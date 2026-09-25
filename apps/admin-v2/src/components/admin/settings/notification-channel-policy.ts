@@ -1,12 +1,21 @@
+import type {
+  putApiV1AdminSettingsNotificationChannels,
+  putApiV1AdminSettingsNotificationChannelsAdminChannels,
+} from "@scalius/api-client/sdk";
+import type { ApiBody } from "~/lib/api";
 import {
-  ORDER_NOTIFICATION_TYPES,
+  CUSTOMER_NOTIFICATION_TYPES,
+  STAFF_NOTIFICATION_TYPES,
+  customerChannelsForType,
+  adminChannelsForType,
+  type NotificationType,
   type OrderNotificationType,
-} from "@scalius/core/modules/notifications/browser";
+} from "./notification-event-types";
 
 export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
+export const ADMIN_NOTIFICATION_CHANNELS = ["push", "email"] as const;
 
-/** Grouped for display; labels come from `notificationEventMessages`. */
-export const NOTIFICATION_EVENT_GROUPS = [
+const ORDER_EVENT_GROUPS = [
   {
     key: "groupOrders",
     events: [
@@ -37,12 +46,50 @@ export const NOTIFICATION_EVENT_GROUPS = [
   },
 ] as const satisfies ReadonlyArray<{ key: string; events: readonly OrderNotificationType[] }>;
 
+/** The order events, grouped for display; labels come from `notificationEventMessages`. */
+export const NOTIFICATION_EVENT_GROUPS = ORDER_EVENT_GROUPS;
+
+export type NotificationEventGroup = { key: "groupOrders" | "groupPayments" | "groupSupport" | "groupConversations"; events: readonly NotificationType[] };
+
+/** What the customer rules table lists: the order events and a reply in a conversation. */
+export const CUSTOMER_EVENT_GROUPS: readonly NotificationEventGroup[] = [
+  ...ORDER_EVENT_GROUPS,
+  { key: "groupConversations", events: ["conversation_reply"] },
+];
+
+/** What the staff rules table lists: the order events and a new customer message. */
+export const STAFF_EVENT_GROUPS: readonly NotificationEventGroup[] = [
+  ...ORDER_EVENT_GROUPS,
+  { key: "groupConversations", events: ["conversation_message"] },
+];
+
 export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
-export type CustomerNotificationConfig = Record<
-  OrderNotificationType,
-  Record<CustomerNotificationChannel, boolean>
->;
-export type AdminNotificationConfig = Record<OrderNotificationType, { push: boolean }>;
+export type AdminNotificationChannel = (typeof ADMIN_NOTIFICATION_CHANNELS)[number];
+export type CustomerNotificationConfig = Record<NotificationType, Record<CustomerNotificationChannel, boolean>>;
+export type AdminNotificationConfig = Record<NotificationType, Record<AdminNotificationChannel, boolean>>;
+
+/** Whether an event can use a channel at all (a reply never goes by WhatsApp; staff email is for customer messages). */
+export function customerChannelAllowed(event: NotificationType, channel: string): boolean {
+  return (customerChannelsForType(event) as readonly string[]).includes(channel);
+}
+
+export function adminChannelAllowed(event: NotificationType, channel: string): boolean {
+  return (adminChannelsForType(event) as readonly string[]).includes(channel);
+}
+
+function defaultCustomerChannels(event: NotificationType): readonly string[] {
+  if (event === "order_ready_for_pickup") return ["email", "sms"];
+  return ["email"];
+}
+
+function defaultAdminChannels(event: NotificationType): readonly string[] {
+  return event === "order_created"
+    || event === "order_cancelled"
+    || event === "support_request_submitted"
+    || event === "conversation_message"
+    ? ["push"]
+    : [];
+}
 
 /**
  * Provider readiness controls delivery, not merchant intent. A temporarily
@@ -53,12 +100,13 @@ export function buildCustomerNotificationConfig(
   channelData: Record<string, string[]> | undefined,
 ): CustomerNotificationConfig {
   const config = {} as CustomerNotificationConfig;
-  for (const event of ORDER_NOTIFICATION_TYPES) {
+  for (const event of CUSTOMER_NOTIFICATION_TYPES) {
     const saved = channelData?.[event];
+    const selected = Array.isArray(saved) ? saved : defaultCustomerChannels(event);
     config[event] = {
-      email: Array.isArray(saved) ? saved.includes("email") : true,
-      sms: Array.isArray(saved) && saved.includes("sms"),
-      whatsapp: Array.isArray(saved) && saved.includes("whatsapp"),
+      email: selected.includes("email") && customerChannelAllowed(event, "email"),
+      sms: selected.includes("sms") && customerChannelAllowed(event, "sms"),
+      whatsapp: selected.includes("whatsapp") && customerChannelAllowed(event, "whatsapp"),
     };
   }
   return config;
@@ -68,33 +116,34 @@ export function buildAdminNotificationConfig(
   channelData: Record<string, string[]> | undefined,
 ): AdminNotificationConfig {
   const config = {} as AdminNotificationConfig;
-  for (const event of ORDER_NOTIFICATION_TYPES) {
+  for (const event of STAFF_NOTIFICATION_TYPES) {
     const saved = channelData?.[event];
+    const selected = Array.isArray(saved) ? saved : defaultAdminChannels(event);
     config[event] = {
-      push: Array.isArray(saved)
-        ? saved.includes("push")
-        : event === "order_created" || event === "order_cancelled" || event === "support_request_submitted",
+      push: selected.includes("push") && adminChannelAllowed(event, "push"),
+      email: selected.includes("email") && adminChannelAllowed(event, "email"),
     };
   }
   return config;
 }
 
-export function serializeCustomerNotificationConfig(
-  config: CustomerNotificationConfig,
-): Record<OrderNotificationType, CustomerNotificationChannel[]> {
-  const result = {} as Record<OrderNotificationType, CustomerNotificationChannel[]>;
-  for (const event of ORDER_NOTIFICATION_TYPES) {
-    result[event] = CUSTOMER_NOTIFICATION_CHANNELS.filter((channel) => config[event]?.[channel]);
+/** The saved shapes: every order event, plus the conversation event each audience may use. */
+export type CustomerRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannels>["channels"];
+export type AdminRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannelsAdminChannels>["channels"];
+
+export function serializeCustomerNotificationConfig(config: CustomerNotificationConfig): CustomerRulesBody {
+  const result: Record<string, CustomerNotificationChannel[]> = {};
+  for (const event of CUSTOMER_NOTIFICATION_TYPES) {
+    result[event] = CUSTOMER_NOTIFICATION_CHANNELS.filter((channel) => config[event]?.[channel] && customerChannelAllowed(event, channel));
   }
-  return result;
+  // Each event only carries the channels it allows (checked above).
+  return result as CustomerRulesBody;
 }
 
-export function serializeAdminNotificationConfig(
-  config: AdminNotificationConfig,
-): Record<OrderNotificationType, "push"[]> {
-  const result = {} as Record<OrderNotificationType, "push"[]>;
-  for (const event of ORDER_NOTIFICATION_TYPES) {
-    result[event] = config[event]?.push ? ["push"] : [];
+export function serializeAdminNotificationConfig(config: AdminNotificationConfig): AdminRulesBody {
+  const result: Record<string, AdminNotificationChannel[]> = {};
+  for (const event of STAFF_NOTIFICATION_TYPES) {
+    result[event] = ADMIN_NOTIFICATION_CHANNELS.filter((channel) => config[event]?.[channel] && adminChannelAllowed(event, channel));
   }
-  return result;
+  return result as AdminRulesBody;
 }

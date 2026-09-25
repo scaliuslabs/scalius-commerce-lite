@@ -10,10 +10,11 @@ import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../../schemas/order-tracking";
 import {
-    createCustomerOrderSupportRequest,
     CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
     getOrderSupportRequestStatusLabel,
 } from "@scalius/core/modules/orders";
+import { createCustomerOrderSupportRequest } from "@scalius/core/modules/conversations";
+import { enforceBuyerWriteLimits } from "../../utils/conversation-http";
 import { UnauthorizedError } from "../../utils/api-error";
 import {
     conflictResponse,
@@ -389,12 +390,14 @@ const createCustomerOrderSupportRequestRoute = createRoute({
             supportRequests: z.array(customerOrderSupportRequestSchema),
             supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
             supportRequestIntro: z.string(),
+            conversationId: z.string(),
           })),
         },
       },
     },
     ...errorResponses,
     409: conflictResponse,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -409,6 +412,7 @@ app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
   const db = c.get("db");
   const orderId = c.req.valid("param").id;
   const body = c.req.valid("json");
+  await enforceBuyerWriteLimits(c, "support-request", { customerId: session.customerId });
   const result = await createCustomerOrderSupportRequest(db, session.customerId, orderId, body);
   await enqueueOrderSupportRequestNotificationForOrder({
     db,

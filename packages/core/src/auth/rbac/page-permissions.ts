@@ -97,6 +97,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Abandoned checkouts live under Orders (requires orders.view)
   "/admin/orders/abandoned": { permission: PERMISSIONS.ORDERS_VIEW },
 
+  // Inbox: customer conversations (replying is gated inside the page)
+  "/admin/inbox": { permission: PERMISSIONS.CONVERSATIONS_VIEW },
+
   // Discounts
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/discounts/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
@@ -177,6 +180,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/orders\/[^/]+$/,
     config: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+
+  // Inbox: one thread
+  {
+    pattern: /^\/admin\/inbox\/[^/]+$/,
+    config: { permission: PERMISSIONS.CONVERSATIONS_VIEW },
   },
 
   // Customers: one customer page; saving and order history are gated inside it.

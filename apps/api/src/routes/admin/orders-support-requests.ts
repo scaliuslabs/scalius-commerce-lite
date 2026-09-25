@@ -8,7 +8,6 @@ import {
 import {
     ADMIN_ORDER_SUPPORT_REQUEST_STATUSES,
     getOrderSupportRequestStatusLabel,
-    updateAdminOrderSupportRequestStatus,
     createOrderReturn,
     createOrderReturnSchema,
     listOrderReturns,
@@ -16,6 +15,7 @@ import {
     recordOrderEvent,
     updateOrderStatus,
 } from "@scalius/core/modules/orders";
+import { updateAdminOrderSupportRequestStatus } from "@scalius/core/modules/conversations";
 import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import {

@@ -9,9 +9,12 @@ const mocks = vi.hoisted(() => ({
     enqueueOrderSupportRequestNotificationForOrder: vi.fn(),
 }));
 
+vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/core/modules/conversations")>()),
+    updateAdminOrderSupportRequestStatus: mocks.updateAdminOrderSupportRequestStatus,
+}));
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@scalius/core/modules/orders")>()),
-    updateAdminOrderSupportRequestStatus: mocks.updateAdminOrderSupportRequestStatus,
     listOrderSupportRequests: mocks.listOrderSupportRequests,
     listOrderReturns: mocks.listOrderReturns,
     createOrderReturn: mocks.createOrderReturn,

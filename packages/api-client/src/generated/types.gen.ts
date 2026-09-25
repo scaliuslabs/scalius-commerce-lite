@@ -9775,6 +9775,17 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1CustomerAuthOrdersByIdSupportRequestsError = PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors[keyof PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors];
@@ -9828,6 +9839,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 disabledReason: string | null;
             }>;
             supportRequestIntro: string;
+            conversationId: string;
         };
     };
 };
@@ -9981,6 +9993,1217 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
 };
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponse = PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses[keyof PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses];
+
+export type GetApiV1CustomerAuthConversationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        cursor?: string;
+    };
+    url: '/api/v1/customer-auth/conversations';
+};
+
+export type GetApiV1CustomerAuthConversationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsError = GetApiV1CustomerAuthConversationsErrors[keyof GetApiV1CustomerAuthConversationsErrors];
+
+export type GetApiV1CustomerAuthConversationsResponses = {
+    /**
+     * Conversations (20 per page) and whether the account may start a store conversation
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+            }>;
+            nextCursor: string | null;
+            canStartStoreConversation: boolean;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsResponse = GetApiV1CustomerAuthConversationsResponses[keyof GetApiV1CustomerAuthConversationsResponses];
+
+export type PostApiV1CustomerAuthConversationsData = {
+    body: {
+        subject: string;
+        body: string;
+        clientMessageKey: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/conversations';
+};
+
+export type PostApiV1CustomerAuthConversationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsError = PostApiV1CustomerAuthConversationsErrors[keyof PostApiV1CustomerAuthConversationsErrors];
+
+export type PostApiV1CustomerAuthConversationsResponses = {
+    /**
+     * The new conversation
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsResponse = PostApiV1CustomerAuthConversationsResponses[keyof PostApiV1CustomerAuthConversationsResponses];
+
+export type GetApiV1CustomerAuthConversationsUnreadData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/unread';
+};
+
+export type GetApiV1CustomerAuthConversationsUnreadErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsUnreadError = GetApiV1CustomerAuthConversationsUnreadErrors[keyof GetApiV1CustomerAuthConversationsUnreadErrors];
+
+export type GetApiV1CustomerAuthConversationsUnreadResponses = {
+    /**
+     * Unread count
+     */
+    200: {
+        success: true;
+        data: {
+            unread: number;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsUnreadResponse = GetApiV1CustomerAuthConversationsUnreadResponses[keyof GetApiV1CustomerAuthConversationsUnreadResponses];
+
+export type GetApiV1CustomerAuthConversationsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/customer-auth/conversations/{id}';
+};
+
+export type GetApiV1CustomerAuthConversationsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsByIdError = GetApiV1CustomerAuthConversationsByIdErrors[keyof GetApiV1CustomerAuthConversationsByIdErrors];
+
+export type GetApiV1CustomerAuthConversationsByIdResponses = {
+    /**
+     * The conversation
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsByIdResponse = GetApiV1CustomerAuthConversationsByIdResponses[keyof GetApiV1CustomerAuthConversationsByIdResponses];
+
+export type PostApiV1CustomerAuthConversationsByIdMessagesData = {
+    body: {
+        body: string;
+        clientMessageKey: string;
+        attachmentIds?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/messages';
+};
+
+export type PostApiV1CustomerAuthConversationsByIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsByIdMessagesError = PostApiV1CustomerAuthConversationsByIdMessagesErrors[keyof PostApiV1CustomerAuthConversationsByIdMessagesErrors];
+
+export type PostApiV1CustomerAuthConversationsByIdMessagesResponses = {
+    /**
+     * Posted; the conversation after the post
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsByIdMessagesResponse = PostApiV1CustomerAuthConversationsByIdMessagesResponses[keyof PostApiV1CustomerAuthConversationsByIdMessagesResponses];
+
+export type PostApiV1CustomerAuthConversationsByIdReadData = {
+    body: {
+        seq: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/read';
+};
+
+export type PostApiV1CustomerAuthConversationsByIdReadErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsByIdReadError = PostApiV1CustomerAuthConversationsByIdReadErrors[keyof PostApiV1CustomerAuthConversationsByIdReadErrors];
+
+export type PostApiV1CustomerAuthConversationsByIdReadResponses = {
+    /**
+     * Read marker
+     */
+    200: {
+        success: true;
+        data: {
+            readSeq: number;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsByIdReadResponse = PostApiV1CustomerAuthConversationsByIdReadResponses[keyof PostApiV1CustomerAuthConversationsByIdReadResponses];
+
+export type GetApiV1CustomerAuthOrdersByIdConversationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/customer-auth/orders/{id}/conversation';
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationError = GetApiV1CustomerAuthOrdersByIdConversationErrors[keyof GetApiV1CustomerAuthOrdersByIdConversationErrors];
+
+export type GetApiV1CustomerAuthOrdersByIdConversationResponses = {
+    /**
+     * The order thread
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationResponse = GetApiV1CustomerAuthOrdersByIdConversationResponses[keyof GetApiV1CustomerAuthOrdersByIdConversationResponses];
+
+export type PostApiV1CustomerAuthOrdersByIdConversationData = {
+    body: {
+        body: string;
+        clientMessageKey: string;
+        attachmentIds?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/conversation';
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationError = PostApiV1CustomerAuthOrdersByIdConversationErrors[keyof PostApiV1CustomerAuthOrdersByIdConversationErrors];
+
+export type PostApiV1CustomerAuthOrdersByIdConversationResponses = {
+    /**
+     * Posted; the thread after the post
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationResponse = PostApiV1CustomerAuthOrdersByIdConversationResponses[keyof PostApiV1CustomerAuthOrdersByIdConversationResponses];
+
+export type PostApiV1CustomerAuthConversationAttachmentsData = {
+    body: {
+        file?: Blob | File;
+        conversationId?: string;
+        orderId?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/conversation-attachments';
+};
+
+export type PostApiV1CustomerAuthConversationAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationAttachmentsError = PostApiV1CustomerAuthConversationAttachmentsErrors[keyof PostApiV1CustomerAuthConversationAttachmentsErrors];
+
+export type PostApiV1CustomerAuthConversationAttachmentsResponses = {
+    /**
+     * Staged attachment
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationAttachmentsResponse = PostApiV1CustomerAuthConversationAttachmentsResponses[keyof PostApiV1CustomerAuthConversationAttachmentsResponses];
+
+export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdData = {
+    body?: never;
+    path: {
+        id: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/attachments/{attachmentId}';
+};
+
+export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdError = GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdErrors[keyof GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdErrors];
+
+export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses = {
+    /**
+     * The re-encoded image
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponse = GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses[keyof GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
@@ -13403,6 +14626,17 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1OrdersReceiptByIdSupportRequestsError = PostApiV1OrdersReceiptByIdSupportRequestsErrors[keyof PostApiV1OrdersReceiptByIdSupportRequestsErrors];
@@ -13456,6 +14690,7 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 disabledReason: string | null;
             }>;
             supportRequestIntro: string;
+            conversationId: string;
         };
     };
 };
@@ -13988,6 +15223,590 @@ export type PostApiV1OrdersResponses = {
 };
 
 export type PostApiV1OrdersResponse = PostApiV1OrdersResponses[keyof PostApiV1OrdersResponses];
+
+export type GetApiV1OrdersReceiptByIdConversationData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/orders/receipt/{id}/conversation';
+};
+
+export type GetApiV1OrdersReceiptByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdConversationError = GetApiV1OrdersReceiptByIdConversationErrors[keyof GetApiV1OrdersReceiptByIdConversationErrors];
+
+export type GetApiV1OrdersReceiptByIdConversationResponses = {
+    /**
+     * The order thread, or null before anyone wrote
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdConversationResponse = GetApiV1OrdersReceiptByIdConversationResponses[keyof GetApiV1OrdersReceiptByIdConversationResponses];
+
+export type PostApiV1OrdersReceiptByIdConversationData = {
+    body: {
+        body: string;
+        clientMessageKey: string;
+        attachmentIds?: Array<string>;
+        token?: string;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation';
+};
+
+export type PostApiV1OrdersReceiptByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationError = PostApiV1OrdersReceiptByIdConversationErrors[keyof PostApiV1OrdersReceiptByIdConversationErrors];
+
+export type PostApiV1OrdersReceiptByIdConversationResponses = {
+    /**
+     * Posted; the thread after the post
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationResponse = PostApiV1OrdersReceiptByIdConversationResponses[keyof PostApiV1OrdersReceiptByIdConversationResponses];
+
+export type PostApiV1OrdersReceiptByIdConversationReadData = {
+    body: {
+        seq: number;
+        token?: string;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation/read';
+};
+
+export type PostApiV1OrdersReceiptByIdConversationReadErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationReadError = PostApiV1OrdersReceiptByIdConversationReadErrors[keyof PostApiV1OrdersReceiptByIdConversationReadErrors];
+
+export type PostApiV1OrdersReceiptByIdConversationReadResponses = {
+    /**
+     * Read marker
+     */
+    200: {
+        success: true;
+        data: {
+            readSeq: number;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationReadResponse = PostApiV1OrdersReceiptByIdConversationReadResponses[keyof PostApiV1OrdersReceiptByIdConversationReadResponses];
+
+export type PostApiV1OrdersReceiptByIdConversationAttachmentsData = {
+    body: {
+        file?: Blob | File;
+        conversationId?: string;
+        orderId?: string;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation-attachments';
+};
+
+export type PostApiV1OrdersReceiptByIdConversationAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationAttachmentsError = PostApiV1OrdersReceiptByIdConversationAttachmentsErrors[keyof PostApiV1OrdersReceiptByIdConversationAttachmentsErrors];
+
+export type PostApiV1OrdersReceiptByIdConversationAttachmentsResponses = {
+    /**
+     * Staged attachment
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdConversationAttachmentsResponse = PostApiV1OrdersReceiptByIdConversationAttachmentsResponses[keyof PostApiV1OrdersReceiptByIdConversationAttachmentsResponses];
+
+export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation/attachments/{attachmentId}';
+};
+
+export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdError = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors];
+
+export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses = {
+    /**
+     * The re-encoded image
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -46830,6 +48649,1346 @@ export type PostApiV1AdminOrdersByIdPickupReadyResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdPickupReadyResponse = PostApiV1AdminOrdersByIdPickupReadyResponses[keyof PostApiV1AdminOrdersByIdPickupReadyResponses];
+
+export type GetApiV1AdminConversationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'open' | 'pending' | 'closed' | 'all';
+        /**
+         * `me`, `none` or a staff user id
+         */
+        assignee?: string;
+        subjectType?: 'order' | 'store';
+        /**
+         * Subject, customer name or order number
+         */
+        q?: string;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/conversations';
+};
+
+export type GetApiV1AdminConversationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsError = GetApiV1AdminConversationsErrors[keyof GetApiV1AdminConversationsErrors];
+
+export type GetApiV1AdminConversationsResponses = {
+    /**
+     * Inbox page
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsResponse = GetApiV1AdminConversationsResponses[keyof GetApiV1AdminConversationsResponses];
+
+export type GetApiV1AdminConversationsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/conversations/summary';
+};
+
+export type GetApiV1AdminConversationsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsSummaryError = GetApiV1AdminConversationsSummaryErrors[keyof GetApiV1AdminConversationsSummaryErrors];
+
+export type GetApiV1AdminConversationsSummaryResponses = {
+    /**
+     * Counts
+     */
+    200: {
+        success: true;
+        data: {
+            open: number;
+            mineOpen: number;
+            unassignedOpen: number;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsSummaryResponse = GetApiV1AdminConversationsSummaryResponses[keyof GetApiV1AdminConversationsSummaryResponses];
+
+export type PostApiV1AdminConversationsAttachmentsData = {
+    body: {
+        file?: Blob | File;
+        conversationId?: string;
+        orderId?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/conversations/attachments';
+};
+
+export type PostApiV1AdminConversationsAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsAttachmentsError = PostApiV1AdminConversationsAttachmentsErrors[keyof PostApiV1AdminConversationsAttachmentsErrors];
+
+export type PostApiV1AdminConversationsAttachmentsResponses = {
+    /**
+     * Staged attachment
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsAttachmentsResponse = PostApiV1AdminConversationsAttachmentsResponses[keyof PostApiV1AdminConversationsAttachmentsResponses];
+
+export type GetApiV1AdminConversationsOrderByOrderIdData = {
+    body?: never;
+    path: {
+        orderId: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/admin/conversations/order/{orderId}';
+};
+
+export type GetApiV1AdminConversationsOrderByOrderIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsOrderByOrderIdError = GetApiV1AdminConversationsOrderByOrderIdErrors[keyof GetApiV1AdminConversationsOrderByOrderIdErrors];
+
+export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
+    /**
+     * The order thread
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+                lastSeq: number;
+                staffReadSeq: number;
+                customerReadSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    visibility: 'public' | 'internal';
+                    authorType: 'customer' | 'guest_receipt' | 'staff' | 'system';
+                    authorUserId: string | null;
+                    authorName: string | null;
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                order: {
+                    id: string;
+                    orderNumber: string | null;
+                    status: string;
+                    paymentStatus: string;
+                    totalAmountMinor: number;
+                    currencyCode: string | null;
+                    createdAt: number | null;
+                } | null;
+                cases: Array<{
+                    id: string;
+                    type: string;
+                    status: string;
+                    label: string;
+                    active: boolean;
+                    returnId: string | null;
+                }>;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsOrderByOrderIdResponse = GetApiV1AdminConversationsOrderByOrderIdResponses[keyof GetApiV1AdminConversationsOrderByOrderIdResponses];
+
+export type PostApiV1AdminConversationsOrderByOrderIdMessagesData = {
+    body: {
+        body: string;
+        visibility: 'public' | 'internal';
+        requestKey: string;
+        attachmentIds?: Array<string>;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/order/{orderId}/messages';
+};
+
+export type PostApiV1AdminConversationsOrderByOrderIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsOrderByOrderIdMessagesError = PostApiV1AdminConversationsOrderByOrderIdMessagesErrors[keyof PostApiV1AdminConversationsOrderByOrderIdMessagesErrors];
+
+export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
+    /**
+     * Posted; the thread after the post
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+                lastSeq: number;
+                staffReadSeq: number;
+                customerReadSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    visibility: 'public' | 'internal';
+                    authorType: 'customer' | 'guest_receipt' | 'staff' | 'system';
+                    authorUserId: string | null;
+                    authorName: string | null;
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                order: {
+                    id: string;
+                    orderNumber: string | null;
+                    status: string;
+                    paymentStatus: string;
+                    totalAmountMinor: number;
+                    currencyCode: string | null;
+                    createdAt: number | null;
+                } | null;
+                cases: Array<{
+                    id: string;
+                    type: string;
+                    status: string;
+                    label: string;
+                    active: boolean;
+                    returnId: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponse = PostApiV1AdminConversationsOrderByOrderIdMessagesResponses[keyof PostApiV1AdminConversationsOrderByOrderIdMessagesResponses];
+
+export type GetApiV1AdminConversationsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/admin/conversations/{id}';
+};
+
+export type GetApiV1AdminConversationsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsByIdError = GetApiV1AdminConversationsByIdErrors[keyof GetApiV1AdminConversationsByIdErrors];
+
+export type GetApiV1AdminConversationsByIdResponses = {
+    /**
+     * The conversation
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+                lastSeq: number;
+                staffReadSeq: number;
+                customerReadSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    visibility: 'public' | 'internal';
+                    authorType: 'customer' | 'guest_receipt' | 'staff' | 'system';
+                    authorUserId: string | null;
+                    authorName: string | null;
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                order: {
+                    id: string;
+                    orderNumber: string | null;
+                    status: string;
+                    paymentStatus: string;
+                    totalAmountMinor: number;
+                    currencyCode: string | null;
+                    createdAt: number | null;
+                } | null;
+                cases: Array<{
+                    id: string;
+                    type: string;
+                    status: string;
+                    label: string;
+                    active: boolean;
+                    returnId: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsByIdResponse = GetApiV1AdminConversationsByIdResponses[keyof GetApiV1AdminConversationsByIdResponses];
+
+export type PatchApiV1AdminConversationsByIdData = {
+    body: {
+        version: number;
+        status?: 'open' | 'pending' | 'closed';
+        assigneeUserId?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}';
+};
+
+export type PatchApiV1AdminConversationsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminConversationsByIdError = PatchApiV1AdminConversationsByIdErrors[keyof PatchApiV1AdminConversationsByIdErrors];
+
+export type PatchApiV1AdminConversationsByIdResponses = {
+    /**
+     * The conversation after the change
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+                lastSeq: number;
+                staffReadSeq: number;
+                customerReadSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    visibility: 'public' | 'internal';
+                    authorType: 'customer' | 'guest_receipt' | 'staff' | 'system';
+                    authorUserId: string | null;
+                    authorName: string | null;
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                order: {
+                    id: string;
+                    orderNumber: string | null;
+                    status: string;
+                    paymentStatus: string;
+                    totalAmountMinor: number;
+                    currencyCode: string | null;
+                    createdAt: number | null;
+                } | null;
+                cases: Array<{
+                    id: string;
+                    type: string;
+                    status: string;
+                    label: string;
+                    active: boolean;
+                    returnId: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PatchApiV1AdminConversationsByIdResponse = PatchApiV1AdminConversationsByIdResponses[keyof PatchApiV1AdminConversationsByIdResponses];
+
+export type PostApiV1AdminConversationsByIdMessagesData = {
+    body: {
+        body: string;
+        visibility: 'public' | 'internal';
+        requestKey: string;
+        attachmentIds?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}/messages';
+};
+
+export type PostApiV1AdminConversationsByIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsByIdMessagesError = PostApiV1AdminConversationsByIdMessagesErrors[keyof PostApiV1AdminConversationsByIdMessagesErrors];
+
+export type PostApiV1AdminConversationsByIdMessagesResponses = {
+    /**
+     * Posted; the conversation after the post
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                unread: number;
+                version: number;
+                lastSeq: number;
+                staffReadSeq: number;
+                customerReadSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    visibility: 'public' | 'internal';
+                    authorType: 'customer' | 'guest_receipt' | 'staff' | 'system';
+                    authorUserId: string | null;
+                    authorName: string | null;
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                order: {
+                    id: string;
+                    orderNumber: string | null;
+                    status: string;
+                    paymentStatus: string;
+                    totalAmountMinor: number;
+                    currencyCode: string | null;
+                    createdAt: number | null;
+                } | null;
+                cases: Array<{
+                    id: string;
+                    type: string;
+                    status: string;
+                    label: string;
+                    active: boolean;
+                    returnId: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsByIdMessagesResponse = PostApiV1AdminConversationsByIdMessagesResponses[keyof PostApiV1AdminConversationsByIdMessagesResponses];
+
+export type PostApiV1AdminConversationsByIdReadData = {
+    body: {
+        seq: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}/read';
+};
+
+export type PostApiV1AdminConversationsByIdReadErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsByIdReadError = PostApiV1AdminConversationsByIdReadErrors[keyof PostApiV1AdminConversationsByIdReadErrors];
+
+export type PostApiV1AdminConversationsByIdReadResponses = {
+    /**
+     * Marked
+     */
+    200: {
+        success: true;
+        data: {
+            ok: true;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsByIdReadResponse = PostApiV1AdminConversationsByIdReadResponses[keyof PostApiV1AdminConversationsByIdReadResponses];
+
+export type GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdData = {
+    body?: never;
+    path: {
+        id: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}/attachments/{attachmentId}';
+};
+
+export type GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdError = GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors[keyof GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors];
+
+export type GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses = {
+    /**
+     * The re-encoded image
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponse = GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses[keyof GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses];
 
 export type GetApiV1AdminProductsStatsData = {
     body?: never;

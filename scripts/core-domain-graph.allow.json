@@ -7,6 +7,7 @@
   ],
   "edges": [
     "agent-storefront -> checkout",
+    "agent-storefront -> conversations",
     "agent-storefront -> customers",
     "agent-storefront -> media",
     "agent-storefront -> orders",
@@ -37,6 +38,8 @@
     "collections -> catalog",
     "collections -> categories",
     "collections -> products",
+    "conversations -> notifications",
+    "conversations -> orders",
     "customers -> media",
     "customers -> orders",
     "customers -> payments",

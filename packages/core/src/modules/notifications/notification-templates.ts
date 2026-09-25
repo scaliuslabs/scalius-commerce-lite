@@ -393,7 +393,18 @@ export type EmailPayment =
 export interface OrderEmailFacts {
   store: EmailStore;
   /** `unitPrice`/`subtotal` are null when the saved currency can't be shown. */
-  items: Array<{ name: string | null; variant: string | null; quantity: number; unitPrice: string | null; subtotal: string | null }>;
+  /**
+   * `properties` are the buyer's line inputs as display lines ("Engraving: Rahim"),
+   * shown in the email only (never SMS); absent on lines without inputs.
+   */
+  items: Array<{
+    name: string | null;
+    variant: string | null;
+    quantity: number;
+    unitPrice: string | null;
+    subtotal: string | null;
+    properties?: readonly string[];
+  }>;
   /** Null when the saved currency can't be shown truthfully. */
   amounts: {
     subtotal: string;
@@ -493,6 +504,7 @@ export function renderOrderEmail(input: {
   const lines = facts.items.map((item) => ({
     name: item.name || copy.itemUnavailable,
     variant: item.variant,
+    properties: (item.properties ?? []).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean),
     quantity: item.unitPrice ? `${item.quantity} × ${item.unitPrice}` : copy.quantity(item.quantity),
     subtotal: item.subtotal ?? "",
   }));
@@ -505,7 +517,7 @@ export function renderOrderEmail(input: {
     facts.store.name, subject, body,
     cta ? `${cta.label}: ${cta.href}` : "",
     lines.length || summary.length ? copy.orderSummary : "",
-    ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
+    ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}${item.properties.map((line) => `\n${line}`).join("")}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
     summary.map(({ label, value, was }) => `${label}: ${value}${was ? ` ${copy.was(was)}` : ""}`).join("\n"),
     amounts ? "" : copy.amountsUnavailable,
     `${copy.payment}: ${payment}`,
@@ -523,7 +535,7 @@ ${storeHeaderHtml(facts.store)}
 <div style="margin:0 0 8px;">${bodyHtml(body)}</div>
 ${cta ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(cta.href)}" style="${BUTTON}">${escapeHtml(cta.label)}</a></p>` : ""}${origin ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(`${origin}/`)}" style="${LINK}">${escapeHtml(copy.visitStore)}</a></p>` : ""}
 <h2 style="${SECTION}">${escapeHtml(copy.orderSummary)}</h2>
-${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
+${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}${item.properties.map((line) => `<div style="font-size:14px;${MUTED}">${escapeHtml(line)}</div>`).join("")}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
 ${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(({ label, value, was }, index) => {
     const weight = index === summary.length - 1 ? "700" : "400";
     const before = was ? `<s style="${MUTED}">${escapeHtml(was)}</s> ` : "";

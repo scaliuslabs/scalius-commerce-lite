@@ -18,7 +18,7 @@ import { approveOrderReturn, createOrderReturn, getOrderReturn, receiveOrderRetu
 import { addOrderComment, listOrderTimeline, recordOrderEvent } from "../timeline";
 import { createOrdersCsvArtifactBuilder, formatCommerceDateTime } from "../csv-export";
 import { readInvoiceOrderSource } from "../invoices/order-reader";
-import { createReceiptOrderSupportRequest } from "../order-support-requests";
+import { createReceiptOrderSupportRequest } from "../../conversations";
 
 /**
  * Real-SQLite behaviour of the dashboard order lifecycle: sequential order

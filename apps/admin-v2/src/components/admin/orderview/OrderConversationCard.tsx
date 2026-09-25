@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { MessagesSquare } from "lucide-react";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -16,8 +19,10 @@ import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
+import { useHasPermission } from "~/contexts/PermissionContext";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
+import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
@@ -34,6 +39,9 @@ import { restockedUnits, shippedCancelReason } from "./OrderStatusCard";
 import { openCancellationRequest, type OrderActionRequest } from "./primary-action";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
+import { ConversationComposer } from "../inbox/ConversationComposer";
+import { ConversationMessages } from "../inbox/ConversationMessages";
+import { inboxKeys, orderThreadQueryOptions, useMarkRead } from "../inbox/inbox-api";
 
 type Resolution = "under_review" | "approved" | "rejected" | "completed";
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
@@ -69,6 +77,7 @@ function ResolveDialog({
   const r = useMessages(resourceMessages);
   const canCancelOrders = useOrderActionPermissions().canChangeOrderStatus;
   const mutation = useResolveOrderSupportRequest();
+  const queryClient = useQueryClient();
   const options = request ? resolutionsFor(request, canCancelOrders) : [];
   const [selected, setSelected] = useState<Resolution | null>(null);
   const [choiceMissing, setChoiceMissing] = useState(false);
@@ -131,6 +140,8 @@ function ResolveDialog({
     }, {
       onSuccess: () => {
         commandKey.current.clear();
+        // The status change is a line on the order's conversation.
+        void queryClient.invalidateQueries({ queryKey: inboxKeys.order(order.id) });
         onOpenChange(false);
       },
     });
@@ -230,15 +241,29 @@ function ResolveDialog({
   );
 }
 
-export function OrderSupportRequestsCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
+/**
+ * The order's Messages card (Wave A §8.1): open requests with their answers,
+ * the conversation with the customer (internal notes included) and the reply
+ * box. Replaces the customer-requests card; the case actions are unchanged.
+ */
+export function OrderConversationCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
+  const tr = useMessages(inboxMessages);
   const o = useMessages(orderMessages);
   const actions = useOrderActionPermissions();
   const canResolve = actions.canResolveOrderSupportRequests;
+  const canRead = useHasPermission(PERMISSIONS.CONVERSATIONS_VIEW);
+  const canReply = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY);
   const cardRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<OrderSupportRequest | null>(null);
   const [open, setOpen] = useState(false);
   const requests = order.supportRequests ?? [];
+  const thread = useQuery({ ...orderThreadQueryOptions(order.id), enabled: canRead });
+  const markRead = useMarkRead();
+
+  useEffect(() => {
+    if (thread.data) markRead(thread.data);
+  }, [thread.data, markRead]);
 
   // "Review cancellation request" in the header opens the open request here.
   useEffect(() => {
@@ -252,44 +277,83 @@ export function OrderSupportRequestsCard({ order, request }: { order: Order; req
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.id]);
 
-  if (requests.length === 0) return null;
-  const openCount = requests.filter((request) => request.active).length;
+  if (!canRead && requests.length === 0) return null;
+  const active = requests.filter((item) => item.active);
+  const conversation = thread.data ?? null;
 
   return (
     <Card ref={cardRef} id="order-requests" className="scroll-mt-4">
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle>{t("requests.title")}</CardTitle>
-        {openCount > 0 ? <Badge variant="outline">{t("requests.open", { count: openCount })}</Badge> : null}
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+        <div className="flex items-center gap-2">
+          <CardTitle>{tr("card.title")}</CardTitle>
+          {conversation && conversation.unread > 0 ? <Badge variant="info">{tr("unread", { count: conversation.unread })}</Badge> : null}
+          {active.length > 0 ? <Badge variant="attention">{t("requests.open", { count: active.length })}</Badge> : null}
+        </div>
+        {conversation ? (
+          <Button variant="link" size="sm" asChild>
+            <Link to="/admin/inbox/$conversationId" params={{ conversationId: conversation.id }}>{tr("card.openInInbox")}</Link>
+          </Button>
+        ) : null}
       </CardHeader>
-      <CardContent>
-        <ul className="divide-y">
-          {requests.map((request) => (
-            <li key={request.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{o(`request.${request.type}`)}</span>
-                  <Badge variant={statusBadgeVariant(request.status)}>{orderDetailLabel(t, "requests.status.", request.status)}</Badge>
+      <CardContent className="flex flex-col gap-4">
+        {requests.length > 0 ? (
+          <ul className="divide-y rounded-lg border">
+            {requests.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{o(`request.${item.type}`)}</span>
+                    <Badge variant={statusBadgeVariant(item.status)}>{orderDetailLabel(t, "requests.status.", item.status)}</Badge>
+                  </div>
+                  <p className="text-muted-foreground">{item.reason}</p>
+                  <p className="text-muted-foreground">{formatOrderTimestamp(item.submittedAt ?? item.createdAt)}</p>
                 </div>
-                <p className="text-muted-foreground">{request.reason}</p>
-                {request.message ? <p className="line-clamp-3 text-muted-foreground">{request.message}</p> : null}
-                <p className="text-muted-foreground">{formatOrderTimestamp(request.submittedAt ?? request.createdAt)}</p>
+                {canResolve && item.active && resolutionsFor(item, actions.canChangeOrderStatus).length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelected(item);
+                      setOpen(true);
+                    }}
+                  >
+                    {t("requests.review")}
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {canRead ? (
+          thread.isPending ? (
+            <p className="text-body text-muted-foreground">{t("read.loading")}</p>
+          ) : thread.isError ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-body text-muted-foreground">{tr("threadLoadFailed")}</p>
+              <Button type="button" size="sm" variant="outline" onClick={() => void thread.refetch()}>{tr("retry")}</Button>
+            </div>
+          ) : conversation && conversation.messages.length > 0 ? (
+            <ConversationMessages
+              thread={conversation}
+              currentUserId={null}
+              className="max-h-96 overflow-y-auto"
+            />
+          ) : (
+            <div className="flex items-start gap-3">
+              <MessagesSquare aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+              <div className="flex flex-col gap-1">
+                <p className="font-medium">{tr("card.empty")}</p>
+                <p className="text-body text-muted-foreground">{tr("card.emptyBody")}</p>
               </div>
-              {canResolve && request.active && resolutionsFor(request, actions.canChangeOrderStatus).length > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelected(request);
-                    setOpen(true);
-                  }}
-                >
-                  {t("requests.review")}
-                </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+            </div>
+          )
+        ) : null}
+        {canRead && canReply ? (
+          <div className="border-t pt-4">
+            <ConversationComposer conversationId={conversation?.id ?? null} orderId={order.id} />
+          </div>
+        ) : null}
       </CardContent>
       <ResolveDialog order={order} request={selected} open={open} onOpenChange={setOpen} />
     </Card>
