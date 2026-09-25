@@ -25,8 +25,9 @@ import { MENUS } from "./menus.mjs";
 /**
  * The fixture products from the seeded store: the richest discounted product
  * (10+ sold, a colour axis of two or more values, a published brand, a
- * rendered photo; key specs preferred) and a plain one (no discount, no
- * options, no sales).
+ * rendered photo; one price for every option, so the amount saved shows, a
+ * discount of 15% or more and key specs preferred) and a plain one (no
+ * discount, no options, no sales).
  */
 export function pickCardProducts(db) {
   const colourAxis = `EXISTS (SELECT 1 FROM product_option_definitions axis
@@ -42,7 +43,7 @@ export function pickCardProducts(db) {
     JOIN product_sales_stats st ON st.product_id = p.id AND st.sold_30d >= 10
     JOIN brands b ON b.id = p.brand_id AND b.status = 'published' AND b.deleted_at IS NULL
     WHERE ${colourAxis} AND ${renderedPhoto}
-    ORDER BY (${keySpecs} >= 4) DESC, st.sold_30d DESC, p.id LIMIT 1`).get();
+    ORDER BY (s.from_minor = s.to_minor) DESC, (s.discount_depth_bps >= 1500) DESC, (${keySpecs} >= 4) DESC, st.sold_30d DESC, p.id LIMIT 1`).get();
   const plain = db.prepare(`SELECT p.id, p.slug, p.name FROM products p
     JOIN product_buyer_state s ON s.product_id = p.id AND s.is_public = 1 AND s.has_discount = 0
       AND s.available_for_sale = 1 AND s.has_customer_options = 0
@@ -176,6 +177,9 @@ export async function runVariants(ctx, { template = "department-mall", path }) {
       const tag = viewport === "phone" ? "m" : "d";
       for (const [role, product] of [["rich", fixture.rich], ["plain", fixture.plain]]) {
         if (!product) continue;
+        // An empty cache, so the photo's candidate is the one `sizes` asks
+        // for (Chrome reuses a larger cached candidate from another viewport).
+        await page.send("Network.clearBrowserCache");
         await page.nav(base + productListing(product), { settle: 600 });
         const m = await page.eval(CARD_PROBE(product.slug));
         if (!m) {
