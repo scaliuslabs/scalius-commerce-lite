@@ -47,6 +47,10 @@ export const REVIEW_COPY_KEYS = [
   "reviewsBackToProductText",
   "reviewsNextPageText",
   "reviewsFirstPageText",
+  "reviewsWriteCtaText",
+  "reviewsSignInToReviewText",
+  "reviewsVerifiedOnlyText",
+  "reviewsVisibleSoonText",
 ] as const satisfies ReadonlyArray<keyof CheckoutLanguageData>;
 
 export type ReviewCopy = Pick<CheckoutLanguageData, (typeof REVIEW_COPY_KEYS)[number]>;

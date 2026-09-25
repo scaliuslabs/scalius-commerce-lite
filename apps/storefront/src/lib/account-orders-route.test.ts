@@ -9,7 +9,7 @@ describe("/account/orders", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe(ACCOUNT_ORDERS_HREF);
-    expect(ACCOUNT_ORDERS_HREF).toBe("/account#ordersHeading");
+    expect(ACCOUNT_ORDERS_HREF).toBe("/account");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   });
 });

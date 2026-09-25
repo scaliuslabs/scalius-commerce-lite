@@ -6,7 +6,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { countBuyerUnread } from "@scalius/core/modules/conversations";
 import { countBuyerDownloads } from "@scalius/core/modules/digital";
 import { countBuyerGiftCards } from "@scalius/core/modules/gift-cards";
-import { countReviewableLinesForCustomer } from "@scalius/core/modules/reviews";
+import { countReviewableLinesForCustomer, countWrittenReviewsForCustomer } from "@scalius/core/modules/reviews";
 import { countActiveBuyerWarranties } from "@scalius/core/modules/warranty";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
@@ -20,6 +20,7 @@ const count = z.number().int().nonnegative();
 export const customerAccountSummarySchema = z.object({
   unreadInbox: count,
   reviewsToWrite: count,
+  reviewsWritten: count,
   downloads: count,
   giftCards: count,
   activeWarranties: count,
@@ -47,10 +48,11 @@ app.openapi(createRoute({
   // request stays far below the six-connection limit.
   const unreadInbox = await countBuyerUnread(db, customerId);
   const reviewsToWrite = await countReviewableLinesForCustomer(db, customerId);
+  const reviewsWritten = await countWrittenReviewsForCustomer(db, customerId);
   const downloads = await countBuyerDownloads(db, customerId);
   const giftCards = await countBuyerGiftCards(db, customerId);
   const activeWarranties = await countActiveBuyerWarranties(db, customerId);
-  return ok(c, { unreadInbox, reviewsToWrite, downloads, giftCards, activeWarranties });
+  return ok(c, { unreadInbox, reviewsToWrite, reviewsWritten, downloads, giftCards, activeWarranties });
 });
 
 export { app as customerAccountSummaryRoutes };
