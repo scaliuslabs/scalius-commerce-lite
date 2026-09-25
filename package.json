@@ -47,6 +47,7 @@
     "check:env": "node scripts/check-worker-env.mjs",
     "check:admin-perf": "node scripts/admin-perf-check.mjs",
     "perf:storefront": "node scripts/storefront-perf.mjs",
+    "fidelity:check": "node scripts/storefront-fidelity/check.mjs",
     "check:dist-secrets": "node scripts/check-dist-secrets.mjs",
     "check:build-canaries": "node scripts/check-build-canaries.mjs",
     "generate:agent-contract": "pnpm --dir apps/api exec tsx src/openapi/generate-agent-operation-manifest-cli.ts",
