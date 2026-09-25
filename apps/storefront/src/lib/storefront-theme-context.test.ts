@@ -74,7 +74,7 @@ describe("request theme", () => {
     expect(resolveThemePreview).toHaveBeenCalledWith(`tpv_${"a".repeat(48)}`);
     expect(resolved.previewToken).toBe(`tpv_${"a".repeat(48)}`);
     expect(resolved.theme.template).toBe("heritage-editorial");
-    expect(resolved.layout.productPage).toEqual({ gallery: "beside", thumbnails: "below" });
+    expect(resolved.layout.productPage).toEqual({ gallery: "beside", thumbnails: "below", stageRatio: 0.75, thumbnailSize: 88 });
     expect(resolved.layout.productCard.imageRatio).toBe("portrait");
     expect(resolved.layout.density).toBe("airy");
     expect(resolved.layout.grid).toBe(STOREFRONT_DENSITY_SPECS.airy);
