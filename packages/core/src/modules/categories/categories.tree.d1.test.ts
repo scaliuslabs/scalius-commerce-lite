@@ -25,6 +25,7 @@ import {
     moveCategory,
 } from "./categories.tree";
 import { getPublicCategoryBySlug } from "./categories.storefront";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getStorefrontCategoryProducts } from "../catalog/listing";
 
 type Captured = { sql: string; params: readonly SQLInputValue[] };
@@ -294,6 +295,8 @@ describe("category tree reads", () => {
     it("lists a category's published subtree, leaving out a draft descendant's products", async () => {
         const db = database();
         const store = await seedStore(db);
+        // Seeded with raw SQL: fill the stored buyer state as a release does.
+        await rebuildCatalogProjections(db);
         const category = await getPublicCategoryBySlug(db, "level-0");
 
         const flat = await getStorefrontCategoryProducts(db, category!, { page: 1, limit: 20 });

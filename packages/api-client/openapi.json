@@ -191371,6 +191371,11 @@
                     "nullable": true,
                     "minLength": 1
                   },
+                  "brandId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "A live brand id (brd_…). Omit to keep the current brand; null removes it."
+                  },
                   "isActive": {
                     "type": "boolean"
                   },
@@ -194797,6 +194802,10 @@
                                   "type": "string",
                                   "nullable": true
                                 },
+                                "brandId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "slug": {
                                   "type": "string"
                                 },
@@ -194938,6 +194947,7 @@
                                 "price",
                                 "categoryId",
                                 "categoryName",
+                                "brandId",
                                 "slug",
                                 "canonicalPath",
                                 "noIndex",
@@ -195897,6 +195907,10 @@
                             "nullable": true,
                             "minLength": 1
                           },
+                          "brandId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "isActive": {
                             "type": "boolean"
                           },
@@ -196741,6 +196755,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "brandId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "metaTitle": {
                           "type": "string",
                           "nullable": true
@@ -197312,6 +197330,7 @@
                         "description",
                         "price",
                         "categoryId",
+                        "brandId",
                         "metaTitle",
                         "metaDescription",
                         "canonicalPath",
@@ -197456,6 +197475,11 @@
                     "type": "string",
                     "nullable": true,
                     "minLength": 1
+                  },
+                  "brandId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "A live brand id (brd_…). Omit to keep the current brand; null removes it."
                   },
                   "isActive": {
                     "type": "boolean"
@@ -213865,6 +213889,344 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "attributes.edit"
+        }
+      }
+    },
+    "/api/v1/admin/catalog/projections/rebuild": {
+      "post": {
+        "operationId": "dashboard.catalog_projections.rebuild",
+        "tags": [
+          "Admin - Catalog"
+        ],
+        "summary": "Rebuild the catalogue listing projections",
+        "description": "Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the public cache generation is bumped once the last product is covered. Stock and checkout are unaffected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "afterProductId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 180,
+                    "description": "Cursor from the previous call; omit or null to start."
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2700,
+                    "description": "Products this call recomputes (default 900)."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One rebuild chunk committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "processed": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nextAfterProductId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "done": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "processed",
+                        "nextAfterProductId",
+                        "done"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
         }
       }
     },
@@ -241730,6 +242092,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.cache.purge_all"
+          ]
+        },
+        {
+          "operationId": "dashboard.catalog_projections.rebuild",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.catalog_projections.rebuild"
           ]
         },
         {

@@ -21,7 +21,7 @@
 //       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@scalius/database/client";
-import { processCatalogQueueMessage, type CatalogQueueMessage } from "./utils/catalog-jobs";
+import type { CatalogQueueMessage } from "./utils/catalog-jobs";
 import {
   customerAuthOtpChallenges,
   orderPaymentRecoveryChallenges,
@@ -739,6 +739,7 @@ async function processQueueMessage(
 
     case "catalog.recommendations.refresh":
     case "catalog.projections.rebuild": {
+      const { processCatalogQueueMessage } = await import("./utils/catalog-jobs");
       await processCatalogQueueMessage(payload, db, env, executionCtx);
       break;
     }

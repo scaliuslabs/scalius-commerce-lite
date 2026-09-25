@@ -4,6 +4,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../utils/api-response";
 import { productRoutes } from "./products";
+import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 
 function createApp() {
   const { db, sqlite } = createSqliteD1Database();
@@ -18,6 +19,8 @@ function createApp() {
       ('var_polo', 'polo', 'POLO', 110000, 5, 1, 1),
       ('var_mug', 'mug', 'MUG', 20000, 5, 1, 1);
   `);
+  // Seeded with raw SQL: fill the stored buyer state as a release does.
+  const projected = rebuildCatalogProjections(db);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -29,6 +32,7 @@ function createApp() {
   });
   app.route("/products", productRoutes);
   return async (query: string) => {
+    await projected;
     const response = await app.request(`/api/v1/products/recommendations${query}`, {}, {} as Env);
     return { status: response.status, body: await response.json() as Record<string, any> };
   };

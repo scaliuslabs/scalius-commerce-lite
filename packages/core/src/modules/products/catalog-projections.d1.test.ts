@@ -64,6 +64,9 @@ beforeEach(() => {
         INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
         VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
         INSERT INTO shipping_methods (id, name, fee_minor, kind) VALUES ('m_ship', 'Standard', 6000, 'delivery');
+        INSERT INTO brands (id, name, slug, status) VALUES
+            ('brd_walton01', 'Walton', 'walton', 'published'), ('brd_minister1', 'Minister', 'minister', 'draft');
+        INSERT INTO brands (id, name, slug, status, deleted_at) VALUES ('brd_trashed1', 'Gone', 'gone', 'draft', 1);
     `);
 });
 
@@ -269,6 +272,7 @@ async function createRandomProduct(rng: Rng, index: number) {
         ...baseInput,
         name: `Walk product ${index}`,
         categoryId: rng.pick(["cat_a", "cat_b", null]),
+        brandId: rng.pick(["brd_walton01", "brd_minister1", null, undefined]),
         isActive: rng.chance(0.85),
         discountPercentage: rng.pick([0, 0, 10, 25]),
         attributes,
@@ -417,6 +421,7 @@ describe("catalogue projection drift", () => {
                     patch: rng.pick([
                         { isActive: rng.chance(0.5) },
                         { categoryId: rng.pick(["cat_a", "cat_b", null]) },
+                        { brandId: rng.pick(["brd_walton01", "brd_minister1", null]) },
                         { discountPercentage: rng.pick([0, 15]), discountType: "percentage" as const },
                         { price: rng.pick([180, 420]) },
                     ]),
@@ -436,6 +441,8 @@ describe("catalogue projection drift", () => {
                     isActive: details.isActive,
                     discountPercentage: rng.pick([0, 5]),
                     attributes: rng.chance(0.5) ? [] : [{ attributeId: "attr_material", value: rng.pick(["Silk", "Cotton"]) }],
+                    // Omitted keeps the brand; a value or null replaces it.
+                    ...(rng.chance(0.5) ? { brandId: rng.pick(["brd_walton01", null]) } : {}),
                     expectedAggregateRevision: details.aggregateRevision,
                 }));
             }],
@@ -458,8 +465,14 @@ describe("catalogue projection drift", () => {
                 const id = rng.pick(productIds);
                 const row = productRow(id);
                 if (!row || row.deletedAt !== null) return;
-                const copy = await duplicateProduct(db, id, `Copy ${productIds.length}`);
-                productIds.push(copy.id);
+                // duplicateProduct refuses (with a raw ZodError, a pre-existing gap) a
+                // source whose option value no live SKU uses any more.
+                const copy = await duplicateProduct(db, id, `Copy ${productIds.length}`)
+                    .catch((error: unknown) => {
+                        if (error instanceof Error && error.name === "ZodError") return null;
+                        throw error;
+                    });
+                if (copy) productIds.push(copy.id);
             }],
             ["variant price", async () => {
                 const sku = rng.pick(liveSkus().filter((row) => row.isDefault === 0));
@@ -542,6 +555,38 @@ describe("catalogue projection drift", () => {
         expect([...counts.keys()].sort()).toEqual(steps.map(([name]) => name).sort());
         expect(storedBuyerState().some((row) => row.is_public === 1)).toBe(true);
         expect(storedFacets().some((row) => row.facet_kind === "option")).toBe(true);
+    });
+
+    it("writes a live brand through the product editor into the buyer state", async () => {
+        const created = await createRandomProduct(prng(3), 0);
+        const revision = () => productRow(created.id)!.revision;
+        const stateBrand = () => (sqlite.prepare("SELECT brand_id AS brandId FROM product_buyer_state WHERE product_id = ?")
+            .get(created.id) as { brandId: string | null }).brandId;
+
+        await updateProductSemanticSection(db, created.id, {
+            section: "base", expectedAggregateRevision: revision(), patch: { brandId: "brd_walton01" },
+        });
+        expect(stateBrand()).toBe("brd_walton01");
+        // A trashed brand is refused; nothing changes.
+        await expect(updateProductSemanticSection(db, created.id, {
+            section: "base", expectedAggregateRevision: revision(), patch: { brandId: "brd_trashed1" },
+        })).rejects.toMatchObject({ details: { field: "brandId" } });
+        expect(stateBrand()).toBe("brd_walton01");
+        // The full editor keeps an omitted brand and clears it on null.
+        const details = (await getProductDetails(db, created.id))!;
+        expect(details.brandId).toBe("brd_walton01");
+        const full = {
+            ...baseInput, id: created.id, name: details.name, slug: details.slug, price: details.price,
+            categoryId: details.categoryId, isActive: details.isActive, attributes: [],
+        };
+        await updateProduct(db, created.id, updateProductSchema.parse({ ...full, expectedAggregateRevision: revision() }));
+        expect(stateBrand()).toBe("brd_walton01");
+        await updateProduct(db, created.id, updateProductSchema.parse({ ...full, brandId: null, expectedAggregateRevision: revision() }));
+        expect(stateBrand()).toBeNull();
+        await expect(createProduct(db, createProductSchema.parse({
+            ...baseInput, name: "Branded", categoryId: null, isActive: true, price: 100, attributes: [], brandId: "brd_missing1",
+        }))).rejects.toMatchObject({ details: { field: "brandId" } });
+        await expectNoDrift("brand writes");
     });
 
     it("rebuilds from nothing and heals rows a write path never touched", async () => {
