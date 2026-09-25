@@ -49,6 +49,10 @@ vi.mock("@scalius/core/modules/notifications", () => ({
   flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
 }));
 
+vi.mock("@scalius/core/modules/conversations", () => ({
+  sweepOrphanConversationAttachments: vi.fn(async () => ({ scanned: 0, deleted: 0 })),
+}));
+
 vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   flushPendingMetaPurchaseOutbox: mocks.flushPendingMetaPurchaseOutbox,
 }));

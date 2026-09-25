@@ -48,6 +48,12 @@ export const PERMISSIONS = {
   ORDERS_ISSUE_INVOICE: "orders.issue_invoice",
 
   // =============================================
+  // Conversations (2 permissions): the inbox and order threads
+  // =============================================
+  CONVERSATIONS_VIEW: "conversations.view",
+  CONVERSATIONS_REPLY: "conversations.reply",
+
+  // =============================================
   // Customers (6 permissions)
   // =============================================
   CUSTOMERS_VIEW: "customers.view",
@@ -436,6 +442,24 @@ export const PERMISSION_METADATA: Record<
     action: "issue_invoice",
     category: "Orders",
     isSensitive: true,
+  },
+  [PERMISSIONS.CONVERSATIONS_VIEW]: {
+    name: PERMISSIONS.CONVERSATIONS_VIEW,
+    displayName: "View Inbox",
+    description: "Read customer conversations, internal notes and attachments",
+    resource: "conversations",
+    action: "view",
+    category: "Orders",
+    isSensitive: false,
+  },
+  [PERMISSIONS.CONVERSATIONS_REPLY]: {
+    name: PERMISSIONS.CONVERSATIONS_REPLY,
+    displayName: "Reply to Customers",
+    description: "Reply to customers, add internal notes, assign and close conversations",
+    resource: "conversations",
+    action: "reply",
+    category: "Orders",
+    isSensitive: false,
   },
 
   // Customers
