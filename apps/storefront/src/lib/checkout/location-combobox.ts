@@ -53,7 +53,7 @@ export function enhanceLocationCombobox(
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
   input.setAttribute("aria-controls", listId);
-  input.autocomplete = select.getAttribute("autocomplete") || "off";
+  input.setAttribute("autocomplete", select.getAttribute("autocomplete") || "off");
   input.spellcheck = false;
   for (const name of ["aria-describedby", "aria-required", "aria-invalid"]) {
     const value = select.getAttribute(name);
@@ -108,6 +108,9 @@ export function enhanceLocationCombobox(
 
   const wrapper = doc.createElement("div");
   wrapper.className = "relative";
+  // The field a failed post asked the buyer to fix keeps the focus.
+  const hadFocus = doc.activeElement === select || select.autofocus;
+  select.autofocus = false;
   select.before(wrapper);
   wrapper.append(input, chevron, popup, select);
   select.hidden = true;
@@ -238,11 +241,10 @@ export function enhanceLocationCombobox(
   };
 
   const listen = { signal };
-  input.addEventListener("click", () => {
-    if (open) return closeList();
-    openList();
-    // Typing replaces the chosen name instead of adding to it.
-    if (!isPhone()) input.select();
+  input.addEventListener("click", () => (open ? closeList() : openList()), listen);
+  // Typing over the chosen name searches afresh instead of adding to it.
+  input.addEventListener("beforeinput", () => {
+    if (select.value && input.value === selectedName()) input.value = "";
   }, listen);
   input.addEventListener("input", () => onType(input), listen);
   input.addEventListener("keydown", onKey, listen);
@@ -288,6 +290,7 @@ export function enhanceLocationCombobox(
     else input.value = selectedName();
   };
   sync();
+  if (hadFocus) input.focus();
 
   return {
     sync,
