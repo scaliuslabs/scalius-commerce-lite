@@ -136,7 +136,6 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
     // Noise columns a public payload still outputs until its owner removes them
     // there (the source fix), per the cache lead's ruling.
     const pendingSourceFix = [
-      "product_variants.updated_at ", // S3a: public catalogue payloads drop variant updatedAt
       "hero_sliders.revision ", "hero_sliders.updated_at ", // S3b
       "checkout_languages.revision ", "checkout_languages.updated_at ", // S3b
       "shipping_methods.updated_at ", // S3b: /shipping-methods drops updatedAt

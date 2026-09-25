@@ -2207,7 +2207,6 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;

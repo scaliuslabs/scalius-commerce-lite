@@ -31,6 +31,19 @@ export interface ProductAttributeAssignment {
     value: string;
 }
 
+/**
+ * The value row an assignment stores, as the product's current rows can be
+ * compared with it (a save that changes nothing writes nothing).
+ * `valueId` is the enum value's id; `null` when the enum value is new.
+ */
+export interface PlannedProductAttributeValue {
+    attributeId: string;
+    value: string;
+    valueNumber: number | null;
+    valueId: string | null;
+    kind: "enum" | "plain";
+}
+
 type AssignmentDefinition = {
     attributeId: string;
     valueType: "text" | "number" | "boolean" | "enum";
@@ -50,11 +63,11 @@ export async function prepareProductAttributeValueRows(
     db: Database,
     productId: string,
     assignments: ReadonlyArray<ProductAttributeAssignment>,
-): Promise<{ statements: AttributeBatchItem[] }> {
+): Promise<{ statements: AttributeBatchItem[]; planned: PlannedProductAttributeValue[] }> {
     const entries = assignments
         .map((assignment, index) => ({ index, attributeId: assignment.attributeId.trim(), raw: assignment.value }))
         .filter((entry) => entry.attributeId && entry.raw.trim());
-    if (entries.length === 0) return { statements: [] };
+    if (entries.length === 0) return { statements: [], planned: [] };
     const uniqueIds = new Set(entries.map((entry) => entry.attributeId));
     if (uniqueIds.size > MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS || entries.length > MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS) {
         throw new ValidationError(`Assign at most ${MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS} attributes to a product.`);
@@ -93,6 +106,7 @@ export async function prepareProductAttributeValueRows(
     const newEnumValues = new Map<string, NewAttributeValueRow & { attributeId: string }>();
     // `k` is the row's kind as text: json_extract() yields text on PostgreSQL.
     const rows: Array<{ id: string; a: string; v: string; n: number | null; k: "enum" | "plain" }> = [];
+    const planned: PlannedProductAttributeValue[] = [];
     for (const entry of entries) {
         const definition = byAttribute.get(entry.attributeId)!;
         const encoded = encodeAttributeValue(definition.valueType, entry.raw, definition.unit);
@@ -117,8 +131,16 @@ export async function prepareProductAttributeValueRows(
                 }
             }
             rows.push({ id: `val_${nanoid()}`, a: entry.attributeId, v: encoded.value, n: null, k: "enum" });
+            planned.push({
+                attributeId: entry.attributeId,
+                value: definition.enumValue ?? encoded.value,
+                valueNumber: null,
+                valueId: definition.enumValueId,
+                kind: "enum",
+            });
         } else {
             rows.push({ id: `val_${nanoid()}`, a: entry.attributeId, v: encoded.value, n: encoded.valueNumber, k: "plain" });
+            planned.push({ attributeId: entry.attributeId, value: encoded.value, valueNumber: encoded.valueNumber, valueId: null, kind: "plain" });
         }
     }
 
@@ -156,5 +178,5 @@ export async function prepareProductAttributeValueRows(
         FROM json_each(${payload}) AS entry
         WHERE 1 = 1
     `));
-    return { statements };
+    return { statements, planned };
 }

@@ -49,24 +49,34 @@ import {
     type ProductMediaProjectionRow,
 } from "../products/media";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
-import {
-    categoryScope,
-    declareProductCards,
-    declareRequestedProducts,
-    deps,
-} from "../catalog/declare-deps";
+import { categoryScope } from "@scalius/shared/cache-deps";
+import { deps } from "../../cache-deps";
+import { declareProductCards, declareRequestedProducts } from "../catalog";
 
 /**
  * What a collection's product set depends on beyond the cards shown: a
  * manual collection's every configured member (a hidden one shows once it is
  * public again) and a dynamic one's categories (membership, newest order and
  * published state). The collection row itself is declared by its reader.
+ *
+ * `shown`: a curated list that shows the first public members in configured
+ * order, up to its limit. Once the limit is reached, members after the last
+ * shown one cannot enter unless one before them changes (their own keys), so
+ * only the members up to that point are declared.
  */
-function declareCollectionMembership(config: unknown): void {
+function declareCollectionMembership(
+    config: unknown,
+    shown?: { productIds: readonly string[]; limit: number },
+): void {
     if (!deps.active()) return;
     const cfg = normalizeCollectionConfig(config);
     const membership = collectionMembershipForConfig(cfg);
-    declareRequestedProducts(membership.productIds);
+    let members = membership.productIds;
+    if (shown && shown.productIds.length >= shown.limit && shown.productIds.length > 0) {
+        const last = members.indexOf(shown.productIds[shown.productIds.length - 1]!);
+        if (last !== -1) members = members.slice(0, last + 1);
+    }
+    declareRequestedProducts(members);
     for (const categoryId of membership.categoryIds) {
         deps.listMembership(categoryScope(categoryId));
         deps.category(categoryId);
@@ -1141,8 +1151,6 @@ export function planCollectionProducts(
             const allRows = [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)];
             const mediaByProduct = resolveProductMediaProjectionRows(mediaRows);
             const resolvedProductsById = resolveProductCards(allRows, mediaByProduct);
-            declareProductCards(allRows.map((row) => row.id), mediaByProduct);
-            for (const request of requests) declareCollectionMembership(request.config);
 
             const specificProductsById = new Map<string, ResolvedProduct>();
             for (const prod of rowsOf(pinnedList)) {
@@ -1212,6 +1220,16 @@ export function planCollectionProducts(
                 const featuredProduct = cfg.featuredProductId
                     ? featuredProductsById.get(cfg.featuredProductId) ?? null
                     : null;
+
+                // The cards shown, and the set they are taken from.
+                declareProductCards(
+                    [...collectionProducts.map((product) => product.id), ...(featuredProduct ? [featuredProduct.id] : [])],
+                    mediaByProduct,
+                );
+                declareCollectionMembership(cfg, {
+                    productIds: collectionProducts.map((product) => product.id),
+                    limit: maxProducts,
+                });
 
                 resolvedByKey.set(request.key, { products: collectionProducts, categories: collectionCategories, featuredProduct });
             }
