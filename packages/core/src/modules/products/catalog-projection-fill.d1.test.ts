@@ -66,7 +66,7 @@ describe("0091_catalogue_projection_fill", () => {
         sqlite.exec(SEED);
         expect(sqlite.prepare("SELECT count(*) AS n FROM product_buyer_state").get()).toEqual({ n: 0 });
 
-        sqlite.exec(compiledMigrationSql(provider, undefined, "0091_"));
+        sqlite.exec(compiledMigrationSql(provider, "0092_", "0091_"));
         const filled = { state: sqlite.prepare(BUYER_STATE).all(), facets: sqlite.prepare(FACETS).all() };
         expect(sqlite.prepare("SELECT version, name FROM scalius_schema_migrations ORDER BY version DESC LIMIT 1").get())
             .toEqual({ version: CATALOG_PROJECTION_FILL_MIGRATION.version, name: CATALOG_PROJECTION_FILL_MIGRATION.name });
