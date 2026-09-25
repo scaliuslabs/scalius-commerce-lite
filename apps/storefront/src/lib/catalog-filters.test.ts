@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `https://api.test/api/v1${path}` }));
 
+import type { ProductFacet } from "@/lib/api";
 import {
+  applyCatalogFilterCounts,
   catalogCountQuery,
   catalogFilterSearchParams,
   setupCatalogFilters,
@@ -12,11 +14,26 @@ import {
   visibleCatalogFacets,
 } from "./catalog-filters";
 
-const facet = (slug: string, values: Array<[string, number]>) => ({
+const facet = (slug: string, values: Array<[string, number]>): ProductFacet => ({
   id: slug,
   name: slug,
   slug,
-  values: values.map(([value, count]) => ({ value, count })),
+  kind: slug.startsWith("option.") ? "option" : "attribute",
+  display: "checkbox",
+  unit: null,
+  values: values.map(([value, count]) => ({ value, label: value, count, swatch: null })),
+  range: null,
+});
+
+const rangeFacet = (slug: string, range: { min: number; max: number } | null): ProductFacet => ({
+  id: slug,
+  name: "Display size",
+  slug,
+  kind: "attribute",
+  display: "range",
+  unit: "in",
+  values: [],
+  range,
 });
 
 function renderForm(desktop: boolean, beforeScript?: (form: HTMLFormElement) => void) {
@@ -27,6 +44,8 @@ function renderForm(desktop: boolean, beforeScript?: (form: HTMLFormElement) => 
       <input type="checkbox" role="switch" name="hasDiscount" value="true" />
       <input type="checkbox" name="option.size" value="42" />
       <input type="text" inputmode="decimal" name="minPrice" value="" />
+      <input type="text" inputmode="decimal" name="display-size.min" value="" data-catalog-range="min" />
+      <input type="text" inputmode="decimal" name="display-size.max" value="" data-catalog-range="max" />
       <button type="submit" data-catalog-filter-apply>Show 10 products</button>
     </form>
   `;
@@ -65,6 +84,32 @@ describe("catalog filter facets", () => {
     ]);
   });
 
+  it("shows a range when its products differ, or while a bound is applied", () => {
+    const facets = [rangeFacet("display-size", { min: 13, max: 15.6 }), rangeFacet("weight", { min: 1.2, max: 1.2 }), rangeFacet("battery", null)];
+    const [shown, ...rest] = visibleCatalogFacets(facets, {});
+    expect([shown!.slug, rest]).toEqual(["display-size", []]);
+    expect(shown).toMatchObject({ applied: { min: null, max: null }, selectedCount: 0, preview: [], more: [] });
+
+    const applied = visibleCatalogFacets(facets, { "weight.max": "1.5", "display-size.min": "14" });
+    expect(applied.map(({ slug, applied: bounds, selectedCount }) => [slug, bounds, selectedCount])).toEqual([
+      ["display-size", { min: "14", max: null }, 1],
+      ["weight", { min: null, max: "1.5" }, 1],
+    ]);
+  });
+
+  it("selects values by their URL value, not their label", () => {
+    const brand: ProductFacet = {
+      ...facet("brand", []),
+      kind: "brand",
+      values: [
+        { value: "samsung", label: "Samsung", count: 3, swatch: null },
+        { value: "apple", label: "Apple", count: 2, swatch: null },
+      ],
+    };
+    const [shown] = visibleCatalogFacets([brand], { brand: ["samsung", "Apple"] });
+    expect(shown!.preview.map(({ label, selected }) => [label, selected])).toEqual([["Samsung", true], ["Apple", false]]);
+  });
+
   it("offers a price filter only when prices differ or one is applied", () => {
     expect(showsCatalogPriceFilter({ min: 0, max: 0 }, {})).toBe(false);
     expect(showsCatalogPriceFilter({ min: 500, max: 500 }, {})).toBe(false);
@@ -90,6 +135,26 @@ describe("catalog filter form", () => {
     const params = catalogFilterSearchParams(form);
     expect(params.toString()).toBe("sortBy=price-asc&q=running+shoe&hasDiscount=true");
     expect(catalogCountQuery(params).toString()).toBe("search=running+shoe&hasDiscount=true&limit=1");
+  });
+
+  it("submits only the range bounds the buyer typed", () => {
+    const form = renderForm(true);
+    form.querySelector<HTMLInputElement>("[name='display-size.max']")!.value = " 15.6 ";
+
+    const params = catalogFilterSearchParams(form);
+    expect(params.toString()).toBe("sortBy=price-asc&q=running+shoe&display-size.max=15.6");
+    expect(catalogCountQuery(params).toString()).toBe("search=running+shoe&display-size.max=15.6&limit=1");
+  });
+
+  it("applies a desktop range on Enter, not on every change", () => {
+    const form = renderForm(true);
+    const max = form.querySelector<HTMLInputElement>("[name='display-size.max']")!;
+    max.value = "15.6";
+    max.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(window.location.search).toBe("?sortBy=price-asc");
+
+    form.requestSubmit();
+    expect(window.location.search).toBe("?sortBy=price-asc&q=running+shoe&display-size.max=15.6");
   });
 
   it("applies a desktop switch as soon as it changes", () => {
@@ -127,8 +192,8 @@ describe("catalog filter form", () => {
             <input type="search" data-catalog-facet-query />
             <p data-catalog-facet-search-empty hidden>No matches</p>
           </div>
-          ${["Asus", "Acer", "Apple"].map((value) => `<label><input type="checkbox" name="brand" value="${value}" data-catalog-facet />${value}</label>`).join("")}
-          <details><summary>Show 1 more</summary><label><input type="checkbox" name="brand" value="Lenovo" data-catalog-facet />Lenovo</label></details>
+          ${[["asus", "Asus", 3], ["acer", "Acer", 1], ["hp", "Hewlett-Packard", 2]].map(([value, label, count]) => `<label><input type="checkbox" name="brand" value="${value}" data-catalog-facet /><span>${label}</span><span data-catalog-facet-count>${count}</span></label>`).join("")}
+          <details><summary>Show 1 more</summary><label><input type="checkbox" name="brand" value="lenovo" data-catalog-facet /><span>Lenovo</span><span data-catalog-facet-count>4</span></label></details>
         </fieldset>
       </form>
     `;
@@ -140,11 +205,19 @@ describe("catalog filter form", () => {
 
     const visible = () => [...document.querySelectorAll<HTMLLabelElement>("fieldset label")]
       .filter((label) => !label.hidden)
-      .map((label) => label.textContent!.trim());
+      .map((label) => label.querySelector("span")!.textContent);
     input.value = "LEN";
     input.dispatchEvent(new Event("input"));
     expect(visible()).toEqual(["Lenovo"]);
     expect(document.querySelector("details")!.open).toBe(true);
+
+    // It searches what the buyer reads: the label, never the URL value or the count.
+    input.value = "packard";
+    input.dispatchEvent(new Event("input"));
+    expect(visible()).toEqual(["Hewlett-Packard"]);
+    input.value = "3";
+    input.dispatchEvent(new Event("input"));
+    expect(visible()).toEqual([]);
 
     input.value = "zz";
     input.dispatchEvent(new Event("input"));
@@ -247,5 +320,22 @@ describe("catalog filter form", () => {
     expect(input("41").disabled).toBe(true);
     expect(apply.textContent).toBe("No matching products");
     expect(apply.disabled).toBe(true);
+  });
+
+  it("shows each range's bounds for the pending selection as its placeholders", () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="text" name="display-size.min" placeholder="11" data-catalog-range="min" />
+        <input type="text" name="display-size.max" placeholder="17" data-catalog-range="max" />
+        <input type="text" name="weight.min" placeholder="1" data-catalog-range="min" />
+        <button type="submit" data-catalog-filter-apply>Show 10 products</button>
+      </form>
+    `;
+    const form = document.querySelector("form")!;
+    applyCatalogFilterCounts(form, [rangeFacet("display-size", { min: 13, max: 15.6 }), rangeFacet("weight", null)], 4);
+    const placeholders = [...form.querySelectorAll("input")].map((input) => input.placeholder);
+    // A range the pending selection leaves without products keeps its old hint.
+    expect(placeholders).toEqual(["13", "15.6", "1"]);
+    expect(form.querySelector("button")!.textContent).toBe("Show 4 products");
   });
 });

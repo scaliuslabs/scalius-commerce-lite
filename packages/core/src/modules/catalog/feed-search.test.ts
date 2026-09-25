@@ -23,7 +23,7 @@ const getStorefrontProducts: typeof readStorefrontProducts = (db, params) =>
 const getStorefrontCollectionProducts: typeof readStorefrontCollectionProducts = (db, membership, params) =>
     withProjections(db, () => readStorefrontCollectionProducts(db, membership, params));
 import { searchStorefrontProducts } from "./search";
-import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
+import { resolvePublicAttributeFilters } from "./facets";
 import { search as searchCatalog } from "../../search";
 
 let sqlite: DatabaseSync;
@@ -508,7 +508,7 @@ describe("storefront feed category search", () => {
     it("applies OR within facets, AND across facets, and returns self-excluding counts", async () => {
         const color = { id: "attr_color", name: "Color", slug: "color" };
         const material = { id: "attr_material", name: "Material", slug: "material" };
-        const brand = { id: "attr_brand", name: "Brand", slug: "brand" };
+        const brand = { id: "attr_maker", name: "Maker", slug: "maker" };
         for (const [productId, values] of [
             ["prod_runner", ["Red", "Cotton", "A"]],
             ["prod_loafer", ["Blue", "Cotton", "A"]],
@@ -526,37 +526,21 @@ describe("storefront feed category search", () => {
             minPrice: 800,
             page: 1,
             limit: 20,
-            attributeFilters: [
-                { ...color, values: ["Red", "Blue"] },
-                { ...material, values: ["Cotton"] },
-            ],
+            attributeFilters: await resolvePublicAttributeFilters(db, { color: ["Red", "Blue"], material: ["Cotton"] }, []),
         });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_loafer"]);
         expect(result.pagination.total).toBe(1);
         expect(result.priceRange).toEqual({ min: 500, max: 1000 });
+        const facet = (attribute: { id: string; name: string; slug: string }, values: Array<[string, string, number]>) => ({
+            ...attribute, kind: "attribute", display: "checkbox", unit: null, range: null,
+            values: values.map(([value, label, count]) => ({ value, label, count, swatch: null })),
+        });
+        // Attribute facets in their own order, then by name.
         expect(result.facets).toEqual([
-            {
-                ...brand,
-                values: [
-                    { value: "A", count: 1 },
-                    { value: "B", count: 0 },
-                ],
-            },
-            {
-                ...color,
-                values: [
-                    { value: "Blue", count: 1 },
-                    { value: "Red", count: 0 },
-                ],
-            },
-            {
-                ...material,
-                values: [
-                    { value: "Cotton", count: 1 },
-                    { value: "Silk", count: 1 },
-                ],
-            },
+            facet(color, [["blue", "Blue", 1], ["red", "Red", 0]]),
+            facet(brand, [["a", "A", 1], ["b", "B", 0]]),
+            facet(material, [["cotton", "Cotton", 1], ["silk", "Silk", 1]]),
         ]);
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
     });
@@ -652,18 +636,19 @@ describe("storefront feed category search", () => {
         insertAttribute("prod_runner", color, "Red");
         insertAttribute("prod_loafer", color, "Blue");
 
+        const typed = { kind: "attribute", ...color };
         await expect(resolvePublicAttributeFilters(db, {
-            color: ["Red", "Blue", "Missing"],
+            color: ["Red", "Blue", " red "],
             unknown: ["Anything"],
         }, [])).resolves.toEqual([
-            { ...color, values: ["Red", "Blue"] },
+            { ...typed, values: ["red", "blue"], labels: ["Red", "Blue"], keys: ["red", "blue"] },
         ]);
         await expect(resolvePublicAttributeFilters(db, {
             "option.size": ["42", "41"],
             color: ["Red"],
         }, [])).resolves.toEqual([
-            { id: "option.size", name: "size", slug: "option.size", values: ["42", "41"] },
-            { ...color, values: ["Red"] },
+            { kind: "option", id: "option.size", name: "size", slug: "option.size", values: ["42", "41"], labels: ["42", "41"], keys: ["42", "41"] },
+            { ...typed, values: ["red"], labels: ["Red"], keys: ["red"] },
         ]);
         await expect(resolvePublicAttributeFilters(db, {
             color: Array.from({ length: 91 }, (_, index) => `Value ${index}`),

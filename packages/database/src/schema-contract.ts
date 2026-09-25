@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 91,
-  name: "0091_catalogue_projection_fill",
+  version: 92,
+  name: "0092_attribute_option_presets",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -233,8 +233,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "0c4e0fe4d503aaeda11d492acb521f8740e64073427df0c2d2e2ed9802bf0ecf",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 91,
+    name: "0091_catalogue_projection_fill",
     sourceSha256: "f517802465dd78eb25c3688f3b7dd9b0ac2ebe58dbf1b124fb4758f538ea0531",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "81dabf4bfe6ec2627963d55b32f3e44c6693fd523cf550dff6f2c6be1dea2328",
   },
 ] as const;
 

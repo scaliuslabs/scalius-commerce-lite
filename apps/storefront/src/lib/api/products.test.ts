@@ -37,8 +37,81 @@ import {
   getFeedProducts,
   getProductsByCategory,
   getProductBySlugResult,
+  normalizeProductFacets,
   searchProductsForForm,
 } from "./products";
+
+describe("listing facets", () => {
+  it("keeps the typed facet contract and drops what cannot render safely", () => {
+    expect(normalizeProductFacets([
+      {
+        id: "attr_1",
+        name: "Finish",
+        slug: "finish",
+        kind: "attribute",
+        display: "swatch",
+        unit: null,
+        range: null,
+        values: [
+          { value: "rose gold", label: "Rose Gold", count: 3, swatch: "#B76E79" },
+          // A swatch lands in a style attribute: only a hex colour survives.
+          { value: "black", label: "Black", count: 2, swatch: "red;position:fixed" },
+          { value: "", label: "Empty", count: 1, swatch: null },
+          { value: "grey", label: "Grey", count: -1, swatch: null },
+        ],
+      },
+      {
+        id: "attr_2",
+        name: "Display size",
+        slug: "display-size",
+        kind: "attribute",
+        display: "range",
+        unit: " in ",
+        range: { min: 11.6, max: 17.3 },
+        values: [{ value: "13", label: "13 in", count: 1, swatch: null }],
+      },
+      { id: "attr_3", name: "Weight", slug: "weight", kind: "attribute", display: "range", unit: "kg", range: { min: 3, max: 1 }, values: [] },
+      // Missing typing: a label falls back to the value, the kind to the slug.
+      { id: "option.size", name: "Size", slug: "option.size", values: [{ value: "42", count: 4 }] },
+      { id: "broken", name: "Broken", values: [] },
+    ])).toEqual([
+      {
+        id: "attr_1",
+        name: "Finish",
+        slug: "finish",
+        kind: "attribute",
+        display: "swatch",
+        unit: null,
+        range: null,
+        values: [
+          { value: "rose gold", label: "Rose Gold", count: 3, swatch: "#B76E79" },
+          { value: "black", label: "Black", count: 2, swatch: null },
+        ],
+      },
+      {
+        id: "attr_2",
+        name: "Display size",
+        slug: "display-size",
+        kind: "attribute",
+        display: "range",
+        unit: "in",
+        range: { min: 11.6, max: 17.3 },
+        values: [],
+      },
+      { id: "attr_3", name: "Weight", slug: "weight", kind: "attribute", display: "range", unit: "kg", range: null, values: [] },
+      {
+        id: "option.size",
+        name: "Size",
+        slug: "option.size",
+        kind: "option",
+        display: "checkbox",
+        unit: null,
+        range: null,
+        values: [{ value: "42", label: "42", count: 4, swatch: null }],
+      },
+    ]);
+  });
+});
 
 function productPagePayload() {
   return {

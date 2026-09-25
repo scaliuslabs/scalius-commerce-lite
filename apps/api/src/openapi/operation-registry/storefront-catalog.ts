@@ -8,7 +8,6 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
     reason:
       "ID compatibility alias; use storefront.attributes.list_for_category with the public category slug.",
   },
-  "storefront.attributes.list_filterable": { limits: { request: 16_384 } },
   "storefront.attributes.list_for_category": { limits: { request: 16_384 } },
   "storefront.attributes.list_for_search": { limits: { request: 16_384 } },
   "storefront.categories.get": {

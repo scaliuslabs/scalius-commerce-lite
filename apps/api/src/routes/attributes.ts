@@ -1,15 +1,16 @@
 // src/server/routes/attributes.ts
+// Public facet definitions outside a listing (agents and tools): a
+// category's or a search's typed facets with counts, read from the catalogue
+// projections (catalog/facets.ts). Listings return the same facets beside
+// their products; storefront pages never call these routes.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import {
   categories
 } from "@scalius/database/schema";
 import { eq, and, isNull } from "drizzle-orm";
-import {
-  getPublicFilterableAttributes,
-  getPublicAttributesByCategory,
-  getPublicAttributesForSearch,
-} from "@scalius/core/modules/attributes";
+import { getPublicCategoryFacets, getPublicSearchFacets } from "@scalius/core/modules/catalog";
+import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -18,16 +19,7 @@ import { normalizePublicFtsSearchQuery } from "../utils/public-search-query";
 import { getPublicCategoryById } from "@scalius/core/modules/categories";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// Cache this endpoint as it changes infrequently
-// Cache category-specific attributes
-// Cache category-specific attributes by slug
-const attributeFilterSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  values: z.array(z.string()).max(100),
-});
-const filterResponseSchema = successEnvelope(z.object({ filters: z.array(attributeFilterSchema) }));
+const filterResponseSchema = successEnvelope(z.object({ facets: z.array(productFacetSchema).max(20) }));
 const publicAttributeCategorySlugSchema = z
   .string()
   .trim()
@@ -35,35 +27,13 @@ const publicAttributeCategorySlugSchema = z
   .max(100)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
-// GET /attributes/filterable
-const filterableRoute = createRoute({
-  method: "get",
-  path: "/filterable",
-  operationId: "storefront.attributes.list_filterable",
-  tags: ["Attributes"],
-  summary: "Get all filterable product attributes with values",
-  responses: {
-    200: {
-      description: "Filterable attributes list",
-      content: { "application/json": { schema: filterResponseSchema } },
-    },
-    500: errorResponses[500],
-  }
-});
-
-app.openapi(filterableRoute, async (c) => {
-  const db = c.get("db");
-  const result = await getPublicFilterableAttributes(db);
-  return ok(c, result);
-});
-
 // GET /attributes/category/:categoryId
 const categoryAttributesRoute = createRoute({
   method: "get",
   path: "/category/{categoryId}",
   operationId: "storefront.attributes.category_id_alias",
   tags: ["Attributes"],
-  summary: "Get filterable attributes for a category by ID",
+  summary: "Get the facets of a category by ID",
   request: {
     params: z.object({
       categoryId: z.string().trim().min(1).max(180),
@@ -84,8 +54,7 @@ app.openapi(categoryAttributesRoute, async (c) => {
   if (!await getPublicCategoryById(db, categoryId)) {
     throw new NotFoundError("Category not found");
   }
-  const result = await getPublicAttributesByCategory(db, categoryId);
-  return ok(c, result);
+  return ok(c, await getPublicCategoryFacets(db, categoryId));
 });
 
 // GET /attributes/category-slug/:categorySlug
@@ -94,7 +63,9 @@ const categorySlugAttributesRoute = createRoute({
   path: "/category-slug/{categorySlug}",
   operationId: "storefront.attributes.list_for_category",
   tags: ["Attributes"],
-  summary: "Get filterable attributes for a category by slug",
+  summary: "Get the facets of a category by slug",
+  description:
+    "Brand, option and typed attribute facets over the public products of the category and its published sub-categories, with counts (at most 20 attribute facets and 30 values each). Filter a listing with `?<facet slug>=<value>` (`<slug>.min`/`<slug>.max` for a range).",
   request: {
     params: z.object({
       categorySlug: publicAttributeCategorySlugSchema,
@@ -127,8 +98,7 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
 
   if (!category) throw new NotFoundError("Category not found");
 
-  const result = await getPublicAttributesByCategory(db, category.id);
-  return ok(c, result);
+  return ok(c, await getPublicCategoryFacets(db, category.id));
 });
 
 // GET /attributes/search-filters
@@ -137,7 +107,7 @@ const searchFiltersRoute = createRoute({
   path: "/search-filters",
   operationId: "storefront.attributes.list_for_search",
   tags: ["Attributes"],
-  summary: "Get filterable attributes for search results",
+  summary: "Get the facets of search results",
   request: {
     query: z.object({
       q: z.string().trim().max(120).optional().openapi({ description: "Search query" }),
@@ -163,10 +133,10 @@ app.openapi(searchFiltersRoute, async (c) => {
   }
 
   if (!query) {
-    return ok(c, { filters: [] });
+    return ok(c, { facets: [] });
   }
 
-  return ok(c, await getPublicAttributesForSearch(db, query, categoryId));
+  return ok(c, await getPublicSearchFacets(db, query, categoryId));
 });
 
 export { app as attributeRoutes };

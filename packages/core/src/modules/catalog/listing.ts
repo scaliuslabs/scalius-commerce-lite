@@ -21,13 +21,10 @@ import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
 import {
-    isOptionFilter,
-    buildOptionFilterCondition,
-    buildAttributeProductSubquery,
-    buildResultScopedFacetQuery,
-    buildResultScopedOptionFacetQuery,
-    type PublicProductFacetRow,
-    groupResultScopedFacets,
+    buildCatalogFacetCountQuery,
+    catalogFacetFilterConditions,
+    groupCatalogFacets,
+    type CatalogFacetCountRow,
 } from "./facets";
 import {
     priceFilterBoundsMinor,
@@ -127,6 +124,8 @@ type StorefrontCatalogScope = {
     sortAfterScope?: boolean;
     orderBy?: SQL;
     fixedCategory?: StorefrontCategoryProductCategory;
+    /** The brand's own page: no brand facet. */
+    withoutBrandFacet?: boolean;
 };
 
 /**
@@ -169,27 +168,27 @@ async function readStorefrontCatalogResults(
         search,
         sort = search ? "relevance" : "newest",
     } = params;
-    const optionFilters = (params.attributeFilters ?? []).filter(isOptionFilter);
-    const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
     const unscoped = !scope.condition && !params.category && !params.search && !params.ids;
     // Facet counts apply every selection except their own facet's, so they
-    // read the scope conditions before the option filter is applied.
+    // read the scope conditions before the facet filters are applied.
     const setOptions = { drivenByIdSet: scope.drivenByIdSet };
     const unfiltered = buildStorefrontBuyerStateConditions(db, { ...params, ...priceBounds }, setOptions);
     const priceRange = buildStorefrontBuyerStateConditions(db, params, setOptions);
-    const unfilteredOptionConditions = unfiltered.conditions;
+    const facetBaseConditions = unfiltered.conditions;
     const priceRangeConditions = priceRange.conditions;
     if (scope.condition) {
-        unfilteredOptionConditions.push(scope.condition);
+        facetBaseConditions.push(scope.condition);
         priceRangeConditions.push(scope.condition);
     }
-    const optionCondition = buildOptionFilterCondition(optionFilters);
-    const conditions = optionCondition ? [...unfilteredOptionConditions, optionCondition] : unfilteredOptionConditions;
-    if (optionCondition) priceRangeConditions.push(optionCondition);
+    // Selected facet values, ranges, option axes and brands: probes of the
+    // stored facet rows and buyer state, never a `products` read.
+    const facetConditions = catalogFacetFilterConditions(params.attributeFilters);
+    const conditions = [...facetBaseConditions, ...facetConditions];
+    priceRangeConditions.push(...facetConditions);
     // The count and price range join `products` only when a condition reads it.
-    const countNeedsProducts = unfiltered.needsProducts || Boolean(optionCondition) || Boolean(scope.needsProducts);
-    const priceRangeNeedsProducts = priceRange.needsProducts || Boolean(optionCondition) || Boolean(scope.needsProducts);
+    const countNeedsProducts = unfiltered.needsProducts || Boolean(scope.needsProducts);
+    const priceRangeNeedsProducts = priceRange.needsProducts || Boolean(scope.needsProducts);
     const orderBy = scope.orderBy
         ? [scope.orderBy]
         : sort === "relevance" && search
@@ -216,14 +215,6 @@ async function readStorefrontCatalogResults(
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
         .where(and(...conditions))
         .$dynamic();
-    const attributeSubquery = buildAttributeProductSubquery(
-        db,
-        attributeFilters,
-        "catalog_filtered_products",
-    );
-    if (attributeSubquery) {
-        query = query.innerJoin(attributeSubquery, eq(buyerState.productId, attributeSubquery.productId));
-    }
     const rankJoin = !scope.orderBy && sort === "relevance" && search
         ? productSearchRankJoin(db, search)
         : undefined;
@@ -246,14 +237,6 @@ async function readStorefrontCatalogResults(
         .$dynamic();
     if (countNeedsProducts) countQuery = countQuery.innerJoin(products, eq(products.id, buyerState.productId));
     countQuery = countQuery.where(and(...conditions));
-    const countSubquery = buildAttributeProductSubquery(
-        db,
-        attributeFilters,
-        "catalog_count_filtered_products",
-    );
-    if (countSubquery) {
-        countQuery = countQuery.innerJoin(countSubquery, eq(buyerState.productId, countSubquery.productId));
-    }
 
     let priceRangeQuery = db
         .select({
@@ -266,35 +249,16 @@ async function readStorefrontCatalogResults(
         priceRangeQuery = priceRangeQuery.innerJoin(products, eq(products.id, buyerState.productId));
     }
     priceRangeQuery = priceRangeQuery.where(and(...priceRangeConditions));
-    const priceRangeSubquery = buildAttributeProductSubquery(
-        db,
-        attributeFilters,
-        "catalog_price_range_filtered_products",
-    );
-    if (priceRangeSubquery) {
-        priceRangeQuery = priceRangeQuery.innerJoin(
-            priceRangeSubquery,
-            eq(buyerState.productId, priceRangeSubquery.productId),
-        );
-    }
 
-    const facetReads = () => Promise.all([
-        buildResultScopedFacetQuery(
-            db,
-            buyerState,
-            unfilteredOptionConditions,
-            attributeFilters,
-            optionCondition,
-        ).all() as Promise<PublicProductFacetRow[]>,
-        buildResultScopedOptionFacetQuery(
-            db,
-            buyerState,
-            unfilteredOptionConditions,
-            attributeFilters,
-            optionFilters,
-        ).all() as Promise<PublicProductFacetRow[]>,
-    ]);
-    const noFacets = Promise.resolve([[], []] as [PublicProductFacetRow[], PublicProductFacetRow[]]);
+    // Every facet (brand, option axes, attributes) in one statement.
+    const facetReads = () => buildCatalogFacetCountQuery(db, {
+        baseConditions: facetBaseConditions,
+        needsProducts: countNeedsProducts,
+        filters: params.attributeFilters,
+        categoryId: scope.fixedCategory?.id,
+        brandFacet: !scope.withoutBrandFacet,
+    });
+    const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
     // learns the catalogue size from its count first (see the limit above).
     const [productsList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
@@ -316,7 +280,7 @@ async function readStorefrontCatalogResults(
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
-    const [mediaMap, categoriesData, [facetRows, optionFacetRows]] = await Promise.all([
+    const [mediaMap, categoriesData, facetRows] = await Promise.all([
         loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
             ? db
@@ -360,10 +324,7 @@ async function readStorefrontCatalogResults(
             min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
             max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
         },
-        facets: [
-            ...groupResultScopedFacets(optionFacetRows, optionFilters),
-            ...groupResultScopedFacets(facetRows, attributeFilters),
-        ],
+        facets: groupCatalogFacets(facetRows, params.attributeFilters),
     };
 }
 
@@ -417,6 +378,7 @@ export async function getStorefrontBrandProducts(
     return readStorefrontCatalogPage(db, params, {
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
+        withoutBrandFacet: true,
     });
 }
 

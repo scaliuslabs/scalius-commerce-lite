@@ -104,16 +104,40 @@ export interface BuyerPriceRange {
   max: number;
 }
 
+/** Where a listing facet comes from: a typed attribute, a merchant option axis, or the brand. */
+export type ProductFacetKind = "attribute" | "option" | "brand";
+/** How a facet renders. Authoritative for attributes (merchant-chosen); options and brand send "checkbox". */
+export type ProductFacetDisplay = "checkbox" | "range" | "swatch" | "search_list";
+
 export interface ProductFacetValue {
+  /**
+   * The URL value: submitted as `?<facet.slug>=<value>` (repeatable; OR within
+   * a facet, AND across facets). Normalised: lowercased text, a canonical
+   * number ("15.6"), "1"/"0" for yes/no, a brand slug.
+   */
   value: string;
+  /** What the buyer reads ("Samsung", "15.6 in", "Yes"). */
+  label: string;
+  /** Products matching every other facet's selection plus this value; 0 renders disabled unless selected. */
   count: number;
+  /** "#rrggbb" for swatch facets (the merchant's colour of the value), else null. */
+  swatch: string | null;
 }
 
 export interface ProductFacet {
+  /** Attribute id, "option.<axis>" or "brand". */
   id: string;
   name: string;
+  /** Query key: attribute slug, "option.<axis>" or "brand". A range facet filters with `<slug>.min` and `<slug>.max`. */
   slug: string;
+  kind: ProductFacetKind;
+  display: ProductFacetDisplay;
+  /** Unit of a number attribute ("in", "GB"). */
+  unit: string | null;
+  /** At most 100 values (top by count, selected ones kept), in display order; empty for a range facet. */
   values: ProductFacetValue[];
+  /** A range facet's bounds over the products matching the other facets' selections; null otherwise. */
+  range: { min: number; max: number } | null;
 }
 
 // ---------------------------------------------------------------------------

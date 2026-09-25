@@ -5,10 +5,9 @@ import type {
   CollectionWithProducts,
   CategorySummary,
   Product,
-  ProductFacet,
   BuyerPriceRange,
 } from "./types";
-import type { ProductListOptions } from "./products";
+import { normalizeProductFacets, type ProductListOptions } from "./products";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
@@ -30,7 +29,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     featuredProduct?: Product | null;
     pagination?: CollectionWithProducts["pagination"];
     priceRange?: BuyerPriceRange;
-    facets?: ProductFacet[];
+    facets?: unknown;
   }>(payload);
   if (
     !candidate?.collection ||
@@ -59,7 +58,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     featuredProduct: candidate.featuredProduct,
     pagination: candidate.pagination,
     priceRange: candidate.priceRange,
-    facets: candidate.facets,
+    facets: normalizeProductFacets(candidate.facets),
   } as CollectionWithProducts;
 }
 

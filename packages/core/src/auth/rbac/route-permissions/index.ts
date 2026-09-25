@@ -17,6 +17,7 @@ import { CONVERSATION_ROUTE_PERMISSIONS } from "./conversations";
 import { BRAND_ROUTE_PERMISSIONS } from "./brands";
 import { CATALOG_PROJECTION_ROUTE_PERMISSIONS } from "./catalog-projections";
 import { MERCHANDISING_ROUTE_PERMISSIONS } from "./merchandising";
+import { ATTRIBUTE_TYPED_ROUTE_PERMISSIONS } from "./attributes-typed";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -40,6 +41,7 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   BRAND_ROUTE_PERMISSIONS,
   CATALOG_PROJECTION_ROUTE_PERMISSIONS,
   MERCHANDISING_ROUTE_PERMISSIONS,
+  ATTRIBUTE_TYPED_ROUTE_PERMISSIONS,
 ];
 
 /**
