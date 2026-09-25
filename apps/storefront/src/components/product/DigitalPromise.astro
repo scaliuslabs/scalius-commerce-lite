@@ -1,11 +1,42 @@
 ---
-// Owned by B3 (digital goods): the digital buy box's promise bullets (delivery time, where to redeem); renders nothing until B3 ships it.
+// B3 (digital goods): the buy box's promise for a digital product (how it
+// arrives, where to get it again, no shipping), styled like DeliveryFacts.
+// Only when what the page sells is digital; physical goods and services show
+// nothing, and gift cards carry their own promise (B4).
+import { Download, PackageX, Send } from "lucide-react";
 import type { Product } from "@/lib/api";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
+import { DOWNLOAD_COPY as copy } from "@/lib/account-downloads";
 
 export interface Props {
   product: Product;
   /** What the page sells (the chosen SKU, or every buyable SKU). */
   fulfilment: ProductFulfilment;
 }
+
+const { product, fulfilment } = Astro.props;
+const shows = fulfilment === "digital" && product.isGiftCard !== true;
+const promises = [
+  { Icon: Send, title: copy.promiseDeliveryTitle, detail: copy.promiseDeliveryDetail },
+  { Icon: Download, title: copy.promiseAccessTitle, detail: copy.promiseAccessDetail },
+  { Icon: PackageX, title: copy.promiseShippingTitle, detail: copy.promiseShippingDetail },
+];
 ---
+
+{shows && (
+  <section class="mt-3" aria-label={copy.promiseLabel}>
+    <ul class="divide-y divide-border rounded-lg border border-border bg-card">
+      {promises.map(({ Icon, title, detail }) => (
+        <li class="flex items-center gap-3 px-3 py-2.5">
+          <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-foreground">{title}</span>
+            <span class="block text-sm leading-relaxed text-muted-foreground">{detail}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
+)}
