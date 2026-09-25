@@ -10,7 +10,7 @@ import {
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
-import { applyBundleSavingsToDiscountAllocation } from "./bundle-discounts";
+import { resolveBundlePromotionInterplay } from "./bundle-discounts";
 import {
     PaymentMethod,
     PaymentStatus,
@@ -443,15 +443,15 @@ export async function createStorefrontOrder(
         },
     });
     assertDiscountCodesApplied(discount);
-    // Quantity bundles add to the promotion's line discounts (bundle-discounts.ts).
-    const bundleDiscount = applyBundleSavingsToDiscountAllocation(
+    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
+    const bundleDiscount = resolveBundlePromotionInterplay(
         preparedItems.map((item) => ({
             lineId: item.taxAllocationLineId,
             unitPriceMinor: item.unitPriceMinor,
             quantity: item.quantity,
             bundleDiscountMinor: item.bundleDiscountMinor,
         })),
-        discount.taxAllocation,
+        discount,
     );
     const bundleDiscountByLine = new Map(bundleDiscount.bundleLines.map((line) => [line.lineId, line.amountMinor]));
     const taxQuoteInput = {
@@ -570,13 +570,13 @@ export async function createStorefrontOrder(
                 unitPriceMinor: lineTax.unitPriceMinor,
                 lineSubtotalMinor: lineTax.grossAmountMinor,
                 discountAmountMinor: lineTax.discountMinor,
-                /** The bundle part of `discountAmountMinor` (the rest is the promotion's). */
+                /** The bundle saving in `discountAmountMinor`; 0 when promotions priced the order. */
                 bundleDiscountMinor: bundleDiscountByLine.get(item.taxAllocationLineId) ?? 0,
                 taxableAmountMinor: lineTax.taxableAmountMinor,
                 taxAmountMinor: lineTax.taxMinor,
             };
         }),
-        promotion: discount.snapshot,
+        promotion: bundleDiscount.discount.snapshot,
         requestUrl,
         taxQuote,
     };

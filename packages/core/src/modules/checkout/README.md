@@ -64,13 +64,16 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
   (`@scalius/shared/product-bundles`) from the catalog unit price after
   catalog discounts, before surcharges. Each line gets `bundleDiscountMinor`;
   gift cards never bundle. BDT savings are whole taka.
-- **With promotions** (`bundle-discounts.ts`, one rule for the tax quote, the
-  order and the agent quote): promotions are evaluated at catalog prices as if
-  no bundle existed; each line's bundle saving then adds to its promotion
-  discount, capped at what the promotion leaves of the line (the bundle
-  yields). Delivery thresholds read the catalog subtotal. The order stores the
-  sum in `discount_amount_minor`; the payload's `items[].bundleDiscountMinor`
-  is the bundle part, and commit checks promotion + bundle against every
-  tax line. Bundle savings have no `order_discount_allocations` row (that
-  table needs a promotion): receipts derive them as the line discount minus
-  its promotion allocations until a lead-numbered migration records them.
+- **With promotions** (`resolveBundlePromotionInterplay` in
+  `bundle-discounts.ts`, one rule for the tax quote, the order and the agent
+  quote): an order is priced by its promotions or by its bundles, never both.
+  Promotions are evaluated at catalog prices as always; a typed code that
+  applies wins; otherwise the buyer gets whichever saves more in total
+  (promotions on a tie), and a losing automatic promotion steps aside (no
+  snapshot, no discount lines; offers and code feedback stay). Delivery
+  thresholds read the catalog subtotal. Bundle savings land in the lines'
+  `discount_amount_minor` with no `order_discount_allocations` rows, so the
+  commit check (it refuses a payload that mixes both), refund reconciliation
+  and receipt lines keep reading promotion allocations only. Stacking needs a
+  recorded bundle part per line (a lead-numbered migration); then only the
+  interplay function changes.

@@ -420,8 +420,9 @@ export interface StorefrontOrderCommitPayload {
         lineSubtotalMinor: number;
         discountAmountMinor: number;
         /**
-         * The quantity-bundle part of `discountAmountMinor`; the rest is the
-         * promotion's (checkout/bundle-discounts.ts). Absent means none.
+         * The quantity-bundle saving in `discountAmountMinor`. An order is
+         * priced by its promotion or its bundles, never both
+         * (checkout/bundle-discounts.ts). Absent means none.
          */
         bundleDiscountMinor?: number;
         taxableAmountMinor: number;

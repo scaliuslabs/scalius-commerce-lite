@@ -59203,7 +59203,7 @@
                         "bundleDiscountMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "description": "The quantity-bundle part of `discountMinor`; the rest is the discounts above."
+                          "description": "Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie)."
                         },
                         "bundleDiscountAmount": {
                           "type": "number",
@@ -59240,7 +59240,7 @@
                               "label"
                             ]
                           },
-                          "description": "Products whose cart quantity reached a bundle tier. Bundles add to promotions, which are evaluated at catalog prices."
+                          "description": "The bundle tiers that priced this quote (empty when promotions did)."
                         },
                         "items": {
                           "type": "array",

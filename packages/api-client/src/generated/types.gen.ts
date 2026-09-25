@@ -15955,12 +15955,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 requiresCustomerPhone?: boolean;
             }>;
             /**
-             * The quantity-bundle part of `discountMinor`; the rest is the discounts above.
+             * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).
              */
             bundleDiscountMinor: number;
             bundleDiscountAmount: number;
             /**
-             * Products whose cart quantity reached a bundle tier. Bundles add to promotions, which are evaluated at catalog prices.
+             * The bundle tiers that priced this quote (empty when promotions did).
              */
             bundles: Array<{
                 productId: string;

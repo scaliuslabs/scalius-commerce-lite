@@ -9,7 +9,7 @@ import {
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   DELIVERY_ADDRESS_REQUIRED_REASON,
-  applyBundleSavingsToDiscountAllocation,
+  resolveBundlePromotionInterplay,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   summarizeStorefrontCartFulfilment,
@@ -748,15 +748,15 @@ export async function quoteAgentStorefrontCheckout(
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
   const discount = await quoteAgentStorefrontDiscount(db, row, projection, discountCode, input.customerPhone);
   const currency = await getCurrencySettings(db);
-  // Quantity bundles add to the promotion's line discounts, as in the order checkout commits.
-  const bundleDiscount = applyBundleSavingsToDiscountAllocation(
+  // Promotions or quantity bundles price the order, never both (as the order checkout commits).
+  const bundleDiscount = resolveBundlePromotionInterplay(
     projection.items.map((item) => ({
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
     })),
-    discount.taxAllocation,
+    discount,
   );
   const quote = await calculateStorefrontTaxQuote(db, {
     // The same destination checkout commits: no address (pickup, service)
