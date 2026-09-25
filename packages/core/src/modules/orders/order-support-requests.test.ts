@@ -5,7 +5,9 @@ import {
   OrderStatus,
   PaymentStatus,
 } from "@scalius/database/schema";
+import { DEFAULT_CUSTOMER_REQUEST_POLICY } from "../settings/customer-request-policy.shared";
 import {
+  applyCustomerRequestPolicyToSupportActions,
   getAdminOrderSupportRequestTransition,
   getCustomerOrderSupportRequestActions,
   customerAccountOwnershipCondition,
@@ -187,5 +189,33 @@ describe("admin order support request transitions", () => {
       .toThrow("cannot move");
     expect(() => getAdminOrderSupportRequestTransition("submitted", "submitted"))
       .toThrow("Unsupported");
+  });
+});
+
+describe("cancellation wording follows how the order reaches the buyer", () => {
+  const cases = [
+    ["a shipped order", { shippingMethodKind: "delivery", requiresShipping: true }, "before it ships.", "before shipment starts."],
+    ["an order from before Wave A", {}, "before it ships.", "before shipment starts."],
+    ["a pickup order", { shippingMethodKind: "pickup", requiresShipping: false }, "before it's collected.", "until the order is collected."],
+    ["a service order", { shippingMethodKind: null, requiresShipping: false }, "before the service is done.", "until the service is done."],
+  ] as const;
+
+  it.each(cases)("words the cancellation for %s", (_label, delivery, description, unavailable) => {
+    const eligible = applyCustomerRequestPolicyToSupportActions(
+      DEFAULT_CUSTOMER_REQUEST_POLICY,
+      getCustomerOrderSupportRequestActions({ ...actionState(), ...delivery }, context()),
+      { order: delivery, includeHidden: true },
+    );
+    expect(actionByType("cancel_pre_shipment", eligible).description).toBe(`Ask the store to review this order ${description}`);
+
+    const blocked = getCustomerOrderSupportRequestActions(
+      { ...actionState({ status: OrderStatus.DELIVERED }), ...delivery },
+      context(),
+    );
+    expect(actionByType("cancel_pre_shipment", blocked).disabledReason).toBe(
+      `Cancellation requests are available ${unavailable}`,
+    );
+    // Return and refund wording is not about the delivery method.
+    expect(actionByType("return", eligible).description).toBe("Ask the store to review a return for this order.");
   });
 });

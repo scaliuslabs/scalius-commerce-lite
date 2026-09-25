@@ -181,6 +181,25 @@ export function orderLinePropertyRows(
 /** How the order reaches the buyer: to an address, picked up, or nothing to deliver. */
 export type OrderDeliveryMode = "ship" | "pickup" | "none";
 
+/**
+ * A support action's description in the store's language, naming the real
+ * deadline for a cancellation: before it ships, before it's collected, or
+ * before the service is done. Other actions keep the store's own words.
+ */
+export function supportActionDescription(
+  action: { type: string; description: string },
+  order: Omit<OrderFulfilmentView, "status">,
+  copy: CheckoutLanguageData,
+): string {
+  if (action.type !== "cancel_pre_shipment") return action.description;
+  const mode = orderDeliveryMode(order);
+  return mode === "pickup"
+    ? copy.orderReceiptCancelRequestPickupDescriptionText
+    : mode === "none"
+      ? copy.orderReceiptCancelRequestServiceDescriptionText
+      : copy.orderReceiptCancelRequestDescriptionText;
+}
+
 export function orderDeliveryMode(order: Omit<OrderFulfilmentView, "status">): OrderDeliveryMode {
   if (order.shippingMethodKind === "pickup") return "pickup";
   return order.requiresShipping === false ? "none" : "ship";

@@ -22,6 +22,8 @@ import {
   CUSTOMER_REQUEST_ACTION_COPY,
   CUSTOMER_REQUEST_STATE_REASONS,
   CUSTOMER_REQUEST_TYPES,
+  cancellationUnavailableReason,
+  customerRequestDeliveryMode,
   getCustomerRequestIntro,
   getCustomerRequestPolicy,
   projectCustomerRequestActions,
@@ -109,6 +111,9 @@ export type SupportRequestActionOrderState = {
   paymentStatus: string;
   fulfillmentStatus: string;
   paidAmountMinor: number;
+  /** The order's delivery method; the cancellation wording names collection or the service instead of shipping. */
+  shippingMethodKind?: string | null;
+  requiresShipping?: boolean | null;
 };
 
 type SupportRequestActionContext = {
@@ -336,7 +341,7 @@ export function getCustomerOrderSupportRequestActions(
     createAction(
       "cancel_pre_shipment",
       canCancel,
-      canCancel ? null : CUSTOMER_REQUEST_STATE_REASONS.cancellationUnavailable,
+      canCancel ? null : cancellationUnavailableReason(customerRequestDeliveryMode(order)),
     ),
     createAction(
       "return",
@@ -358,9 +363,16 @@ export function getCustomerOrderSupportRequestActions(
 export function applyCustomerRequestPolicyToSupportActions(
   policy: CustomerRequestPolicy,
   actions: readonly CustomerOrderSupportRequestAction[],
-  options: { includeHidden?: boolean } = {},
+  options: {
+    includeHidden?: boolean;
+    /** The order the actions are for; its delivery method words the cancellation. */
+    order?: Pick<SupportRequestActionOrderState, "shippingMethodKind" | "requiresShipping">;
+  } = {},
 ): CustomerOrderSupportRequestAction[] {
-  return projectCustomerRequestActions(policy, actions, options).map((action) => ({
+  return projectCustomerRequestActions(policy, actions, {
+    includeHidden: options.includeHidden,
+    deliveryMode: options.order ? customerRequestDeliveryMode(options.order) : undefined,
+  }).map((action) => ({
     type: action.type,
     label: action.label,
     description: action.description,
@@ -431,6 +443,8 @@ export async function selectSupportRequestOrderState(
       paymentStatus: orders.paymentStatus,
       fulfillmentStatus: orders.fulfillmentStatus,
       paidAmountMinor: orders.paidAmountMinor,
+      shippingMethodKind: orders.shippingMethodKind,
+      requiresShipping: orders.requiresShipping,
     })
     .from(orders)
     .where(expectedCustomerId
@@ -478,11 +492,11 @@ export async function buildOrderSupportRequestState(
   });
   return {
     supportRequests,
-    supportRequestActions: applyCustomerRequestPolicyToSupportActions(policy, baseActions),
+    supportRequestActions: applyCustomerRequestPolicyToSupportActions(policy, baseActions, { order }),
     allSupportRequestActions: applyCustomerRequestPolicyToSupportActions(
       policy,
       baseActions,
-      { includeHidden: true },
+      { includeHidden: true, order },
     ),
     supportRequestIntro: getCustomerRequestIntro(policy),
     hasShipment: shipmentRows.length > 0,

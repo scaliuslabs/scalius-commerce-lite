@@ -52,6 +52,7 @@ import {
   relabelOrderTimeline,
   resolveOrderDeliveryBlock,
   showsOrderLineGroupHeadings,
+  supportActionDescription,
 } from "@/lib/order-line-groups";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
@@ -422,7 +423,7 @@ function renderSupport(detail: AccountOrderDetail): void {
     actions.innerHTML = detail.supportRequestActions.map((action) => `
       <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
         <span class="font-medium">${escapeHtml(action.label)}</span>
-        <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? action.description : action.disabledReason ?? action.description)}</span>
+        <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? supportActionDescription(action, detail.order, copy) : action.disabledReason ?? supportActionDescription(action, detail.order, copy))}</span>
       </button>`).join("");
   }
   const selected = detail.supportRequestActions.find((action) => action.type === selectedSupportType);

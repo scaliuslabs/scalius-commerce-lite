@@ -228,6 +228,9 @@ describe("account order detail", () => {
     expect([...document.querySelectorAll("#orderProgress li")].map((step) => step.textContent?.replace(/\s+/g, " ").trim()))
       .toEqual(["Order placed (done)", "Confirmed", "Ready for pickup", "Picked up"]);
     expect(document.body.textContent).not.toMatch(/null|undefined|Delivery method/);
+    // Nothing ships: the cancellation deadline is collection.
+    expect(text("orderSupportActions")).toContain("Ask the store to review this order before it's collected.");
+    expect(document.body.textContent).not.toContain("before it ships");
 
     const collected = detail({
       ...order.order, status: "delivered", statusLabel: "Delivered",
