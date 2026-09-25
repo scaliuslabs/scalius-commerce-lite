@@ -56,6 +56,7 @@ const categoryProductFilterSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
+  inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
   includeSubcategories: includeSubcategoriesSchema,
 }).superRefine((value, ctx) => {
   if (
@@ -133,6 +134,9 @@ const storefrontCategoryProductSchema = z.object({
   secondaryImageUrl: z.string().nullable(),
   cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+  subcategoryId: z.string().nullable().optional().openapi({
+    description: "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).",
+  }),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 });
@@ -145,6 +149,7 @@ const appliedCategoryFiltersSchema = z.object({
   maxPrice: z.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 });
 
 const agentCategoryProductFilterSchema = z.object({
@@ -158,6 +163,7 @@ const agentCategoryProductFilterSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 }).superRefine((value, ctx) => {
   if (value.minPrice !== undefined && value.maxPrice !== undefined && value.minPrice > value.maxPrice) {
     ctx.addIssue({ code: "custom", path: ["maxPrice"], message: "Maximum price must be greater than or equal to minimum price" });
@@ -509,6 +515,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
+  if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
 
   return ok(c, {
     category: categoryForProducts,
@@ -597,6 +604,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
+  if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
   return ok(c, {
     category: {
       id: category.id,

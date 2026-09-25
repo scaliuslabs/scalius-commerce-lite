@@ -554,15 +554,44 @@ export const STOREFRONT_FILTER_VALUES_IN_HTML = 10;
 /** The small-catalogue rule: fewer results than this show no filters. */
 export const STOREFRONT_FILTER_MIN_RESULTS = 8;
 
+/**
+ * A template's own facet numbers over its style's (optional): each
+ * reference is its own spec (Daraz's column is 190px with 18px rows, Star
+ * Tech's 225px with 32px rows, Apple Gadgets' 316px). Bounds keep a column
+ * readable and every row a target.
+ */
+export const STOREFRONT_LISTING_FILTER_BOUNDS = {
+  column: { min: 180, max: 340 },
+  rowPitch: { min: 16, max: 36 },
+  label: { min: 12, max: 18 },
+} as const;
+
+const filterNumber = (bounds: { min: number; max: number }) => z.number().int().min(bounds.min).max(bounds.max).optional();
+
 export const storefrontListingFiltersSchema = z.object({
   style: z.enum(STOREFRONT_LISTING_FILTER_STYLES),
   /** Facet groups start open (sidebars and the drawer); bar dropdowns always open on demand. */
   openByDefault: z.boolean(),
+  /** Desktop column width in px (sidebars), over the style's. */
+  column: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.column),
+  /** Facet value row pitch in px, over the style's. */
+  rowPitch: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.rowPitch),
+  /** Facet value label size in px, over the style's. */
+  label: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.label),
 }).strict().refine(
   (filters) => !(filters.style === "bar-dropdowns" && filters.openByDefault),
   { message: "Filter dropdowns open on demand.", path: ["openByDefault"] },
 );
 export type StorefrontListingFilters = z.infer<typeof storefrontListingFiltersSchema>;
+
+/** A listing's facet numbers: its style's measured spec with the template's own overrides. */
+export function storefrontListingFilterSpec(filters: StorefrontListingFilters): StorefrontListingFilterSpec {
+  const spec: StorefrontListingFilterSpec = { ...STOREFRONT_LISTING_FILTER_SPECS[filters.style] };
+  if (filters.column !== undefined) spec.column = filters.column;
+  if (filters.rowPitch !== undefined) spec.rowPitch = filters.rowPitch;
+  if (filters.label !== undefined) spec.label = filters.label;
+  return spec;
+}
 
 /**
  * The small-catalogue rule, for one listing: filters show only with at

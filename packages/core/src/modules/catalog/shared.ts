@@ -153,7 +153,7 @@ export function buildStorefrontProductConditions(
 /**
  * Listing conditions over the stored buyer state (`product_buyer_state`
  * joined to `products`): the public set, the request's category, search,
- * id, price, free-delivery and discount filters. `needsProducts` is false
+ * id, price, free-delivery, discount and in-stock filters. `needsProducts` is false
  * when every condition reads the buyer state alone, so a count can skip
  * the `products` join.
  */
@@ -196,6 +196,9 @@ export function buildStorefrontBuyerStateConditions(
     }
     if (params.hasDiscount === "true") conditions.push(sql`${buyerState.hasDiscount} = 1`);
     else if (params.hasDiscount === "false") conditions.push(sql`${buyerState.hasDiscount} = 0`);
+    // "Exclude out of stock": the stored buyer-visible availability, the
+    // same truth the card's sold-out band and the product feed show.
+    if (params.inStock === "true") conditions.push(sql`${buyerState.availableForSale} = 1`);
     return { conditions, needsProducts };
 }
 

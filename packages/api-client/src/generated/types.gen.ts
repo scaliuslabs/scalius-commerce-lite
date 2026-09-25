@@ -284,6 +284,9 @@ export type StorefrontThemeDocument = {
             filters: {
                 style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
                 openByDefault: boolean;
+                column?: number;
+                rowPitch?: number;
+                label?: number;
             };
             toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';
@@ -1473,15 +1476,15 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1490,6 +1493,9 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1564,15 +1570,15 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1581,6 +1587,9 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1651,15 +1660,15 @@ export type GetApiV1AttributesSearchFiltersResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1668,6 +1677,9 @@ export type GetApiV1AttributesSearchFiltersResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1764,6 +1776,7 @@ export type GetApiV1CollectionsByIdData = {
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/collections/{id}';
 };
@@ -1881,15 +1894,15 @@ export type GetApiV1CollectionsByIdResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1898,6 +1911,9 @@ export type GetApiV1CollectionsByIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2134,6 +2150,10 @@ export type GetApiV1BrandsBySlugProductsData = {
          * Has discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
     };
     url: '/api/v1/brands/{slug}/products';
 };
@@ -2243,15 +2263,15 @@ export type GetApiV1BrandsBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2260,6 +2280,9 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2300,6 +2323,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -12936,6 +12960,10 @@ export type GetApiV1ProductsData = {
          */
         hasDiscount?: 'true' | 'false';
         /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
+        /**
          * Comma-separated product IDs
          */
         ids?: string;
@@ -13020,15 +13048,15 @@ export type GetApiV1ProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -13037,6 +13065,9 @@ export type GetApiV1ProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -14567,6 +14598,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         hasDiscount?: 'true' | 'false';
         /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
+        /**
          * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
          */
         includeSubcategories?: 'true' | 'false';
@@ -14681,6 +14716,10 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
                 updatedAt: string | null;
             }>;
@@ -14696,15 +14735,15 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -14713,6 +14752,9 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -14753,6 +14795,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -14778,6 +14821,7 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/categories/{slug}/product-summaries';
 };
@@ -14862,6 +14906,10 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
                 updatedAt: string | null;
             }>;
@@ -14877,15 +14925,15 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -14894,6 +14942,9 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -14934,6 +14985,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };

@@ -145,11 +145,11 @@ describe("listing filters", () => {
       boutique: { style: "bar-dropdowns", openByDefault: false }, // Dawn
       "heritage-editorial": { style: "bar-dropdowns", openByDefault: false }, // Aarong
       "fashion-value": { style: "sidebar-comfortable", openByDefault: true }, // Fabrilife
-      "spec-catalogue": { style: "sidebar-dense", openByDefault: true }, // Star Tech
-      "rounded-tech": { style: "sidebar-comfortable", openByDefault: true }, // Apple Gadgets
-      marketplace: { style: "sidebar-dense", openByDefault: true }, // Daraz, Amazon
+      "spec-catalogue": { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
+      "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, // Apple Gadgets
+      marketplace: { style: "sidebar-dense", openByDefault: true, column: 190, rowPitch: 18, label: 13 }, // Daraz
       "mass-retail": { style: "sidebar-dense", openByDefault: true }, // large catalogue (owner rule)
-      "department-mall": { style: "sidebar-comfortable", openByDefault: true }, // Game Ghor
+      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "daily-essentials": { style: "drawer", openByDefault: false }, // Chaldal
       "showcase-landing": { style: "drawer", openByDefault: false },
     });
@@ -168,6 +168,22 @@ describe("listing filters", () => {
     expect(comfortable.rowPitch).toBeGreaterThan(dense.rowPitch);
     expect(STOREFRONT_LISTING_FILTER_SPECS["bar-dropdowns"]).toMatchObject({ placement: "bar", barFacets: 4 });
     expect(STOREFRONT_LISTING_FILTER_SPECS.drawer.placement).toBe("drawer");
+  });
+
+  it("resolves a template's own column, row pitch and label over its style's, within bounds", () => {
+    const spec = (template: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(template), LIVE_SMALL).blocks.listing.filters.spec;
+    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 190, rowPitch: 18, label: 13 });
+    expect(spec("spec-catalogue")).toMatchObject({ placement: "sidebar", column: 225, rowPitch: 32, label: 14 });
+    expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
+    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 22, label: 14 });
+    // No override: the style's own numbers.
+    expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"]);
+    const theme = storefrontTemplateTheme("marketplace");
+    for (const [key, value] of [["column", 179], ["column", 341], ["rowPitch", 15], ["rowPitch", 37], ["label", 11], ["label", 19], ["rowPitch", 18.5]] as const) {
+      const next = structuredClone(theme);
+      next.blocks.listing.filters = { ...next.blocks.listing.filters, [key]: value };
+      expect(storefrontThemeDocumentSchema.safeParse(next).success, `${key}=${value}`).toBe(false);
+    }
   });
 
   it("applies the small-catalogue rule per listing", () => {
