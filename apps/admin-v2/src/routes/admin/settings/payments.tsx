@@ -4,7 +4,8 @@ import {
   PaymentOptionsCard,
 } from "~/components/admin/settings/PaymentsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { EmiPlansCard, emiSettingsQuery } from "~/components/admin/settings/EmiPlansCard";
+import { EmiPlansCard } from "~/components/admin/settings/EmiPlansCard";
+import { emiSettingsQuery } from "~/lib/api-query-options/emi";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
