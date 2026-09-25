@@ -25,6 +25,7 @@ describe("customer account summary", () => {
     expect(body.data).toEqual({
       unreadInbox: 1,
       reviewsToWrite: 0,
+      reviewsWritten: 0,
       downloads: 0,
       giftCards: 0,
       activeWarranties: 0,
