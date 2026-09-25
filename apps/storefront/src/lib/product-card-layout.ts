@@ -56,15 +56,32 @@ const PAGE_GUTTER_PX = [
 export const FILTER_COLUMN_GAP_PX = 24;
 
 /**
- * The filter column beside a listing grid, in px, from the listing's filter
- * style (`STOREFRONT_LISTING_FILTER_SPECS[style].column`: 240 dense, 270
- * comfortable); 0 when the facets live in a bar or a drawer. Pass it to the
- * sizes helper so card images follow the grid the sidebar leaves.
+ * The listing's filters as far as the grid needs them: the style, and the
+ * template's own column width when it overrides the style's measured one
+ * (`resolved.blocks.listing.filters`).
  */
-export function listingFilterColumnPx(style: StorefrontListingFilterStyle | null | undefined): number {
-  if (!style) return 0;
-  const spec = STOREFRONT_LISTING_FILTER_SPECS[style];
-  return spec.placement === "sidebar" && spec.column ? spec.column : 0;
+export interface ListingFilterColumnSource {
+  style: StorefrontListingFilterStyle;
+  /** The resolved spec, the template's own override included. */
+  spec?: { column?: number | null } | null;
+  column?: number | null;
+}
+
+const positive = (value: unknown): value is number => typeof value === "number" && value > 0;
+
+/**
+ * The filter column beside a listing grid, in px: the resolved spec's
+ * column (`filters.spec.column`, which carries a template's override), else
+ * the style's measured column (`STOREFRONT_LISTING_FILTER_SPECS[style]`:
+ * 240 dense, 270 comfortable); 0 when the facets live in a bar or a drawer.
+ * Pass it to the sizes helper so card images follow the grid the sidebar
+ * leaves.
+ */
+export function listingFilterColumnPx(filters: ListingFilterColumnSource | null | undefined): number {
+  if (!filters) return 0;
+  const style = STOREFRONT_LISTING_FILTER_SPECS[filters.style];
+  if (!style || style.placement !== "sidebar") return 0;
+  return [filters.spec?.column, filters.column, style.column].find(positive) ?? 0;
 }
 
 function remToPx(value: string): number {

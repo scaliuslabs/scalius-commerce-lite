@@ -191,10 +191,16 @@ describe("productCardImageSizes", () => {
   });
 
   it("takes the filter column from the listing's filter style", () => {
-    expect(listingFilterColumnPx("sidebar-dense")).toBe(240);
-    expect(listingFilterColumnPx("sidebar-comfortable")).toBe(270);
-    expect(listingFilterColumnPx("bar-dropdowns")).toBe(0);
-    expect(listingFilterColumnPx("drawer")).toBe(0);
+    expect(listingFilterColumnPx({ style: "sidebar-dense" })).toBe(240);
+    expect(listingFilterColumnPx({ style: "sidebar-comfortable" })).toBe(270);
+    // A template's own column wins over the style's (Daraz 190, Star Tech 225).
+    expect(listingFilterColumnPx({ style: "sidebar-dense", column: 190 })).toBe(190);
+    expect(listingFilterColumnPx({ style: "sidebar-dense", column: null })).toBe(240);
+    // The resolved spec carries the template override (marketplace 190).
+    expect(listingFilterColumnPx({ style: "sidebar-dense", spec: { column: 190 } })).toBe(190);
+    expect(listingFilterColumnPx({ style: "sidebar-comfortable", spec: { column: 316 }, column: 999 })).toBe(316);
+    expect(listingFilterColumnPx({ style: "bar-dropdowns", column: 300 })).toBe(0);
+    expect(listingFilterColumnPx({ style: "drawer" })).toBe(0);
     expect(listingFilterColumnPx(null)).toBe(0);
     const containerMax = px("90rem");
     // From 1024px the grid loses the column and its 24px gap; below, it is page wide.
