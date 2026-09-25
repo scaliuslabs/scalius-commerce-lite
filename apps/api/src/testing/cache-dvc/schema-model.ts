@@ -13,6 +13,7 @@ import {
   CACHE_DEP_TABLES,
   cacheDepExemptReason,
   isCacheDepTable,
+  type CacheDepRule,
 } from "@scalius/shared/cache-deps";
 
 export type ColumnShape = "text" | "integer" | "real" | "boolean" | "timestamp" | "json" | "blob";
@@ -139,7 +140,7 @@ export function registryColumnsMissingFromSchema(model: SchemaModel): string[] {
     const columns = new Set(model.get(table)?.columns.map((column) => column.name) ?? []);
     if (columns.size === 0) continue;
     const named = new Set<string>(spec.noise);
-    for (const rule of spec.rules) {
+    for (const rule of spec.rules as readonly CacheDepRule[]) {
       if (Array.isArray(rule.changed)) for (const column of rule.changed) named.add(column);
       const equals = rule.where?.equals;
       if (equals) for (const column of Object.keys(equals)) named.add(column);
