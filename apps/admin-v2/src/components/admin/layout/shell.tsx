@@ -1,4 +1,5 @@
 import * as React from "react";
+import { matchesShortcut, typingIn } from "./shortcuts";
 
 const STORAGE_KEY = "scalius.nav.collapsed";
 const DESKTOP = "(min-width: 768px)";
@@ -12,6 +13,9 @@ interface Shell {
   setDrawerOpen: (open: boolean) => void;
   searchOpen: boolean;
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  /** The `?` keyboard shortcuts dialog. */
+  helpOpen: boolean;
+  setHelpOpen: (open: boolean) => void;
 }
 
 const ShellContext = React.createContext<Shell | null>(null);
@@ -30,12 +34,6 @@ function savedCollapsed(): boolean {
   }
 }
 
-/** Typing in a field (or a dialog) never triggers a shell shortcut. */
-export function typingIn(target: EventTarget | null): boolean {
-  const element = target as HTMLElement | null;
-  return Boolean(element?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']"));
-}
-
 /**
  * The navigation's state. The saved expanded/collapsed choice is read before
  * the first render (the dashboard renders only in the browser), so the shell
@@ -45,6 +43,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(savedCollapsed);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   const toggleCollapsed = React.useCallback(() => {
     setCollapsed((value) => {
@@ -59,7 +58,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "b" || !(event.metaKey || event.ctrlKey) || event.altKey || typingIn(event.target)) return;
+      if (!matchesShortcut("navigation", event) || typingIn(event.target)) return;
       event.preventDefault();
       if (window.matchMedia(DESKTOP).matches) toggleCollapsed();
       else setDrawerOpen((open) => !open);
@@ -69,8 +68,8 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
   }, [toggleCollapsed]);
 
   const shell = React.useMemo<Shell>(
-    () => ({ collapsed, toggleCollapsed, drawerOpen, setDrawerOpen, searchOpen, setSearchOpen }),
-    [collapsed, toggleCollapsed, drawerOpen, searchOpen],
+    () => ({ collapsed, toggleCollapsed, drawerOpen, setDrawerOpen, searchOpen, setSearchOpen, helpOpen, setHelpOpen }),
+    [collapsed, toggleCollapsed, drawerOpen, searchOpen, helpOpen],
   );
   return <ShellContext.Provider value={shell}>{children}</ShellContext.Provider>;
 }

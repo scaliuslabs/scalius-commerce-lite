@@ -82,7 +82,8 @@ export function UnsavedChangesGuard({
         if (!open) reset?.();
       }}
     >
-      <AlertDialogContent>
+      {/* The save bar shakes and flashes while this shows (global.css). */}
+      <AlertDialogContent data-leave-guard="">
         <AlertDialogHeader>
           <AlertDialogTitle>{t("leaveTitle")}</AlertDialogTitle>
           <AlertDialogDescription>{t("leaveDescription")}</AlertDialogDescription>

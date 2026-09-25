@@ -288,7 +288,9 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
   const [name, setName] = useState("");
   const [selection, setSelection] = useState(() => defaultSelection("pat"));
   useSaveBar({
-    dirty: name.trim().length > 0,
+    // Any change counts (the name or the access); changing it back clears it.
+    dirty: name !== "" || JSON.stringify(selection) !== JSON.stringify(defaultSelection("pat")),
+    invalid: !name.trim(),
     // A failure is listed in the dialog's banner; the form keeps its values.
     save: async () => {
       const result = await createAgentToken({ ...selection, label: name.trim() });
@@ -301,7 +303,7 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
   });
   return (
     <>
-      <SettingsField id="ai-key-name" label={t("name")} help={t("nameHelp")}>
+      <SettingsField id="ai-key-name" label={t("name")} help={t("nameHelp")} error={name.trim() ? undefined : t("nameRequired")}>
         <Input
           id="ai-key-name"
           value={name}

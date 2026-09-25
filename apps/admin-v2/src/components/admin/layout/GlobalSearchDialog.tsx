@@ -27,7 +27,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useDebounce } from "~/hooks/use-debounce";
 import { apiData } from "~/lib/api";
@@ -40,12 +40,15 @@ import { customerTitle } from "~/lib/customer-title";
 import { settingsSearchMessages } from "~/i18n/settings-search";
 import { SETTINGS_NAV } from "../settings/settings-nav";
 import { matches, searchSettings, words } from "../settings/settings-search";
-import { GO_SHORTCUTS, type VisibleNavItem } from "./AdminNav";
+import type { VisibleNavItem } from "./AdminNav";
+import { goCaps } from "./shortcuts";
 import { useTheme } from "./ThemeProvider";
 
 export interface GlobalSearchProps {
   nav: VisibleNavItem[];
   canOpen: (path: string) => boolean;
+  /** Destination → the key after G (defaults plus this staff member's choices). */
+  goKeys: ReadonlyMap<string, string>;
 }
 
 interface Entry {
@@ -73,8 +76,6 @@ const MAX_RESULTS = 7;
 /** Per record type, so one type can't crowd out the others. */
 const PER_TYPE = 3;
 const RECENT_KEY = "scalius.search.recent";
-const SHORTCUT_BY_PATH = Object.fromEntries(Object.entries(GO_SHORTCUTS).map(([key, to]) => [to, `G ${key.toUpperCase()}`]));
-
 /** Everyday tasks that live inside a page, found by name like the pages themselves. */
 const TASKS: ReadonlyArray<{ key: ShellKey & KeywordKey; to: string; search?: Record<string, string>; icon: Entry["icon"] }> = [
   { key: "lowStock", to: "/admin/inventory", search: { section: "alerts" }, icon: PackageMinus },
@@ -119,7 +120,7 @@ function remember(entry: Entry) {
  * endpoints as the list pages, so the two searches never disagree. The query
  * stays in this dialog: nothing goes into the URL.
  */
-export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
+export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
   const t = useMessages(shellMessages);
   const customerT = useMessages(customersMessages);
   const settingsPage = useMessages(settingsNavMessages);
@@ -151,9 +152,13 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
   const discounts = useQuery({ ...discountsQueryOptions(), enabled: searching && canOpen("/admin/discounts") });
 
   const places = useMemo<Entry[]>(() => {
+    const hint = (to: string) => {
+      const key = goKeys.get(to);
+      return key ? goCaps(key).join(" ") : undefined;
+    };
     const sections = nav.flatMap((item): Entry[] => [
-      { id: `nav:${item.key}`, label: t(item.key), to: item.to, icon: ArrowRight, hint: SHORTCUT_BY_PATH[item.to] },
-      ...item.children.map((child) => ({ id: `nav:${child.key}`, label: t(child.key), to: child.to, icon: ArrowRight, hint: SHORTCUT_BY_PATH[child.to] })),
+      { id: `nav:${item.key}`, label: t(item.key), to: item.to, icon: ArrowRight, hint: hint(item.to) },
+      ...item.children.map((child) => ({ id: `nav:${child.key}`, label: t(child.key), to: child.to, icon: ArrowRight, hint: hint(child.to) })),
     ]);
     // With no query, offer the sections themselves (their G-key hints teach the shortcuts).
     if (!needle) return sections.filter((entry) => nav.some((item) => `nav:${item.key}` === entry.id));
@@ -189,7 +194,7 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
       }),
     ];
     return [...sections.filter((entry) => found(entry.id.slice(4))), ...tasks, ...settingEntries];
-  }, [canOpen, locale, nav, needle, settingsCard, settingsPage, t, theme, toggleTheme]);
+  }, [canOpen, goKeys, locale, nav, needle, settingsCard, settingsPage, t, theme, toggleTheme]);
 
   const records = useMemo<Entry[]>(() => {
     if (!searching) return [];
@@ -289,51 +294,6 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
           </CommandList>
         </Command>
         <p className="hidden border-t px-3 py-2 text-caption text-muted-foreground sm:block">{t("searchHint")}</p>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const SHORTCUTS: ReadonlyArray<{ keys: string[]; label: keyof (typeof shellMessages)["en"] }> = [
-  { keys: ["S", "⌘/Ctrl K"], label: "shortcutSearch" },
-  { keys: ["G H"], label: "home" },
-  { keys: ["G O"], label: "orders" },
-  { keys: ["G P"], label: "products" },
-  { keys: ["G C"], label: "customers" },
-  { keys: ["G D"], label: "discounts" },
-  { keys: ["G T"], label: "content" },
-  { keys: ["G W"], label: "onlineStore" },
-  { keys: ["G S"], label: "settings" },
-  { keys: ["⌘/Ctrl S"], label: "shortcutSave" },
-  { keys: ["⌘/Ctrl B"], label: "shortcutNavigation" },
-  { keys: ["?"], label: "shortcutHelp" },
-];
-
-/** Shopify's `?` sheet: every keyboard shortcut on one card. */
-export function ShortcutsDialog({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) {
-  const t = useMessages(shellMessages);
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle>{t("shortcutsTitle")}</DialogTitle>
-        </DialogHeader>
-        <dl className="divide-y text-body">
-          {SHORTCUTS.map((shortcut) => (
-            <div key={shortcut.keys.join()} className="flex items-center justify-between gap-4 py-2">
-              <dt>{t(shortcut.label)}</dt>
-              <dd className="flex items-center gap-1 text-muted-foreground">
-                {shortcut.keys.map((key, index) => (
-                  <span key={key} className="flex items-center gap-1">
-                    {index > 0 ? t("or") : null}
-                    <kbd>{key}</kbd>
-                  </span>
-                ))}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <p className="text-body text-muted-foreground">{t("shortcutsNote")}</p>
       </DialogContent>
     </Dialog>
   );

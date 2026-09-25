@@ -43,9 +43,9 @@ export function UserAvatar({ user }: { user: UserMenuUser }) {
 
 /**
  * The account menu (My account, dashboard language, light/dark, sign out),
- * opened from the navigation's store row, rail badge or signed-in user row.
+ * opened from the top bar's store button or the settings panel's signed-in user row.
  */
-export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "top" | "right"; children: ReactNode }) {
+export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "top" | "bottom"; children: ReactNode }) {
   const t = useMessages(shellMessages);
   const locale = useLocale();
   const { preference, setPreference } = useTheme();

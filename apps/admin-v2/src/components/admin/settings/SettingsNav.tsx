@@ -30,18 +30,18 @@ function StoreIdentity({ variant }: { variant: "sidebar" | "rows" }) {
   if (!store.canView) return null;
   const sidebar = variant === "sidebar";
   const name = store.name ? (
-    <span className={cn("block truncate", sidebar ? "text-body font-medium" : "text-heading-sm")}>{store.name}</span>
+    <span className={cn("block truncate", sidebar ? "text-nav font-medium text-sidebar-foreground" : "text-heading-sm")}>{store.name}</span>
   ) : !store.loaded ? null : (
     <Link
       to="/admin/settings/store"
       hash="business"
-      className={cn("block truncate hover:underline", sidebar ? "text-body font-medium text-sidebar-foreground underline" : "text-heading-sm text-link")}
+      className={cn("block truncate hover:underline", sidebar ? "text-nav font-medium text-sidebar-foreground underline" : "text-heading-sm text-link")}
     >
       {t("addStoreName")}
     </Link>
   );
   const host = store.host ? (
-    <span className={cn("block truncate text-body", sidebar ? "text-sidebar-muted-foreground" : "text-muted-foreground")}>{store.host}</span>
+    <span className={cn("block truncate", sidebar ? "text-caption text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{store.host}</span>
   ) : null;
   return sidebar ? (
     <div className="flex min-h-11 min-w-0 items-center gap-3 px-2">
@@ -49,7 +49,7 @@ function StoreIdentity({ variant }: { variant: "sidebar" | "rows" }) {
         {name}
         {host}
       </span>
-      <StoreBadge name={store.name} className="size-8 rounded-lg text-body" />
+      <StoreBadge name={store.name} className="size-7 rounded-lg text-nav" />
     </div>
   ) : (
     <div className="flex min-h-9 min-w-0 items-center gap-3 px-2">
@@ -120,7 +120,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
       <Search
         className={cn(
           "pointer-events-none absolute top-1/2 -translate-y-1/2",
-          sidebar ? "left-2 size-5 text-sidebar-muted-foreground" : "left-3.5 size-4 text-muted-foreground",
+          sidebar ? "left-2.5 size-4 text-sidebar-muted-foreground" : "left-3.5 size-4 text-muted-foreground",
         )}
         aria-hidden="true"
       />
@@ -128,7 +128,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
         <input
           type="search"
           {...field}
-          className="h-11 w-full rounded-lg bg-sidebar-hover pl-9 pr-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-body md:h-8"
+          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover pl-8 pr-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-8"
         />
       ) : (
         <Input
@@ -140,15 +140,15 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
       )}
     </div>
   );
-  const resultRow = sidebar ? "block rounded-lg px-2 py-1.5 text-sidebar-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring" : "flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/50";
-  const detail = sidebar ? "block text-body text-sidebar-muted-foreground" : "block text-body text-muted-foreground";
+  const resultRow = sidebar ? "block rounded-lg px-2 py-1 text-nav text-sidebar-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring" : "flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/50";
+  const detail = sidebar ? "block text-caption text-sidebar-muted-foreground" : "block text-body text-muted-foreground";
 
   return (
     <nav aria-label={t("settings")} className={sidebar ? "space-y-2" : "space-y-3"}>
       {sidebar ? searchField : <StoreIdentity variant="rows" />}
       {sidebar ? <StoreIdentity variant="sidebar" /> : searchField}
       {searching && pages.length === 0 && cards.length === 0 && shortcuts.length === 0 ? (
-        <p role="status" className={cn("px-2.5 text-body", sidebar ? "text-sidebar-muted-foreground" : "text-muted-foreground")}>{search("noResults")}</p>
+        <p role="status" className={cn("px-2", sidebar ? "text-nav text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{search("noResults")}</p>
       ) : null}
       {sections.map((section) =>
         section.items.length === 0 ? null : sidebar ? (
@@ -188,13 +188,13 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
       )}
       {cards.length > 0 || shortcuts.length > 0 ? (
         <div className="space-y-1">
-          <h2 className={cn("px-2 text-body", sidebar ? "text-sidebar-muted-foreground" : "text-muted-foreground")}>{search("results")}</h2>
+          <h2 className={cn("px-2", sidebar ? "text-caption font-medium text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{search("results")}</h2>
           <ul className={sidebar ? "space-y-0.5" : "divide-y divide-border overflow-hidden rounded-xl bg-card shadow-card"}>
             {cards.map(({ card, page, to }) => (
               <li key={card}>
                 <Link to={to} hash={card} className={resultRow} onClick={onNavigate}>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-body font-medium">{search(card)}</span>
+                    <span className={cn("block font-medium", sidebar ? "text-nav" : "text-body")}>{search(card)}</span>
                     <span className={detail}>{t(page)}</span>
                   </span>
                   {sidebar ? null : <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
@@ -204,7 +204,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
             {shortcuts.map((entry) => {
               const label = (
                 <span className="min-w-0 flex-1">
-                  <span className="block text-body font-medium">{search(entry.card)}</span>
+                  <span className={cn("block font-medium", sidebar ? "text-nav" : "text-body")}>{search(entry.card)}</span>
                   <span className={detail}>{search(entry.section)}</span>
                 </span>
               );
@@ -217,7 +217,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
                     </Link>
                   ) : (
                     // Language and light/dark mode live in the account menu; say where.
-                    <div className={sidebar ? "block px-2 py-1.5 text-sidebar-foreground" : "flex min-h-14 items-center gap-3 px-4 py-3"}>{label}</div>
+                    <div className={sidebar ? "block px-2 py-1 text-nav text-sidebar-foreground" : "flex min-h-14 items-center gap-3 px-4 py-3"}>{label}</div>
                   )}
                 </li>
               );

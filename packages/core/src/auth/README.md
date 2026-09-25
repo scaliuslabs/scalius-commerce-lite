@@ -206,6 +206,8 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 | DELETE | `/users/{id}` | Delete admin user (prevents last admin deletion) |
 | POST | `/change-password` | Change current user password (12-char minimum) |
 | POST | `/update-profile` | Update name and avatar |
+| GET | `/shortcuts` | Your dashboard keyboard shortcuts (`staff-shortcuts:<userId>` settings document; revision 0 = none saved) |
+| PUT | `/shortcuts` | Replace your shortcuts (`expectedRevision` compare-and-swap; paths `/admin/...`, values `g <key>` or `""` to turn a default off, no duplicates, max 80) |
 | GET | `/2fa/info` | Get current user 2FA status |
 | POST | `/2fa/complete-verification` | Complete 2FA after Better Auth verification; requires the verification session token bound to the current session/user |
 | POST | `/2fa/method` | Switch between TOTP and email OTP after verifying a code for the target method or proving the same-origin Better Auth `sessionToken` matches the current session/user |

@@ -57,6 +57,8 @@ export const saveBarMessages = defineMessages({
     retryBar: "Couldn't save · Retry",
     conflictBar: "Changed by someone else · Reload",
     retry: "Retry",
+    sessionLost: "You're signed out. Your changes are kept on this page: sign in again in a new tab, then save.",
+    signInNewTab: "Sign in",
   },
   bn: {
     unsavedChanges: "সেভ করা হয়নি",
@@ -84,5 +86,7 @@ export const saveBarMessages = defineMessages({
     retryBar: "সেভ হয়নি · আবার চেষ্টা করুন",
     conflictBar: "অন্য কেউ বদলেছেন · রিলোড করুন",
     retry: "আবার চেষ্টা করুন",
+    sessionLost: "আপনি সাইন আউট হয়ে গেছেন। পরিবর্তনগুলো এই পেজে রাখা আছে: নতুন ট্যাবে আবার সাইন ইন করে সেভ করুন।",
+    signInNewTab: "সাইন ইন",
   },
 });

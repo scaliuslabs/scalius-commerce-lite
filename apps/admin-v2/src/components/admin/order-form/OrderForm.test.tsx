@@ -11,8 +11,10 @@ const state = vi.hoisted(() => ({
   create: vi.fn(),
   confirm: vi.fn(),
   navigate: vi.fn(),
+  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock("sonner", () => ({ toast: state.toast }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
 vi.mock("@/lib/api", () => ({ apiData: (value: unknown) => value }));
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -37,16 +39,29 @@ vi.mock("@/hooks/use-currency", () => ({
 vi.mock("@/hooks/use-order-action-permissions", () => ({
   useOrderActionPermissions: () => ({ canEditOrders: true, canCreateOrders: true }),
 }));
-vi.mock("@/components/admin/FormStickyHeader", () => ({
-  FormActionBar: (props: { onSave: () => void; saveLabel: string; canSave: boolean }) => (
-    <button type="button" disabled={!props.canSave} onClick={props.onSave}>{props.saveLabel}</button>
-  ),
-}));
 vi.mock("@/components/admin/resource/PageHeader", () => ({ PageHeader: () => null }));
 vi.mock("../shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
 vi.mock("./OrderItemsSection", () => ({ OrderItemsSection: () => null }));
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
-vi.mock("./CustomerInfoSection", () => ({ CustomerInfoSection: () => null, ORDER_LOCATION_IDS: { city: "order-city", zone: "order-zone", area: "order-area" } }));
+// The customer card, reduced to two fields wired like the real ones.
+vi.mock("./CustomerInfoSection", async () => {
+  const { useController } = await import("react-hook-form");
+  function CustomerInfoSection() {
+    const name = useController({ name: "customerName" });
+    const notes = useController({ name: "notes" });
+    return (
+      <>
+        <input aria-label="Name" value={name.field.value ?? ""} onChange={name.field.onChange} />
+        <textarea
+          aria-label="Notes"
+          value={notes.field.value || ""}
+          onChange={(e) => notes.field.onChange(e.target.value || null)}
+        />
+      </>
+    );
+  }
+  return { CustomerInfoSection, ORDER_LOCATION_IDS: { city: "order-city", zone: "order-zone", area: "order-area" } };
+});
 vi.mock("./ProductSearch", () => ({ PRODUCT_SEARCH_INPUT_ID: "order-product-search" }));
 
 import { OrderForm } from "../OrderForm";
@@ -71,8 +86,25 @@ const order = {
 
 const buttonNamed = (name: string) =>
   Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === name);
+const field = (label: string) =>
+  document.body.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
+const saveBar = () => document.body.querySelector("[data-save-bar]");
 
-describe("edit order review", () => {
+async function type(label: string, value: string) {
+  const element = field(label);
+  const setValue = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")!.set!;
+  await act(async () => {
+    setValue.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function click(name: string) {
+  await act(async () => buttonNamed(name)!.click());
+  await act(async () => {});
+}
+
+describe("edit order on the save bar", () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -101,10 +133,28 @@ describe("edit order review", () => {
     host.remove();
   });
 
-  it("shows the cash change and sends one save for a double click", async () => {
-    expect(state.preview).toHaveBeenCalledTimes(1);
-    await act(async () => buttonNamed("Review changes")!.click());
-    await act(async () => {});
+  it("shows the bar only while the order differs from the saved one", async () => {
+    expect(saveBar()).toBeNull();
+    await type("Notes", "Call before delivery");
+    expect(saveBar()?.textContent).toContain("Unsaved changes");
+    // Undoing the note is no change at all.
+    await type("Notes", "");
+    expect(saveBar()).toBeNull();
+  });
+
+  it("discards back to the loaded order exactly", async () => {
+    await type("Name", "Rahim Uddin");
+    await type("Notes", "Leave at the gate");
+    await click("Discard");
+    await click("Discard changes");
+    expect(saveBar()).toBeNull();
+    expect(field("Name").value).toBe("Karim Ahmed");
+    expect(field("Notes").value).toBe("");
+  });
+
+  it("reviews the cash change from the bar's Save and sends one save for a double click", async () => {
+    await type("Notes", "Call before delivery");
+    await click("Save");
 
     expect(document.body.textContent).toContain("Save changes to order #1001?");
     expect(document.body.textContent).toContain("Cash to collect ৳2,370 → ৳3,570");
@@ -118,14 +168,36 @@ describe("edit order review", () => {
     expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({
       id: "ord_1",
       expectedVersion: 3,
+      notes: "Call before delivery",
       quoteFingerprint: "f".repeat(64),
     }));
     // The dialog never asks for a fresh preview.
     expect(state.preview).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the edits and the bar, without an error, when the review is cancelled", async () => {
+    await type("Notes", "Call before delivery");
+    await click("Save");
+    await click("Cancel");
+    expect(document.body.textContent).not.toContain("Save changes to order #1001?");
+    expect(saveBar()?.textContent).toContain("Unsaved changes");
+    expect(document.body.textContent).not.toContain("Couldn't save");
+    expect(field("Notes").value).toBe("Call before delivery");
+    expect(state.confirm).not.toHaveBeenCalled();
+  });
+
+  it("saves and leaves once the review is confirmed", async () => {
+    state.confirm.mockResolvedValue({ id: "ord_1" });
+    await type("Notes", "Call before delivery");
+    await click("Save");
+    await click("Save changes");
+    expect(state.navigate).toHaveBeenCalledWith({ to: "/admin/orders/$orderId", params: { orderId: "ord_1" } });
+    expect(state.toast.success).toHaveBeenCalledTimes(1);
+    expect(state.toast.success).toHaveBeenCalledWith("Order updated");
+  });
 });
 
-describe("create order without an address", () => {
+describe("create order on the save bar", () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -168,6 +240,7 @@ describe("create order without an address", () => {
     state.quote.mockReset().mockResolvedValue(quote);
     state.create.mockReset().mockResolvedValue({ id: "ord_new" });
     state.navigate.mockReset();
+    state.toast.success.mockReset();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -178,7 +251,7 @@ describe("create order without an address", () => {
     host.remove();
   });
 
-  it("quotes and creates a pickup order with the line's buyer inputs and no address", async () => {
+  it("names the new order in the bar, then creates a pickup order with the line's buyer inputs and no address", async () => {
     await renderCreate(pickup);
     // No city or zone: the pickup method is enough to price it.
     expect(state.quote).toHaveBeenCalledWith({ body: expect.objectContaining({
@@ -186,25 +259,44 @@ describe("create order without an address", () => {
       items: [expect.objectContaining({ properties: [{ key: "engraving", value: "Rahim" }] })],
     }) });
 
-    await act(async () => buttonNamed("Create order")!.click());
-    await act(async () => {});
+    await type("Notes", "Engrave before pickup");
+    expect(saveBar()?.textContent).toContain("Unsaved order");
+    await click("Save");
     expect(state.create).toHaveBeenCalledTimes(1);
     const [body] = state.create.mock.calls[0]!;
     expect(body).toMatchObject({
       shippingAddress: null, city: null, zone: null, area: null, shippingMethodId: "rate_counter",
+      notes: "Engrave before pickup",
       items: [{ productId: "p_lighter", variantId: "v_lighter", quantity: 1, properties: [{ key: "engraving", value: "Rahim" }] }],
     });
     // Display-only fields never leave the form.
     expect(body.items[0]).not.toHaveProperty("propertiesDisplay");
     expect(body.items[0]).not.toHaveProperty("fulfillmentKind");
+    expect(state.navigate).toHaveBeenCalledWith({ to: "/admin/orders/$orderId", params: { orderId: "ord_new" } });
+    expect(state.toast.success).toHaveBeenCalledWith("Order created");
   });
 
-  it("still asks an address for a delivered order", async () => {
+  it("still asks an address for a delivered order and keeps the bar", async () => {
     await renderCreate({ ...pickup, shippingMethodId: null, shippingMethodKind: null });
     expect(state.quote).not.toHaveBeenCalled();
-    await act(async () => buttonNamed("Create order")!.click());
-    await act(async () => {});
+    await type("Notes", "Deliver after 5pm");
+    await click("Save");
     expect(state.create).not.toHaveBeenCalled();
+    expect(saveBar()).not.toBeNull();
+  });
+
+  it("keeps the bar and the details with an error when the order can't be created", async () => {
+    state.create.mockRejectedValue(new Error("Only 1 of that item is left."));
+    await renderCreate(pickup);
+    await type("Notes", "Engrave before pickup");
+    await click("Save");
+    expect(state.create).toHaveBeenCalledTimes(1);
+    expect(state.navigate).not.toHaveBeenCalled();
+    expect(saveBar()).not.toBeNull();
+    expect(document.body.textContent).toContain("Couldn't save your changes");
+    expect(document.body.textContent).toContain("Only 1 of that item is left.");
+    expect(field("Notes").value).toBe("Engrave before pickup");
+    expect(state.toast.success).not.toHaveBeenCalled();
   });
 
   it("creates an order of services with no delivery method and no address", async () => {
@@ -215,8 +307,8 @@ describe("create order without an address", () => {
       items: [{ productId: "p_setup", variantId: "v_setup", quantity: 1, price: 1500, fulfillmentKind: "service" as const }],
     });
     expect(state.quote).toHaveBeenCalledWith({ body: expect.objectContaining({ city: null, zone: null }) });
-    await act(async () => buttonNamed("Create order")!.click());
-    await act(async () => {});
+    await type("Notes", "Set up on Friday");
+    await click("Save");
     expect(state.create.mock.calls[0]![0]).toMatchObject({ shippingAddress: null, city: null, zone: null });
     expect(state.create.mock.calls[0]![0]).not.toHaveProperty("shippingMethodId");
   });
