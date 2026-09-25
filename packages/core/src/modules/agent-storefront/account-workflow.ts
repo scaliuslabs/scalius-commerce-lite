@@ -22,11 +22,8 @@ import {
   getCustomerOrders,
   getCustomerOwnedOrderForDetail,
 } from "../customers/customers.service";
-import {
-  createCustomerOrderSupportRequest,
-  createReceiptOrderSupportRequest,
-  getReceiptOrderSupportRequestStateForOrder,
-} from "../orders/order-support-requests";
+import { getReceiptOrderSupportRequestStateForOrder } from "../orders/order-support-requests";
+import { createCustomerOrderSupportRequest, createReceiptOrderSupportRequest } from "../conversations";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { orderMoneyAmounts, orderMoneySelection } from "../orders/money";

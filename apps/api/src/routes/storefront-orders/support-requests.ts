@@ -1,13 +1,14 @@
-// Guest support requests on a receipt.
+// Guest support requests on a receipt: a case on the order's conversation.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createReceiptOrderSupportRequest } from "@scalius/core/modules/conversations";
 import {
-  createReceiptOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
 } from "@scalius/core/modules/orders";
+import { enforceBuyerWriteLimits } from "../../utils/conversation-http";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { created } from "../../utils/api-response";
-import { successEnvelope, errorResponses, conflictResponse } from "../../schemas/responses";
+import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
 import { receiptSupportRequestSchema, receiptSupportRequestActionSchema } from "./shared";
 
@@ -18,6 +19,8 @@ const receiptSupportRequestResponseSchema = z.object({
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
   supportRequestIntro: z.string(),
+  /** The order thread the case was recorded on. */
+  conversationId: z.string(),
 });
 
 const createReceiptSupportRequestRoute = createRoute({
@@ -54,6 +57,7 @@ const createReceiptSupportRequestRoute = createRoute({
     },
     409: conflictResponse,
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -67,6 +71,7 @@ app.openapi(createReceiptSupportRequestRoute, async (c) => {
   c.header("Expires", "0");
 
   await validateReceiptToken(c.env.CACHE, id, body.token, db);
+  await enforceBuyerWriteLimits(c, "support-request", { orderId: id });
   const result = await createReceiptOrderSupportRequest(db, id, {
     type: body.type,
     reason: body.reason,

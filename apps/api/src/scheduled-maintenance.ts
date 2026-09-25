@@ -6,6 +6,7 @@ import {
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
 import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
+import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -255,6 +256,16 @@ async function runScheduledMaintenanceInner(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
         `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
         `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
+    );
+  }
+
+  // Conversation images uploaded but never attached within an hour.
+  const orphanAttachments = await timed("conversation_attachment_sweep", () =>
+    sweepOrphanConversationAttachments(db, env.BUCKET),
+  );
+  if (orphanAttachments.scanned > 0) {
+    console.log(
+      `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
     );
   }
 

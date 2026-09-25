@@ -16,6 +16,7 @@ import {
   markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
+  sendConversationNotification,
   sendOrderNotification,
   sendOrderNotificationEmail,
   sendStaffOrderEmails,
@@ -237,6 +238,29 @@ async function dispatchClaimedNotification(
       data: claim.data,
     });
     return failures.length > 0 ? { kind: "retry", failures } : { kind: "done" };
+  }
+
+  if (claim.subjectType === "conversation") {
+    if (claim.notificationType !== "conversation_reply" && claim.notificationType !== "conversation_message") {
+      return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
+    }
+    const outcome = await sendConversationNotification(db, {
+      outboxId: claim.outboxId,
+      conversationId: claim.subjectId,
+      notificationType: claim.notificationType,
+      seq: Number(claim.data.seq),
+    }, {
+      env,
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    });
+    if (outcome.kind === "nothing_to_send") {
+      // Ids only: the line's text never reaches a log.
+      console.log(`[Queue] Conversation notification ${claim.outboxId} had nothing to send: ${outcome.reason}`);
+      return { kind: "done" };
+    }
+    return outcome.result.hasRetryableFailure
+      ? { kind: "retry", failures: [summarizeNotificationFailures(outcome.result.outcomes)] }
+      : { kind: "done" };
   }
 
   return { kind: "unsupported", reason: `unsupported_notification_subject: ${claim.subjectType}` };
