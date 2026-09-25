@@ -1,0 +1,350 @@
+{
+  "$comment": "Reference numbers for pnpm fidelity:check. Every value was measured on the live reference site with headless Chrome over CDP (getBoundingClientRect and computed styles) at 1440x900 (desktop) and 390x844 DPR 3 (phone) on 2026-09-25. 'study' = audit/rewrite-2026-09-23/storefront-study/sites/<site>.md; 'density' = the live density measurement in audit/rewrite-2026-09-23/fidelity/AUDIT.md §0 (data/density-refs.json); 'facets' = the live facet-column table in AUDIT.md §0. Fonts are 'size/weight'. A metric a site does not have is simply absent.",
+  "measuredAt": "2026-09-25",
+  "tolerances": {
+    "sizePct": 0.1,
+    "sizeMinPx": 2,
+    "gapPx": 4,
+    "fontPx": 1,
+    "fontWeight": 100,
+    "ratio": 0.05,
+    "scrollFactor": 1.1,
+    "firstYSlackPx": 40
+  },
+  "budgets": {
+    "$comment": "AUDIT.md §8 global bar. Header HTML is #site-header outerHTML; JSON-LD is every ld+json script on the page.",
+    "ttfbHitMs": 50,
+    "ttfbMissMs": 300,
+    "lcpPhoneMs": 1500,
+    "lcpDesktopMs": 1200,
+    "cls": 0.05,
+    "pdpHtmlKB": 120,
+    "categoryHtmlKB": 150,
+    "headerHtmlKB": 45,
+    "jsonLdKB": 20,
+    "headerAnchors": 150,
+    "buyBoxTopPx": 400,
+    "hoverVisibleMs": 150,
+    "cardVariantMinDiffPct": 25
+  },
+  "templates": {
+    "boutique": { "largeCatalogue": false, "refs": { "header": "dawn", "card": "dawn", "listing": "dawn", "pdp": "dawn", "footer": "dawn" } },
+    "heritage-editorial": { "largeCatalogue": false, "refs": { "header": "aarong", "card": "aarong", "listing": "aarong", "pdp": "aarong", "footer": "aarong" } },
+    "fashion-value": { "largeCatalogue": false, "refs": { "header": "fabrilife", "card": "fabrilife", "listing": "fabrilife", "pdp": "fabrilife", "footer": "fabrilife" } },
+    "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
+    "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
+    "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "daraz", "listing": "daraz", "pdp": "daraz", "footer": "daraz" } },
+    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" } },
+    "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
+    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "chaldal", "card": "chaldal", "listing": "chaldal", "pdp": "chaldal", "footer": "chaldal" } },
+    "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" } }
+  },
+  "sites": {
+    "startech": {
+      "name": "Star Tech /laptop-notebook",
+      "shots": { "home": "startech-home", "plp": "startech-plp", "pdp": "startech-pdp", "density": "density-ref-startech" },
+      "desktop": {
+        "header.h": { "v": 132, "src": "study: header 132px in two rows (82 + 50)" },
+        "header.search.w": { "v": 580, "src": "study: 580x42 search input" },
+        "header.search.h": { "v": 42, "src": "study: 580x42 search input" },
+        "card.w": { "v": 254, "src": "density: 4 x 254x665" },
+        "card.h": { "v": 665, "src": "density: 4 x 254x665 (4 spec bullets, Buy Now, Compare)" },
+        "card.cols": { "v": 4, "src": "density" },
+        "card.gap": { "v": 0, "src": "study: 4 columns of 254px with no gap" },
+        "card.ratio": { "v": 1, "src": "study: square 204px image" },
+        "card.title": { "v": "14/600", "src": "study: 14/600 title of 2 lines" },
+        "card.price": { "v": "17/600", "src": "study: price 17/600" },
+        "listing.firstCardY": { "v": 364, "src": "density" },
+        "listing.productsVisible": { "v": 4, "src": "density" },
+        "listing.filtersVisible": { "v": 7, "src": "density" },
+        "listing.bottomOf20": { "v": 3742, "src": "density" },
+        "listing.filterColumnW": { "v": 225, "src": "facets: 225px column" },
+        "listing.filterRowPitch": { "v": 32, "src": "facets: 32px row pitch" },
+        "pdp.h1": { "v": "22/400", "src": "study: h1 22/400 blue" },
+        "pdp.price": { "v": "20/700", "src": "study: 20/700 in the buy box" },
+        "pdp.cta.w": { "v": 200, "src": "study: Buy Now 200x42" },
+        "pdp.cta.h": { "v": 42, "src": "study: Buy Now 200x42" },
+        "footer.h": { "v": 448, "src": "study: footer 448px" }
+      },
+      "phone": {
+        "header.h": { "v": 50, "src": "study: 50px fixed top bar" },
+        "card.w": { "v": 370, "src": "density: 1 x 370x584" },
+        "card.h": { "v": 584, "src": "density: 1 x 370x584" },
+        "card.cols": { "v": 1, "src": "density" },
+        "listing.firstCardY": { "v": 295, "src": "density" },
+        "listing.productsVisible": { "v": 1, "src": "density" },
+        "listing.bottomOf20": { "v": 12173, "src": "density" },
+        "pdp.h1": { "v": "20/400", "src": "study: h1 20 on phones" },
+        "pdp.cta.h": { "v": 42, "src": "study: Buy Now 104x42" },
+        "footer.h": { "v": 973, "src": "study: phone footer 973px" }
+      }
+    },
+    "applegadgets": {
+      "name": "Apple Gadgets /category/mobile-phone",
+      "shots": { "home": "applegadgets-home", "plp": "applegadgets-plp", "pdp": "applegadgets-pdp", "density": "density-ref-applegadgets" },
+      "desktop": {
+        "header.h": { "v": 132, "src": "study: 80 + 52 rows" },
+        "header.search.w": { "v": 584, "src": "study: 584x48 pill search" },
+        "header.search.h": { "v": 48, "src": "study: 584x48 pill search" },
+        "card.w": { "v": 323, "src": "density: 3 x 323x387" },
+        "card.h": { "v": 387, "src": "density: 3 x 323x387" },
+        "card.cols": { "v": 3, "src": "density" },
+        "card.gap": { "v": 16, "src": "study: 16px gap" },
+        "card.ratio": { "v": 1.31, "src": "study: image 321x245, landscape 1.31 crop" },
+        "card.title": { "v": "20/600", "src": "study: listing card titles 20/600" },
+        "card.price": { "v": "18/600", "src": "study: price 18/600" },
+        "listing.firstCardY": { "v": 649, "src": "density (below a 296px category banner)" },
+        "listing.productsVisible": { "v": 3, "src": "density" },
+        "listing.filtersVisible": { "v": 3, "src": "density" },
+        "listing.filterColumnW": { "v": 316, "src": "facets: 316px column" },
+        "listing.filterRowPitch": { "v": 28, "src": "facets: 28px row pitch" },
+        "pdp.h1": { "v": "32/600", "src": "study: h1 32/600" },
+        "pdp.price": { "v": "24/700", "src": "study: 24/700" },
+        "pdp.cta.w": { "v": 380, "src": "study: Shop Now 380x48" },
+        "pdp.cta.h": { "v": 48, "src": "study: Shop Now 380x48" },
+        "footer.h": { "v": 1090, "src": "study: black footer 1,090px" }
+      },
+      "phone": {
+        "header.h": { "v": 125, "src": "study: sticky 125px header with the search band" },
+        "header.search.w": { "v": 358, "src": "study: 358x40 pill search" },
+        "header.search.h": { "v": 40, "src": "study: 358x40 pill search" },
+        "card.w": { "v": 171, "src": "density: 2 x 171x267" },
+        "card.h": { "v": 267, "src": "density: 2 x 171x267" },
+        "card.cols": { "v": 2, "src": "density" },
+        "card.gap": { "v": 16, "src": "study: 16px gap" },
+        "card.title": { "v": "14/600", "src": "study: 14/600 on phones" },
+        "listing.firstCardY": { "v": 363, "src": "density" },
+        "listing.productsVisible": { "v": 4, "src": "density" },
+        "pdp.h1": { "v": "24/600", "src": "study: 24 on phones" },
+        "pdp.cta.w": { "v": 172, "src": "study: 172x44 side by side" },
+        "pdp.cta.h": { "v": 44, "src": "study: 172x44 side by side" }
+      }
+    },
+    "daraz": {
+      "name": "Daraz /catalog/?q=ssd",
+      "shots": { "home": "daraz-home", "plp": "daraz-search", "pdp": "daraz-pdp", "density": "density-ref-daraz" },
+      "desktop": {
+        "card.w": { "v": 250, "src": "density: 4 x 250x421" },
+        "card.h": { "v": 421, "src": "density: 4 x 250x421" },
+        "card.cols": { "v": 4, "src": "density" },
+        "card.ratio": { "v": 1, "src": "study: square 200px image" },
+        "card.title": { "v": "13/400", "src": "study: title 13/400, 2 lines" },
+        "card.price": { "v": "18/400", "src": "study: price 18/400 orange" },
+        "listing.firstCardY": { "v": 292, "src": "density" },
+        "listing.productsVisible": { "v": 4, "src": "density" },
+        "listing.filtersVisible": { "v": 21, "src": "density" },
+        "listing.bottomOf20": { "v": 2397, "src": "density" },
+        "listing.filterColumnW": { "v": 190, "src": "facets: 190px column" },
+        "listing.filterRowPitch": { "v": 18, "src": "facets: 18px row pitch" },
+        "pdp.h1": { "v": "22/400", "src": "study: h1 22/400" },
+        "pdp.price": { "v": "30/400", "src": "study: price 30/400 orange" },
+        "pdp.cta.w": { "v": 225, "src": "study: Buy Now + Add to Cart 225x44" },
+        "pdp.cta.h": { "v": 44, "src": "study: 225x44" }
+      },
+      "phone": {
+        "card.w": { "v": 189, "src": "density: 2 x 189x281" },
+        "card.h": { "v": 281, "src": "density: 2 x 189x281" },
+        "card.cols": { "v": 2, "src": "density" },
+        "card.gap": { "v": 0, "src": "study: no gap (hairline dividers)" },
+        "listing.firstCardY": { "v": 117, "src": "density" },
+        "listing.productsVisible": { "v": 5, "src": "density" },
+        "pdp.h1": { "v": "16/400", "src": "study: title 16/400" },
+        "pdp.price": { "v": "24/700", "src": "study: price 24/700" }
+      }
+    },
+    "amazon": {
+      "name": "Amazon.com (header, product page)",
+      "shots": { "home": "amazon-home", "plp": "amazon-search", "pdp": "amazon-pdp" },
+      "desktop": {
+        "header.h": { "v": 99, "src": "study: 60 + 39 rows" },
+        "header.search.w": { "v": 790, "src": "study: search unit 790x40" },
+        "header.search.h": { "v": 40, "src": "study: search unit 790x40" },
+        "pdp.h1": { "v": "18/400", "src": "study: title 18/400" }
+      },
+      "phone": {
+        "header.search.w": { "v": 370, "src": "study: full-width 370x44 search" },
+        "header.search.h": { "v": 44, "src": "study: 370x44" },
+        "pdp.h1": { "v": "14/400", "src": "study: phone title 14/400" }
+      }
+    },
+    "amazon_uk": {
+      "name": "Amazon UK /s?k=laptop bag (list view)",
+      "shots": { "plp": "density-ref-amazon_uk", "density": "density-ref-amazon_uk" },
+      "desktop": {
+        "card.cols": { "v": 1, "src": "density: 1 x 1130x254 list rows" },
+        "listing.firstCardY": { "v": 248, "src": "density" },
+        "listing.productsVisible": { "v": 3, "src": "density" },
+        "listing.filtersVisible": { "v": 25, "src": "density" },
+        "listing.filterColumnW": { "v": 262, "src": "facets: 262px column" },
+        "listing.filterRowPitch": { "v": 22, "src": "facets: 22px row pitch" }
+      },
+      "phone": {
+        "card.cols": { "v": 1, "src": "density: 1 x 382x217" },
+        "listing.firstCardY": { "v": 443, "src": "density" },
+        "listing.productsVisible": { "v": 2, "src": "density" },
+        "listing.bottomOf20": { "v": 4630, "src": "density" }
+      }
+    },
+    "dawn": {
+      "name": "Shopify Dawn /collections/bags",
+      "shots": { "home": "dawn-home", "plp": "dawn-plp", "pdp": "dawn-pdp", "density": "density-ref-dawn" },
+      "desktop": {
+        "header.h": { "v": 84, "src": "study: 84px sticky header (plus a 39px announcement bar)" },
+        "card.w": { "v": 269, "src": "density: 4 x 269x351" },
+        "card.h": { "v": 351, "src": "density: 4 x 269x351" },
+        "card.cols": { "v": 4, "src": "density" },
+        "card.gap": { "v": 8, "src": "study: 8px gap" },
+        "card.ratio": { "v": 1, "src": "study: square images" },
+        "card.title": { "v": "13/400", "src": "study: card titles 13/400" },
+        "card.price": { "v": "16/400", "src": "study: prices 16/400" },
+        "listing.firstCardY": { "v": 293, "src": "density" },
+        "listing.productsVisible": { "v": 8, "src": "density" },
+        "pdp.h1": { "v": "40/400", "src": "study: h1 40/400" },
+        "pdp.price": { "v": "18/400", "src": "study: price 18/400" },
+        "pdp.cta.w": { "v": 345, "src": "study: Add to cart 345x47" },
+        "pdp.cta.h": { "v": 47, "src": "study: 345x47" }
+      },
+      "phone": {
+        "header.h": { "v": 64, "src": "study: 64px bar" },
+        "card.w": { "v": 178, "src": "density: 2 x 178x251" },
+        "card.h": { "v": 251, "src": "density: 2 x 178x251" },
+        "card.cols": { "v": 2, "src": "density" },
+        "card.gap": { "v": 4, "src": "study: 4px gap" },
+        "listing.firstCardY": { "v": 248, "src": "density" },
+        "listing.productsVisible": { "v": 4, "src": "density" }
+      }
+    },
+    "fabrilife": {
+      "name": "Fabrilife /shop (Polo T-shirt)",
+      "shots": { "home": "fabrilife-home", "plp": "fabrilife-plp", "pdp": "fabrilife-pdp" },
+      "desktop": {
+        "header.h": { "v": 80, "src": "study: 80px fixed header" },
+        "header.search.w": { "v": 300, "src": "study: 300x44 grey search" },
+        "header.search.h": { "v": 44, "src": "study: 300x44" },
+        "card.w": { "v": 236, "src": "study: 4 columns of 236x366" },
+        "card.h": { "v": 366, "src": "study: 236x366" },
+        "card.cols": { "v": 4, "src": "study" },
+        "card.gap": { "v": 16, "src": "study: 16px gap" },
+        "card.ratio": { "v": 1, "src": "study: square 234px image" },
+        "card.title": { "v": "15/500", "src": "study: title 15/500 on one line" },
+        "card.price": { "v": "20/700", "src": "study: price 20/700" },
+        "listing.filterColumnW": { "v": 270, "src": "study: sticky 270px refinement aside" },
+        "pdp.h1": { "v": "20/700", "src": "study: title about 20/700" },
+        "pdp.cta.h": { "v": 37, "src": "study: Add To Cart 115x37" }
+      },
+      "phone": {
+        "header.h": { "v": 52, "src": "study: 52px fixed bar" },
+        "card.w": { "v": 169, "src": "study: 2 columns of 169x267" },
+        "card.h": { "v": 267, "src": "study: 169x267" },
+        "card.cols": { "v": 2, "src": "study" },
+        "card.gap": { "v": 6, "src": "study: 6px gap" }
+      }
+    },
+    "aarong": {
+      "name": "Aarong /women/saree (shelves)",
+      "shots": { "home": "aarong-home", "plp": "aarong-plp", "pdp": "aarong-pdp" },
+      "desktop": {
+        "header.h": { "v": 100, "src": "study: about 100px at rest" },
+        "card.w": { "v": 350, "src": "study: 350px wide shelf cards with 40px gutters" },
+        "card.gap": { "v": 40, "src": "study: 40px gutters" },
+        "card.ratio": { "v": 0.75, "src": "study: portrait 3:4 images (310x413)" },
+        "card.title": { "v": "16/700", "src": "study: product names 16/700" },
+        "card.price": { "v": "16/400", "src": "study: prices 16/400" },
+        "pdp.h1": { "v": "30/500", "src": "study: title 30/500" },
+        "pdp.price": { "v": "20/400", "src": "study: price 20/400" },
+        "pdp.cta.w": { "v": 492, "src": "study: ADD TO BAG 492x39" },
+        "pdp.cta.h": { "v": 39, "src": "study: 492x39" }
+      },
+      "phone": {
+        "header.h": { "v": 60, "src": "study: sticky 60px bar" },
+        "card.w": { "v": 187, "src": "study: 187px shelf cards (2.1 visible)" },
+        "card.ratio": { "v": 0.75, "src": "study: 179x239 images" }
+      }
+    },
+    "target": {
+      "name": "Target /s?searchTerm=towels",
+      "shots": { "home": "target-home", "plp": "target-search", "pdp": "target-pdp" },
+      "desktop": {
+        "header.h": { "v": 80, "src": "study: white 80px main row (below a 50px red utility bar)" },
+        "header.search.w": { "v": 628, "src": "study: 628x44 pill search" },
+        "header.search.h": { "v": 44, "src": "study: 628x44" },
+        "card.w": { "v": 318, "src": "study: 4 columns of 318x616" },
+        "card.h": { "v": 616, "src": "study: 318x616" },
+        "card.cols": { "v": 4, "src": "study" },
+        "card.gap": { "v": 24, "src": "study: 24px gap" },
+        "card.ratio": { "v": 1, "src": "study: square 318px image" },
+        "card.title": { "v": "14/400", "src": "study: title 14/400 (brand 14/700 above it)" },
+        "card.price": { "v": "22/700", "src": "study: price 22/700" },
+        "pdp.h1": { "v": "23/700", "src": "study: product title 23/700" },
+        "pdp.cta.w": { "v": 480, "src": "study: Add to cart 480x40" },
+        "pdp.cta.h": { "v": 40, "src": "study: 480x40" }
+      },
+      "phone": {
+        "card.w": { "v": 334, "src": "study: one product per row, 334x267" },
+        "card.h": { "v": 267, "src": "study: 334x267" },
+        "card.cols": { "v": 1, "src": "study: list layout" }
+      }
+    },
+    "gameghor": {
+      "name": "Game Ghor /product-category/pc-games/",
+      "shots": { "home": "gameghor-home", "plp": "gameghor-plp", "pdp": "gameghor-pdp" },
+      "desktop": {
+        "header.h": { "v": 165, "src": "study: main row about 120 + nav row 45 (below a 38px top bar)" },
+        "header.search.w": { "v": 720, "src": "study: 720x41 pill search" },
+        "header.search.h": { "v": 41, "src": "study: 720x41" },
+        "card.w": { "v": 218, "src": "study: 4 columns of 218x325" },
+        "card.h": { "v": 325, "src": "study: 218x325" },
+        "card.cols": { "v": 4, "src": "study" },
+        "card.gap": { "v": 0, "src": "study: no gap" },
+        "card.ratio": { "v": 1, "src": "study: square 170px image" },
+        "card.title": { "v": "14/700", "src": "study: title 14/700 blue" },
+        "card.price": { "v": "20/400", "src": "study: price 20/400" },
+        "listing.filterColumnW": { "v": 270, "src": "study: 270px left sidebar" },
+        "pdp.h1": { "v": "25/500", "src": "study: h1 25/500" },
+        "pdp.cta.w": { "v": 147, "src": "study: Buy Now 147x55" },
+        "pdp.cta.h": { "v": 55, "src": "study: 147x55" }
+      },
+      "phone": {
+        "header.h": { "v": 54, "src": "study: 54px bar" },
+        "card.w": { "v": 180, "src": "study: 2 columns of 180x280" },
+        "card.h": { "v": 280, "src": "study: 180x280" },
+        "card.cols": { "v": 2, "src": "study" },
+        "footer.h": { "v": 405, "src": "study: phone footer 405px" }
+      }
+    },
+    "chaldal": {
+      "name": "Chaldal /popular",
+      "shots": { "home": "chaldal-home", "plp": "chaldal-popular" },
+      "desktop": {
+        "header.h": { "v": 90, "src": "study: fixed 90px header" },
+        "header.search.w": { "v": 792, "src": "study: 792x48 search" },
+        "header.search.h": { "v": 48, "src": "study: 792x48" },
+        "card.w": { "v": 194, "src": "study: 6 columns of about 194px" },
+        "card.cols": { "v": 6, "src": "study: 6 columns at a 1180px content width" },
+        "card.ratio": { "v": 1, "src": "study: square image" },
+        "card.title": { "v": "16/400", "src": "study: name 16/400" },
+        "card.price": { "v": "19/700", "src": "study: price 18-20/700 (midpoint; +-1px covers the range)" }
+      },
+      "phone": {
+        "card.w": { "v": 118, "src": "study: 3 columns of 118x206" },
+        "card.h": { "v": 206, "src": "study: 118x206" },
+        "card.cols": { "v": 3, "src": "study" },
+        "card.gap": { "v": 12, "src": "study: 12px gap" },
+        "card.title": { "v": "14/400", "src": "study: names 14/400" },
+        "card.price": { "v": "12/700", "src": "study: prices 11-12/700" }
+      }
+    },
+    "landing-bd": {
+      "name": "BD F-commerce landing pages (honey, papaya, panjabi)",
+      "shots": { "home": "lp-honey", "pdp": "lp-honey" },
+      "desktop": {
+        "header.h": { "v": 66, "src": "study: sticky header 63-68px" },
+        "pdp.h1": { "v": "48/700", "src": "study: h1 48/700 on desktop" }
+      },
+      "phone": {
+        "header.h": { "v": 66, "src": "study: sticky header 63-68px" },
+        "pdp.h1": { "v": "31/700", "src": "study: h1 31/700 on phone" }
+      }
+    }
+  }
+}
