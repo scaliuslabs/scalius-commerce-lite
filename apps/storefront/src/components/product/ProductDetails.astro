@@ -10,15 +10,18 @@ import { warrantySpecRow } from "./warranty-spec-row";
 interface Props {
   product: Product;
   copy?: Partial<CheckoutLanguageData>;
+  /** False when the buy box or "About this item" already lists the key features. */
+  features?: boolean;
 }
 
-const { product, copy } = Astro.props;
+const { product, copy, features: showFeatures = true } = Astro.props;
+const features = showFeatures ? (product.features ?? []) : [];
 // The spec table's Warranty row; until the spec table lands it sits in the description tab.
 const warrantyRow = warrantySpecRow(product, pickWarrantyCopy(copy, ENGLISH_CHECKOUT_LANGUAGE_DATA));
 
 const tabs = [];
 
-if (product.description || (product.features && product.features.length > 0) || warrantyRow) {
+if (product.description || features.length > 0 || warrantyRow) {
   tabs.push({ id: "description", label: "Description" });
 }
 
@@ -107,8 +110,7 @@ const hasManyTabs = tabs.length > 4;
         </div>
 
         <div class="mt-3 lg:mt-4">
-          {(product.description ||
-            (product.features && product.features.length > 0) || warrantyRow) && (
+          {(product.description || features.length > 0 || warrantyRow) && (
             <div
               id="details-panel-description"
               role="tabpanel"
@@ -116,13 +118,13 @@ const hasManyTabs = tabs.length > 4;
               data-tab-panel="description"
               class="tab-panel"
             >
-              {product.features && product.features.length > 0 && (
+              {features.length > 0 && (
                 <div class="mb-6">
                   <h3 class="text-sm font-medium text-foreground mb-3">
                     Key Features
                   </h3>
                   <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                    {product.features.map((feature) => (
+                    {features.map((feature) => (
                       <li class="flex items-start">
                         <Check className="h-4 w-4 text-primary mr-2 shrink-0 mt-0.5" />
                         <span class="text-sm text-foreground">{feature}</span>

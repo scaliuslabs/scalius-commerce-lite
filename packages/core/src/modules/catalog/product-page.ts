@@ -6,12 +6,13 @@ import {
     productVariants,
     productAttributeValues,
     productAttributes,
+    attributeGroups,
     productBuyerState,
     brands,
     productReviewStats,
     warrantyPolicies,
 } from "@scalius/database/schema";
-import { and, sql, eq, isNull } from "drizzle-orm";
+import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { listProductBuyGetOffers } from "../promotions/promotions.checkout";
@@ -249,17 +250,36 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 })),
             })),
 
+        // The specification table: grouped rows in the merchant's order (one
+        // statement; the group join adds no round trip).
         db.select({
             name: productAttributes.name,
             value: productAttributeValues.value,
             slug: productAttributes.slug,
+            group: attributeGroups.name,
+            unit: productAttributes.unit,
+            keySpec: productAttributes.keySpec,
         }).from(productAttributeValues)
             .innerJoin(productAttributes, and(
                 eq(productAttributeValues.attributeId, productAttributes.id),
                 isNull(productAttributes.deletedAt),
             ))
+            .leftJoin(attributeGroups, and(
+                eq(attributeGroups.id, productAttributes.groupId),
+                isNull(attributeGroups.deletedAt),
+            ))
             .where(eq(productAttributeValues.productId, product.id))
-            .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
+            .orderBy(
+                sql`${attributeGroups.id} IS NULL`,
+                asc(attributeGroups.sortOrder),
+                asc(attributeGroups.name),
+                asc(productAttributes.sortOrder),
+                asc(productAttributes.name),
+            )
+            .then((res: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean }>) => ({
+                type: "attributes",
+                data: res.map((row) => ({ ...row, keySpec: Boolean(row.keySpec) })),
+            })),
     ];
 
     // Published reviews: one indexed read in this wave, only when the product

@@ -1,0 +1,35 @@
+---
+// Specifications (Star Tech, Apple Gadgets, Target): every attribute value
+// of the product in a two-column table, grouped under the merchant's
+// attribute groups in their order. `limit` makes Amazon's short top table
+// of key specs.
+import type { Product } from "@/lib/api";
+import { groupSpecificationRows, specificationValue } from "../lib/product-page-modules";
+
+interface Props {
+  rows: NonNullable<Product["attributes"]>;
+}
+
+const { rows } = Astro.props;
+const groups = groupSpecificationRows(rows);
+---
+
+<div class="overflow-hidden rounded-lg border border-border">
+  <table class="w-full border-collapse text-sm">
+    {groups.map((group) => (
+      <tbody>
+        {group.group && (
+          <tr>
+            <th colspan="2" scope="colgroup" class="bg-muted px-3 py-2 text-left font-semibold text-foreground lg:px-4">{group.group}</th>
+          </tr>
+        )}
+        {group.rows.map((row) => (
+          <tr class="border-t border-border first:border-t-0">
+            <th scope="row" class="w-2/5 px-3 py-2 text-left align-top font-normal text-muted-foreground lg:w-1/3 lg:px-4">{row.name}</th>
+            <td class="px-3 py-2 align-top text-foreground lg:px-4">{specificationValue(row)}</td>
+          </tr>
+        ))}
+      </tbody>
+    ))}
+  </table>
+</div>

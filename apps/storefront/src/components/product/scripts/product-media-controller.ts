@@ -5,6 +5,7 @@ import {
 } from "@/lib/responsive-image";
 import { GALLERY_IMAGE_WIDTHS } from "../lib/gallery-images";
 import { loadVariantsFromDOM } from "../lib/variant-state-machine";
+import { playVideoFacade, stopVideoFacade } from "./video-facade";
 
 export type ProductMediaSelectionSource = "initial" | "gallery" | "variant";
 
@@ -52,30 +53,7 @@ let warmedImages = new Set<string>();
 const selectionTokens = new WeakMap<HTMLElement, number>();
 const mobileZoomBackgroundInertStates = new Map<HTMLElement, boolean>();
 let activeController: AbortController | null = null;
-let videoThemePromise: Promise<void> | null = null;
 let bodyOverflowBeforeMobileZoom = "";
-
-async function enhanceProductVideo(video: HTMLVideoElement): Promise<void> {
-  if (typeof customElements === "undefined") return;
-  if (!videoThemePromise) {
-    videoThemePromise = import("@player.style/microvideo")
-      .then(() => customElements.whenDefined("media-theme-microvideo"))
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        videoThemePromise = null;
-        throw error;
-      });
-  }
-  try {
-    await videoThemePromise;
-    if (!video.isConnected) return;
-    video.controls = false;
-    const player = video.closest<HTMLElement>("[data-product-video-player]");
-    if (player) player.dataset.enhanced = "true";
-  } catch {
-    video.controls = true;
-  }
-}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -275,14 +253,6 @@ function updateActiveThumbnails(
   });
 }
 
-function clearVideo(video: HTMLVideoElement): void {
-  video.pause();
-  video.removeAttribute("src");
-  video.removeAttribute("poster");
-  video.preload = "none";
-  video.load();
-}
-
 function setMobileZoomBackgroundInert(
   modal: HTMLElement,
   inert: boolean,
@@ -340,8 +310,7 @@ function galleryParts(root: HTMLElement) {
       "[data-image-stage='mobile']",
     ),
     videoStage: root.querySelector<HTMLElement>("[data-video-stage]"),
-    video: root.querySelector<HTMLVideoElement>("[data-product-video]"),
-    placeholder: root.querySelector<HTMLElement>("[data-video-placeholder]"),
+    facade: root.querySelector<HTMLAnchorElement>("[data-video-stage] [data-video-facade]"),
     mobileImage: root.querySelector<HTMLImageElement>(
       "[data-mobile-main-image]",
     ),
@@ -390,36 +359,52 @@ function adoptRenderedInitialItem(
   }
 
   if (
-    !parts.video ||
+    !parts.facade ||
     parts.videoStage?.classList.contains("hidden") ||
-    !sameDocumentUrl(parts.video.getAttribute("src"), item.url)
+    !sameDocumentUrl(parts.facade.dataset.videoSrc ?? null, item.url)
   )
     return false;
   setActiveData(root, item, null);
-  void enhanceProductVideo(parts.video);
   return true;
 }
 
+/**
+ * Puts a video's facade on the stage: its poster (in the main photo's slot,
+ * so it is the rendition a photo would be), its title and its length. The
+ * player itself mounts only when the buyer presses play.
+ */
 function showVideo(root: HTMLElement, parts: GalleryParts, item: GalleryItem) {
-  const { video, videoStage } = parts;
-  if (!video || !videoStage) return;
+  const { facade, videoStage } = parts;
+  if (!facade || !videoStage) return;
+  stopVideoFacade(videoStage);
   parts.desktopImageStage?.classList.remove("lg:block");
   parts.desktopImageStage?.classList.add("hidden", "lg:!hidden");
   parts.mobileImageStage?.classList.add("hidden");
   videoStage.classList.remove("hidden");
   parts.mobileTrigger?.setAttribute("aria-disabled", "true");
 
-  video.pause();
-  video.preload = "metadata";
-  video.setAttribute("aria-label", item.altText);
-  if (item.posterUrl) video.poster = item.posterUrl;
-  else video.removeAttribute("poster");
-  if (video.getAttribute("src") !== item.url) {
-    video.src = item.url;
-    video.load();
+  facade.dataset.videoSrc = item.url;
+  facade.dataset.videoTitle = item.altText;
+  facade.href = item.url;
+  const template = facade.dataset.labelTemplate;
+  if (template) facade.setAttribute("aria-label", template.replace("{title}", item.altText));
+  const poster = facade.querySelector<HTMLImageElement>("[data-video-poster]");
+  if (poster) {
+    if (item.posterUrl) {
+      applySources(poster, galleryMainSources(root, item.posterUrl), "");
+      poster.hidden = false;
+    } else {
+      poster.hidden = true;
+      poster.removeAttribute("srcset");
+      poster.removeAttribute("src");
+    }
   }
-  void enhanceProductVideo(video);
-  parts.placeholder?.classList.toggle("hidden", Boolean(item.posterUrl));
+  const duration = facade.querySelector<HTMLElement>("[data-video-duration]");
+  if (duration) {
+    const text = item.thumbnail?.dataset.videoDuration ?? "";
+    duration.textContent = text;
+    duration.hidden = !text;
+  }
   closeMobileZoom(root);
 }
 
@@ -428,13 +413,12 @@ function showImage(
   sources: ResponsiveImageSources,
   altText: string,
 ): void {
-  if (parts.video?.getAttribute("src")) clearVideo(parts.video);
+  stopVideoFacade(parts.videoStage);
   parts.videoStage?.classList.add("hidden");
   parts.desktopImageStage?.classList.remove("lg:!hidden");
   parts.desktopImageStage?.classList.add("hidden", "lg:block");
   parts.mobileImageStage?.classList.remove("hidden");
   parts.mobileTrigger?.removeAttribute("aria-disabled");
-  parts.placeholder?.classList.add("hidden");
   for (const image of [parts.mobileImage, parts.desktopImage]) {
     if (image) applySources(image, sources, altText);
   }
@@ -872,17 +856,16 @@ export function initProductMediaGallery(
     bindScrollIndicator(root, rail, "down", signal);
   }
   bindMobileZoom(root, signal);
-  const video = root.querySelector<HTMLVideoElement>("[data-product-video]");
-  const videoPlaceholder = root.querySelector<HTMLElement>(
-    "[data-video-placeholder]",
-  );
-  video?.addEventListener(
-    "playing",
-    () => videoPlaceholder?.classList.add("hidden"),
-    {
-      signal,
-    },
-  );
+  root
+    .querySelector<HTMLElement>("[data-video-stage] [data-video-facade]")
+    ?.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        playVideoFacade(event.currentTarget as HTMLElement);
+      },
+      { signal },
+    );
 
   window.addEventListener(
     "product-media-select",

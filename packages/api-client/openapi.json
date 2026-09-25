@@ -1775,6 +1775,7 @@
                         "description",
                         "content-blocks",
                         "compare-similar",
+                        "warranty",
                         "questions",
                         "reviews",
                         "policies",
@@ -1782,7 +1783,7 @@
                         "recently-viewed"
                       ]
                     },
-                    "maxItems": 12
+                    "maxItems": 13
                   },
                   "sticky": {
                     "type": "object",
@@ -60180,12 +60181,26 @@
                                   },
                                   "value": {
                                     "type": "string"
+                                  },
+                                  "group": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "unit": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "keySpec": {
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
                                   "name",
                                   "slug",
-                                  "value"
+                                  "value",
+                                  "group",
+                                  "unit",
+                                  "keySpec"
                                 ]
                               }
                             },

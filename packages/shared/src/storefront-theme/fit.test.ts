@@ -130,7 +130,7 @@ describe("fallback resolution", () => {
     // Modules and toolbar pieces without data are left out; nothing renders an empty box.
     const spec = storefrontTemplateTheme("spec-catalogue");
     const resolvedSpec = resolve(spec);
-    expect(resolvedSpec.blocks.product.below).toEqual(["description", "related"]);
+    expect(resolvedSpec.blocks.product.below).toEqual(["spec-table", "description", "warranty", "reviews", "related"]);
     expect(resolvedSpec.blocks.listing.toolbar).not.toContain("subcategory-pills");
     // Aspect chips read today's facets (the storefront omits them without a
     // multi-value facet); the default listing has no per-page control.
