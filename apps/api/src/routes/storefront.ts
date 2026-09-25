@@ -10,10 +10,13 @@ import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared/checkout-language";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
+  HOME_BRAND_LIMIT,
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
+  HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
+  homeSectionRequestsEmpty,
 } from "@scalius/shared/storefront-theme";
 import {
   CACHE_GENERATION_HEADER,
@@ -112,6 +115,25 @@ const homepageMediaSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
 });
+/** A brand-wall brand: published, live, with a public product. */
+const homepageBrandSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  canonicalPath: z.string().nullable(),
+  logo: z.object({
+    mediaId: z.string(),
+    url: z.string(),
+    alt: z.string(),
+    width: z.number().int().nullable(),
+    height: z.number().int().nullable(),
+  }).nullable(),
+});
+/** A deal countdown's promotion: active, started, and ending at `endsAt` (still ahead when read). */
+const homepagePromotionSchema = z.object({
+  id: z.string(),
+  endsAt: z.string(),
+});
 const homepageDataSchema = z.object({
   seo: z.object({
     homepageTitle: z.string().nullable(),
@@ -158,6 +180,8 @@ const homepageDataSchema = z.object({
   sections: z.object({
     lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
     media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
+    brands: z.array(homepageBrandSchema).max(HOME_BRAND_LIMIT),
+    promotions: z.array(homepagePromotionSchema).max(HOME_MAX_PROMOTIONS),
   }),
 });
 type HomepageData = z.infer<typeof homepageDataSchema>;
@@ -511,7 +535,7 @@ const themePreviewHomepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read the homepage section data of a theme preview's draft",
   description:
-    "The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+    "The product lists, images, brands and deal promotions the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
   operationId: "system.storefront_theme_preview.homepage",
   request: {
     body: {
@@ -541,9 +565,9 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
   const requests = homeSectionRequests(preview.theme.pages.home);
-  const data = requests.lists.length > 0 || requests.mediaIds.length > 0
-    ? (await getHomepageData(db, { requests, sectionsOnly: true })).sections
-    : { lists: [], media: [] };
+  const data = homeSectionRequestsEmpty(requests)
+    ? { lists: [], media: [], brands: [], promotions: [] }
+    : (await getHomepageData(db, { requests, sectionsOnly: true })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
 });
 

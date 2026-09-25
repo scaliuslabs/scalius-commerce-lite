@@ -510,7 +510,55 @@ export type StorefrontThemeDocument = {
                     kind: 'category';
                     categoryId: string;
                 };
-                endsAt: string | null;
+                promotionId?: string | null;
+                endsAt?: string | null;
+            };
+        } | {
+            id: string;
+            type: 'product-tabs';
+            version: 1;
+            settings: {
+                title: string;
+                tabs: Array<{
+                    label: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                }>;
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'shop-by';
+            version: 1;
+            settings: {
+                title: string;
+                cards: Array<{
+                    mediaId: string;
+                    title: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'banner-mosaic';
+            version: 1;
+            settings: {
+                tiles: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
             };
         } | {
             id: string;
@@ -4783,6 +4831,23 @@ export type GetApiV1StorefrontHomepageResponses = {
                     width: number | null;
                     height: number | null;
                 }>;
+                brands: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    logo: {
+                        mediaId: string;
+                        url: string;
+                        alt: string;
+                        width: number | null;
+                        height: number | null;
+                    } | null;
+                }>;
+                promotions: Array<{
+                    id: string;
+                    endsAt: string;
+                }>;
             };
         };
     };
@@ -5318,6 +5383,23 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                 alt: string;
                 width: number | null;
                 height: number | null;
+            }>;
+            brands: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                logo: {
+                    mediaId: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+            }>;
+            promotions: Array<{
+                id: string;
+                endsAt: string;
             }>;
         };
     };

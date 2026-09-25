@@ -243,7 +243,7 @@ describe("storefront homepage data", () => {
 
     // A preview names its own reads instead of the published theme's.
     const preview = await getHomepageData(db, {
-      requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 1 }], mediaIds: [] },
+      requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 1 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
     });
     expect(preview.sections.lists.map((each) => [each.key, each.products.map((product) => product.id)]))
       .toEqual([["newest", ["p_new"]]]);
@@ -260,7 +260,7 @@ describe("storefront homepage data", () => {
       .run(JSON.stringify(theme));
     const homepage = await getHomepageData(db);
     expect(batches).toBe(1);
-    expect(homepage.sections).toEqual({ lists: [], media: [] });
+    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [] });
   });
 
   it("points hero slides saved with an original upload at its published rendition (R3-MOB-01)", async () => {
