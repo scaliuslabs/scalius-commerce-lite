@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useState } from "react";
+import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { getServerFnError } from "@/lib/api-helpers";
 import { apiData } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import { categoriesInTreeOrder, categoryPathLabel, indexCategories } from "@/lib/category-tree";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
@@ -156,16 +157,22 @@ function CategoryCombobox({
     }
   };
 
+  // Categories are named by their path ("Men › Shirts"), parents before children.
+  const { ordered, byId } = useMemo(
+    () => ({ ordered: categoriesInTreeOrder(categories), byId: indexCategories(categories) }),
+    [categories],
+  );
+  const pathOf = (category: Category) => categoryPathLabel(category.id, byId);
   const selected = categories.find((category) => category.id === selectedId);
   const selectedStatus = selected ? statusLabel(selected) : null;
-  const filtered = categories.filter((category) => category.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-invalid={invalid || undefined} className="w-full justify-between">
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? (selectedStatus ? `${selected.name} · ${selectedStatus}` : selected.name) : t("chooseCategory")}
+            {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t("chooseCategory")}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -199,7 +206,7 @@ function CategoryCombobox({
                 {filtered.map((category) => (
                   <CommandItem
                     key={category.id}
-                    value={category.name}
+                    value={category.id}
                     onSelect={() => {
                       onSelect(category.id);
                       setOpen(false);
@@ -207,7 +214,7 @@ function CategoryCombobox({
                     }}
                   >
                     <Check className={cn("mr-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
-                    <span className="flex-1">{category.name}</span>
+                    <span className="flex-1">{pathOf(category)}</span>
                     {statusLabel(category) ? (
                       <span className="text-body text-muted-foreground">{statusLabel(category)}</span>
                     ) : null}
