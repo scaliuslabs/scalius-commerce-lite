@@ -49,7 +49,7 @@ export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /**
  * Rendition backfill budget. Each image costs one R2 read, one Images info
- * call, up to eight Images transforms, eight R2 writes and a few D1 queries: a
+ * call, up to thirteen Images transforms and R2 writes, and a few D1 queries: a
  * few seconds of wall time but little Worker CPU (the transforms run in the
  * Images service). The backfill runs last and starts no new image once the
  * run is this old, so the run ends well inside the 15-minute cron wall limit
@@ -68,10 +68,11 @@ export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
  * so a large backlog (the 0094 ladder migration sends every image back to
  * its original) is re-rendered within minutes instead of one 240-image run
  * per 15 minutes. Each job bumps the generation when it renders.
- * Each image is eight Images transforms: 1,000 images are 8,000 unique
- * transformations, billed per unique transformation per month (5,000
- * included; a free account stops transforming beyond that and its cards
- * keep their placeholders until the allowance resets).
+ * Each image is up to thirteen Images transforms (the 1.2x ladder): 1,000
+ * images are 13,000 unique transformations, billed per unique transformation
+ * per month (5,000 included; a free account stops transforming beyond that
+ * and its cards keep their placeholders until the allowance resets). New
+ * dashboard uploads encode their ladder in the browser and cost none.
  */
 export const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = 1_000;
 

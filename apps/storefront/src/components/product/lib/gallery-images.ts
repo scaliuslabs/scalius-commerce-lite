@@ -20,13 +20,13 @@ export type ProductGalleryLayout = ResolvedStorefrontThemeLayout["productPage"];
 
 /** Rendition widths: the `src` fallback of each slot and the zoom detail. */
 export const GALLERY_IMAGE_WIDTHS = {
-  thumbnail: 160,
+  thumbnail: 144,
   main: 960,
   zoom: 1600,
 } as const;
 
-/** A thumbnail is at most 100px wide: 320 covers DPR 3. */
-const THUMBNAIL_MAX_WIDTH = 320;
+/** A thumbnail is at most 100px wide: the 296 step covers DPR 3 (the first ladder step at or above 288). */
+const THUMBNAIL_MAX_WIDTH = 296;
 
 /** Below 1024px: full row width (12px gutters), capped at the 384px stage. */
 const MOBILE_MAIN_SIZES = ["(max-width: 407px) calc(100vw - 24px)", "(max-width: 1023px) 384px"];

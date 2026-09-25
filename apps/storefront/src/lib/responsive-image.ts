@@ -54,7 +54,8 @@ export function responsiveImageSources(
 
 /** Screens at or above this density are asked for about 2x, not 3x, pixels. */
 const DENSITY_CAP_MEDIA = "(min-resolution: 2.5dppx)";
-const DENSITY_CAP_SCALE = "0.667";
+/** 3 x 0.666 = 1.998: just under 2x, so a slot never rounds past a ladder step. */
+export const DENSITY_CAP_SCALE = "0.666";
 
 function splitTopLevel(list: string): string[] {
   const parts: string[] = [];

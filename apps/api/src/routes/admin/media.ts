@@ -332,7 +332,7 @@ const saveVariantsRoute = createRoute({
     path: "/{id}/variants",
     tags: ["Admin - Media"],
     summary: "Store pre-generated WebP renditions",
-    description: "Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w160, w320 … and the master). The widths must be exactly those the dashboard pipeline derives from `width`. Replaces earlier renditions and switches the published media URL to the largest one.",
+    description: "Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w144, w172 … and the master). The widths must be exactly those the dashboard pipeline derives from `width` (@scalius/shared mediaVariantWidths). Replaces earlier renditions and switches the published media URL to the largest one.",
     operationId: "dashboard.media.variants_save",
     request: { params: idParam, body: { required: true, content: { "multipart/form-data": { schema: z.object({
         width: z.string(),

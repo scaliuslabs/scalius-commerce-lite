@@ -64,8 +64,10 @@ length and part-1 signature checks finish before the storage side effect.
   generation.
 - The rendition ladder (`MEDIA_VARIANT_WIDTHS`, @scalius/shared) is read from
   the published URL alone, so changing it needs a migration that sends every
-  rendered image back to its original (0094 added 240 and 400); the read
-  hints and the backlog fan-out then re-render them under the same keys.
+  rendered image back to its original (0094 set the 1.2x geometric ladder);
+  the read hints and the backlog fan-out then re-render them under the same
+  keys. Dashboard uploads encode the ladder in the browser (no Images
+  transforms); only the server render job and the backfill spend them.
 - Usage (`media.usage.ts`) is the one list of places that can show a file:
   product photos, video covers, and media URLs saved in product descriptions
   and extra sections, categories, collections, pages/blog posts, homepage

@@ -479,7 +479,7 @@ describe("storefront theme render matrix", () => {
       if (layout !== "split" && layout !== "story-cards") {
         // Phones get a phone-sized rendition, and the first slide paints without script.
         const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
-        expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/640.webp 640w");
+        expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/613.webp 613w");
         expect(phoneSource.getAttribute("sizes")).toBe(heroImageCandidate(HOMEPAGE_DATA.hero.mobile[0]!.url, "mobile", layout).sizes);
         expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
         expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
@@ -545,7 +545,7 @@ describe("storefront theme render matrix", () => {
       for (const thumb of thumbs) {
         expect(thumb.getAttribute("loading")).toBe("lazy");
         expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage, rail).sizes);
-        expect(thumb.getAttribute("srcset")).toMatch(/\/160\.webp 160w, \S+\/240\.webp 240w, \S+\/320\.webp 320w$/);
+        expect(thumb.getAttribute("srcset")).toMatch(/\/144\.webp 144w, (?:\S+\/\d+\.webp \d+w, )*\S+\/\d+\.webp \d+w$/);
       }
     }
     expect(duplicateIds(productPage)).toEqual([]);

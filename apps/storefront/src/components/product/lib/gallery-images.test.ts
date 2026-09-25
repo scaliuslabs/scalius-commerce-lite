@@ -110,7 +110,7 @@ describe("product gallery image slots", () => {
     expect(evaluateSizes(sizes, 1440)).toBe(468);
   });
 
-  it("sizes thumbnails to their rail and caps their srcset at 320w", () => {
+  it("sizes thumbnails to their rail and caps their srcset at 296w", () => {
     const beside = GALLERY.classic;
     const below = GALLERY["thumbs-below"];
     // Phones and tablets: a strip of 68px thumbnails in every layout.
@@ -123,8 +123,8 @@ describe("product gallery image slots", () => {
     expect(evaluateSizes(productGalleryThumbnailSlot(below, "mobile").sizes, 390)).toBe(68);
     expect(evaluateSizes(productGalleryThumbnailSlot(below, "desktop").sizes, 1440)).toBe(88);
     for (const slot of [mobile, desktop]) {
-      expect(slot.width).toBe(160);
-      expect(slot.maxWidth).toBe(320);
+      expect(slot.width).toBe(144);
+      expect(slot.maxWidth).toBe(296);
     }
   });
 });
