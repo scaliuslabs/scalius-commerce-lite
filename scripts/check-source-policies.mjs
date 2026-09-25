@@ -43,6 +43,13 @@ export const policies = [
     sample: 'import { getDb } from "@scalius/database/client";',
   },
   {
+    rule: "storefront and dashboard code read only the bundler's built-in import.meta.env flags, never process.env",
+    why: "the build replaces any other import.meta.env name with its local value, and a bare import.meta.env (even in a comment) with every variable the file names; runtime values come from the Worker env or the API (apps/storefront/integrations/build-env-isolation.mjs)",
+    paths: [storefront, "apps/admin-v2/src"],
+    forbid: [/\bimport\.meta\.env\b(?!\.(?:DEV|PROD|SSR|MODE|BASE_URL)\b)/, /\bprocess\.env\b/],
+    sample: "const secret = import.meta.env.SCALIUS_SECRET;",
+  },
+  {
     rule: "@scalius/database and @scalius/shared are imported by subpath only",
     why: "the packages have no root export; a root import breaks the Worker bundle",
     paths: ["apps/api/src", storefront, "apps/admin-v2/src", "packages/core/src", "packages/cli/src"],

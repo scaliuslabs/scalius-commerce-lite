@@ -5,6 +5,7 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 import deferredPartytown from "./integrations/deferred-partytown.mjs";
+import buildEnvIsolation from "./integrations/build-env-isolation.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
@@ -54,6 +55,9 @@ export default defineConfig({
   session: false,
 
   integrations: [
+    // Keeps .dev.vars, .env* and process.env values out of dist/: only the
+    // built-in import.meta.env keys (DEV, SSR, ...) are inlined.
+    buildEnvIsolation(),
     react(),
     deferredPartytown({
       config: partytownConfig,
