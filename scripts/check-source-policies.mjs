@@ -4,7 +4,7 @@
 // belongs in a behaviour test. Each policy carries the production rule it
 // protects and a `sample` that must violate it, so a regex that silently stops
 // matching fails `check-source-policies.test.mjs`.
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,6 +32,7 @@ const storefront = "apps/storefront/src";
 /**
  * paths: files or directories. forbid: no file may match any pattern.
  * require: every file must match every pattern. extensions: optional file filter.
+ * optionalPaths: skip listed paths that do not exist yet (a later slice adds them).
  * sample: text that must violate the policy.
  */
 export const policies = [
@@ -104,6 +105,37 @@ export const policies = [
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
     sample: '<form action="/cart" class="x">',
+  },
+  {
+    rule: "Wave B buyer forms (reviews, downloads and licence keys, gift cards, warranty claims) submit with method=post",
+    why: "review text, gift-card codes, receipt-scoped actions and claim details must not enter URLs before hydration or without JavaScript (Wave B §11.1); files land slice by slice, so a missing one is skipped until its slice ships",
+    optionalPaths: true,
+    paths: [
+      // Reviews (B2)
+      `${storefront}/components/order/ReviewLineAction.astro`,
+      `${storefront}/components/order/review-line-action.ts`,
+      `${storefront}/pages/account/reviews.astro`,
+      `${storefront}/components/product/reviews`,
+      // Digital goods (B3)
+      `${storefront}/components/order/DigitalLineDelivery.astro`,
+      `${storefront}/components/order/digital-line-delivery.ts`,
+      `${storefront}/pages/account/downloads.astro`,
+      // Gift cards (B4)
+      `${storefront}/components/order/GiftCardLineDelivery.astro`,
+      `${storefront}/components/order/gift-card-line-delivery.ts`,
+      `${storefront}/pages/account/gift-cards.astro`,
+      `${storefront}/pages/gift-card-balance.astro`,
+      `${storefront}/pages/checkout.astro`,
+      `${storefront}/components/checkout`,
+      // Warranty (B5)
+      `${storefront}/components/order/WarrantyLineInfo.astro`,
+      `${storefront}/components/order/warranty-line-info.ts`,
+      `${storefront}/pages/account/warranties.astro`,
+      // The guest order lookup that leads to every receipt-scoped form above.
+      `${storefront}/pages/track-order.astro`,
+    ],
+    forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
+    sample: '<form action="/account/reviews" class="x">',
   },
   {
     rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
@@ -278,7 +310,9 @@ export function policyViolations(policy, files) {
 export function collectSourcePolicyViolations() {
   const violations = policies.flatMap((policy) => policyViolations(
     policy,
-    policy.paths.flatMap((path) => codeFiles(path, policy.extensions ? new Set(policy.extensions) : undefined)).map((file) => ({
+    policy.paths
+      .filter((path) => !policy.optionalPaths || existsSync(resolve(root, path)))
+      .flatMap((path) => codeFiles(path, policy.extensions ? new Set(policy.extensions) : undefined)).map((file) => ({
       name: relative(root, file),
       text: readFileSync(file, "utf8"),
     })),

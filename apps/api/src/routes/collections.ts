@@ -59,6 +59,12 @@ const storefrontCollectionDetailSchema = storefrontCollectionSchema.extend({
   metaDescription: z.string().nullable(),
 });
 
+// Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).
+const cardRatingSchema = z.object({
+  average: z.number().min(1).max(5).openapi({ description: "Average of the published reviews, two decimals truncated (4.66)." }),
+  count: z.number().int().min(1).openapi({ description: "Published reviews." }),
+}).nullable().openapi({ description: "Published-review rating; null when the product has no published review." });
+
 const collectionProductSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -77,8 +83,18 @@ const collectionProductSchema = z.object({
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   hasVariants: z.boolean(),
+  rating: cardRatingSchema,
 });
 
+const ratingFacetSchema = z.array(z.object({
+  min: z.number().int().min(1).max(4).openapi({ description: "Whole stars: products averaging at least this (`minRating`)." }),
+  count: z.number().int().min(0).openapi({ description: "Products matching the other selections and this threshold." }),
+})).max(4).openapi({
+  description: "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.",
+});
+const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().openapi({
+  description: "Only products whose published-review average is at least this many whole stars (1-4).",
+});
 
 const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
@@ -90,7 +106,9 @@ const collectionCatalogQuerySchema = z.object({
     "name-asc",
     "name-desc",
     "discount",
+    "rating",
   ]).optional(),
+  minRating: minRatingQuerySchema,
   search: z.string().optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
@@ -190,6 +208,7 @@ const getCollectionByIdRoute = createRoute({
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -216,7 +235,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     throw new NotFoundError("Collection not found");
   }
 
-  const { collection, categories, products, featuredProduct, pagination, priceRange, facets } = result;
+  const { collection, categories, products, featuredProduct, pagination, priceRange, facets, ratingFacet } = result;
 
   return ok(c, {
     collection: {
@@ -239,6 +258,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     pagination,
     priceRange,
     facets,
+    ratingFacet,
   });
 });
 

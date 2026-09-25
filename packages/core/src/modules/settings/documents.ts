@@ -52,6 +52,7 @@ import {
   type CustomerRequestPolicy,
 } from "./customer-request-policy.shared";
 import type { Database } from "@scalius/database/client";
+import { sql, type SQL } from "drizzle-orm";
 import {
   defineSettingsDocument,
   readSettingsDocumentStrict,
@@ -357,25 +358,28 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
 });
 
 // ─────────────────────────────────────────
-// Reviews (Wave B §2): moderation and review requests. Disabled until the
-// reviews slice ships; an unreadable document hides reviews and refuses
-// writes (`readReviewSettings`).
+// Reviews (Wave B §2): moderation and review requests. On by default (auto
+// moderation, a request 7 days after delivery); an unreadable document hides
+// reviews and refuses writes (`readReviewSettings`). Request channels are the
+// `review_request` row of the notifications document, like every other buyer
+// message; this document only says whether and when to ask.
 // ─────────────────────────────────────────
 
 export const REVIEW_MODERATION_MODES = ["auto", "hold"] as const;
 export type ReviewModerationMode = (typeof REVIEW_MODERATION_MODES)[number];
 export const REVIEW_REQUEST_DELAY_DAYS = { min: 1, max: 60 } as const;
 export const REVIEW_BLOCK_WORDS_MAX = 50;
-export const REVIEW_BLOCK_WORD_MAX_LENGTH = 60;
+/** Matches `REVIEW_LIMITS.blockWordLength` in `@scalius/shared/reviews`. */
+export const REVIEW_BLOCK_WORD_MAX_LENGTH = 40;
 
 export interface ReviewSettings {
   enabled: boolean;
   /** `auto` publishes reviews that pass the content checks; `hold` holds every review. Never by rating. */
   moderation: ReviewModerationMode;
+  /** Ask buyers for a review after delivery (the channels are the notifications document's `review_request` row). */
+  requestsEnabled: boolean;
   /** Days after delivery before the review request goes out. */
   requestDelayDays: number;
-  requestEmail: boolean;
-  requestSms: boolean;
   /** Merchant words that hold a review for moderation (en/bn). */
   blockWords: string[];
 }
@@ -385,17 +389,15 @@ export const reviewsDocument = defineSettingsDocument<ReviewSettings>({
   schema: z.object({
     enabled: z.boolean(),
     moderation: z.enum(REVIEW_MODERATION_MODES),
+    requestsEnabled: z.boolean(),
     requestDelayDays: z.number().int().min(REVIEW_REQUEST_DELAY_DAYS.min).max(REVIEW_REQUEST_DELAY_DAYS.max),
-    requestEmail: z.boolean(),
-    requestSms: z.boolean(),
     blockWords: z.array(z.string().trim().min(1).max(REVIEW_BLOCK_WORD_MAX_LENGTH)).max(REVIEW_BLOCK_WORDS_MAX),
   }),
   defaults: {
-    enabled: false,
+    enabled: true,
     moderation: "auto",
+    requestsEnabled: true,
     requestDelayDays: 7,
-    requestEmail: true,
-    requestSms: false,
     blockWords: [],
   },
 });
@@ -403,6 +405,20 @@ export const reviewsDocument = defineSettingsDocument<ReviewSettings>({
 /** Reviews settings, or a failure the caller must treat as "reviews hidden, writes refused". */
 export function readReviewSettings(db: Database): Promise<StrictSettingsRead<ReviewSettings>> {
   return readSettingsDocumentStrict(reviewsDocument, db);
+}
+
+/**
+ * Whether reviews are on, as one SQL expression (1 or 0) for reads that must
+ * not spend a settings round trip (the product page row, the store shape): no
+ * stored document means the default (on); a stored one counts only when it is
+ * JSON whose `enabled` is not `false`. The strict read above stays the
+ * authority for every write.
+ */
+export function reviewsEnabledSql(): SQL<number> {
+  return sql<number>`(SELECT CASE WHEN count(*) = 0 THEN 1 ELSE count(CASE WHEN
+      (CASE WHEN json_valid(rs."value") THEN coalesce(json_type(rs."value", '$.enabled'), 'true') END) = 'true'
+    THEN 1 END) END
+    FROM "settings" rs WHERE rs."key" = 'document' AND rs."category" = 'reviews')`;
 }
 
 // ─────────────────────────────────────────

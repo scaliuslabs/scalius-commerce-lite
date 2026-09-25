@@ -152,7 +152,13 @@ export interface StorefrontProductFilterInput {
     page?: number;
     limit?: number;
     /** Defaults to "relevance" when `search` is set, otherwise "newest". */
-    sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount";
+    /** `rating`: the Bayesian review rank (`product_review_stats.rating_rank_milli`), unreviewed products last. */
+    sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount" | "rating";
+    /**
+     * "N★ & up": only products whose published-review average is at least N
+     * (`rating_avg_centi >= N * 100`). Whole stars 1-4; anything else is ignored.
+     */
+    minRating?: number;
     minPrice?: number;
     maxPrice?: number;
     freeDelivery?: "true" | "false";

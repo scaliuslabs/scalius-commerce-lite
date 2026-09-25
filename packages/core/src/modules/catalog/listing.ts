@@ -24,12 +24,17 @@ import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
     groupCatalogFacets,
+    groupCatalogRatingFacet,
     type CatalogFacetCountRow,
 } from "./facets";
 import {
     priceFilterBoundsMinor,
     buildStorefrontBuyerStateConditions,
     getPagination,
+    normalizeMinRating,
+    presentCardRating,
+    productMinRatingCondition,
+    reviewStats,
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
     publishedCategoryIdSet,
 } from "./shared";
@@ -67,6 +72,8 @@ type StorefrontProductListRow = {
     categoryId: string | null;
     createdAt: number;
     updatedAt: number;
+    ratingAvgCenti: number | null;
+    reviewCount: number | null;
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
@@ -98,6 +105,12 @@ export interface StorefrontCategoryProductCategory {
  * sortable index (newest, price) would otherwise win and walk every public
  * row filtering by the set; the unary `+` keeps the order from choosing it,
  * which bounds the read by the scope's own size.
+ *
+ * `rating` reads the review stats projection the page left-joins by primary
+ * key (`rating_rank_milli`, Bayesian, so one 5★ never outranks many 4.8★):
+ * no buyer-state index gives that order, so the scope's own index drives
+ * and the page is sorted after it; unreviewed products come last, newest
+ * first.
  */
 function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sortAfterScope = false): SQL {
     const column = (value: SQLWrapper) => sortAfterScope ? sql`+${value}` : sql`${value}`;
@@ -106,6 +119,9 @@ function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sor
     if (sort === "name-asc") return sql`${products.name}`;
     if (sort === "name-desc") return desc(products.name);
     if (sort === "discount") return sql`${column(buyerState.discountDepthBps)} DESC`;
+    if (sort === "rating") {
+        return sql`${reviewStats.ratingRankMilli} DESC NULLS LAST, COALESCE(${reviewStats.reviewCount}, 0) DESC, ${column(buyerState.productCreatedAt)} DESC`;
+    }
     return sql`${column(buyerState.productCreatedAt)} DESC`;
 }
 
@@ -184,6 +200,9 @@ async function readStorefrontCatalogResults(
     // Selected facet values, ranges, option axes and brands: probes of the
     // stored facet rows and buyer state, never a `products` read.
     const facetConditions = catalogFacetFilterConditions(params.attributeFilters);
+    // "N★ & up": a primary-key probe of the review stats per scoped product.
+    const minRating = normalizeMinRating(params.minRating);
+    if (minRating !== undefined) facetConditions.push(productMinRatingCondition(buyerState.productId, minRating));
     const conditions = [...facetBaseConditions, ...facetConditions];
     priceRangeConditions.push(...facetConditions);
     // The count and price range join `products` only when a condition reads it.
@@ -209,10 +228,14 @@ async function readStorefrontCatalogResults(
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
+            ratingAvgCenti: reviewStats.ratingAvgCenti,
+            reviewCount: reviewStats.reviewCount,
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        // The card rating (and the `rating` order): the page's rows by primary key.
+        .leftJoin(reviewStats, eq(reviewStats.productId, buyerState.productId))
         .where(and(...conditions))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search
@@ -257,6 +280,8 @@ async function readStorefrontCatalogResults(
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
         brandFacet: !scope.withoutBrandFacet,
+        ratingFacet: true,
+        minRating,
     });
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
@@ -300,6 +325,8 @@ async function readStorefrontCatalogResults(
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
+        ratingAvgCenti,
+        reviewCount,
         ...product
     }) => {
         const category = scope.fixedCategory && product.categoryId === scope.fixedCategory.id
@@ -311,6 +338,7 @@ async function readStorefrontCatalogResults(
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
             ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
+            rating: presentCardRating(ratingAvgCenti, reviewCount),
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
@@ -325,6 +353,7 @@ async function readStorefrontCatalogResults(
             max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
         },
         facets: groupCatalogFacets(facetRows, params.attributeFilters),
+        ratingFacet: groupCatalogRatingFacet(facetRows, minRating),
     };
 }
 

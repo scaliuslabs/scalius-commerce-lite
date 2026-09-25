@@ -1,5 +1,5 @@
 // Helpers shared by the catalogue reads. Not exported from the domain entry.
-import { products, categories } from "@scalius/database/schema";
+import { products, categories, productReviewStats } from "@scalius/database/schema";
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { productCategoryNameMatch } from "../../search/relevance";
@@ -248,4 +248,40 @@ export function productImageMapFromMedia(
         });
     }
     return result;
+}
+
+// ─── Review ratings on buyer listings (Wave B §2.4) ─────────────────────
+// Listings read only the `product_review_stats` trigger projection, by its
+// primary key or its indexes, never `product_reviews` (R9). Catalogue reads
+// the table through the schema, not the reviews domain.
+
+/** The stats projection (read-only here: triggers own every write, R3). */
+export const reviewStats = productReviewStats;
+
+/** `minRating` as whole stars 1-4 ("N★ & up"; the storefront offers 4, 3, 2), or undefined. */
+export function normalizeMinRating(value: number | undefined): number | undefined {
+    return value !== undefined && Number.isInteger(value) && value >= 1 && value <= 4 ? value : undefined;
+}
+
+/**
+ * The product has a published-review average of at least `stars`
+ * (`rating_avg_centi >= stars * 100`, so 3.99 is not "4★ & up"). A
+ * correlated primary-key probe per scoped product, so the listing's own
+ * index keeps driving the read.
+ */
+export function productMinRatingCondition(productId: SQL | AnyColumn, stars: number): SQL {
+    return sql`EXISTS (
+        SELECT 1 FROM ${reviewStats} AS rating_filter
+        WHERE rating_filter.product_id = ${productId}
+          AND rating_filter.rating_avg_centi >= ${stars * 100}
+    )`;
+}
+
+/** A card's rating: `{average, count}` from the stats row, null without a published review. */
+export type CardRating = { average: number; count: number } | null;
+
+export function presentCardRating(ratingAvgCenti: number | null | undefined, reviewCount: number | null | undefined): CardRating {
+    const count = Number(reviewCount ?? 0);
+    if (!Number.isFinite(count) || count < 1 || ratingAvgCenti === null || ratingAvgCenti === undefined) return null;
+    return { average: Number(ratingAvgCenti) / 100, count };
 }
