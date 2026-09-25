@@ -72,14 +72,15 @@ describe("storefront layout data", () => {
     sqlite.exec(`
       INSERT INTO categories (id, name, slug, status) VALUES
         ('c_1', 'Sarees', 'sarees', 'published'), ('c_2', 'Panjabi', 'panjabi', 'published'), ('c_3', 'Draft', 'draft', 'draft');
-      INSERT INTO products (id, name, price_minor, slug, is_active) VALUES
-        ('p_1', 'One', 1000, 'one', 1), ('p_2', 'Two', 1000, 'two', 1), ('p_3', 'Three', 1000, 'three', 1),
-        ('p_off', 'Off', 1000, 'off', 0);
+      INSERT INTO products (id, name, price_minor, slug, is_active, category_id) VALUES
+        ('p_1', 'One', 1000, 'one', 1, 'c_1'), ('p_2', 'Two', 1000, 'two', 1, 'c_2'), ('p_3', 'Three', 1000, 'three', 1, 'c_3'),
+        ('p_off', 'Off', 1000, 'off', 0, 'c_1');
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
         ('v_1', 'p_1', 'ONE', 1000, 1, 0, 1, 1), ('v_2', 'p_2', 'TWO', 1000, 1, 0, 1, 1),
         ('v_off', 'p_off', 'OFF', 1000, 1, 0, 1, 1);
       INSERT INTO collections (id, name, presentation, config) VALUES ('col_1', 'Best', 'grid', '{}');
     `);
+    await rebuildCatalogProjections(db);
     const shape = (await getLayoutData(db)).storeShape;
     expect(shape).toMatchObject({
       productCount: 3,
