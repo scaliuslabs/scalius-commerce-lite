@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 92,
-  name: "0092_attribute_option_presets",
+  version: 96,
+  name: "0096_warranty",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -238,8 +238,28 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "f517802465dd78eb25c3688f3b7dd9b0ac2ebe58dbf1b124fb4758f538ea0531",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 92,
+    name: "0092_attribute_option_presets",
     sourceSha256: "81dabf4bfe6ec2627963d55b32f3e44c6693fd523cf550dff6f2c6be1dea2328",
+  },
+  {
+    version: 93,
+    name: "0093_reviews",
+    sourceSha256: "f0fa69308e86a712f5bcb7c80e126f17d15dbe449fcd3e5f6996100f9dd644f0",
+  },
+  {
+    version: 94,
+    name: "0094_digital_goods",
+    sourceSha256: "b78be4c196d831cc0fc824fd82c1e66dbc4a9a845b3bef256bde87ee0c5ab718",
+  },
+  {
+    version: 95,
+    name: "0095_gift_cards",
+    sourceSha256: "fd607d50e3f023546e39295dcef0511471a4437b2fdde71261c0b9fe0dcbd800",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "14c9d0b08f87f5ad5cd87ec3e57fe5dc119008f3923975f400af5d54ecf3e2d7",
   },
 ] as const;
 
