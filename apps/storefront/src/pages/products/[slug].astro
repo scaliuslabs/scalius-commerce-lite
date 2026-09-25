@@ -32,8 +32,10 @@ import {
 import {
   buildMerchantReturnPolicyJsonLd,
   buildOfferShippingDetails,
+  buildProductGroupJsonLd,
   gtinJsonLdForVariant,
   physicalOfferShippingDetails,
+  productSchemaDescription,
 } from "@/lib/commerce-structured-data";
 import {
   getBuyerStockSummary,
@@ -426,53 +428,37 @@ const primarySchemaAvailability = selectedBuyerVariant
   ? isVariantAvailable(selectedBuyerVariant)
   : buyerStockSummary.canPurchaseAny;
 
-// Product JSON-LD -- per SEO-01 (merchant listing spec)
+// Product JSON-LD -- per SEO-01 (merchant listing spec). The description is
+// stated once (plain text, capped), never per variant.
+const schemaDescription = productSchemaDescription(product.description, product.name);
 const productJsonLd =
   !product.noIndex && canonicalUrl
     ? serializeJsonForInlineScript(
         shouldEmitProductGroupJsonLd
-          ? {
-              "@context": "https://schema.org",
-              "@type": "ProductGroup",
+          ? buildProductGroupJsonLd({
               name: product.name,
               url: canonicalUrl,
-              description: (product.description || product.name).replace(
-                /<[^>]+>/g,
-                "",
-              ),
-              ...(schemaImageUrls.length > 0 ? { image: schemaImageUrls } : {}),
+              description: schemaDescription,
+              images: schemaImageUrls,
               productGroupID: product.id,
-              ...(brandName
-                ? { brand: { "@type": "Brand", name: brandName } }
-                : {}),
-              ...(productGroupVariesBy.length > 0
-                ? { variesBy: productGroupVariesBy }
-                : {}),
-              hasVariant: buyerVariants.map((variant) => {
-                const variantPrice = getVariantSchemaPrice(variant);
-                const variantSchemaImages = getVariantSchemaImages(variant);
+              brandName,
+              variesBy: productGroupVariesBy,
+              variants: buyerVariants.map((variant) => {
+                const variantUrl = buildVariantProductUrl(variant) ?? canonicalUrl;
                 return {
-                  "@type": "Product",
                   name: getVariantSchemaName(variant),
-                  url: buildVariantProductUrl(variant) ?? canonicalUrl,
-                  description: (product.description || product.name).replace(
-                    /<[^>]+>/g,
-                    "",
-                  ),
-                  ...(variantSchemaImages.length > 0
-                    ? { image: variantSchemaImages }
-                    : {}),
+                  url: variantUrl,
+                  image: getVariantSchemaImages(variant)[0] ?? null,
                   sku: normalizedVariantOption(variant.sku) || variant.id,
-                  ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
-                  ...mappedVariantSchemaProps(variant),
-                  ...(brandName
-                    ? { brand: { "@type": "Brand", name: brandName } }
-                    : {}),
-                  offers: withOfferCommerceDetails({
+                  properties: {
+                    ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
+                    ...mappedVariantSchemaProps(variant),
+                  },
+                  offer: withOfferCommerceDetails({
                     "@type": "Offer",
-                    url: buildVariantProductUrl(variant) ?? canonicalUrl,
+                    url: variantUrl,
                     priceCurrency: currencyCode,
-                    price: formatMetadataPrice(variantPrice),
+                    price: formatMetadataPrice(getVariantSchemaPrice(variant)),
                     ...(productConditionSchemaUrl
                       ? { itemCondition: productConditionSchemaUrl }
                       : {}),
@@ -482,16 +468,13 @@ const productJsonLd =
                   }, [variant]),
                 };
               }),
-            }
+            })
           : {
               "@context": "https://schema.org",
               "@type": "Product",
               name: primarySchemaName,
               url: primarySchemaUrl,
-              description: (product.description || product.name).replace(
-                /<[^>]+>/g,
-                "",
-              ),
+              description: schemaDescription,
               ...((selectedBuyerVariant
                 ? getVariantSchemaImages(selectedBuyerVariant)
                 : schemaImageUrls

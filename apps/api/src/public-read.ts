@@ -10,6 +10,7 @@ import {
   withCacheIdentity,
 } from "./public-cache-policy";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
+import { queueRenditionsForRenderedOriginals } from "./utils/media-rendition-hints";
 
 /**
  * One anonymous public read, rendered the same way wherever it is served:
@@ -26,9 +27,15 @@ export async function renderPublicRead(
   ctx: ExecutionContext,
 ): Promise<Response> {
   const response = await fetchRuntimeApiApp(request, runtimeEnv, ctx);
-  return decoratePublicApiResponse(
+  const decorated = decoratePublicApiResponse(
     applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" }),
   );
+  // A rendered read that still publishes an image original queues that
+  // image's renditions (utils/media-rendition-hints.ts).
+  if (isStorablePublicRead(decorated) && decorated.body) {
+    ctx.waitUntil(queueRenditionsForRenderedOriginals(decorated.clone(), runtimeEnv));
+  }
+  return decorated;
 }
 
 /**

@@ -1,10 +1,10 @@
 import {
-  STOREFRONT_HTML_CACHE_IGNORED_QUERY_PARAMS,
+  isStorefrontTrackingQueryParam,
   normalizeStorefrontCacheQueryValue,
 } from "@scalius/shared/storefront-cache-path";
 
-export const STOREFRONT_QUERY_IGNORED_PARAMS =
-  STOREFRONT_HTML_CACHE_IGNORED_QUERY_PARAMS;
+/** Ad-click and campaign parameters: never part of a page's state or canonical. */
+export const isStorefrontIgnoredQueryParam = isStorefrontTrackingQueryParam;
 
 type QueryValue =
   | string
@@ -45,6 +45,7 @@ export function canonicalizeUrlSearchParams(
     const value = normalizeStorefrontCacheQueryValue(key, rawValue);
     if (
       ignored.has(key) ||
+      isStorefrontTrackingQueryParam(key) ||
       (dropEmptyValues && value === "") ||
       (Object.hasOwn(defaultParams, key) && value === String(defaultParams[key]))
     ) {

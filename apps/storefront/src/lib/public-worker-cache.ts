@@ -1,6 +1,7 @@
 import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
+  isStorefrontTrackingQueryParam,
 } from "@scalius/shared/storefront-cache-path";
 import {
   CACHE_GENERATION_HEADER,
@@ -140,8 +141,15 @@ export function isLayoutBatchedPagePath(pathname: string): boolean {
   );
 }
 
+/**
+ * The query that can shape a page stays small. Ad-click and campaign
+ * parameters never reach the key or the render, so a long `fbclid` or a
+ * stack of `utm_*` tags cannot push an ad visit off the cache.
+ */
 function hasBoundedPublicQuery(url: URL): boolean {
-  const entries = [...url.searchParams.entries()];
+  const entries = [...url.searchParams.entries()].filter(
+    ([key]) => !isStorefrontTrackingQueryParam(key),
+  );
   return (
     entries.length <= MAX_PUBLIC_QUERY_ENTRIES &&
     entries.every(

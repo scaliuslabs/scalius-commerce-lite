@@ -1,6 +1,6 @@
 import type { ProductFacet, ProductListOptions } from "@/lib/api";
 import {
-  STOREFRONT_QUERY_IGNORED_PARAMS,
+  isStorefrontIgnoredQueryParam,
   buildCanonicalQueryString,
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
@@ -31,9 +31,6 @@ const PRODUCT_LIST_SORT_VALUES = [
 const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;
 
-const IGNORED_PRODUCT_LIST_QUERY_PARAMS = new Set<string>(
-  STOREFRONT_QUERY_IGNORED_PARAMS,
-);
 const NAVIGATION_PARAM_SET = new Set<string>(PRODUCT_LIST_NAVIGATION_PARAMS);
 const SORT_VALUE_SET = new Set<string>(PRODUCT_LIST_SORT_VALUES);
 const BOOLEAN_FILTER_SET = new Set<string>(PRODUCT_LIST_BOOLEAN_FILTERS);
@@ -222,7 +219,7 @@ function collectRenderableParams(
 ): Map<string, string[]> {
   const valuesByKey = new Map<string, string[]>();
   for (const [key, value] of params.entries()) {
-    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
+    if (isStorefrontIgnoredQueryParam(key)) continue;
     const values = valuesByKey.get(key) ?? [];
     values.push(value);
     valuesByKey.set(key, values);
@@ -233,7 +230,7 @@ function collectRenderableParams(
 function hasRepeatedSingletonParams(params: URLSearchParams): boolean {
   const seen = new Set<string>();
   for (const [key] of params.entries()) {
-    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
+    if (isStorefrontIgnoredQueryParam(key)) continue;
     if (
       !NAVIGATION_PARAM_SET.has(key) &&
       !BOOLEAN_FILTER_SET.has(key) &&
