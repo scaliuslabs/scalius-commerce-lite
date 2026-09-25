@@ -13,6 +13,8 @@ interface OrderFormState {
   products: Product[];
   /** Changing a saved order (amendment) rather than creating one. */
   isEdit: boolean;
+  /** Edit only: the order was placed without a delivery method (services), so it can't take goods. */
+  amendShipsNothing?: boolean;
   /** Edit only: the delivery method the order was placed with, shown even when the address no longer offers it. */
   savedShippingMethod?: { id: string; name: string; kind?: "delivery" | "pickup" | null } | null;
   /** Totals from the form values, shown until a current server quote exists. */

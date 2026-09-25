@@ -66,6 +66,7 @@ function EditOrderPage() {
         orderLabel={orderLabel}
         cashToCollect={data.cashToCollect}
         savedShippingMethod={data.savedShippingMethod}
+        amendShipsNothing={!data.defaultValues.shippingMethodKind && data.defaultValues.requiresShipping === false}
       />
     );
   }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
+import { toast } from "sonner";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { canTransitionTo } from "@scalius/shared/order-state";
@@ -24,6 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -95,7 +97,13 @@ export function usePickupReadyAction(orderId: string) {
  * Service, automatic), then one card per hand-over already recorded, each
  * with its own actions.
  */
-export function OrderFulfilmentCards({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
+export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
+  order: Order;
+  request?: OrderActionRequest | null;
+  /** Opens the payment card's "record the cash" flow (the order's next step). */
+  onRecordPayment?: () => void;
+}) {
+  const t = useMessages(orderDetailMessages);
   const hydrated = useHydrated();
   const money = useOrderMoney(order);
   // The Returns card reads the same query; this only reuses it.
@@ -103,10 +111,15 @@ export function OrderFulfilmentCards({ order, request }: { order: Order; request
   const returned = useMemo(() => returnedQuantities(returnsQuery.data?.returns ?? []), [returnsQuery.data]);
   const open = unfulfilledGroups(order);
   const done = fulfilledGroups(order);
+  // Handed over, money still due: say so and offer the next step (a toast with an action stays 10 s).
+  const awaitingPayment = () => toast.info(t("handover.awaitingPayment"), {
+    duration: 10_000,
+    ...(onRecordPayment ? { action: { label: t("handover.recordPayment"), onClick: onRecordPayment } } : {}),
+  });
   return (
     <>
       {open.map((group) => (
-        <UnfulfilledCard key={`open-${group.type}`} order={order} group={group} money={money} request={request} />
+        <UnfulfilledCard key={`open-${group.type}`} order={order} group={group} money={money} request={request} onAwaitingPayment={awaitingPayment} />
       ))}
       {done.map((group, index) => (
         <FulfilledCard
@@ -187,11 +200,12 @@ const GROUP_TITLES: Record<FulfillmentType, "group.ship" | "group.pickup" | "gro
 };
 
 /** What still has to reach the buyer, by how it gets there, with the one next action. */
-function UnfulfilledCard({ order, group, money, request }: {
+function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   order: Order;
   group: UnfulfilledGroup;
   money: Money & { saved: ReturnType<typeof resolveSavedOrderMoneySummary> };
   request?: OrderActionRequest | null;
+  onAwaitingPayment: () => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const permissions = useOrderActionPermissions();
@@ -281,7 +295,13 @@ function UnfulfilledCard({ order, group, money, request }: {
       </CardContent>
       {footer ? <CardFooter>{footer}</CardFooter> : null}
       {isManualGroup(group.type) ? (
-        <ManualFulfillmentDialog order={order} kind={group.type} open={dialog === group.type} onOpenChange={(open) => setDialog(open ? group.type as ManualFulfillmentKind : null)} />
+        <ManualFulfillmentDialog
+          order={order}
+          kind={group.type}
+          open={dialog === group.type}
+          onOpenChange={(open) => setDialog(open ? group.type as ManualFulfillmentKind : null)}
+          onAwaitingPayment={onAwaitingPayment}
+        />
       ) : null}
       {cancelRequest.dialog}
     </Card>
@@ -321,12 +341,16 @@ function FulfilledCard({ order, group, number, money, returned }: {
   const fulfillment = group.fulfillment;
   const canManage = useOrderActionPermissions().canManageOrderShipments;
   const canVoid = canManage && fulfillment?.canVoid === true && !order.archivedAt;
-  const blockedReason = canManage && fulfillment && !fulfillment.canVoid ? fulfillment.voidBlockedReason ?? null : null;
+  // The server says whether and why not; an archived order is restored first.
+  const blockedReason = canManage && fulfillment && typeof fulfillment.canVoid === "boolean" && !canVoid
+    ? t(order.archivedAt ? "void.blocked.archived" : `void.blocked.${fulfillment.voidBlockedReason ?? "voided"}`)
+    : null;
   const when = fulfillment ? formatOrderTimestamp(fulfillment.createdAt) : null;
   const description = [
     when ? t(fulfillment?.actorType === "system" ? "fulfilled.automaticAt" : "fulfilled.at", { date: when }) : null,
     fulfillment?.cashCollected != null ? t("fulfilled.cash", { amount: money.major(fulfillment.cashCollected) }) : null,
   ].filter(Boolean).join(" · ");
+  const voidLabel = t(group.type === "ship" ? "shipments.cameBack" : "void.menu");
   const actions = canVoid || blockedReason ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -335,12 +359,22 @@ function FulfilledCard({ order, group, number, money, returned }: {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem disabled={!canVoid} onSelect={() => setVoiding(true)}>
-          <span className="flex flex-col">
-            <span>{t(group.type === "ship" ? "shipments.cameBack" : "void.menu")}</span>
-            {blockedReason ? <span className="text-muted-foreground">{blockedReason}</span> : null}
-          </span>
-        </DropdownMenuItem>
+        {blockedReason ? (
+          // A disabled item takes no pointer events: the tooltip hangs on its wrapper.
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="block" data-testid="void-blocked">
+                <DropdownMenuItem disabled>
+                  {voidLabel}
+                  <span className="sr-only">{blockedReason}</span>
+                </DropdownMenuItem>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{blockedReason}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <DropdownMenuItem onSelect={() => setVoiding(true)}>{voidLabel}</DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null;

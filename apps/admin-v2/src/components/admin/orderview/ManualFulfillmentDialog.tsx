@@ -51,11 +51,13 @@ const COPY = {
  * fulfil by hand: "Mark as sent" (own rider, with tracking), "Mark as picked
  * up" and "Mark as done" (with the cash taken at the counter or the visit).
  */
-export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChange }: {
+export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChange, onAwaitingPayment }: {
   order: Order;
   kind?: ManualFulfillmentKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Everything was handed over but money is still due: the next step is recording the payment. */
+  onAwaitingPayment?: () => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
@@ -137,7 +139,12 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
         ...(kind === "ship" && Object.keys(tracking).length > 0 ? { tracking } : {}),
         ...(cashDue !== null && cashTaken ? { cashReceived: cashDue } : {}),
       },
-      { onSuccess: () => onOpenChange(false) },
+      {
+        onSuccess: (result) => {
+          onOpenChange(false);
+          if (result?.awaitingPayment) onAwaitingPayment?.();
+        },
+      },
     );
   };
 

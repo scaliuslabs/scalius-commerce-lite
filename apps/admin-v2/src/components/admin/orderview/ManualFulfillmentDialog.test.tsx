@@ -166,6 +166,19 @@ describe("ManualFulfillmentDialog", () => {
       expect(mocks.mutate.mock.calls[0]![0].cashReceived).toBeUndefined();
     });
 
+    it("asks for the payment next when everything is handed over but money is still due", async () => {
+      mocks.mutate.mockImplementationOnce((_payload, callbacks) => callbacks.onSuccess({ awaitingPayment: true }));
+      const onAwaitingPayment = vi.fn();
+      const onOpenChange = vi.fn();
+      await act(async () => root.render(
+        <ManualFulfillmentDialog order={pickupOrder} kind="pickup" open onOpenChange={onOpenChange} onAwaitingPayment={onAwaitingPayment} />,
+      ));
+      await act(async () => document.querySelector<HTMLButtonElement>("#fulfill-cash")!.click());
+      await act(async () => button(en["pickup.submit"]).click());
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onAwaitingPayment).toHaveBeenCalledTimes(1);
+    });
+
     it("offers no cash field to staff who can't record cash", async () => {
       mocks.canUpdateCod = false;
       await act(async () => root.render(<ManualFulfillmentDialog order={pickupOrder} kind="pickup" open onOpenChange={() => undefined} />));

@@ -72,6 +72,8 @@ export interface OrderFormProps {
   /** Amend only: "#1001" and the cash still to collect before the change. */
   orderLabel?: string;
   cashToCollect?: number | null;
+  /** Amend only: the order was placed without a delivery method (it ships nothing). */
+  amendShipsNothing?: boolean;
   /** Amend only: the order's saved delivery method. */
   savedShippingMethod?: { id: string; name: string; kind?: "delivery" | "pickup" | null } | null;
 }

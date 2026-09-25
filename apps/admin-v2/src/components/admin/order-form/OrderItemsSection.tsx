@@ -75,10 +75,9 @@ function normalizeProductRead(result: unknown): { variants: ProductVariant[]; cu
 }
 
 function normalizeCatalogProduct(product: CatalogProduct): Product {
-  // `requiresCustomization` lands on catalog rows with the Wave A contract; unknown until then.
-  const flag = (product as { requiresCustomization?: unknown }).requiresCustomization;
   return {
-    ...(typeof flag === "boolean" && !flag ? { customization: null } : {}),
+    // Catalog rows carry the buyer inputs, so picking one needs only its SKUs.
+    customization: customizationFromView(product.customization),
     id: product.id,
     name: product.name,
     price: product.price,
@@ -94,7 +93,7 @@ function normalizeCatalogProduct(product: CatalogProduct): Product {
 }
 
 export function OrderItemsSection() {
-  const { form, refs, isEdit } = useOrderForm();
+  const { form, refs, isEdit, amendShipsNothing } = useOrderForm();
   const t = useMessages(orderFormMessages);
   const queryClient = useQueryClient();
   const { code, fmt } = useCurrency();
@@ -164,6 +163,11 @@ export function OrderItemsSection() {
     inputs: Extract<LinePropertiesCheck, { ok: true }> | null = null,
   ) => {
     const currentItems = form.getValues("items");
+    // The order keeps its delivery method: one that ships nothing can't take goods (the server refuses them).
+    if (isEdit && amendShipsNothing && (variant.fulfillmentKind ?? "physical") === "physical") {
+      setPickerMessage(`${product.name}: ${t("noDeliveryForGoods")}`);
+      return false;
+    }
     const remainingStock = isEdit
       ? null
       : remainingStockForNewOrderLine(variant, currentItems);
@@ -225,9 +229,10 @@ export function OrderItemsSection() {
 
     setSelectedProduct({ ...product, variants: [] });
     setIsLoadingVariants(true);
-    // A product that may ask for buyer inputs is read whole (SKUs and inputs in one read).
-    const read = product.customization === null
-      ? queryClient.ensureQueryData(productVariantsQueryOptions(product.id)).then((result) => ({ variants: normalizeVariants(result), customization: null }))
+    // Rows that carry their buyer inputs need only the SKUs; any other product is read whole.
+    const known = product.customization;
+    const read = known !== undefined
+      ? queryClient.ensureQueryData(productVariantsQueryOptions(product.id)).then((result) => ({ variants: normalizeVariants(result), customization: known }))
       : queryClient.ensureQueryData(productQueryOptions(product.id)).then(normalizeProductRead);
     void read
       .then(({ variants, customization }) => {
