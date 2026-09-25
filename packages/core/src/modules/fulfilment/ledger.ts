@@ -583,7 +583,8 @@ async function readFulfilment(db: Database, orderId: string, fulfillmentId: stri
         requestKey: orderFulfillments.requestKey,
         providerType: deliveryShipments.providerType,
         providerId: deliveryShipments.providerId,
-        shipmentStatus: deliveryShipments.status,
+        // Aliased: two `status` columns in one join collide by name.
+        shipmentStatus: sql<string | null>`${deliveryShipments.status}`.as("shipment_status"),
     }).from(orderFulfillments)
         .leftJoin(deliveryShipments, eq(deliveryShipments.id, orderFulfillments.shipmentId))
         .where(and(eq(orderFulfillments.id, fulfillmentId), eq(orderFulfillments.orderId, orderId)))
