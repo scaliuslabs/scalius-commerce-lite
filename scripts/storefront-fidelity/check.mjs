@@ -316,7 +316,7 @@ async function main() {
         }
       }
     }
-    if (results.variants) checks.push(...variantChecks("department-mall", results.variants.diffs, reference.budgets));
+    if (results.variants) checks.push(...variantChecks("department-mall", results.variants.diffs, reference.budgets, results.variants));
     for (const [target, h] of Object.entries(results.hover ?? {})) checks.push(...hoverChecks(target.split(":")[0], h.results, reference.budgets).map((c) => ({ ...c, id: `${target}/${c.block}/${c.viewport}/${c.metric}` })));
 
     if (results.matrix) {

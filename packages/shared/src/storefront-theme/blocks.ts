@@ -154,22 +154,22 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 16, phone: 16 }, weight: 700, lines: 2 },
     price: { size: { desktop: 16, phone: 16 }, weight: 400 },
   },
-  // Fabrilife /shop: 236×366 cards, square 234px photo, radius 0; title
-  // 15/500 on one line, price 20/700.
+  // Fabrilife /shop: 236×366 white tiles with a hairline and 4px corners,
+  // square 234px photo; title 15/500 in two lines, price 20/700.
   "fashion-value": {
     image: { ratio: 1, fit: "cover" },
-    radius: 0,
-    surface: "flat",
-    title: { size: { desktop: 15, phone: 15 }, weight: 500, lines: 1 },
+    radius: 4,
+    surface: "hairline",
+    title: { size: { desktop: 15, phone: 15 }, weight: 500, lines: 2 },
     price: { size: { desktop: 20, phone: 20 }, weight: 700 },
   },
-  // Star Tech /laptop-notebook: 254×665, square 204px photo on white
-  // (contain), radius 0, no border or shadow; title 14/600 in two lines,
-  // price 17/600 (the same on phones, base 14).
+  // Star Tech /laptop-notebook: 254×665 white tiles (a hairline, 4px
+  // corners), square 204px photo on white (contain); title 14/600 in two
+  // lines, price 17/600 (the same on phones, base 14).
   spec: {
     image: { ratio: 1, fit: "contain" },
-    radius: 0,
-    surface: "flat",
+    radius: 4,
+    surface: "hairline",
     title: { size: { desktop: 14, phone: 14 }, weight: 600, lines: 2 },
     price: { size: { desktop: 17, phone: 17 }, weight: 600 },
   },
@@ -201,12 +201,12 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 13, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 18, phone: 18 }, weight: 400 },
   },
-  // Chaldal /popular: 194px tiles, square photo, no borders; name 16/400 in
-  // two lines (14/400 on phones), price 18/700 (12/700 on phones).
+  // Chaldal /popular: 194px tiles ruled by hairlines, square photo; name
+  // 16/400 in two lines (14/400 on phones), price 18/700 (12/700 on phones).
   "quick-add": {
     image: { ratio: 1, fit: "contain" },
     radius: 0,
-    surface: "flat",
+    surface: "hairline",
     title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 18, phone: 12 }, weight: 700 },
   },
@@ -232,20 +232,43 @@ export const STOREFRONT_CARD_LOOKS = {
 export interface StorefrontCardRenderer {
   /** A buy action on the card (products without options, in stock). */
   quickBuy: boolean;
-  /** The discount sits on the photo or beside the price. */
-  badge: "image" | "price";
+  /**
+   * Where the discount mark sits: on the photo, beside the price, or both
+   * (Fabrilife: "-40%" on the photo and again after the struck price).
+   */
+  badge: "image" | "price" | "both";
   hoverImage: boolean;
   /** How a discount reads: "-20%", "Sale", "Save ৳600" or "৳600 OFF". */
   discount: "percent" | "sale" | "save" | "off";
+  /**
+   * The discount mark's shape: a round pill, a square tag, a flag flush with
+   * the photo's edge (Star Tech), plain text (Daraz, Target), a tinted chip
+   * (Apple Gadgets) or Amazon's red deal box above the price.
+   */
+  discountStyle: "pill" | "tag" | "flag" | "text" | "chip" | "deal";
+  /**
+   * The regular price while discounted: struck after the price, struck
+   * before it (Dawn), Target's plain "reg ৳1,200", or Amazon's "List:".
+   */
+  strike: "after" | "before" | "reg" | "list";
   /** Title lines before it is clamped. */
   titleLines: 1 | 2 | 3;
   titleWeight: "regular" | "medium" | "strong";
-  /** The price's colour role: ink, the action colour, or the sale colour while discounted. */
-  priceTone: "ink" | "primary" | "sale";
+  /**
+   * The price's colour role: ink, the action colour, the sale colour while
+   * discounted, or the sale colour always (Star Tech's red prices).
+   */
+  priceTone: "ink" | "primary" | "sale" | "sale-always";
+  /** A rating as five stars and the count (Daraz, Amazon, Target, Dawn), or "★ 4.6 (128)". */
+  rating: "stars" | "score";
   /** The body, top to bottom. */
   body: readonly StorefrontCardPart[];
-  /** Where the buy action sits: a full-width button, an outline button, or a round button on the photo. */
-  action: "block" | "outline" | "round";
+  /**
+   * Where the buy action sits: a full-width button, an outline button, a
+   * round button (on the photo, or beside the price), or Amazon's small pill
+   * at the start of the row.
+   */
+  action: "block" | "outline" | "round" | "compact";
   actionLabel: "buy-now" | "add-to-cart";
   /** An "Add to Compare" toggle under the action, and the floating Compare tray (Star Tech). */
   compare: boolean;
@@ -268,7 +291,10 @@ function card(
     badge: "image",
     hoverImage: false,
     discount: "percent",
+    discountStyle: "pill",
+    strike: "after",
     priceTone: "ink",
+    rating: "stars",
     body: ["title", "price"],
     action: "block",
     actionLabel: "add-to-cart",
@@ -393,32 +419,49 @@ export const STOREFRONT_CARD_VARIANTS = {
     defaults: { hoverImage: false },
     renders: (settings) => card(null, { hoverImage: settings.hoverImage }),
   }),
-  // Dawn: title 13/400, price 16/400, Sale / Sold out badge.
+  // Dawn: title 13/400, stars when reviewed, the struck price before the
+  // 16/400 price, a "Sale" / "Sold out" pill on the photo.
   boutique: variant({
     settings: hoverImage,
     defaults: { hoverImage: true },
-    renders: (settings) => card(STOREFRONT_CARD_LOOKS.boutique, { hoverImage: settings.hoverImage, discount: "sale" }),
+    renders: (settings) => card(STOREFRONT_CARD_LOOKS.boutique, {
+      hoverImage: settings.hoverImage,
+      discount: "sale",
+      strike: "before",
+      body: ["title", "rating", "price"],
+    }),
   }),
-  // Aarong: portrait photo, name 16/700 in two lines, price 16/400.
+  // Aarong: portrait photo, name 16/700 in two lines, price 16/400 in the
+  // sale colour while discounted, a square "-20%" tag on the photo.
   portrait: variant({
     settings: hoverImage,
     defaults: { hoverImage: true },
-    renders: (settings) => card(STOREFRONT_CARD_LOOKS.portrait, { hoverImage: settings.hoverImage }),
+    contrastPairs: [["destructive", "card"]],
+    renders: (settings) => card(STOREFRONT_CARD_LOOKS.portrait, { hoverImage: settings.hoverImage, discountStyle: "tag", priceTone: "sale" }),
   }),
-  // Fabrilife: -40% badge, round add over the photo, title on one line,
-  // "Save ৳600", price 20/700.
+  // Fabrilife: a white bordered tile, a red "-40%" tag on the photo, title in
+  // two lines, "Save ৳600" chip, price 20/700 with the struck price and
+  // "-40%" after it, the round dark cart beside it.
   "fashion-value": variant({
     contrastPairs: [["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS["fashion-value"], { quickBuy: true, body: ["title", "savings", "price"], action: "round" }),
+    renders: card(STOREFRONT_CARD_LOOKS["fashion-value"], {
+      quickBuy: true,
+      badge: "both",
+      discountStyle: "tag",
+      body: ["title", "savings", "price"],
+      action: "round",
+    }),
   }),
-  // Star Tech: "Save ৳" pill, title 14/600, four key-spec bullets, price in
-  // the action colour, full-width Buy Now.
+  // Star Tech: a white bordered tile, a "Save ৳" flag, title 14/600, four
+  // key-spec bullets, the price always red, full-width Buy Now, Compare.
   spec: variant({
-    contrastPairs: [["primary", "card"]],
+    contrastPairs: [["primary", "card"], ["destructive", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS.spec, {
       quickBuy: true,
       discount: "save",
-      priceTone: "primary",
+      discountStyle: "flag",
+      priceTone: "sale-always",
+      rating: "score",
       body: ["title", "key-specs", "price", "emi"],
       actionLabel: "buy-now",
       compare: true,
@@ -432,53 +475,65 @@ export const STOREFRONT_CARD_VARIANTS = {
       quickBuy: true,
       badge: "price",
       discount: "off",
+      discountStyle: "chip",
+      rating: "score",
       body: ["title", "price", "emi"],
       action: "outline",
       actionLabel: "buy-now",
     }),
   }),
-  // Target: price first (22/700, "Sale" in the sale colour), brand 14/700,
-  // title 14/400, rating, delivery, full-width Add to cart pill.
+  // Target: colour circles, the 22/700 price first (red with "Sale" and
+  // "reg ৳1,200" while discounted), brand 14/700, title 14/400, stars,
+  // delivery, a full-width Add to cart pill.
   retail: variant({
     contrastPairs: [["destructive", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS.retail, {
       quickBuy: true,
       badge: "price",
       discount: "sale",
+      discountStyle: "text",
+      strike: "reg",
       priceTone: "sale",
-      body: ["price", "brand", "title", "rating", "delivery"],
+      body: ["swatches", "price", "brand", "title", "rating", "delivery"],
     }),
   }),
-  // Daraz: title 13/400, price 18 in the action colour, -%, then rating and
-  // "129 sold" (only when real).
+  // Daraz: title 13/400, price 18 in the action colour, the struck price and
+  // "-15%" under it, then "129 sold" and the stars on one line (only when real).
   marketplace: variant({
     contrastPairs: [["primary", "card"], ["destructive", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS.marketplace, {
       badge: "price",
+      discountStyle: "text",
       priceTone: "primary",
-      body: ["title", "price", "rating", "sold"],
+      body: ["title", "price", "sold", "rating"],
     }),
   }),
-  // Chaldal: round + over the photo, price first (red on sale), name 16/400,
-  // pack size, delivery chip.
+  // Chaldal: ruled tiles, a "৳81 OFF" tag and the round + on the photo,
+  // price first (red on sale), name 16/400, pack size, delivery chip.
   "quick-add": variant({
     contrastPairs: [["destructive", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS["quick-add"], {
       quickBuy: true,
-      badge: "price",
+      discount: "off",
+      discountStyle: "tag",
       priceTone: "sale",
       body: ["price", "title", "pack-size", "delivery"],
       action: "round",
     }),
   }),
   // Amazon: colour swatches, title in three lines, "Options: 4 sizes",
-  // rating, "1K+ bought in past month" (only from real sales), a
-  // superscript price with the struck list price, the delivery line.
+  // stars with the count, "1K+ bought in past month" (only from real
+  // sales), the red deal box, a superscript price with "List:", the
+  // delivery line and the small Add to cart pill.
   detailed: variant({
-    contrastPairs: [["destructive", "card"]],
+    contrastPairs: [["destructive", "card"], ["primary", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS.detailed, {
+      quickBuy: true,
       badge: "price",
+      discountStyle: "deal",
+      strike: "list",
       body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],
+      action: "compact",
     }),
   }),
 };

@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
+    enqueueMediaVariantsBacklog: vi.fn(),
   };
 });
 
@@ -76,6 +77,7 @@ vi.mock("@scalius/core/modules/payments", () => ({
 
 vi.mock("@scalius/core/modules/media", () => ({
   backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
+  enqueueMediaVariantsBacklog: mocks.enqueueMediaVariantsBacklog,
 }));
 
 vi.mock("./utils/cache-generation", () => ({
@@ -99,6 +101,7 @@ import {
   MEDIA_RENDITION_BACKFILL_CONCURRENCY,
   MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
   MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+  MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
@@ -245,6 +248,7 @@ describe("runScheduledMaintenance", () => {
       hasMore: false,
     });
     mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValue({ queued: 0, hasMore: false });
   });
 
   afterEach(() => {
@@ -566,6 +570,11 @@ describe("runScheduledMaintenance", () => {
       },
     );
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    // The backlog beyond this run's inline share goes to the jobs queue.
+    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, env.JOBS_QUEUE, {
+      skip: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+      limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
+    });
 
     const executionCtx = createExecutionContext();
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });

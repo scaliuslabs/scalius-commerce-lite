@@ -25,7 +25,10 @@
     "headerAnchors": 150,
     "buyBoxTopPx": 400,
     "hoverVisibleMs": 150,
-    "cardVariantMinDiffPct": 25
+    "cardVariantMinDiffPct": 25,
+    "cardVariantMinTreatments": 3,
+    "cardPhotoMaxRatio": 1.2,
+    "cardPhoneTitleMinPx": 14
   },
   "templates": {
     "boutique": { "largeCatalogue": false, "refs": { "header": "dawn", "card": "dawn", "listing": "dawn", "pdp": "dawn", "footer": "dawn" } },

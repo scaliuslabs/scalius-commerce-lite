@@ -11,9 +11,10 @@ const master = "https://cdn.example.com/media/media_abc123.jpg/1200.webp";
 
 describe("mediaVariantWidths", () => {
   it("never upscales and caps the master rendition", () => {
-    expect(mediaVariantWidths(1200)).toEqual([160, 320, 480, 640, 960, 1200]);
-    expect(mediaVariantWidths(1600)).toEqual([160, 320, 480, 640, 960, 1600]);
-    expect(mediaVariantWidths(6000)).toEqual([160, 320, 480, 640, 960, 1600, 2400]);
+    expect(mediaVariantWidths(1200)).toEqual([160, 240, 320, 400, 480, 640, 960, 1200]);
+    expect(mediaVariantWidths(1600)).toEqual([160, 240, 320, 400, 480, 640, 960, 1600]);
+    expect(mediaVariantWidths(6000)).toEqual([160, 240, 320, 400, 480, 640, 960, 1600, 2400]);
+    expect(mediaVariantWidths(300)).toEqual([160, 240, 300]);
     expect(mediaVariantWidths(120)).toEqual([120]);
     expect(mediaVariantWidths(0)).toEqual([]);
     expect(mediaVariantWidths(Number.NaN)).toEqual([]);
@@ -24,7 +25,9 @@ describe("rendition URLs", () => {
   it("derives every rendition from the published master URL", () => {
     expect(mediaImageSrcSet(master)).toBe([
       "https://cdn.example.com/media/media_abc123.jpg/160.webp 160w",
+      "https://cdn.example.com/media/media_abc123.jpg/240.webp 240w",
       "https://cdn.example.com/media/media_abc123.jpg/320.webp 320w",
+      "https://cdn.example.com/media/media_abc123.jpg/400.webp 400w",
       "https://cdn.example.com/media/media_abc123.jpg/480.webp 480w",
       "https://cdn.example.com/media/media_abc123.jpg/640.webp 640w",
       "https://cdn.example.com/media/media_abc123.jpg/960.webp 960w",
@@ -34,6 +37,8 @@ describe("rendition URLs", () => {
 
   it("picks the smallest rendition covering the requested width", () => {
     expect(mediaImageUrl(master, 96)).toBe("https://cdn.example.com/media/media_abc123.jpg/160.webp");
+    expect(mediaImageUrl(master, 230)).toBe("https://cdn.example.com/media/media_abc123.jpg/240.webp");
+    expect(mediaImageUrl(master, 330)).toBe("https://cdn.example.com/media/media_abc123.jpg/400.webp");
     expect(mediaImageUrl(master, 600)).toBe("https://cdn.example.com/media/media_abc123.jpg/640.webp");
     expect(mediaImageUrl(master, 1600)).toBe(master);
   });

@@ -33,8 +33,9 @@ describe("card anatomy", () => {
     if (card.priceTone === "primary" || card.action === "outline") expect(pairs(id)).toContain("primary/card");
     // The sale colour as text on the card: a sale-toned price, a discount
     // beside the price in words, or the savings line.
-    const saleText = card.priceTone === "sale"
+    const saleText = card.priceTone === "sale" || card.priceTone === "sale-always"
       || (card.badge === "price" && card.discount !== "off")
+      || card.badge === "both"
       || card.body.includes("savings");
     if (saleText) expect(pairs(id)).toContain("destructive/card");
   });
@@ -57,9 +58,12 @@ describe("card anatomy", () => {
       badge: "image",
       hoverImage: false,
       discount: "percent",
+      discountStyle: "pill",
+      strike: "after",
       titleLines: 2,
       titleWeight: "medium",
       priceTone: "ink",
+      rating: "stars",
       body: ["title", "price"],
       action: "block",
       actionLabel: "add-to-cart",
@@ -72,9 +76,13 @@ describe("card anatomy", () => {
     expect(new Set(shapes).size).toBe(shapes.length);
     // A few measured facts (SYNTHESIS.md section 2.4).
     expect(anatomy("spec").body).toEqual(["title", "key-specs", "price", "emi"]);
-    expect(anatomy("retail").body[0]).toBe("price");
+    // Target: the colour circles, then the price before the title.
+    expect(anatomy("retail").body.slice(0, 2)).toEqual(["swatches", "price"]);
     expect(anatomy("quick-add")).toMatchObject({ action: "round", body: ["price", "title", "pack-size", "delivery"] });
-    expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 1 });
+    expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 2, badge: "both" });
+    expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
+    expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale" });
+    expect(anatomy("detailed")).toMatchObject({ strike: "list", discountStyle: "deal", action: "compact" });
     expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "primary" });
     expect(anatomy("detailed")).toMatchObject({
       titleLines: 3,
@@ -102,9 +110,10 @@ describe("card looks (fidelity AUDIT.md section 2.1)", () => {
 
   it("carries the reference numbers", () => {
     expect(STOREFRONT_CARD_LOOKS["tech-rounded"]).toMatchObject({ image: { ratio: 1.31, fit: "contain" }, radius: 20, surface: "raised" });
-    expect(STOREFRONT_CARD_LOOKS.spec).toMatchObject({ radius: 0, surface: "flat", title: { size: { desktop: 14 }, weight: 600 }, price: { size: { desktop: 17 }, weight: 600 } });
+    // Star Tech and Fabrilife: white tiles with a hairline (the references show them).
+    expect(STOREFRONT_CARD_LOOKS.spec).toMatchObject({ radius: 4, surface: "hairline", title: { size: { desktop: 14 }, weight: 600 }, price: { size: { desktop: 17 }, weight: 600 } });
     expect(STOREFRONT_CARD_LOOKS.portrait.image.ratio).toBe(0.75);
-    expect(STOREFRONT_CARD_LOOKS["fashion-value"]).toMatchObject({ title: { lines: 1 }, price: { size: { desktop: 20 }, weight: 700 } });
+    expect(STOREFRONT_CARD_LOOKS["fashion-value"]).toMatchObject({ surface: "hairline", title: { lines: 2 }, price: { size: { desktop: 20 }, weight: 700 } });
     expect(STOREFRONT_CARD_LOOKS.marketplace.price).toEqual({ size: { desktop: 18, phone: 18 }, weight: 400 });
     expect(STOREFRONT_CARD_LOOKS.retail.price.size.desktop).toBe(22);
     expect(STOREFRONT_CARD_LOOKS.boutique.title).toMatchObject({ size: { desktop: 13 }, weight: 400 });

@@ -189,6 +189,46 @@ const DISCOUNT_WORDING: Record<StorefrontCardRenderer["discount"], string> = {
   off: "৳240 OFF",
 };
 
+/**
+ * The buyer-visible treatments of one rendered card (the structural half of
+ * the fidelity bar; the harness measures the same traits in a browser): the
+ * photo box, the tile, the price's place, size and colour, the struck
+ * price, the discount mark, the rating, the facts, the title, the button and
+ * Compare.
+ */
+function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["layout"]["productCard"]): Record<string, string> {
+  const style = card.getAttribute("style") ?? "";
+  const cssVar = (name: string) => new RegExp(`--${name}:([^;]+)`).exec(style)?.[1] ?? "theme";
+  const body = card.querySelector(".product-card-body")!;
+  const order = Array.from(body.children).map((child) =>
+    child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("p.mt-auto") ? "price" : null)
+    .filter(Boolean);
+  const price = card.querySelector(".product-card-price") ?? body.querySelector("p.mt-auto > span:last-child")!;
+  const regular = card.querySelector(".pc-price-regular, s")!;
+  const strikeAt = regular.compareDocumentPosition(price) & 4 ? "before" : "after";
+  const marks = Array.from(card.querySelectorAll("[data-card-discount]")).map((mark) =>
+    `${mark.closest(".product-card-media") ? "photo" : "price"}:${text(mark)}:${Array.from(mark.classList).filter((name) => /^pc-(badge|discount)-/.test(name)).join("+")}`);
+  const rating = card.querySelector('[data-card-fact="rating"]');
+  const action = card.querySelector("a[href^='/buy/']");
+  return {
+    // The standard card follows the template's tokens (department-mall: a
+    // square cover photo, 15/500 titles, an 18px price), in the same units.
+    ratio: String(anatomy.look.image.ratio),
+    fit: `${anatomy.look.image.fit}/${cssVar("pc-inset") === "theme" ? "0%" : cssVar("pc-inset")}`,
+    surface: `${anatomy.look.surface}/${anatomy.look.radius}`,
+    pricePlace: order.indexOf("price") < order.indexOf("title") ? "before-title" : "after-title",
+    priceSize: String(anatomy.look.price?.size.desktop ?? 18),
+    priceColour: price.classList.contains("pc-price-super") ? "superscript" : ["text-primary", "text-destructive", "text-foreground"].find((name) => price.classList.contains(name)) ?? "?",
+    strike: `${strikeAt}:${text(regular).replace(/[\d৳,.\s]/g, "").replace("Regularprice", "")}${regular.querySelector("s") || regular.tagName === "S" ? ":struck" : ""}`,
+    discount: marks.sort().join("|"),
+    rating: rating ? (rating.classList.contains("pc-rating-stars") ? "stars" : "score") : "none",
+    facts: Array.from(card.querySelectorAll("[data-card-fact]")).map((node) => node.getAttribute("data-card-fact")).sort().join(","),
+    title: `${card.querySelector(".product-card-link")!.parentElement!.className.match(/line-clamp-\d/)![0]}/${anatomy.look.title?.weight ?? 500}/${anatomy.look.title?.size.desktop ?? 15}`,
+    button: action ? `${anatomy.action}:${text(action).split(":")[0]}` : "none",
+    compare: card.querySelector("[data-compare-toggle]") ? "compare" : "none",
+  };
+}
+
 // ─── The matrix ───────────────────────────────────────────────────────────
 
 describe("product card matrix", () => {
@@ -251,12 +291,20 @@ describe("product card matrix", () => {
     if (anatomy.hoverImage) expect(hoverBox(cards.onSale)).toBe(image("sale-back"));
     expect(hoverBox(cards.noPhoto)).toBeNull();
 
-    // The discount, worded and placed by the anatomy.
+    // The discount, worded and placed by the anatomy ("both": the wording on
+    // the photo and the percentage again after the struck price).
     const imageDiscount = cards.onSale.querySelector(".product-card-media [data-card-discount]");
     const priceDiscount = cards.onSale.querySelector(".product-card-price-row [data-card-discount]");
     const wording = card === "standard" ? "-20%" : DISCOUNT_WORDING[anatomy.discount];
-    expect(text(anatomy.badge === "image" ? imageDiscount : priceDiscount)).toBe(wording);
-    expect(anatomy.badge === "image" ? priceDiscount : imageDiscount).toBeNull();
+    if (anatomy.badge === "both") {
+      expect(text(imageDiscount)).toBe(wording);
+      expect(text(priceDiscount)).toBe("-20%");
+    } else {
+      expect(text(anatomy.badge === "image" ? imageDiscount : priceDiscount)).toBe(wording);
+      expect(anatomy.badge === "image" ? priceDiscount : imageDiscount).toBeNull();
+    }
+    // No discount, no mark and no struck price anywhere.
+    expect(cards.withOptions.querySelector("[data-card-discount], s, .pc-price-reg")).toBeNull();
     // Amount wordings fall back to the percentage when the price varies by option.
     expect(text(cards.soldOut)).toContain("Sold out");
 
@@ -331,14 +379,44 @@ describe("product card matrix", () => {
     // The price tone is a colour role: the action colour, the sale colour
     // while discounted, or ink.
     const priceClass = cards.onSale.querySelector(".product-card-price")!.classList;
-    const tone = anatomy.priceTone === "primary" ? "text-primary" : anatomy.priceTone === "sale" ? "text-destructive" : "text-foreground";
+    const tone = anatomy.priceTone === "primary" ? "text-primary"
+      : anatomy.priceTone === "sale" || anatomy.priceTone === "sale-always" ? "text-destructive" : "text-foreground";
     expect(priceClass.contains(tone)).toBe(true);
+    // Without a discount the sale colour stays for Star Tech's always-red price only.
+    const plainTone = cards.withOptions.querySelector(".product-card-price")!.classList;
+    expect(plainTone.contains("text-destructive")).toBe(anatomy.priceTone === "sale-always");
+    // The struck price as the reference words it.
+    const regular = cards.onSale.querySelector(".pc-price-regular")!;
+    expect(text(regular)).toContain("৳1,200");
+    expect(Boolean(regular.querySelector("s"))).toBe(anatomy.strike !== "reg");
+    if (anatomy.strike === "list") expect(text(regular)).toMatch(/^List:/);
+    if (anatomy.strike === "reg") expect(text(regular)).toMatch(/^reg /);
+    const current = cards.onSale.querySelector(".product-card-price")!;
+    const before = Boolean(regular.compareDocumentPosition(current) & 4);
+    expect(before).toBe(anatomy.strike === "before");
     expect(cards.withOptions.querySelector(".product-card-price")!.textContent).toContain("From ৳1,200");
 
     // Compare (Star Tech): a plain link to the comparison without JavaScript.
     const compare = cards.onSale.querySelector("[data-compare-toggle]");
     expect(Boolean(compare)).toBe(anatomy.compare);
     if (compare) expect(compare.getAttribute("href")).toBe("/compare?ids=sale");
+  });
+
+  it("makes every two cards differ in at least three buyer-visible treatments on a product with every fact", async () => {
+    const all: Record<string, Record<string, string>> = {};
+    for (const card of CARD_VARIANTS) {
+      const theme = themeWith(card, {});
+      all[card] = cardTraits((await renderCards(theme)).allFacts, requestThemeFor(theme).layout.productCard);
+    }
+    const short: string[] = [];
+    for (let i = 0; i < CARD_VARIANTS.length; i += 1) {
+      for (let j = i + 1; j < CARD_VARIANTS.length; j += 1) {
+        const [a, b] = [CARD_VARIANTS[i]!, CARD_VARIANTS[j]!];
+        const differing = Object.keys(all[a]!).filter((trait) => all[a]![trait] !== all[b]![trait]);
+        if (differing.length < 3) short.push(`${a}~${b}: ${differing.join(", ") || "nothing"}`);
+      }
+    }
+    expect(short).toEqual([]);
   });
 
   it("draws Amazon's superscript price and the delivery line from the stored rate", async () => {
