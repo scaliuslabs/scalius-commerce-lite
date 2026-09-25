@@ -27,15 +27,15 @@ describe("resolveHomepageHero", () => {
 describe("heroImageCandidate", () => {
   it("offers every rendition to the banner so phones fetch a phone-sized file (R3-MOB-01)", () => {
     const candidate = heroImageCandidate("https://cdn.example/media/hero.webp/1080.webp", "mobile");
-    expect(candidate.srcset).toBe([160, 240, 320, 400, 480, 640, 960, 1080]
+    expect(candidate.srcset).toBe([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1080]
       .map((width) => `https://cdn.example/media/hero.webp/${width}.webp ${width}w`)
       .join(", "));
     // The home LCP: DPR 2.5+ phones are asked for about 2x pixels.
     expect(candidate.sizes).toBe(
-      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
+      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.666), calc(100vw - 2rem)",
     );
     expect(candidate.media).toBe("(max-width: 767px)");
-    expect(candidate.src).toBe("https://cdn.example/media/hero.webp/640.webp");
+    expect(candidate.src).toBe("https://cdn.example/media/hero.webp/735.webp");
   });
 
   it("falls back to the single original when an image has no renditions", () => {
@@ -55,7 +55,7 @@ describe("heroLeadCandidates", () => {
     expect(contained.map((candidate) => candidate.media)).toEqual(["(max-width: 767px)", "(min-width: 768px)"]);
     expect(contained[1]!.sizes).toBe(heroImageCandidate(desktop[0]!.url, "desktop").sizes);
     expect(heroLeadCandidates({ desktop, mobile }, "full-bleed")[1]!.sizes)
-      .toBe("(min-resolution: 2.5dppx) calc((100vw) * 0.667), 100vw");
+      .toBe("(min-resolution: 2.5dppx) calc((100vw) * 0.666), 100vw");
     expect(heroImageSizes("split", "desktop")).toBe("50vw");
     expect(heroImageSizes("split", "mobile")).toBe("100vw");
   });

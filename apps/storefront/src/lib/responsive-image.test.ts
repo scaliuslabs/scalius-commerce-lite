@@ -4,17 +4,18 @@ import { describe, expect, it } from "vitest";
 
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
-import { capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { DENSITY_CAP_SCALE, capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
 
 describe("capSizesDensity", () => {
   it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
     expect(capSizesDensity("calc(100vw - 2rem)")).toBe(
-      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
+      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.666), calc(100vw - 2rem)",
     );
     expect(capSizesDensity("(max-width: 407px) calc(100vw - 24px), (max-width: 1023px) 384px, 468px")).toBe([
-      "(min-resolution: 2.5dppx) and (max-width: 407px) calc((100vw - 24px) * 0.667)",
-      "(min-resolution: 2.5dppx) and (max-width: 1023px) calc((384px) * 0.667)",
-      "(min-resolution: 2.5dppx) calc((468px) * 0.667)",
+      "(min-resolution: 2.5dppx) and (max-width: 407px) calc((100vw - 24px) * 0.666)",
+      "(min-resolution: 2.5dppx) and (max-width: 1023px) calc((384px) * 0.666)",
+      "(min-resolution: 2.5dppx) calc((468px) * 0.666)",
       "(max-width: 407px) calc(100vw - 24px)",
       "(max-width: 1023px) 384px",
       "468px",
@@ -23,11 +24,31 @@ describe("capSizesDensity", () => {
 
   it("keeps compound conditions and nested math intact", () => {
     expect(capSizesDensity("(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem), min(50vw, 30rem)")).toBe([
-      "(min-resolution: 2.5dppx) and (min-width: 64rem) and (max-width: 80rem) calc((100vw - 4rem) * 0.667)",
-      "(min-resolution: 2.5dppx) calc((min(50vw, 30rem)) * 0.667)",
+      "(min-resolution: 2.5dppx) and (min-width: 64rem) and (max-width: 80rem) calc((100vw - 4rem) * 0.666)",
+      "(min-resolution: 2.5dppx) calc((min(50vw, 30rem)) * 0.666)",
       "(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem)",
       "min(50vw, 30rem)",
     ].join(", "));
+  });
+});
+
+describe("card photo bytes", () => {
+  it("fetches every card photo 120-480 px wide at <= 1.2x its pixels at DPR 1, 2 and 3 (about 2x at DPR 3)", () => {
+    const master = "https://cdn.example.test/media/card.jpg/1600.webp";
+    const worst: Array<{ width: number; dpr: number; ratio: number }> = [];
+    for (let width = 120; width <= 480; width += 1) {
+      for (const dpr of [1, 2, 3]) {
+        // What a browser asks for: the slot width times its density, DPR
+        // 2.5+ screens through the capSizesDensity entries.
+        const density = dpr >= 2.5 ? dpr * Number(DENSITY_CAP_SCALE) : dpr;
+        const needed = width * density;
+        const fetched = Number(/\/(\d+)\.webp$/.exec(mediaImageUrl(master, needed))![1]);
+        expect(fetched, `${width}px at DPR ${dpr}`).toBeGreaterThanOrEqual(needed);
+        if (fetched / needed > 1.2) worst.push({ width, dpr, ratio: fetched / needed });
+        if (dpr === 3) expect(fetched / width, `${width}px at DPR 3`).toBeLessThanOrEqual(2 * 1.2);
+      }
+    }
+    expect(worst).toEqual([]);
   });
 });
 
@@ -39,7 +60,7 @@ describe("responsiveImageSources", () => {
   it("serves renditions with the slot's srcset and sizes", () => {
     expect(responsiveImageSources(MASTER, slot)).toEqual({
       src: at(960),
-      srcset: [160, 240, 320, 400, 480, 640, 960, 1600]
+      srcset: [144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600]
         .map((width) => `${at(width)} ${width}w`)
         .join(", "),
       sizes: slot.sizes,
@@ -50,8 +71,8 @@ describe("responsiveImageSources", () => {
     expect(
       responsiveImageSources(MASTER, { width: 160, sizes: "80px", maxWidth: 320 }),
     ).toEqual({
-      src: at(160),
-      srcset: `${at(160)} 160w, ${at(240)} 240w, ${at(320)} 320w`,
+      src: at(172),
+      srcset: [144, 172, 206, 247, 296, 355].map((width) => `${at(width)} ${width}w`).join(", "),
       sizes: "80px",
     });
   });
@@ -62,7 +83,7 @@ describe("responsiveImageSources", () => {
       responsiveImageSources(small, { width: 480, sizes: "80px", maxWidth: 320 }),
     ).toEqual({
       src: small,
-      srcset: `https://cdn.example.test/media/icon.png/160.webp 160w, https://cdn.example.test/media/icon.png/240.webp 240w, ${small} 300w`,
+      srcset: [144, 172, 206, 247, 296].map((width) => `https://cdn.example.test/media/icon.png/${width}.webp ${width}w`).concat(`${small} 300w`).join(", "),
       sizes: "80px",
     });
   });

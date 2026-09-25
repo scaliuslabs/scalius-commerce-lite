@@ -3164,7 +3164,7 @@ export const postApiV1AdminMediaByIdRestore = <ThrowOnError extends boolean = fa
 /**
  * Store pre-generated WebP renditions
  *
- * Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w160, w320 … and the master). The widths must be exactly those the dashboard pipeline derives from `width`. Replaces earlier renditions and switches the published media URL to the largest one.
+ * Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w144, w172 … and the master). The widths must be exactly those the dashboard pipeline derives from `width` (@scalius/shared mediaVariantWidths). Replaces earlier renditions and switches the published media URL to the largest one.
  */
 export const postApiV1AdminMediaByIdVariants = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaByIdVariantsData, ThrowOnError>): RequestResult<PostApiV1AdminMediaByIdVariantsResponses, PostApiV1AdminMediaByIdVariantsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaByIdVariantsResponses, PostApiV1AdminMediaByIdVariantsErrors, ThrowOnError>({
     ...formDataBodySerializer,

@@ -210,7 +210,7 @@ describe("pre-generated media renditions", () => {
     expect((await listMediaFiles(db, { variants: "missing" })).files.map(({ id }) => id)).toEqual([file.id]);
 
     const saved = await withPublicMediaUrl("https://media.example", () =>
-      saveMediaVariants(db, file.id, { width: 1000, height: 800, files: renditions([160, 240, 320, 400, 480, 640, 960, 1000]) }, storage.bucket),
+      saveMediaVariants(db, file.id, { width: 1000, height: 800, files: renditions([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1000]) }, storage.bucket),
     );
 
     expect(saved).toMatchObject({
@@ -220,7 +220,7 @@ describe("pre-generated media renditions", () => {
       height: 800,
       version: 1,
     });
-    expect([...storage.objects].sort()).toEqual([160, 240, 1000, 320, 400, 480, 640, 960].map((width) => `${file.objectKey}/${width}.webp`).sort());
+    expect([...storage.objects].sort()).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1000].map((width) => `${file.objectKey}/${width}.webp`).sort());
     expect((await listMediaFiles(db, { variants: "missing" })).files).toEqual([]);
   });
 
@@ -228,9 +228,9 @@ describe("pre-generated media renditions", () => {
     const file = await seedImage();
     const storage = createBucket();
 
-    await expect(saveMediaVariants(db, file.id, { width: 1000, height: 800, files: renditions([160, 320]) }, storage.bucket))
+    await expect(saveMediaVariants(db, file.id, { width: 1000, height: 800, files: renditions([144, 172]) }, storage.bucket))
       .rejects.toThrow(/each width/);
-    const jpeg = new Map(renditions([160, 240, 320, 400, 480, 640, 960, 1000]));
+    const jpeg = new Map(renditions([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1000]));
     jpeg.set(160, new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer);
     await expect(saveMediaVariants(db, file.id, { width: 1000, height: 800, files: jpeg }, storage.bucket))
       .rejects.toThrow();
@@ -242,7 +242,7 @@ describe("pre-generated media renditions", () => {
     const file = await seedImage();
     const storage = createBucket();
     storage.objects.add(file.objectKey);
-    await saveMediaVariants(db, file.id, { width: 500, height: 500, files: renditions([160, 240, 320, 400, 480, 500]) }, storage.bucket);
+    await saveMediaVariants(db, file.id, { width: 500, height: 500, files: renditions([144, 172, 206, 247, 296, 355, 426, 500]) }, storage.bucket);
     const saved = await saveHeaderConfig(db, {
       logo: { src: `https://media.example/${file.objectKey}/320.webp`, alt: "Logo" },
     }, 0);
@@ -281,7 +281,7 @@ describe("pre-generated media renditions", () => {
 
     const saved = await generateMediaVariants(db, file.id, bucket, images);
 
-    expect(transforms).toEqual([160, 240, 320, 400, 480, 640, 700]);
+    expect(transforms).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 700]);
     expect(saved).toMatchObject({ variantWidth: 700, width: 700, height: 350 });
     expect(storage.objects.has(`${file.objectKey}/700.webp`)).toBe(true);
   });

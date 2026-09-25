@@ -116,7 +116,7 @@ describe("media rendition backfill and delayed render job", () => {
             expect(row("media_oldest_png")).toMatchObject({ variant_width: 700, version: 1 });
             expect(row("media_trashed_webp")).toMatchObject({ variant_width: 700 });
             expect(row("media_newer_jpeg").variant_width).toBeNull();
-            expect([160, 240, 320, 400, 480, 640, 700].every((width) => store.objects.has(`${oldest}/${width}.webp`))).toBe(true);
+            expect([144, 172, 206, 247, 296, 355, 426, 511, 613, 700].every((width) => store.objects.has(`${oldest}/${width}.webp`))).toBe(true);
 
             await expect(run()).resolves.toEqual({ scanned: 1, generated: 1, failed: 0, hasMore: false });
             store.transforms.length = 0;

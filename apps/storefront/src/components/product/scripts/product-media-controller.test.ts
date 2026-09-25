@@ -11,7 +11,7 @@ import {
 import { bindDesktopZoom } from "./product-desktop-zoom-controller";
 
 const SIZES = "(max-width: 1023px) 384px, 468px";
-const LADDER = [160, 240, 320, 400, 480, 640, 960, 1600];
+const LADDER = [144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600];
 
 /** A published media URL (its 1600 master rendition). */
 function media(name: string): string {

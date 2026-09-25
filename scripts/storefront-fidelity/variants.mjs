@@ -43,7 +43,7 @@ export function pickCardProducts(db) {
     JOIN product_sales_stats st ON st.product_id = p.id AND st.sold_30d >= 10
     JOIN brands b ON b.id = p.brand_id AND b.status = 'published' AND b.deleted_at IS NULL
     WHERE ${colourAxis} AND ${renderedPhoto}
-    ORDER BY (s.from_minor = s.to_minor) DESC, (s.discount_depth_bps >= 1500) DESC, (${keySpecs} >= 4) DESC, st.sold_30d DESC, p.id LIMIT 1`).get();
+    ORDER BY (s.from_minor = s.to_minor) DESC, (s.discount_depth_bps >= 1500) DESC, min(${keySpecs}, 4) DESC, st.sold_30d DESC, p.id LIMIT 1`).get();
   const plain = db.prepare(`SELECT p.id, p.slug, p.name FROM products p
     JOIN product_buyer_state s ON s.product_id = p.id AND s.is_public = 1 AND s.has_discount = 0
       AND s.available_for_sale = 1 AND s.has_customer_options = 0
@@ -85,7 +85,13 @@ const CARD_PROBE = (slug) => `(async () => {
   const rating = card.querySelector('[data-card-fact="rating"]');
   const c = cs(card);
   const lines = (el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight));
-  const drawn = img ? img.clientWidth - parseFloat(cs(img).paddingLeft) - parseFloat(cs(img).paddingRight) : 0;
+  // The photo's rendered width: its content box, widened by a cover crop of
+  // a photo whose shape differs from the box (a square photo in a 3:4 box
+  // is drawn at the box height).
+  const boxW = img ? img.clientWidth - parseFloat(cs(img).paddingLeft) - parseFloat(cs(img).paddingRight) : 0;
+  const boxH = img ? img.clientHeight - parseFloat(cs(img).paddingTop) - parseFloat(cs(img).paddingBottom) : 0;
+  const aspect = img && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+  const drawn = !img ? 0 : cs(img).objectFit === 'cover' ? Math.max(boxW, boxH * aspect) : Math.min(boxW, boxH * aspect);
   const fetched = img ? (Number((/\\/(\\d+)\\.webp(?:[?#].*)?$/.exec(img.currentSrc) || [])[1]) || img.naturalWidth) : 0;
   const b = box(card);
   return {
