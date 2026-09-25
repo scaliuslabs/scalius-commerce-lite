@@ -21,7 +21,7 @@ interface Props {
   /** A menu row under the bar (slot `desktop-nav-full`). */
   menuRow: boolean;
   navigationStyle: StorefrontNavigationRenderer;
-  /** On scroll the dropdown menu row folds into the bar (a copy, see nav-disclosure.ts). */
+  /** On scroll the dropdown menu row folds into the bar (the menu moves there, see nav-disclosure.ts). */
   condensedMenu: boolean;
   /** Phone bar icons the bottom tabs already carry ("account cart"). */
   phoneDrop: string;
@@ -122,7 +122,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         <div class="header-expanded-center absolute w-full max-w-lg">
           <SearchBar />
         </div>
-        {/* Compact menu (classic header, shown on scroll) */}
+        {/* Compact menu (classic header, on scroll): the row's menu moves here (nav-disclosure.ts) */}
         {
           condensedMenu && (
             <div class="header-compact-center absolute inset-x-0 flex w-full justify-center" data-nav-compact-from="desktop-nav"></div>
@@ -235,7 +235,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       menuRow && (
         <div class="header-full-nav-row hidden border-t border-border lg:block">
           {/* The menu row is the mega panels' anchor (they span it). */}
-          <div class="py-2 flex justify-center relative z-50">
+          <div class="py-2 flex justify-center relative z-50" data-nav-compact-home={condensedMenu ? "desktop-nav" : undefined}>
             <slot name="desktop-nav-full" />
           </div>
         </div>

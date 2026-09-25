@@ -53,6 +53,7 @@ import {
     normalizeNavigationMenuItemInput,
     normalizeNavigationMenuName,
     sparsePositionBetween,
+    trimNavigationHierarchy,
     type NavigationHierarchyNode,
     type NavigationMenuItemInput,
     type NavigationMenuItemStorage,
@@ -1130,6 +1131,27 @@ async function validateNavigationRowsForPublication(
     }
 }
 
+/**
+ * A menu already placed on the storefront keeps within every placement's
+ * rendering budget, as assigning it required: publishing or restoring a
+ * bigger revision is refused instead of silently changing what renders.
+ */
+async function assertPlacedMenuFits(db: Database, menuId: string, itemCount: number): Promise<void> {
+    const placed = await db
+        .select({ surface: navigationPlacements.surface, slot: navigationPlacements.slot })
+        .from(navigationPlacements)
+        .where(eq(navigationPlacements.menuId, menuId))
+        .all();
+    for (const placement of placed) {
+        const { maxItems } = getNavigationPlacementDefinition(placement.surface, placement.slot);
+        if (itemCount > maxItems) {
+            throw new ValidationError(
+                `This menu is shown in the storefront ${placement.surface}, which renders at most ${maxItems} items; it contains ${itemCount}.`,
+            );
+        }
+    }
+}
+
 export async function publishNavigationMenu(
     db: Database,
     menuId: string,
@@ -1150,6 +1172,7 @@ export async function publishNavigationMenu(
     if (items.length > NAVIGATION_MENU_ITEM_LIMIT) {
         throw new ValidationError(`A menu can contain at most ${NAVIGATION_MENU_ITEM_LIMIT} items.`);
     }
+    await assertPlacedMenuFits(db, menuId, items.length);
     await validateNavigationRowsForPublication(db, items);
 
     const checksum = await checksumNavigationPublication(items);
@@ -1262,6 +1285,7 @@ export async function rollbackNavigationMenu(
         openInNewTab: row.openInNewTab,
         isEnabled: row.isEnabled,
     }));
+    await assertPlacedMenuFits(db, menuId, authorityRows.length);
     await validateNavigationRowsForPublication(db, authorityRows);
     const checksum = await checksumNavigationPublication(authorityRows);
     if (checksum !== sourcePublication.checksum) {
@@ -1471,14 +1495,28 @@ export async function getPublishedNavigationPlacements(db: Database) {
         }
     }
 
-    const targetsByMenu = new Map<string, NavigationTargetItem[]>();
+    // A menu re-published past its placement's budget still renders: its
+    // first items, top levels first (the storefront reaches the rest through
+    // category pages and /categories). Only a publication whose rows do not
+    // match its own count, or that no longer forms a tree, is skipped.
+    const targetsByPlacement = new Map<string, NavigationTargetItem[]>();
+    const hierarchies = new Map<string, NavigationHierarchyNode<AuthorityProjectionRow>[] | null>();
     const validPlacements = [] as typeof placements;
     for (const placement of placements) {
         const rows = rowsByMenu.get(placement.menuId) ?? [];
-        if (
-            rows.length !== placement.itemCount
-            || rows.length > placement.definition.maxItems
-        ) {
+        if (!hierarchies.has(placement.menuId)) {
+            let hierarchy: NavigationHierarchyNode<AuthorityProjectionRow>[] | null = null;
+            if (rows.length === placement.itemCount) {
+                try {
+                    hierarchy = buildNavigationHierarchy(rows);
+                } catch {
+                    hierarchy = null;
+                }
+            }
+            hierarchies.set(placement.menuId, hierarchy);
+        }
+        const hierarchy = hierarchies.get(placement.menuId);
+        if (!hierarchy) {
             console.warn("[Navigation] Skipping an invalid public placement", {
                 placementId: placement.id,
                 menuId: placement.menuId,
@@ -1486,15 +1524,14 @@ export async function getPublishedNavigationPlacements(db: Database) {
             continue;
         }
         validPlacements.push(placement);
-        if (!targetsByMenu.has(placement.menuId)) {
-            targetsByMenu.set(
-                placement.menuId,
-                publishedHierarchyToTargets(buildNavigationHierarchy(rows)),
-            );
-        }
+        const maxItems = placement.definition.maxItems;
+        targetsByPlacement.set(
+            placement.id,
+            publishedHierarchyToTargets(rows.length > maxItems ? trimNavigationHierarchy(hierarchy, maxItems) : hierarchy),
+        );
     }
 
-    const allTargets = [...targetsByMenu.values()].flat();
+    const allTargets = [...targetsByPlacement.values()].flat();
     const resources = await loadNavigationResourceSnapshots(
         db,
         { navigation: allTargets },
@@ -1504,7 +1541,7 @@ export async function getPublishedNavigationPlacements(db: Database) {
     return validPlacements.map((placement) => ({
         ...placement,
         items: resolveNavigationItemsForPublic(
-            targetsByMenu.get(placement.menuId) ?? [],
+            targetsByPlacement.get(placement.id) ?? [],
             resources,
         ),
     }));
