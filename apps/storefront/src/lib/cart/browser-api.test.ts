@@ -58,6 +58,46 @@ describe("previewCartDiscounts", () => {
     });
   });
 
+  it("sends the pre-surcharge price bundles use and lists the bundle saving in the estimate", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: {
+        totalDiscount: 50,
+        bundleDiscountAmount: 50,
+        bundles: [{ productId: "prod_soap", quantity: 2, discountType: "percentage", label: "Pair" }],
+        discounts: [],
+        offers: [],
+        rejectedCodes: [{
+          code: "SAVE5",
+          reason: "lower_savings",
+          message: "Bundle saving applied: better than SAVE5.",
+          conflictsWith: "Bundle saving",
+          bundleSavesMore: true,
+        }],
+      },
+    })));
+
+    const result = await previewCartDiscounts(["SAVE5"], [
+      { id: "prod_soap", name: "Soap", price: 250, quantity: 2, variantId: "var_soap" },
+      {
+        id: "prod_mug", name: "Mug", price: 900, quantity: 1, variantId: "var_mug",
+        properties: [{ key: "wrap", value: "true", label: "Gift wrap", displayValue: "Yes", priceMinor: 10_000 }],
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      ok: true,
+      totalDiscount: 50,
+      discounts: [{ promotionId: "bundle", title: "Pair", code: null, amount: 50, shippingAmount: 0 }],
+      rejectedCodes: [{ code: "SAVE5", reason: "lower_savings", bundleSavesMore: true }],
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).items).toEqual([
+      { id: "prod_soap", price: 250, quantity: 2, variantId: "var_soap" },
+      { id: "prod_mug", price: 900, basePrice: 800, quantity: 1, variantId: "var_mug" },
+    ]);
+  });
+
   it("reads the message out of the API error envelope instead of printing an object", async () => {
     fetchMock.mockResolvedValue(new Response(
       JSON.stringify({ success: false, error: { code: "VALIDATION_ERROR", message: "Use up to 5 discount codes." } }),
