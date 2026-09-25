@@ -1,10 +1,12 @@
 // src/routes/admin/settings/notification-templates.ts
-// Customer message templates per order event (email subject + body, SMS
-// body), and test sends of a draft rendered with sample order data.
+// Customer message templates per event (email subject + body, SMS body): the
+// order events plus the Wave B messages whose content a domain resolves at
+// send time (digital delivery, gift card, review request). Test sends render a
+// draft with sample data.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-    ORDER_NOTIFICATION_TYPES,
+    TEMPLATED_NOTIFICATION_TYPES,
     TEMPLATE_LIMITS,
     findUnknownVariables,
     renderSmsTemplate,
@@ -27,15 +29,15 @@ import { isWithinRateLimit } from "../../../utils/rate-limit";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const eventSchema = z.enum(ORDER_NOTIFICATION_TYPES);
+const eventSchema = z.enum(TEMPLATED_NOTIFICATION_TYPES);
 const emailTemplateSchema = z.object({
     subject: z.string().max(TEMPLATE_LIMITS.subject),
     body: z.string().max(TEMPLATE_LIMITS.emailBody),
 });
 const smsTemplateSchema = z.object({ body: z.string().max(TEMPLATE_LIMITS.smsBody) });
 const perEvent = <T extends z.ZodTypeAny>(template: T) =>
-    z.object(Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, template])) as Record<
-        (typeof ORDER_NOTIFICATION_TYPES)[number],
+    z.object(Object.fromEntries(TEMPLATED_NOTIFICATION_TYPES.map((event) => [event, template])) as Record<
+        (typeof TEMPLATED_NOTIFICATION_TYPES)[number],
         T
     >);
 
@@ -87,7 +89,7 @@ app.openapi(createRoute({
     path: "/",
     operationId: "dashboard.notifications.templates_update",
     tags: ["Admin - Settings"],
-    summary: "Save the customer message templates for one order status",
+    summary: "Save the customer message templates for one event",
     request: {
         body: {
             required: true,
@@ -133,7 +135,7 @@ app.openapi(createRoute({
     path: "/test",
     operationId: "dashboard.notifications.template_test_send",
     tags: ["Admin - Settings"],
-    summary: "Send a draft template with sample order data (email to yourself, SMS to a number you enter)",
+    summary: "Send a draft template with sample data (email to yourself, SMS to a number you enter)",
     request: { body: { required: true, content: { "application/json": { schema: testSendSchema } } } },
     responses: {
         200: {

@@ -37,7 +37,7 @@ import {
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
 import {
   NOTIFICATION_TYPES,
-  ORDER_NOTIFICATION_TYPES,
+  TEMPLATED_NOTIFICATION_TYPES,
   adminChannelsForType,
   customerChannelsForType,
   isNotificationType,
@@ -51,7 +51,13 @@ import {
   normalizeCustomerRequestPolicy,
   type CustomerRequestPolicy,
 } from "./customer-request-policy.shared";
-import { defineSettingsDocument } from "./settings-store";
+import type { Database } from "@scalius/database/client";
+import { sql, type SQL } from "drizzle-orm";
+import {
+  defineSettingsDocument,
+  readSettingsDocumentStrict,
+  type StrictSettingsRead,
+} from "./settings-store";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -276,11 +282,20 @@ export const customerCountriesDocument = defineSettingsDocument<CustomerCountrie
 
 export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
 
+/**
+ * When digital and gift-card lines are handed over (Wave B §3.3): as soon as
+ * payment settles, or only once staff confirmed the order (stores worried
+ * about card fraud on keys and codes).
+ */
+export const AUTO_FULFIL_MODES = ["after_payment", "after_confirmation"] as const;
+export type AutoFulfilMode = (typeof AUTO_FULFIL_MODES)[number];
+
 export interface CheckoutFlowSettings {
   guestCheckoutEnabled: boolean;
   checkoutMode: CheckoutMode;
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
+  autoFulfilMode: AutoFulfilMode;
 }
 
 export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
@@ -290,12 +305,14 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
     partialPaymentEnabled: z.boolean(),
     partialPaymentAmount: z.number(),
+    autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
   }),
   defaults: {
     guestCheckoutEnabled: true,
     checkoutMode: "all",
     partialPaymentEnabled: false,
     partialPaymentAmount: 0,
+    autoFulfilMode: "after_payment",
   },
 });
 
@@ -339,6 +356,97 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
   ) as unknown as z.ZodType<CustomerRequestPolicy>,
   defaults: normalizeCustomerRequestPolicy(undefined),
 });
+
+// ─────────────────────────────────────────
+// Reviews (Wave B §2): moderation and review requests. On by default (auto
+// moderation, a request 7 days after delivery); an unreadable document hides
+// reviews and refuses writes (`readReviewSettings`). Request channels are the
+// `review_request` row of the notifications document, like every other buyer
+// message; this document only says whether and when to ask.
+// ─────────────────────────────────────────
+
+export const REVIEW_MODERATION_MODES = ["auto", "hold"] as const;
+export type ReviewModerationMode = (typeof REVIEW_MODERATION_MODES)[number];
+export const REVIEW_REQUEST_DELAY_DAYS = { min: 1, max: 60 } as const;
+export const REVIEW_BLOCK_WORDS_MAX = 50;
+/** Matches `REVIEW_LIMITS.blockWordLength` in `@scalius/shared/reviews`. */
+export const REVIEW_BLOCK_WORD_MAX_LENGTH = 40;
+
+export interface ReviewSettings {
+  enabled: boolean;
+  /** `auto` publishes reviews that pass the content checks; `hold` holds every review. Never by rating. */
+  moderation: ReviewModerationMode;
+  /** Ask buyers for a review after delivery (the channels are the notifications document's `review_request` row). */
+  requestsEnabled: boolean;
+  /** Days after delivery before the review request goes out. */
+  requestDelayDays: number;
+  /** Merchant words that hold a review for moderation (en/bn). */
+  blockWords: string[];
+}
+
+export const reviewsDocument = defineSettingsDocument<ReviewSettings>({
+  key: "reviews",
+  schema: z.object({
+    enabled: z.boolean(),
+    moderation: z.enum(REVIEW_MODERATION_MODES),
+    requestsEnabled: z.boolean(),
+    requestDelayDays: z.number().int().min(REVIEW_REQUEST_DELAY_DAYS.min).max(REVIEW_REQUEST_DELAY_DAYS.max),
+    blockWords: z.array(z.string().trim().min(1).max(REVIEW_BLOCK_WORD_MAX_LENGTH)).max(REVIEW_BLOCK_WORDS_MAX),
+  }),
+  defaults: {
+    enabled: true,
+    moderation: "auto",
+    requestsEnabled: true,
+    requestDelayDays: 7,
+    blockWords: [],
+  },
+});
+
+/** Reviews settings, or a failure the caller must treat as "reviews hidden, writes refused". */
+export function readReviewSettings(db: Database): Promise<StrictSettingsRead<ReviewSettings>> {
+  return readSettingsDocumentStrict(reviewsDocument, db);
+}
+
+/**
+ * Whether reviews are on, as one SQL expression (1 or 0) for reads that must
+ * not spend a settings round trip (the product page row, the store shape): no
+ * stored document means the default (on); a stored one counts only when it is
+ * JSON whose `enabled` is not `false`. The strict read above stays the
+ * authority for every write.
+ */
+export function reviewsEnabledSql(): SQL<number> {
+  return sql<number>`(SELECT CASE WHEN count(*) = 0 THEN 1 ELSE count(CASE WHEN
+      (CASE WHEN json_valid(rs."value") THEN coalesce(json_type(rs."value", '$.enabled'), 'true') END) = 'true'
+    THEN 1 END) END
+    FROM "settings" rs WHERE rs."key" = 'document' AND rs."category" = 'reviews')`;
+}
+
+// ─────────────────────────────────────────
+// Gift cards (Wave B §4): cards never expire unless the store sets a default.
+// ─────────────────────────────────────────
+
+export const GIFT_CARD_DEFAULT_EXPIRY_MONTHS = { min: 1, max: 120 } as const;
+
+export interface GiftCardSettings {
+  /** Months until a newly issued card expires; null = never (the default). */
+  defaultExpiryMonths: number | null;
+}
+
+export const giftCardsDocument = defineSettingsDocument<GiftCardSettings>({
+  key: "gift_cards",
+  schema: z.object({
+    defaultExpiryMonths: z.number().int()
+      .min(GIFT_CARD_DEFAULT_EXPIRY_MONTHS.min)
+      .max(GIFT_CARD_DEFAULT_EXPIRY_MONTHS.max)
+      .nullable(),
+  }),
+  defaults: { defaultExpiryMonths: null },
+});
+
+/** Gift-card settings, or a failure the caller must treat as "gift cards unavailable". */
+export function readGiftCardSettings(db: Database): Promise<StrictSettingsRead<GiftCardSettings>> {
+  return readSettingsDocumentStrict(giftCardsDocument, db);
+}
 
 // ─────────────────────────────────────────
 // Store policies (Settings -> Policies): each policy is one of the store's
@@ -447,19 +555,31 @@ export const seoDocument = defineSettingsDocument<SeoSettings>({
 
 export type NotificationChannelRules = Record<string, string[]>;
 
-/** Buyer defaults: email for every buyer message; ready-for-pickup also texts (§10). */
+/**
+ * Buyer defaults: email for every buyer message; ready-for-pickup, digital
+ * delivery and gift cards also text; review requests are email only (an SMS
+ * costs the merchant). Staff alerts never reach the buyer (Wave B §10).
+ */
 function defaultCustomerChannels(type: NotificationType): string[] {
-  if (type === "conversation_message") return [];
-  if (type === "order_ready_for_pickup") return ["email", "sms"];
+  if (type === "conversation_message" || type === "review_pending" || type === "digital_keys_exhausted") return [];
+  if (type === "order_ready_for_pickup" || type === "order_digital_delivered" || type === "gift_card_issued") {
+    return ["email", "sms"];
+  }
   return ["email"];
 }
 
-/** Staff defaults: push for new and cancelled orders, support requests and buyer messages. */
+/**
+ * Staff defaults: push for new and cancelled orders, support requests, buyer
+ * messages and reviews waiting for approval; push and email when a licence
+ * key pool runs out.
+ */
 function defaultAdminChannels(type: NotificationType): string[] {
+  if (type === "digital_keys_exhausted") return ["push", "email"];
   return type === "order_created"
     || type === "order_cancelled"
     || type === "support_request_submitted"
     || type === "conversation_message"
+    || type === "review_pending"
     ? ["push"]
     : [];
 }
@@ -554,11 +674,11 @@ export const notificationsDocument = defineSettingsDocument<NotificationSettings
 export const notificationTemplatesDocument = defineSettingsDocument<NotificationTemplateOverrides>({
   key: "notification_templates",
   schema: z.object({
-    email: z.partialRecord(z.enum(ORDER_NOTIFICATION_TYPES), z.object({
+    email: z.partialRecord(z.enum(TEMPLATED_NOTIFICATION_TYPES), z.object({
       subject: z.string().max(TEMPLATE_LIMITS.subject),
       body: z.string().max(TEMPLATE_LIMITS.emailBody),
     })),
-    sms: z.partialRecord(z.enum(ORDER_NOTIFICATION_TYPES), z.object({
+    sms: z.partialRecord(z.enum(TEMPLATED_NOTIFICATION_TYPES), z.object({
       body: z.string().max(TEMPLATE_LIMITS.smsBody),
     })),
   }),
@@ -772,4 +892,6 @@ export const SETTINGS_DOCUMENTS = [
   sslcommerzDocument,
   paymentMethodsDocument,
   metaConversionsDocument,
+  reviewsDocument,
+  giftCardsDocument,
 ] as const;

@@ -405,6 +405,8 @@ describe("tax Admin jurisdiction authority", () => {
       "guard",
       "classification",
       "revision",
+      // The gift-card product rules guard (products/gift-card-rules.ts).
+      "guard",
     ]);
     expect(result).toMatchObject({ version: 3, aggregateRevision: 6 });
   });

@@ -398,24 +398,3 @@ export function inboxBadgeText(unread: number): string {
   if (!Number.isFinite(unread) || unread <= 0) return "";
   return unread > 99 ? "99+" : String(Math.floor(unread));
 }
-
-// ---------------------------------------------------------------------------
-// Browser: unread count for the account page
-// ---------------------------------------------------------------------------
-
-/** Unread replies across the account's conversations; 0 when unknown. Same-origin proxy, session cookie. */
-export async function fetchInboxUnread(fetcher: typeof fetch = fetch): Promise<number> {
-  try {
-    const response = await fetcher("/api/customer-auth/conversations/unread", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-    if (!response.ok) return 0;
-    const payload = await response.json() as { success?: boolean; data?: { unread?: unknown } };
-    const unread = payload?.data?.unread;
-    return payload?.success && typeof unread === "number" && unread > 0 ? Math.floor(unread) : 0;
-  } catch {
-    return 0;
-  }
-}

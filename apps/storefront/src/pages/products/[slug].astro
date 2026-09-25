@@ -18,6 +18,13 @@ import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
 import ProductEmiLine from "@/components/product/ProductEmiLine.astro";
+import DigitalPromise from "@/components/product/DigitalPromise.astro";
+import WarrantyRow from "@/components/product/WarrantyRow.astro";
+import ProductReviews from "@/components/product/reviews/ProductReviews.astro";
+import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
+import { reviewStructuredData } from "@/lib/review-structured-data";
+import { pickReviewCopy } from "@/components/product/reviews/review-format";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { GALLERY_IMAGE_WIDTHS, productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -181,6 +188,9 @@ const pageTitle = product.metaTitle || product.name;
 const pageDescription = pageMetaDescription;
 // Product-page copy in the store's checkout language (buttons, buyer inputs).
 const productPageCopy = resolveProductPageCopy(layoutData.storefrontCopy);
+// Reviews read the same language (the summary, the module and its dates).
+const reviewCopy = pickReviewCopy(productPageCopy);
+const reviewLanguage = checkoutLanguageBaseCode(layoutData.storefrontCopy?.languageCode);
 const quickBuyNoticeByError: Record<string, string> = {
   customization_required: productPageCopy.customizationNeededText,
   customization_invalid: productPageCopy.customizationInvalidText,
@@ -440,6 +450,9 @@ const primarySchemaAvailability = selectedBuyerVariant
 // Product JSON-LD -- per SEO-01 (merchant listing spec). The description is
 // stated once (plain text, capped), never per variant.
 const schemaDescription = productSchemaDescription(product.description, product.name);
+// Rating and reviews join the Product or ProductGroup root, from the same
+// `product.reviews` the summary and the module render (none at 0 or when off).
+const reviewSchema = reviewStructuredData(product);
 const productJsonLd =
   !product.noIndex && canonicalUrl
     ? serializeJsonForInlineScript(
@@ -452,6 +465,7 @@ const productJsonLd =
               productGroupID: product.id,
               brandName,
               variesBy: productGroupVariesBy,
+              rootFacts: reviewSchema,
               variants: buyerVariants.map((variant) => {
                 const variantUrl = buildVariantProductUrl(variant) ?? canonicalUrl;
                 return {
@@ -505,6 +519,7 @@ const productJsonLd =
               ...(brandName
                 ? { brand: { "@type": "Brand", name: brandName } }
                 : {}),
+              ...reviewSchema,
               offers: withOfferCommerceDetails({
                 "@type": "Offer",
                 url: primarySchemaUrl,
@@ -640,15 +655,21 @@ const productCategoryAnalytics = productCategory
           actionCopy={productPageCopy}
           fulfilmentBadge={fulfilmentBadge}
         >
+          <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
           {buyBoxShowsEmi && product.emi && (
             <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={currencyCode} currencySymbol={currencySymbol} />
           )}
+          <DigitalPromise slot="after-actions" product={product} fulfilment={pageFulfilment} />
           <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
+          <WarrantyRow slot="after-actions" product={product} />
         </ProductSummary>
       </ProductPageLayout>
     </section>
 
     <StickyBuyBar productName={product.name} />
+
+    {/* The template's `reviews` module: after the description, before related products. */}
+    <ProductReviews product={product} copy={reviewCopy} language={reviewLanguage} storeName={sellerSchemaName} />
 
     <RelatedProducts
       recommendations={recommendations}

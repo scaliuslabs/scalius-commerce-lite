@@ -38,6 +38,7 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
 import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
+import { lineExtrasMarkup } from "@/lib/order-line-extras";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -532,7 +533,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
-          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
+          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}${lineExtrasMarkup(item, { orderId: order.id, access: "account" })}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
       </li>`;

@@ -41,6 +41,7 @@ import {
 import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
+import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../shared/order-line-extras";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -242,6 +243,7 @@ const customerOrderDetailSchema = z.object({
     taxableAmountMinor: z.number().int().nullable(),
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
+    ...orderLineExtrasShape,
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
@@ -349,9 +351,16 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
       order: getCustomerPaymentSessionOrderForDetail(order),
     }),
   ]);
+  const lineExtras = await composeOrderLineExtras(c.get("db"), {
+    orderId,
+    orderItemIds: detail.items.map((item) => item.id),
+    audience: "buyer",
+    currencyDecimalPlaces: order.currencyDecimalPlaces,
+  });
 
   return ok(c, {
     ...detail,
+    items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
     paymentRecovery,
   });

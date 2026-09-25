@@ -5,11 +5,14 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cartValidationRoutes } from "./cart-validation";
 import { checkoutRoutes } from "./checkout";
 import { orderConversationRoutes } from "./conversation";
+import { receiptDownloadRoutes } from "./downloads";
 import { paymentRecoveryRoutes } from "./payment-recovery";
 import { receiptRoutes } from "./receipt";
+import { receiptReviewRoutes } from "./reviews";
 import { checkoutStatusRoutes } from "./status";
 import { receiptSupportRequestRoutes } from "./support-requests";
 import { taxQuoteRoutes } from "./tax-quote";
+import { receiptWarrantyRoutes } from "./warranties";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -21,5 +24,8 @@ app.route("/", cartValidationRoutes);
 app.route("/", taxQuoteRoutes);
 app.route("/", checkoutRoutes);
 app.route("/", orderConversationRoutes);
+app.route("/", receiptReviewRoutes);
+app.route("/", receiptDownloadRoutes);
+app.route("/", receiptWarrantyRoutes);
 
 export { app as orderRoutes };

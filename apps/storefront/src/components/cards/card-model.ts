@@ -19,9 +19,8 @@ import type {
 } from "@scalius/shared/storefront-theme";
 import { cssNamedColour } from "./css-colours";
 
-/** Facts no reader sends yet (reviews, EMI plans on cards); kept so the slots stay honest. */
+/** Facts no reader sends yet (EMI plans on cards); kept so the slot stays honest. */
 export interface ProductCardPendingFacts {
-  rating?: { average: number; count: number } | null;
   /** The lowest monthly EMI amount in major units, from the merchant's EMI plans. */
   emiMonthlyFrom?: number | null;
 }
@@ -210,7 +209,14 @@ function cardFactValues(
 
 export function productCardModel(
   product: ProductCardProduct,
-  options: { currencySymbol: string; currencyCode: string; hoverImage: boolean; quickBuy: boolean },
+  options: {
+    currencySymbol: string;
+    currencyCode: string;
+    hoverImage: boolean;
+    quickBuy: boolean;
+    /** False while the store has no published review or reviews are off (`hasReviews`): no card shows a rating. */
+    ratings?: boolean;
+  },
 ): ProductCardModel {
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode });
   const hasDiscount = product.discountedPrice < product.price;
@@ -250,7 +256,7 @@ export function productCardModel(
       ? `/buy/${encodeURIComponent(product.slug)}`
       : null,
     needsOptions: !soldOut && product.hasVariants,
-    facts: cardFactValues(product.cardFacts, product, money, saved),
+    facts: cardFactValues(product.cardFacts, options.ratings === false ? { ...product, rating: null } : product, money, saved),
   };
 }
 

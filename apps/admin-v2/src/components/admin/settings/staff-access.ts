@@ -26,6 +26,8 @@ const GROUP_BY_RESOURCE: Record<string, PermissionGroup> = {
   categories: "products",
   collections: "products",
   attributes: "products",
+  reviews: "products",
+  gift_cards: "products",
   customers: "customers",
   discounts: "discounts",
   pages: "content",

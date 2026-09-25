@@ -16,9 +16,12 @@ import {
   markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
+  recordNothingToSend,
   sendConversationNotification,
   sendOrderNotification,
   sendOrderNotificationEmail,
+  sendResolvedNotification,
+  sendStaffAlertNotification,
   sendStaffOrderEmails,
   type ClaimedNotificationOutbox,
   type NotificationQueueMessage,
@@ -26,8 +29,14 @@ import {
 } from "@scalius/core/modules/notifications";
 import {
   isOrderNotificationType,
+  isStaffAlertNotificationType,
   type OrderNotificationType,
+  type ResolvedNotificationType,
 } from "@scalius/core/modules/notifications/browser";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { resolveDigitalDeliveryContent } from "./notification-content/digital";
+import { resolveGiftCardIssuedContent } from "./notification-content/gift-card";
+import { resolveReviewRequestContent } from "./notification-content/review-request";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { logOpsEvent } from "./utils/ops-log";
 
@@ -214,12 +223,124 @@ type DispatchResult =
   | { kind: "retry"; failures: string[] }
   | { kind: "unsupported"; reason: string };
 
+function fromDispatch(result: { outcomes: DispatchOutcome[]; hasRetryableFailure: boolean }): DispatchResult {
+  return result.hasRetryableFailure
+    ? { kind: "retry", failures: [summarizeNotificationFailures(result.outcomes)] }
+    : { kind: "done" };
+}
+
+/**
+ * A resolver found nothing to send (Wave B §10): one skipped
+ * `nothing_to_send` receipt, then the row is marked sent. Terminal: never
+ * retried, never dead-lettered. Ids only in the log.
+ */
+async function nothingToSend(
+  db: Db,
+  claim: ClaimedNotificationOutbox & { notificationType: ResolvedNotificationType },
+  orderId: string | null,
+): Promise<DispatchResult> {
+  await recordNothingToSend(db, {
+    outboxId: claim.outboxId,
+    notificationType: claim.notificationType,
+    subjectType: claim.subjectType === "gift_card" ? "gift_card" : "order",
+    subjectId: claim.subjectId,
+    orderId,
+  });
+  console.log(`[Queue] Notification ${claim.outboxId} (${claim.notificationType}) had nothing to send`);
+  return { kind: "done" };
+}
+
+/** Digital delivery and review requests: the domain's content, to the order's own contact. */
+async function dispatchResolvedOrderNotification(
+  claim: ClaimedNotificationOutbox & { notificationType: "order_digital_delivered" | "review_request" },
+  db: Db,
+  env: Env,
+): Promise<DispatchResult> {
+  const order = await db
+    .select({
+      customerName: orders.customerName,
+      customerEmail: orders.customerEmail,
+      customerPhone: orders.customerPhone,
+      orderNumber: orders.orderNumber,
+    })
+    .from(orders)
+    .where(eq(orders.id, claim.subjectId))
+    .get();
+  if (!order) return { kind: "unsupported", reason: "order_missing" };
+
+  const input = { orderId: claim.subjectId, data: claim.data };
+  const extraTemplateData = claim.notificationType === "order_digital_delivered"
+    ? await resolveDigitalDeliveryContent(db, env, input)
+    : await resolveReviewRequestContent(db, env, input);
+  if (!extraTemplateData) return nothingToSend(db, claim, claim.subjectId);
+
+  return fromDispatch(await sendResolvedNotification(db, {
+    outboxId: claim.outboxId,
+    notificationType: claim.notificationType,
+    subjectType: "order",
+    subjectId: claim.subjectId,
+    orderId: claim.subjectId,
+    orderNumber: formatOrderNumber(order.orderNumber, claim.subjectId),
+    recipient: { name: order.customerName, email: order.customerEmail, phone: order.customerPhone },
+    extraTemplateData,
+  }, {
+    env,
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+  }));
+}
+
+/** An issued gift card: the domain's content, to the card's delivery contact. */
+async function dispatchGiftCardNotification(
+  claim: ClaimedNotificationOutbox,
+  db: Db,
+  env: Env,
+): Promise<DispatchResult> {
+  if (claim.notificationType !== "gift_card_issued") {
+    return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
+  }
+  const resolvedClaim = { ...claim, notificationType: claim.notificationType };
+  const content = await resolveGiftCardIssuedContent(db, env, { giftCardId: claim.subjectId, data: claim.data });
+  if (!content) return nothingToSend(db, resolvedClaim, null);
+
+  return fromDispatch(await sendResolvedNotification(db, {
+    outboxId: claim.outboxId,
+    notificationType: "gift_card_issued",
+    subjectType: "gift_card",
+    subjectId: claim.subjectId,
+    orderId: content.orderId,
+    orderNumber: content.orderNumber,
+    recipient: content.recipient,
+    extraTemplateData: content.extraTemplateData,
+  }, {
+    env,
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+  }));
+}
+
 async function dispatchClaimedNotification(
   claim: ClaimedNotificationOutbox,
   db: Db,
   env: Env,
 ): Promise<DispatchResult> {
+  if (claim.subjectType === "gift_card") {
+    return dispatchGiftCardNotification(claim, db, env);
+  }
+
   if (claim.subjectType === "order") {
+    const type = claim.notificationType;
+    if (type === "order_digital_delivered" || type === "review_request") {
+      return dispatchResolvedOrderNotification({ ...claim, notificationType: type }, db, env);
+    }
+    if (isStaffAlertNotificationType(type)) {
+      return fromDispatch(await sendStaffAlertNotification(db, {
+        outboxId: claim.outboxId,
+        orderId: claim.subjectId,
+        notificationType: type,
+      }, {
+        env,
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      }));
+    }
     if (!isOrderNotificationType(claim.notificationType)) {
       return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
     }

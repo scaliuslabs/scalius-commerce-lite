@@ -19,6 +19,7 @@ import {
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { reviewsEnabledSql } from "../settings/documents";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 
@@ -121,6 +122,20 @@ export function selectStoreShapeCounts(db: Database) {
         WHERE m."deleted_at" IS NULL AND m."is_active" = 1
         LIMIT 1
       ) AS capped_shipping_methods)`,
+      // Reviews show only when reviews are on (no document = the default,
+      // on; a malformed one reads as off) and one review is published.
+      publishedReviewCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "product_review_stats" rs0
+        WHERE rs0."rating_rank_milli" IS NOT NULL AND ${reviewsEnabledSql()} = 1
+        LIMIT 1
+      ) AS capped_reviews)`,
+      digitalSkuCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "product_variants" v
+        INNER JOIN "products" p ON p."id" = v."product_id"
+        WHERE v."fulfillment_kind" = 'digital' AND v."deleted_at" IS NULL
+          AND p."deleted_at" IS NULL AND p."is_active" = 1
+        LIMIT 1
+      ) AS capped_digital_skus)`,
     })
     .from(sql`(SELECT 1 AS one) AS store_shape_row`);
 }
@@ -137,6 +152,8 @@ export interface StoreShapeCountsRow {
   keySpecCount: Counted;
   collectionCount: Counted;
   deliveryMethodCount: Counted;
+  publishedReviewCount?: Counted;
+  digitalSkuCount?: Counted;
 }
 
 /** The shape from the counts row and the header menu tree. */
@@ -156,6 +173,8 @@ export function storeShapeFromCounts(
     hasCollections: number(row?.collectionCount) > 0,
     hasDeliveryMethods: number(row?.deliveryMethodCount) > 0,
     hasKeySpecs: number(row?.keySpecCount) > 0,
+    hasReviews: number(row?.publishedReviewCount) > 0,
+    hasDigitalLines: number(row?.digitalSkuCount) > 0,
   });
 }
 

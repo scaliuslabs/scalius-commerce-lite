@@ -71,7 +71,7 @@ export const inventoryOperations = sqliteTable("inventory_operations", {
     operationKey: text("operation_key").primaryKey(),
     requestHash: text("request_hash").notNull(),
     operationType: text("operation_type", {
-        enum: ["manual_adjustment", "scanner_adjustment", "stocktake"],
+        enum: ["manual_adjustment", "scanner_adjustment", "stocktake", "licence_keys"],
     }).notNull(),
     variantId: text("variant_id")
         .notNull()

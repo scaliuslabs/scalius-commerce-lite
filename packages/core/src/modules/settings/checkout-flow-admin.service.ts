@@ -2,7 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 
 import { getCheckoutFlowValidationIssues } from "./checkout-flow";
-import { checkoutDocument, type CheckoutFlowSettings, type CheckoutMode } from "./documents";
+import { checkoutDocument, type AutoFulfilMode, type CheckoutFlowSettings, type CheckoutMode } from "./documents";
 import { readStoreCurrency, toStoreMinor } from "./store-money";
 
 export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {
@@ -15,6 +15,8 @@ export interface SaveCheckoutFlowSettingsInput {
     checkoutMode: CheckoutMode;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: number;
+    /** Omitted = keep the saved mode (the dashboard offers it once Wave B delivery lands). */
+    autoFulfilMode?: AutoFulfilMode;
     expectedRevision: number;
     availablePaymentMethods: readonly string[];
 }
@@ -49,6 +51,7 @@ export async function saveCheckoutFlowSettingsDocument(
         checkoutMode: input.checkoutMode,
         partialPaymentEnabled: input.partialPaymentEnabled,
         partialPaymentAmount: input.partialPaymentAmount,
+        ...(input.autoFulfilMode === undefined ? {} : { autoFulfilMode: input.autoFulfilMode }),
     }, {}, { expectedRevision: input.expectedRevision });
     return { ...value, revision };
 }

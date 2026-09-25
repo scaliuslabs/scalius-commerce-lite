@@ -224,6 +224,23 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `productContentBlocks` | Typed, versioned content blocks per product and placement; settings follow `@scalius/shared/product-content-blocks` |
 | `productBundles` | Quantity tiers (percentage or fixed set price); every change bumps the checkout authority |
 
+### Wave B: `reviews.ts`, `digital.ts`, `gift-cards.ts`, `warranty.ts` (0095-0098)
+
+| Table | Purpose |
+|-------|---------|
+| `productReviews` | One verified-purchase review per order line; one live review per product and buyer. A BEFORE INSERT trigger refuses any line not handed over on a delivered/completed order |
+| `productReviewStats` | Per-product count, sum, histogram, `floor(avg*100)` and Bayesian rank `floor((sum+15)*1000/(count+5))`: a trigger projection of published reviews; never written by code |
+| `orderReviewRequests` | One row per order that reached `delivered`, written by a trigger on `orders.status`; the 15-minute sweep queues the request |
+| `digitalAssets` / `digitalAssetUploads` | Downloadable files (private R2 under `private/digital/`) and licence-key pools per product/variant; multipart upload sessions |
+| `digitalEntitlements` | What a line received; the download count never passes the snapshot limit (CHECK) |
+| `digitalLicenceKeys` | Encrypted keys with an HMAC `key_hash` (dedupe per pool); only `available -> assigned|revoked`, never deleted |
+| `giftCards` / `giftCardTransactions` | HMAC `code_hash` lookup plus ciphertext (keys from `CREDENTIAL_ENCRYPTION_KEY`); the balance starts at 0 and is a trigger projection of the append-only ledger, which refuses overdrafts and redemption of disabled or expired cards |
+| `warrantyPolicies` / `warrantyPolicyRevisions` | Reusable policies with immutable revisions; `products.warranty_policy_id` points at the policy and `order_items.warranty_revision_id` freezes the revision at commit |
+| `orderItemWarranties` | One per fulfilment line of a line with a revision (trigger); starts at the handover, expires by SQLite calendar arithmetic (mirrored by the PostgreSQL `unixepoch(epoch, 'unixepoch', '+N unit')` compat function), voided with its fulfilment |
+| `warrantyClaims` | A claim record plus its `warranty_claim` thread; at most one open claim per warranty |
+
+`order_items_auto_pending_idx` (partial, digital and gift-card lines still owed) drives the auto-fulfil sweep.
+
 ### `content.ts` -- Content Domain
 
 | Table | Purpose |
@@ -297,6 +314,13 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | `folder_` | Media folder | `mediaFolders` |
 | `analytics_` | Analytics script | `analytics` |
 | `chk_` | Checkout token | (ephemeral, in order flow) |
+| `rev_` | Product review | `productReviews` |
+| `dga_` | Digital asset | `digitalAssets` |
+| `gc_` | Gift card | `giftCards` |
+| `gct_` | Gift-card transaction | `giftCardTransactions` |
+| `wrp_` / `wrr_` | Warranty policy / revision | `warrantyPolicies` / `warrantyPolicyRevisions` |
+| `wty_` | Line warranty (`wty_` + fulfilment line id) | `orderItemWarranties` |
+| `wcl_` | Warranty claim | `warrantyClaims` |
 
 Some tables use plain `nanoid()` without a prefix: `collections`, `deliveryShipments`, `deliveryProviders`.
 
@@ -357,7 +381,7 @@ ledger. Every migration from 0050 onward must:
 - be listed in the runtime release manifest used by `/readyz`.
 
 The current release is the one `CURRENT_DATABASE_SCHEMA` names in
-`src/schema-contract.ts` (`0094_media_rendition_ladder` at this writing). The release chain also
+`src/schema-contract.ts` (`0098_warranty` at this writing). The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54

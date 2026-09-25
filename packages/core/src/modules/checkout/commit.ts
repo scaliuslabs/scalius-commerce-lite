@@ -15,7 +15,9 @@ import {
     orderTaxSnapshots,
     orders,
     codTracking,
+    products,
     promotionRedemptions,
+    warrantyPolicies,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -104,9 +106,10 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
-// Bound values per order line (the constant columns are SQL literals); the
-// D1 limit is 100 per statement, so 5 rows a statement.
-export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+// Bound values per order line (the constant columns are SQL literals, the
+// warranty lookup binds the product id once more); the D1 limit is 100 per
+// statement, so 5 rows a statement (95 values).
+export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 // order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot.
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
@@ -296,6 +299,22 @@ async function prepareOrderInventory(
     return result;
 }
 
+/**
+ * The product's warranty as bought: its policy's current revision, read in
+ * the commit batch itself (no round trip) so the line freezes whatever is
+ * current at commit (design §5.1). No policy or an archived one is NULL.
+ * The warranty is not price-relevant, so it is outside the authority fence.
+ */
+function currentWarrantyRevisionSql(productId: string) {
+    return sql<string | null>`(
+        SELECT ${warrantyPolicies.currentRevisionId}
+        FROM ${products}
+        JOIN ${warrantyPolicies} ON ${warrantyPolicies.id} = ${products.warrantyPolicyId}
+        WHERE ${products.id} = ${productId}
+          AND ${warrantyPolicies.archivedAt} IS NULL
+    )`;
+}
+
 function buildOrderWriteBatch(
     db: Database,
     payload: StorefrontOrderCommitPayload,
@@ -447,6 +466,7 @@ function buildOrderWriteBatch(
             propertiesPriceMinor: item.propertiesPriceMinor ?? 0,
             baseUnitPriceMinor: item.baseUnitPriceMinor
                 ?? item.unitPriceMinor - (item.propertiesPriceMinor ?? 0),
+            warrantyRevisionId: currentWarrantyRevisionSql(item.productId),
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(

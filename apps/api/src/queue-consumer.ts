@@ -81,6 +81,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { bumpCacheGeneration } from "./utils/cache-generation";
+import { enqueueOrderAutoFulfil } from "./utils/auto-fulfil-queue";
 import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
@@ -811,6 +812,7 @@ async function applyPaymentEvent(
           amount: fromMinor(event.amountMinor ?? 0, getDecimalPlaces(currency)),
         });
         scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, { orderId: event.orderId, gateway: provider });
+        await enqueueOrderAutoFulfil(env.JOBS_QUEUE, event.orderId, "payment-confirmed");
       }
       console.log(`[Queue] ${provider} payment confirmed for order ${event.orderId}`);
       return {

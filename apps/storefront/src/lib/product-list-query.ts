@@ -35,10 +35,17 @@ const PRODUCT_LIST_SORT_VALUES = [
   "name-asc",
   "name-desc",
   "discount",
+  "rating",
 ] as const satisfies NonNullable<ProductListOptions["sort"]>[];
 
 const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount", "inStock"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;
+/**
+ * "N★ & up" (`minRating=1..4`): a filter like any facet value, so a rated
+ * view is `noindex,follow` and its canonical is the plain listing.
+ */
+export const PRODUCT_LIST_MIN_RATING_PARAM = "minRating";
+const MIN_RATING_VALUE = /^[1-4]$/;
 
 const NAVIGATION_PARAM_SET = new Set<string>(PRODUCT_LIST_NAVIGATION_PARAMS);
 const SORT_VALUE_SET = new Set<string>(PRODUCT_LIST_SORT_VALUES);
@@ -243,7 +250,8 @@ function hasRepeatedSingletonParams(params: URLSearchParams): boolean {
     if (
       !NAVIGATION_PARAM_SET.has(key) &&
       !BOOLEAN_FILTER_SET.has(key) &&
-      !PRICE_FILTER_SET.has(key)
+      !PRICE_FILTER_SET.has(key) &&
+      key !== PRODUCT_LIST_MIN_RATING_PARAM
     )
       continue;
     if (seen.has(key)) return true;
@@ -375,6 +383,21 @@ export function resolveProductListQueryState({
     options.minPrice = minPrice;
     currentFilters.minPrice = String(minPrice);
   }
+
+  // "N★ & up": one whole star from 1 to 4 (Bangla digits read as Latin);
+  // anything else, including the empty "Any rating" choice, redirects to the
+  // URL without it.
+  if (params.has(PRODUCT_LIST_MIN_RATING_PARAM)) {
+    const raw = getLastParam(params, PRODUCT_LIST_MIN_RATING_PARAM)!.trim();
+    const latin = latinDigits(raw)!;
+    if (MIN_RATING_VALUE.test(latin)) {
+      options.minRating = Number(latin);
+      currentFilters[PRODUCT_LIST_MIN_RATING_PARAM] = latin;
+      if (latin !== raw) shouldRedirect = true;
+    } else {
+      shouldRedirect = true;
+    }
+  }
   if (maxPrice !== undefined) {
     options.maxPrice = maxPrice;
     currentFilters.maxPrice = String(maxPrice);
@@ -401,7 +424,7 @@ export function resolveProductListQueryState({
     );
     const value = values.at(-1);
     if (!value) continue;
-    if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key)) continue;
+    if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key) || key === PRODUCT_LIST_MIN_RATING_PARAM) continue;
 
     if (BOOLEAN_FILTER_SET.has(key)) {
       if (value === "true") {

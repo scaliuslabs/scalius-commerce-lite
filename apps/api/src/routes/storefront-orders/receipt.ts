@@ -47,6 +47,7 @@ import {
 } from "../../schemas/responses";
 import { authMiddleware } from "../../middleware/auth";
 import { getTrustedClientIp } from "../../utils/client-ip";
+import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../shared/order-line-extras";
 import {
   receiptSupportRequestSchema,
   receiptSupportRequestActionSchema,
@@ -136,6 +137,7 @@ const orderReceiptSchema = z.object({
     taxableAmountMinor: z.number().int().nullable(),
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
+    ...orderLineExtrasShape,
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -376,6 +378,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     listBuyerOrderFulfilments(db, id),
     findOrderConversationId(db, id),
   ]);
+  const lineExtras = await composeOrderLineExtras(db, {
+    orderId: id,
+    orderItemIds: items.map((item) => item.id),
+    audience: "buyer",
+    currencyDecimalPlaces: order.currencyDecimalPlaces,
+  });
 
   const money = orderMoneyAmounts(order);
   return ok(c, {
@@ -434,7 +442,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         propertiesPriceMinor,
         baseUnitPriceMinor,
         ...item
-      }) => ({
+      }) => withOrderLineExtras({
         ...item,
         ...presentOrderLineFulfilment({
           fulfillmentType,
@@ -449,7 +457,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           (productImageStatus === "ready" || productImageStatus === "trashed")
             ? getCurrentPublicMediaUrl(productImageObjectKey)
             : null,
-      })),
+      }, lineExtras)),
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
       supportRequestIntro: supportState.supportRequestIntro,

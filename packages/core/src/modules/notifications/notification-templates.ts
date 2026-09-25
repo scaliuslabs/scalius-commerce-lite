@@ -6,7 +6,11 @@
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
-import { ORDER_NOTIFICATION_TYPES, type OrderNotificationType } from "./notification-types";
+import {
+  TEMPLATED_NOTIFICATION_TYPES,
+  isResolvedNotificationType,
+  type TemplatedNotificationType,
+} from "./notification-types";
 
 export const TEMPLATE_LIMITS = { subject: 200, emailBody: 10_000, smsBody: 1_000 } as const;
 
@@ -24,6 +28,19 @@ export const NOTIFICATION_VARIABLES = [
   "support_status",
   "pickup_address",
   "pickup_hours",
+  // Resolved at send time by the API layer (Wave B §10); never persisted.
+  "download_names",
+  "licence_keys",
+  "sms_licence_keys",
+  "access_link",
+  "review_products",
+  "review_link",
+  "gift_card_code",
+  "gift_card_value",
+  "gift_card_expires",
+  "gift_card_message",
+  "gift_card_sender",
+  "gift_card_link",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -38,7 +55,25 @@ const ORDER_VARIABLES: readonly NotificationVariable[] = [
 ];
 
 /** Only what the sender knows for this event. */
-export function variablesForEvent(event: OrderNotificationType): readonly NotificationVariable[] {
+export function variablesForEvent(event: TemplatedNotificationType): readonly NotificationVariable[] {
+  // `sms_licence_keys` holds the keys only when they fit a short SMS; otherwise
+  // it is empty and the line that uses it is left out.
+  if (event === "order_digital_delivered") {
+    return ["customer_name", "order_number", "store_name", "download_names", "licence_keys", "sms_licence_keys", "access_link"];
+  }
+  if (event === "review_request") return ["customer_name", "order_number", "store_name", "review_products", "review_link"];
+  if (event === "gift_card_issued") {
+    return [
+      "customer_name",
+      "store_name",
+      "gift_card_code",
+      "gift_card_value",
+      "gift_card_expires",
+      "gift_card_message",
+      "gift_card_sender",
+      "gift_card_link",
+    ];
+  }
   if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
   if (event === "order_ready_for_pickup") return [...ORDER_VARIABLES, "pickup_address", "pickup_hours"];
   if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
@@ -61,17 +96,17 @@ export interface SmsTemplate {
 }
 
 export interface NotificationTemplates {
-  email: Record<OrderNotificationType, EmailTemplate>;
-  sms: Record<OrderNotificationType, SmsTemplate>;
+  email: Record<TemplatedNotificationType, EmailTemplate>;
+  sms: Record<TemplatedNotificationType, SmsTemplate>;
 }
 
 /** What a merchant changed; a missing event means the default. */
 export interface NotificationTemplateOverrides {
-  email: Partial<Record<OrderNotificationType, EmailTemplate>>;
-  sms: Partial<Record<OrderNotificationType, SmsTemplate>>;
+  email: Partial<Record<TemplatedNotificationType, EmailTemplate>>;
+  sms: Partial<Record<TemplatedNotificationType, SmsTemplate>>;
 }
 
-type DefaultCopy = Record<OrderNotificationType, { subject: string; message: string; sms: string }>;
+type DefaultCopy = Record<TemplatedNotificationType, { subject: string; message: string; sms: string }>;
 
 // The default copy per checkout language. A {{tracking_id}} sits on its own
 // line, so that line is left out while the tracking ID isn't known yet.
@@ -159,6 +194,21 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         message: "Your {{support_request}} is {{support_status}}.",
         sms: "your {{support_request}} for order {{order_number}} is now {{support_status}}.",
       },
+      order_digital_delivered: {
+        subject: "Your downloads for order {{order_number}} are ready",
+        message: "Your digital items are ready.\nFiles: {{download_names}}\nLicence keys: {{licence_keys}}\nGet them here: {{access_link}}",
+        sms: "your digital items for order {{order_number}} are ready.\nKeys: {{sms_licence_keys}}\nCheck your email or account: {{access_link}}",
+      },
+      gift_card_issued: {
+        subject: "Your {{store_name}} gift card",
+        message: "You've received a gift card.\nFrom: {{gift_card_sender}}\n{{gift_card_message}}\nGift card code: {{gift_card_code}}\nValue: {{gift_card_value}}\nExpires: {{gift_card_expires}}\nUse it at checkout: {{gift_card_link}}",
+        sms: "you've received a {{gift_card_value}} gift card from {{store_name}}.\nCode: {{gift_card_code}}\nExpires: {{gift_card_expires}}",
+      },
+      review_request: {
+        subject: "How was your order {{order_number}}?",
+        message: "Thank you for shopping with us. We'd love to hear what you think of {{review_products}}.\nWrite a review: {{review_link}}",
+        sms: "how was your order {{order_number}}? Write a review: {{review_link}}",
+      },
     },
   },
   bn: {
@@ -244,6 +294,21 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         message: "আপনার {{support_request}} {{support_status}}।",
         sms: "অর্ডার {{order_number}}-এর {{support_request}} {{support_status}}।",
       },
+      order_digital_delivered: {
+        subject: "অর্ডার {{order_number}}-এর ডাউনলোড প্রস্তুত",
+        message: "আপনার ডিজিটাল পণ্য প্রস্তুত।\nফাইল: {{download_names}}\nলাইসেন্স কী: {{licence_keys}}\nএখান থেকে নিন: {{access_link}}",
+        sms: "অর্ডার {{order_number}}-এর ডিজিটাল পণ্য প্রস্তুত।\nকী: {{sms_licence_keys}}\nইমেইল বা অ্যাকাউন্টে দেখুন: {{access_link}}",
+      },
+      gift_card_issued: {
+        subject: "আপনার {{store_name}} গিফট কার্ড",
+        message: "আপনি একটি গিফট কার্ড পেয়েছেন।\nপাঠিয়েছেন: {{gift_card_sender}}\n{{gift_card_message}}\nগিফট কার্ড কোড: {{gift_card_code}}\nমূল্য: {{gift_card_value}}\nমেয়াদ: {{gift_card_expires}}\nচেকআউটে ব্যবহার করুন: {{gift_card_link}}",
+        sms: "{{store_name}} থেকে আপনি {{gift_card_value}}-এর একটি গিফট কার্ড পেয়েছেন।\nকোড: {{gift_card_code}}\nমেয়াদ: {{gift_card_expires}}",
+      },
+      review_request: {
+        subject: "অর্ডার {{order_number}} কেমন লাগল?",
+        message: "আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ। {{review_products}} নিয়ে আপনার মতামত জানতে চাই।\nরিভিউ লিখুন: {{review_link}}",
+        sms: "অর্ডার {{order_number}} কেমন লাগল? রিভিউ লিখুন: {{review_link}}",
+      },
     },
   },
 };
@@ -252,13 +317,13 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
 export function defaultNotificationTemplates(language: MessageLanguage): NotificationTemplates {
   const { greeting, events } = DEFAULT_COPY[language];
   return {
-    email: Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, {
+    email: Object.fromEntries(TEMPLATED_NOTIFICATION_TYPES.map((event) => [event, {
       subject: events[event].subject,
       body: `${greeting}\n\n${events[event].message}`,
-    }])) as Record<OrderNotificationType, EmailTemplate>,
-    sms: Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, {
+    }])) as Record<TemplatedNotificationType, EmailTemplate>,
+    sms: Object.fromEntries(TEMPLATED_NOTIFICATION_TYPES.map((event) => [event, {
       body: `${greeting} ${events[event].sms}`,
-    }])) as Record<OrderNotificationType, SmsTemplate>,
+    }])) as Record<TemplatedNotificationType, SmsTemplate>,
   };
 }
 
@@ -277,7 +342,7 @@ export function resolveNotificationTemplates(
 const VARIABLE = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
 /** Variables this event can't fill, as the merchant typed them. */
-export function findUnknownVariables(template: string, event: OrderNotificationType): string[] {
+export function findUnknownVariables(template: string, event: TemplatedNotificationType): string[] {
   const allowed = new Set<string>(variablesForEvent(event));
   const unknown = new Set<string>();
   for (const match of template.matchAll(VARIABLE)) {
@@ -347,7 +412,7 @@ export function renderSubject(template: string, values: NotificationVariableValu
  * the event's default, so no email goes out without a subject.
  */
 export function renderEmailTemplate(
-  event: OrderNotificationType,
+  event: TemplatedNotificationType,
   language: MessageLanguage,
   template: EmailTemplate,
   values: NotificationVariableValues,
@@ -364,7 +429,7 @@ export function renderEmailTemplate(
 
 /** The SMS a customer gets for one event; one that renders empty uses the event's default. */
 export function renderSmsTemplate(
-  event: OrderNotificationType,
+  event: TemplatedNotificationType,
   language: MessageLanguage,
   body: string,
   values: NotificationVariableValues,
@@ -549,6 +614,39 @@ ${support.length ? `<div style="margin-top:24px;border-top:1px solid #dadce0;pad
   return { subject, html, text };
 }
 
+/**
+ * A message that is not an order summary (a gift card, a digital delivery, a
+ * review request, a staff alert): the store header, the subject, the rendered
+ * body with its web addresses as links, and an optional button.
+ */
+export function renderMessageEmail(input: {
+  language: MessageLanguage;
+  store: EmailStore;
+  /** Rendered subject (plain text). */
+  subject: string;
+  /** Rendered body (plain text; blank lines separate paragraphs). */
+  body: string;
+  action?: { label: string; href: string } | null;
+}): { subject: string; html: string; text: string } {
+  const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
+  const action = input.action ?? null;
+  const text = [
+    input.store.name,
+    subject,
+    input.body,
+    action ? `${action.label}: ${action.href}` : "",
+  ].filter(Boolean).join("\n\n");
+  const html = `<!doctype html><html lang="${input.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;background:#ffffff;">
+<div role="main" style="max-width:560px;margin:0 auto;padding:24px 20px;overflow-wrap:anywhere;background:#ffffff;color:#202124;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;">
+${storeHeaderHtml(input.store)}
+<h1 style="margin:0 0 16px;font-size:24px;line-height:1.3;">${escapeHtml(subject)}</h1>
+<div style="margin:0 0 8px;">${bodyHtml(input.body)}</div>
+${action ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(action.href)}" style="${BUTTON}">${escapeHtml(action.label)}</a></p>` : ""}
+</div></body></html>`;
+  return { subject, html, text };
+}
+
 // ─────────────────────────────────────────
 // Sample order for the dashboard preview and test sends
 // ─────────────────────────────────────────
@@ -567,12 +665,29 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
     refund_amount: "৳450",
     support_request: copy.request.return,
     support_status: copy.requestStatus.approved,
+    download_names: "Recipe book.pdf",
+    licence_keys: "SAMPLE-KEY-0000",
+    sms_licence_keys: "SAMPLE-KEY-0000",
+    access_link: "https://example.com/account/downloads",
+    review_products: "Cotton panjabi",
+    review_link: "https://example.com/account/orders/1001#reviews",
+    gift_card_code: "SAMPLE0000000000",
+    gift_card_value: "৳1,000",
+    gift_card_expires: "",
+    gift_card_message: "Happy Eid!",
+    gift_card_sender: "Karim",
+    gift_card_link: "https://example.com/",
   };
 }
 
-/** A draft template on a sample order in the real email frame, for the dashboard preview and test emails. */
+/**
+ * A draft template with sample data in the real email frame, for the
+ * dashboard preview and test emails: the order summary for order events, the
+ * plain message frame for the digital, gift card and review messages (the
+ * frame their real send uses).
+ */
 export function sampleOrderEmail(options: {
-  event: OrderNotificationType;
+  event: TemplatedNotificationType;
   language: MessageLanguage;
   store: EmailStore;
   template: EmailTemplate;
@@ -581,6 +696,13 @@ export function sampleOrderEmail(options: {
 }): { subject: string; html: string; text: string } {
   const origin = options.origin?.replace(/\/+$/, "") || null;
   const values = sampleVariables(options.store.name ?? "", options.language);
+  if (isResolvedNotificationType(options.event)) {
+    return renderMessageEmail({
+      language: options.language,
+      store: options.store,
+      ...renderEmailTemplate(options.event, options.language, options.template, values),
+    });
+  }
   return renderOrderEmail({
     language: options.language,
     ...renderEmailTemplate(options.event, options.language, options.template, values),

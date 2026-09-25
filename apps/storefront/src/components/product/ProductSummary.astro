@@ -172,6 +172,7 @@ function optionAriaLabel(
   <div class="flex h-full flex-col">
     <div class="mb-2 border-b border-border pb-2">
       <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
+      <slot name="after-title" />
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p class="product-price whitespace-nowrap text-xl font-semibold text-foreground lg:text-3xl" aria-live="polite" data-from-template={actionCopy.fromPriceText}>

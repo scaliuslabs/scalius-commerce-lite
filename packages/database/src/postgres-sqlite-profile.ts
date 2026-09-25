@@ -1312,6 +1312,52 @@ BEGIN
 END
 $function$;
 
+-- unixepoch(epoch, 'unixepoch', '+N days|months|years') with SQLite's
+-- calendar rules: months and years keep the day of month and let it overflow
+-- into the next month (Jan 31 + 1 month = Mar 3 in a common year), as the
+-- warranty expiry trigger computes on D1/Turso.
+CREATE OR REPLACE FUNCTION public.unixepoch(epoch_seconds bigint, modifier text, shift text)
+RETURNS bigint
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+AS $function$
+DECLARE
+  parts text[];
+  amount bigint;
+  unit text;
+  base_timestamp timestamp;
+  total_months bigint;
+  seconds_into_day bigint;
+BEGIN
+  IF lower(modifier) <> 'unixepoch' THEN
+    RAISE EXCEPTION 'unsupported unixepoch() modifier: %', modifier USING ERRCODE = '22023';
+  END IF;
+  parts := regexp_match(shift, '^\s*([+-]?[0-9]+)\s+(days?|months?|years?)\s*$', 'i');
+  IF parts IS NULL THEN
+    RAISE EXCEPTION 'unsupported unixepoch() modifier: %', shift USING ERRCODE = '22023';
+  END IF;
+  amount := parts[1]::bigint;
+  unit := lower(parts[2]);
+  IF unit LIKE 'day%' THEN
+    RETURN epoch_seconds + amount * 86400;
+  END IF;
+  IF unit LIKE 'year%' THEN
+    amount := amount * 12;
+  END IF;
+  base_timestamp := to_timestamp(epoch_seconds) AT TIME ZONE 'UTC';
+  total_months := extract(year FROM base_timestamp)::bigint * 12
+    + extract(month FROM base_timestamp)::bigint - 1 + amount;
+  seconds_into_day := epoch_seconds
+    - floor(extract(epoch FROM date_trunc('day', base_timestamp) AT TIME ZONE 'UTC'))::bigint;
+  RETURN floor(extract(epoch FROM make_timestamp(
+      (total_months / 12)::integer, (total_months % 12 + 1)::integer, 1, 0, 0, 0
+    ) AT TIME ZONE 'UTC'))::bigint
+    + (extract(day FROM base_timestamp)::bigint - 1) * 86400
+    + seconds_into_day;
+END
+$function$;
+
 CREATE OR REPLACE FUNCTION public.strftime(format_text text, value_text text)
 RETURNS text
 LANGUAGE plpgsql

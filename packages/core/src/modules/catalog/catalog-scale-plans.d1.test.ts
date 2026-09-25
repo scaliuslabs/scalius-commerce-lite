@@ -580,6 +580,164 @@ describe("catalogue-scale query plans", () => {
         expect(all).not.toContain("product_variants_on_sale_newest_idx");
     });
 
+    // Wave B R9: listing rating sort, filter, facet and card ratings read only
+    // `product_review_stats`, by primary key after the listing's own index.
+    // Stats rows are written directly here (the review triggers that own them
+    // are covered in packages/database and listing-rating.d1.test.ts).
+    const insertStats = (productId: string, fives: number, fours: number) => sqlite!
+        .prepare(`INSERT INTO product_review_stats
+            (product_id, review_count, rating_sum, count_4, count_5, rating_avg_centi, rating_rank_milli)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(productId, fives + fours, 5 * fives + 4 * fours, fours, fives,
+            Math.floor(((5 * fives + 4 * fours) * 100) / (fives + fours)),
+            Math.floor(((5 * fives + 4 * fours + 15) * 1000) / (fives + fours + 5)));
+    const neverReadsReviews = (queries: Captured[], statementPlans: string[]) => {
+        for (const query of queries) expect(query.sql).not.toMatch(/\bproduct_reviews\b/);
+        for (const plan of statementPlans) {
+            expect(plan).not.toMatch(/SCAN (product_review_stats|facet_rating|rating_filter)\b/);
+            // The stats never drive a listing: no walk of their rank or average index.
+            expect(plan).not.toMatch(/product_review_stats_(rank|avg)_idx/);
+        }
+    };
+    const laptopCategory = {
+        id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
+        metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
+        excludeFromSitemap: false, createdAt: null, updatedAt: null,
+    };
+
+    it("sorts, filters and counts a category by rating from the stats by primary key, never the reviews", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO brands (id, name, slug, status) VALUES ('brd_asus0001', 'Asus', 'asus', 'published');
+            UPDATE products SET brand_id = 'brd_asus0001' WHERE id IN ('prod_a', 'prod_b');
+        `);
+        insertStats("prod_a", 1, 0); // 5.00, rank 3333
+        insertStats("prod_c", 8, 2); // 4.80, rank 4200
+        await project(db, queries);
+
+        const sorted = await getStorefrontCategoryProducts(db, laptopCategory, { page: 1, limit: 20, sort: "rating" });
+        const sortedPlans = plans(readsBuyerState);
+        const sortedQueries = [...queries];
+        queries.length = 0;
+        const filtered = await getStorefrontCategoryProducts(db, laptopCategory, { page: 1, limit: 20, sort: "rating", minRating: 4 });
+        const filteredPlans = plans(readsBuyerState);
+        const filteredQueries = [...queries];
+
+        expect(sorted.products.map((product) => [product.id, product.rating])).toEqual([
+            ["prod_a", { average: 5, count: 1 }],
+            ["prod_b", null],
+        ]);
+        expect(filtered.products.map((product) => product.id)).toEqual(["prod_a"]);
+        expect(filtered.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
+        expect(filtered.facets.find((facet) => facet.slug === "brand")?.values.map(({ count }) => count)).toEqual([1]);
+        // Still page, count + price range, and every facet (rating included): no new statement.
+        expect(sortedPlans).toHaveLength(3);
+        expect(filteredPlans).toHaveLength(3);
+        for (const plan of [...sortedPlans, ...filteredPlans]) {
+            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expectBuyerStateListing(plan);
+        }
+        const joined = [...sortedPlans, ...filteredPlans].join("\n");
+        expect(joined).toContain("SEARCH product_review_stats USING INDEX sqlite_autoindex_product_review_stats_1 (product_id=?) LEFT-JOIN");
+        expect(joined).toContain("SEARCH facet_rating USING INDEX sqlite_autoindex_product_review_stats_1 (product_id=?) LEFT-JOIN");
+        expect(filteredPlans.join("\n"))
+            .toContain("SEARCH rating_filter EXISTS USING INDEX sqlite_autoindex_product_review_stats_1 (product_id=?)");
+        neverReadsReviews([...sortedQueries, ...filteredQueries], [...sortedPlans, ...filteredPlans]);
+        expect(Math.max(...filteredQueries.map((query) => query.params.length))).toBeLessThanOrEqual(90);
+    });
+
+    it("sorts shop-all, a subtree, a brand and a collection by rating, and rates homepage cards, by primary key", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO brands (id, name, slug, status) VALUES ('brd_asus0001', 'Asus', 'asus', 'published');
+            UPDATE products SET brand_id = 'brd_asus0001';
+            INSERT INTO categories (id, name, slug, status, parent_id) VALUES ('cat_gaming', 'Gaming', 'gaming', 'published', 'cat_laptop');
+            UPDATE products SET category_id = 'cat_gaming' WHERE id = 'prod_b';
+        `);
+        insertStats("prod_a", 1, 0);
+        insertStats("prod_c", 8, 2);
+        insertStats("prod_b", 2, 3); // 4.40, rank 3700
+        await project(db, queries);
+
+        const shopAll = await getStorefrontProducts(db, { page: 1, limit: 2, sort: "rating" });
+        const subtree = await getStorefrontCategoryProducts(db, laptopCategory, { page: 1, limit: 20, sort: "rating" }, { includeDescendants: true });
+        const brand = await getStorefrontBrandProducts(db, { id: "brd_asus0001" }, { page: 1, limit: 20, sort: "rating", minRating: 4 });
+        const collection = await getStorefrontCollectionProducts(db, { productIds: ["prod_a"], categoryIds: ["cat_gaming"] }, { page: 1, limit: 20, sort: "rating" });
+        const listingPlans = plans(readsBuyerState);
+        const listingQueries = [...queries];
+        queries.length = 0;
+        const home = await getHomepageData(db, {
+            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 4 }], mediaIds: [] },
+            sectionsOnly: true,
+        });
+        const cardPlans = plans(joinsPricing);
+
+        expect(shopAll.products.map((product) => product.id)).toEqual(["prod_c", "prod_b"]);
+        expect(shopAll.pagination.total).toBe(3);
+        expect(subtree.products.map((product) => product.id)).toEqual(["prod_b", "prod_a"]);
+        expect(brand.products.map((product) => product.id)).toEqual(["prod_c", "prod_b", "prod_a"]);
+        expect(brand.ratingFacet).toEqual([{ min: 4, count: 3 }, { min: 3, count: 3 }, { min: 2, count: 3 }]);
+        expect(collection.products.map((product) => product.id)).toEqual(["prod_b", "prod_a"]);
+        expect(home.sections.lists[0]?.products.map((product) => [product.id, product.rating?.count ?? null]))
+            .toEqual([["prod_a", 1], ["prod_b", 5], ["prod_c", 10]]);
+        for (const plan of listingPlans) expectBuyerStateListing(plan);
+        const joined = listingPlans.join("\n");
+        expect(joined).toContain("SEARCH product_buyer_state USING INDEX product_buyer_state_brand_newest_idx (is_public=? AND brand_id=?)");
+        expect(joined).toContain("SEARCH collection_member USING COVERING INDEX product_buyer_state_category_newest_idx");
+        expect(cardPlans.length).toBeGreaterThanOrEqual(1);
+        for (const plan of cardPlans) {
+            expect(plan).toContain("SEARCH product_review_stats USING INDEX sqlite_autoindex_product_review_stats_1 (product_id=?)");
+            expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
+        }
+        neverReadsReviews([...listingQueries, ...queries], [...listingPlans, ...cardPlans]);
+    });
+
+    it("keeps a rating sort, filter and facet over a 3,000-product category bounded by the category", async () => {
+        const { db, queries, plans } = setup();
+        const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES (?, ?, 10000, ?, ?, 1, ?)");
+        const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES (?, ?, ?, 10000, 1, 1, 0)");
+        sqlite!.exec("INSERT INTO categories (id, name, slug, status) VALUES ('cat_bulk', 'Bulk', 'bulk', 'published')");
+        sqlite!.exec("BEGIN");
+        for (let index = 0; index < 3_000; index += 1) {
+            // 2,000 in the bulk category, 1,000 elsewhere; half of each reviewed.
+            insertProduct.run(`prod_bulk_${index}`, `Bulk ${index}`, `bulk-${index}`, index % 3 === 2 ? "cat_phone" : "cat_bulk", 1_600_000_000 + index);
+            insertSku.run(`var_bulk_${index}`, `prod_bulk_${index}`, `BULK-${index}`);
+            if (index % 2 === 0) insertStats(`prod_bulk_${index}`, index % 7, 1 + (index % 5));
+        }
+        sqlite!.exec("COMMIT");
+        await project(db, queries);
+        const bulk = { ...laptopCategory, id: "cat_bulk", name: "Bulk", slug: "bulk" };
+
+        const started = performance.now();
+        const sorted = await getStorefrontCategoryProducts(db, bulk, { page: 1, limit: 20, sort: "rating", minRating: 4 });
+        const categoryMs = performance.now() - started;
+        const categoryPlans = plans(readsBuyerState);
+        const categoryQueries = [...queries];
+        queries.length = 0;
+        const shopStarted = performance.now();
+        const shopAll = await getStorefrontProducts(db, { page: 3, limit: 20, sort: "rating" });
+        const shopAllMs = performance.now() - shopStarted;
+
+        const expected = sqlite!.prepare(`SELECT s.product_id FROM product_review_stats s
+            JOIN products p ON p.id = s.product_id
+            WHERE p.category_id = 'cat_bulk' AND s.rating_avg_centi >= 400
+            ORDER BY s.rating_rank_milli DESC, s.review_count DESC, p.created_at DESC, p.id LIMIT 20`).all()
+            .map((row) => row.product_id);
+        expect(sorted.products.map((product) => product.id)).toEqual(expected);
+        expect(sorted.ratingFacet.map((value) => value.min)).toEqual([4, 3, 2]);
+        expect(shopAll.products).toHaveLength(20);
+        expect(shopAll.facets).toEqual([]); // above the shop-all live-facet cap
+        expect(shopAll.ratingFacet).toEqual([]);
+        for (const plan of categoryPlans) {
+            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expectBuyerStateListing(plan);
+        }
+        neverReadsReviews([...categoryQueries, ...queries], [...categoryPlans, ...plans(readsBuyerState)]);
+        // Local SQLite; a scan of product_reviews or a stats-driven walk shows up as seconds here.
+        expect(categoryMs).toBeLessThan(1_500);
+        expect(shopAllMs).toBeLessThan(1_500);
+    }, 60_000);
+
     it("looks SKUs up by their identity index", async () => {
         const { db, plans } = setup();
         const result = await getStorefrontFeedProducts(db, { ids: "sku-b", limit: 10 });

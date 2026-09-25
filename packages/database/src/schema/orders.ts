@@ -14,6 +14,7 @@ import { inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
+import { warrantyPolicyRevisions } from "./warranty";
 import {
     OrderStatus,
     PaymentMethod,
@@ -322,6 +323,9 @@ export const orderItems = sqliteTable("order_items", {
     propertiesPriceMinor: integer("properties_price_minor").notNull().default(0),
     /** Unit price before surcharges (the product/variant sale applies to it only). */
     baseUnitPriceMinor: integer("base_unit_price_minor"),
+    /** The warranty revision frozen at commit (Wave B); NULL = no warranty. Immutable (trigger). */
+    warrantyRevisionId: text("warranty_revision_id")
+        .references(() => warrantyPolicyRevisions.id, { onDelete: "restrict" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -343,6 +347,11 @@ export const orderItems = sqliteTable("order_items", {
     index("order_items_product_id_idx").on(table.productId),
     index("order_items_variant_id_idx").on(table.variantId),
     index("order_items_product_image_media_id_idx").on(table.productImageMediaId),
+    // Drives the auto-fulfil sweep: only lines an automatic fulfiller still owes.
+    index("order_items_auto_pending_idx")
+        .on(table.orderId)
+        .where(sql`${table.fulfillmentType} IN ('digital', 'gift_card') AND ${table.fulfilledQuantity} < ${table.quantity}`),
+    // Trigger: order_items_warranty_immutable.
 ]);
 
 /** Monotonic authority for invoice numbering. Updated only with invoice issuance. */

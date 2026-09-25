@@ -666,6 +666,34 @@
       "when": 1790300025000,
       "tag": "0094_media_rendition_ladder",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1790300026000,
+      "tag": "0095_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1790300027000,
+      "tag": "0096_digital_goods",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1790300028000,
+      "tag": "0097_gift_cards",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1790300029000,
+      "tag": "0098_warranty",
+      "breakpoints": true
     }
   ]
 }

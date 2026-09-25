@@ -4,6 +4,7 @@
 // ("Display size: 13–15.6 in") that removes both of its bounds.
 import type { ProductFacet } from "@/lib/api";
 import {
+  PRODUCT_LIST_MIN_RATING_PARAM,
   buildProductListHref,
   parseProductListRangeKey,
   productListRangeKey,
@@ -97,6 +98,11 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
   if (range && rangeFacet?.display === "range") {
     if (!rangesShown.has(range.slug)) appliedFilters.push(rangeFilter(rangeFacet));
     rangesShown.add(range.slug);
+    continue;
+  }
+  if (key === PRODUCT_LIST_MIN_RATING_PARAM) {
+    const stars = single(key);
+    if (stars) appliedFilters.push({ key: `${key}:${stars}`, label: `${stars}★ & up`, href: withoutFilterValue(key) });
     continue;
   }
   const values = Array.isArray(rawValue) ? rawValue : [rawValue];
