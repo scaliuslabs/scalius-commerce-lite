@@ -1,0 +1,68 @@
+---
+// The header's desktop panels, whole (a partial, not a page): one
+// <template data-panel-for="<key>"> per department with children, rendered
+// by the same components the header uses, for the request's theme and its
+// navigation source over the whole reachable category tree. The header's
+// own HTML carries these panels cut to its link budget; nav-panels.ts swaps
+// them in on the buyer's first hover, focus or touch on the menu. Cached like
+// any public page under the store's cache generation.
+export const partial = true;
+
+import { getCategoryNavigation } from "@/lib/api";
+import { loadPageWithLayout } from "@/lib/page-data";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { markRenderUncacheable } from "@/lib/cache-policy";
+import RecursiveDesktopNav from "@/components/header/RecursiveDesktopNav.astro";
+import MegaMenuPanel from "@/components/header/MegaMenuPanel.astro";
+import FlyoutList from "@/components/header/FlyoutList.astro";
+import {
+  navigationPanelContent,
+  navigationPanelKey,
+  sourceNavigation,
+} from "@/components/header/nav-tree";
+
+const { layoutData, pageData: categories } = await loadPageWithLayout(() => getCategoryNavigation());
+if (!layoutData) {
+  markRenderUncacheable(Astro.response.headers);
+  return new Response("", { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+const { resolved } = await resolveRequestTheme(Astro, layoutData);
+const { navigation, desktopNav } = resolved.blocks;
+// The whole bounded tree when it loaded, else the layout's cut (still whole for small stores).
+const nodes = categories?.nodes ?? layoutData.categoryTree?.nodes ?? [];
+if (!categories) markRenderUncacheable(Astro.response.headers);
+const departments = sourceNavigation(navigation.source, layoutData.navigation ?? [], nodes)
+  .slice(0, navigation.maxTopItems)
+  .filter((item) => (item.subMenu?.length ?? 0) > 0)
+  .map(navigationPanelContent);
+const settings = desktopNav.settings as Record<string, unknown>;
+const kind =
+  desktopNav.variant === "mega-panel"
+    ? "mega"
+    : desktopNav.variant === "dropdown"
+      ? "dropdown"
+      : desktopNav.variant === "cascading" || (desktopNav.variant === "sticky-category-bar" && settings.flyouts === "cascading")
+        ? "cascade"
+        : desktopNav.variant === "sticky-category-bar"
+          ? "indent"
+          : null;
+---
+
+{
+  kind &&
+    departments.map((item, index) => (
+      <template data-panel-for={navigationPanelKey(item)}>
+        {kind === "dropdown" && (
+          <div class="desktop-nav-dropdown">
+            <RecursiveDesktopNav items={item.subMenu ?? []} />
+          </div>
+        )}
+        {kind === "mega" && <MegaMenuPanel id={`nav-panel-${index}`} item={item} promoImages={settings.promoImages === true} />}
+        {(kind === "cascade" || kind === "indent") && (
+          <div class="cnav-panel" data-menu-panel>
+            <FlyoutList items={item.subMenu ?? []} mode={kind} parent={item} />
+          </div>
+        )}
+      </template>
+    ))
+}

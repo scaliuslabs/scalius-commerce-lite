@@ -11,6 +11,7 @@
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
+import { navigationPanelKey } from "./nav-tree";
 import MegaMenuPanel from "./MegaMenuPanel.astro";
 import {
   ariaCurrent,
@@ -34,6 +35,8 @@ interface Props {
   noScriptFit?: number;
   align?: "center" | "start";
   label?: string;
+  /** The panels here are cut to the link budget; this URL serves them whole (filled on intent, nav-panels.ts). */
+  panelsSrc?: string;
 }
 
 const {
@@ -46,6 +49,7 @@ const {
   noScriptFit,
   align = "center",
   label = "Main navigation",
+  panelsSrc,
 } = Astro.props;
 const items = (Array.isArray(navigation) ? navigation : []).filter((item) => item?.title);
 const moreId = `${id}-more`;
@@ -58,7 +62,7 @@ const link = (item: NavigationItem) => ({
 });
 ---
 
-<nav id={id} aria-label={label} class="desktop-nav" data-nav-style={navStyle} data-nav-align={align}>
+<nav id={id} aria-label={label} class="desktop-nav" data-nav-style={navStyle} data-nav-align={align} data-nav-panels={panelsSrc}>
   <ul class="desktop-nav-list" data-nav-overflow data-nav-pending>
     {
       items.map((item, index) => {
@@ -69,11 +73,12 @@ const link = (item: NavigationItem) => ({
             class="desktop-nav-item"
             data-nav-index={index}
             data-disclosure-item={children.length > 0 ? "" : undefined}
+            data-nav-key={panelsSrc && children.length > 0 ? navigationPanelKey(item) : undefined}
             data-nav-nojs-hidden={noScriptFit !== undefined && index >= noScriptFit ? "" : undefined}
           >
             {item.href ? (
-              <a class="desktop-nav-link" {...link(item)}>
-                {item.title}
+              <a class="desktop-nav-link" title={item.title.length > 24 ? item.title : undefined} {...link(item)}>
+                <span class="nav-label">{item.title}</span>
               </a>
             ) : children.length === 0 ? (
               <span class="desktop-nav-link">{item.title}</span>

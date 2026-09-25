@@ -29,6 +29,7 @@ import type {
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { headerCondense, headerGeometryStyle, headerSpec } from "./header-variants";
 import {
+  countNavigationLinks,
   estimateNavRowFit,
   navigationIndexMode,
   navigationShortcuts,
@@ -151,6 +152,16 @@ const plan = planHeaderNavigation(
   },
 );
 const desktopTree = desktopRendering ? plan.desktop : [];
+// Panels cut to the budget fill up to their whole content on intent (a
+// hover, focus or touch on the menu): /navigation/panels, nav-panels.ts.
+const panelKinds = ["dropdown", "mega-panel", "cascading", "sticky-category-bar"];
+const panelsSrc =
+  desktopRendering &&
+  panelKinds.includes(desktopKind) &&
+  (Boolean(categoryTree?.truncated) ||
+    countNavigationLinks(desktopTree) < countNavigationLinks(tree.slice(0, navigation.maxTopItems)))
+    ? "/navigation/panels"
+    : undefined;
 // Without JavaScript an inline row (between the logo and the search) cannot
 // wrap: it shows what the narrowest desktop (1024px) surely fits, then "All
 // categories". Rows of their own wrap instead.
@@ -165,6 +176,7 @@ const noScriptFit = inlineRowPx !== null && plan.allCategories
       itemChromePx: 28,
       gapPx: 4,
       availablePx: Math.max(0, inlineRowPx),
+      maxLabelPx: 208,
     })
   : undefined;
 
@@ -211,6 +223,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
           extras={plan.extras}
           allCategories={plan.allCategories}
           noScriptFit={noScriptFit}
+          panelsSrc={panelsSrc}
         />
       )}
       {desktopMenu && desktopKind === "mega-panel" && (
@@ -222,6 +235,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
           extras={plan.extras}
           allCategories={plan.allCategories}
           noScriptFit={noScriptFit}
+          panelsSrc={panelsSrc}
         />
       )}
       {desktopMenu && desktopKind === "cascading" && (
@@ -232,10 +246,17 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
           flyouts="cascade"
           extras={plan.extras}
           allCategories={plan.allCategories}
+          panelsSrc={panelsSrc}
         />
       )}
       {desktopMenu && desktopKind === "sticky-category-bar" && (
-        <CategoryBar navigation={desktopTree} flyouts={flyouts} extras={plan.extras} allCategories={plan.allCategories} />
+        <CategoryBar
+          navigation={desktopTree}
+          flyouts={flyouts}
+          extras={plan.extras}
+          allCategories={plan.allCategories}
+          panelsSrc={panelsSrc}
+        />
       )}
       {desktopMenu && desktopKind === "departments-rail" && (
         <DepartmentsRail navigation={desktopTree} allCategories={plan.allCategories} />
@@ -329,6 +350,40 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     mask-image: var(--nav-chevron-left);
   }
 
+  /* A long top-level name wraps to two lines (then ends in an ellipsis, the
+     whole name in its title) instead of pushing the rest of its row into
+     "More"; in the "More" list it reads whole. */
+  .nav-label {
+    display: -webkit-box;
+    max-width: 13rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Its hover and current marks underline the words (on both lines). */
+  .desktop-nav-link:has(> .nav-label) {
+    background-image: none;
+  }
+
+  .desktop-nav-link:is(:hover, [aria-current]) > .nav-label,
+  .desktop-nav-item:has(> [aria-expanded="true"]) > .desktop-nav-link > .nav-label {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+  }
+
+  [data-nav-more-list] .nav-label {
+    display: inline;
+    max-width: none;
+    -webkit-line-clamp: unset;
+    text-align: start;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .nav-chevron {
       transition: none;
@@ -378,9 +433,11 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
   import { installNavDisclosure } from "./nav-disclosure";
   import { installNavMenus } from "./nav-menus";
   import { installDrawer } from "./drawer";
+  import { installNavPanels } from "./nav-panels";
 
   installNavDisclosure();
   installNavMenus();
+  installNavPanels();
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));

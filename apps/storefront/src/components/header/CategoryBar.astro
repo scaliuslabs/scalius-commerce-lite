@@ -14,9 +14,10 @@ interface Props {
   /** Categories past `maxTopItems`, and "All categories", for "More". */
   extras?: NavigationItem[];
   allCategories?: boolean;
+  panelsSrc?: string;
 }
 
-const { navigation, flyouts, extras = [], allCategories = false } = Astro.props;
+const { navigation, flyouts, extras = [], allCategories = false, panelsSrc } = Astro.props;
 ---
 
 <div class="category-bar" data-category-bar>
@@ -28,6 +29,7 @@ const { navigation, flyouts, extras = [], allCategories = false } = Astro.props;
     label="Categories"
     extras={extras}
     allCategories={allCategories}
+    panelsSrc={panelsSrc}
   />
 </div>
 

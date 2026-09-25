@@ -409,6 +409,36 @@ export function planHeaderNavigation(
   };
 }
 
+// ── Panels filled on intent ─────────────────────────────────────────────
+
+/**
+ * How a row item and its fuller panel find each other (the header's pruned
+ * panel and /navigation/panels' full one): its target, or its name.
+ */
+export function navigationPanelKey(item: NavigationItem): string {
+  return navigationTargetKey(item.href) ?? `#${labelKey(item.title)}`;
+}
+
+/** What one panel may show once filled (Fabrilife: 3-4 groups x 7-10 links; Star Tech: 17 rows). */
+export const NAVIGATION_PANEL_CAPS = [16, 10, 8] as const;
+
+/** A department's panel content, whole but bounded: its levels cut to `NAVIGATION_PANEL_CAPS`. */
+export function navigationPanelContent(item: NavigationItem): NavigationItem {
+  const cap = (list: readonly NavigationItem[] | undefined, depth: number): NavigationItem[] =>
+    (list ?? []).slice(0, NAVIGATION_PANEL_CAPS[depth] ?? 0).map((child) => {
+      const children = cap(child.subMenu, depth + 1);
+      const node: NavigationItem = { ...child };
+      if (children.length > 0) node.subMenu = children;
+      else delete node.subMenu;
+      return node;
+    });
+  const children = cap(item.subMenu, 0);
+  const node: NavigationItem = { ...item };
+  if (children.length > 0) node.subMenu = children;
+  else delete node.subMenu;
+  return node;
+}
+
 // ── Fitting a row before any script runs ────────────────────────────────
 
 /**
@@ -431,11 +461,20 @@ export function estimateNavLabelWidth(title: string, options: { fontPx: number; 
 /** How many leading items fit in `availablePx` (each with its padding and chrome). */
 export function estimateNavRowFit(
   titles: readonly string[],
-  options: { fontPx: number; uppercase?: boolean; itemChromePx: number; gapPx: number; availablePx: number },
+  options: {
+    fontPx: number;
+    uppercase?: boolean;
+    itemChromePx: number;
+    gapPx: number;
+    availablePx: number;
+    /** A label wraps at this width (`.nav-label`, 13rem). */
+    maxLabelPx?: number;
+  },
 ): number {
   let used = 0;
   for (let index = 0; index < titles.length; index += 1) {
-    const width = estimateNavLabelWidth(titles[index]!, options) + options.itemChromePx + (index > 0 ? options.gapPx : 0);
+    const label = Math.min(estimateNavLabelWidth(titles[index]!, options), options.maxLabelPx ?? Number.POSITIVE_INFINITY);
+    const width = label + options.itemChromePx + (index > 0 ? options.gapPx : 0);
     if (used + width > options.availablePx) return index;
     used += width;
   }
