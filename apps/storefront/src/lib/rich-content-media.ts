@@ -118,6 +118,34 @@ function getImagePlan(isPriorityImage: boolean) {
       };
 }
 
+const DIMENSION_ATTR_RE = /(?:^|\s)(?:width|height)\s*=/i;
+
+function hasDimensionAttrs(attrs: string): boolean {
+  return DIMENSION_ATTR_RE.test(attrs);
+}
+
+function positiveSize(value: string | null): number | null {
+  if (!value || !/^\d{1,5}$/.test(value)) return null;
+  const size = Number(value);
+  return size > 0 && size <= 10_000 ? size : null;
+}
+
+/**
+ * `width`/`height` for an external image whose URL states both, as image
+ * CDNs do (`?w=1200&h=800`, `?width=…&height=…`). Nothing when either is
+ * unknown: a guessed ratio would be worse than none.
+ */
+function knownDimensionAttrs(src: string): string {
+  try {
+    const params = new URL(src.replace(/&amp;/g, "&")).searchParams;
+    const width = positiveSize(params.get("w") ?? params.get("width"));
+    const height = positiveSize(params.get("h") ?? params.get("height"));
+    return width && height ? ` width="${width}" height="${height}"` : "";
+  } catch {
+    return "";
+  }
+}
+
 const H1_TAG_RE = /<(\/?)h1(?=[\s>])/gi;
 
 /**
@@ -148,7 +176,8 @@ export function firstRichContentImageUrl(
  * Serves pre-generated renditions for images inside admin-authored rich HTML.
  * Attribute parsing is deliberately narrow: it only manages image loading
  * attributes and preserves the rest of the original tag untouched. Images
- * without renditions keep their original tag.
+ * without renditions (external, or originals) keep their source but still get
+ * the managed loading attributes, so they never load eagerly by accident.
  */
 export function optimizeRichContentImages(
   html: string,
@@ -167,8 +196,6 @@ export function optimizeRichContentImages(
     imageIndex += 1;
     const plan = getImagePlan(isPriorityImage);
     const srcset = mediaImageSrcSet(originalSrc);
-    if (!srcset) return tag;
-    const src = mediaImageUrl(originalSrc, plan.srcWidth);
 
     const managed = attrs
       .replace(MANAGED_ATTR_RE, "")
@@ -178,8 +205,20 @@ export function optimizeRichContentImages(
     const fetchPriorityAttr = plan.fetchpriority
       ? ` fetchpriority="${plan.fetchpriority}"`
       : "";
+    const loadingAttrs = ` loading="${plan.loading}" decoding="async"${fetchPriorityAttr}`;
 
-    return `<img${managedPrefix} src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="${plan.sizes}" loading="${plan.loading}" decoding="async"${fetchPriorityAttr}>`;
+    // No renditions (an external image, or an original of ours): the same
+    // file, but it loads like every other description image, lazily and off
+    // the main thread. The merchant's own width/height stay (they reserve
+    // the box), and a source without them gets its known intrinsic size.
+    if (!srcset) {
+      const sizeAttrs = hasDimensionAttrs(managed) ? "" : knownDimensionAttrs(originalSrc);
+      // The src attribute exactly as authored (it may already hold entities).
+      return `<img${managedPrefix} src=${srcMatch[1]}${sizeAttrs}${loadingAttrs}>`;
+    }
+    const src = mediaImageUrl(originalSrc, plan.srcWidth);
+
+    return `<img${managedPrefix} src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="${plan.sizes}"${loadingAttrs}>`;
   });
 
   return optimizeCssImageUrls(optimizeSourceTags(optimizedHtml));

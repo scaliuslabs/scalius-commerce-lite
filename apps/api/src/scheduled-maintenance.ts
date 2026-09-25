@@ -182,6 +182,17 @@ async function runScheduledMaintenanceInner(
   const db = getDb(env);
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
+  // Each sweep is isolated: one that keeps failing (logged by `timed`) must
+  // not starve the sweeps after it, above all the rendition backfill that runs
+  // last. The run still fails with the first error once everything has run.
+  const failures: unknown[] = [];
+  const isolated = async (sweep: () => Promise<void>) => {
+    try {
+      await sweep();
+    } catch (error) {
+      failures.push(error);
+    }
+  };
 
   // Backstop for a KV mirror write that every bump pass missed. A KV outage is
   // logged by `timed` and must not block the commerce maintenance below.
@@ -189,275 +200,307 @@ async function runScheduledMaintenanceInner(
     syncCacheGenerationMirror(env, db)).catch(() => false);
   if (mirrorRepaired) console.log("[scheduled] Cache generation mirror repaired");
 
-  const result = await timed("inventory_expiry_sweep", () =>
-    releaseExpiredReservations(db, 30, {
-      limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
-    }),
-  );
-  const expiryAvailabilityTransitions = result.availabilityTransitionVariantIds ?? [];
-  if (expiryAvailabilityTransitions.length > 0) {
-    await timed("inventory_expiry_cache_generation", () =>
-      bumpCacheGeneration({ env, executionCtx }),
+  await isolated(async () => {
+    const result = await timed("inventory_expiry_sweep", () =>
+      releaseExpiredReservations(db, 30, {
+        limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
+      }),
     );
-  }
+    const expiryAvailabilityTransitions = result.availabilityTransitionVariantIds ?? [];
+    if (expiryAvailabilityTransitions.length > 0) {
+      await timed("inventory_expiry_cache_generation", () =>
+        bumpCacheGeneration({ env, executionCtx }),
+      );
+    }
 
-  const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
-  const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
-    archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
-      limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
-    }),
-  );
-  if (
-    staleIncompleteOrders.found > 0 ||
-    staleIncompleteOrders.failed > 0 ||
-    staleIncompleteOrders.hasMore
-  ) {
     console.log(
-      `[scheduled] Stale incomplete order cleanup: found=${staleIncompleteOrders.found}, ` +
-        `archived=${staleIncompleteOrders.archived}, failed=${staleIncompleteOrders.failed}, ` +
-        `limit=${staleIncompleteOrders.limit}, hasMore=${staleIncompleteOrders.hasMore}`,
+      `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
+        `, limit=${result.limit}, hasMore=${result.hasMore}` +
+        (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
     );
-  }
+  });
 
-  console.log(
-    `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
-      `, limit=${result.limit}, hasMore=${result.hasMore}` +
-      (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
-  );
+  await isolated(async () => {
+    const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
+    const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
+      archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
+        limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
+      }),
+    );
+    if (
+      staleIncompleteOrders.found > 0 ||
+      staleIncompleteOrders.failed > 0 ||
+      staleIncompleteOrders.hasMore
+    ) {
+      console.log(
+        `[scheduled] Stale incomplete order cleanup: found=${staleIncompleteOrders.found}, ` +
+          `archived=${staleIncompleteOrders.archived}, failed=${staleIncompleteOrders.failed}, ` +
+          `limit=${staleIncompleteOrders.limit}, hasMore=${staleIncompleteOrders.hasMore}`,
+      );
+    }
+  });
 
-  const abandonedCheckoutCleanup = await timed("abandoned_checkout_cleanup", () =>
-    cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
-      retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
-      emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
-      limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
-    }),
-  );
-  if (
-    abandonedCheckoutCleanup.scannedExpired > 0 ||
-    abandonedCheckoutCleanup.deletedExpired > 0 ||
-    abandonedCheckoutCleanup.scannedEmpty > 0 ||
-    abandonedCheckoutCleanup.deletedEmpty > 0 ||
-    abandonedCheckoutCleanup.hasMore
-  ) {
-    console.log(
-      `[scheduled] Abandoned checkout cleanup: scannedExpired=${abandonedCheckoutCleanup.scannedExpired}, ` +
-        `deletedExpired=${abandonedCheckoutCleanup.deletedExpired}, ` +
-        `scannedEmpty=${abandonedCheckoutCleanup.scannedEmpty}, ` +
-        `deletedEmpty=${abandonedCheckoutCleanup.deletedEmpty}, ` +
-        `limit=${abandonedCheckoutCleanup.limit}, hasMore=${abandonedCheckoutCleanup.hasMore}`,
+  await isolated(async () => {
+    const abandonedCheckoutCleanup = await timed("abandoned_checkout_cleanup", () =>
+      cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
+        retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
+        emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
+        limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (
+      abandonedCheckoutCleanup.scannedExpired > 0 ||
+      abandonedCheckoutCleanup.deletedExpired > 0 ||
+      abandonedCheckoutCleanup.scannedEmpty > 0 ||
+      abandonedCheckoutCleanup.deletedEmpty > 0 ||
+      abandonedCheckoutCleanup.hasMore
+    ) {
+      console.log(
+        `[scheduled] Abandoned checkout cleanup: scannedExpired=${abandonedCheckoutCleanup.scannedExpired}, ` +
+          `deletedExpired=${abandonedCheckoutCleanup.deletedExpired}, ` +
+          `scannedEmpty=${abandonedCheckoutCleanup.scannedEmpty}, ` +
+          `deletedEmpty=${abandonedCheckoutCleanup.deletedEmpty}, ` +
+          `limit=${abandonedCheckoutCleanup.limit}, hasMore=${abandonedCheckoutCleanup.hasMore}`,
+      );
+    }
+  });
 
-  const notificationOutbox = await timed("notification_outbox_flush", () =>
-    flushPendingNotificationOutbox({
-      db,
-      queue: env.JOBS_QUEUE,
-      limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
-    }),
-  );
-  if (
-    notificationOutbox.scanned > 0 ||
-    notificationOutbox.failed > 0 ||
-    notificationOutbox.staleQueued > 0
-  ) {
-    console.log(
-      `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
-        `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
-        `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
+  await isolated(async () => {
+    const notificationOutbox = await timed("notification_outbox_flush", () =>
+      flushPendingNotificationOutbox({
+        db,
+        queue: env.JOBS_QUEUE,
+        limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (
+      notificationOutbox.scanned > 0 ||
+      notificationOutbox.failed > 0 ||
+      notificationOutbox.staleQueued > 0
+    ) {
+      console.log(
+        `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
+          `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
+          `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
+      );
+    }
+  });
 
-  // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
-  // or gift-card lines were not handed over. A no-op until Wave B registers
-  // an automatic fulfiller.
-  const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db));
-  if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
-    console.log(
-      `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
-        `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
-    );
-  }
+  await isolated(async () => {
+    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
+    // or gift-card lines were not handed over. A no-op until Wave B registers
+    // an automatic fulfiller.
+    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db));
+    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
+      console.log(
+        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
+          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
+      );
+    }
+  });
 
-  // Conversation images uploaded but never attached within an hour.
-  const orphanAttachments = await timed("conversation_attachment_sweep", () =>
-    sweepOrphanConversationAttachments(db, env.BUCKET),
-  );
-  if (orphanAttachments.scanned > 0) {
-    console.log(
-      `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
+  await isolated(async () => {
+    // Conversation images uploaded but never attached within an hour.
+    const orphanAttachments = await timed("conversation_attachment_sweep", () =>
+      sweepOrphanConversationAttachments(db, env.BUCKET),
     );
-  }
+    if (orphanAttachments.scanned > 0) {
+      console.log(
+        `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
+      );
+    }
+  });
 
-  const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
-    flushPendingMetaPurchaseOutbox({
-      db,
-      storefrontUrl: env.STOREFRONT_URL,
-      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
-    }),
-  );
-  if (
-    metaPurchaseOutbox.scanned > 0 ||
-    metaPurchaseOutbox.failed > 0 ||
-    metaPurchaseOutbox.skipped > 0 ||
-    metaPurchaseOutbox.busy > 0
-  ) {
-    console.log(
-      `[scheduled] Meta Purchase outbox flush: scanned=${metaPurchaseOutbox.scanned}, ` +
-        `sent=${metaPurchaseOutbox.sent}, failed=${metaPurchaseOutbox.failed}, ` +
-        `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
+  await isolated(async () => {
+    const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
+      flushPendingMetaPurchaseOutbox({
+        db,
+        storefrontUrl: env.STOREFRONT_URL,
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (
+      metaPurchaseOutbox.scanned > 0 ||
+      metaPurchaseOutbox.failed > 0 ||
+      metaPurchaseOutbox.skipped > 0 ||
+      metaPurchaseOutbox.busy > 0
+    ) {
+      console.log(
+        `[scheduled] Meta Purchase outbox flush: scanned=${metaPurchaseOutbox.scanned}, ` +
+          `sent=${metaPurchaseOutbox.sent}, failed=${metaPurchaseOutbox.failed}, ` +
+          `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
+      );
+    }
+  });
 
-  const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
-    reconcileDueRefundAttempts(db, {
-      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
-    }),
-  );
-  if (refundReconciliation.refundNotifications.length > 0) {
-    await timed("refund_reconciliation_notification_enqueue", () =>
-      enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications),
+  await isolated(async () => {
+    const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
+      reconcileDueRefundAttempts(db, {
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      }),
     );
-  }
-  if (
-    refundReconciliation.scanned > 0 ||
-    refundReconciliation.failed > 0 ||
-    refundReconciliation.deferred > 0 ||
-    refundReconciliation.errors.length > 0 ||
-    refundReconciliation.hasMore
-  ) {
-    console.log(
-      `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
-        `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
-        `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
-        `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
-        `hasMore=${refundReconciliation.hasMore}`,
-    );
-  }
+    if (refundReconciliation.refundNotifications.length > 0) {
+      await timed("refund_reconciliation_notification_enqueue", () =>
+        enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications),
+      );
+    }
+    if (
+      refundReconciliation.scanned > 0 ||
+      refundReconciliation.failed > 0 ||
+      refundReconciliation.deferred > 0 ||
+      refundReconciliation.errors.length > 0 ||
+      refundReconciliation.hasMore
+    ) {
+      console.log(
+        `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
+          `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
+          `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
+          `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
+          `hasMore=${refundReconciliation.hasMore}`,
+      );
+    }
+  });
 
-  const externalRefunds = await timed("external_refund_reconciliation", () =>
-    reconcileExternalRefundWebhooks(db, {
-      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
-    }),
-  );
-  if (externalRefunds.refundNotifications.length > 0) {
-    await timed("external_refund_notification_enqueue", () =>
-      enqueueReconciledRefundNotifications(db, env, externalRefunds.refundNotifications),
+  await isolated(async () => {
+    const externalRefunds = await timed("external_refund_reconciliation", () =>
+      reconcileExternalRefundWebhooks(db, {
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      }),
     );
-  }
-  if (
-    externalRefunds.scanned > 0 ||
-    externalRefunds.imported > 0 ||
-    externalRefunds.deferred > 0 ||
-    externalRefunds.errors.length > 0 ||
-    externalRefunds.hasMore
-  ) {
-    console.log(
-      `[scheduled] External refund reconciliation: scanned=${externalRefunds.scanned}, ` +
-        `imported=${externalRefunds.imported}, finalized=${externalRefunds.finalized}, ` +
-        `skipped=${externalRefunds.skipped}, deferred=${externalRefunds.deferred}, ` +
-        `errors=${externalRefunds.errors.length}, limit=${externalRefunds.limit}, ` +
-        `hasMore=${externalRefunds.hasMore}`,
-    );
-  }
+    if (externalRefunds.refundNotifications.length > 0) {
+      await timed("external_refund_notification_enqueue", () =>
+        enqueueReconciledRefundNotifications(db, env, externalRefunds.refundNotifications),
+      );
+    }
+    if (
+      externalRefunds.scanned > 0 ||
+      externalRefunds.imported > 0 ||
+      externalRefunds.deferred > 0 ||
+      externalRefunds.errors.length > 0 ||
+      externalRefunds.hasMore
+    ) {
+      console.log(
+        `[scheduled] External refund reconciliation: scanned=${externalRefunds.scanned}, ` +
+          `imported=${externalRefunds.imported}, finalized=${externalRefunds.finalized}, ` +
+          `skipped=${externalRefunds.skipped}, deferred=${externalRefunds.deferred}, ` +
+          `errors=${externalRefunds.errors.length}, limit=${externalRefunds.limit}, ` +
+          `hasMore=${externalRefunds.hasMore}`,
+      );
+    }
+  });
 
-  const staleQueuedPaymentWebhookCutoff =
-    Math.floor(Date.now() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60;
-  const staleQueuedPaymentWebhooks = await timed("stale_queued_payment_webhook_sweep", () =>
-    failStaleQueuedPaymentWebhookEvents(
-      db,
-      staleQueuedPaymentWebhookCutoff,
-      { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
-    ),
-  );
-  if (
-    staleQueuedPaymentWebhooks.scanned > 0 ||
-    staleQueuedPaymentWebhooks.failed > 0 ||
-    staleQueuedPaymentWebhooks.hasMore
-  ) {
-    console.log(
-      `[scheduled] Stale queued payment webhook sweep: scanned=${staleQueuedPaymentWebhooks.scanned}, ` +
-        `failed=${staleQueuedPaymentWebhooks.failed}, limit=${staleQueuedPaymentWebhooks.limit}, ` +
-        `hasMore=${staleQueuedPaymentWebhooks.hasMore}`,
+  await isolated(async () => {
+    const staleQueuedPaymentWebhookCutoff =
+      Math.floor(Date.now() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60;
+    const staleQueuedPaymentWebhooks = await timed("stale_queued_payment_webhook_sweep", () =>
+      failStaleQueuedPaymentWebhookEvents(
+        db,
+        staleQueuedPaymentWebhookCutoff,
+        { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
+      ),
     );
-  }
+    if (
+      staleQueuedPaymentWebhooks.scanned > 0 ||
+      staleQueuedPaymentWebhooks.failed > 0 ||
+      staleQueuedPaymentWebhooks.hasMore
+    ) {
+      console.log(
+        `[scheduled] Stale queued payment webhook sweep: scanned=${staleQueuedPaymentWebhooks.scanned}, ` +
+          `failed=${staleQueuedPaymentWebhooks.failed}, limit=${staleQueuedPaymentWebhooks.limit}, ` +
+          `hasMore=${staleQueuedPaymentWebhooks.hasMore}`,
+      );
+    }
+  });
 
-  const customerAuthOtpCleanup = await timed("customer_auth_otp_challenge_cleanup", () =>
-    cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
-      limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
-    }),
-  );
-  if (customerAuthOtpCleanup.scanned > 0 || customerAuthOtpCleanup.hasMore) {
-    console.log(
-      `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
-        `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
-        `hasMore=${customerAuthOtpCleanup.hasMore}`,
+  await isolated(async () => {
+    const customerAuthOtpCleanup = await timed("customer_auth_otp_challenge_cleanup", () =>
+      cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
+        limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (customerAuthOtpCleanup.scanned > 0 || customerAuthOtpCleanup.hasMore) {
+      console.log(
+        `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
+          `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
+          `hasMore=${customerAuthOtpCleanup.hasMore}`,
+      );
+    }
+  });
 
-  const paymentRecoveryOtpCleanup = await timed("order_payment_recovery_otp_cleanup", () =>
-    cleanupExpiredOrderPaymentRecoveryChallenges(db, Math.floor(Date.now() / 1000), {
-      limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
-    }),
-  );
-  if (paymentRecoveryOtpCleanup.scanned > 0 || paymentRecoveryOtpCleanup.hasMore) {
-    console.log(
-      `[scheduled] Order payment recovery OTP cleanup: scanned=${paymentRecoveryOtpCleanup.scanned}, ` +
-        `deleted=${paymentRecoveryOtpCleanup.deleted}, limit=${paymentRecoveryOtpCleanup.limit}, ` +
-        `hasMore=${paymentRecoveryOtpCleanup.hasMore}`,
+  await isolated(async () => {
+    const paymentRecoveryOtpCleanup = await timed("order_payment_recovery_otp_cleanup", () =>
+      cleanupExpiredOrderPaymentRecoveryChallenges(db, Math.floor(Date.now() / 1000), {
+        limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (paymentRecoveryOtpCleanup.scanned > 0 || paymentRecoveryOtpCleanup.hasMore) {
+      console.log(
+        `[scheduled] Order payment recovery OTP cleanup: scanned=${paymentRecoveryOtpCleanup.scanned}, ` +
+          `deleted=${paymentRecoveryOtpCleanup.deleted}, limit=${paymentRecoveryOtpCleanup.limit}, ` +
+          `hasMore=${paymentRecoveryOtpCleanup.hasMore}`,
+      );
+    }
+  });
 
-  const customerAuthOtpRateLimitCleanup = await timed("customer_auth_otp_rate_limit_cleanup", () =>
-    cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
-      limit: CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
-    }),
-  );
-  if (customerAuthOtpRateLimitCleanup.scanned > 0 || customerAuthOtpRateLimitCleanup.hasMore) {
-    console.log(
-      `[scheduled] Customer auth OTP rate-limit cleanup: scanned=${customerAuthOtpRateLimitCleanup.scanned}, ` +
-        `deleted=${customerAuthOtpRateLimitCleanup.deleted}, limit=${customerAuthOtpRateLimitCleanup.limit}, ` +
-        `hasMore=${customerAuthOtpRateLimitCleanup.hasMore}`,
+  await isolated(async () => {
+    const customerAuthOtpRateLimitCleanup = await timed("customer_auth_otp_rate_limit_cleanup", () =>
+      cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
+        limit: CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (customerAuthOtpRateLimitCleanup.scanned > 0 || customerAuthOtpRateLimitCleanup.hasMore) {
+      console.log(
+        `[scheduled] Customer auth OTP rate-limit cleanup: scanned=${customerAuthOtpRateLimitCleanup.scanned}, ` +
+          `deleted=${customerAuthOtpRateLimitCleanup.deleted}, limit=${customerAuthOtpRateLimitCleanup.limit}, ` +
+          `hasMore=${customerAuthOtpRateLimitCleanup.hasMore}`,
+      );
+    }
+  });
 
-  const customerSessionCleanup = await timed("customer_session_cleanup", () =>
-    cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
-      limit: CUSTOMER_SESSION_SWEEP_LIMIT,
-    }),
-  );
-  if (customerSessionCleanup.scanned > 0 || customerSessionCleanup.hasMore) {
-    console.log(
-      `[scheduled] Customer session cleanup: scanned=${customerSessionCleanup.scanned}, ` +
-        `deleted=${customerSessionCleanup.deleted}, limit=${customerSessionCleanup.limit}, ` +
-        `hasMore=${customerSessionCleanup.hasMore}`,
+  await isolated(async () => {
+    const customerSessionCleanup = await timed("customer_session_cleanup", () =>
+      cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
+        limit: CUSTOMER_SESSION_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (customerSessionCleanup.scanned > 0 || customerSessionCleanup.hasMore) {
+      console.log(
+        `[scheduled] Customer session cleanup: scanned=${customerSessionCleanup.scanned}, ` +
+          `deleted=${customerSessionCleanup.deleted}, limit=${customerSessionCleanup.limit}, ` +
+          `hasMore=${customerSessionCleanup.hasMore}`,
+      );
+    }
+  });
 
-  const scannerTokenClaimsCleanup = await timed("scanner_token_claim_cleanup", () =>
-    cleanupExpiredScannerTokenClaims(db, {
-      nowSeconds: Math.floor(Date.now() / 1000),
-      limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
-    }),
-  );
-  if (scannerTokenClaimsCleanup.scanned > 0 || scannerTokenClaimsCleanup.hasMore) {
-    console.log(
-      `[scheduled] Scanner token claim cleanup: scanned=${scannerTokenClaimsCleanup.scanned}, ` +
-        `deleted=${scannerTokenClaimsCleanup.deleted}, limit=${scannerTokenClaimsCleanup.limit}, ` +
-        `hasMore=${scannerTokenClaimsCleanup.hasMore}`,
+  await isolated(async () => {
+    const scannerTokenClaimsCleanup = await timed("scanner_token_claim_cleanup", () =>
+      cleanupExpiredScannerTokenClaims(db, {
+        nowSeconds: Math.floor(Date.now() / 1000),
+        limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+      }),
     );
-  }
+    if (scannerTokenClaimsCleanup.scanned > 0 || scannerTokenClaimsCleanup.hasMore) {
+      console.log(
+        `[scheduled] Scanner token claim cleanup: scanned=${scannerTokenClaimsCleanup.scanned}, ` +
+          `deleted=${scannerTokenClaimsCleanup.deleted}, limit=${scannerTokenClaimsCleanup.limit}, ` +
+          `hasMore=${scannerTokenClaimsCleanup.hasMore}`,
+      );
+    }
+  });
 
-  // Identity handoff audit rows double as the single-use token ledger; they
-  // are retained for 90 days after the token expired, then pruned by index.
-  const handoffEventsPruned = await timed("identity_handoff_audit_prune", () =>
-    pruneExpiredIdentityHandoffEvents(db),
-  );
-  if (handoffEventsPruned > 0) {
-    console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
-  }
+  await isolated(async () => {
+    // Identity handoff audit rows double as the single-use token ledger; they
+    // are retained for 90 days after the token expired, then pruned by index.
+    const handoffEventsPruned = await timed("identity_handoff_audit_prune", () =>
+      pruneExpiredIdentityHandoffEvents(db),
+    );
+    if (handoffEventsPruned > 0) {
+      console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
+    }
+  });
 
   // The first tick of a new API version heals writes the previous version
   // committed after the migration (scheduled/catalog-projections.ts).
@@ -483,26 +526,31 @@ async function runScheduledMaintenanceInner(
   // Images that still publish only their original get WebP renditions until
   // none are left or the run's time budget is spent. Rendition URLs replace
   // the published image URLs, so one generation bump per run that saved any.
-  // Local dev binds no IMAGES.
-  const images = env.IMAGES;
-  if (images) {
-    const renditions = await timed("media_rendition_backfill", () =>
-      backfillMissingMediaVariants(db, env.BUCKET, images, {
-        deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
-        concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
-        maxImages: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
-      }),
-    );
-    if (renditions.scanned > 0) {
-      console.log(
-        `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
-          `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
+  // Runs even when a sweep above failed. Without the IMAGES binding nothing
+  // can render.
+  await isolated(async () => {
+    const images = env.IMAGES;
+    if (images) {
+      const renditions = await timed("media_rendition_backfill", () =>
+        backfillMissingMediaVariants(db, env.BUCKET, images, {
+          deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
+          concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
+          maxImages: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+        }),
       );
+      if (renditions.scanned > 0) {
+        console.log(
+          `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
+            `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
+        );
+      }
+      if (renditions.generated > 0) {
+        await timed("media_rendition_cache_generation", () =>
+          bumpCacheGeneration({ env, executionCtx }),
+        );
+      }
     }
-    if (renditions.generated > 0) {
-      await timed("media_rendition_cache_generation", () =>
-        bumpCacheGeneration({ env, executionCtx }),
-      );
-    }
-  }
+  });
+
+  if (failures.length > 0) throw failures[0];
 }

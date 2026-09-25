@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
+  isStorefrontTrackingQueryParam,
 } from "./storefront-cache-path";
 
 describe("storefront HTML cache path canonicalization", () => {
@@ -58,6 +59,29 @@ describe("storefront HTML cache path canonicalization", () => {
         "/search?q=fish&fbclid=meta&gclid=google&gbraid=ios&wbraid=web&msclkid=bing&ttclid=tiktok",
       ),
     ).toBe("/search?q=fish");
+  });
+
+  it("strips the whole tracking allowlist, including every utm_* tag, from any HTML path", () => {
+    const tracking =
+      "utm_source=fb&utm_medium=cpc&utm_campaign=eid&utm_id=9&utm_source_platform=meta&UTM_TERM=x" +
+      "&fbclid=a&gclid=b&gbraid=c&wbraid=d&gad_source=1&gad_campaignid=2&srsltid=e&msclkid=f" +
+      "&ttclid=g&yclid=h&mc_cid=i&mc_eid=j&igshid=k&_ga=2.1.3";
+    expect(canonicalizeStorefrontHtmlCachePath(`/products/fish?${tracking}`)).toBe("/products/fish");
+    expect(canonicalizeStorefrontHtmlCachePath(`/?${tracking}`)).toBe("/");
+    expect(canonicalizeStorefrontHtmlCachePath(`/categories/drinks?${tracking}&brand=Fresh&page=2`))
+      .toBe("/categories/drinks?brand=Fresh&page=2");
+    expect(canonicalizeStorefrontHtmlCachePath(`/about-us?${tracking}`)).toBe("/about-us");
+  });
+
+  it("never strips functional or unknown parameters", () => {
+    expect(
+      canonicalizeStorefrontHtmlCachePath(
+        "/products/fish?variant=var_1&gclid=b&utm=keep&source=keep&ga=keep&campaign=keep&tracking=keep",
+      ),
+    ).toBe("/products/fish?campaign=keep&ga=keep&source=keep&tracking=keep&utm=keep&variant=var_1");
+    for (const key of ["q", "page", "sortBy", "limit", "brand", "minPrice", "option.size", "display-size.min"]) {
+      expect(isStorefrontTrackingQueryParam(key)).toBe(false);
+    }
   });
 
   it("preserves repeated values so multi-select HTML cache identities stay exact", () => {
