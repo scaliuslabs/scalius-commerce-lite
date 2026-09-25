@@ -6,6 +6,20 @@ import { restoreProduct } from "./lifecycle";
 // These fakes carry no projection SQL; catalog-projections.d1.test.ts covers it.
 vi.mock("../catalog-projections", () => ({ catalogProjectionRefreshStatements: () => [] }));
 
+// Nor the typed attribute rows; attributes/attribute-types.d1.test.ts covers them.
+const attributeRows = vi.hoisted(() => ({
+    prepare: vi.fn(async (_db: unknown, _productId: string, assignments: Array<{ attributeId: string }>) => {
+        if (assignments.some((assignment) => assignment.attributeId === "attr_trashed")) {
+            const { ValidationError: Refusal } = await import("@scalius/core/errors");
+            throw new Refusal("One or more assigned attributes are unavailable or in trash. Remove them and try again.");
+        }
+        return { statements: assignments.length > 0 ? [{ kind: "attribute-rows" }] : [] };
+    }),
+}));
+vi.mock("../../attributes/product-attribute-values", () => ({
+    prepareProductAttributeValueRows: attributeRows.prepare,
+}));
+
 const productUpdate = {
     id: "prod_1",
     name: "Strict SKU Product",
@@ -84,9 +98,12 @@ describe("admin product SKU invariant boundaries", () => {
 
         await createProduct(db as never, largeAggregate as never);
 
-        expect(multiRowStatementSizes).toHaveLength(11);
+        // Rich content in multi-row inserts of 18; the 90 typed attribute rows
+        // are prepared by the attributes domain (one json_each statement).
+        expect(multiRowStatementSizes).toHaveLength(6);
         expect(Math.max(...multiRowStatementSizes)).toBe(18);
-        expect(multiRowStatementSizes.reduce((sum, size) => sum + size, 0)).toBe(191);
+        expect(multiRowStatementSizes.reduce((sum, size) => sum + size, 0)).toBe(101);
+        expect(attributeRows.prepare).toHaveBeenCalledWith(db, expect.stringMatching(/^prod_/), largeAggregate.attributes);
     });
 
     it("rejects unavailable attribute definitions before create composition writes", async () => {
