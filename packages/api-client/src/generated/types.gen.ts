@@ -9804,12 +9804,10 @@ export type GetApiV1CheckoutConfigResponses = {
             }>;
             activeDefaultMethod?: string;
             guestCheckoutEnabled: boolean;
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields: Array<'email' | 'phone'>;
-                optionalContactFields: Array<'email' | 'phone'>;
-                defaultOtpChannel: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
@@ -14244,7 +14242,6 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -17668,16 +17665,173 @@ export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponses = {
 
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponse = PostApiV1OrdersPaymentRecoveryVerifyOtpResponses[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpResponses];
 
+export type PostApiV1OrdersLookupStatusData = {
+    body: {
+        /**
+         * Order number ("#1001") or order id
+         */
+        reference: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/lookup/status';
+};
+
+export type PostApiV1OrdersLookupStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusError = PostApiV1OrdersLookupStatusErrors[keyof PostApiV1OrdersLookupStatusErrors];
+
+export type PostApiV1OrdersLookupStatusResponses = {
+    /**
+     * Where the order is
+     */
+    200: {
+        success: true;
+        data: {
+            order: {
+                orderNumber: number | null;
+                firstName: string | null;
+                status: string;
+                paymentStatus: string;
+                createdAt: string | null;
+                requiresShipping: boolean;
+                shippingMethodKind: string | null;
+                shippingMethodName: string | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotal: number;
+                shipping: number;
+                discount: number;
+                tax: number;
+                total: number;
+                paid: number;
+                balanceDue: number;
+                items: Array<{
+                    productName: string | null;
+                    variantLabel: string | null;
+                    quantity: number;
+                    productImage: string | null;
+                }>;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
+                codeOptions: Array<{
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    /**
+                     * Masked contact on the order ("01•••••678")
+                     */
+                    destination: string;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusResponse = PostApiV1OrdersLookupStatusResponses[keyof PostApiV1OrdersLookupStatusResponses];
+
 export type PostApiV1OrdersLookupSendOtpData = {
     body: {
         /**
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
+        channel?: 'email' | 'sms' | 'whatsapp';
     };
     path?: never;
     query?: never;
@@ -17800,10 +17954,6 @@ export type PostApiV1OrdersLookupVerifyOtpData = {
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
         code: string;
     };
     path?: never;
@@ -18813,6 +18963,7 @@ export type PostApiV1OrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        customerWhatsapp?: string | null;
         shippingAddress?: string | null;
         city?: string | null;
         zone?: string | null;
@@ -42262,12 +42413,10 @@ export type GetApiV1AdminSettingsAuthResponses = {
                 customerAuth: number;
                 whatsapp: number;
             };
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields?: Array<'email' | 'phone'>;
-                optionalContactFields?: Array<'email' | 'phone'>;
-                defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
@@ -42284,12 +42433,10 @@ export type PostApiV1AdminSettingsAuthData = {
             customerAuth?: number;
             whatsapp?: number;
         };
-        authVerificationMethod?: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-        customerAuthPolicy?: {
-            otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-            requiredContactFields?: Array<'email' | 'phone'>;
-            optionalContactFields?: Array<'email' | 'phone'>;
-            defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+        customerIdentity?: {
+            email: 'required' | 'optional' | 'hidden';
+            whatsapp: 'off' | 'same_as_phone' | 'separate';
+            channels: Array<'email' | 'sms' | 'whatsapp'>;
         };
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;
@@ -53346,6 +53493,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             customerName: string;
             customerPhone: string;
             customerEmail: string | null;
+            customerWhatsapp: string | null;
             customerId: string | null;
             customerRecord: {
                 id: string;
@@ -72032,7 +72180,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -72169,7 +72316,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -72214,7 +72360,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -72310,7 +72455,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -72491,7 +72635,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 [key: string]: string;
             };
             fieldVisibility: {
-                showEmailField: boolean;
                 showOrderNotesField: boolean;
                 showAreaField: boolean;
             };
@@ -72599,7 +72742,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -72712,7 +72854,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };

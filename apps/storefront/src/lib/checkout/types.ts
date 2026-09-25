@@ -1,7 +1,4 @@
-import type {
-  CustomerAuthMethod,
-  CustomerAuthPolicyConfig,
-} from "@scalius/shared/customer-auth-policy";
+import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import type { Readiness } from "@scalius/shared/readiness";
 import type { CartValidationIssue } from "../api/orders";
 
@@ -62,8 +59,8 @@ export interface CheckoutConfig {
   }>;
   activeDefaultMethod?: string;
   guestCheckoutEnabled: boolean;
-  authVerificationMethod: CustomerAuthMethod;
-  customerAuthPolicy?: CustomerAuthPolicyConfig;
+  /** Settings → Customer accounts; `channels` are only chosen ones that can send. */
+  customerIdentity?: CustomerIdentitySettings;
   checkoutMode: string;
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;

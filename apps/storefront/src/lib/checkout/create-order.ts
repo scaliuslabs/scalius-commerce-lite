@@ -182,6 +182,7 @@ export async function createOrder(
     customerName: readString(checkoutData.customerName),
     customerPhone: readString(checkoutData.customerPhone),
     customerEmail: readOptionalString(checkoutData.customerEmail),
+    customerWhatsapp: readOptionalString(checkoutData.customerWhatsapp),
     ...address,
     notes: readOptionalString(checkoutData.notes),
     items,

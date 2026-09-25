@@ -1,24 +1,13 @@
 // src/modules/customers/otp-transport.ts
-// OTP transport abstraction — each transport knows how to build the queue
-// payload for its delivery channel (email, SMS, WhatsApp).
-// The queue consumer in apps/api/src/queue-consumer.ts dispatches based on
-// the `method` + `channel` fields in the payload. Provider secrets are
-// resolved at send time; provider secrets and raw OTP codes must not be
-// serialized into queues.
-
-/** The store sign-in method the queue consumer re-checks at send time. */
-interface OtpTransportSettings {
-  authVerificationMethod: string;
-}
+// The OTP queue message. The queue consumer in apps/api/src/queue-consumer.ts
+// dispatches on `method` + `channel`. Payloads carry opaque challenge/delivery
+// references only: provider secrets, raw codes, recipients and names are
+// resolved at send time and must never be serialized into queues.
 import {
+  channelRequestMethod,
+  channelToAllowedMethod,
   type CustomerAuthOtpChannel,
-  getCustomerAuthDeliveryChannel,
-  normalizeCustomerAuthMethod,
 } from "@scalius/shared/customer-auth-policy";
-
-// ─────────────────────────────────────────
-// Queue payload shape (matches AuthOtpQueueMessage in queue-consumer.ts)
-// ─────────────────────────────────────────
 
 export interface OtpQueuePayload {
   type: "auth.send_otp";
@@ -37,150 +26,22 @@ export interface OtpQueuePayload {
   name?: string;
 }
 
-// ─────────────────────────────────────────
-// Transport interface
-// ─────────────────────────────────────────
-
-export interface OtpTransport {
-  /** The internal method name used in routing (e.g. "email", "phone") */
-  readonly method: "email" | "phone";
-
-  /** Human-readable label for success messages */
-  readonly label: string;
-
-  /** Build the queue payload for sending the OTP via this transport */
-  buildQueuePayload(
-    settings: OtpTransportSettings,
-    channel: CustomerAuthOtpChannel,
-    deliveryKey: string,
-    otpExpiresAt: number,
-    challengeKey: string,
-  ): OtpQueuePayload;
-
-  /**
-   * Validate that the transport has the required configuration.
-   * Returns an error message if misconfigured, or null if ready.
-   */
-  validateConfig(settings: OtpTransportSettings): string | null;
-}
-
-// ─────────────────────────────────────────
-// Concrete transports
-// ─────────────────────────────────────────
-
-export class EmailOtpTransport implements OtpTransport {
-  readonly method = "email" as const;
-  readonly label = "email";
-
-  buildQueuePayload(
-    settings: OtpTransportSettings,
-    channel: CustomerAuthOtpChannel,
-    deliveryKey: string,
-    otpExpiresAt: number,
-    challengeKey: string,
-  ): OtpQueuePayload {
-    return {
-      type: "auth.send_otp",
-      challengeKey,
-      deliveryKey,
-      purpose: "customer_login",
-      otpExpiresAt,
-      method: "email",
-      allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
-      channel,
-    };
-  }
-
-  validateConfig(_settings: OtpTransportSettings): string | null {
-    // Email transport uses the global email integration; no per-transport config needed.
-    return null;
-  }
-}
-
-export class SmsOtpTransport implements OtpTransport {
-  readonly method = "phone" as const;
-  readonly label = "SMS";
-
-  buildQueuePayload(
-    settings: OtpTransportSettings,
-    channel: CustomerAuthOtpChannel,
-    deliveryKey: string,
-    otpExpiresAt: number,
-    challengeKey: string,
-  ): OtpQueuePayload {
-    return {
-      type: "auth.send_otp",
-      challengeKey,
-      deliveryKey,
-      purpose: "customer_login",
-      otpExpiresAt,
-      method: "phone",
-      allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
-      channel,
-    };
-  }
-
-  validateConfig(_settings: OtpTransportSettings): string | null {
-    // SMS provider integration is pending (see queue-consumer TODO).
-    return null;
-  }
-}
-
-export class WhatsAppOtpTransport implements OtpTransport {
-  readonly method = "phone" as const;
-  readonly label = "WhatsApp";
-
-  buildQueuePayload(
-    settings: OtpTransportSettings,
-    channel: CustomerAuthOtpChannel,
-    deliveryKey: string,
-    otpExpiresAt: number,
-    challengeKey: string,
-  ): OtpQueuePayload {
-    return {
-      type: "auth.send_otp",
-      challengeKey,
-      deliveryKey,
-      purpose: "customer_login",
-      otpExpiresAt,
-      method: "phone",
-      allowedMethod: "whatsapp_otp",
-      channel,
-    };
-  }
-
-  validateConfig(_settings: OtpTransportSettings): string | null {
-    // Customer auth validates encrypted WhatsApp credentials before queueing.
-    return null;
-  }
-}
-
-// ─────────────────────────────────────────
-// Transport registry & factory
-// ─────────────────────────────────────────
-
-const emailTransport = new EmailOtpTransport();
-const smsTransport = new SmsOtpTransport();
-const whatsAppTransport = new WhatsAppOtpTransport();
-
-/**
- * Resolve the correct OtpTransport based on the requested method and the
- * store's `authVerificationMethod` setting.
- *
- * @param method  - "email" or "phone" (from the customer's request)
- * @param allowedMethod - the `authVerificationMethod` value from the customer_auth settings document
- */
-export function getOtpTransport(
-  method: "email" | "phone",
-  allowedMethod: unknown,
-  requestedChannel?: CustomerAuthOtpChannel,
-): OtpTransport {
-  const channel = getCustomerAuthDeliveryChannel(allowedMethod, method, requestedChannel);
-  if (channel === "email") {
-    return emailTransport;
-  }
-  if (channel === "whatsapp") {
-    return whatsAppTransport;
-  }
-  return smsTransport;
+/** One reference-only OTP message for a challenge on one channel. */
+export function buildOtpQueuePayload(input: {
+  channel: CustomerAuthOtpChannel;
+  purpose: string;
+  challengeKey: string;
+  deliveryKey: string;
+  otpExpiresAt: number;
+}): OtpQueuePayload {
+  return {
+    type: "auth.send_otp",
+    challengeKey: input.challengeKey,
+    deliveryKey: input.deliveryKey,
+    purpose: input.purpose,
+    otpExpiresAt: input.otpExpiresAt,
+    method: channelRequestMethod(input.channel),
+    allowedMethod: channelToAllowedMethod(input.channel),
+    channel: input.channel,
+  };
 }

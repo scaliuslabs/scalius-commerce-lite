@@ -27,7 +27,6 @@ import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
 const baseConfig: CheckoutConfig = {
   gateways: [],
   guestCheckoutEnabled: true,
-  authVerificationMethod: "email",
   checkoutMode: "single",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,

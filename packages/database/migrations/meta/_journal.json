@@ -694,6 +694,13 @@
       "when": 1790300029000,
       "tag": "0098_warranty",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1790300030000,
+      "tag": "0099_customer_whatsapp",
+      "breakpoints": true
     }
   ]
 }

@@ -1,161 +1,79 @@
 import { describe, expect, it } from "vitest";
-
 import {
-  customerAuthMethodUsesEmailProvider,
-  customerAuthMethodUsesSmsProvider,
-  customerAuthMethodUsesWhatsAppProvider,
-  customerAuthPolicyUsesEmailProvider,
-  getCustomerAuthAllowedRequestMethods,
-  getCustomerAuthDeliveryChannel,
-  getCustomerAuthPolicyForMethod,
-  getDefaultCustomerAuthRequestMethod,
-  getLegacyCustomerAuthMethodForPolicy,
-  normalizeCustomerAuthMethod,
-  normalizeCustomerAuthPolicy,
-  resolveCustomerAuthPolicy,
-  resolveCustomerAuthChannelForRequest,
+  DEFAULT_CUSTOMER_IDENTITY,
+  checkoutContactFields,
+  customerIdentityProblem,
+  isChannelCollected,
+  normalizeCustomerIdentitySettings,
+  offeredChannels,
+  orderChannelTarget,
+  orderCodeChannels,
+  resolveSignInChannel,
 } from "./customer-auth-policy";
 
-describe("customer auth policy", () => {
-  it.each([
-    ["email", "email"],
-    ["sms_otp", "sms_otp"],
-    ["whatsapp_otp", "whatsapp_otp"],
-    ["both", "both"],
-    ["phone", "sms_otp"],
-    ["email_phone_mandatory", "email"],
-    ["unexpected", "email"],
-    [null, "email"],
-    [undefined, "email"],
-  ] as const)("normalizes %s to %s", (input, expected) => {
-    expect(normalizeCustomerAuthMethod(input)).toBe(expected);
-  });
-
-  it.each([
-    ["email", ["email"], "email"],
-    ["sms_otp", ["phone"], "phone"],
-    ["whatsapp_otp", ["phone"], "phone"],
-    ["both", ["email", "phone"], "email"],
-    ["phone", ["phone"], "phone"],
-  ] as const)("resolves request methods for %s", (input, requestMethods, defaultMethod) => {
-    expect(getCustomerAuthAllowedRequestMethods(input)).toEqual(requestMethods);
-    expect(getDefaultCustomerAuthRequestMethod(input)).toBe(defaultMethod);
-  });
-
-  it("separates email, SMS, and WhatsApp provider requirements", () => {
-    expect(customerAuthMethodUsesEmailProvider("email")).toBe(true);
-    expect(customerAuthMethodUsesEmailProvider("both")).toBe(true);
-    expect(customerAuthMethodUsesEmailProvider("sms_otp")).toBe(false);
-    expect(customerAuthMethodUsesSmsProvider("sms_otp")).toBe(true);
-    expect(customerAuthMethodUsesSmsProvider("both")).toBe(true);
-    expect(customerAuthMethodUsesSmsProvider("whatsapp_otp")).toBe(false);
-    expect(customerAuthMethodUsesWhatsAppProvider("whatsapp_otp")).toBe(true);
-    expect(customerAuthMethodUsesWhatsAppProvider("both")).toBe(false);
-    expect(customerAuthPolicyUsesEmailProvider({
-      otpChannels: ["email", "whatsapp"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: [],
-      defaultOtpChannel: "email",
-    })).toBe(true);
-  });
-
-  it("labels the phone side of both as SMS, not WhatsApp", () => {
-    const policy = resolveCustomerAuthPolicy("both");
-
-    expect(policy.label).toBe("Email or SMS OTP");
-    expect(policy.requestOptions).toEqual([
-      expect.objectContaining({ method: "email", label: "Email", channel: "email" }),
-      expect.objectContaining({ method: "phone", label: "SMS", channel: "sms" }),
-    ]);
-  });
-
-  it.each([
-    ["email", "email", "email"],
-    ["both", "email", "email"],
-    ["both", "phone", "sms"],
-    ["sms_otp", "phone", "sms"],
-    ["phone", "phone", "sms"],
-    ["whatsapp_otp", "phone", "whatsapp"],
-  ] as const)("resolves %s/%s to %s delivery", (authMethod, requestMethod, channel) => {
-    expect(getCustomerAuthDeliveryChannel(authMethod, requestMethod)).toBe(channel);
-  });
-
-  it("normalizes advanced collection and verification policy", () => {
-    const policy = normalizeCustomerAuthPolicy({
-      otpChannels: ["email", "whatsapp"],
-      requiredContactFields: ["email"],
-      optionalContactFields: ["phone", "email"],
-      defaultOtpChannel: "whatsapp",
+describe("customer identity settings", () => {
+  it("keeps a valid document and resets anything else to the defaults", () => {
+    const saved = { email: "optional", whatsapp: "separate", channels: ["sms", "whatsapp", "sms"] };
+    expect(normalizeCustomerIdentitySettings(saved)).toEqual({
+      email: "optional",
+      whatsapp: "separate",
+      channels: ["sms", "whatsapp"],
     });
-
-    expect(policy).toEqual({
-      otpChannels: ["email", "whatsapp"],
-      requiredContactFields: ["email", "phone"],
-      optionalContactFields: [],
-      defaultOtpChannel: "whatsapp",
-    });
-    expect(resolveCustomerAuthChannelForRequest(policy, "phone")).toBe("whatsapp");
-    expect(resolveCustomerAuthChannelForRequest(policy, "email")).toBe("email");
+    for (const stale of [
+      undefined,
+      { authVerificationMethod: "sms_otp", policy: { otpChannels: ["sms"] } },
+      { email: "optional", whatsapp: "off", channels: [] },
+      { email: "hidden", whatsapp: "off", channels: ["email"] },
+      { email: "maybe", whatsapp: "off", channels: ["sms"] },
+    ]) {
+      expect(normalizeCustomerIdentitySettings(stale)).toEqual(DEFAULT_CUSTOMER_IDENTITY);
+    }
   });
 
-  it("keeps phone required even when only phone-based OTP channels are enabled", () => {
-    const policy = normalizeCustomerAuthPolicy({
-      otpChannels: ["sms", "whatsapp"],
-      requiredContactFields: [],
-      optionalContactFields: ["phone", "email"],
-      defaultOtpChannel: "sms",
-    });
-
-    expect(policy).toEqual({
-      otpChannels: ["sms", "whatsapp"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: ["email"],
-      defaultOtpChannel: "sms",
-    });
+  it("lets a channel be chosen only when its contact field is collected", () => {
+    expect(isChannelCollected({ email: "hidden", whatsapp: "off" }, "email")).toBe(false);
+    expect(isChannelCollected({ email: "optional", whatsapp: "off" }, "email")).toBe(true);
+    expect(isChannelCollected({ email: "hidden", whatsapp: "off" }, "whatsapp")).toBe(false);
+    expect(isChannelCollected({ email: "hidden", whatsapp: "same_as_phone" }, "whatsapp")).toBe(true);
+    expect(isChannelCollected({ email: "hidden", whatsapp: "off" }, "sms")).toBe(true);
+    expect(customerIdentityProblem({ email: "hidden", whatsapp: "off", channels: ["sms", "email"] }))
+      .toBe("Email codes need checkout to ask for the email address.");
+    expect(customerIdentityProblem({ email: "hidden", whatsapp: "off", channels: ["whatsapp"] }))
+      .toBe("WhatsApp codes need checkout to ask for a WhatsApp number.");
+    expect(customerIdentityProblem({ email: "required", whatsapp: "off", channels: [] }))
+      .toBe("Choose at least one way to send codes.");
   });
 
-  it("requires email when codes are sent only by email", () => {
-    expect(normalizeCustomerAuthPolicy({
-      otpChannels: ["email"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: [],
-      defaultOtpChannel: "email",
-    }).requiredContactFields).toEqual(["phone", "email"]);
-    expect(getCustomerAuthPolicyForMethod("email").requiredContactFields).toEqual(["phone", "email"]);
-    // Another channel reaches customers without email, so email stays the merchant's choice.
-    expect(normalizeCustomerAuthPolicy({
-      otpChannels: ["email", "sms"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: [],
-      defaultOtpChannel: "email",
-    }).requiredContactFields).toEqual(["phone"]);
+  it("offers only chosen channels that can send, and never adds one (fail closed)", () => {
+    const settings = { email: "required", whatsapp: "off", channels: ["email"] } as const;
+    const chosen = { ...settings, channels: [...settings.channels] };
+    expect(offeredChannels(chosen, { email: false, sms: true, whatsapp: true })).toEqual([]);
+    expect(offeredChannels(chosen, { email: true, sms: true })).toEqual(["email"]);
   });
 
-  it("resolves explicit phone channel selection when both SMS and WhatsApp are enabled", () => {
-    const policy = normalizeCustomerAuthPolicy({
-      otpChannels: ["sms", "whatsapp"],
-      requiredContactFields: [],
-      optionalContactFields: ["email"],
-      defaultOtpChannel: "sms",
-    });
-
-    expect(resolveCustomerAuthChannelForRequest(policy, "phone", "whatsapp")).toBe("whatsapp");
-    expect(resolveCustomerAuthChannelForRequest(policy, "phone")).toBe("sms");
-    expect(getCustomerAuthDeliveryChannel(policy, "phone", "whatsapp")).toBe("whatsapp");
+  it("resolves a sign-in channel from the chosen ones only", () => {
+    expect(resolveSignInChannel(["email"], "phone", "sms")).toBeNull();
+    expect(resolveSignInChannel(["email", "whatsapp", "sms"], "phone")).toBe("whatsapp");
+    expect(resolveSignInChannel(["email", "whatsapp", "sms"], "phone", "sms")).toBe("sms");
+    expect(resolveSignInChannel(["email", "sms"], "email", "sms")).toBe("email");
   });
 
-  it("keeps a legacy auth method summary for clients that have not adopted the policy object", () => {
-    expect(getLegacyCustomerAuthMethodForPolicy({
-      otpChannels: ["email", "sms"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: ["email"],
-      defaultOtpChannel: "email",
-    })).toBe("both");
-    expect(getLegacyCustomerAuthMethodForPolicy({
-      otpChannels: ["email", "whatsapp"],
-      requiredContactFields: ["phone"],
-      optionalContactFields: ["email"],
-      defaultOtpChannel: "whatsapp",
-    })).toBe("whatsapp_otp");
+  it("shapes the checkout contact fields; phone is never optional", () => {
+    expect(checkoutContactFields({ email: "hidden", whatsapp: "same_as_phone" })).toEqual({ email: "hidden", whatsapp: "hidden" });
+    expect(checkoutContactFields({ email: "required", whatsapp: "separate" })).toEqual({ email: "required", whatsapp: "optional" });
+  });
+
+  it("sends order codes only to contacts saved on the order", () => {
+    const order = { customerPhone: "+8801712000001", customerEmail: " Buyer@Example.test ", customerWhatsapp: "+8801812000001" };
+    expect(orderChannelTarget({ whatsapp: "separate" }, "whatsapp", order)).toBe("+8801812000001");
+    expect(orderChannelTarget({ whatsapp: "same_as_phone" }, "whatsapp", order)).toBe("+8801712000001");
+    expect(orderChannelTarget({ whatsapp: "separate" }, "whatsapp", { ...order, customerWhatsapp: null })).toBe("+8801712000001");
+    expect(orderChannelTarget({ whatsapp: "off" }, "whatsapp", order)).toBeNull();
+    expect(orderCodeChannels(
+      { email: "optional", whatsapp: "off", channels: ["email", "sms"] },
+      { ...order, customerEmail: null },
+    )).toEqual([{ channel: "sms", target: "+8801712000001" }]);
+    expect(orderCodeChannels({ email: "optional", whatsapp: "off", channels: ["email"] }, order))
+      .toEqual([{ channel: "email", target: "buyer@example.test" }]);
   });
 });

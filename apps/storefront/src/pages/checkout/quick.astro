@@ -3,6 +3,7 @@
 // when scripts are off; every step is a POST that answers with the next thing
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
+import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
@@ -90,7 +91,7 @@ const lang: CheckoutLanguageData = languageResponse ?? {
   name: "English (Fallback)",
   code: "en",
   languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
-  fieldVisibility: { showEmailField: true, showOrderNotesField: true, showAreaField: true },
+  fieldVisibility: { showOrderNotesField: true, showAreaField: true },
   isActive: true,
   isDefault: true,
 };
@@ -126,6 +127,8 @@ const quoteInput = quickCheckoutQuoteInput(form, mode, rateId);
 const quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
 const quote = quoteResult?.ok ? quoteResult.quote : null;
 
+// Settings → Customer accounts decides the contact fields (phone always).
+const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
 let errorMessage = "";
 let fieldErrors: QuickCheckoutFieldError[] = [];
 if (quoteResult && !quoteResult.ok) {
@@ -140,7 +143,7 @@ if (quoteResult && !quoteResult.ok) {
 if (!codAvailable) {
   errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
 } else if (form.intent === "place" && !errorMessage) {
-  fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH);
+  fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH, contactFields.email);
   if (checkoutConfig.guestCheckoutEnabled === false && !customerSessionToken) {
     errorMessage = copy.signInToCheckoutText;
   } else if (fieldErrors.length > 0) {
@@ -181,6 +184,8 @@ const fieldMessage: Record<QuickCheckoutFieldError, string> = {
   customerName: copy.nameTooShortText,
   customerPhone: copy.phoneInvalidText,
   customerEmail: copy.emailInvalidText,
+  customerEmailRequired: copy.emailRequiredText,
+  customerWhatsapp: copy.whatsappInvalidText,
   shippingAddress: formatCheckoutLanguageText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH }),
   city: copy.cityZoneRequiredText,
   zone: copy.zoneRequiredText,
@@ -253,11 +258,22 @@ const secondaryButtonClass =
               <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{mode === "pickup" ? copy.customerPhonePickupHelp : mode === "none" ? copy.customerPhoneServiceHelp : copy.customerPhoneHelp}</p>
               {errorFor("customerPhone") && <p id="customerPhone-error" class={errorClass}>{errorFor("customerPhone")}</p>}
             </div>
-            {lang.fieldVisibility.showEmailField && (
+            {contactFields.email !== "hidden" && (
               <div class="sm:col-span-2">
-                <label for="customerEmail" class={labelClass}>{copy.customerEmailLabel}</label>
-                <input id="customerEmail" name="customerEmail" type="email" autocomplete="email" maxlength="254" value={form.customerEmail} placeholder={copy.customerEmailPlaceholder} aria-invalid={errorFor("customerEmail") ? "true" : undefined} class={fieldClass} />
-                {errorFor("customerEmail") && <p class={errorClass}>{errorFor("customerEmail")}</p>}
+                <label for="customerEmail" class={labelClass}>
+                  {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
+                  {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
+                </label>
+                <input id="customerEmail" name="customerEmail" type="email" autocomplete="email" maxlength="254" required={contactFields.email === "required"} value={form.customerEmail} placeholder={copy.customerEmailPlaceholder} aria-invalid={errorFor("customerEmail") || errorFor("customerEmailRequired") ? "true" : undefined} class={fieldClass} />
+                {(errorFor("customerEmail") || errorFor("customerEmailRequired")) && <p class={errorClass}>{errorFor("customerEmail") || errorFor("customerEmailRequired")}</p>}
+              </div>
+            )}
+            {contactFields.whatsapp === "optional" && (
+              <div class="sm:col-span-2">
+                <label for="customerWhatsapp" class={labelClass}>{copy.customerWhatsappLabel}</label>
+                <input id="customerWhatsapp" name="customerWhatsapp" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value={form.customerWhatsapp} aria-describedby="customerWhatsapp-help" aria-invalid={errorFor("customerWhatsapp") ? "true" : undefined} class={fieldClass} />
+                <p id="customerWhatsapp-help" class="mt-1 text-sm text-muted-foreground">{copy.customerWhatsappHelpText}</p>
+                {errorFor("customerWhatsapp") && <p class={errorClass}>{errorFor("customerWhatsapp")}</p>}
               </div>
             )}
           </div>

@@ -5,10 +5,7 @@ import { getConfiguredSdkClient } from "./transport";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
-import type {
-  CustomerAuthMethod,
-  CustomerAuthPolicyConfig,
-} from "@scalius/shared/customer-auth-policy";
+import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import type { Readiness } from "@scalius/shared/readiness";
 
 export interface GatewayConfig {
@@ -33,8 +30,8 @@ export interface CheckoutConfig {
   gateways: GatewayConfig[];
   activeDefaultMethod?: GatewayConfig["id"];
   guestCheckoutEnabled?: boolean;
-  authVerificationMethod?: CustomerAuthMethod;
-  customerAuthPolicy?: CustomerAuthPolicyConfig;
+  /** Settings → Customer accounts; `channels` are only chosen ones that can send. */
+  customerIdentity?: CustomerIdentitySettings;
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
@@ -56,7 +53,6 @@ export interface CheckoutConfig {
 const CHECKOUT_UNAVAILABLE: CheckoutConfig = {
   gateways: [],
   guestCheckoutEnabled: false,
-  authVerificationMethod: "email",
   checkoutMode: "all",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,

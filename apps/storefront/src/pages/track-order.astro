@@ -1,7 +1,12 @@
 ---
-// Track your order: order number + the phone used, proven by a code sent to
-// the contact saved on the order. Works without JavaScript (the form posts
-// here); phone, email and code only ever travel in POST bodies.
+// Track your order. The order number alone opens a status-only view (no
+// address, phone, email or surname; the API limits lookups per buyer IP and
+// answers every miss the same way). Full details and every action need a
+// one-time code, sent through a channel the store chose in Customer accounts
+// to a contact saved on the order; a correct code stores the receipt proof as
+// an httpOnly cookie and opens the receipt. Plain form posts: it works the
+// same without JavaScript, and the order number, code and contacts only ever
+// travel in POST bodies.
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -14,19 +19,29 @@ import {
   describeOrderCodeSendRefusal,
   failureNeedsStoreContact,
   getOrderCodeFailureText,
-  formatCountdown,
   getOrderLookupFieldErrors,
   normalizeOrderReference,
-  readOrderLookupInput,
 } from "@/lib/order-lookup";
 import {
+  getOrderLookupStatus,
   readOrderCodeFields,
   sendOrderLookupCode,
   verifiedReceiptResponse,
   verifyOrderLookupCode,
-  type VerifiedOrderReceipt,
+  type OrderCodeChannel,
+  type OrderLookupStatus,
 } from "@/lib/order-lookup-api";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { formatOrderReceiptDate, formatOrderSuccessLabel } from "@/lib/order-success-localization";
+import {
+  orderProgressMarkup,
+  orderShipmentMarkup,
+  orderTimelineMarkup,
+  safeTrackingUrl,
+  type OrderTrackingText,
+} from "@/lib/order-tracking-markup";
+import { relabelOrderProgress, relabelOrderTimeline } from "@/lib/order-line-groups";
+import { formatMoney } from "@/lib/currency";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -38,71 +53,108 @@ const isPost = Astro.request.method === "POST";
 if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
   return new Response(null, { status: 403 });
 }
+// Every answer here is for this buyer only.
+Astro.response.headers.set("Cache-Control", "private, no-store");
 
 const [layoutData, checkoutLanguage]: [LayoutData | null, CheckoutLanguageData | null] = await Promise.all([
   getLayoutData(),
   getActiveCheckoutLanguage(),
 ]);
 const copy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+const languageCode = checkoutLanguage?.code ?? "en";
+const CHANNELS = ["email", "sms", "whatsapp"] as const;
+const isChannel = (value: unknown): value is OrderCodeChannel => CHANNELS.includes(value as OrderCodeChannel);
 
-// Emails link /track-order?order=1001; an order number is not personal data.
+// Emails link /track-order?order=1001 to fill the field; nothing is looked up by URL.
 let reference = normalizeOrderReference(Astro.url.searchParams.get("order")) ?? "";
-let phone = "";
-let codeSent = false;
+let channel: OrderCodeChannel | undefined;
+let status: OrderLookupStatus | null = null;
+let codeStep = false;
 let message = "";
 let failed = false;
 let needsStoreContact = false;
-let resendAfterSeconds = 0;
-let verified: VerifiedOrderReceipt | null = null;
-// Each field's own message under it, like checkout.
-let fieldErrors: Partial<Record<"reference" | "phone" | "code", string>> = {};
+let fieldErrors: Partial<Record<"reference" | "code", string>> = {};
 
 if (isPost) {
   const fields = (await readOrderCodeFields(Astro.request)) ?? {};
-  reference = fields.reference ?? "";
-  phone = fields.phone ?? "";
-  codeSent = fields.intent === "verify" || fields.intent === "resend";
-  const input = readOrderLookupInput(reference, phone);
-  failed = true;
-  if (!input.ok) {
-    codeSent = false;
-    fieldErrors = getOrderLookupFieldErrors(copy, reference, phone);
-  } else if (fields.intent === "verify") {
+  const intent = fields.intent ?? "find";
+  reference = normalizeOrderReference(fields.reference) ?? fields.reference ?? "";
+  channel = isChannel(fields.channel) ? fields.channel : undefined;
+  fieldErrors = getOrderLookupFieldErrors(copy, reference);
+  if (!fieldErrors.reference && intent === "find") {
+    const result = await getOrderLookupStatus(Astro.request, reference);
+    if (result.ok) status = result.data;
+    else if (result.failure.status === 404) fieldErrors = { reference: copy.trackOrderNotFoundText };
+    else {
+      failed = true;
+      message = result.failure.status === 429
+        ? getOrderCodeFailureText(copy, result.failure, "send", copy.trackOrderUnavailableText)
+        : copy.trackOrderUnavailableText;
+    }
+  } else if (!fieldErrors.reference && intent === "verify") {
+    codeStep = true;
     if (!fields.code) {
       fieldErrors = { code: copy.paymentRecoveryEnterCodeText };
     } else {
-      const result = await verifyOrderLookupCode({ reference: input.reference, phone: input.phone, code: fields.code });
-      if (result.ok) verified = result.data;
-      else {
-        needsStoreContact = failureNeedsStoreContact(result.failure);
-        message = getOrderCodeFailureText(copy, result.failure, "verify", copy.trackOrderUnavailableText);
-      }
+      const result = await verifyOrderLookupCode({ reference, code: fields.code });
+      if (result.ok) return verifiedReceiptResponse(result.data, "redirect");
+      failed = true;
+      needsStoreContact = failureNeedsStoreContact(result.failure);
+      message = getOrderCodeFailureText(copy, result.failure, "verify", copy.trackOrderUnavailableText);
     }
-  } else {
-    const result = await sendOrderLookupCode({ reference: input.reference, phone: input.phone });
+  } else if (!fieldErrors.reference && intent === "send") {
+    const result = await sendOrderLookupCode({ reference, channel });
     if (result.ok) {
-      codeSent = result.data.sent;
-      failed = false;
+      codeStep = result.data.sent;
       message = result.data.message || copy.trackOrderCodeSentText;
-      resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
-      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.trackOrderUnavailableText));
+      failed = true;
+      const refusal = describeOrderCodeSendRefusal(copy, result.failure, copy.trackOrderUnavailableText);
+      message = refusal.message;
+      codeStep = refusal.codeSent;
+      needsStoreContact = refusal.needsStoreContact;
     }
   }
 }
 
-// A correct code: store the receipt proof and open the receipt (303).
-const verifiedRedirect = verified ? verifiedReceiptResponse(verified, "redirect") : null;
-if (verifiedRedirect) return verifiedRedirect;
+const orderNumberText = status ? formatOrderNumber(status.orderNumber, reference) : `#${reference}`;
+const money = (amount: number) => formatMoney(amount, { code: status?.currencyCode ?? "BDT" });
+const trackingText: OrderTrackingText = {
+  done: copy.orderTrackingStepDoneText,
+  trackingId: copy.orderTrackingIdText,
+  trackWithCourier: copy.orderTrackWithCourierText,
+  formatDate: (iso) => formatOrderReceiptDate(iso, languageCode) ?? "",
+};
+const deliveryView = status
+  ? { status: status.status, requiresShipping: status.requiresShipping, shippingMethodKind: status.shippingMethodKind }
+  : null;
+const progress = status && deliveryView ? relabelOrderProgress(status.tracking.progress, deliveryView, copy) : null;
+const timeline = status && deliveryView ? relabelOrderTimeline(status.tracking.timeline, deliveryView, copy) : [];
+const shipments = (status?.tracking.shipments ?? []).map((shipment) => orderShipmentMarkup({
+  statusLabel: shipment.statusLabel,
+  courier: shipment.courierName,
+  trackingId: shipment.trackingId,
+  trackingUrl: safeTrackingUrl(shipment.trackingUrl),
+}, trackingText)).join("");
+const channelName: Record<OrderCodeChannel, string> = {
+  email: copy.trackOrderChannelEmailText,
+  sms: copy.trackOrderChannelSmsText,
+  whatsapp: copy.trackOrderChannelWhatsappText,
+};
+const placedAt = status ? formatOrderReceiptDate(status.createdAt, languageCode) : null;
+const deliveryLabel = status?.shippingMethodName
+  ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
+  : copy.orderReceiptDeliveryText;
 
 const fieldClass =
   "min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";
-const errorClass = "text-sm text-destructive";
-const firstInvalid = (["reference", "phone", "code"] as const).find((field) => fieldErrors[field]);
-const invalid = (field: "reference" | "phone" | "code", errorId: string) => fieldErrors[field]
+const primaryButton =
+  "inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90";
+const secondaryButton =
+  "inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted";
+const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[field]
   ? { "aria-invalid": "true" as const, "aria-describedby": errorId }
   : {};
-const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
 ---
 
 <Layout
@@ -112,81 +164,152 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section class="container mx-auto px-4 py-10">
-    <div class="mx-auto w-full max-w-md">
-      <h1 class="text-2xl font-semibold text-foreground">{copy.trackOrderText}</h1>
-      <p class="mt-2 text-sm text-muted-foreground">{copy.trackOrderIntroText}</p>
+    <div class="mx-auto w-full max-w-xl">
+      {status ? (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">
+            {formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
+          </h1>
+          {status.firstName && (
+            <p class="mt-1 text-sm text-muted-foreground">{formatCheckoutLanguageText(copy.trackOrderGreetingText, { name: status.firstName })}</p>
+          )}
+          <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            {placedAt && (
+              <div>
+                <dt class="text-muted-foreground">{copy.orderReceiptPlacedText}</dt>
+                <dd class="font-medium text-foreground">{placedAt}</dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-muted-foreground">{copy.orderReceiptStatusText}</dt>
+              <dd class="font-medium text-foreground">{formatOrderSuccessLabel(status.status, copy)}</dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</dt>
+              <dd class="font-medium text-foreground">{formatOrderSuccessLabel(status.paymentStatus, copy)}</dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{copy.orderReceiptDeliveryText}</dt>
+              <dd class="font-medium text-foreground">{status.shippingMethodName ?? "—"}</dd>
+            </div>
+          </dl>
 
-      <form
-        method="post"
-        action="/track-order"
-        class="mt-6 space-y-4"
-        data-order-code-form
-        data-send-url="/api/order-lookup/send-code"
-        data-verify-url="/api/order-lookup/verify"
-        data-code-sent={codeSent ? "true" : undefined}
-      >
-        <div class="grid gap-2">
-          <label for="trackOrderReference" class="text-sm font-medium text-foreground">{copy.orderReceiptOrderNumberText}</label>
-          <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" class={fieldClass} autofocus={firstInvalid === "reference"} {...invalid("reference", "trackOrderReferenceError")} />
-          <p id="trackOrderReferenceError" data-field-error="reference" class={errorClass} hidden={!fieldErrors.reference}>{fieldErrors.reference}</p>
-        </div>
-        <div class="grid gap-2">
-          <label for="trackOrderPhone" class="text-sm font-medium text-foreground">{copy.customerPhoneLabel}</label>
-          <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} autofocus={firstInvalid === "phone" || (!firstInvalid && !isPost && Boolean(reference))} {...invalid("phone", "trackOrderPhoneError")} />
-          <p id="trackOrderPhoneError" data-field-error="phone" class={errorClass} hidden={!fieldErrors.phone}>{fieldErrors.phone}</p>
-        </div>
-        <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
-          <label for="trackOrderCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
-          <input id="trackOrderCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class={`${fieldClass} font-mono tracking-[0.3em]`} autofocus={firstInvalid === "code" || (!firstInvalid && codeSent)} {...invalid("code", "trackOrderCodeError")} />
-          <p id="trackOrderCodeError" data-field-error="code" class={errorClass} hidden={!fieldErrors.code}>{fieldErrors.code}</p>
-        </div>
+          {progress && (
+            <section class="mt-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText}>
+              <div set:html={orderProgressMarkup(progress, trackingText)} />
+              {shipments && <div class="mt-4 space-y-3" set:html={shipments} />}
+              {timeline.length > 0 && (
+                <>
+                  <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">{copy.orderTrackingUpdatesText}</h2>
+                  <ol class="space-y-3 border-l border-border pl-4" set:html={orderTimelineMarkup(timeline, trackingText)} />
+                </>
+              )}
+            </section>
+          )}
 
-        <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
-        <StoreContact layoutData={layoutData} hidden={!needsStoreContact} label={copy.storeContactLabelText} />
+          <section class="mt-6 rounded-xl border border-border bg-background p-4 sm:p-6">
+            <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptItemsText}</h2>
+            <ul class="mt-3 divide-y divide-border">
+              {status.items.map((item) => (
+                <li class="flex items-center gap-3 py-3">
+                  {item.productImage ? (
+                    <img src={item.productImage} alt="" width="56" height="56" loading="lazy" class="h-14 w-14 shrink-0 rounded-lg border border-border object-cover" />
+                  ) : (
+                    <span class="h-14 w-14 shrink-0 rounded-lg border border-border bg-muted" aria-hidden="true"></span>
+                  )}
+                  <span class="min-w-0 flex-1 text-sm">
+                    <span class="block font-medium text-foreground">{item.productName}</span>
+                    {item.variantLabel && <span class="block text-muted-foreground">{item.variantLabel}</span>}
+                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <dl class="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+              <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{copy.subtotalText}</dt><dd>{money(status.subtotal)}</dd></div>
+              {status.requiresShipping || status.shipping > 0 ? (
+                <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{deliveryLabel}</dt><dd>{status.shipping > 0 ? money(status.shipping) : copy.freeText}</dd></div>
+              ) : null}
+              {status.discount > 0 && (
+                <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{copy.discountText}</dt><dd>−{money(status.discount)}</dd></div>
+              )}
+              {status.tax > 0 && (
+                <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{copy.taxText}</dt><dd>{money(status.tax)}</dd></div>
+              )}
+              <div class="flex justify-between gap-4 text-base font-semibold"><dt>{copy.totalText}</dt><dd>{money(status.total)}</dd></div>
+              {status.paid > 0 && (
+                <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{copy.orderReceiptPaidText}</dt><dd>{money(status.paid)}</dd></div>
+              )}
+              {status.balanceDue > 0 && status.paid > 0 && (
+                <div class="flex justify-between gap-4"><dt class="text-muted-foreground">{copy.orderReceiptBalanceDueText}</dt><dd>{money(status.balanceDue)}</dd></div>
+              )}
+            </dl>
+          </section>
 
-        <button
-          type="submit"
-          name="intent"
-          value={codeSent ? "verify" : "send"}
-          data-order-code-submit
-          class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {codeSent ? copy.orderReceiptViewOrderText : copy.paymentRecoverySendCodeText}
-        </button>
-        <button
-          type="submit"
-          name="intent"
-          value="resend"
-          data-order-code-resend
-          data-resend-after={resendAfterSeconds || undefined}
-          hidden={!codeSent}
-          class="inline-flex min-h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-foreground underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
-        >
-          {resendAfterSeconds
-            ? formatCheckoutLanguageText(copy.orderCodeResendInText, { time: formatCountdown(resendAfterSeconds) })
-            : copy.orderCodeSendNewText}
-        </button>
-      </form>
+          <section class="mt-6 rounded-xl border border-border bg-background p-4 sm:p-6">
+            <h2 class="text-sm font-semibold text-foreground">{copy.trackOrderFullDetailsTitleText}</h2>
+            {status.codeOptions.length > 0 ? (
+              <>
+                <p class="mt-1 text-sm text-muted-foreground">{copy.trackOrderFullDetailsHelpText}</p>
+                <form method="post" action="/track-order" class="mt-4 space-y-2">
+                  <input type="hidden" name="intent" value="send" />
+                  <input type="hidden" name="reference" value={reference} />
+                  {status.codeOptions.map((option, index) => (
+                    <button type="submit" name="channel" value={option.channel} class={index === 0 ? primaryButton : secondaryButton}>
+                      {formatCheckoutLanguageText(copy.trackOrderSendCodeByText, { channel: channelName[option.channel], destination: option.destination })}
+                    </button>
+                  ))}
+                </form>
+              </>
+            ) : (
+              <>
+                <p class="mt-1 text-sm text-muted-foreground">{copy.trackOrderNoCodeOptionText}</p>
+                <StoreContact layoutData={layoutData} label={copy.storeContactLabelText} />
+              </>
+            )}
+          </section>
+          <p class="mt-6 text-center text-sm">
+            <a href="/track-order" class="font-medium text-primary underline-offset-4 hover:underline">{copy.trackOrderAnotherOrderText}</a>
+          </p>
+        </>
+      ) : codeStep ? (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">
+            {formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
+          </h1>
+          <form method="post" action="/track-order" class="mt-6 space-y-4" novalidate>
+            <input type="hidden" name="reference" value={reference} />
+            {channel && <input type="hidden" name="channel" value={channel} />}
+            <p aria-live="polite" class={`text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
+            <div class="grid gap-2">
+              <label for="trackOrderCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
+              <input id="trackOrderCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" autofocus class={`${fieldClass} font-mono tracking-[0.3em]`} {...invalid("code", "trackOrderCodeError")} />
+              <p id="trackOrderCodeError" class="text-sm text-destructive" hidden={!fieldErrors.code}>{fieldErrors.code}</p>
+            </div>
+            <StoreContact layoutData={layoutData} hidden={!needsStoreContact} label={copy.storeContactLabelText} />
+            <button type="submit" name="intent" value="verify" class={primaryButton}>{copy.orderReceiptViewOrderText}</button>
+            <button type="submit" name="intent" value="send" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-foreground underline-offset-4 hover:underline">
+              {copy.orderCodeSendNewText}
+            </button>
+          </form>
+        </>
+      ) : (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">{copy.trackOrderText}</h1>
+          <p class="mt-2 text-sm text-muted-foreground">{copy.trackOrderIntroText}</p>
+          <form method="post" action="/track-order" class="mt-6 space-y-4" novalidate>
+            <input type="hidden" name="intent" value="find" />
+            <div class="grid gap-2">
+              <label for="trackOrderReference" class="text-sm font-medium text-foreground">{copy.orderReceiptOrderNumberText}</label>
+              <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" autofocus class={fieldClass} {...invalid("reference", "trackOrderReferenceError")} />
+              <p id="trackOrderReferenceError" class="text-sm text-destructive" hidden={!fieldErrors.reference}>{fieldErrors.reference}</p>
+            </div>
+            <p aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
+            <StoreContact layoutData={layoutData} hidden={!needsStoreContact} label={copy.storeContactLabelText} />
+            <button type="submit" class={primaryButton}>{copy.trackOrderFindText}</button>
+          </form>
+        </>
+      )}
     </div>
   </section>
-
-  <script is:inline set:html={`window.__CHECKOUT_LANGUAGE__=${serializedCopy};`}></script>
 </Layout>
-
-<script>
-  import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-  import { getOrderLookupFieldErrors } from "@/lib/order-lookup";
-  import { enhanceOrderCodeForm } from "@/lib/order-lookup-form";
-
-  // The page always inlines its copy above this module.
-  const copy = (window.__CHECKOUT_LANGUAGE__ as { languageData: CheckoutLanguageData }).languageData;
-  const form = document.querySelector<HTMLFormElement>("[data-order-code-form]");
-  if (form) {
-    enhanceOrderCodeForm(form, copy, {
-      verifyCode: copy.orderReceiptViewOrderText,
-      codeSent: copy.trackOrderCodeSentText,
-      unavailable: copy.trackOrderUnavailableText,
-      validate: (fields) => getOrderLookupFieldErrors(copy, fields.reference ?? "", fields.phone ?? ""),
-    });
-  }
-</script>

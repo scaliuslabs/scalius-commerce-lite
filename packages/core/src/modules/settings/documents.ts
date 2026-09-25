@@ -16,11 +16,9 @@ import {
   type SupportedCurrencyCode,
 } from "@scalius/shared/currency";
 import {
-  getLegacyCustomerAuthMethodForPolicy,
-  normalizeCustomerAuthMethod,
-  normalizeCustomerAuthPolicy,
-  type CustomerAuthMethod,
-  type CustomerAuthPolicyConfig,
+  DEFAULT_CUSTOMER_IDENTITY,
+  normalizeCustomerIdentitySettings,
+  type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
 import {
   normalizeSeoDiscoverySettings,
@@ -316,36 +314,23 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
   },
 });
 
-export interface CustomerAuthSettings {
-  /** Derived from the policy; kept for the legacy dashboard and OTP queue fields. */
-  authVerificationMethod: CustomerAuthMethod;
-  policy: CustomerAuthPolicyConfig;
-}
-
 /**
- * A stored policy wins; without one, the policy follows the saved method. The
- * normalized pair is what every reader sees.
+ * Settings → Customer accounts: what checkout collects and which code
+ * channels prove a buyer. The one document every identity surface reads.
  */
+export type CustomerAuthSettings = CustomerIdentitySettings;
+
 export const customerAuthDocument = defineSettingsDocument<CustomerAuthSettings>({
   key: "customer_auth",
   schema: z.preprocess(
-    (value) => {
-      const record = asRecord(value);
-      const storedPolicy = record.policy && typeof record.policy === "object" ? record.policy : undefined;
-      const policy = normalizeCustomerAuthPolicy(storedPolicy, record.authVerificationMethod);
-      return {
-        policy,
-        authVerificationMethod: storedPolicy
-          ? getLegacyCustomerAuthMethodForPolicy(policy)
-          : normalizeCustomerAuthMethod(record.authVerificationMethod),
-      };
-    },
-    z.object({ authVerificationMethod: z.string(), policy: jsonRecord }),
+    normalizeCustomerIdentitySettings,
+    z.object({
+      email: z.enum(["required", "optional", "hidden"]),
+      whatsapp: z.enum(["off", "same_as_phone", "separate"]),
+      channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3),
+    }),
   ) as unknown as z.ZodType<CustomerAuthSettings>,
-  defaults: {
-    authVerificationMethod: "email",
-    policy: normalizeCustomerAuthPolicy(undefined, "email"),
-  },
+  defaults: { ...DEFAULT_CUSTOMER_IDENTITY, channels: [...DEFAULT_CUSTOMER_IDENTITY.channels] },
 });
 
 export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPolicy>({

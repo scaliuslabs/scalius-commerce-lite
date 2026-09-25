@@ -4,7 +4,6 @@ import {
     getEmailProviderReadiness,
     getEmailRuntimeSettings,
 } from "@scalius/core/integrations/email";
-import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
     normalizeFirebaseServiceAccountJson,
     readFirebaseSettings,
@@ -15,15 +14,12 @@ import {
 } from "@scalius/core/integrations/whatsapp";
 import { getActivePaymentMethods, filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments";
 import {
-    CUSTOMER_AUTH_CONTACT_FIELDS,
-    CUSTOMER_AUTH_METHODS,
     CUSTOMER_AUTH_OTP_CHANNELS,
-    customerAuthPolicyUsesEmailProvider,
-    customerAuthPolicyUsesSmsProvider,
-    customerAuthPolicyUsesWhatsAppProvider,
-    getCustomerAuthPolicyForMethod,
-    normalizeCustomerAuthMethod,
-    normalizeCustomerAuthPolicy,
+    EMAIL_COLLECTION_MODES,
+    WHATSAPP_COLLECTION_MODES,
+    customerIdentityProblem,
+    type CustomerAuthOtpChannel,
+    type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
 import {
     getCheckoutFlowSettingsDocument,
@@ -44,6 +40,7 @@ import {
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
     getCheckoutReadiness,
     getCustomerSignInReadiness,
+    isCustomerAuthChannelReady,
 } from "@scalius/core/modules/settings";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/modules/notifications";
@@ -224,12 +221,18 @@ export function getInheritedSecuritySources(
     ];
 }
 
-const customerAuthPolicySchema = z.object({
-    otpChannels: z.array(z.enum(CUSTOMER_AUTH_OTP_CHANNELS)).min(1).max(3),
-    requiredContactFields: z.array(z.enum(CUSTOMER_AUTH_CONTACT_FIELDS)).max(2).optional(),
-    optionalContactFields: z.array(z.enum(CUSTOMER_AUTH_CONTACT_FIELDS)).max(2).optional(),
-    defaultOtpChannel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
-});
+/** Settings → Customer accounts. Phone is always collected and required. */
+const customerIdentitySchema = z.object({
+    email: z.enum(EMAIL_COLLECTION_MODES),
+    whatsapp: z.enum(WHATSAPP_COLLECTION_MODES),
+    channels: z.array(z.enum(CUSTOMER_AUTH_OTP_CHANNELS)).min(1).max(3),
+}).strict();
+
+const CHANNEL_NOT_READY: Record<CustomerAuthOtpChannel, string> = {
+    email: "Email codes can't be turned on until transactional email is set up.",
+    sms: "SMS codes can't be turned on until an SMS provider is set up.",
+    whatsapp: "WhatsApp codes can't be turned on until a WhatsApp provider is connected.",
+};
 
 /**
  * A provider message is merchant copy from a third party; bound it so one
@@ -390,8 +393,7 @@ const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), re
 
 const authSettingsResponseSchema = z.object({
     revision: authRevisionsSchema,
-    authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),
-    customerAuthPolicy: customerAuthPolicySchema,
+    customerIdentity: customerIdentitySchema,
     whatsappAccessToken: z.string().max(MASKED.length),
     whatsappPhoneNumberId: z.string().max(WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
     whatsappTemplateName: z.string().max(WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
@@ -420,8 +422,7 @@ app.openapi(getAuthRoute, async (c) => {
 
     return ok(c, {
         revision: { customerAuth: auth.revision, whatsapp: whatsappDocumentRead.revision },
-        authVerificationMethod: auth.value.authVerificationMethod,
-        customerAuthPolicy: auth.value.policy,
+        customerIdentity: auth.value,
         whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
         whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(0, WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
         whatsappTemplateName: (whatsapp.authTemplateName || "").slice(0, WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
@@ -430,8 +431,7 @@ app.openapi(getAuthRoute, async (c) => {
 
 const saveAuthSchema = z.object({
     expectedRevision: authRevisionsSchema.partial(),
-    authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS).optional(),
-    customerAuthPolicy: customerAuthPolicySchema.optional(),
+    customerIdentity: customerIdentitySchema.optional(),
     whatsappAccessToken: z.string().max(WHATSAPP_ACCESS_TOKEN_MAX_LENGTH).optional(),
     whatsappPhoneNumberId: z
         .string()
@@ -472,6 +472,7 @@ app.openapi(saveAuthRoute, async (c) => {
     const body = c.req.valid("json");
     const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const existingAuth = await customerAuthDocument.read(db);
+    const env = c.env as Record<string, unknown>;
 
     const incomingWhatsAppAccessToken =
         typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED
@@ -494,42 +495,22 @@ app.openapi(saveAuthRoute, async (c) => {
     };
     const whatsappProviderTouched = Object.values(whatsappPatch).some((value) => value !== undefined);
 
-    let requestedCustomerAuthPolicy: ReturnType<typeof normalizeCustomerAuthPolicy> | undefined;
-    if (body.customerAuthPolicy) {
-        requestedCustomerAuthPolicy = normalizeCustomerAuthPolicy(
-            body.customerAuthPolicy,
-            body.authVerificationMethod ?? existingAuth.authVerificationMethod,
-        );
-    } else if (body.authVerificationMethod) {
-        requestedCustomerAuthPolicy = getCustomerAuthPolicyForMethod(
-            normalizeCustomerAuthMethod(body.authVerificationMethod),
-        );
-    }
-    const effectiveCustomerAuthPolicy = requestedCustomerAuthPolicy ?? existingAuth.policy;
+    const requestedIdentity: CustomerIdentitySettings | undefined = body.customerIdentity
+        ? { ...body.customerIdentity, channels: [...new Set(body.customerIdentity.channels)] }
+        : undefined;
+    const problem = requestedIdentity ? customerIdentityProblem(requestedIdentity) : null;
+    if (problem) throw new ValidationError(problem);
 
-    if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
-        const emailReadiness = await getEmailProviderReadiness({
-            db,
-            env: c.env as Record<string, unknown>,
-            encryptionKey: credentialEncryptionKey,
-        });
-        if (!isReady(emailReadiness)) {
-            throw new ValidationError(
-                `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.issues[0]?.message ?? ""}`.trim(),
-            );
+    // Fail closed: every chosen channel must be able to send. A WhatsApp
+    // channel is judged against the credentials this same save leaves behind.
+    const effectiveIdentity = requestedIdentity ?? existingAuth;
+    for (const channel of requestedIdentity?.channels ?? []) {
+        if (channel === "whatsapp") continue;
+        if (!(await isCustomerAuthChannelReady(db, channel, { encryptionKey: credentialEncryptionKey, runtimeEnv: env }))) {
+            throw new ValidationError(CHANNEL_NOT_READY[channel]);
         }
     }
-
-    if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
-        const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
-        if (!isReady(smsReadiness)) {
-            throw new ValidationError(
-                `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.issues[0]?.message ?? ""}`.trim(),
-            );
-        }
-    }
-
-    if (customerAuthPolicyUsesWhatsAppProvider(effectiveCustomerAuthPolicy)) {
+    if (effectiveIdentity.channels.includes("whatsapp") && (requestedIdentity || whatsappProviderTouched)) {
         const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
         const nextAccessToken = whatsappPatch.accessToken === undefined
             ? whatsapp.accessToken
@@ -537,15 +518,7 @@ app.openapi(saveAuthRoute, async (c) => {
         const nextPhoneNumberId = whatsappPatch.phoneNumberId === undefined
             ? whatsapp.phoneNumberId?.trim() || undefined
             : whatsappPatch.phoneNumberId.trim() || undefined;
-        const nextTemplateName = whatsappPatch.authTemplateName === undefined
-            ? whatsapp.authTemplateName?.trim() || undefined
-            : whatsappPatch.authTemplateName.trim() || undefined;
-
-        if (!nextAccessToken || !nextPhoneNumberId || !nextTemplateName) {
-            throw new ValidationError(
-                "WhatsApp OTP cannot be enabled until a WhatsApp access token, phone number ID, and OTP template name are configured.",
-            );
-        }
+        if (!nextAccessToken || !nextPhoneNumberId) throw new ValidationError(CHANNEL_NOT_READY.whatsapp);
     }
 
     // Credentials and policy commit together (or not at all), each at the
@@ -564,10 +537,10 @@ app.openapi(saveAuthRoute, async (c) => {
             expectedRevision: requireExpectedRevision(body.expectedRevision.whatsapp, "whatsapp"),
         });
     }
-    if (requestedCustomerAuthPolicy) {
+    if (requestedIdentity) {
         writes.push({
             document: customerAuthDocument,
-            patch: { policy: requestedCustomerAuthPolicy },
+            patch: requestedIdentity,
             expectedRevision: requireExpectedRevision(body.expectedRevision.customerAuth, "customerAuth"),
         });
     }
@@ -807,9 +780,8 @@ app.openapi(saveEmailRoute, async (c) => {
             patch.sender = sender.trim();
         }
 
-        const effectiveCustomerAuthPolicy = customerAuth.policy;
         const emailSettingsTouched = Object.keys(patch).length > 0;
-        if (emailSettingsTouched && customerAuthPolicyUsesEmailProvider(effectiveCustomerAuthPolicy)) {
+        if (emailSettingsTouched && customerAuth.channels.includes("email")) {
             // Judge the settings this save would leave behind with the one
             // shared email readiness rule instead of re-deriving it here.
             const nextResendApiKey = typeof apiKey === "string" && apiKey !== MASKED

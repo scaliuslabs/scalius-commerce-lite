@@ -36329,19 +36329,26 @@
                         "guestCheckoutEnabled": {
                           "type": "boolean"
                         },
-                        "authVerificationMethod": {
-                          "type": "string",
-                          "enum": [
-                            "email",
-                            "sms_otp",
-                            "whatsapp_otp",
-                            "both"
-                          ]
-                        },
-                        "customerAuthPolicy": {
+                        "customerIdentity": {
                           "type": "object",
                           "properties": {
-                            "otpChannels": {
+                            "email": {
+                              "type": "string",
+                              "enum": [
+                                "required",
+                                "optional",
+                                "hidden"
+                              ]
+                            },
+                            "whatsapp": {
+                              "type": "string",
+                              "enum": [
+                                "off",
+                                "same_as_phone",
+                                "separate"
+                              ]
+                            },
+                            "channels": {
                               "type": "array",
                               "items": {
                                 "type": "string",
@@ -36352,43 +36359,12 @@
                                 ]
                               },
                               "maxItems": 3
-                            },
-                            "requiredContactFields": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "enum": [
-                                  "email",
-                                  "phone"
-                                ]
-                              },
-                              "maxItems": 2
-                            },
-                            "optionalContactFields": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "enum": [
-                                  "email",
-                                  "phone"
-                                ]
-                              },
-                              "maxItems": 2
-                            },
-                            "defaultOtpChannel": {
-                              "type": "string",
-                              "enum": [
-                                "email",
-                                "sms",
-                                "whatsapp"
-                              ]
                             }
                           },
                           "required": [
-                            "otpChannels",
-                            "requiredContactFields",
-                            "optionalContactFields",
-                            "defaultOtpChannel"
+                            "email",
+                            "whatsapp",
+                            "channels"
                           ]
                         },
                         "checkoutMode": {
@@ -36505,8 +36481,7 @@
                       "required": [
                         "gateways",
                         "guestCheckoutEnabled",
-                        "authVerificationMethod",
-                        "customerAuthPolicy",
+                        "customerIdentity",
                         "checkoutMode",
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
@@ -51681,9 +51656,6 @@
                             "fieldVisibility": {
                               "type": "object",
                               "properties": {
-                                "showEmailField": {
-                                  "type": "boolean"
-                                },
                                 "showOrderNotesField": {
                                   "type": "boolean"
                                 },
@@ -51692,7 +51664,6 @@
                                 }
                               },
                               "required": [
-                                "showEmailField",
                                 "showOrderNotesField",
                                 "showAreaField"
                               ]
@@ -64220,12 +64191,604 @@
         "security": []
       }
     },
+    "/api/v1/orders/lookup/status": {
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Status-only view of an order by its number (no personal data)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Order number (\"#1001\") or order id"
+                  }
+                },
+                "required": [
+                  "reference"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Where the order is",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "firstName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "paymentStatus": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "requiresShipping": {
+                              "type": "boolean"
+                            },
+                            "shippingMethodKind": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currencyCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currencyDecimalPlaces": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "subtotal": {
+                              "type": "number"
+                            },
+                            "shipping": {
+                              "type": "number"
+                            },
+                            "discount": {
+                              "type": "number"
+                            },
+                            "tax": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "paid": {
+                              "type": "number"
+                            },
+                            "balanceDue": {
+                              "type": "number"
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantLabel": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "productImage": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "productName",
+                                  "variantLabel",
+                                  "quantity",
+                                  "productImage"
+                                ]
+                              }
+                            },
+                            "tracking": {
+                              "type": "object",
+                              "properties": {
+                                "progress": {
+                                  "type": "object",
+                                  "properties": {
+                                    "steps": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "key": {
+                                            "type": "string",
+                                            "enum": [
+                                              "placed",
+                                              "confirmed",
+                                              "shipped",
+                                              "delivered"
+                                            ]
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "done": {
+                                            "type": "boolean"
+                                          },
+                                          "happenedAt": {
+                                            "$ref": "#/components/schemas/NullableTimestamp"
+                                          }
+                                        },
+                                        "required": [
+                                          "key",
+                                          "label",
+                                          "done",
+                                          "happenedAt"
+                                        ]
+                                      }
+                                    },
+                                    "outcome": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "happenedAt": {
+                                          "$ref": "#/components/schemas/NullableTimestamp"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "label",
+                                        "happenedAt"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "steps",
+                                    "outcome"
+                                  ]
+                                },
+                                "timeline": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "order",
+                                          "payment",
+                                          "refund",
+                                          "request"
+                                        ]
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "happenedAt": {
+                                        "$ref": "#/components/schemas/NullableTimestamp"
+                                      },
+                                      "details": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "type",
+                                      "status",
+                                      "label",
+                                      "happenedAt"
+                                    ]
+                                  }
+                                },
+                                "shipments": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "statusLabel": {
+                                        "type": "string"
+                                      },
+                                      "courierName": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingId": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingUrl": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "description": "http(s) courier tracking link"
+                                      }
+                                    },
+                                    "required": [
+                                      "statusLabel",
+                                      "courierName",
+                                      "trackingId",
+                                      "trackingUrl"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "progress",
+                                "timeline",
+                                "shipments"
+                              ]
+                            },
+                            "codeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "channel": {
+                                    "type": "string",
+                                    "enum": [
+                                      "email",
+                                      "sms",
+                                      "whatsapp"
+                                    ]
+                                  },
+                                  "destination": {
+                                    "type": "string",
+                                    "description": "Masked contact on the order (\"01•••••678\")"
+                                  }
+                                },
+                                "required": [
+                                  "channel",
+                                  "destination"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "orderNumber",
+                            "firstName",
+                            "status",
+                            "paymentStatus",
+                            "createdAt",
+                            "requiresShipping",
+                            "shippingMethodKind",
+                            "shippingMethodName",
+                            "currencyCode",
+                            "currencyDecimalPlaces",
+                            "subtotal",
+                            "shipping",
+                            "discount",
+                            "tax",
+                            "total",
+                            "paid",
+                            "balanceDue",
+                            "items",
+                            "tracking",
+                            "codeOptions"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "order"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "storefront.orders_lookup_status.status",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "internal"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/orders/lookup/send-otp": {
       "post": {
         "tags": [
           "Orders"
         ],
-        "summary": "Send a code to the contact saved on an order (order number + its phone)",
+        "summary": "Send a code to the contact saved on an order, through a channel the store chose",
         "requestBody": {
           "required": true,
           "content": {
@@ -64239,16 +64802,17 @@
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
                   },
-                  "phone": {
+                  "channel": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 32,
-                    "description": "Phone number used for the order"
+                    "enum": [
+                      "email",
+                      "sms",
+                      "whatsapp"
+                    ]
                   }
                 },
                 "required": [
-                  "reference",
-                  "phone"
+                  "reference"
                 ],
                 "additionalProperties": false
               }
@@ -64656,12 +65220,6 @@
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
                   },
-                  "phone": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 32,
-                    "description": "Phone number used for the order"
-                  },
                   "code": {
                     "type": "string",
                     "minLength": 4,
@@ -64670,7 +65228,6 @@
                 },
                 "required": [
                   "reference",
-                  "phone",
                   "code"
                 ],
                 "additionalProperties": false
@@ -68447,6 +69004,11 @@
                     "type": "string",
                     "nullable": true,
                     "format": "email"
+                  },
+                  "customerWhatsapp": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 32
                   },
                   "shippingAddress": {
                     "type": "string",
@@ -152298,19 +152860,26 @@
                             "whatsapp"
                           ]
                         },
-                        "authVerificationMethod": {
-                          "type": "string",
-                          "enum": [
-                            "email",
-                            "sms_otp",
-                            "whatsapp_otp",
-                            "both"
-                          ]
-                        },
-                        "customerAuthPolicy": {
+                        "customerIdentity": {
                           "type": "object",
                           "properties": {
-                            "otpChannels": {
+                            "email": {
+                              "type": "string",
+                              "enum": [
+                                "required",
+                                "optional",
+                                "hidden"
+                              ]
+                            },
+                            "whatsapp": {
+                              "type": "string",
+                              "enum": [
+                                "off",
+                                "same_as_phone",
+                                "separate"
+                              ]
+                            },
+                            "channels": {
                               "type": "array",
                               "items": {
                                 "type": "string",
@@ -152322,41 +152891,14 @@
                               },
                               "minItems": 1,
                               "maxItems": 3
-                            },
-                            "requiredContactFields": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "enum": [
-                                  "email",
-                                  "phone"
-                                ]
-                              },
-                              "maxItems": 2
-                            },
-                            "optionalContactFields": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "enum": [
-                                  "email",
-                                  "phone"
-                                ]
-                              },
-                              "maxItems": 2
-                            },
-                            "defaultOtpChannel": {
-                              "type": "string",
-                              "enum": [
-                                "email",
-                                "sms",
-                                "whatsapp"
-                              ]
                             }
                           },
                           "required": [
-                            "otpChannels"
-                          ]
+                            "email",
+                            "whatsapp",
+                            "channels"
+                          ],
+                          "additionalProperties": false
                         },
                         "whatsappAccessToken": {
                           "type": "string",
@@ -152373,8 +152915,7 @@
                       },
                       "required": [
                         "revision",
-                        "authVerificationMethod",
-                        "customerAuthPolicy",
+                        "customerIdentity",
                         "whatsappAccessToken",
                         "whatsappPhoneNumberId",
                         "whatsappTemplateName"
@@ -152674,19 +153215,26 @@
                       }
                     }
                   },
-                  "authVerificationMethod": {
-                    "type": "string",
-                    "enum": [
-                      "email",
-                      "sms_otp",
-                      "whatsapp_otp",
-                      "both"
-                    ]
-                  },
-                  "customerAuthPolicy": {
+                  "customerIdentity": {
                     "type": "object",
                     "properties": {
-                      "otpChannels": {
+                      "email": {
+                        "type": "string",
+                        "enum": [
+                          "required",
+                          "optional",
+                          "hidden"
+                        ]
+                      },
+                      "whatsapp": {
+                        "type": "string",
+                        "enum": [
+                          "off",
+                          "same_as_phone",
+                          "separate"
+                        ]
+                      },
+                      "channels": {
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -152698,41 +153246,14 @@
                         },
                         "minItems": 1,
                         "maxItems": 3
-                      },
-                      "requiredContactFields": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "email",
-                            "phone"
-                          ]
-                        },
-                        "maxItems": 2
-                      },
-                      "optionalContactFields": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "email",
-                            "phone"
-                          ]
-                        },
-                        "maxItems": 2
-                      },
-                      "defaultOtpChannel": {
-                        "type": "string",
-                        "enum": [
-                          "email",
-                          "sms",
-                          "whatsapp"
-                        ]
                       }
                     },
                     "required": [
-                      "otpChannels"
-                    ]
+                      "email",
+                      "whatsapp",
+                      "channels"
+                    ],
+                    "additionalProperties": false
                   },
                   "whatsappAccessToken": {
                     "type": "string",
@@ -193435,6 +193956,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "customerWhatsapp": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "customerId": {
                           "type": "string",
                           "nullable": true
@@ -194621,6 +195146,7 @@
                         "customerName",
                         "customerPhone",
                         "customerEmail",
+                        "customerWhatsapp",
                         "customerId",
                         "customerRecord",
                         "totalAmount",
@@ -261466,9 +261992,6 @@
                             "fieldVisibility": {
                               "type": "object",
                               "properties": {
-                                "showEmailField": {
-                                  "type": "boolean"
-                                },
                                 "showOrderNotesField": {
                                   "type": "boolean"
                                 },
@@ -261477,7 +262000,6 @@
                                 }
                               },
                               "required": [
-                                "showEmailField",
                                 "showOrderNotesField",
                                 "showAreaField"
                               ]
@@ -261938,9 +262460,6 @@
                               "fieldVisibility": {
                                 "type": "object",
                                 "properties": {
-                                  "showEmailField": {
-                                    "type": "boolean"
-                                  },
                                   "showOrderNotesField": {
                                     "type": "boolean"
                                   },
@@ -261949,7 +262468,6 @@
                                   }
                                 },
                                 "required": [
-                                  "showEmailField",
                                   "showOrderNotesField",
                                   "showAreaField"
                                 ]
@@ -262343,9 +262861,6 @@
                   "fieldVisibility": {
                     "type": "object",
                     "properties": {
-                      "showEmailField": {
-                        "type": "boolean"
-                      },
                       "showOrderNotesField": {
                         "type": "boolean"
                       },
@@ -262418,9 +262933,6 @@
                             "fieldVisibility": {
                               "type": "object",
                               "properties": {
-                                "showEmailField": {
-                                  "type": "boolean"
-                                },
                                 "showOrderNotesField": {
                                   "type": "boolean"
                                 },
@@ -262429,7 +262941,6 @@
                                 }
                               },
                               "required": [
-                                "showEmailField",
                                 "showOrderNotesField",
                                 "showAreaField"
                               ]
@@ -262771,9 +263282,6 @@
                         "fieldVisibility": {
                           "type": "object",
                           "properties": {
-                            "showEmailField": {
-                              "type": "boolean"
-                            },
                             "showOrderNotesField": {
                               "type": "boolean"
                             },
@@ -262782,7 +263290,6 @@
                             }
                           },
                           "required": [
-                            "showEmailField",
                             "showOrderNotesField",
                             "showAreaField"
                           ]
@@ -263148,9 +263655,6 @@
                   "fieldVisibility": {
                     "type": "object",
                     "properties": {
-                      "showEmailField": {
-                        "type": "boolean"
-                      },
                       "showOrderNotesField": {
                         "type": "boolean"
                       },
@@ -263225,9 +263729,6 @@
                             "fieldVisibility": {
                               "type": "object",
                               "properties": {
-                                "showEmailField": {
-                                  "type": "boolean"
-                                },
                                 "showOrderNotesField": {
                                   "type": "boolean"
                                 },
@@ -263236,7 +263737,6 @@
                                 }
                               },
                               "required": [
-                                "showEmailField",
                                 "showOrderNotesField",
                                 "showAreaField"
                               ]

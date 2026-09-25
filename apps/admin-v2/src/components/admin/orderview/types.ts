@@ -187,6 +187,8 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
+  /** A separate WhatsApp number; null means the phone. */
+  customerWhatsapp?: string | null;
   shippingAddress: string;
   city: string;
   zone: string;

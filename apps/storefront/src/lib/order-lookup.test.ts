@@ -11,7 +11,6 @@ import {
   getOrderCodeFailureText,
   getOrderLookupFieldErrors,
   normalizeOrderReference,
-  readOrderLookupInput,
 } from "./order-lookup";
 
 const en = ENGLISH_CHECKOUT_LANGUAGE_DATA;
@@ -32,36 +31,12 @@ describe("order lookup input", () => {
     expect(normalizeOrderReference("1001; drop")).toBeNull();
   });
 
-  it("accepts Bangladeshi phone formats, including Bangla digits", () => {
-    expect(readOrderLookupInput("#1001", "০১৭১২-৩৪৫৬৭৮")).toEqual({
-      ok: true,
-      reference: "1001",
-      phone: "+8801712345678",
+  it("asks only for the order number, in the buyer's language", () => {
+    expect(getOrderLookupFieldErrors(en, "")).toEqual({ reference: en.trackOrderNumberInvalidText });
+    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1")).toEqual({
+      reference: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderNumberInvalidText,
     });
-    expect(readOrderLookupInput("1001", "1712 345678")).toMatchObject({ ok: true, phone: "+8801712345678" });
-  });
-
-  it("names the field to fix, order number first", () => {
-    expect(readOrderLookupInput("", "")).toEqual({ ok: false, field: "reference" });
-    expect(readOrderLookupInput("1001", "0171234")).toEqual({ ok: false, field: "phone" });
-    expect(readOrderLookupInput("1001", "01212345678")).toEqual({ ok: false, field: "phone" });
-  });
-
-  it("gives every field its own message at once", () => {
-    expect(getOrderLookupFieldErrors(en, "", "")).toEqual({
-      reference: en.trackOrderNumberInvalidText,
-      phone: en.trackOrderPhoneInvalidText,
-    });
-    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1001", "0171234")).toEqual({
-      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneFormatInvalidText,
-    });
-    expect(getOrderLookupFieldErrors(en, "১০০১", "০১৭১২-৩৪৫৬৭৮")).toEqual({});
-  });
-
-  it("asks for a missing phone, and says a typed one is not valid", () => {
-    expect(getOrderLookupFieldErrors(en, "#1001", "   ").phone).toBe(en.trackOrderPhoneInvalidText);
-    expect(getOrderLookupFieldErrors(en, "#1001", "123").phone).toBe("Enter a valid phone number.");
-    expect(getOrderLookupFieldErrors(en, "#1001", "02123456789").phone).toBe(en.trackOrderPhoneFormatInvalidText);
+    expect(getOrderLookupFieldErrors(en, "১০০১")).toEqual({});
   });
 });
 
@@ -92,7 +67,7 @@ describe("order code messages", () => {
   });
 
   it("shows the API's reason when a send is refused for this order", () => {
-    const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
+    const notFound = "We couldn't find an order with that number. Check it and try again.";
     expect(getOrderCodeFailureText(en, { status: 404, message: notFound }, "send", unavailable)).toBe(notFound);
     expect(getOrderCodeFailureText(en, { status: 409, message: "No way to reach you." }, "send", unavailable)).toBe("No way to reach you.");
     expect(getOrderCodeFailureText(en, { status: 400, message: "Backend detail" }, "send", unavailable)).toBe(en.paymentRecoverySendFailedText);
