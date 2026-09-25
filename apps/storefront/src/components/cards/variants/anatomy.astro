@@ -29,9 +29,11 @@ interface Props {
   headingLevel: "h2" | "h3";
   /** The product id, for Compare. */
   productId: string;
+  /** The contained photo's margin on each side, as a share of its box (CARD_PHOTO_INSET). */
+  inset: number;
 }
 
-const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId } = Astro.props;
+const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId, inset } = Astro.props;
 const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
@@ -59,6 +61,7 @@ const lookStyle = [
   `--pc-ratio:${look.image.ratio}`,
   `--pc-fit:${look.image.fit}`,
   `--pc-radius:${look.radius}px`,
+  `--pc-inset:${Number((inset * 100).toFixed(2))}%`,
   look.title && `--pc-title-d:${look.title.size.desktop}px;--pc-title-m:${look.title.size.phone}px;--pc-title-w:${look.title.weight}`,
   look.price && `--pc-price-d:${look.price.size.desktop}px;--pc-price-m:${look.price.size.phone}px;--pc-price-w:${look.price.weight}`,
 ].filter(Boolean).join(";");

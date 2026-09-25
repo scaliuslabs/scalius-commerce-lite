@@ -16,7 +16,8 @@ import {
   type ProductGridContext,
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, productCardModel, type ProductCardProduct } from "./card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, productCardModel, type ProductCardProduct } from "./card-model";
+import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import StandardCard from "./variants/standard.astro";
 import AnatomyCard from "./variants/anatomy.astro";
 
@@ -90,7 +91,12 @@ const loading = productCardImageLoading(
 // can override the theme's filters), else the theme's for a grid beside them.
 const filterColumnPx = filterColumnOverride
   ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
-const sizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
+const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
+// Every card but standard (kept as it was): the photo's own width inside its
+// margin, and DPR 3 phones fetch about 2x pixels, so a card photo is never
+// much wider than drawn.
+const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
+const sizes = variant === "standard" ? slotSizes : capSizesDensity(scaleSizes(slotSizes, 1 - 2 * inset));
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,
@@ -114,6 +120,7 @@ const dimensions = variant === "standard"
       model={model}
       ratio={ratio}
       dimensions={dimensions}
+      inset={inset}
       productId={product.id}
       sizes={sizes}
       loading={loading}

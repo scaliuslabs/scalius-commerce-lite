@@ -160,7 +160,6 @@
   --pc-meta: 0.8125rem;
   --pc-title: var(--pc-title-m, 0.875rem);
   --pc-price: var(--pc-price-m, 1rem);
-  --pc-inset: 6%;
   border-radius: var(--pc-radius, 0);
   background: var(--card);
   color: var(--foreground);
@@ -491,12 +490,9 @@
   padding: var(--pc-pad-y) var(--pc-pad-x) 1rem;
 }
 
+/* The photo sits inset on white over a hairline that spans the tile (204px of 254). */
 .site-root .product-card[data-card-variant="spec"] .product-card-well {
-  margin: 1.25rem 1.25rem 0;
-}
-
-.site-root .product-card[data-card-variant="spec"] .product-card-photo {
-  padding: 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .site-root .product-card[data-card-variant="spec"] .pc-title {
@@ -552,13 +548,14 @@
   }
 }
 
+/* "Save: 5,400৳" flush with the tile's left edge, rounded on the right. */
 .site-root .product-card[data-card-variant="spec"] .product-card-badges {
-  top: 0.5rem;
-  left: 0.5rem;
+  top: 0.75rem;
+  left: 0;
 }
 
 .site-root .product-card[data-card-variant="spec"] .product-card-badge {
-  border-radius: 2rem;
+  border-radius: 0 2rem 2rem 0;
   box-shadow: none;
   background: var(--primary);
   color: var(--primary-foreground);
@@ -570,9 +567,8 @@
    white; title and price 18/600, a "৳500 OFF" chip, an outline pill. */
 .site-root .product-card[data-card-variant="tech-rounded"] {
   --pc-pad-x: 1.25rem;
-  --pc-pad-y: 1rem;
-  --pc-gap: 0.5rem;
-  --pc-inset: 7%;
+  --pc-pad-y: 0.75rem;
+  --pc-gap: 0.375rem;
   --pc-action-h: 2.25rem;
   border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
 }
@@ -593,7 +589,7 @@
 
 .site-root .product-card[data-card-variant="tech-rounded"] .product-card-action {
   border-radius: 999px;
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 /* ─── retail: Target ───────────────────────────────────────────────────────
@@ -603,7 +599,6 @@
 .site-root .product-card[data-card-variant="retail"] {
   --pc-pad-y: 0.75rem;
   --pc-gap: 0.25rem;
-  --pc-inset: 8%;
   --pc-action-h: 2.5rem;
 }
 
@@ -645,7 +640,6 @@
   --pc-pad-y: 0.5rem;
   --pc-gap: 0.25rem;
   --pc-meta: 0.75rem;
-  --pc-inset: 0%;
   border-radius: 2px;
   background: var(--card);
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
@@ -684,7 +678,6 @@
   --pc-pad-y: 0.5rem;
   --pc-gap: 0.25rem;
   --pc-meta: 0.75rem;
-  --pc-inset: 10%;
 }
 
 .site-root .product-card[data-card-variant="quick-add"] .product-card-stack {
@@ -755,7 +748,6 @@
   --pc-pad-y: 0.75rem;
   --pc-gap: 0.375rem;
   --pc-meta: 0.875rem;
-  --pc-inset: 8%;
 }
 
 .site-root .product-card[data-card-variant="detailed"] .product-card-well {
@@ -835,7 +827,7 @@
   }
 
   .site-root .product-grid[data-phone-layout="list-row"] > .product-card[data-card-variant="spec"] .product-card-well {
-    margin: 0.5rem 0 0 0.5rem;
+    border-bottom: 0;
   }
 }
 

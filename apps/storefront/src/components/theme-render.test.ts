@@ -32,7 +32,8 @@ import {
   productGridFluidCss,
   productGridSpec,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS } from "@/components/cards/card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET } from "@/components/cards/card-model";
+import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
@@ -736,9 +737,15 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
     expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
     const media = element.querySelector(".product-card-media")!;
     const photo = media.querySelector("img")!;
-    // `sizes` follows the density's fluid grid within the container cap.
-    expect(photo.getAttribute("sizes")).toBe(productCardImageSizes(grid, containerWidth));
-    expect(photo.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
+    // `sizes` follows the density's fluid grid within the container cap; every
+    // card but standard asks for its photo's own width inside its margin, and
+    // DPR 3 phones for about 2x pixels.
+    const slot = productCardImageSizes(grid, containerWidth);
+    expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
+    const variant = resolved.blocks.card.variant;
+    expect(photo.getAttribute("sizes")).toBe(variant === "standard"
+      ? slot
+      : capSizesDensity(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0))));
     expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
