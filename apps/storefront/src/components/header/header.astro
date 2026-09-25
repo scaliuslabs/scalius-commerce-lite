@@ -136,8 +136,10 @@ const plan = planHeaderNavigation(
   {
     desktop: desktopRendering,
     desktopRow: rowKinds.includes(desktopKind),
-    desktopAllLinks: desktopKind !== "dropdown",
-    drawerAllLinks: phoneTree === "drill",
+    // Every parent costs one more: its "All X" link, or its toggle and panel
+    // (the header's bytes budget as much as its anchors).
+    desktopAllLinks: true,
+    drawerAllLinks: true,
     desktopWeight: desktopKind === "mega-panel" ? 0.65 : 0.5,
     reserved,
   },
@@ -289,6 +291,44 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
   {/* Without JavaScript, menu rows wrap instead of fitting into "More" (never clipped). */}
   <noscript><style is:inline>[data-nav-overflow]{flex-wrap:wrap!important;opacity:1!important;animation:none!important}[data-nav-overflow]>[data-nav-nojs-hidden]{display:none!important}[data-nav-overflow]>[data-nav-nojs-only]{display:flex!important}</style></noscript>
 </header>
+
+<style is:global>
+  /* The menus' chevrons, painted by CSS (masks in currentColor) instead of an
+     inline <svg> per row, and the menus' styles are global (no per-element
+     scope attribute): both keep the header HTML within its budget. */
+  :root {
+    --nav-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    --nav-chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E");
+    --nav-chevron-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m10 4-4 4 4 4'/%3E%3C/svg%3E");
+  }
+
+  .nav-chevron {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    background: currentColor;
+    -webkit-mask: var(--nav-chevron-down) center / contain no-repeat;
+    mask: var(--nav-chevron-down) center / contain no-repeat;
+    transition: transform 200ms ease;
+  }
+
+  .nav-chevron--right {
+    -webkit-mask-image: var(--nav-chevron-right);
+    mask-image: var(--nav-chevron-right);
+  }
+
+  .nav-chevron--left {
+    -webkit-mask-image: var(--nav-chevron-left);
+    mask-image: var(--nav-chevron-left);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-chevron {
+      transition: none;
+    }
+  }
+</style>
 
 <style>
   .drill-row-menu {
