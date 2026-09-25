@@ -104,3 +104,41 @@ export function getOrderCodeFailureText(
   if (failure.status === 503) return unavailableText;
   return operation === "send" ? copy.paymentRecoverySendFailedText : copy.paymentRecoveryVerificationFailedText;
 }
+
+/** What the page shows after a refused "Send code", with or without JavaScript. */
+export interface OrderCodeSendRefusal {
+  message: string;
+  /** Show the code field: the code already sent still works. */
+  codeSent: boolean;
+  /** The wait before a new code, counted on the resend button. */
+  resendAfterSeconds: number;
+  needsStoreContact: boolean;
+}
+
+/**
+ * A rate-limited send ("A code was just sent", "Enter the latest code we
+ * sent") leaves the last code usable, so the code field opens and the wait
+ * moves to the resend button. Without that, a buyer who reloads the page or
+ * comes back from their inbox is told to wait up to ten minutes with no field
+ * for the code they already have.
+ */
+export function describeOrderCodeSendRefusal(
+  copy: CheckoutLanguageData,
+  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds"> & { errorCode?: string },
+  unavailableText: string,
+): OrderCodeSendRefusal {
+  if (failure.status === 429) {
+    return {
+      message: getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
+      codeSent: true,
+      resendAfterSeconds: positiveSeconds(failure.retryAfterSeconds) ?? 0,
+      needsStoreContact: false,
+    };
+  }
+  return {
+    message: getOrderCodeFailureText(copy, failure, "send", unavailableText),
+    codeSent: false,
+    resendAfterSeconds: 0,
+    needsStoreContact: failureNeedsStoreContact(failure),
+  };
+}
