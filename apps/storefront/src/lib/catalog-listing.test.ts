@@ -55,31 +55,58 @@ describe("listing presentation", () => {
 });
 
 describe("facet display types", () => {
-  const values = (...names: string[]) => names.map((value) => ({ value, count: 1 }));
-
-  it("uses swatches only when every value is a known colour", () => {
-    const swatch = catalogFacetDisplay({ values: values("Black", "navy", "Off-White", "Sky_Blue", "Multicolour") });
-    expect(swatch.display).toBe("swatch");
-    expect(swatch.swatches.get("Off-White")).toBe("#f4f1e8");
-    expect(catalogFacetDisplay({ values: values("Black", "Rose Gold") })).toEqual({ display: "checkbox", swatches: new Map() });
-    expect(catalogFacetDisplay({ values: values("কালো", "লাল") }).display).toBe("checkbox");
-    expect(catalogFacetDisplay({ values: [] }).display).toBe("checkbox");
+  // Option axes and the brand: the API sends "checkbox" and the values decide.
+  const option = (...labels: string[]) => ({
+    kind: "option" as const,
+    display: "checkbox" as const,
+    values: labels.map((label) => ({ value: label.toLowerCase(), label, swatch: null as string | null })),
   });
 
-  it("adds a search field to long lists, and follows a typed display", () => {
-    const many = values(...Array.from({ length: CATALOG_FACET_SEARCH_MIN_VALUES + 1 }, (_, index) => `Brand ${index}`));
-    expect(catalogFacetDisplay({ values: many }).display).toBe("search-list");
-    expect(catalogFacetDisplay({ values: many.slice(0, CATALOG_FACET_SEARCH_MIN_VALUES) }).display).toBe("checkbox");
-    // Typed attributes (Phase 1b) name their display; a swatch still needs paint for every value.
-    expect(catalogFacetDisplay({ values: many, display: "checkbox" }).display).toBe("checkbox");
-    expect(catalogFacetDisplay({ values: values("Black", "Rose Gold"), display: "swatch" }).display).toBe("checkbox");
+  it("paints an option axis as swatches only when every value is a known colour", () => {
+    const swatch = catalogFacetDisplay(option("Black", "navy", "Off-White", "Sky_Blue", "Multicolour"));
+    expect(swatch.display).toBe("swatch");
+    // Keyed by the submitted value, read from the label.
+    expect(swatch.swatches.get("off-white")).toBe("#f4f1e8");
+    expect(catalogFacetDisplay(option("Black", "Rose Gold"))).toEqual({ display: "checkbox", swatches: new Map() });
+    expect(catalogFacetDisplay(option("কালো", "লাল")).display).toBe("checkbox");
+    expect(catalogFacetDisplay(option()).display).toBe("checkbox");
+  });
+
+  it("gives long option or brand lists a search field", () => {
+    const many = option(...Array.from({ length: CATALOG_FACET_SEARCH_MIN_VALUES + 1 }, (_, index) => `Brand ${index}`));
+    expect(catalogFacetDisplay(many).display).toBe("search-list");
+    expect(catalogFacetDisplay({ ...many, kind: "brand" }).display).toBe("search-list");
+    expect(catalogFacetDisplay({ ...many, values: many.values.slice(0, CATALOG_FACET_SEARCH_MIN_VALUES) }).display).toBe("checkbox");
+  });
+
+  it("follows the merchant's display for a typed attribute", () => {
+    const attribute = (display: "checkbox" | "range" | "swatch" | "search_list", values = option("Black", "Rose Gold").values) =>
+      catalogFacetDisplay({ kind: "attribute", display, values });
+    const many = option(...Array.from({ length: CATALOG_FACET_SEARCH_MIN_VALUES + 1 }, (_, index) => `Brand ${index}`)).values;
+    expect(attribute("checkbox", many).display).toBe("checkbox");
+    expect(attribute("search_list", option("A", "B").values).display).toBe("search-list");
+    expect(attribute("range", []).display).toBe("range");
+    // A swatch paints from the merchant's colour, then the colour words; a
+    // value with neither stays a swatch without paint.
+    const swatch = attribute("swatch", [
+      { value: "rose gold", label: "Rose Gold", swatch: "#b76e79" },
+      { value: "black", label: "Black", swatch: null },
+      { value: "sunset", label: "Sunset", swatch: null },
+      { value: "bad", label: "Bad", swatch: "red;position:fixed" },
+    ]);
+    expect(swatch.display).toBe("swatch");
+    expect([...swatch.swatches]).toEqual([["rose gold", "#b76e79"], ["black", "#111111"]]);
+    // A colour-word option axis stays a checkbox list once typed as one.
+    expect(attribute("checkbox", option("Black", "Navy").values).display).toBe("checkbox");
   });
 });
 
 describe("toolbar chips", () => {
+  const value = (label: string, count: number) => ({ value: label.toLowerCase(), label, count, swatch: null });
   const facets = [
-    { id: "a", name: "Size", slug: "size", values: [{ value: "M", count: 30 }, { value: "L", count: 50 }, { value: "XL", count: 0 }] },
-    { id: "b", name: "Colour", slug: "option.color", values: [{ value: "Red", count: 12 }, { value: "Blue", count: 40 }] },
+    { id: "a", name: "Size", slug: "size", kind: "attribute" as const, display: "checkbox" as const, unit: null, range: null, values: [value("M", 30), value("L", 50), value("XL", 0)] },
+    { id: "option.color", name: "Colour", slug: "option.color", kind: "option" as const, display: "checkbox" as const, unit: null, range: null, values: [value("Red", 12), value("Blue", 40)] },
+    { id: "b", name: "Display size", slug: "display-size", kind: "attribute" as const, display: "range" as const, unit: "in", range: { min: 11, max: 17 }, values: [] },
   ];
 
   it("gives each shown facet an aspect chip with a stable anchor, then Price", () => {
@@ -87,6 +114,7 @@ describe("toolbar chips", () => {
     expect(chips).toEqual([
       { slug: "size", label: "Size", selectedCount: 1, anchor: "catalog-facet-size" },
       { slug: "option.color", label: "Colour", selectedCount: 0, anchor: "catalog-facet-option_2ecolor" },
+      { slug: "display-size", label: "Display size", selectedCount: 0, anchor: "catalog-facet-display-size" },
       { slug: "price", label: "Price", selectedCount: 0, anchor: "catalog-facet-price" },
     ]);
     expect(catalogFacetAnchor("option.স্টোরেজ")).toBe("catalog-facet-option_2eস্টোরেজ");
@@ -95,19 +123,20 @@ describe("toolbar chips", () => {
     expect(catalogAspectChips([], { shown: true, applied: true })).toEqual([]);
   });
 
-  it("links the popular values that narrow the listing", () => {
+  it("links the popular values that narrow the listing, by label", () => {
     const links = catalogPopularFilters({
       facets,
-      currentFilters: { size: "M" },
+      currentFilters: { size: "m" },
       pathname: "/categories/shirts",
       defaultSort: "newest",
       total: 50,
       max: 3,
     });
-    // L matches every product (no narrowing), M is applied, XL matches none.
+    // L matches every product (no narrowing), M is applied, XL matches none,
+    // and a range has no value to link.
     expect(links).toEqual([
-      { label: "Blue", href: "/categories/shirts?option.color=Blue&size=M", active: false },
-      { label: "Red", href: "/categories/shirts?option.color=Red&size=M", active: false },
+      { label: "Blue", href: "/categories/shirts?option.color=blue&size=m", active: false },
+      { label: "Red", href: "/categories/shirts?option.color=red&size=m", active: false },
     ]);
   });
 

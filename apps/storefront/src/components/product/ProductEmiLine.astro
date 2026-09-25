@@ -1,0 +1,21 @@
+---
+// "EMI on card payment, from X/month" under the price. Informational only:
+// checkout offers no EMI. The page renders it only when the buy box variant
+// asks for it (`emi` setting) and the product has a quote (store EMI plans
+// on, product EMI-eligible, a plan applies to its price).
+import { formatMoney } from "@scalius/shared/currency";
+import type { ProductEmiOffer } from "@/lib/api";
+
+interface Props {
+  emi: ProductEmiOffer;
+  currencyCode: string;
+  currencySymbol: string;
+}
+
+const { emi, currencyCode, currencySymbol } = Astro.props;
+const monthly = formatMoney(emi.monthly, { code: currencyCode, symbol: currencySymbol });
+---
+
+<p class="mt-1 text-sm text-muted-foreground" data-product-emi>
+  EMI on card payment, from <span class="font-medium text-foreground">{monthly}</span>/month
+</p>

@@ -2,7 +2,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
+import { resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { search } from "../../search";
 import { getHomepageData } from "../storefront/storefront.service";
@@ -15,6 +15,7 @@ import {
 } from "./listing";
 import { getStorefrontFeedProducts } from "./feed";
 import { getStorefrontSitemapProducts } from "./sitemap";
+import { getStorefrontProductComparison } from "./compare";
 import { refreshProductSalesStats } from "./recommendation-refresh";
 import {
     catalogBuyerStateRefreshStatementsForSkus,
@@ -105,7 +106,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a", "prod_b"]);
         const statePlans = plans(readsBuyerState);
-        expect(statePlans.length).toBeGreaterThanOrEqual(4); // page, count, two facet counts
+        expect(statePlans.length).toBeGreaterThanOrEqual(3); // page, count, the facet counts
         for (const plan of statePlans) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
             expectBuyerStateListing(plan);
@@ -194,16 +195,16 @@ describe("catalogue-scale query plans", () => {
     it("counts facets live on shop-all only while the public catalogue is small", async () => {
         const { db, queries } = setup();
         sqlite!.exec(`
-            INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_brand', 'Brand', 'brand', 1);
-            INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ('val_a', 'prod_a', 'attr_brand', 'Asus');
+            INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_maker', 'Maker', 'maker', 1);
+            INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ('val_a', 'prod_a', 'attr_maker', 'Asus');
         `);
         await project(db, queries);
         const small = await getStorefrontProducts(db, { page: 1, limit: 2 });
-        expect(small.facets.map((facet) => facet.slug)).toEqual(["brand"]);
-        expect(queries.filter((query) => query.sql.includes("product_attribute_values")).length).toBe(1);
+        expect(small.facets.map((facet) => facet.slug)).toEqual(["maker"]);
+        expect(queries.filter((query) => query.sql.includes("product_facet_values")).length).toBe(1);
 
         // 2,001 public products: the unscoped count stops at the limit and the
-        // facet statements never run; a category still counts its own.
+        // facet statement never runs; a category still counts its own.
         const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES (?, ?, 10000, ?, 'cat_phone', 1, 1600000000)");
         const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES (?, ?, ?, 10000, 1, 1, 0)");
         for (let index = 0; index < 1_998; index += 1) {
@@ -214,9 +215,9 @@ describe("catalogue-scale query plans", () => {
         const large = await getStorefrontProducts(db, { page: 1, limit: 2 });
         expect(large.pagination.total).toBe(2_001);
         expect(large.facets).toEqual([]);
-        expect(queries.filter((query) => query.sql.includes("product_attribute_values"))).toEqual([]);
+        expect(queries.filter((query) => query.sql.includes("product_facet_values"))).toEqual([]);
         const scoped = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });
-        expect(scoped.facets.map((facet) => facet.slug)).toEqual(["brand"]);
+        expect(scoped.facets.map((facet) => facet.slug)).toEqual(["maker"]);
     });
 
     it("pages and counts the product sitemap from the buyer state's newest index", async () => {
@@ -337,20 +338,135 @@ describe("catalogue-scale query plans", () => {
         for (const plan of plans(joinsPricing)) expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
     });
 
-    it("resolves attribute filters from the requested values, not from every value row", async () => {
-        const { db, plans } = setup();
+    it("resolves facet filters by slug, enum value and brand slug indexes in one statement", async () => {
+        const { db, queries, plans } = setup();
         sqlite!.exec(`
-            INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_brand', 'Brand', 'brand', 1);
-            INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES
-                ('val_a', 'prod_a', 'attr_brand', 'Asus'),
-                ('val_b', 'prod_b', 'attr_brand', 'Lenovo');
+            INSERT INTO brands (id, name, slug, status) VALUES ('brd_asus0001', 'Asus', 'asus', 'published');
+            INSERT INTO product_attributes (id, name, slug, filterable, value_type) VALUES
+                ('attr_ram', 'RAM', 'ram', 1, 'enum'),
+                ('attr_display', 'Display', 'display', 1, 'number');
+            INSERT INTO attribute_values (id, attribute_id, value, normalized_value) VALUES
+                ('atv_ram00008', 'attr_ram', '8GB', '8gb');
         `);
 
-        await expect(resolvePublicAttributeFilters(db, { brand: ["Asus", "Dell"] }, []))
-            .resolves.toEqual([{ id: "attr_brand", name: "Brand", slug: "brand", values: ["Asus"] }]);
-        const [plan] = plans((sql) => sql.includes("requested_filter"));
-        expect(plan).toContain("product_attribute_values_attr_value_product_idx");
-        expect(plan).not.toMatch(/SCAN product_attribute_values/);
+        await expect(resolvePublicAttributeFilters(db, {
+            ram: ["8GB", "64GB"],
+            "display.min": ["13"],
+            brand: ["Asus", "dell"],
+        }, [])).resolves.toEqual([
+            { kind: "brand", id: "brand", name: "Brand", slug: "brand", values: ["asus"], labels: ["Asus"], keys: ["brd_asus0001"] },
+            { kind: "attribute", id: "attr_ram", name: "RAM", slug: "ram", values: ["8gb"], labels: ["8GB"], keys: ["atv_ram00008"] },
+            { kind: "attribute", id: "attr_display", name: "Display", slug: "display", values: [], labels: [], keys: [], range: { min: 13, max: null } },
+        ]);
+        expect(queries).toHaveLength(1);
+        const [plan] = plans(() => true);
+        expect(plan).toContain("SEARCH product_attributes USING INDEX product_attributes_slug_unique (slug=?)");
+        expect(plan).toContain("SEARCH brands USING INDEX brands_slug_unique (slug=?)");
+        expect(plan).toContain("SEARCH attribute_values USING INDEX");
+        expect(plan).not.toMatch(/SCAN (product_attributes|attribute_values|brands|product_attribute_values)\b/);
+    });
+
+    it("filters and counts a category's facets by probing the facet rows of its own products", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO brands (id, name, slug, status) VALUES ('brd_asus0001', 'Asus', 'asus', 'published');
+            UPDATE products SET brand_id = 'brd_asus0001' WHERE id = 'prod_a';
+            INSERT INTO product_attributes (id, name, slug, filterable, value_type, facet_display, unit) VALUES
+                ('attr_ram', 'RAM', 'ram', 1, 'text', 'checkbox', NULL),
+                ('attr_display', 'Display', 'display', 1, 'number', 'range', 'in');
+            INSERT INTO product_attribute_values (id, product_id, attribute_id, value, value_number) VALUES
+                ('val_ram_a', 'prod_a', 'attr_ram', '8GB', NULL),
+                ('val_ram_b', 'prod_b', 'attr_ram', '16GB', NULL),
+                ('val_display_a', 'prod_a', 'attr_display', '15.6 in', 15.6),
+                ('val_display_b', 'prod_b', 'attr_display', '14 in', 14);
+            INSERT INTO category_attribute_sets (category_id, attribute_id, sort_order) VALUES
+                ('cat_laptop', 'attr_ram', 0), ('cat_laptop', 'attr_display', 1);
+        `);
+        await project(db, queries);
+        const filters = await resolvePublicAttributeFilters(db, { ram: ["8gb"], "display.min": ["13"], brand: ["asus"] }, []);
+        queries.length = 0;
+        const result = await getStorefrontCategoryProducts(db, {
+            id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
+            metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
+            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+        }, { page: 1, limit: 20, attributeFilters: filters });
+
+        expect(result.products.map((product) => product.id)).toEqual(["prod_a"]);
+        // Brand first, then the category's spec order.
+        expect(result.facets.map((facet) => [facet.slug, facet.display])).toEqual([
+            ["brand", "checkbox"], ["ram", "checkbox"], ["display", "range"],
+        ]);
+        expect(result.facets.find((facet) => facet.slug === "ram")?.values).toEqual([
+            { value: "8gb", label: "8GB", count: 1, swatch: null },
+            { value: "16gb", label: "16GB", count: 0, swatch: null },
+        ]);
+        expect(result.facets.find((facet) => facet.slug === "display"))
+            .toMatchObject({ unit: "in", values: [], range: { min: 15.6, max: 15.6 } });
+        const statePlans = plans(readsBuyerState);
+        expect(statePlans).toHaveLength(3); // page, count + price range, every facet
+        for (const plan of statePlans) {
+            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).not.toContain("product_buyer_state_brand_newest_idx");
+            expect(plan).not.toMatch(/SCAN (product_facet_values|attribute_row|option_row|attribute_selected_row|range_selected_row|option_selected_row|option_sku)\b/);
+            expect(plan).not.toMatch(/SCAN product_attribute_values\b/);
+            expectBuyerStateListing(plan);
+        }
+        expect(statePlans.join("\n"))
+            .toContain("SEARCH attribute_selected_row USING INDEX sqlite_autoindex_product_facet_values_1 (owner_id=? AND facet_key=?)");
+        expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(90);
+    });
+
+    it("drives option filters from the product's own SKU facet rows", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position) VALUES ('axis_a', 'prod_a', 'RAM', 'ram', 0);
+            INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES ('ov_a8', 'axis_a', '8GB', '8gb', 0);
+            UPDATE product_variants SET deleted_at = unixepoch() WHERE id = 'var_a';
+            INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory, option_combination_key) VALUES
+                ('var_a8', 'prod_a', 'SKU-A8', 5000000, 1, 0, 1, 'ov_a8');
+            INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES ('var_a8', 'axis_a', 'ov_a8');
+        `);
+        await project(db, queries);
+        const filters = await resolvePublicAttributeFilters(db, { "option.ram": ["8GB"] }, []);
+        queries.length = 0;
+        const result = await getStorefrontProducts(db, { page: 1, limit: 20, category: "laptop", attributeFilters: filters });
+
+        expect(result.products.map((product) => product.id)).toEqual(["prod_a"]);
+        expect(result.facets).toEqual([{
+            id: "option.ram", name: "RAM", slug: "option.ram", kind: "option", display: "checkbox", unit: null, range: null,
+            values: [{ value: "8gb", label: "8GB", count: 1, swatch: null }],
+        }]);
+        const joined = plans(readsBuyerState).join("\n");
+        // Either facet index answers (product, axis, value) with three equalities.
+        expect(joined).toMatch(/SEARCH option_sku (EXISTS )?USING INDEX product_facet_values_(product_idx \(product_id=\? AND facet_key=\? AND value_key=\?|value_idx \(facet_key=\? AND value_key=\? AND product_id=\?)\)/);
+        expect(joined).toContain("SEARCH option_row USING INDEX product_facet_values_product_idx (product_id=? AND facet_key>? AND facet_key<?)");
+        expect(joined).not.toMatch(/SCAN (product_facet_values|option_row|option_sku|option_selected_row|product_variant_option_values)\b/);
+    });
+
+    it("compares products by primary key and their specs by product index, in one wave", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO attribute_groups (id, name, sort_order) VALUES ('atg_display01', 'Display', 0);
+            INSERT INTO product_attributes (id, name, slug, filterable, group_id, key_spec) VALUES ('attr_screen', 'Screen', 'screen', 1, 'atg_display01', 1);
+            INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES
+                ('val_screen_a', 'prod_a', 'attr_screen', '15.6 in'),
+                ('val_screen_c', 'prod_c', 'attr_screen', '6.7 in');
+        `);
+        await project(db, queries);
+        const result = await getStorefrontProductComparison(db, ["prod_c", "prod_missing", "prod_a"]);
+
+        expect(result.products.map((product) => product.id)).toEqual(["prod_c", "prod_a"]);
+        expect(result.groups).toEqual([{
+            id: "atg_display01",
+            name: "Display",
+            rows: [{ attributeId: "attr_screen", name: "Screen", slug: "screen", unit: null, keySpec: true, highlight: false, values: ["6.7 in", "15.6 in"] }],
+        }]);
+        expect(queries).toHaveLength(3);
+        for (const plan of plans(() => true)) {
+            expect(plan).not.toMatch(/SCAN (products|product_buyer_state|product_attribute_values|product_media|media)\b/);
+        }
+        expect(plans((sql) => sql.includes("product_attribute_values"))[0])
+            .toContain("product_attribute_values_product_id_attribute_id_unique (product_id=?)");
     });
 
     it("keeps a 100-card page from 100 categories under D1's 100 bound parameters", async () => {

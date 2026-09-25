@@ -7,6 +7,7 @@ import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../catalog/listing";
+import { resolvePublicAttributeFilters } from "../catalog/facets";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { resolveNavigationConfigs } from "./navigation.resolver";
 import type {
@@ -135,6 +136,13 @@ export async function getNavigationPreviewProductCount(
         throw new NotFoundError("Category not found");
     }
 
+    // The preview filters as the storefront link would: slug=value pairs
+    // resolved to typed facet filters.
+    const filterValues: Record<string, string[]> = {};
+    for (const filter of input.attributeFilters ?? []) {
+        (filterValues[filter.slug] ??= []).push(filter.value);
+    }
+    const attributeFilters = await resolvePublicAttributeFilters(db, filterValues, []);
     const result = await getStorefrontProducts(db, {
         category: input.categoryId,
         search: input.search,
@@ -145,12 +153,7 @@ export async function getNavigationPreviewProductCount(
         page: 1,
         limit: 1,
         sort: "newest",
-        attributeFilters: (input.attributeFilters ?? []).map((filter) => ({
-            id: filter.slug,
-            name: filter.slug,
-            slug: filter.slug,
-            values: [filter.value],
-        })),
+        attributeFilters,
     });
 
     return { count: result.pagination.total };

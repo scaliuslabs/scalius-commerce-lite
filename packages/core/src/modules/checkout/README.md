@@ -51,3 +51,29 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
   before.
 - **Commit budget.** A 99-line commit is one batch of 39 statements, each
   within D1's 100 bound values (`wave-a-checkout.d1.test.ts`).
+
+## Quantity bundles (catalogue slice 1c)
+
+- **Reads.** The authority batch carries the cart products' active
+  `product_bundles` rows (`selectActiveProductBundleRows`, one `json_each`
+  parameter); `validateStorefrontCartItems()` reads them beside the product
+  rows. Every tier write bumps `checkout_authority` (0090 triggers), so a
+  prepared order priced from old tiers fails its commit guard.
+- **Pricing.** `resolveCartBundleSavings()` groups the lines of one product
+  (any SKU, any buyer inputs) and prices them with `bundleGroupPricing`
+  (`@scalius/shared/product-bundles`) from the catalog unit price after
+  catalog discounts, before surcharges. Each line gets `bundleDiscountMinor`;
+  gift cards never bundle. BDT savings are whole taka.
+- **With promotions** (`resolveBundlePromotionInterplay` in
+  `bundle-discounts.ts`, one rule for the tax quote, the order and the agent
+  quote): an order is priced by its promotions or by its bundles, never both.
+  Promotions are evaluated at catalog prices as always; a typed code that
+  applies wins; otherwise the buyer gets whichever saves more in total
+  (promotions on a tie), and a losing automatic promotion steps aside (no
+  snapshot, no discount lines; offers and code feedback stay). Delivery
+  thresholds read the catalog subtotal. Bundle savings land in the lines'
+  `discount_amount_minor` with no `order_discount_allocations` rows, so the
+  commit check (it refuses a payload that mixes both), refund reconciliation
+  and receipt lines keep reading promotion allocations only. Stacking needs a
+  recorded bundle part per line (a lead-numbered migration); then only the
+  interplay function changes.

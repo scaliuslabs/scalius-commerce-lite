@@ -34,6 +34,7 @@ import {
   sanitizeHomepagePresentationConfig,
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
+import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
 import {
   NOTIFICATION_TYPES,
   ORDER_NOTIFICATION_TYPES,
@@ -400,6 +401,19 @@ export const homepageDocument = defineSettingsDocument<HomepagePresentationConfi
   defaults: sanitizeHomepagePresentationConfig(null),
 });
 
+// ─────────────────────────────────────────
+// EMI plans: the "EMI on card payment, from X/month" line on eligible
+// products. Informational only (no checkout EMI until a gateway supports it);
+// off by default and shown only once the merchant enters plans. A stored
+// document that is not valid reads as off.
+// ─────────────────────────────────────────
+
+export const emiDocument = defineSettingsDocument<EmiSettings>({
+  key: "emi",
+  schema: emiSettingsSchema,
+  defaults: { enabled: false, plans: [] },
+});
+
 export interface SeoSettings {
   homepageTitle: string;
   homepageMetaDescription: string;
@@ -746,6 +760,7 @@ export const SETTINGS_DOCUMENTS = [
   headerDocument,
   footerDocument,
   homepageDocument,
+  emiDocument,
   seoDocument,
   notificationsDocument,
   notificationTemplatesDocument,

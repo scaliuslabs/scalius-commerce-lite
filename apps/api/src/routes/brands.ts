@@ -11,8 +11,8 @@ import {
   listPublicBrands,
 } from "@scalius/core/modules/brands";
 import { brandSlugSchema } from "@scalius/shared/catalog-brand";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
-import { getStorefrontBrandProducts } from "@scalius/core/modules/catalog";
+import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
@@ -95,20 +95,9 @@ const brandProductSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
-const facetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
-});
 
 const appliedFiltersSchema = z.object({
-  attributes: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    slug: z.string(),
-    values: z.array(z.string()),
-  })),
+  attributes: z.array(appliedFacetFilterSchema),
   sort: sortSchema,
   search: z.string().optional(),
   minPrice: z.number().min(0).optional(),
@@ -215,7 +204,7 @@ const getBrandProductsRoute = createRoute({
         products: z.array(brandProductSchema),
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
-        facets: z.array(facetSchema),
+        facets: z.array(productFacetSchema),
         appliedFilters: appliedFiltersSchema,
       })) } },
     },
@@ -231,7 +220,8 @@ app.openapi(getBrandProductsRoute, async (c) => {
   const params = c.req.valid("query");
   const [brand, attributeFilters] = await Promise.all([
     getPublicBrandBySlug(db, slug),
-    resolvePublicAttributeFilters(db, readRepeatedPublicQueryValues(c.req.url), Object.keys(params)),
+    // The brand page is its own brand filter: no `brand` key.
+    resolvePublicAttributeFilters(db, readRepeatedPublicQueryValues(c.req.url), Object.keys(params), { brand: false }),
   ]);
   if (!brand) throw new NotFoundError("Brand not found");
 
@@ -240,7 +230,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
   });
-  const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: attributeFilters, sort: params.sort };
+  const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters), sort: params.sort };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;

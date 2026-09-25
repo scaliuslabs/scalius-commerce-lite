@@ -1,68 +1,29 @@
 # Attributes
 
-Product attribute CRUD, value management, and public storefront filter queries.
+Typed product attributes (migration 0090): definitions, spec groups, the value vocabulary, type conversion, category attribute sets and the typed product-value writer. Storefront filter and facet reads live in `catalog/facets.ts`. The code is the source of truth. This page only maps it.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `index.ts` | Barrel exports (re-exports service, public, validation) |
-| `attributes.service.ts` | Admin CRUD for attributes and their values |
-| `attributes.public.ts` | Public/storefront queries for filterable attributes |
-| `attributes.validation.ts` | Zod schemas and types for attribute operations |
+| `attributes.validation.ts` | Zod schemas (browser-safe), reserved slugs (`brand`, `category`, `search`, `q`, `page`, `limit`, `sort`, `ids`) |
+| `attribute-value-codec.ts` | Pure encoding of a typed value (text, enum display, number with an optional unit, yes/no including Bangla) (browser-safe) |
+| `attributes.service.ts` | Definition CRUD and the string-keyed value routes (`/{id}/values`) over `attribute_values` |
+| `attribute-values.ts` | The id-based vocabulary (`atv_`): list, create, rename/recolour/reorder, delete or merge, and the definition's `options` list |
+| `attribute-groups.ts` | Spec groups (`atg_`); trashing a group ungroups its attributes |
+| `attribute-types.ts` | `convertAttributeValueType`: validate everything, switch the type, then rewrite rows in resumable keyset chunks |
+| `category-attribute-sets.ts` | Effective set through `category_closure`; order key `(3 - depth) * 100000 + sort_order`, lowest per attribute, ties by name |
+| `product-attribute-values.ts` | `prepareProductAttributeValueRows`, used by `products/admin/write.ts` |
+| `projection-refresh.ts` | `CatalogProjectionRefresh` (injected by the caller) and the 90-products-per-batch walker |
 
-## Validation Schemas (`attributes.validation.ts`)
+## Rules
 
-| Schema | Fields |
-|--------|--------|
-| `createAttributeSchema` | name (min 2), slug (min 2, regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`; optional, derived from the name with a `-2`, `-3`… suffix when omitted), filterable (default true), options (string array, max 500, optional) |
-| `updateAttributeSchema` | Same fields, all optional. Options can be nullable. |
-| `bulkActionSchema` | ids (string array, min 1), permanent (default false) |
-| `addValueSchema` | value (min 1) |
-| `updateValueSchema` | oldValue (min 1), newValue (min 1) |
-| `deleteValueSchema` | value (min 1) |
-
-**Exported types:** `CreateAttributeInput`, `UpdateAttributeInput`
-
-## Admin Service (`attributes.service.ts`)
-
-### Attribute CRUD
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `listAttributes` | `(db, { page?, limit?, search?, sort?, order?, showTrashed? })` | Paginated with LIKE search on name/slug, sortable by name/slug/filterable/createdAt/updatedAt, includes valueCount per attribute. Whitelist-validated sort fields. |
-| `createAttribute` | `(db, data: CreateAttributeInput)` | Checks for existing name/slug conflicts (including soft-deleted -- throws specific error for deleted conflicts). ID format: `attr_{nanoid}`. |
-| `updateAttribute` | `(db, id, data: UpdateAttributeInput)` | Checks for name/slug conflicts excluding self. Throws `NotFoundError` if missing. |
-| `deleteAttribute` | `(db, id)` | Soft-delete. Rejects if attribute is in use by products (checks first 5, reports count and product names). Throws `ConflictError`. |
-| `permanentlyDeleteAttribute` | `(db, id)` | Hard delete from DB. |
-| `restoreAttribute` | `(db, id)` | Clears `deletedAt`. Checks for active conflicts on name/slug before restoring. Throws `ConflictError` if conflict exists. |
-| `bulkDeleteAttributes` | `(db, ids, permanent?)` | Soft or hard delete array of IDs. |
-| `bulkRestoreAttributes` | `(db, ids)` | Sets `deletedAt = null` for array of IDs. |
-
-### Attribute Values
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `listAttributeValues` | `(db, attributeId, { search?, sort?, page?, limit? })` | Server-searchable distinct values with authoritative `totalValues`/`totalProducts`, sample product names (up to 5), and preset flag. Reconciles used presets across the full matching set before appending globally unique unused presets. Large value sets use bound `json_each()` lookups so a 100-row page remains below D1's 100-parameter limit. |
-| `addAttributeValue` | `(db, attributeId, value)` | Adds value to the attribute's `options` array. Throws `ConflictError` if already exists. |
-| `renameAttributeValue` | `(db, attributeId, oldValue, newValue)` | Uses `db.batch()` to atomically rename value in `productAttributeValues` table AND in the attribute's `options` array. |
-| `deleteAttributeValue` | `(db, attributeId, value)` | Uses `db.batch()` to atomically delete from `productAttributeValues` and remove from `options` array. |
-
-## Public Queries (`attributes.public.ts`)
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `resolvePublicAttributeFilters` | `(db, queryParams, standardQueryKeys)` | Resolves raw public query params into attribute filters by excluding route-owned query keys and accepting only known product attribute slugs. Shared by product and category product routes. |
-| `getPublicFilterableAttributes` | `(db)` | Returns all filterable attributes with distinct values from active, non-deleted products. For global filter sidebar. |
-| `getPublicAttributesByCategory` | `(db, categoryId)` | Filterable attributes scoped to a specific category. Only includes values on active products in that category. |
-
-All public queries return `{ filters: PublicAttributeFilter[] }` where each filter has `{ id, name, slug, values: string[] }`. Values are sorted alphabetically.
-The API `/attributes/search-filters` route is KV-cached with the `api:attributes:search-filters` prefix and invalidated by both search/product and attribute cache groups.
-
-**Exported types:** `PublicAttributeFilter`, `PublicAttributeQueryFilter`
-
-## Dependencies
-
-- `@scalius/database` -- `productAttributes`, `productAttributeValues`, `products`
-- `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
-- `nanoid` -- ID generation (`attr_` prefix)
+- This domain imports no other domain. Every write that changes `product_attribute_values` rows, or their facet key or label, takes a `CatalogProjectionRefresh`. The API passes `catalogProjectionRefreshStatements`. Each batch covers at most 90 products and holds the row writes, the aggregate revision bump and then the refresh.
+- Every statement binds at most 90 parameters. Id and value lists go in as one `json_each` JSON parameter.
+- `normalized_value` is always computed in SQL (`lower(trim(value))`), because the column CHECK requires it.
+- Code does not read or write `product_attributes.options`. The list responses' `options` field comes from `attribute_values`. Migration `0092_attribute_option_presets` copied the old presets into `attribute_values` (idempotent; the column drop in the next release re-runs it first).
+- `valueType` changes only through conversion. Unit is allowed only on number attributes. `range` is allowed only on number, `swatch` only on enum.
+- A conversion first drops the attribute's facet rows (they carry old-type keys). Each chunk then writes its products' rows back. Running the same conversion again continues with the rows that are still in the wrong shape.
+- A number row is in shape only when its display text equals the canonical number plus the unit, so a unit change through conversion rewrites the display text.
+- A permanent delete removes the facet rows, the product values, the vocabulary and then the definition. Trash and permanent delete are still refused while products use the attribute.
+- The admin routes bump the cache generation after every buyer-visible write, and also after a failure that may already have committed batches.

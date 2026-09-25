@@ -4,9 +4,9 @@ import {
     products,
     categories,
     productVariants,
-    productRichContent,
     productAttributeValues,
     productAttributes,
+    productBuyerState,
     brands,
 } from "@scalius/database/schema";
 import { and, sql, eq, isNull } from "drizzle-orm";
@@ -36,6 +36,20 @@ import {
     type ProductMediaProjection,
 } from "../products/media";
 import { readStoredCustomization } from "../products/customization";
+import {
+    loadProductPageBlockMedia,
+    resolveProductPageContentBlocks,
+    selectProductPageContentBlockRows,
+    type ProductPageBlockMedia,
+    type ProductPageContentBlockRow,
+} from "../products/content-blocks";
+import {
+    presentProductBundleTier,
+    productBundleTiersByProduct,
+    selectActiveProductBundleRows,
+    type ProductBundleRow,
+} from "../products/bundles";
+import { parseStoredEmiSettings, productEmiOffer, storeEmiSettingsSql } from "../products/emi";
 import {
     DEFAULT_RECOMMENDATION_LIMIT,
     getStorefrontProductRecommendations,
@@ -83,6 +97,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             isActive: products.isActive,
             isGiftCard: products.isGiftCard,
             customizationSchema: products.customizationSchema,
+            pageTemplate: products.pageTemplate,
+            emiEligible: products.emiEligible,
+            // The lowest buyer price (the "from" price) for the EMI line.
+            buyerFromMinor: productBuyerState.fromMinor,
+            storeEmiSettings: storeEmiSettingsSql(),
             storeCurrencyCode: storeCurrencyCodeSql(),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
@@ -113,6 +132,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             ...publicCategoryConditions(),
         ))
         .leftJoin(brands, publicBrandJoinCondition(products.brandId))
+        .leftJoin(productBuyerState, eq(productBuyerState.productId, products.id))
         .where(and(
             eq(products.slug, slug),
             eq(products.isActive, true),
@@ -122,7 +142,17 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .get();
 
     if (!productRow) return null;
-    const { category, brand, storeCurrencyCode, customizationSchema: storedCustomization, ...product } = productRow;
+    const {
+        category,
+        brand,
+        storeCurrencyCode,
+        customizationSchema: storedCustomization,
+        pageTemplate,
+        emiEligible,
+        buyerFromMinor,
+        storeEmiSettings,
+        ...product
+    } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const customization = readStoredCustomization(storedCustomization, decimalPlaces);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
@@ -154,6 +184,21 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .orderBy(productVariants.createdAt, productVariants.id)
         .all();
 
+    // Content blocks (page order) and active bundle tiers: one round trip in
+    // the second wave, where the legacy rich-content read used to be.
+    const contentPromise = db.batch([
+        selectProductPageContentBlockRows(db, product.id),
+        selectActiveProductBundleRows(db, [product.id]),
+    ] as never).then((results) => {
+        const [blockRows, bundleRows] = results as unknown as [ProductPageContentBlockRow[], ProductBundleRow[]];
+        return {
+            blocks: resolveProductPageContentBlocks(blockRows),
+            bundles: productBundleTiersByProduct(bundleRows).get(product.id) ?? [],
+        };
+    });
+    // Files the blocks show: a third-wave read, only when a block names one.
+    const blockMediaPromise = contentPromise.then(({ blocks }) => loadProductPageBlockMedia(db, blocks.mediaIds));
+
     const promises: Promise<{ type: string; data: unknown }>[] = [
         mediaMapPromise.then((mediaMap) => ({
             type: "media",
@@ -163,12 +208,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
         variantRowsPromise.then((res) => ({ type: "variants", data: res })),
 
-        db.select({
-            id: productRichContent.id,
-            title: productRichContent.title,
-            content: productRichContent.content,
-        }).from(productRichContent).where(eq(productRichContent.productId, product.id))
-            .orderBy(productRichContent.sortOrder).then((res: Array<{ id: string; title: string; content: string }>) => ({ type: "additionalInfo", data: res })),
+        contentPromise.then((data) => ({ type: "content", data })),
 
         listProductBuyGetOffers(db, product.id, storeCurrencyFromCode(storeCurrencyCode))
             .then((offers) => ({
@@ -206,15 +246,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const optionMapPromise = loadProductOptions(db, [product.id]);
     const selectedOptionMapPromise = variantRowsPromise.then((rows) =>
         loadVariantSelectedOptions(db, rows.map((variant) => variant.id)));
-    const [results, optionMap, selectedOptionMap] = await Promise.all([
+    const [results, optionMap, selectedOptionMap, blockMedia] = await Promise.all([
         Promise.all(promises),
         optionMapPromise,
         selectedOptionMapPromise,
+        blockMediaPromise,
     ]);
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
-    const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
+    const content = results.find((r) => r.type === "content")!.data as Awaited<typeof contentPromise>;
+    // The classic page's tabs: every rich-text block in `tabs` (legacy tabs keep their ids).
+    const additionalInfo = content.blocks.tabs;
+    const currencyCode = storeCurrencyFromCode(storeCurrencyCode);
     const recommendations = results.find((r) => r.type === "recommendations")!.data as ProductRecommendations;
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
@@ -283,6 +327,21 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             additionalInfo,
             offers,
             brand: brand?.id ? brand : null,
+            /** The product page template id; null is the theme's default. */
+            pageTemplate,
+            /** Blocks other than the tabs, in placement then page order. */
+            contentBlocks: content.blocks.blocks,
+            /** The ready files those blocks name. */
+            contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
+            /** Active quantity tiers, priced by checkout exactly as shown. */
+            bundles: content.bundles.map((tier) => presentProductBundleTier(tier, decimalPlaces)),
+            emi: productEmiOffer({
+                emiEligible: emiEligible === true,
+                priceMinor: buyerFromMinor ?? null,
+                settings: parseStoredEmiSettings(storeEmiSettings),
+                currencyCode,
+                decimalPlaces,
+            }),
         },
         category,
         media: publicMedia,

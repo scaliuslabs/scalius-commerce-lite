@@ -66,13 +66,18 @@ are not inferred, because guessing at a reference is worse than not claiming one
 
 ### What the seed carries
 
-Exactly fifteen catalog tables, in this dependency order:
+Exactly eighteen catalog tables, in this dependency order:
 
-`media_folders`, `media`, `categories`, `collections`, `product_attributes`,
-`products`, `product_media`, `product_option_definitions`,
-`product_option_values`, `product_variants`, `product_variant_option_values`,
-`product_attribute_values`, `product_rich_content`, `hero_sections`,
-`hero_sliders`.
+`media_folders`, `media`, `categories`, `collections`, `brands`,
+`product_attributes`, `products`, `product_media`,
+`product_option_definitions`, `product_option_values`, `product_variants`,
+`product_variant_option_values`, `product_attribute_values`,
+`product_rich_content`, `product_content_blocks`, `product_bundles`,
+`hero_sections`, `hero_sliders`.
+
+`product_content_blocks` leaves out the blocks mirrored from
+`product_rich_content` tabs: loading a tab recreates its block (0090's mirror
+trigger).
 
 Nothing else is ever opened for export — no orders, customers, users, sessions,
 accounts, settings, discounts, promotions, inventory ledgers, checkout state, or

@@ -177,6 +177,7 @@ function optionAriaLabel(
         </s>
         <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
       </div>
+      <slot name="after-price" />
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
           <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>

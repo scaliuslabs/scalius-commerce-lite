@@ -37,12 +37,28 @@ import {
 } from "../../schemas/responses";
 import { attributeSchema } from "../../schemas/entities";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
+import { adminAttributesTypedRoutes, bumpAfterFailedBatches, projectionRefresh } from "./attributes-typed";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+// Typed-attribute routes (groups, value vocabulary, conversion, category
+// sets) register first so their literal segments win over `/{id}` routes.
+app.route("/", adminAttributesTypedRoutes);
+
+/** Typed definition fields (migration 0090), carried by every attribute response. */
+const typedAttributeFields = {
+    groupId: z.string().max(80).nullable(),
+    valueType: z.enum(["text", "number", "boolean", "enum"]),
+    unit: z.string().max(16).nullable(),
+    sortOrder: z.number().int(),
+    keySpec: z.boolean(),
+    highlight: z.boolean(),
+    facetDisplay: z.enum(["checkbox", "range", "swatch", "search_list"]),
+};
 const attributeMutationResultSchema = z.object({
     id: z.string().max(180),
     name: z.string().max(100),
     slug: z.string().max(100),
     filterable: z.boolean(),
+    ...typedAttributeFields,
 });
 const attributeAgentSummarySchema = attributeMutationResultSchema.extend({
     deletedAt: z.union([z.string(), z.number()]).nullable(),
@@ -61,7 +77,7 @@ const listRoute = createRoute({
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(500).default(10).openapi({ description: "Items per page (max 500)" }),
             search: z.string().trim().max(120).optional().default("").openapi({ description: "Search term" }),
-            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name").openapi({ description: "Sort field" }),
+            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt", "sortOrder"]).optional().default("name").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
             ids: z.string().max(9000).optional().openapi({ description: "Comma-separated attribute IDs (max 90)" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" })
@@ -70,7 +86,7 @@ const listRoute = createRoute({
     responses: {
         200: {
             description: "Attribute list with pagination",
-            content: { "application/json": { schema: paginatedEnvelope("attributes", attributeSchema.extend({ valueCount: z.number() })) } },
+            content: { "application/json": { schema: paginatedEnvelope("attributes", attributeSchema.extend({ valueCount: z.number(), ...typedAttributeFields })) } },
         },
         ...errorResponses,
     }
@@ -102,7 +118,7 @@ const listAgentSummariesRoute = createRoute({
             page: z.coerce.number().int().min(1).default(1),
             limit: z.coerce.number().int().min(1).max(50).default(20),
             search: z.string().trim().max(120).optional().default(""),
-            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name"),
+            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt", "sortOrder"]).optional().default("name"),
             order: z.enum(["asc", "desc"]).optional().default("asc"),
             ids: z.string().max(9000).optional(),
             trashed: z.enum(["true", "false"]).optional(),
@@ -185,7 +201,7 @@ app.openapi(updateAttributeRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    const result = await updateAttribute(db, id, data);
+    const result = await bumpAfterFailedBatches(c, () => updateAttribute(db, id, data, projectionRefresh(db)));
     await bumpCacheGeneration(c);
     return ok(c, result);
 });
@@ -431,7 +447,7 @@ app.openapi(updateValueRoute, async (c) => {
     const db = c.get("db");
     const { id: attributeId } = c.req.valid("param");
     const { oldValue, newValue } = c.req.valid("json");
-    await renameAttributeValue(db, attributeId, oldValue, newValue);
+    await bumpAfterFailedBatches(c, () => renameAttributeValue(db, attributeId, oldValue, newValue, projectionRefresh(db)));
     await bumpCacheGeneration(c);
     return ok(c, {
         message: `Value "${oldValue}" renamed to "${newValue}"`
@@ -463,7 +479,7 @@ app.openapi(deleteValueRoute, async (c) => {
     const db = c.get("db");
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
-    await deleteAttributeValue(db, attributeId, value);
+    await bumpAfterFailedBatches(c, () => deleteAttributeValue(db, attributeId, value, projectionRefresh(db)));
     await bumpCacheGeneration(c);
     return ok(c, {
         message: `Value "${value}" deleted from all products`

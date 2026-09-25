@@ -25,6 +25,7 @@ import {
     selectCheckoutProductMediaProjectionRows,
     type ProductMediaProjectionRow,
 } from "../products/media";
+import { selectActiveProductBundleRows, type ProductBundleRow } from "../products/bundles";
 import {
     resolveStorefrontCartValidationFromRows,
     selectStorefrontCartProductRows,
@@ -190,6 +191,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
         selectDeliveryRateRowsByIds(db, shippingMethodIds),
+        // Quantity bundle tiers price the cart; any change bumps the revision below.
+        selectActiveProductBundleRows(db, productIds),
         db.select({
             revision: checkoutAuthority.revision,
             hasActiveAdminPushTarget: sql<number>`EXISTS(
@@ -248,8 +251,11 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const shippingRows = Array.isArray(results[6])
                 ? results[6] as DeliveryRateRow[]
                 : [];
-            const sideEffectRows = Array.isArray(results[7])
-                ? results[7] as CheckoutSideEffectSettingsRow[]
+            const bundleRows = Array.isArray(results[7])
+                ? results[7] as ProductBundleRow[]
+                : [];
+            const sideEffectRows = Array.isArray(results[8])
+                ? results[8] as CheckoutSideEffectSettingsRow[]
                 : [];
             const sideEffectSettings = sideEffectRows[0];
             const orderCreatedChannels = notificationsRead.value.orderChannels.order_created ?? [];
@@ -276,7 +282,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             }
             let taxAuthority: StorefrontTaxAuthoritySnapshot;
             try {
-                taxAuthority = taxPlan.resolve(results.slice(8, 11));
+                taxAuthority = taxPlan.resolve(results.slice(9, 9 + taxPlan.statements.length));
             } catch (error) {
                 if (error instanceof Error && !("code" in error)) {
                     Object.defineProperty(error, "code", {
@@ -303,6 +309,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         productRows,
                         variantRows,
                         mediaByProduct,
+                        bundleRows,
                     );
                     if (!cartValidation.valid) {
                         throw new ValidationError("Some items in your cart need attention.", {

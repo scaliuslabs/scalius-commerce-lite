@@ -10,7 +10,8 @@ Public entry: `index.ts`.
 |------|---------|---------|
 | `listing.ts` | `getStorefrontProducts()`, `getStorefrontCategoryProducts()`, `getStorefrontBrandProducts()`, `getStorefrontCollectionProducts()`, `storefrontCollectionVisibleCountQuery()`, `SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT` | Shop, category, brand and collection listings over the stored buyer state (`product_buyer_state` indexes: newest, price, category, brand). Shop-all facet counts run live only up to 2,000 public products |
 | `buyer-state.ts` | -- | The public buyer set and card pricing columns read from `product_buyer_state` (kept by `products/catalog-projections.ts`); not exported |
-| `facets.ts` | `OPTION_FACET_PREFIX`, `PublicProductFacet` | Attribute and option-axis filters and result-scoped facet counts (typed attributes extend this file) |
+| `facets.ts` | `resolvePublicAttributeFilters()`, `getPublicCategoryFacets()`, `getPublicSearchFacets()`, `PublicProductFacet` | Typed facet filters and counts over `product_buyer_state` ⋈ `product_facet_values`: attribute values and number ranges, option axes on one SKU, the brand entity. One statement counts every facet (see "Facets" below) |
+| `compare.ts` | `getStorefrontProductComparison()`, `loadProductSpecGroups()`, `MAX_COMPARE_PRODUCTS` | Up to 4 public products side by side with specs grouped by attribute group; `loadProductSpecGroups` is the grouped spec-table read the product page reuses |
 | `product-page.ts` | `getStorefrontProductBySlug()` | The product page read |
 | `search.ts` | `searchStorefrontProducts()` | Storefront product search |
 | `feed.ts` | `getStorefrontFeedProducts()`, `getEligibleStorefrontFeedProductById()`, `getFeedProjectionDiagnosticById()` | Google/Base and Meta catalogue feed rows |
@@ -39,10 +40,28 @@ Public entry: `index.ts`.
 |--------|------|---------|-------------|
 | GET | `/{slug}/products` | `getStorefrontCategoryProducts` | Category-scoped product list using shared public list filtering/sort helpers, preserving the category-products response shape |
 
-### Storefront Attributes (`/api/storefront/attributes`)
+### Storefront Attributes (`/api/v1/attributes`)
+Facet definitions outside a listing (agents, tools); storefront pages read the facets of their listing response instead. `GET /attributes/filterable` was removed (F20: 1.65M rows, no caller).
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
-| GET | `/filterable` | inline | All filterable attributes with their unique values (1h cache) |
-| GET | `/category/{categoryId}` | inline | Filterable attributes scoped to a category by ID (30m cache) |
-| GET | `/category-slug/{categorySlug}` | inline | Filterable attributes scoped to a category by slug (30m cache) |
-| GET | `/search-filters?q=X&categoryId=Y` | inline | Filterable attributes for search results (based on matching product categories) |
+| GET | `/category/{categoryId}` | `getPublicCategoryFacets` | Typed facets of a category and its published sub-categories (≤ 20 attribute facets, 30 values) |
+| GET | `/category-slug/{categorySlug}` | `getPublicCategoryFacets` | The same by slug |
+| GET | `/search-filters?q=X&categoryId=Y` | `getPublicSearchFacets` | Typed facets of a search's public hits |
+
+### Product comparison
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/api/v1/products/compare?ids=a,b,c,d` | `getStorefrontProductComparison` | 1-4 product ids; non-public ids are left out; one wave of three statements |
+
+## Facets
+
+URL contract (`resolvePublicAttributeFilters`, one statement; none for option-only filters):
+
+- `?<attribute slug>=<value>`: repeatable, OR within a facet, AND across facets. Values are normalised: text and enum values lowercased and trimmed (an enum value must exist), numbers canonical (`15.6`), booleans `1`/`0`.
+- `?<slug>.min=` / `?<slug>.max=`: inclusive range on a number attribute's `value_number`.
+- `?option.<axis>=<value>`: merchant option axes, matched on one live SKU (a Chalk 42 SKU for Chalk + 42).
+- `?brand=<brand slug>`: published brands (`product_buyer_state.brand_id`). A legacy attribute whose slug is `brand` is neither filterable nor offered.
+
+Counts (`buildCatalogFacetCountQuery`): the listing scope (public set, category or subtree, search, price, collection, brand page) is read once through its own index and materialized with each product's match flags; attribute rows are probed by primary key (owner = product) and option rows through `product_facet_values_product_idx`, in a fixed `CROSS JOIN` order. Each value counts products matching every other facet's selection. Readers join only live, filterable attribute definitions, so definition writes (filterable, display, unit, order, trash) need no projection refresh. A category's effective attribute set (its own and its ancestors', root first) orders and restricts its attribute facets. Caps: 50 attribute facets, 100 values per facet (most common first, selected values always kept); range facets return their bounds instead of values. Shop-all counts stay live only up to 2,000 public products.
+
+Measured on the 30k-product seed after typing it (`facets-scale.local.test.ts`, which also proves every count, range and total equal to a brute-force count from the source tables): the 3.3k-product Laptop page reads 128k D1 rows in 123 ms (the facet statement 110k rows, 55 ms), 155k with two enum filters, 246k with two option axes, a small leaf 3.3k rows.
