@@ -464,9 +464,10 @@ Two opt-in harnesses read it (both skip unless their variable is set):
 Findings and measured timings: `audit/rewrite-2026-09-23/CATALOG-SCALE.md`.
 
 The seeder writes rows directly, so fill the catalogue projections before
-profiling listings: call `POST /api/v1/admin/catalog/projections/rebuild`
-until `done`, or `rebuildCatalogProjections` in-process (30k products: 34
-chunks of 900, about 14 s locally).
+profiling listings: apply migration 0091's statements, call
+`POST /api/v1/admin/catalog/projections/rebuild` until `done`, or run
+`rebuildCatalogProjections` in-process (30k products: 34 chunks of 900, about
+14 s locally).
 
 ### Catalogue projections
 
@@ -485,8 +486,22 @@ expiry, adjust, alert level, order transitions) and checkout batch appends the
 refresh statements after its ledger-v2 edge and `stockVersion` CAS, so the
 projection commits with the write. Stock writes refresh the buyer state only.
 They are projections like `availabilityBand`: cart validation and checkout stay
-authoritative. The rebuild route, the queued `catalog.projections.rebuild`
-chain and the nightly cron (first 15-minute tick after 20:00 UTC) heal drift;
+authoritative.
+
+Nothing ever reads them empty. Migration `0091_catalogue_projection_fill` fills
+both for every product in the release that adds their readers (about 3 s at
+30k products; the migration applies before the new Worker goes live). It is
+generated from `catalogProjectionFillStatements`, the same builders the writes
+use (`packages/core/scripts/catalog-projection-fill.ts --write`), and a test
+keeps the checked-in D1/Turso file and its PostgreSQL sidecar equal to that
+output and equal to the rebuild on a seeded store. The demo-store seed ends
+with the same statements. Writes the previous API version commits between the
+migration and the new Worker going live do not refresh them, so the first cron
+tick of every new API version (`CF_VERSION_METADATA`, KV hint
+`catalog:projections:rebuilt-for-version`) queues one full rebuild.
+
+The rebuild route, the queued `catalog.projections.rebuild` chain and the
+nightly cron (first 15-minute tick after 20:00 UTC) heal drift;
 `catalog-projections.d1.test.ts` walks random product, SKU, stock and checkout
 writes and compares the projections with a fresh computation after every step.
 

@@ -465,14 +465,8 @@ describe("catalogue projection drift", () => {
                 const id = rng.pick(productIds);
                 const row = productRow(id);
                 if (!row || row.deletedAt !== null) return;
-                // duplicateProduct refuses (with a raw ZodError, a pre-existing gap) a
-                // source whose option value no live SKU uses any more.
-                const copy = await duplicateProduct(db, id, `Copy ${productIds.length}`)
-                    .catch((error: unknown) => {
-                        if (error instanceof Error && error.name === "ZodError") return null;
-                        throw error;
-                    });
-                if (copy) productIds.push(copy.id);
+                const copy = await duplicateProduct(db, id, `Copy ${productIds.length}`);
+                productIds.push(copy.id);
             }],
             ["variant price", async () => {
                 const sku = rng.pick(liveSkus().filter((row) => row.isDefault === 0));
