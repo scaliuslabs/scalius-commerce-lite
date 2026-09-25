@@ -81,10 +81,13 @@ export async function loadSqliteSqlFile(
 export async function createProviderSchemaDatabase(
   provider: DatabaseProvider,
   location = ":memory:",
+  /** Apply only migrations whose file name sorts before this one (sidecar parity tests). */
+  beforeMigration?: string,
 ): Promise<DatabaseSync> {
   const database = new DatabaseSync(location);
   const migrationNames = (await readdir(canonicalMigrationDirectory))
     .filter((name) => /^\d{4}_.+\.sql$/.test(name))
+    .filter((name) => beforeMigration === undefined || name < beforeMigration)
     .sort((left, right) => left.localeCompare(right));
 
   try {

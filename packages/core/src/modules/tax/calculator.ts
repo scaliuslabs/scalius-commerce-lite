@@ -9,6 +9,8 @@ import type {
     TaxRateDefinition,
 } from "./types";
 
+// A destination without an address (null city/zone/area) matches only
+// store-wide (`all`) rates.
 function matchesDestination(rate: TaxRateDefinition, destination: TaxDestination): boolean {
     if (rate.jurisdictionType === "all") return rate.jurisdictionId === null;
     const destinationId = rate.jurisdictionType === "city"

@@ -154,7 +154,8 @@ type PaymentSessionOrderRow = {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
-  shippingAddress: string;
+  /** Null when nothing ships; the gateway address is optional. */
+  shippingAddress: string | null;
   cityName: string | null;
   status: string;
   paymentMethod: string;
@@ -321,7 +322,7 @@ async function createPaymentSessionForOrder(
           name: order.customerName,
           phone: order.customerPhone,
           email: order.customerEmail ?? undefined,
-          address: order.shippingAddress,
+          address: order.shippingAddress ?? undefined,
           city: order.cityName ?? undefined,
         },
         urls,
