@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { isOrderNotificationType } from "@scalius/core/modules/notifications/browser";
+import { isTemplatedNotificationType } from "@scalius/core/modules/notifications/browser";
 import { NotificationTemplateEditor } from "~/components/admin/settings/NotificationTemplateEditor";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -12,7 +12,7 @@ import { notificationEventMessages } from "~/i18n/notification-events";
 import { titleHead } from "~/i18n/page-titles";
 import { notificationTemplateMessages } from "~/i18n/settings-notifications";
 
-// One customer message (e.g. "Order shipped"), opened from Settings → Notifications.
+// One customer message (e.g. "Order shipped", "Gift card received"), opened from Settings → Notifications.
 export const Route = createFileRoute("/admin/settings/notifications_/$event")({
   loader: ({ context: { queryClient } }) =>
     Promise.allSettled([
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/admin/settings/notifications_/$event")({
     ]),
   head: ({ params }) =>
     titleHead(
-      isOrderNotificationType(params.event)
+      isTemplatedNotificationType(params.event)
         ? translate(notificationEventMessages, params.event)
         : translate(settingsNavMessages, "notifications"),
     ),
@@ -35,7 +35,7 @@ function NotificationMessagePage() {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationTemplateMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
-  const known = isOrderNotificationType(event);
+  const known = isTemplatedNotificationType(event);
   return (
     <SettingsPage
       page="notifications"

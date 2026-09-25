@@ -97,6 +97,21 @@ describe("notification templates", () => {
     expect(email.text).toContain("Hi <img src=x onerror=alert(1)>");
   });
 
+  it("previews the digital, gift card and review messages in their real frame, not an order summary", () => {
+    const defaults = defaultNotificationTemplates("en");
+    for (const event of ["order_digital_delivered", "gift_card_issued", "review_request"] as const) {
+      const email = sampleOrderEmail({ event, language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email[event] });
+      expect(email.html).not.toContain("Dhanmondi");
+      expect(email.html).not.toContain("EID10");
+      expect(email.html).not.toMatch(/\{\{\s*\w+\s*\}\}/);
+    }
+    const gift = sampleOrderEmail({ event: "gift_card_issued", language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email.gift_card_issued });
+    expect(gift.html).toContain("SAMPLE0000000000");
+    const review = sampleOrderEmail({ event: "review_request", language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email.review_request });
+    expect(review.html).toContain("Cotton panjabi");
+    expect(review.html).toContain("https://example.com/account/orders/1001#reviews");
+  });
+
   it("links only plain http(s) addresses in the message, without letting them break out", () => {
     const email = sampleOrderEmail({
       event: "order_shipped",

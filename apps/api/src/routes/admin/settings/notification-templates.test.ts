@@ -100,6 +100,47 @@ describe("notification template routes", () => {
         expect(stored()).toEqual({ email: {}, sms: {} });
     });
 
+    it("serves and saves the digital, gift card and review templates beside the order ones", async () => {
+        const { request, stored } = createTestApp();
+        const initial = await request("");
+        for (const event of ["order_digital_delivered", "gift_card_issued", "review_request"] as const) {
+            expect(initial.body.data.templates.email[event]).toEqual(DEFAULTS.email[event]);
+            expect(initial.body.data.templates.sms[event]).toEqual(DEFAULTS.sms[event]);
+        }
+
+        const saved = await request("", "PUT", {
+            event: "review_request",
+            sms: { body: "{{customer_name}}, rate {{review_products}}: {{review_link}}" },
+            expectedRevision: 0,
+        });
+        expect(saved.status).toBe(200);
+        expect(stored()).toEqual({ email: {}, sms: { review_request: { body: "{{customer_name}}, rate {{review_products}}: {{review_link}}" } } });
+
+        // Order-only variables stay out of a gift card message.
+        const rejected = await request("", "PUT", {
+            event: "gift_card_issued",
+            sms: { body: "Code {{gift_card_code}} for order {{order_total}}" },
+            expectedRevision: 1,
+        });
+        expect(rejected.status).toBe(400);
+        expect(rejected.body.error.details.issues[0].path).toEqual(["sms", "body"]);
+    });
+
+    it("test-sends a gift card draft in the message frame with sample values", async () => {
+        const { request } = createTestApp();
+        const { status } = await request("/test", "POST", {
+            channel: "email",
+            event: "gift_card_issued",
+            subject: "A gift card from {{store_name}}",
+            body: "Code: {{gift_card_code}}, value {{gift_card_value}}",
+        });
+        expect(status).toBe(200);
+        const email = transport.sendEmail.mock.calls[0]![0];
+        expect(email.subject).toBe("A gift card from Nokshi Kantha");
+        expect(email.html).toContain("Code: SAMPLE0000000000, value ৳1,000");
+        expect(email.html).not.toContain("Dhanmondi");
+    });
+
     it("rejects variables the event can't fill, naming them on the field", async () => {
         const { request, stored } = createTestApp();
 

@@ -6,7 +6,11 @@
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
-import { TEMPLATED_NOTIFICATION_TYPES, type TemplatedNotificationType } from "./notification-types";
+import {
+  TEMPLATED_NOTIFICATION_TYPES,
+  isResolvedNotificationType,
+  type TemplatedNotificationType,
+} from "./notification-types";
 
 export const TEMPLATE_LIMITS = { subject: 200, emailBody: 10_000, smsBody: 1_000 } as const;
 
@@ -676,7 +680,12 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
   };
 }
 
-/** A draft template on a sample order in the real email frame, for the dashboard preview and test emails. */
+/**
+ * A draft template with sample data in the real email frame, for the
+ * dashboard preview and test emails: the order summary for order events, the
+ * plain message frame for the digital, gift card and review messages (the
+ * frame their real send uses).
+ */
 export function sampleOrderEmail(options: {
   event: TemplatedNotificationType;
   language: MessageLanguage;
@@ -687,6 +696,13 @@ export function sampleOrderEmail(options: {
 }): { subject: string; html: string; text: string } {
   const origin = options.origin?.replace(/\/+$/, "") || null;
   const values = sampleVariables(options.store.name ?? "", options.language);
+  if (isResolvedNotificationType(options.event)) {
+    return renderMessageEmail({
+      language: options.language,
+      store: options.store,
+      ...renderEmailTemplate(options.event, options.language, options.template, values),
+    });
+  }
   return renderOrderEmail({
     language: options.language,
     ...renderEmailTemplate(options.event, options.language, options.template, values),
