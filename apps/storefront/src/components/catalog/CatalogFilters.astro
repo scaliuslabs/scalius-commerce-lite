@@ -116,13 +116,22 @@ const availabilitySection: Section = { kind: "availability", key: "availability"
 const priceSection: Section | null = showPrice
   ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
   : null;
-// Daraz's order in a column (category, brand, then the shopping switches
-// and price, then specs); Dawn's in a bar (availability, price, then facets).
-const leading = facetSections.filter((section) => section.kind === "group" && (section.group.kind === "category" || section.group.facets[0]!.kind === "brand"));
-const rest = facetSections.filter((section) => !leading.includes(section));
-const sections: Section[] = bar
-  ? [availabilitySection, ...(priceSection ? [priceSection] : []), ...leading.filter((section) => section.kind === "group" && section.group.kind !== "category"), ...rest]
-  : [...leading, availabilitySection, ...(priceSection ? [priceSection] : []), ...rest];
+// The order follows the references:
+// - dense column (Amazon, Daraz): availability, brand and the first specs as
+//   tight checkbox rows, then price and the other specs, the category links
+//   last (pills or the breadcrumb carry the tree above);
+// - bar (Dawn): availability, price, then the facets;
+// - comfortable column and drawer (Apple Gadgets, Fabrilife, Target): the
+//   category links, price, availability, then the facets.
+const categorySections = facetSections.filter((section) => section.kind === "group" && section.group.kind === "category");
+const brandSections = facetSections.filter((section) => section.kind === "group" && section.group.facets[0]!.kind === "brand");
+const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
+const price = priceSection ? [priceSection] : [];
+const sections: Section[] = dense
+  ? [availabilitySection, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
+  : bar
+    ? [availabilitySection, ...price, ...brandSections, ...specSections]
+    : [...categorySections, ...price, availabilitySection, ...brandSections, ...specSections];
 // A column opens its first groups (and any in use) so the page does not
 // start with a wall; a bar's dropdowns open on demand.
 const OPEN_GROUPS = 6;
