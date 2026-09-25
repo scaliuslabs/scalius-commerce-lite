@@ -99,6 +99,10 @@ export async function autoFulfilOrder(
         for (const line of context.lines) {
             fulfilledAfter.set(line.orderItemId, (fulfilledAfter.get(line.orderItemId) ?? 0) + line.quantity);
         }
+        const nextFulfillmentStatus = deriveOrderFulfilmentStatus(items.map((item) => ({
+            quantity: item.quantity,
+            fulfilledQuantity: fulfilledAfter.get(item.id) ?? item.fulfilledQuantity,
+        })));
         const statements: BatchItem<"sqlite">[] = [
             // The ledger rows first: their unique request key makes a
             // concurrent or repeated run fail here before any delivery.
@@ -112,10 +116,7 @@ export async function autoFulfilOrder(
             }),
             ...await fulfiller.prepare(db, context),
             db.update(orders).set({
-                fulfillmentStatus: deriveOrderFulfilmentStatus(items.map((item) => ({
-                    quantity: item.quantity,
-                    fulfilledQuantity: fulfilledAfter.get(item.id) ?? item.fulfilledQuantity,
-                }))),
+                fulfillmentStatus: nextFulfillmentStatus,
                 updatedAt: sql`unixepoch()`,
             }).where(eq(orders.id, orderId)) as BatchItem<"sqlite">,
         ];

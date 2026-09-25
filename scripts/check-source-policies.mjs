@@ -134,6 +134,16 @@ export const policies = [
     sample: 'import { restoreDeductedStock } from "../inventory/restore";',
   },
   {
+    rule: "order_items.fulfilled_quantity moves only through the fulfilment ledger",
+    why: "fulfilled_quantity is a trigger projection of active order_fulfillment_lines (Wave A F1); a direct update desynchronises it from the ledger",
+    paths: ["apps/api/src", "packages/core/src"],
+    forbid: [
+      /\.set\(\s*\{[^}]*\bfulfilledQuantity\s*:/,
+      /\bSET\s+[^;`]*\bfulfilled_quantity\s*=/i,
+    ],
+    sample: "await db.update(orderItems).set({ fulfilledQuantity: 3 }).where(eq(orderItems.id, id));",
+  },
+  {
     rule: "production code never calls the legacy multi-SKU stock helpers",
     why: "deductMultiple/releaseMultiple/restoreDeductedMultiple bypass the ledger-v2 stockVersion CAS batch",
     paths: ["apps/api/src", "packages/core/src"],

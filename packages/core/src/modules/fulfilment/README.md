@@ -4,6 +4,28 @@ The real actions that hand an order's units over: own-courier parcels (Mark as s
 
 Public entry: `index.ts`.
 
+## The ledger (Wave A §2.2)
+
+Every action that hands units over inserts one `order_fulfillments` row
+(`kind` = the lines' fulfilment type) and its `order_fulfillment_lines`, in one
+batch that CAS-claims the order version. `order_items.fulfilled_quantity` is a
+trigger projection of the active lines: never write it (a source policy
+forbids it). A fulfilment only moves active → voided, which the triggers
+subtract again; lines and fulfilments are otherwise immutable, and a parcel
+row linked to a fulfilment can't be deleted.
+
+- The last `ship` line moves a confirmed order to shipped and deducts stock.
+- The last `pickup`/`service` line of an order that ships nothing delivers it
+  through `applyOrderStatusChange` (money gate); cash taken at the counter is
+  recorded first. Otherwise the result says `awaitingPayment`.
+- Courier bookings, repairs, webhooks and status refreshes record every unsent
+  ship line as one system fulfilment linked to the parcel, before the order
+  moves; a courier cancellation (`cancelled`, `pickup_failed`) voids it after
+  the order is back to confirmed.
+- Void (`canVoid` in the order detail): own-rider, pickup and service
+  fulfilments of a confirmed order. Courier parcels follow the courier.
+- Returns never touch the ledger: a returned item stays fulfilled.
+
 ## Files
 
 | Path | Exports | Purpose |
@@ -12,6 +34,10 @@ Public entry: `index.ts`.
 | `reconcile.ts` | `reconcileOrderShipment()`, `lookupUnknownOrderShipment()`, `resolveUnknownOrderShipment()` | Courier booking repair without calling the provider again |
 | `bulk.ts` | `bulkShipOrders()`, `bulkFulfillOrders()` | Bulk courier booking and bulk Mark as sent |
 | `delivery-outcomes.ts` | `processCodAction()`, `markOrderDelivered()` | Delivered, and COD collected/failed/returned |
+| `ledger.ts` | `recordOrderFulfilment()`, `voidOrderFulfilment()`, `markParcelReturned()`, `recordCourierBookingFulfilment()`, `syncCourierFulfilmentFromShipment()`, `assertShipmentDeletable()`, `deriveOrderFulfilmentStatus()` | The fulfilment ledger (Wave A): the only writer of `order_fulfillments` and their lines |
+| `pickup.ts` | `markOrderReadyForPickup()` | Ready for pickup: `pickup_ready_at` plus the `order_ready_for_pickup` outbox row in one batch |
+| `registry.ts` | `FULFILLER_REGISTRY`, `hasFulfiller()` | Which line types can be handed over (manual: ship, pickup, service; automatic: none until Wave B) |
+| `auto-fulfil.ts` | `autoFulfilOrder()`, `sweepAutoFulfilment()` | Digital and gift-card lines after settlement (queue `order.auto_fulfil` and the 15-minute sweep) |
 | `shared.ts` | -- | Helpers shared by the files above (not exported) |
 
 ### Fulfillment Flow

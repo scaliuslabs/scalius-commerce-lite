@@ -234,6 +234,8 @@ export interface StorefrontFeedProduct {
     freeDelivery: boolean;
     categoryId: string | null;
     excludeFromProductFeed: boolean;
+    /** A buyer input is required: agent carts (variant + quantity only) can't buy it. */
+    requiresCustomization: boolean;
     productCondition: ProductCondition | null;
     hasVariants: boolean;
     availableForSale: boolean;
