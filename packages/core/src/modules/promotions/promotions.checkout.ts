@@ -31,6 +31,28 @@ import {
 } from "./promotions.evaluator";
 import { promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
+import { deps } from "../../cache-deps";
+
+/**
+ * A cached read that shows automatic promotions is valid only until the next
+ * scheduled start or end of one (no row changes at that instant, so no key
+ * advances). One small read, and only while a dependency scope records.
+ */
+async function declareNextAutomaticPromotionTransition(db: Database, nowEpochSeconds: number): Promise<void> {
+    if (!deps.active()) return;
+    const row = await db.select({
+        nextStart: sql<number | null>`MIN(CASE WHEN ${promotions.startsAt} > ${nowEpochSeconds} THEN CAST(${promotions.startsAt} AS INTEGER) END)`,
+        nextEnd: sql<number | null>`MIN(CASE WHEN ${promotions.endsAt} > ${nowEpochSeconds} THEN CAST(${promotions.endsAt} AS INTEGER) END)`,
+    }).from(promotions).where(and(
+        eq(promotions.method, "automatic"),
+        eq(promotions.status, "active"),
+        isNull(promotions.deletedAt),
+    )).get();
+    const next = [row?.nextStart, row?.nextEnd]
+        .map((value) => (value === null || value === undefined ? null : Number(value)))
+        .filter((value): value is number => value !== null && Number.isFinite(value));
+    if (next.length > 0) deps.validUntil(Math.min(...next) * 1_000);
+}
 
 type CheckoutLine = StorefrontDiscountCart["lines"][number];
 
@@ -366,6 +388,7 @@ async function loadOfferProducts(
 ): Promise<Map<string, DiscountOfferProduct>> {
     const result = new Map<string, DiscountOfferProduct>();
     if (productIds.length === 0) return result;
+    deps.products(productIds);
     const [productRows, skuRows] = await db.batch([
         db.select({
             id: products.id,
@@ -691,10 +714,18 @@ export async function listProductBuyGetOffers(
     currencyCode: string,
     evaluatedAtEpochSeconds = Math.floor(Date.now() / 1_000),
 ): Promise<ProductBuyGetOffer[]> {
-    const candidates = typedCandidates(
-        await loadCandidates(db, [], { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } }, evaluatedAtEpochSeconds),
-    ).filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
+    // Cached product pages: any automatic promotion's rows, limits and
+    // schedule decide the offers shown.
+    deps.anyPromotion();
+    const [loaded] = await Promise.all([
+        loadCandidates(db, [], { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } }, evaluatedAtEpochSeconds),
+        declareNextAutomaticPromotionTransition(db, evaluatedAtEpochSeconds),
+    ]);
+    const candidates = typedCandidates(loaded)
+        .filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
     if (candidates.length === 0) return [];
+    // Collection-scoped offers resolve the product's collections.
+    deps.anyCollection();
     const line = { id: productId, productId, variantId: productId, unitPriceMinor: 0, quantity: 1 };
     const lineCollections = await resolveLineCollections(db, [line], scopedCollectionIds(candidates));
     const drafts = candidates.flatMap((candidate) => {

@@ -8,6 +8,7 @@ import {
   getPublicCategoryBreadcrumb,
   getPublicCategoryChildren,
   getPublicCategorySection,
+  getPublicCategorySitemapEntries,
   getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
 import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
@@ -132,7 +133,6 @@ const storefrontCategoryProductSchema = z.object({
   secondaryImageUrl: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
 });
 
 const appliedCategoryFiltersSchema = z.object({
@@ -219,7 +219,6 @@ const listCategorySummariesRoute = createRoute({
           imageUrl: z.string().max(2048).nullable(),
           descriptionCharacters: z.number().int().min(0),
           contentCharacters: z.number().int().min(0),
-          updatedAt: z.string().nullable(),
         })).max(50),
         pagination: paginationSchema,
       })) } },
@@ -231,6 +230,33 @@ const listCategorySummariesRoute = createRoute({
 app.openapi(listCategorySummariesRoute, async (c) => {
   const query = c.req.valid("query");
   return ok(c, await getPublicCategorySummaries(c.get("db"), query));
+});
+
+// GET /categories/sitemap — category pages for XML discovery (registered before /{slug})
+const categorySitemapRoute = createRoute({
+  method: "get",
+  path: "/sitemap",
+  operationId: "storefront.categories.sitemap",
+  tags: ["Categories"],
+  summary: "List category pages for the XML sitemap",
+  description: "Published categories without noIndex or a sitemap exclusion, filtered before the limit, with each page's last change.",
+  responses: {
+    200: {
+      description: "Category sitemap entries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        categories: z.array(z.object({
+          slug: z.string(),
+          canonicalPath: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(categorySitemapRoute, async (c) => {
+  return ok(c, { categories: await getPublicCategorySitemapEntries(c.get("db")) });
 });
 
 // GET /categories/tree — the published tree for automatic menus
@@ -434,7 +460,7 @@ const getCategoryProductsRoute = createRoute({
     200: {
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
-        category: storefrontCategoryDetailSchema,
+        category: storefrontCategoryDetailSchema.omit({ updatedAt: true }),
         products: z.array(storefrontCategoryProductSchema),
         pagination: paginationSchema,
         priceRange: z.object({
@@ -485,7 +511,6 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     children: category.children,
     breadcrumb: category.breadcrumb,
     createdAt: category.createdAt,
-    updatedAt: category.updatedAt,
   };
 
   const { includeSubcategories, ...filters } = params;
@@ -577,7 +602,6 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     noIndex: category.noIndex,
     excludeFromSitemap: category.excludeFromSitemap,
     createdAt: category.createdAt,
-    updatedAt: category.updatedAt,
   }, {
     ...filters,
     search: normalizePublicListingSearchParam(params.search),

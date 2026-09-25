@@ -7,7 +7,38 @@ import { unwrapData } from "./unwrap";
 import {
   getApiV1Categories,
   getApiV1CategoriesBySlug,
+  getApiV1CategoriesSitemap,
 } from "@scalius/api-client/sdk";
+
+export interface SitemapCategory {
+  slug: string;
+  canonicalPath: string | null;
+  updatedAt: string | null;
+}
+
+/**
+ * Category pages for the sitemap (the API leaves out noIndex and
+ * excludeFromSitemap categories before its limit), or null on failure.
+ */
+export async function getSitemapCategories(): Promise<SitemapCategory[] | null> {
+  return withEdgeCache(
+    "sitemap_categories",
+    async () => {
+      try {
+        const { data, error } = await getApiV1CategoriesSitemap({ client: getConfiguredSdkClient() });
+        if (error) {
+          console.error("Error fetching sitemap categories:", error);
+          return null;
+        }
+        return unwrapData<{ categories: SitemapCategory[] }>(data)?.categories ?? null;
+      } catch (error: unknown) {
+        console.error("Error fetching sitemap categories:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.LONG },
+  );
+}
 
 /**
  * Fetches a list of all categories.

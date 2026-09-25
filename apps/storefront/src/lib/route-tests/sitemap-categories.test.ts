@@ -3,12 +3,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAllCategories: vi.fn(),
+  getSitemapCategories: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/categories", () => ({
-  getAllCategories: mocks.getAllCategories,
+  getSitemapCategories: mocks.getSitemapCategories,
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
@@ -19,12 +19,12 @@ import { GET } from "../../pages/sitemap-categories.xml";
 
 describe("categories sitemap route", () => {
   beforeEach(() => {
-    mocks.getAllCategories.mockReset();
+    mocks.getSitemapCategories.mockReset();
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
   it("returns non-cacheable 503 when categories cannot be read", async () => {
-    mocks.getAllCategories.mockResolvedValueOnce(null);
+    mocks.getSitemapCategories.mockResolvedValueOnce(null);
 
     const response = await GET({} as never);
 
@@ -34,7 +34,7 @@ describe("categories sitemap route", () => {
   });
 
   it("keeps legitimate empty category lists as empty XML", async () => {
-    mocks.getAllCategories.mockResolvedValueOnce([]);
+    mocks.getSitemapCategories.mockResolvedValueOnce([]);
 
     const response = await GET({} as never);
     const body = await response.text();
@@ -44,57 +44,21 @@ describe("categories sitemap route", () => {
     expect(body).toContain("<urlset");
   });
 
-  it("omits noindexed and sitemap-excluded categories", async () => {
-    mocks.getAllCategories.mockResolvedValueOnce([
-      {
-        id: "cat_1",
-        name: "Visible",
-        slug: "visible",
-        description: null,
-        imageUrl: null,
-        metaTitle: null,
-        metaDescription: null,
-        canonicalPath: "/shop/visible-category",
-        noIndex: false,
-        excludeFromSitemap: false,
-        createdAt: "2026-06-01T00:00:00.000Z",
-        updatedAt: "2026-06-02T00:00:00.000Z",
-      },
-      {
-        id: "cat_2",
-        name: "Noindex",
-        slug: "noindex",
-        description: null,
-        imageUrl: null,
-        metaTitle: null,
-        metaDescription: null,
-        noIndex: true,
-        excludeFromSitemap: false,
-        createdAt: "2026-06-01T00:00:00.000Z",
-        updatedAt: "2026-06-02T00:00:00.000Z",
-      },
-      {
-        id: "cat_3",
-        name: "Excluded",
-        slug: "excluded",
-        description: null,
-        imageUrl: null,
-        metaTitle: null,
-        metaDescription: null,
-        noIndex: false,
-        excludeFromSitemap: true,
-        createdAt: "2026-06-01T00:00:00.000Z",
-        updatedAt: "2026-06-02T00:00:00.000Z",
-      },
+  it("lists the API's sitemap entries with route-shaped canonicals and their own lastmod", async () => {
+    // The API leaves out noIndex and sitemap-excluded categories.
+    mocks.getSitemapCategories.mockResolvedValueOnce([
+      { slug: "visible", canonicalPath: "/shop/visible-category", updatedAt: "2026-06-02T00:00:00.000Z" },
+      { slug: "renamed", canonicalPath: "/categories/new-name", updatedAt: null },
     ]);
 
     const response = await GET({} as never);
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("/categories/visible");
+    expect(body).toContain("https://storefront.example.test/categories/visible");
     expect(body).not.toContain("/shop/visible-category");
-    expect(body).not.toContain("/categories/noindex");
-    expect(body).not.toContain("/categories/excluded");
+    expect(body).toContain("<lastmod>2026-06-02T00:00:00.000Z</lastmod>");
+    expect(body).toContain("https://storefront.example.test/categories/new-name");
+    expect(body).not.toContain("/categories/renamed");
   });
 });

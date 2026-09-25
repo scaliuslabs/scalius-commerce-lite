@@ -1,6 +1,7 @@
 /**
  * Categories Sitemap
- * Contains all category pages
+ * Published category pages; the API leaves out noIndex and excludeFromSitemap
+ * categories before its limit and dates each page by its own last change.
  */
 
 import {
@@ -10,7 +11,7 @@ import {
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
-import { getAllCategories } from '@/lib/api/categories';
+import { getSitemapCategories } from '@/lib/api/categories';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
 
@@ -20,19 +21,17 @@ export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
 
-    const categories = await getAllCategories();
+    const categories = await getSitemapCategories();
 
     if (!categories) {
       console.error('Failed to fetch categories for sitemap');
       return xmlDataUnavailableResponse('Category sitemap is temporarily unavailable');
     }
 
-    const categoryUrls: SitemapUrl[] = categories
-      .filter((category) => !category.noIndex && !category.excludeFromSitemap)
-      .map((category) => ({
-        loc: `${baseUrl}${normalizeResourceCanonicalPath('category', category.canonicalPath) ?? `/categories/${category.slug}`}`,
-        lastmod: category.updatedAt ?? category.createdAt ?? undefined,
-      }));
+    const categoryUrls: SitemapUrl[] = categories.map((category) => ({
+      loc: `${baseUrl}${normalizeResourceCanonicalPath('category', category.canonicalPath) ?? `/categories/${category.slug}`}`,
+      lastmod: category.updatedAt ?? undefined,
+    }));
 
     const xml = generateSitemap(categoryUrls, baseUrl);
 
