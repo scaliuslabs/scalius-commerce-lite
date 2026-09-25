@@ -95,6 +95,12 @@ const categoryNodes = categoryTree?.nodes ?? [];
 const tree = sourceNavigation(navigation.source, menuItems, categoryNodes);
 const treeSourced = navigation.source !== "menu";
 const hasNavigation = tree.length > 0;
+// Shortcut rows (beside "All", the phone's pills) lead with the merchant's
+// own links when the departments come from the tree (Amazon's Deals, Sell...).
+const menuTree = sourceNavigation("menu", menuItems, []);
+const shortcutTree = navigation.source === "tree+menu" && menuTree.length > 0
+  ? [...menuTree, ...tree.filter((item) => !menuTree.some((entry) => entry.href && entry.href === item.href))]
+  : tree;
 const desktopKind = desktopNav.variant;
 const desktopSettings = desktopNav.settings as Record<string, unknown>;
 const railAlways = desktopKind === "departments-rail" && desktopSettings.open === "always";
@@ -243,7 +249,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
           />
           {rowLinks > 0 && (
             <DesktopNav
-              navigation={navigationShortcuts(tree, rowLinks)}
+              navigation={navigationShortcuts(shortcutTree, rowLinks)}
               id="drill-row-nav"
               navStyle="menu"
               align="start"
@@ -256,7 +262,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     {
       shortcutRow && (
         <div slot="phone-extras" class="header-phone-shortcuts">
-          <PillNav navigation={navigationShortcuts(tree, 10)} />
+          <PillNav navigation={navigationShortcuts(shortcutTree, 10)} />
         </div>
       )
     }
