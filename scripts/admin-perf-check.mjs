@@ -33,13 +33,17 @@ export const BUNDLE_BUDGETS = {
   // Editors (rich text preview, forms, validation) sit near 290-350.
   routeDefault: 360,
   routes: {
-    "auth/login.tsx": 168,
+    // Rolldown groups lucide icons across entries: the navigation's rail and
+    // settings-takeover icons moved a few into the login's icon chunk.
+    "auth/login.tsx": 169,
     "admin/index.tsx": 206,
     "admin/orders/_list/index.tsx": 290,
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
     "admin/orders/$orderId/index.tsx": 287,
     "admin/products/index.tsx": 290,
     "admin/products/$productId/edit.tsx": 364,
+    // The editor plus the navigation shell (rail, panel, settings takeover).
+    "admin/products/new.tsx": 362,
     "admin/inventory/index.tsx": 255,
     "admin/customers/index.tsx": 245,
     "admin/settings/store.tsx": 291,

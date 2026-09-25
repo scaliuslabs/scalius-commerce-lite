@@ -30,7 +30,7 @@ export function getRouter() {
     basepath: getDashboardBasePath() || "/",
     // Positions are kept per history entry: Back restores, a new visit starts at the top.
     scrollRestoration: true,
-    scrollToTopSelectors: ["#admin-main-scroll", "[data-settings-scroll]"],
+    scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
     // Hovering or focusing a link fetches the page's code and runs its loader,
     // so the click lands on data already in flight. React Query owns caching

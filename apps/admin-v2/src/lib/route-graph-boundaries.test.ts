@@ -286,7 +286,7 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const sidebarSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "sidebar.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AppSidebar.tsx"),
       "utf8",
     );
 
@@ -296,7 +296,7 @@ describe("admin route graph boundaries", () => {
     expect(userMenuSource).toContain('await import("@/lib/auth-client")');
     expect(deferredToasterSource).toContain("lazy(() =>");
     expect(deferredToasterSource).toContain('import("./sonner")');
-    expect(sidebarSource).toContain('import("./sidebar-mobile-sheet")');
+    expect(sidebarSource).toContain('import("@/components/ui/sidebar-mobile-sheet")');
     expect(sidebarSource).not.toContain("@/components/ui/sheet");
   });
 
@@ -549,7 +549,7 @@ describe("admin route graph boundaries", () => {
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollRestoration: true");
     expect(routerSource).toContain(
-      'scrollToTopSelectors: ["#admin-main-scroll", "[data-settings-scroll]"]',
+      'scrollToTopSelectors: ["#admin-main-scroll"]',
     );
     expect(routerSource).toContain('scrollRestorationBehavior: "instant"');
     expect(adminRouteSource).toContain(
