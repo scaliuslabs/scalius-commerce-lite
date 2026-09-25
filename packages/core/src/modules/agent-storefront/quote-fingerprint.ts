@@ -5,7 +5,8 @@ export const AGENT_STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN = /^taxq_[A-Za-
 
 export interface AgentStorefrontCheckoutQuoteFingerprintInput {
   contextRevision: number;
-  shippingMethodId: string;
+  /** The method the order uses; null when nothing in the cart needs one. */
+  shippingMethodId: string | null;
   discountCode: string | null;
   quote: TaxQuote;
 }

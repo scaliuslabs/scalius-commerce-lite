@@ -15831,7 +15831,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -16409,7 +16410,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -17039,7 +17041,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -17667,7 +17670,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -18289,7 +18293,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -18919,7 +18924,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -19535,7 +19541,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -20181,7 +20188,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -20800,7 +20808,8 @@
                                 "nullable": true
                               },
                               "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page."
                               },
                               "action": {
                                 "type": "string"
@@ -21768,8 +21777,10 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
-                    "maxLength": 500
+                    "maxLength": 500,
+                    "description": "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services)."
                   },
                   "notes": {
                     "type": "string",
@@ -21792,7 +21803,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
                   "notes",
                   "paymentMethod"
                 ],
@@ -116711,6 +116721,7 @@
                                   "storefront_url_unavailable",
                                   "product_feed_excluded",
                                   "inactive_deleted_unpublished",
+                                  "non_physical_excluded",
                                   "inconsistent_option_axes",
                                   "no_buyer_sku",
                                   "non_positive_price",
@@ -116748,6 +116759,7 @@
                                         "storefront_url_unavailable",
                                         "product_feed_excluded",
                                         "inactive_deleted_unpublished",
+                                        "non_physical_excluded",
                                         "inconsistent_option_axes",
                                         "no_buyer_sku",
                                         "non_positive_price",
@@ -116773,7 +116785,7 @@
                               "samples"
                             ]
                           },
-                          "maxItems": 9
+                          "maxItems": 10
                         }
                       },
                       "required": [
@@ -120178,7 +120190,8 @@
                                       "sku_not_found",
                                       "sku_ambiguous",
                                       "feed_disabled",
-                                      "storefront_url_unavailable"
+                                      "storefront_url_unavailable",
+                                      "non_physical_product"
                                     ]
                                   }
                                 },
@@ -159078,6 +159091,96 @@
                                 "type": "integer",
                                 "nullable": true,
                                 "description": "Units buyers can still order across active SKUs; null when a SKU has no stock limit."
+                              },
+                              "requiresCustomization": {
+                                "type": "boolean"
+                              },
+                              "customization": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "fields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "text",
+                                            "textarea",
+                                            "select",
+                                            "checkbox"
+                                          ]
+                                        },
+                                        "required": {
+                                          "type": "boolean"
+                                        },
+                                        "help": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "maxLength": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        },
+                                        "options": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "value": {
+                                                "type": "string"
+                                              },
+                                              "label": {
+                                                "type": "string"
+                                              },
+                                              "price": {
+                                                "type": "number"
+                                              },
+                                              "priceMinor": {
+                                                "type": "integer"
+                                              }
+                                            },
+                                            "required": [
+                                              "value",
+                                              "label",
+                                              "price",
+                                              "priceMinor"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "label",
+                                        "type",
+                                        "required",
+                                        "help",
+                                        "maxLength",
+                                        "price",
+                                        "priceMinor",
+                                        "options"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "fields"
+                                ],
+                                "description": "Buyer inputs asked on the product page, in schema order."
                               }
                             },
                             "required": [
@@ -159102,7 +159205,9 @@
                               "hasStockHistory",
                               "mediaCount",
                               "primaryImage",
-                              "availableStock"
+                              "availableStock",
+                              "requiresCustomization",
+                              "customization"
                             ]
                           }
                         },
@@ -167467,6 +167572,20 @@
                               },
                               "voidedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "canVoid": {
+                                "type": "boolean"
+                              },
+                              "voidBlockedReason": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "voided",
+                                  "courier",
+                                  "delivered",
+                                  "order_not_confirmed",
+                                  null
+                                ]
                               }
                             },
                             "required": [
@@ -167478,7 +167597,9 @@
                               "status",
                               "actorType",
                               "cashCollected",
-                              "voidedAt"
+                              "voidedAt",
+                              "canVoid",
+                              "voidBlockedReason"
                             ]
                           }
                         },
@@ -169735,17 +169856,37 @@
                               "nullable": true
                             },
                             "shippingAddress": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "city": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "area": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "requiresShipping": {
+                              "type": "boolean"
+                            },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodKind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ],
+                              "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
                             },
                             "cityName": {
                               "type": "string",
@@ -169805,6 +169946,9 @@
                             "city",
                             "zone",
                             "area",
+                            "requiresShipping",
+                            "shippingMethodId",
+                            "shippingMethodKind",
                             "cityName",
                             "zoneName",
                             "areaName",
@@ -169915,6 +170059,96 @@
                               "discountAmount": {
                                 "type": "number",
                                 "nullable": true
+                              },
+                              "customizationSchema": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "fields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "text",
+                                            "textarea",
+                                            "select",
+                                            "checkbox"
+                                          ]
+                                        },
+                                        "required": {
+                                          "type": "boolean"
+                                        },
+                                        "help": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "maxLength": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        },
+                                        "options": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "value": {
+                                                "type": "string"
+                                              },
+                                              "label": {
+                                                "type": "string"
+                                              },
+                                              "price": {
+                                                "type": "number"
+                                              },
+                                              "priceMinor": {
+                                                "type": "integer"
+                                              }
+                                            },
+                                            "required": [
+                                              "value",
+                                              "label",
+                                              "price",
+                                              "priceMinor"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "label",
+                                        "type",
+                                        "required",
+                                        "help",
+                                        "maxLength",
+                                        "price",
+                                        "priceMinor",
+                                        "options"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "fields"
+                                ],
+                                "description": "Buyer inputs asked on the product page, in schema order."
+                              },
+                              "requiresCustomization": {
+                                "type": "boolean"
                               },
                               "variants": {
                                 "type": "array",
@@ -170108,6 +170342,8 @@
                               "discountPercentage",
                               "discountType",
                               "discountAmount",
+                              "customizationSchema",
+                              "requiresCustomization",
                               "variants"
                             ],
                             "additionalProperties": {}
@@ -170138,17 +170374,37 @@
                               "nullable": true
                             },
                             "shippingAddress": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "city": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "area": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "requiresShipping": {
+                              "type": "boolean"
+                            },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodKind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ],
+                              "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
                             },
                             "cityName": {
                               "type": "string",
@@ -170216,6 +170472,61 @@
                                   },
                                   "price": {
                                     "type": "number"
+                                  },
+                                  "fulfillmentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "ship",
+                                      "pickup",
+                                      "digital",
+                                      "gift_card",
+                                      "service"
+                                    ],
+                                    "description": "How the order line reaches the buyer, frozen when the order is placed."
+                                  },
+                                  "properties": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "text",
+                                            "textarea",
+                                            "select",
+                                            "checkbox"
+                                          ]
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        },
+                                        "displayValue": {
+                                          "type": "string"
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "type",
+                                        "label",
+                                        "value",
+                                        "displayValue",
+                                        "price",
+                                        "priceMinor"
+                                      ]
+                                    }
                                   }
                                 },
                                 "required": [
@@ -170223,7 +170534,9 @@
                                   "productId",
                                   "variantId",
                                   "quantity",
-                                  "price"
+                                  "price",
+                                  "fulfillmentType",
+                                  "properties"
                                 ]
                               }
                             }
@@ -170239,6 +170552,9 @@
                             "city",
                             "zone",
                             "area",
+                            "requiresShipping",
+                            "shippingMethodId",
+                            "shippingMethodKind",
                             "cityName",
                             "zoneName",
                             "areaName",
@@ -170511,6 +170827,9 @@
                         },
                         "replayed": {
                           "type": "boolean"
+                        },
+                        "awaitingPayment": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -170521,7 +170840,8 @@
                         "shipmentId",
                         "orderStatus",
                         "fulfillmentStatus",
-                        "replayed"
+                        "replayed",
+                        "awaitingPayment"
                       ]
                     }
                   },

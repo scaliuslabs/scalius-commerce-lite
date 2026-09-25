@@ -38,6 +38,8 @@ export const PRODUCT_FEED_ROW_PREVIEW_DIAGNOSTIC_REASONS = [
   "sku_ambiguous",
   "feed_disabled",
   "storefront_url_unavailable",
+  // Services and gift cards (digital until Wave B) are not merchant-feed items.
+  "non_physical_product",
 ] as const;
 
 export const PRODUCT_FEED_ROW_PREVIEW_OMISSION_REASONS = [
@@ -318,6 +320,9 @@ function diagnosticReason(
   }
   if (source.diagnostic.excludeFromProductFeed) {
     return "excluded_from_product_feed";
+  }
+  if (!source.diagnostic.sellsPhysicalGoods) {
+    return "non_physical_product";
   }
   if (!source.diagnostic.hasBuyerResolvableSku) {
     return "unresolved_variant_shape";
