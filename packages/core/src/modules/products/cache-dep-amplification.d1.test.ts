@@ -39,6 +39,8 @@ describe("cache dependency write amplification", () => {
             CREATE TRIGGER amp_clock AFTER UPDATE ON cache_clock BEGIN INSERT INTO amp VALUES ('clock', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
         `);
         await rebuildCatalogProjections(db);
+        // Saved long ago: a write's own lastmod always moves.
+        sqlite.exec("UPDATE products SET updated_at = 1700000000");
     }, 60_000);
 
     async function measure(write: () => Promise<unknown>) {
@@ -65,23 +67,37 @@ describe("cache dependency write amplification", () => {
         const productKeys = result.keys.filter((key) => key.startsWith("p:"));
         expect(productKeys).toHaveLength(PRODUCTS);
         expect(result.keys.filter((key) => !key.startsWith("p:"))).toEqual([
-            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_root", "t:product_buyer_state", "t:products",
+            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_root", "lm:seo", "lm:shape", "t:product_buyer_state", "t:products",
         ]);
-        // Per product: the products row trigger and the buyer-state membership trigger.
-        expect(result.clockWrites).toBe(2 * PRODUCTS);
-        // products fire: p + t (2); buyer state fire: p + 4 scopes + t (6).
-        expect(result.depWrites).toBe(8 * PRODUCTS);
+        // Per product, four fires: the products row (p + t), its store shape
+        // (lm:shape + t), its lastmod (lm:seo + p + t), and the buyer-state
+        // membership (p + 4 scopes + t).
+        expect(result.clockWrites).toBe(4 * PRODUCTS);
+        expect(result.depWrites).toBe(13 * PRODUCTS);
         expect(result.ms).toBeLessThan(2_000);
+    });
+
+    it("a bulk change to values the products already have is a no-op: no revision, no lastmod, no key", async () => {
+        sqlite.exec("UPDATE products SET updated_at = 1700000000");
+        const result = await measure(() => bulkUpdateProducts(db, claims(), { isActive: true, categoryId: "cat_a" }));
+        expect(result).toMatchObject({ keys: [], depWrites: 0, clockWrites: 0 });
+        expect(sqlite.prepare("SELECT DISTINCT aggregate_revision AS revision, updated_at AS updatedAt FROM products").all())
+            .toEqual([{ revision: 1, updatedAt: 1700000000 }]);
+        // One real change among them moves only that product's revision and lastmod.
+        sqlite.exec("UPDATE products SET is_active = 0 WHERE id = 'p_7'");
+        const mixed = await bulkUpdateProducts(db, claims(), { isActive: true });
+        expect(mixed.products.filter((product) => product.aggregateRevision !== 1)).toEqual([{ id: "p_7", aggregateRevision: 2 }]);
+        expect(sqlite.prepare("SELECT id FROM products WHERE updated_at <> 1700000000").all()).toEqual([{ id: "p_7" }]);
     });
 
     it("a 90-product category move advances both subtrees", async () => {
         const result = await measure(() => bulkUpdateProducts(db, claims(), { categoryId: "cat_b" }));
         expect(result.keys.filter((key) => !key.startsWith("p:"))).toEqual([
-            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_b", "lm:cat:cat_root", "t:product_buyer_state", "t:products",
+            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_b", "lm:cat:cat_root", "lm:seo", "t:product_buyer_state", "t:products",
         ]);
-        // products row + buyer state old image + new image.
-        expect(result.clockWrites).toBe(3 * PRODUCTS);
-        expect(result.depWrites).toBeLessThanOrEqual(14 * PRODUCTS);
+        // products row, its lastmod, and the buyer state's old and new images.
+        expect(result.clockWrites).toBe(4 * PRODUCTS);
+        expect(result.depWrites).toBeLessThanOrEqual(17 * PRODUCTS);
     });
 
     it("a refresh with no change (a save of unchanged facts) and a rebuild with no drift write nothing", async () => {
