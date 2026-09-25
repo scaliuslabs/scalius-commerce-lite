@@ -1,10 +1,8 @@
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
 import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
-import {
-  applyBaselineSecurityHeaders,
-  redirectPlaintextRequest,
-} from "@scalius/shared/http-security";
+import { redirectPlaintextRequest } from "@scalius/shared/http-security";
+import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-helper/private-download-security";
 
 import {
   getRuntimeApiBaseUrl,
@@ -111,19 +109,20 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  // A purchased file streams as a sandboxed attachment: keep its own policy.
-  const securedResponse = isBrowserContinuationRelayPathname(url.pathname) || isDigitalDownloadPathname(url.pathname)
-    ? response
-    : setPageCspHeader(
-        response,
-        {
-          apiBaseUrl: getRuntimeApiBaseUrl(),
-          storefrontUrl: getRuntimeStorefrontUrl(),
-          mediaUrl: getRuntimeMediaUrl(),
-          cdnBaseUrl: getCdnBase(),
-        },
-        getRuntimeCspAllowedDomains(),
-      );
+  // A purchased file streams as a sandboxed attachment: it keeps its own policy.
+  const securedResponse = withPageCsp(url.pathname, response, {
+    privateRelay: isBrowserContinuationRelayPathname(url.pathname),
+    setPageCsp: (page) => setPageCspHeader(
+      page,
+      {
+        apiBaseUrl: getRuntimeApiBaseUrl(),
+        storefrontUrl: getRuntimeStorefrontUrl(),
+        mediaUrl: getRuntimeMediaUrl(),
+        cdnBaseUrl: getCdnBase(),
+      },
+      getRuntimeCspAllowedDomains(),
+    ),
+  });
   return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
@@ -133,11 +132,6 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
 // build-time env, and nothing is retained across requests.
-/** The cookie-bound download streams (`/api/downloads/account|order/…`), never HTML. */
-function isDigitalDownloadPathname(pathname: string): boolean {
-  return /^\/api\/downloads\/(?:account|order)\//.test(pathname);
-}
-
 const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
   runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
@@ -153,14 +147,8 @@ const transportSecurityMiddleware = defineMiddleware(
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    const pathname = new URL(request.url).pathname;
-    const privateRelay = isBrowserContinuationRelayPathname(pathname);
-    const privateDownload = isDigitalDownloadPathname(pathname);
-    const response = applyBaselineSecurityHeaders(request, await next(), {
-      frameProtection: privateRelay || privateDownload ? "deny" : "same-origin",
-    });
-    if (privateRelay || privateDownload) response.headers.set("Referrer-Policy", "no-referrer");
-    return response;
+    const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
+    return applyTransportSecurityHeaders(request, await next(), { privateRelay });
   },
 );
 
