@@ -497,14 +497,15 @@ export const STOREFRONT_CARD_VARIANTS = {
       body: ["swatches", "price", "brand", "title", "rating", "delivery"],
     }),
   }),
-  // Daraz: title 13/400, price 18 in the action colour, the struck price and
-  // "-15%" under it, then "129 sold" and the stars on one line (only when real).
+  // Daraz: title 13/400, the 18/400 price always in its orange-red (the sale
+  // colour, so it survives an ink-only palette), the struck price and "-15%"
+  // under it, then "129 sold" and the stars on one line (only when real).
   marketplace: variant({
     contrastPairs: [["primary", "card"], ["destructive", "card"]],
     renders: card(STOREFRONT_CARD_LOOKS.marketplace, {
       badge: "price",
       discountStyle: "text",
-      priceTone: "primary",
+      priceTone: "sale-always",
       body: ["title", "price", "sold", "rating"],
     }),
   }),

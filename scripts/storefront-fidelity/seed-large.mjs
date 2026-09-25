@@ -166,6 +166,32 @@ function shapeStore(stateDir, pool, ports, log) {
   });
 
   fillProjections(db);
+  // Units sold in the last 30 days, as the nightly refresh computes them
+  // (core catalog refreshProductSalesStats), so cards can show real "sold" facts.
+  db.exec(`DELETE FROM product_sales_stats;
+    INSERT INTO product_sales_stats (product_id, sold_30d, computed_at)
+    SELECT line.product_id, SUM(line.quantity), unixepoch()
+    FROM orders o JOIN order_items line ON line.order_id = o.id
+    WHERE o.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')
+      AND o.deleted_at IS NULL AND o.created_at >= unixepoch() - ${30 * 86_400} AND line.quantity > 0
+      AND EXISTS (SELECT 1 FROM products p WHERE p.id = line.product_id)
+    GROUP BY line.product_id;`);
+  // Two delivery rates, as every Bangladeshi store has: cards read the cheapest.
+  db.exec(`INSERT OR REPLACE INTO shipping_methods (id, name, is_active, sort_order, fee_minor, kind) VALUES
+    ('ship_fid_dhaka', 'Inside Dhaka', 1, 0, 6000, 'delivery'), ('ship_fid_outside', 'Outside Dhaka', 1, 1, 12000, 'delivery');`);
+  // The scale seed's 1,500 orders over two years give no product ten sales
+  // in 30 days, so the "sold" fact would never render. One discounted public
+  // product in seven with a colour axis gets a deterministic 30-day count
+  // (10 to 1,209) in this projection: test data for the card facts, never
+  // shown outside the harness store.
+  db.exec(`INSERT OR REPLACE INTO product_sales_stats (product_id, sold_30d, computed_at)
+    SELECT s.product_id, 10 + (CAST(substr(s.product_id, 12) AS INTEGER) * 37) % 1200, unixepoch()
+    FROM product_buyer_state s
+    WHERE s.is_public = 1 AND s.has_discount = 1 AND s.product_id LIKE 'prod_scale_%'
+      AND CAST(substr(s.product_id, 12) AS INTEGER) % 7 = 0
+      AND EXISTS (SELECT 1 FROM product_option_definitions axis WHERE axis.product_id = s.product_id
+        AND axis.deleted_at IS NULL AND (axis.standard_mapping = 'color' OR axis.normalized_name IN ('color', 'colour')));`);
+  log(`  sales stats: ${q("SELECT count(*) AS n FROM product_sales_stats WHERE sold_30d >= 10")[0].n} products with 10+ sold in 30 days`);
   const pages = resolvePages(db, video);
   db.close();
   return pages;

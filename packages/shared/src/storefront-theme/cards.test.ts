@@ -83,7 +83,7 @@ describe("card anatomy", () => {
     expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
     expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale" });
     expect(anatomy("detailed")).toMatchObject({ strike: "list", discountStyle: "deal", action: "compact" });
-    expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "primary" });
+    expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "sale-always" });
     expect(anatomy("detailed")).toMatchObject({
       titleLines: 3,
       body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],

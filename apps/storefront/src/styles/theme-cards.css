@@ -763,7 +763,7 @@
 
 /* ─── marketplace: Daraz ───────────────────────────────────────────────────
    A white 2px tile (a shadow on hover); the photo edge to edge; title
-   13/400 in two lines; price 18/400 in the action colour on its own line,
+   13/400 in two lines; price 18/400 in the sale colour on its own line,
    then the struck price and "-15%"; "129 sold in 30 days". */
 .site-root .product-card[data-card-variant="marketplace"] {
   --pc-pad-x: 0.5rem;
