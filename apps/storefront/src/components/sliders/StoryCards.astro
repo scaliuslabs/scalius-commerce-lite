@@ -55,8 +55,11 @@ const FIRST_SCREEN = 6;
                   decoding={lead ? "sync" : "async"}
                 />
                 {headline && (
-                  <span class="absolute inset-x-0 top-0 bg-linear-to-b from-black/75 via-black/40 to-transparent p-4 pb-16 text-2xl font-bold leading-tight text-white [overflow-wrap:anywhere] md:text-[2rem]">
-                    {headline}
+                  <span class="absolute inset-x-0 top-0">
+                    <span class="block bg-black/70 p-4 pb-2 text-2xl font-bold leading-tight text-white [overflow-wrap:anywhere] md:text-[2rem]">
+                      {headline}
+                    </span>
+                    <span class="block h-10 bg-linear-to-b from-black/70 to-transparent" aria-hidden="true" />
                   </span>
                 )}
               </Frame>
