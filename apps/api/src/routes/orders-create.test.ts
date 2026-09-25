@@ -2938,3 +2938,104 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Wave A is additive for the storefront: the storefront deployed before the
+ * API keeps sending the pre-Wave A payloads (always an address, no buyer
+ * inputs) to the new API between the two deploys. These are those payloads
+ * verbatim (lib/checkout/create-order.ts, tax-quote-client.ts).
+ */
+describe("old-storefront payloads against the Wave A API", () => {
+  const oldCheckoutBody = {
+    checkoutRequestId: "checkout_req_123456",
+    expectedQuoteFingerprint: DEFAULT_QUOTE_FINGERPRINT,
+    customerName: "Old Storefront",
+    customerPhone: "+8801712345678",
+    customerEmail: null,
+    shippingAddress: "123 Queue Street, Mirpur",
+    city: "city_1",
+    zone: "zone_1",
+    area: null,
+    cityName: "Dhaka",
+    zoneName: "Mirpur",
+    areaName: null,
+    notes: null,
+    items: [{
+      cartKey: "line:v2:product_1:variant:variant_1",
+      productId: "product_1",
+      variantId: "variant_1",
+      quantity: 1,
+      price: 100,
+      productName: "Queue Product",
+      variantLabel: null,
+    }],
+    shippingCharge: 60,
+    shippingMethodId: "shipping_1",
+    discountCodes: [],
+    paymentMethod: "cod",
+  };
+
+  it("creates an order from the old checkout body and answers with every old field", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(oldCheckoutBody),
+    }, { CACHE: kv } as never);
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = await response.json() as { data: Record<string, unknown> };
+    for (const field of ["checkoutToken", "receiptToken", "statusToken", "orderId", "paymentMethod", "totalAmount", "message"]) {
+      expect(body.data).toHaveProperty(field);
+    }
+    const [, input] = mocks.createStorefrontOrder.mock.calls[0]!;
+    expect(input).toMatchObject({ shippingAddress: "123 Queue Street, Mirpur", city: "city_1", zone: "zone_1" });
+    expect((input as { items: Array<Record<string, unknown>> }).items[0]!.properties).toBeUndefined();
+  });
+
+  it("quotes the old tax-quote body (address, method, no buyer inputs)", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders/tax-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ cartKey: "line_1", productId: "product_1", variantId: "variant_1", quantity: 1, productName: "Queue Product", variantLabel: null }],
+        inventoryPool: "regular",
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+        shippingMethodId: "shipping_1",
+        discountCodes: [],
+        customerPhone: "+8801712345678",
+      }),
+    }, { CACHE: kv } as never);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as { data: Record<string, unknown> };
+    expect(body.data).toMatchObject({
+      valid: true,
+      quoteFingerprint: expect.any(String),
+      shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+      requiresShipping: true,
+    });
+  });
+
+  it("accepts the new shapes too: buyer inputs, and pickup without an address", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...oldCheckoutBody,
+        shippingAddress: undefined,
+        city: undefined,
+        zone: undefined,
+        items: [{ ...oldCheckoutBody.items[0], properties: [{ key: "engraving", value: "Anika" }] }],
+      }),
+    }, { CACHE: kv } as never);
+    expect(response.status, await response.clone().text()).toBe(201);
+    const [, input] = mocks.createStorefrontOrder.mock.calls[0]!;
+    expect((input as { items: Array<Record<string, unknown>> }).items[0]).toMatchObject({
+      properties: [{ key: "engraving", value: "Anika" }],
+    });
+  });
+});

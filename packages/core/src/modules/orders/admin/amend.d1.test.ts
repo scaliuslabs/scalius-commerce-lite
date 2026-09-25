@@ -166,6 +166,27 @@ describe("manual COD order amendments on D1 storage", () => {
     },
   );
 
+  it("keeps a retained line's frozen buyer inputs and prices a new line's from the schema", async () => {
+    sqlite.exec(`UPDATE products SET customization_schema = '${JSON.stringify({
+      version: 1,
+      fields: [{ key: "engraving", label: "Engraving", type: "text", required: false, help: null, maxLength: 20, priceMinor: 2_000 }],
+    })}' WHERE id = 'product_1'`);
+    await confirmManualOrderAmendment(db, "order_1", await confirmedInput({
+      items: [
+        // Frozen by default: inputs sent with a kept line are ignored.
+        { orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 2, properties: [{ key: "engraving", value: "Ignored" }] },
+        { productId: "product_1", variantId: "variant_1", quantity: 1, properties: [{ key: "engraving", value: "Anika" }] },
+      ],
+    }), "admin_1");
+    const rows = sqlite.prepare(`SELECT id, properties, properties_price_minor, base_unit_price_minor, unit_price_minor, fulfillment_type
+      FROM order_items ORDER BY unit_price_minor`).all() as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ id: "item_1", properties: null, properties_price_minor: 0, unit_price_minor: 10000 });
+    expect(rows[1]).toMatchObject({ properties_price_minor: 2000, base_unit_price_minor: 10000, unit_price_minor: 12000, fulfillment_type: "ship" });
+    expect(JSON.parse(rows[1]!.properties as string)).toEqual([
+      { key: "engraving", type: "text", label: "Engraving", value: "Anika", displayValue: "Anika", priceMinor: 2000 },
+    ]);
+  });
+
   it("recognizes an untouched COD order as editable", async () => {
     await expect(getOrderEditReadiness(db, "order_1")).resolves.toEqual({
       items: { allowed: true, reason: null },

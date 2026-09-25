@@ -145,6 +145,14 @@ describe("Pathao webhook provider authority", () => {
       status: "delivered",
       rawStatus: "order.delivered",
     }));
+    // The courier's lines reach the ledger before the order moves to
+    // delivered (its gate reads them), and again after for cancellations.
+    expect(courierLedger.sync).toHaveBeenCalledTimes(2);
+    expect(courierLedger.sync).toHaveBeenNthCalledWith(1, db, "shipment_1", "delivered");
+    expect(courierLedger.sync.mock.invocationCallOrder[0]!)
+      .toBeLessThan(mocks.updateOrderStatusFromShipment.mock.invocationCallOrder[0]!);
+    expect(courierLedger.sync.mock.invocationCallOrder[1]!)
+      .toBeGreaterThan(mocks.updateOrderStatusFromShipment.mock.invocationCallOrder[0]!);
   });
 
   it("fails closed instead of returning a public example secret", async () => {

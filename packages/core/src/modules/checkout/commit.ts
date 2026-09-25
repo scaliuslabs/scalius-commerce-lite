@@ -104,9 +104,11 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
-// Bound values per order line; the D1 limit is 100 per statement.
-export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 22;
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
+// Bound values per order line (the constant columns are SQL literals); the
+// D1 limit is 100 per statement, so 5 rows a statement.
+export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+// order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot.
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
@@ -435,7 +437,13 @@ function buildOrderWriteBatch(
             discountAmountMinor: item.discountAmountMinor,
             taxableAmountMinor: item.taxableAmountMinor,
             taxAmountMinor: item.taxAmountMinor,
-            fulfillmentStatus: "pending" as const,
+            // Constant columns are SQL literals, not bound values: a
+            // multi-row insert binds every defaulted column otherwise, and
+            // 18 bound values a row keep 5 rows a statement (D1 allows 100).
+            // The ledger alone moves fulfilled_quantity afterwards.
+            fulfillmentStatus: sql`'pending'`,
+            shippedQuantity: sql`0`,
+            fulfilledQuantity: sql`0`,
             fulfillmentType: item.fulfillmentType ?? "ship",
             properties: item.properties ?? null,
             propertiesPriceMinor: item.propertiesPriceMinor ?? 0,

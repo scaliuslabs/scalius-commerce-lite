@@ -16,6 +16,7 @@ function product(
   overrides: Partial<StorefrontFeedProduct> = {},
 ): StorefrontFeedProduct {
   return {
+    requiresCustomization: false,
     id: "prod_feed_1",
     name: "Cotton Shirt",
     slug: "cotton-shirt",

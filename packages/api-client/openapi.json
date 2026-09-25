@@ -40761,6 +40761,9 @@
                               "excludeFromProductFeed": {
                                 "type": "boolean"
                               },
+                              "requiresCustomization": {
+                                "type": "boolean"
+                              },
                               "productCondition": {
                                 "type": "string",
                                 "nullable": true,
@@ -41005,6 +41008,7 @@
                               "freeDelivery",
                               "categoryId",
                               "excludeFromProductFeed",
+                              "requiresCustomization",
                               "productCondition",
                               "hasVariants",
                               "availableForSale",
@@ -153466,6 +153470,28 @@
                                   "returnedQuantity": {
                                     "type": "integer",
                                     "minimum": 0
+                                  },
+                                  "properties": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "displayValue": {
+                                          "type": "string"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "label",
+                                        "displayValue",
+                                        "priceMinor"
+                                      ]
+                                    }
                                   }
                                 },
                                 "required": [
@@ -154314,6 +154340,28 @@
                                   "returnedQuantity": {
                                     "type": "integer",
                                     "minimum": 0
+                                  },
+                                  "properties": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "displayValue": {
+                                          "type": "string"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "label",
+                                        "displayValue",
+                                        "priceMinor"
+                                      ]
+                                    }
                                   }
                                 },
                                 "required": [
