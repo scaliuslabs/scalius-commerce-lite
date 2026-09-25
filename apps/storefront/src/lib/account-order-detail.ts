@@ -535,16 +535,20 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const name = escapeHtml(item.productName || "Product");
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
-      return `<li class="flex gap-3 py-4 first:pt-0 last:pb-0">
+      // Downloads, gift cards and the review form take a full-width row under
+      // the line (under its text from sm up), never the narrow column beside the total.
+      const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account" });
+      return `<li class="flex flex-wrap gap-x-3 py-4 first:pt-0 last:pb-0">
         <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
         <div class="min-w-0 flex-1 text-sm">
           ${item.productSlug ? `<a href="/products/${encodeURIComponent(item.productSlug)}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
-          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}${lineExtrasMarkup(item, { orderId: order.id, access: "account" })}
+          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
+        ${extras ? `<div class="basis-full text-sm sm:pl-[4.75rem]">${extras}</div>` : ""}
       </li>`;
     };
     const groups = groupOrderLines(detail.items, order, copy);

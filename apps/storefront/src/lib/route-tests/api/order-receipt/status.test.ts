@@ -81,6 +81,7 @@ describe("receipt payment status proxy", () => {
       data: {
         state: "payment_pending",
         updatedAt: "2026-07-19T00:00:00.000Z",
+        downloadsPreparing: false,
       },
     });
     expect(JSON.stringify(json)).not.toContain("receipt_1");
@@ -90,6 +91,20 @@ describe("receipt payment status proxy", () => {
       cache: "no-store",
     });
     expect(policy).toEqual({ retries: 1, timeout: 5000, auth: false });
+  });
+
+  it("says while a paid download is still being prepared, and when it is delivered", async () => {
+    const line = { id: "li_1", quantity: 1, fulfillmentType: "digital", fulfilledQuantity: 0 };
+    const read = async (fulfilledQuantity: number) => {
+      mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify(receipt({
+        status: "processing",
+        paymentStatus: "paid",
+        items: [{ ...line, fulfilledQuantity }],
+      })), { status: 200, headers: { "Content-Type": "application/json" } }));
+      return (await (await GET(request())).json() as { data: { downloadsPreparing: boolean } }).data;
+    };
+    expect((await read(0)).downloadsPreparing).toBe(true);
+    expect((await read(1)).downloadsPreparing).toBe(false);
   });
 
   it("returns a settled state after authoritative payment confirmation", async () => {

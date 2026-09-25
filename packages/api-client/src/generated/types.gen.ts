@@ -2248,6 +2248,50 @@ export type GetApiV1CollectionsResponses = {
 
 export type GetApiV1CollectionsResponse = GetApiV1CollectionsResponses[keyof GetApiV1CollectionsResponses];
 
+export type GetApiV1CollectionsDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/collections/directory';
+};
+
+export type GetApiV1CollectionsDirectoryErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryError = GetApiV1CollectionsDirectoryErrors[keyof GetApiV1CollectionsDirectoryErrors];
+
+export type GetApiV1CollectionsDirectoryResponses = {
+    /**
+     * Collection directory
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                name: string;
+                canonicalPath: string | null;
+                productCount: number;
+                imageUrl: string | null;
+                imageAlt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryResponse = GetApiV1CollectionsDirectoryResponses[keyof GetApiV1CollectionsDirectoryResponses];
+
 export type GetApiV1CollectionsByIdData = {
     body?: never;
     path: {

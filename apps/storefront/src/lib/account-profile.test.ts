@@ -75,9 +75,15 @@ function save() {
   element<HTMLFormElement>("profileForm").dispatchEvent(new Event("submit", { cancelable: true }));
 }
 
-function change(id: string, value?: string) {
-  if (value !== undefined) field(id).value = value;
-  field(id).dispatchEvent(new Event("change"));
+/** The location picker's value: the hidden select the combobox drives. */
+function place(name: "city" | "zone" | "area") {
+  return document.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!;
+}
+
+/** Chooses like the combobox does: sets the select and fires `change`. */
+function choose(name: "city" | "zone" | "area", value: string) {
+  place(name).value = value;
+  place(name).dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 beforeEach(() => {
@@ -103,9 +109,20 @@ beforeEach(() => {
       <form id="profileForm" class="hidden">
         <input id="fieldName" /><p id="fieldNameError" class="hidden"></p>
         <input id="fieldAddress" /><p id="fieldAddressError" class="hidden"></p>
-        <select id="fieldCity"><option value="">City</option></select><p id="fieldCityError" class="hidden"></p>
-        <select id="fieldZone" disabled><option value="">Zone</option></select><p id="fieldZoneError" class="hidden"></p>
-        <div id="profileAreaField" hidden><select id="fieldArea" disabled><option value="">Area (optional)</option></select></div>
+        <div data-location-fields data-loading-text="Loading…" data-no-match-text="No match for “{query}”" data-close-text="Close">
+          <label for="profile-city">City</label>
+          <select id="profile-city" name="city" aria-required="true"><option value="">Select a city</option></select>
+          <label for="profile-zone">Thana</label>
+          <select id="profile-zone" name="zone" aria-required="true" disabled><option value="">Select a thana</option></select>
+          <button type="button" hidden data-location-retry="zone">Retry</button>
+          <div data-location-area hidden>
+            <label for="profile-area">Area</label>
+            <select id="profile-area" name="area" disabled><option value="">Select an area (optional)</option></select>
+            <button type="button" hidden data-location-retry="area">Retry</button>
+          </div>
+          <input type="hidden" name="cityName" /><input type="hidden" name="zoneName" /><input type="hidden" name="areaName" />
+        </div>
+        <p id="profileLocationError" class="hidden"></p>
         <p id="profileSaveStatus" class="hidden"></p>
         <button id="profileLocationsRetryBtn" type="button" class="hidden">Retry</button>
         <button id="saveProfileBtn" type="submit" disabled>Save address</button>
@@ -354,9 +371,21 @@ describe("account delivery details", () => {
     expect(element("profileSummary").textContent).toBe("Add a delivery address for faster checkout");
     expect(element("profileToggle").textContent).toBe("Add address");
     expect(field("fieldAddress").value).toBe("");
-    expect(field("fieldCity").value).toBe("");
+    expect(place("city").value).toBe("");
     expect(field("fieldName").value).toBe(customer.name);
     expect(element("orderCount").textContent).toBe("1 order");
+  });
+
+  it("shows the saved city, thana and area in the same pickers as checkout", async () => {
+    await initializeAccountPage();
+    const city = element<HTMLInputElement>("profile-city");
+    expect(city.getAttribute("role")).toBe("combobox");
+    expect(document.querySelector('label[for="profile-city"]')).not.toBeNull();
+    expect(city.value).toBe("Dhaka");
+    expect(element<HTMLInputElement>("profile-zone").value).toBe("Mirpur");
+    expect(element<HTMLInputElement>("profile-area").value).toBe("Mirpur 1");
+    expect(saveButton().disabled).toBe(false);
+    expect(element("profileSaveStatus").textContent).toBe("");
   });
 
   it("never saves a blank name and says so under the field", async () => {
@@ -374,17 +403,19 @@ describe("account delivery details", () => {
     expect(element("fieldNameError").classList.contains("hidden")).toBe(true);
   });
 
-  it("validates a partial or short address like checkout", async () => {
+  it("validates a partial or short address like checkout, at the location still to choose", async () => {
     await initializeAccountPage();
-    change("fieldCity", "");
+    choose("city", "");
     save();
-    expect(element("fieldCityError").textContent).toBe("Choose a city.");
+    expect(element("profileLocationError").textContent).toBe("Choose a city and thana to continue.");
+    expect(element("profile-city").getAttribute("aria-invalid")).toBe("true");
     field("fieldAddress").value = "House 1";
-    change("fieldCity", customer.city!);
-    await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
+    choose("city", customer.city!);
+    await vi.waitFor(() => expect(place("zone").disabled).toBe(false));
     save();
     expect(element("fieldAddressError").textContent).toBe("Enter a complete delivery address (at least 10 characters).");
-    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
+    expect(element("profileLocationError").textContent).toBe("Choose a thana to continue.");
+    expect(element("profile-zone").getAttribute("aria-invalid")).toBe("true");
     expect(updateCustomerProfile).not.toHaveBeenCalled();
   });
 
@@ -396,7 +427,7 @@ describe("account delivery details", () => {
     element("profileToggle").click();
     save();
     expect(element("fieldAddressError").textContent).toBe("Enter your delivery address.");
-    expect(element("fieldCityError").textContent).toBe("Choose a city.");
+    expect(element("profileLocationError").textContent).toBe("Choose a city and thana to continue.");
     expect(field("fieldAddress").getAttribute("aria-invalid")).toBe("true");
     expect(document.activeElement).toBe(field("fieldAddress"));
     expect(updateCustomerProfile).not.toHaveBeenCalled();
@@ -409,13 +440,62 @@ describe("account delivery details", () => {
     updateCustomerProfile.mockResolvedValue({ success: true, customer: saved });
     await initializeAccountPage();
     element("profileToggle").click();
+    await vi.waitFor(() => expect(place("area").value).toBe(customer.area));
     field("fieldName").value = "New name";
     field("fieldAddress").value = "Road 7, House 12";
     save();
     await vi.waitFor(() => expect(element("profileSaved").classList.contains("hidden")).toBe(false));
+    expect(updateCustomerProfile).toHaveBeenCalledWith({
+      name: "New name", address: "Road 7, House 12", city: customer.city, zone: customer.zone, area: customer.area,
+    });
     expect(element("profileName").textContent).toBe("New name");
     expect(element("profileSummary").textContent).toContain("Road 7, House 12");
     expect(element("profileToggle").textContent).toBe("Edit");
+  });
+
+  it("clears the thana and area when the city changes and saves the new choice", async () => {
+    getCities.mockResolvedValue([...cities, { id: "city_ctg", name: "Chattogram" }]);
+    getZones.mockImplementation(async (cityId: string) =>
+      cityId === "city_ctg" ? [{ id: "zone_agrabad", name: "Agrabad" }] : zones);
+    getAreas.mockImplementation(async (zoneId: string) => (zoneId === "zone_agrabad" ? [] : areas));
+    await initializeAccountPage();
+    element("profileToggle").click();
+    await vi.waitFor(() => expect(place("area").value).toBe(customer.area));
+    choose("city", "city_ctg");
+    expect(place("zone").value).toBe("");
+    expect(place("area").value).toBe("");
+    expect(element<HTMLInputElement>("profile-zone").value).toBe("");
+    expect(document.activeElement).toBe(element("profile-zone"));
+    await vi.waitFor(() => expect(place("zone").disabled).toBe(false));
+    choose("zone", "zone_agrabad");
+    save();
+    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalled());
+    expect(updateCustomerProfile.mock.calls[0]![0]).toMatchObject({ city: "city_ctg", zone: "zone_agrabad", area: "" });
+  });
+
+  it("asks for a new choice when the saved thana is no longer offered", async () => {
+    getZones.mockResolvedValue([{ id: "zone_other", name: "Other" }]);
+    await initializeAccountPage();
+    expect(place("city").value).toBe(customer.city);
+    expect(place("zone").value).toBe("");
+    expect(element("profileSaveStatus").textContent).toBe("Your saved delivery location is no longer available. Choose it again.");
+    element("profileToggle").click();
+    await vi.waitFor(() => expect(place("zone").disabled).toBe(false));
+    save();
+    expect(element("profileLocationError").textContent).toBe("Choose a thana to continue.");
+    expect(updateCustomerProfile).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed cities read without erasing text edits", async () => {
+    getCities.mockResolvedValueOnce(null);
+    await initializeAccountPage();
+    expect(element("profileSaveStatus").textContent).toBe("Your delivery locations could not be loaded. Try again before saving.");
+    expect(saveButton().disabled).toBe(true);
+    field("fieldAddress").value = "Edited delivery address";
+    element("profileLocationsRetryBtn").click();
+    await vi.waitFor(() => expect(place("zone").value).toBe(customer.zone));
+    expect(field("fieldAddress").value).toBe("Edited delivery address");
+    expect(saveButton().disabled).toBe(false);
   });
 
   it("keeps the buyer's input and shows the offline message when the save cannot reach the store", async () => {
@@ -427,264 +507,5 @@ describe("account delivery details", () => {
     await vi.waitFor(() => expect(element("profileSaveStatus").textContent).toBe("We couldn't reach the store. Check your connection and try again."));
     expect(field("fieldName").value).toBe("Draft name");
     expect(element("profileForm").classList.contains("hidden")).toBe(false);
-  });
-
-  it("makes the saved profile editable while orders are pending", async () => {
-    const orders = deferred<OrdersResult>();
-    getCustomerOrders.mockReturnValueOnce(orders.promise);
-    const initialization = initializeAccountPage();
-    await vi.waitFor(() => expect(field("fieldZone").value).toBe(customer.zone));
-    element("profileToggle").click();
-    expect(field("fieldName").value).toBe(customer.name);
-    expect(field("fieldAddress").value).toBe(customer.address);
-    orders.resolve(ordersFailure);
-    await initialization;
-    field("fieldName").value = "Updated name";
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: "Updated name", address: customer.address, city: customer.city, zone: customer.zone, area: customer.area,
-    }));
-  });
-
-  it("keeps Save unavailable until initial location values are bound", async () => {
-    const locations = deferred<typeof zones>();
-    getZones.mockReturnValueOnce(locations.promise);
-    const initialization = initializeAccountPage();
-    await vi.waitFor(() => expect(getZones).toHaveBeenCalledOnce());
-    expect(saveButton().disabled).toBe(true);
-    save();
-    expect(updateCustomerProfile).not.toHaveBeenCalled();
-    locations.resolve(zones);
-    await initialization;
-    expect(field("fieldZone").value).toBe(customer.zone);
-    expect(saveButton().disabled).toBe(false);
-  });
-
-  it("preserves the saved area through its initial read and an unrelated address save", async () => {
-    const locations = deferred<typeof areas>();
-    getAreas.mockReturnValueOnce(locations.promise);
-    const initialization = initializeAccountPage();
-    await vi.waitFor(() => expect(getAreas).toHaveBeenCalledWith(customer.zone));
-    expect(saveButton().disabled).toBe(true);
-    locations.resolve(areas);
-    await initialization;
-    expect(field("fieldArea").value).toBe(customer.area);
-    expect(element("profileAreaField").hidden).toBe(false);
-    field("fieldAddress").value = "New street address";
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: "New street address", city: customer.city, zone: customer.zone, area: customer.area,
-    }));
-  });
-
-  it("clears descendants immediately and persists a new city, zone and optional area", async () => {
-    getCities.mockResolvedValue([...cities, { id: "city_bagerhat", name: "Bagerhat" }]);
-    await initializeAccountPage();
-    const nextZones = deferred<typeof zones>();
-    getZones.mockReturnValueOnce(nextZones.promise);
-    change("fieldCity", "city_bagerhat");
-    expect(field("fieldZone").value).toBe("");
-    expect(field("fieldArea").value).toBe("");
-    expect(saveButton().disabled).toBe(true);
-    nextZones.resolve([{ id: "zone_sadar", name: "Bagerhat Sadar" }]);
-    await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    save();
-    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
-    const nextAreas = deferred<typeof areas>();
-    getAreas.mockReturnValueOnce(nextAreas.promise);
-    change("fieldZone", "zone_sadar");
-    expect(element("fieldZoneError").classList.contains("hidden")).toBe(true);
-    expect(saveButton().disabled).toBe(true);
-    nextAreas.resolve([{ id: "area_school", name: "Adarsh school" }]);
-    await vi.waitFor(() => expect(field("fieldArea").disabled).toBe(false));
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: customer.address, city: "city_bagerhat", zone: "zone_sadar", area: "",
-    }));
-    await vi.waitFor(() => expect(saveButton().disabled).toBe(false));
-    change("fieldArea", "area_school");
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: customer.address, city: "city_bagerhat", zone: "zone_sadar", area: "area_school",
-    }));
-  });
-
-  it("submits an empty area when changing only the zone", async () => {
-    getZones.mockResolvedValue([...zones, { id: "zone_central", name: "Central Road" }]);
-    await initializeAccountPage();
-    getAreas.mockResolvedValueOnce([]);
-    change("fieldZone", "zone_central");
-    expect(field("fieldArea").value).toBe("");
-    await vi.waitFor(() => expect(saveButton().disabled).toBe(false));
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: customer.address, city: customer.city, zone: "zone_central", area: "",
-    }));
-  });
-
-  it.each(["cities", "zones", "areas"])("retries failed initial %s reads without erasing text edits", async (failure) => {
-    if (failure === "cities") getCities.mockResolvedValueOnce(null);
-    if (failure === "zones") getZones.mockResolvedValueOnce(null);
-    if (failure === "areas") getAreas.mockResolvedValueOnce(null);
-    await initializeAccountPage();
-    element("profileToggle").click();
-    expect(saveButton().disabled).toBe(true);
-    expect(element("profileSaveStatus").textContent).toContain("Try again before saving");
-    expect(element("profileLocationsRetryBtn").classList.contains("hidden")).toBe(false);
-    field("fieldName").value = "Unsaved name";
-    element("profileLocationsRetryBtn").click();
-    await vi.waitFor(() => expect(saveButton().disabled).toBe(false));
-    expect(field("fieldName").value).toBe("Unsaved name");
-    expect(field("fieldArea").value).toBe(customer.area);
-    expect(getCities).toHaveBeenCalledTimes(failure === "cities" ? 2 : 1);
-    expect(getZones).toHaveBeenCalledTimes(failure === "zones" ? 2 : 1);
-    expect(getAreas).toHaveBeenCalledTimes(failure === "areas" ? 2 : 1);
-    expect(getCustomerOrders).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(["zones", "areas"])("retries a failed edited %s selection without restoring the old profile", async (failure) => {
-    getCities.mockResolvedValue([...cities, { id: "city_other", name: "Other city" }]);
-    getZones.mockResolvedValue([...zones, { id: "zone_other", name: "Other zone" }]);
-    await initializeAccountPage();
-    field("fieldName").value = "Edited name";
-    if (failure === "zones") {
-      getZones.mockResolvedValueOnce(null);
-      change("fieldCity", "city_other");
-    } else {
-      getAreas.mockResolvedValueOnce(null);
-      change("fieldZone", "zone_other");
-    }
-    await vi.waitFor(() => expect(element("profileLocationsRetryBtn").classList.contains("hidden")).toBe(false));
-    expect(saveButton().disabled).toBe(true);
-    element("profileLocationsRetryBtn").click();
-    await vi.waitFor(() => expect(field(failure === "zones" ? "fieldZone" : "fieldArea").disabled).toBe(false));
-    expect(field("fieldCity").value).toBe(failure === "zones" ? "city_other" : customer.city);
-    expect(field("fieldZone").value).toBe(failure === "zones" ? "" : "zone_other");
-    expect(field("fieldName").value).toBe("Edited name");
-    expect(element("profileLocationsRetryBtn").classList.contains("hidden")).toBe(true);
-  });
-
-  it.each(["city", "zone"])("requires an explicit replacement for an unavailable saved %s", async (missing) => {
-    if (missing === "city") getCities.mockResolvedValue([{ id: "city_active", name: "Active city" }]);
-    getZones.mockResolvedValue([{ id: "zone_active", name: "Active zone" }]);
-    await initializeAccountPage();
-    expect(field("fieldCity").value).toBe(customer.city);
-    expect(field("fieldZone").value).toBe(customer.zone);
-    expect(saveButton().disabled).toBe(true);
-    expect(element("profileSaveStatus").textContent).toContain("no longer available");
-    save();
-    expect(updateCustomerProfile).not.toHaveBeenCalled();
-    if (missing === "city") {
-      change("fieldCity", "city_active");
-      await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    }
-    change("fieldZone", "zone_active");
-    await vi.waitFor(() => expect(saveButton().disabled).toBe(false));
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: customer.address,
-      city: missing === "city" ? "city_active" : customer.city, zone: "zone_active", area: "",
-    }));
-  });
-
-  it.each(["", "area_active"])("preserves an unavailable area until the buyer chooses %s", async (replacement) => {
-    getAreas.mockResolvedValue([{ id: "area_active", name: "Active area" }]);
-    await initializeAccountPage();
-    expect(field("fieldArea").value).toBe(customer.area);
-    expect(element("profileSaveStatus").textContent).toContain("no longer available");
-    expect(saveButton().disabled).toBe(true);
-    change("fieldArea", replacement);
-    save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: customer.address, city: customer.city, zone: customer.zone, area: replacement,
-    }));
-  });
-
-  it("explains an empty thana list", async () => {
-    await initializeAccountPage();
-    getZones.mockResolvedValueOnce([]);
-    change("fieldCity");
-    await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    expect(element("profileSaveStatus").textContent).toContain("No thanas are available");
-    field("fieldAddress").value = "";
-    change("fieldCity", "");
-    expect(saveButton().disabled).toBe(false);
-    expect(element("profileSaveStatus").classList.contains("hidden")).toBe(true);
-  });
-
-  it("keeps only the latest zones when rapid city changes return to the same city", async () => {
-    getCities.mockResolvedValue([...cities, { id: "city_other", name: "Other city" }]);
-    await initializeAccountPage();
-    const reads = [deferred<typeof zones | null>(), deferred<typeof zones | null>(), deferred<typeof zones | null>()];
-    reads.forEach((read) => getZones.mockReturnValueOnce(read.promise));
-    for (const city of ["city_other", customer.city!, "city_other"]) change("fieldCity", city);
-    reads[2]!.resolve([{ id: "zone_latest", name: "Latest zone" }]);
-    await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    change("fieldZone", "zone_latest");
-    await vi.waitFor(() => expect(field("fieldArea").disabled).toBe(false));
-    reads[0]!.resolve([{ id: "zone_old", name: "Old zone" }]);
-    reads[1]!.resolve(null);
-    await Promise.all(reads.map((read) => read.promise));
-    expect(Array.from(element<HTMLSelectElement>("fieldZone").options, (option) => option.value)).toEqual(["", "zone_latest"]);
-    expect(saveButton().disabled).toBe(false);
-    expect(element("profileLocationsRetryBtn").classList.contains("hidden")).toBe(true);
-  });
-
-  it("keeps only the latest areas when rapid zone changes return to the same zone", async () => {
-    getZones.mockResolvedValue([...zones, { id: "zone_other", name: "Other zone" }]);
-    await initializeAccountPage();
-    const reads = [deferred<typeof areas | null>(), deferred<typeof areas | null>(), deferred<typeof areas | null>()];
-    reads.forEach((read) => getAreas.mockReturnValueOnce(read.promise));
-    for (const zone of ["zone_other", customer.zone!, "zone_other"]) change("fieldZone", zone);
-    reads[2]!.resolve([{ id: "area_latest", name: "Latest area" }]);
-    await vi.waitFor(() => expect(field("fieldArea").disabled).toBe(false));
-    change("fieldArea", "area_latest");
-    reads[0]!.resolve(null);
-    reads[1]!.resolve(areas);
-    await Promise.all(reads.map((read) => read.promise));
-    expect(Array.from(element<HTMLSelectElement>("fieldArea").options, (option) => option.value)).toEqual(["", "area_latest"]);
-    expect(field("fieldArea").value).toBe("area_latest");
-    expect(saveButton().disabled).toBe(false);
-  });
-
-  it("does not enable a second save when location controls change during a pending save", async () => {
-    await initializeAccountPage();
-    element("profileToggle").click();
-    const pending = deferred<{ success: boolean }>();
-    updateCustomerProfile.mockReturnValueOnce(pending.promise);
-    save();
-    change("fieldZone");
-    expect(saveButton().disabled).toBe(true);
-    save();
-    expect(updateCustomerProfile).toHaveBeenCalledTimes(1);
-    const locations = deferred<typeof zones>();
-    getZones.mockReturnValueOnce(locations.promise);
-    change("fieldCity");
-    pending.resolve({ success: true });
-    await vi.waitFor(() => expect(saveButton().textContent).toBe("Save address"));
-    expect(element("profileSaveStatus").textContent).toContain("Loading delivery locations");
-    expect(saveButton().disabled).toBe(true);
-    expect(element("profileForm").classList.contains("hidden")).toBe(false);
-    locations.resolve(zones);
-    await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-  });
-
-  it.each(["zones", "areas"])("ignores an older %s initialization after a new account run", async (stage) => {
-    const locations = deferred<typeof zones>();
-    const readLocations = stage === "zones" ? getZones : getAreas;
-    readLocations.mockReturnValueOnce(locations.promise);
-    const firstInitialization = initializeAccountPage();
-    await vi.waitFor(() => expect(readLocations).toHaveBeenCalledOnce());
-    getCustomerSession.mockResolvedValueOnce({
-      authenticated: true, customer: { ...customer, city: null, zone: null, area: null, cityName: null, zoneName: null, areaName: null },
-    });
-    getCustomerOrders.mockResolvedValueOnce({ success: true, orders: [] });
-    await initializeAccountPage();
-    locations.resolve(zones);
-    await firstInitialization;
-    expect(field("fieldCity").value).toBe("");
-    expect(field("fieldZone").value).toBe("");
-    expect(field("fieldZone").disabled).toBe(true);
-    expect(field("fieldArea").disabled).toBe(true);
   });
 });

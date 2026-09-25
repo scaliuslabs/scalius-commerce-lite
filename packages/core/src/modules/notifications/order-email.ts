@@ -74,6 +74,8 @@ async function readOrderFacts(db: Database, orderId: string) {
     unitPriceMinor: orderItems.unitPriceMinor,
     lineSubtotalMinor: orderItems.lineSubtotalMinor,
     properties: orderItems.properties,
+    fulfillmentType: orderItems.fulfillmentType,
+    fulfilledQuantity: orderItems.fulfilledQuantity,
   } }).from(orders)
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
     .where(eq(orders.id, orderId))
@@ -216,6 +218,21 @@ async function readShipment(db: Database, orderId: string, trackingId: string) {
 
 const COURIER_NAMES: Record<string, string> = { pathao: "Pathao", steadfast: "Steadfast" };
 
+/**
+ * The downloads still being prepared, by name: a "delivered" message about
+ * an order with such a line says the download is still to come instead of
+ * implying everything arrived. Empty when every download is delivered.
+ */
+export function pendingDownloadNames(
+  items: ReadonlyArray<{ productName: string | null; fulfillmentType: string; quantity: number; fulfilledQuantity: number }>,
+): string {
+  return items
+    .filter((item) => item.fulfillmentType === "digital" && item.fulfilledQuantity < item.quantity)
+    .map((item) => item.productName?.trim())
+    .filter((name): name is string => Boolean(name))
+    .join(", ");
+}
+
 export async function readOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext> {
   const queuedTrackingId = String(input.data?.trackingId ?? "").trim();
   const [facts, store, shipment] = await Promise.all([
@@ -277,6 +294,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       support_status: status,
       pickup_address: order.pickupAddress?.trim() ?? "",
       pickup_hours: order.pickupHours?.trim() ?? "",
+      pending_downloads: pendingDownloadNames(items),
     },
     facts: {
       store: { name: store.name, logoUrl: store.logoUrl },

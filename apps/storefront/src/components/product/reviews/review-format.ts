@@ -5,6 +5,7 @@
 // URL, a log line or analytics.
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ProductReviews, ProductReviewSummary, PublicProductReview } from "@/lib/api/types";
 
@@ -183,7 +184,10 @@ export function formatReviewDate(iso: string, language: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "";
   try {
-    return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-GB", { day: "numeric", month: "long", year: "numeric" }).format(date);
+    // The store's calendar day, not the server's (UTC) or the buyer's device.
+    return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-GB", {
+      day: "numeric", month: "long", year: "numeric", timeZone: COMMERCE_TIME_ZONE,
+    }).format(date);
   } catch {
     return date.toISOString().slice(0, 10);
   }

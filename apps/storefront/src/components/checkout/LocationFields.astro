@@ -1,0 +1,118 @@
+---
+// City → thana → area, the one location picker for checkout, quick checkout
+// and account addresses. Server-rendered native selects work without
+// JavaScript (the thanas of a chosen city arrive with the next form post);
+// `enhanceLocationSelects()` (src/lib/checkout/location-select.ts) turns
+// them into search-or-scroll comboboxes and loads each level in place.
+import type { LocationData } from "@/lib/api";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+
+interface Props {
+  /** Prefix of the field ids: `<prefix>-city`, `<prefix>-zone`, `<prefix>-area`. */
+  idPrefix?: string;
+  cities: LocationData[];
+  /** The thanas of `city`, when the server already knows it. */
+  zones?: LocationData[];
+  city?: string;
+  zone?: string;
+  copy: Pick<
+    CheckoutLanguageData,
+    | "cityLabel" | "zoneLabel" | "areaLabel" | "selectCityPlaceholder" | "selectZonePlaceholder"
+    | "selectAreaPlaceholder" | "loadingText" | "locationNoMatchText"
+    | "closeText" | "zonesLoadFailedText" | "areasLoadFailedText"
+  >;
+  showAreaField: boolean;
+  /** Native `required` (the no-JavaScript form); otherwise `aria-required`. */
+  nativeRequired?: boolean;
+  /** The message element both city and thana describe themselves with. */
+  errorId?: string;
+  invalid?: boolean;
+}
+
+const {
+  idPrefix = "checkout",
+  cities,
+  zones = [],
+  city = "",
+  zone = "",
+  copy,
+  showAreaField,
+  nativeRequired = false,
+  errorId,
+  invalid = false,
+} = Astro.props;
+
+const labelClass = "mb-1 block text-sm font-medium text-foreground";
+const selectClass =
+  "block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive";
+const retryClass = "mt-1 text-sm font-medium text-destructive underline underline-offset-2";
+const required = nativeRequired ? { required: true } : { "aria-required": "true" };
+---
+
+<div
+  class="grid gap-3 sm:grid-cols-2"
+  data-location-fields
+  data-loading-text={copy.loadingText}
+  data-no-match-text={copy.locationNoMatchText}
+  data-close-text={copy.closeText}
+>
+  <div>
+    <label for={`${idPrefix}-city`} class={labelClass}>
+      {copy.cityLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+    </label>
+    <select
+      id={`${idPrefix}-city`}
+      name="city"
+      autocomplete="address-level2"
+      aria-describedby={errorId}
+      aria-invalid={invalid ? "true" : undefined}
+      class={selectClass}
+      {...required}
+    >
+      <option value="">{copy.selectCityPlaceholder}</option>
+      {cities.map((option) => <option value={option.id} selected={option.id === city}>{option.name}</option>)}
+    </select>
+  </div>
+
+  <div>
+    <label for={`${idPrefix}-zone`} class={labelClass}>
+      {copy.zoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+    </label>
+    <select
+      id={`${idPrefix}-zone`}
+      name="zone"
+      autocomplete="address-level3"
+      disabled={zones.length === 0}
+      aria-describedby={errorId}
+      aria-invalid={invalid && city ? "true" : undefined}
+      class={selectClass}
+      {...required}
+    >
+      <option value="">{copy.selectZonePlaceholder}</option>
+      {zones.map((option) => <option value={option.id} selected={option.id === zone}>{option.name}</option>)}
+    </select>
+    <button type="button" hidden data-location-retry="zone" class={retryClass}>
+      {copy.zonesLoadFailedText}
+    </button>
+  </div>
+
+  {
+    showAreaField && (
+      <div data-location-area class="sm:col-span-2" hidden>
+        <label for={`${idPrefix}-area`} class={labelClass}>
+          {copy.areaLabel}
+        </label>
+        <select id={`${idPrefix}-area`} name="area" disabled class={selectClass}>
+          <option value="">{copy.selectAreaPlaceholder}</option>
+        </select>
+        <button type="button" hidden data-location-retry="area" class={retryClass}>
+          {copy.areasLoadFailedText}
+        </button>
+      </div>
+    )
+  }
+
+  <input type="hidden" name="cityName" />
+  <input type="hidden" name="zoneName" />
+  {showAreaField && <input type="hidden" name="areaName" />}
+</div>

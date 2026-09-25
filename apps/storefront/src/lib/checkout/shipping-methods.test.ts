@@ -77,21 +77,24 @@ function setup(options: {
         : option.querySelector("[data-fee-note]")!.textContent,
     }));
   const note = () => document.querySelector("[data-shipping-note]")!.textContent?.trim();
-  return { methods, events, loadRates, options: options_, note };
+  // "Choose an address" stands in the options' place, at an option's size.
+  const standIn = () => document.querySelector("[data-shipping-options] > p")?.textContent?.trim() ?? "";
+  return { methods, events, loadRates, options: options_, note, standIn };
 }
 
 describe("delivery options follow the address", () => {
   it("offers only pickup before an address, with nothing chosen", () => {
-    const { events, options, note } = setup();
+    const { events, options, note, standIn } = setup();
     expect(options()).toEqual([{ id: "pickup", checked: false, fee: "Free", note: "" }]);
-    expect(note()).toBe("Choose your city and zone.");
+    expect(standIn()).toBe("Choose your city and zone.");
+    expect(note()).toBe("");
     expect(events).toEqual([null]);
     expect(window.lastShippingEventDetail).toBeUndefined();
     expect(document.body.textContent).toContain("Pick up from Shop 12, Dhanmondi");
   });
 
   it("re-reads the rates for each address and replaces a rate that no longer applies", async () => {
-    const { methods, events, loadRates, options, note } = setup({
+    const { methods, events, loadRates, options, note, standIn } = setup({
       byCity: { dhaka: [standard, pickup], ctg: [ctg, pickup] },
     });
     await methods.setAddress(DHAKA);
@@ -100,12 +103,17 @@ describe("delivery options follow the address", () => {
     expect(events.at(-1)).toEqual({ id: "standard", fee: 80, freeOver: null, name: "standard", kind: "delivery" });
     expect(note()).toBe("");
 
+    const announced = events.length;
     const switching = methods.setAddress(CTG);
-    // Nothing is quoted against the Dhaka rate while Chattogram's load.
-    expect(events.at(-1)).toBeNull();
+    // Nothing is quoted against the Dhaka rate while Chattogram's load, and
+    // the totals hear once, when they arrive: one quote per address.
+    expect(window.lastShippingEventDetail).toBeUndefined();
+    expect(document.querySelectorAll("[data-shipping-options] .theme-skeleton")).toHaveLength(2);
+    expect(standIn()).toBe("");
     await switching;
     expect(options().map(({ id, checked }) => [id, checked])).toEqual([["ctg", true], ["pickup", false]]);
     expect(window.lastShippingEventDetail?.id).toBe("ctg");
+    expect(events.slice(announced).map((event) => event?.id)).toEqual(["ctg"]);
   });
 
   it("says free over the threshold, then free once the subtotal reaches it", async () => {
@@ -236,14 +244,14 @@ describe("delivery options follow the address", () => {
 describe("delivery options follow the Delivery/Pickup switch", () => {
   it("lists only pickup locations on the pickup path, with no address, and chooses a single one", async () => {
     let mode: CheckoutDeliveryMode = "delivery";
-    const { methods, options, note, events } = setup({
+    const { methods, options, note, events, standIn } = setup({
       modeSwitch: true,
       readMode: () => mode,
       byCity: { dhaka: [standard, pickup] },
     });
     // Delivery before an address: nothing to choose, pickup is on its own tab.
     expect(options()).toEqual([]);
-    expect(note()).toBe("Choose your city and zone.");
+    expect(standIn()).toBe("Choose your city and zone.");
 
     mode = "pickup";
     await methods.setMode("pickup");

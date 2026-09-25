@@ -2,6 +2,7 @@
 // Customer account: profile, delivery details and order history.
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
+import LocationFields from "@/components/checkout/LocationFields.astro";
 import { getLayoutData } from "@/lib/api";
 import { ACCOUNT_OFFLINE_MESSAGE, ACCOUNT_PAGE_CONTAINER } from "@/lib/account-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
@@ -87,21 +88,9 @@ const error = "mt-1 hidden text-sm text-destructive";
                 <input id="fieldAddress" type="text" autocomplete="street-address" required aria-describedby="fieldAddressError" placeholder="House, road, area" class={field} />
                 <p id="fieldAddressError" class={error}></p>
               </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label for="fieldCity" class={label}>City</label>
-                  <select id="fieldCity" required aria-describedby="fieldCityError" class={field}><option value="">Select a city</option></select>
-                  <p id="fieldCityError" class={error}></p>
-                </div>
-                <div>
-                  <label for="fieldZone" class={label}>{copy.zoneLabel}</label>
-                  <select id="fieldZone" required disabled aria-describedby="fieldZoneError" class={field}><option value="">{copy.selectZonePlaceholder}</option></select>
-                  <p id="fieldZoneError" class={error}></p>
-                </div>
-              </div>
-              <div id="profileAreaField" hidden>
-                <label for="fieldArea" class={label}>Area (optional)</label>
-                <select id="fieldArea" disabled class={field}><option value="">Select an area (optional)</option></select>
+              <div>
+                <LocationFields idPrefix="profile" cities={[]} copy={copy} showAreaField errorId="profileLocationError" />
+                <p id="profileLocationError" class={error}></p>
               </div>
               <p id="profileSaveStatus" role="status" aria-live="polite" class="hidden text-sm"></p>
               <button id="profileLocationsRetryBtn" type="button" class="hidden min-h-11 text-sm font-medium text-primary hover:underline">Retry</button>
