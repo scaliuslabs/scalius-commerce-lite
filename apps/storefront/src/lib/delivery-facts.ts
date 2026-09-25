@@ -167,7 +167,8 @@ function codFact(
   if (!cod) return null;
   return {
     kind: "cod",
-    title: "Cash on delivery",
+    // A service has no delivery: the buyer pays when it is done.
+    title: serviceDetail ? "Pay on service" : "Cash on delivery",
     detail: serviceDetail
       ?? (config.partialPaymentEnabled
         ? "Pay a small advance online, the rest on delivery."

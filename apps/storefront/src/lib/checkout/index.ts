@@ -45,7 +45,7 @@ import {
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
 import { readLastPlacedOrderId, rememberSubmittedCart } from "./receipt-finalization";
-import { cashOnDeliveryDescription, type CheckoutDeliveryMode } from "./delivery-mode";
+import { cashOnDeliveryDescription, cashOnDeliveryLabel, type CheckoutDeliveryMode } from "./delivery-mode";
 import { cartLinePropertyText } from "../cart/line-properties-view";
 
 // COD and the card flow have their own handlers; every hosted gateway shares one.
@@ -337,8 +337,8 @@ function localizedGatewayPresentation(
     case "cod":
       return {
         ...presentation,
-        buyerLabel: checkoutCopy.cashOnDeliveryText,
         // At the door, at the pickup counter, or when the service is done.
+        buyerLabel: cashOnDeliveryLabel(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
         description: cashOnDeliveryDescription(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
       };
     default:
@@ -661,7 +661,8 @@ export function renderOrderSummaryDetails(
     const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
     appendSummaryRow(
       details,
-      checkoutCopy.shippingText,
+      // A pickup order has no shipping: the row names the pickup.
+      quoteDeliveryMode(quote) === "pickup" ? checkoutCopy.deliveryModePickupText : checkoutCopy.shippingText,
       [
         deliveryCharged === 0 ? checkoutCopy.freeText : currencyFmt(deliveryCharged, quote),
         deliveryDiscounts.length > 0 ? ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})` : "",

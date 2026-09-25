@@ -34,4 +34,15 @@ describe("checkout phone help follows the delivery mode", () => {
       '{mode === "pickup" ? copy.customerPhonePickupHelp : mode === "none" ? copy.customerPhoneServiceHelp : copy.customerPhoneHelp}',
     );
   });
+
+describe("a pickup order names the pickup, not shipping", () => {
+  it("in the cart summary and on the payment page", () => {
+    expect(read("../pages/cart.astro")).toMatch(
+      /<span class="group-data-\[delivery-mode=pickup\]:hidden">\{copy\.shippingText\}<\/span>\s*<span class="hidden group-data-\[delivery-mode=pickup\]:inline">\{copy\.deliveryModePickupText\}<\/span>/,
+    );
+    expect(read("../lib/checkout/index.ts")).toContain(
+      'quoteDeliveryMode(quote) === "pickup" ? checkoutCopy.deliveryModePickupText : checkoutCopy.shippingText',
+    );
+  });
+});
 });
