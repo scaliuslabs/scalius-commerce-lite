@@ -111,11 +111,16 @@ export function productGridGap(grid: ThemeGrid, width: number): number {
   return clamp(lines.gap.phone, at(lines.gapLine, width), lines.gap.desktop);
 }
 
-/** Columns `auto-fill` creates in a grid container `width` px wide. */
-export function productGridColumnCount(grid: ThemeGrid, width: number): number {
+/**
+ * Columns `auto-fill` creates in a grid container `width` px wide. A grid
+ * capped at `maxColumns` (a homepage grid section's `columns`: each column
+ * is at least 1/N of the row, components/homepage/ProductGridSection.astro)
+ * makes the fewer of the two.
+ */
+export function productGridColumnCount(grid: ThemeGrid, width: number, maxColumns = Infinity): number {
   const cardMin = productGridCardMin(grid, width);
   const gap = productGridGap(grid, width);
-  return Math.max(1, Math.floor((width + gap) / (cardMin + gap)));
+  return Math.max(1, Math.min(maxColumns, Math.floor((width + gap) / (cardMin + gap))));
 }
 
 const rem = (px: number) => `${Number((px / PX_PER_REM).toFixed(4))}rem`;
@@ -136,7 +141,15 @@ export function productGridFluidCss(grid: ThemeGrid): { cardMin: string; gap: st
   };
 }
 
-export type ProductGridContext = "grid" | "beside-filters" | "rail";
+/**
+ * `rail` is a homepage collection carousel (72% of a phone, then 3, 4 and 5
+ * across); `shelf` a homepage product rail (2.2 on a phone, then 3.3, 4.4
+ * and 5.3 across: the next card always peeks in).
+ */
+export type ProductGridContext = "grid" | "beside-filters" | "rail" | "shelf";
+
+/** Shelf card widths (components/homepage/ProductRail.astro) as image `sizes`. */
+export const SHELF_CARD_SIZES = "(max-width: 639px) 44vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 19vw";
 /**
  * How a listing grid lays cards out in a container narrower than the tablet
  * step: the density's columns, or one card per row with the photo beside
@@ -158,7 +171,7 @@ function pageGutter(viewport: number): number {
 export function productGridWidth(
   viewport: number,
   containerMaxPx: number,
-  context: Exclude<ProductGridContext, "rail">,
+  context: Exclude<ProductGridContext, "rail" | "shelf">,
 ): number {
   const gutter = pageGutter(viewport);
   const content = Math.min(viewport, containerMaxPx) - 2 * gutter;
@@ -172,7 +185,7 @@ const sizesCache = new Map<string, string>();
  * one media condition per viewport range with the same column count and
  * gutter, each `100vw / columns` minus the gutters and gaps (the widest card
  * of the range), then the fixed width once the container cap is reached.
- * `rail` is the horizontal collection rail (collection2.astro). With the
+ * `rail` and `shelf` are the homepage rails (ProductRail.astro). With the
  * `list-row` phone layout, a grid narrower than the tablet step shows one
  * card per row with a fixed-width photo.
  */
@@ -181,11 +194,13 @@ export function productCardImageSizes(
   containerWidth: string,
   context: ProductGridContext = "grid",
   phoneLayout: ProductGridPhoneLayout = "grid",
+  maxColumns = Infinity,
 ): string {
   if (context === "rail") {
     return "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw";
   }
-  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}`;
+  if (context === "shelf") return SHELF_CARD_SIZES;
+  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}|${maxColumns}`;
   const cached = sizesCache.get(key);
   if (cached) return cached;
 
@@ -194,7 +209,7 @@ export function productCardImageSizes(
   for (let viewport = 320; viewport <= containerMaxPx; viewport += 1) {
     const width = productGridWidth(viewport, containerMaxPx, context);
     const rows = phoneLayout === "list-row" && width < PRODUCT_GRID_STEPS_REM.tablet * PX_PER_REM;
-    const columns = productGridColumnCount(grid, width);
+    const columns = productGridColumnCount(grid, width, maxColumns);
     const fixed = viewport - width;
     const capped = viewport === containerMaxPx;
     const signature = rows ? "rows" : `${columns}|${fixed}|${capped}`;
@@ -227,8 +242,8 @@ export interface ProductCardImageLoading {
 }
 
 /** Cards in a first row on a common laptop (1024px), loaded eagerly. */
-export function productGridFirstRow(grid: ThemeGrid, containerWidth: string): number {
-  return productGridColumnCount(grid, productGridWidth(1024, remToPx(containerWidth), "grid"));
+export function productGridFirstRow(grid: ThemeGrid, containerWidth: string, maxColumns = Infinity): number {
+  return productGridColumnCount(grid, productGridWidth(1024, remToPx(containerWidth), "grid"), maxColumns);
 }
 
 /** Cards that share a phone's first row; one of them is the likely LCP image. */

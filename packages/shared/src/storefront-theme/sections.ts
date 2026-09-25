@@ -5,10 +5,6 @@
 import { z } from "zod";
 import { atLeast, type FitCondition } from "./fit";
 
-/** The existing homepage renderers a section maps to until Phase 4 builds its own. */
-export const STOREFRONT_SECTION_RENDERERS = ["hero", "collections", "categories", "delivery", "rich_text"] as const;
-export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
-
 const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
 const title = z.string().trim().max(80);
 const heading = z.string().trim().max(120);
@@ -32,17 +28,12 @@ function section<const Type extends string, Settings extends z.ZodType>(spec: {
   settings: Settings;
   defaults: z.infer<Settings>;
   requires?: readonly FitCondition[];
-  renders: StorefrontSectionRenderer | null | ((settings: z.infer<Settings>) => StorefrontSectionRenderer | null);
 }) {
-  const renders = spec.renders;
   return {
     version: 1 as const,
     settings: spec.settings,
     defaults: spec.defaults,
     requires: spec.requires ?? [],
-    renders: (typeof renders === "function" ? renders : () => renders) as (
-      settings: z.infer<Settings>,
-    ) => StorefrontSectionRenderer | null,
     schema: z.object({
       id: sectionIdSchema,
       type: z.literal(spec.type),
@@ -59,9 +50,20 @@ export const STOREFRONT_SECTION_REGISTRY = {
       // Fabrilife full-bleed 2.6:1; Star Tech contained + 2 side banners;
       // Daraz + app panel; Dawn split; Amazon story cards; Aarong full-screen phone.
       layout: z.enum(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"]),
+      /**
+       * Star Tech's two stacked promos beside a contained hero (300x240 at
+       * 1440px, two across under it on phones). Only `contained-banners`
+       * shows them; without them it is the contained banner alone. Optional,
+       * so stored version 1 heroes stay valid.
+       */
+      sideBanners: z.array(z.object({
+        mediaId: recordId,
+        /** What the image shows (its alt text). */
+        alt: z.string().trim().max(160),
+        href: href.nullable(),
+      }).strict()).max(2).optional(),
     }).strict(),
     defaults: { layout: "full-bleed" },
-    renders: "hero",
   }),
   "usp-strip": section({
     type: "usp-strip",
@@ -77,27 +79,23 @@ export const STOREFRONT_SECTION_REGISTRY = {
       ]),
     }).strict(),
     defaults: { style: "icons", source: { kind: "delivery-facts" } },
-    renders: (settings) => (settings.source.kind === "delivery-facts" ? "delivery" : null),
   }),
   "category-tiles": section({
     type: "category-tiles",
     settings: z.object({ style: z.enum(["icons", "round", "photo", "quad"]) }).strict(),
     defaults: { style: "photo" },
     requires: [atLeast("topCategoryCount", 2)],
-    renders: "categories",
   }),
   /** The collections the merchant puts on the homepage, each in its own presentation. */
   collections: section({
     type: "collections",
     settings: z.object({}).strict(),
     defaults: {},
-    renders: "collections",
   }),
   "product-rail": section({
     type: "product-rail",
     settings: z.object({ title, source: storefrontProductSourceSchema, limit: z.number().int().min(4).max(24) }).strict(),
     defaults: { title: "", source: { kind: "newest" }, limit: 12 },
-    renders: null,
   }),
   "product-grid": section({
     type: "product-grid",
@@ -108,20 +106,22 @@ export const STOREFRONT_SECTION_REGISTRY = {
       rows: z.number().int().min(1).max(6),
     }).strict(),
     defaults: { title: "", source: { kind: "newest" }, columns: 4, rows: 2 },
-    renders: null,
   }),
   "deal-block": section({
     type: "deal-block",
     settings: z.object({ title, source: storefrontProductSourceSchema, endsAt: z.iso.datetime().nullable() }).strict(),
     defaults: { title: "", source: { kind: "on-sale" }, endsAt: null },
-    renders: null,
   }),
   lookbook: section({
     type: "lookbook",
     settings: z.object({ title, mediaId, source: storefrontProductSourceSchema }).strict(),
     defaults: { title: "", mediaId: null, source: { kind: "newest" } },
-    renders: null,
   }),
+  /**
+   * One campaign banner. Consecutive banners with the same `two-up` or
+   * `four-up` layout share one row (Fabrilife's two campaigns side by side,
+   * Target's four promo tiles), each with its own image, words and link.
+   */
   banner: section({
     type: "banner",
     settings: z.object({
@@ -132,14 +132,12 @@ export const STOREFRONT_SECTION_REGISTRY = {
       cta: z.object({ label: z.string().trim().min(1).max(40), href }).strict().nullable(),
     }).strict(),
     defaults: { layout: "full", heading: "", text: "", mediaId: null, cta: null },
-    renders: null,
   }),
   "brand-wall": section({
     type: "brand-wall",
     settings: z.object({ title, style: z.enum(["grid", "rail"]) }).strict(),
     defaults: { title: "", style: "rail" },
     requires: [atLeast("brandCount", 4)],
-    renders: null,
   }),
   editorial: section({
     type: "editorial",
@@ -163,7 +161,6 @@ export const STOREFRONT_SECTION_REGISTRY = {
       }).strict(),
     ]),
     defaults: { layout: "rich-text", heading: "", body: "" },
-    renders: (settings) => (settings.layout === "rich-text" ? "rich_text" : null),
   }),
   faq: section({
     type: "faq",
@@ -175,7 +172,6 @@ export const STOREFRONT_SECTION_REGISTRY = {
       }).strict()).max(20),
     }).strict(),
     defaults: { heading: "", items: [] },
-    renders: null,
   }),
   "utility-cards": section({
     type: "utility-cards",
@@ -183,7 +179,6 @@ export const STOREFRONT_SECTION_REGISTRY = {
       cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href }).strict()).max(4),
     }).strict(),
     defaults: { cards: [] },
-    renders: null,
   }),
   // Daraz "Just For You": off below 40 products.
   "endless-grid": section({
@@ -191,27 +186,23 @@ export const STOREFRONT_SECTION_REGISTRY = {
     settings: z.object({ title, pageSize: z.union([z.literal(12), z.literal(24), z.literal(36)]) }).strict(),
     defaults: { title: "", pageSize: 24 },
     requires: [atLeast("productCount", 40)],
-    renders: null,
   }),
   // Long copy below everything (Star Tech, Apple Gadgets).
   "seo-text": section({
     type: "seo-text",
     settings: z.object({ heading, body: z.string().trim().max(8000) }).strict(),
     defaults: { heading: "", body: "" },
-    renders: null,
   }),
   // A client island after load; never part of the cached page.
   "recently-viewed": section({
     type: "recently-viewed",
     settings: z.object({ title }).strict(),
     defaults: { title: "" },
-    renders: null,
   }),
   newsletter: section({
     type: "newsletter",
     settings: z.object({ heading, text: z.string().trim().max(300) }).strict(),
     defaults: { heading: "", text: "" },
-    renders: null,
   }),
 };
 
@@ -252,8 +243,32 @@ export function storefrontSectionDefault<Type extends StorefrontSectionType>(typ
   } as StorefrontSectionOf<Type>;
 }
 
-/** The existing renderer for a section, or null until its own renderer lands. */
+/**
+ * Section types the storefront renders. The rest wait for their data:
+ * brand-wall for the brand entity, recently-viewed for product pages that
+ * record views, newsletter for a subscriber list.
+ */
+export const STOREFRONT_SECTION_RENDERERS = [
+  "hero",
+  "usp-strip",
+  "category-tiles",
+  "collections",
+  "product-rail",
+  "product-grid",
+  "deal-block",
+  "lookbook",
+  "banner",
+  "editorial",
+  "faq",
+  "utility-cards",
+  "endless-grid",
+  "seo-text",
+] as const satisfies readonly StorefrontSectionType[];
+export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
+
+/** The section's storefront renderer (its type), or null while the section waits for its data. */
 export function storefrontSectionRenderer(each: StorefrontSection): StorefrontSectionRenderer | null {
-  const entry = STOREFRONT_SECTION_REGISTRY[each.type] as { renders: (settings: unknown) => StorefrontSectionRenderer | null };
-  return entry.renders(each.settings);
+  return (STOREFRONT_SECTION_RENDERERS as readonly string[]).includes(each.type)
+    ? each.type as StorefrontSectionRenderer
+    : null;
 }

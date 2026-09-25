@@ -1,0 +1,42 @@
+---
+// Utility cards (Star Tech: 4 across at 300x80, 2x2 on phones): a title and
+// a line of text, each a link to a store page (a finder, a complaint form,
+// store locations).
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { ChevronRight } from "lucide-react";
+
+interface Props {
+  section: StorefrontSectionOf<"utility-cards">;
+}
+
+const { section } = Astro.props;
+const cards = section.settings.cards;
+---
+
+<section class="home-section w-full" aria-label="Store services">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <ul class:list={["grid grid-cols-2 gap-2 md:gap-4", cards.length >= 3 && "lg:grid-cols-4", cards.length === 1 && "grid-cols-1"]}>
+      {cards.map((card) => {
+        const external = card.href.startsWith("https://");
+        return (
+          <li class="min-w-0">
+            <a
+              href={card.href}
+              data-astro-prefetch={getStorefrontPrefetchAttribute(card.href, Astro.url)}
+              target={external ? "_blank" : undefined}
+              rel={external ? "noopener noreferrer" : undefined}
+              class="flex h-full min-h-20 items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 transition-colors hover:border-primary md:px-4"
+            >
+              <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                <span class="block text-sm font-semibold text-foreground md:text-base">{card.title}</span>
+                {card.text && <span class="mt-0.5 block text-xs leading-snug text-muted-foreground md:text-sm">{card.text}</span>}
+              </span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-foreground" aria-hidden="true"><ChevronRight className="size-4" /></span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+</section>
