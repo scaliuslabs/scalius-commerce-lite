@@ -35,6 +35,14 @@ const allowLimiter = { limit: vi.fn(async () => ({ success: true })) };
 
 vi.mock("../utils/order-notification-queue", () => notificationMocks);
 
+// Gift-card tenders and issued cards are covered on the real schema by
+// gift-card d1 tests; this mock database has no gift-card tables.
+vi.mock("@scalius/core/modules/gift-cards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/gift-cards")>()),
+  listOrderGiftCardTenders: vi.fn(async () => []),
+  listLineIssuedCards: vi.fn(async () => new Map()),
+}));
+
 // The discount lines are covered on the real schema by orders-owner-receipt.d1.test.ts.
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),

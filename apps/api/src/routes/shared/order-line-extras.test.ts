@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
+
+// Gift cards (B4) read their issued cards; an order that issued none adds no
+// key. The domains still empty must read nothing.
+const giftCardMocks = vi.hoisted(() => ({ listLineIssuedCards: vi.fn(async () => new Map()) }));
+vi.mock("@scalius/core/modules/gift-cards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/gift-cards")>()),
+  listLineIssuedCards: giftCardMocks.listLineIssuedCards,
+}));
+
 import { composeOrderLineExtras, withOrderLineExtras } from "./order-line-extras";
 
-// The feature domains are empty stubs until B1/B3/B4/B5: composing extras must
-// read nothing and leave every order item byte-identical.
+// Composing extras for lines without facts leaves every order item byte-identical.
 const noDatabase = new Proxy({}, {
   get() {
     throw new Error("order-line extras must not read the database while the domains are empty");
@@ -19,6 +27,7 @@ describe("composeOrderLineExtras", () => {
       currencyDecimalPlaces: 0,
     });
     expect(extras.size).toBe(0);
+    expect(giftCardMocks.listLineIssuedCards).toHaveBeenCalledTimes(1);
     const item = { id: "oi_1", quantity: 1 };
     const presented = withOrderLineExtras(item, extras);
     expect(presented).toBe(item);

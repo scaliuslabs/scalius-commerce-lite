@@ -63,7 +63,19 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
     resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
     createAtomicCheckoutAttempt: mocks.createAtomicCheckoutAttempt,
-    createStorefrontOrder: mocks.createStorefrontOrder,
+    // Prepared orders without gift cards: the whole total is due (Wave B §4.3).
+    createStorefrontOrder: async (...args: unknown[]) => {
+      const result = await mocks.createStorefrontOrder(...args);
+      if (!result || typeof result !== "object" || "giftCardTender" in result) return result;
+      const totalMinor = (result as { taxQuote?: { totalMinor?: number } }).taxQuote?.totalMinor ?? 0;
+      return {
+        ...result,
+        giftCardTender: {
+          handles: [], giftCardLineTotalMinor: 0, applied: [], appliedTotalMinor: 0,
+          amountDueMinor: totalMinor, unusableHandles: [], issues: [],
+        },
+      };
+    },
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
     // The route reads attempt + authority in one batch; the mocks keep their
     // separate seams so each decision is still observable.
@@ -1568,6 +1580,7 @@ describe("create order commit/KV ordering", () => {
         { code: "BDT", decimalPlaces: 2 },
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
+        { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
     );
     } finally {
       consoleError.mockRestore();
@@ -2215,6 +2228,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
+      { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2304,6 +2318,7 @@ describe("create order commit/KV ordering", () => {
       { code: "BDT", decimalPlaces: 2 },
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
+      { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2348,6 +2363,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
+      { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2610,6 +2626,14 @@ describe("create order commit/KV ordering", () => {
       areaName: null,
     });
     mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
+    // The prepared order carries the method the buyer chose.
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_order_1",
+      orderId: "order_1",
+      paymentMethod: "sslcommerz",
+      taxQuote: DEFAULT_TAX_QUOTE,
+      commitPayload: { orderData: { id: "order_1" } },
+    });
     const { app, kv } = createTestApp({
       partialPaymentEnabled: true,
       partialPaymentAmount: 9.99,
