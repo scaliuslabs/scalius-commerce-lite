@@ -8,6 +8,7 @@ import { createPostgresDatabase, type PostgresHttpConnection } from "../src/post
 import {
   currentReadObserver,
   observeStatement,
+  pinnedSourceValues,
   runWithReadObserver,
   statementTables,
   UNPARSEABLE_STATEMENT_TABLE,
@@ -173,5 +174,80 @@ describe("capture on every provider", { timeout: 30_000 }, () => {
       connect: () => connection,
     });
     expect(await capture(() => representativeReads(db))).toEqual(REPRESENTATIVE_TABLES);
+  });
+});
+
+describe("bound statements of row-keyed tables", { timeout: 30_000 }, () => {
+  /** The settings documents each settings statement of a run pinned (category x key). */
+  async function settingsDocuments(run: () => Promise<unknown>): Promise<string[][]> {
+    const statements: Array<{ sql: string; params: readonly unknown[] }> = [];
+    const observer: ReadObserver = {
+      observeTables: () => undefined,
+      valueTables: new Set(["settings"]),
+      observeBoundStatement: (_tables, sql, params) => statements.push({ sql, params }),
+    };
+    await runWithReadObserver(observer, run);
+    return statements.map(({ sql, params }) => pinnedSourceValues(sql, params, "settings", ["category", "key"])
+      .flatMap((pinned) => (pinned.category ?? ["?"]).flatMap((category) => (pinned.key ?? ["?"]).map((key) => `${category}:${key}`)))
+      .sort());
+  }
+
+  const read = (db: Database) => async () => {
+    await db.select({ key: settings.key }).from(settings)
+      .where(sql`${settings.key} = 'document' AND ${settings.category} IN (${"seo"}, ${"it's"})`).all();
+    await db.select({ id: products.id }).from(products).where(eq(products.slug, "not-reported")).all();
+  };
+  const expected = [["it's:document", "seo:document"]];
+
+  it("D1 (bound after prepare), with and without a request session", async () => {
+    const sqlite = createMigratedSqlite();
+    expect(await settingsDocuments(read(getDb({ DB: createSqliteD1Binding(sqlite) })))).toEqual(expected);
+    const binding = createSqliteD1Binding(sqlite);
+    const session = getDb({ DB: Object.assign(Object.create(binding) as D1Database, { withSession: () => binding }) });
+    expect(await settingsDocuments(read(session))).toEqual(expected);
+    expect(await settingsDocuments(read(createSqliteD1Database().db))).toEqual(expected);
+  });
+
+  it("Turso and PostgreSQL (bound with the statement)", async () => {
+    expect(await settingsDocuments(read(createSqliteTursoDatabase(createMigratedSqlite({ provider: "turso" }))))).toEqual(expected);
+    const connection: PostgresHttpConnection = {
+      query: () => Promise.resolve({ rows: [], fields: [] }),
+      transaction: async (queries) => Promise.all(queries),
+    };
+    const postgres = createPostgresDatabase("postgresql://user:secret@example.neon.tech/db", { connect: () => connection });
+    expect(await settingsDocuments(read(postgres))).toEqual(expected);
+  });
+
+  it("reports no statement of another table", async () => {
+    const { db } = createSqliteD1Database();
+    expect(await settingsDocuments(() => db.select({ id: products.id }).from(products).all())).toEqual([]);
+  });
+});
+
+describe("pinned source values", () => {
+  const pin = (sql: string, params: unknown[] = []) => pinnedSourceValues(sql, params, "settings", ["category", "key"]);
+
+  it("reads = and IN pins of each settings source against literals and bound values", () => {
+    expect(pin(`select * from "settings" where ("settings"."key" = ? and "settings"."category" in (?, ?))`, ["document", "seo", "currency"]))
+      .toEqual([{ category: ["seo", "currency"], key: ["document"] }]);
+    expect(pin("select * from settings s where s.category = 'inventory' and s.key = 'document'"))
+      .toEqual([{ category: ["inventory"], key: ["document"] }]);
+  });
+
+  it("scopes each source to its own query level and skips other tables' columns", () => {
+    const sql = `select p.id, (select value from settings where category = 'currency' and key = 'document') as c
+      from products p where p.category = ? and p.key = ? and p.slug in (?, ?)`;
+    expect(pin(sql, ["x", "y", "a", "b"])).toEqual([{ category: ["currency"], key: ["document"] }]);
+    // Placeholders inside literals and comments are not placeholders.
+    expect(pin(`select '?' as q /* ? */, value from settings where category = ? and key = 'document'`, ["seo"]))
+      .toEqual([{ category: ["seo"], key: ["document"] }]);
+  });
+
+  it("leaves a column unpinned when it is not compared with a value", () => {
+    expect(pin("select * from settings")).toEqual([{ category: null, key: null }]);
+    expect(pin("select * from products p join settings s on s.category = p.slug where s.key = 'document'"))
+      .toEqual([{ category: null, key: ["document"] }]);
+    expect(pin("select * from settings where category = ? and key = 'document'", [null])).toEqual([{ category: null, key: ["document"] }]);
+    expect(pin("select * from products")).toEqual([]);
   });
 });

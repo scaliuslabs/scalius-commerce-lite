@@ -37,6 +37,7 @@ import {
 import { referencePartValidator } from "./testing/cache-dvc/validators";
 import { Rng } from "./testing/cache-dvc/rng";
 import { STRUCTURAL_OP_GAPS } from "./testing/cache-dvc/mutations";
+import { DVC_SEED_EPOCH } from "./testing/cache-dvc/seed-store";
 import { registryColumnsMissingFromSchema, registryTablesMissingFromSchema } from "./testing/cache-dvc/schema-model";
 
 vi.mock("@scalius/database/client", async (importOriginal) => {
@@ -168,6 +169,88 @@ describe("DVC property harness has teeth", () => {
     } finally {
       harness.close();
     }
+  }, 120_000);
+});
+
+/** Products whose only discount is on a sold-out SKU, newer than every seeded product, outside the seeded categories' grids. */
+function onSaleFillers(count: number): string {
+  const ids = Array.from({ length: count }, (_, index) => index);
+  const rows = (make: (index: number) => string) => ids.map(make).join(",\n");
+  return `
+    INSERT INTO products (id, name, price_minor, slug, category_id, is_active, discount_type, discount_bps, discount_amount_minor, created_at, updated_at) VALUES
+    ${rows((i) => `('p_fill_${i}', 'Filler ${i}', 100000, 'filler-${i}', 'cat_women', 1, NULL, 0, 0, ${DVC_SEED_EPOCH - 86_400 + i}, ${DVC_SEED_EPOCH})`)};
+    INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping) VALUES
+    ${rows((i) => `('opt_fill_${i}', 'p_fill_${i}', 'Size', 'size', 0, 'size')`)};
+    INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES
+    ${rows((i) => `('ov_fill_${i}_a', 'opt_fill_${i}', 'S', 's', 0), ('ov_fill_${i}_b', 'opt_fill_${i}', 'M', 'm', 1)`)};
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory, option_combination_key, discount_type, discount_bps, discount_amount_minor) VALUES
+    ${rows((i) => `('v_fill_${i}_a', 'p_fill_${i}', 'FILL-${i}-S', 100000, 5, 0, 0, 1, 'S', NULL, 0, 0), ('v_fill_${i}_b', 'p_fill_${i}', 'FILL-${i}-M', 100000, 0, 0, 0, 1, 'M', 'percentage', 1000, 0)`)};
+    INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES
+    ${rows((i) => `('v_fill_${i}_a', 'opt_fill_${i}', 'ov_fill_${i}_a'), ('v_fill_${i}_b', 'opt_fill_${i}', 'ov_fill_${i}_b')`)};
+  `;
+}
+
+/**
+ * Directed scenarios for edges a random walk reaches rarely: render a part,
+ * commit one write that changes it, and require the cached entry to be
+ * rejected. `equal: false` proves each write really changes the part.
+ */
+describe("DVC directed scenarios", () => {
+  async function staleAfter(seed: string, path: string, write: (sqlite: DatabaseSync) => void, setup?: (sqlite: DatabaseSync) => void) {
+    const harness = await DvcHarness.create({ ...harnessConfig(seed), raceRate: 0, collect: false });
+    try {
+      setup?.(harness.sqlite);
+      await harness.readPart(path);
+      write(harness.sqlite);
+      return await harness.checkPart(path);
+    } finally {
+      harness.close();
+    }
+  }
+
+  it("on-sale home list: a candidate window full of products discounted only on sold-out SKUs", async () => {
+    // 36 newer products (the deal block's 12 cards x 3 candidates) each have a
+    // discounted SKU, but it is sold out and the SKU in stock is not
+    // discounted, so none pays less now: they fill the candidate window,
+    // show nowhere on the list, and keep the real sale (p_cotton) out of it.
+    const verdict = await staleAfter("scenario-on-sale", "/api/v1/storefront/homepage", (sqlite) => {
+      // The oldest filler's SKU loses its discount: p_cotton enters the window and the list.
+      sqlite.exec("UPDATE product_variants SET discount_type = NULL, discount_bps = 0 WHERE id = 'v_fill_0_b'");
+    }, (sqlite) => sqlite.exec(onSaleFillers(36)));
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("published menu: an item moved to another menu invalidates the menu it left", async () => {
+    const verdict = await staleAfter("scenario-nav-move", "/api/v1/navigation/menus/menu_main?revision=1&dependencyRevision=1", (sqlite) => {
+      sqlite.exec("UPDATE navigation_menu_publication_items SET menu_id = 'menu_footer' WHERE menu_id = 'menu_main' AND item_id = 'nav_sale'");
+    });
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("option definition moved to another product: a change still reaches the product whose SKUs assign it", async () => {
+    // Moved to p_watch, the definition still names the linen SKUs' size
+    // facet; retiring it changes that facet on the linen listing, which
+    // declares p:p_linen, not p:p_watch.
+    const path = "/api/v1/products?page=1&limit=20&category=panjabi&sort=newest";
+    const verdict = await staleAfter("scenario-option-move", path, (sqlite) => {
+      sqlite.exec("UPDATE product_option_definitions SET deleted_at = 1790000000 WHERE id = 'opt_linen_size'");
+    }, (sqlite) => sqlite.exec("UPDATE product_option_definitions SET product_id = 'p_watch' WHERE id = 'opt_linen_size'"));
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("newest home list: a product the buyer state lists but whose SKU is gone comes back when the SKU does", async () => {
+    // The cards drop a member with no live SKU; the list still depends on it.
+    const verdict = await staleAfter("scenario-newest-member", "/api/v1/storefront/homepage", (sqlite) => {
+      sqlite.exec("UPDATE product_variants SET deleted_at = NULL WHERE id = 'v_watch'");
+    }, (sqlite) => sqlite.exec("UPDATE product_variants SET deleted_at = 1790000000 WHERE id = 'v_watch'"));
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("published menu: a draft edit (menu revision) invalidates nothing", async () => {
+    const verdict = await staleAfter("scenario-nav-draft", "/api/v1/storefront/layout", (sqlite) => {
+      sqlite.exec("UPDATE navigation_menus SET revision = revision + 1 WHERE id = 'menu_main'");
+    });
+    expect(verdict).toEqual({ cached: true, valid: true, equal: true });
   }, 120_000);
 });
 

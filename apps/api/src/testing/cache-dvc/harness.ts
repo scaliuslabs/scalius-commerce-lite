@@ -46,7 +46,7 @@ import {
   TriggerClock,
   type DvcClock,
 } from "./clocks";
-import { MutationCoverage, RowMutator, type Mutation } from "./mutations";
+import { MutationCoverage, RowMutator, TRIGGER_OWNED_TABLES, type Mutation } from "./mutations";
 import {
   coarseTableRecorder,
   headerDependencies,
@@ -678,7 +678,14 @@ export class DvcHarness {
     const candidates = this.changedColumnsSince(entry.logPos, entry.tables);
     const found: string[] = [];
     for (const candidate of candidates) {
-      const alone = await this.renderOnRevertedCopy(entry.path, changes, candidate);
+      let alone: { status: number; body: string };
+      try {
+        alone = await this.renderOnRevertedCopy(entry.path, changes, candidate);
+      } catch {
+        // The candidate alone is not a valid row (a CHECK couples it to a
+        // column the undo restored): it cannot be isolated.
+        continue;
+      }
       if (alone.body !== entry.body || alone.status !== entry.status) found.push(candidate);
     }
     return found.length > 0 ? found : candidates.map((candidate) => `${candidate}?`);
@@ -1084,7 +1091,8 @@ export class DvcHarness {
    * full verification. Bounded, deterministic coverage before the random walk.
    */
   async sweep(): Promise<void> {
-    const tables = [...this.model.values()].filter((table) => table.registered);
+    // Trigger-owned tables change only through the writes that own them.
+    const tables = [...this.model.values()].filter((table) => table.registered && !TRIGGER_OWNED_TABLES.has(table.name));
     for (const table of tables) {
       const plan: Array<() => Mutation | null> = [];
       for (const column of table.columns) {

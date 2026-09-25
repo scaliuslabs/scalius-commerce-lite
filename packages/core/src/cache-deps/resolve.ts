@@ -4,7 +4,11 @@
  *
  * - Coverage: a table the render touched is covered by a declared key of one
  *   of the kinds the registry lists for it (`cacheDepKindsForTable`), or by its
- *   own `t:<table>`. An uncovered registered table falls back to `t:<table>`.
+ *   own `t:<table>`. A table read by row identity
+ *   (`CACHE_DEP_ROW_KEYED_TABLES`: settings) is covered by the rows read
+ *   instead: every statement that touched it must pin the documents it reads
+ *   (`pinnedSourceValues`), and each of their own keys must be declared.
+ *   An uncovered registered table falls back to `t:<table>`.
  * - Exempt tables need nothing; the soft ones (recommendation and popularity
  *   order) bound the entry's soft max age instead.
  * - A table neither registered nor exempt cannot be proven fresh: the entry is
@@ -16,14 +20,17 @@
  */
 import {
   CACHE_DEP_ENTRY_KEY_BUDGET,
+  CACHE_DEP_ROW_KEYED_TABLES,
   CACHE_DEP_SOFT_MAX_AGE_SECONDS,
   CACHE_DEP_TABLES,
   cacheDep,
   cacheDepExemptReason,
   cacheDepKind,
   cacheDepKindsForTable,
+  cacheDepPinnedRowsCovered,
   type CacheDepKind,
 } from "@scalius/shared/cache-deps";
+import { pinnedSourceValues } from "@scalius/database/read-observer";
 
 /**
  * Exempt tables whose only buyer-visible effect is soft ordering (owner
@@ -60,7 +67,38 @@ export interface CacheDepResolveInput {
   readonly declared: Iterable<string>;
   /** Tables the render touched, lower-case. */
   readonly tables: Iterable<string>;
+  /**
+   * Every bound execution of a statement that touched a row-keyed table, with
+   * its SQL and parameters. A row-keyed table read with no reported statement
+   * is uncovered.
+   */
+  readonly rowKeyedStatements?: Iterable<CacheDepRowKeyedStatement>;
   readonly budget?: number;
+}
+
+export interface CacheDepRowKeyedStatement {
+  readonly tables: readonly string[];
+  readonly sql: string;
+  readonly params: readonly unknown[];
+}
+
+/**
+ * Whether every read of a row-keyed table pinned the rows it can match, and
+ * the key of each of those rows was declared.
+ */
+function rowKeyedTableCovered(
+  table: string,
+  statements: readonly CacheDepRowKeyedStatement[],
+  keys: ReadonlySet<string>,
+): boolean {
+  const spec = CACHE_DEP_ROW_KEYED_TABLES[table];
+  if (spec === undefined) return false;
+  const reads = statements.filter((statement) => statement.tables.includes(table));
+  if (reads.length === 0) return false;
+  return reads.every((statement) => {
+    const sources = pinnedSourceValues(statement.sql, statement.params, table, spec.columns);
+    return sources.length > 0 && sources.every((pinned) => cacheDepPinnedRowsCovered(table, pinned, keys));
+  });
 }
 
 export interface CacheDepResolution {
@@ -93,11 +131,17 @@ export function resolveCacheDependencies(input: CacheDepResolveInput): CacheDepR
   const coarseTables: string[] = [];
   const softTables: string[] = [];
   const unregisteredTables: string[] = [];
+  const rowKeyedStatements = [...(input.rowKeyedStatements ?? [])];
   for (const table of new Set(input.tables)) {
     const kinds = cacheDepKindsForTable(table);
     if (kinds !== null) {
       const tableKey = cacheDep.table(table);
-      if (keys.has(tableKey) || kinds.some((kind) => declaredKinds.has(kind))) continue;
+      if (keys.has(tableKey)) continue;
+      if (Object.prototype.hasOwnProperty.call(CACHE_DEP_ROW_KEYED_TABLES, table)) {
+        if (rowKeyedTableCovered(table, rowKeyedStatements, keys)) continue;
+      } else if (kinds.some((kind) => declaredKinds.has(kind))) {
+        continue;
+      }
       coarseTables.push(table);
       continue;
     }

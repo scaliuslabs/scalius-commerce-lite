@@ -416,7 +416,7 @@ export function createPostgresDatabase(
   };
 
   const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
-    observeStatement(sql);
+    observeStatement(sql, params);
     const statement = compileSqliteStatementForPostgres(sql, params.length);
     const normalizedParams = normalizePostgresParameters(params);
     const mode = statement.readOnly ? "read" : "serializable";
@@ -444,7 +444,7 @@ export function createPostgresDatabase(
 
   const executeBatch: AsyncBatchRemoteCallback = async (statements) => {
     if (statements.length === 0) return [];
-    for (const statement of statements) observeStatement(statement.sql);
+    for (const statement of statements) observeStatement(statement.sql, statement.params);
     const compiled = compileBatchStatements(statements);
     const readOnly = compiled.every((statement) => statement.readOnly);
     const execute = async (): Promise<PostgresFullResult[]> => connection.transaction(

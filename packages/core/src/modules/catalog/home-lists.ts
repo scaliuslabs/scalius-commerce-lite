@@ -15,7 +15,7 @@ import {
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
-import { and, asc, desc, eq, gte, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { HomeProductListRequest } from "@scalius/shared/storefront-theme";
 import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
@@ -56,33 +56,39 @@ export interface HomeProductList {
 
 
 /**
- * What one home list depends on: its cards, and the set and order it takes
- * them from. Newest and category lists are the public set's (or the
- * category subtree's) newest members; on sale adds the discount and band
- * facts that decide "pays less now"; popular is ordered by sales stats,
- * which are soft (read from `product_sales_stats`, bounded automatically).
+ * What one home list depends on: every product its selection read (`p:`,
+ * shown or not: a member the cards drop today, or a candidate the list
+ * filters out, is shown tomorrow by a change to that product alone), the
+ * images of the cards shown, and the set and order the selection walks.
+ *
+ * - Newest and category lists take their members from the buyer-state
+ *   projection's public newest (or category newest) order: `lm:all` or
+ *   `lm:cat:<id>`.
+ * - Popular is ordered by sales stats, which are soft (read from
+ *   `product_sales_stats`, bounded automatically), over public members.
+ * - On sale reads a candidate window: which rows are in it (`lo:sale:all`,
+ *   advanced by every write to a discount-marked product or live SKU, the
+ *   only way a row enters, leaves or moves in it) and each candidate's facts.
  */
 function declareHomeProductList(
     source: HomeProductListRequest["source"],
     productIds: readonly string[],
     mediaByProduct: ReadonlyMap<string, ProductMediaProjection[]>,
+    memberIds: readonly string[],
 ): void {
     if (!deps.active()) return;
     declareProductCards(productIds, mediaByProduct);
+    deps.products(memberIds);
     if (source.kind === "category") {
         deps.listMembership(categoryScope(source.categoryId));
         deps.category(source.categoryId);
         return;
     }
-    deps.listMembership("all");
     if (source.kind === "on-sale") {
-        deps.listOrder("disc", "all");
-        deps.listOrder("band", "all");
+        deps.listOrder("sale", "all");
+        return;
     }
-}
-
-function publicProduct(...extra: SQL[]): SQL[] {
-    return [...extra, eq(products.isActive, true), isNull(products.deletedAt), publicProductHasBuyerResolvableSku()];
+    deps.listMembership("all");
 }
 
 const newestFirst = () => [desc(products.createdAt), asc(products.id)] as const;
@@ -128,31 +134,42 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
     resolve(results: readonly unknown[], offset: number): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
-    const slots: Array<{ key: string; rows: number; media: number }> = [];
+    const slots: Array<{ key: string; rows: number; media: number; members: number }> = [];
     const categoryIds: string[] = [];
 
-    const add = (key: string, rows: BatchStatement, ids: SQLWrapper) => {
+    /**
+     * One list: its cards, their media, and the ids its selection read (the
+     * members, or the on-sale candidate window), which it depends on.
+     */
+    const add = (key: string, rows: BatchStatement, ids: SQLWrapper, members: BatchStatement) => {
         const rowsSlot = statements.push(rows) - 1;
         const mediaSlot = statements.push(selectProductMediaProjectionRows(db, ids)) - 1;
-        slots.push({ key, rows: rowsSlot, media: mediaSlot });
+        const membersSlot = statements.push(members) - 1;
+        slots.push({ key, rows: rowsSlot, media: mediaSlot, members: membersSlot });
     };
 
     for (const list of lists) {
         const { source, limit } = list;
         if (source.kind === "newest" || source.kind === "category") {
-            // The exact products, newest first: the public-newest (or
-            // category-newest) index walk stops after `limit` eligible rows.
+            // The exact products, newest first, from the buyer-state
+            // projection (the rows the listing keys advance with): the
+            // public-newest (or category-newest) index walk stops after
+            // `limit` rows.
             const conditions = source.kind === "category"
-                ? publicProduct(eq(products.categoryId, source.categoryId), publishedCategoryIdExists(products.categoryId))
-                : publicProduct();
+                ? [
+                    sql`${productBuyerState.isPublic} = 1`,
+                    eq(productBuyerState.categoryId, source.categoryId),
+                    publishedCategoryIdExists(productBuyerState.categoryId),
+                ]
+                : [sql`${productBuyerState.isPublic} = 1`];
             if (source.kind === "category") categoryIds.push(source.categoryId);
-            const ids = db.select({ id: products.id }).from(products).where(and(...conditions))
-                .orderBy(...newestFirst()).limit(limit);
+            const ids = db.select({ id: productBuyerState.productId }).from(productBuyerState).where(and(...conditions))
+                .orderBy(desc(productBuyerState.productCreatedAt), asc(productBuyerState.productId)).limit(limit);
             const pricing = buildBuyerCatalogPricingProjection(db, { productScope: inArray(products.id, ids) });
             add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .where(inArray(products.id, ids))
-                .orderBy(...newestFirst()), ids);
+                .orderBy(...newestFirst()), ids, ids);
         } else if (source.kind === "on-sale") {
             const candidates = sql`${products.id} IN (${onSaleCandidates(limit * ON_SALE_CANDIDATES_PER_CARD)})`;
             const pricing = buildBuyerCatalogPricingProjection(db, { productScope: candidates });
@@ -165,7 +182,9 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 .where(onSale).orderBy(...newestFirst()).limit(limit);
             add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
-                .where(onSale).orderBy(...newestFirst()).limit(limit), ids);
+                .where(onSale).orderBy(...newestFirst()).limit(limit), ids,
+            // The candidate window itself, shown or not: what the list depends on.
+            db.select({ id: products.id }).from(products).where(candidates));
         } else if (source.kind === "popular") {
             // Units sold in the last 30 days from real order lines
             // (product_sales_stats, refreshed nightly): the popularity index
@@ -186,7 +205,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .innerJoin(productSalesStats, eq(productSalesStats.productId, products.id))
                 .where(inArray(products.id, ids))
-                .orderBy(desc(productSalesStats.sold30d), asc(products.id)), ids);
+                .orderBy(desc(productSalesStats.sold30d), asc(products.id)), ids, ids);
         }
     }
 
@@ -209,12 +228,13 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 ? []
                 : results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[];
             const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
-            return slots.map(({ key, rows, media }) => {
+            return slots.map(({ key, rows, media, members }) => {
                 const productRows = results[offset + rows] as RawProduct[];
                 const mediaByProduct = resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]);
                 const cards = resolveProductCards(productRows, mediaByProduct);
                 const source = lists.find((list) => list.key === key)!.source;
-                declareHomeProductList(source, productRows.map((row) => row.id), mediaByProduct);
+                const memberIds = (results[offset + members] as Array<{ id: string }>).map((row) => row.id);
+                declareHomeProductList(source, productRows.map((row) => row.id), mediaByProduct, memberIds);
                 const category = source.kind === "category" ? categoryById.get(source.categoryId) ?? null : null;
                 return {
                     key,
