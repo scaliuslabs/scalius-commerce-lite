@@ -33,7 +33,8 @@ import {
   productGridSpec,
 } from "@/lib/product-card-layout";
 import { CARD_IMAGE_DIMENSIONS } from "@/components/cards/card-model";
-import { homepageLeadSection } from "@/lib/homepage-sections";
+import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
+import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
   productGalleryMainSlot,
   productGalleryThumbnailSlot,
@@ -212,7 +213,7 @@ const slide = (id: string) => ({
   focalPoint: { x: 50, y: 50 },
 });
 
-const HOMEPAGE_PROPS = {
+const HOMEPAGE_DATA = {
   hero: {
     // m1 has renditions (its URL is the 1080px master), the others don't.
     desktop: [slide("d1"), slide("d2")],
@@ -234,7 +235,6 @@ const HOMEPAGE_PROPS = {
       products: [CARD_PRODUCTS.withOptions, CARD_PRODUCTS.soldOut],
     },
   ],
-  fallbackProducts: [],
   categoryRail: {
     enabled: true,
     title: "Shop by category",
@@ -247,10 +247,24 @@ const HOMEPAGE_PROPS = {
     { kind: "delivery", title: "Delivery in 2-3 days", detail: "Across Bangladesh" },
     { kind: "cod", title: "Cash on delivery", detail: "Pay when it arrives" },
   ],
-  currencySymbol: "৳",
-  currencyCode: "BDT",
 };
-const HOMEPAGE_CONTENT = { hero: true, collections: true, categories: true, delivery: true };
+/** Every product list a template's sections read has the same four cards. */
+const SECTION_LISTS = ["newest", "on-sale", "popular"].map((key) => ({
+  key,
+  products: Object.values(CARD_PRODUCTS),
+  category: null,
+  collection: null,
+}));
+const HOMEPAGE_CONTENT: HomepageContent = {
+  hero: HOMEPAGE_DATA.hero,
+  collections: HOMEPAGE_DATA.collections as unknown as HomepageContent["collections"],
+  categoryRail: HOMEPAGE_DATA.categoryRail,
+  deliveryFacts: HOMEPAGE_DATA.deliveryFacts as HomepageContent["deliveryFacts"],
+  lists: new Map(SECTION_LISTS.map((list) => [list.key, list as never])),
+  media: new Map(),
+};
+const HOMEPAGE_PROPS = { content: HOMEPAGE_CONTENT, currencySymbol: "৳", currencyCode: "BDT" };
+const NO_HERO = { desktop: [], mobile: [] };
 
 const LONG_MENU = [
   "Women", "Men", "Kids", "Home & living", "Beauty", "Jewellery", "Gifts",
@@ -448,22 +462,26 @@ describe("storefront theme render matrix", () => {
     assertTopBar(page, resolved.blocks.topBar.variant, layout.topBar);
     assertHeader(page, resolved.blocks.header.variant, layout.header);
 
-    // Homepage sections in document order: those with a renderer today.
+    // Homepage sections in document order: those with data to show.
     expect(
       Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")),
-    ).toEqual(sections.filter((section) => storefrontSectionRenderer(section) !== null).map((section) => section.type));
-    // The banner's first slide is high priority wherever it sits (one of at
+    ).toEqual(sections.filter((section) => homepageSectionRenders(section, HOMEPAGE_CONTENT)).map((section) => section.type));
+    // The banner's first photo is high priority wherever it sits (one of at
     // most two photo sections, so it is at or just below the fold).
-    const heroImage = page.querySelector(".desktop-carousel img")!;
-    expect(heroImage.getAttribute("fetchpriority")).toBe("high");
-    // Phones get a phone-sized rendition, and the first slide paints without script.
-    const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
-    expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/640.webp 640w");
-    expect(phoneSource.getAttribute("sizes")).toBe(
-      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
-    );
-    expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
-    expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
+    const heroSection = sections.find((section) => section.type === "hero");
+    if (heroSection?.type === "hero") {
+      const hero = page.querySelector('[data-home-section="hero"]')!;
+      expect(hero.querySelectorAll('img[fetchpriority="high"]').length).toBeGreaterThan(0);
+      const layout = heroSection.settings.layout;
+      if (layout !== "split" && layout !== "story-cards") {
+        // Phones get a phone-sized rendition, and the first slide paints without script.
+        const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
+        expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/640.webp 640w");
+        expect(phoneSource.getAttribute("sizes")).toBe(heroImageCandidate(HOMEPAGE_DATA.hero.mobile[0]!.url, "mobile", layout).sizes);
+        expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
+        expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
+      }
+    }
 
     // Footer: the variant's structure, with contact links from business facts.
     assertFooter(page, resolved.blocks.footer.variant, { business: true });
@@ -543,7 +561,7 @@ describe("storefront theme render matrix", () => {
       cardSurface: "bordered",
       topBar: true,
     });
-    expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "categories", "delivery"]);
+    expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category-tiles", "usp-strip"]);
     // Today's announcement bar, classic header, dropdown row, drawer and columns footer.
     expect(resolved.blocks.topBar.variant).toBe("announcement");
     expect(resolved.blocks.header.variant).toBe("mall-departments");
@@ -1193,7 +1211,7 @@ describe("theme sections", () => {
         { id: "hero", type: "hero", version: 1, settings: { layout: "full-screen" } },
         { id: "collections", type: "collections", version: 1, settings: {} },
         { id: "care", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "", body: "Dry clean only." } },
-        // No renderer until the homepage section library lands: renders nothing.
+        // Waits for a subscriber list: renders nothing.
         { id: "brands", type: "newsletter", version: 1, settings: { heading: "Join", text: "" } },
         { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
       ],
@@ -1237,13 +1255,13 @@ describe("theme sections", () => {
 
   it("skips empty sections and text strips when choosing what leads", () => {
     expect(
-      homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: false })?.id,
+      homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: NO_HERO })?.id,
     ).toBe("collections");
-    expect(homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: false, collections: false })).toBeNull();
+    expect(homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: NO_HERO, collections: [], lists: new Map() })).toBeNull();
     const emptyStory = custom.pages.home.map((section) =>
       section.type === "editorial" ? { ...section, settings: { layout: "rich-text" as const, heading: " ", body: "\n\n" } } : section,
     );
     expect(homepageLeadSection(emptyStory, HOMEPAGE_CONTENT)?.id).toBe("hero");
-    expect(homepageLeadSection(emptyStory, { ...HOMEPAGE_CONTENT, hero: false })?.id).toBe("collections");
+    expect(homepageLeadSection(emptyStory, { ...HOMEPAGE_CONTENT, hero: NO_HERO })?.id).toBe("collections");
   });
 });

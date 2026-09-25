@@ -1,0 +1,101 @@
+---
+// Story-card hero (Amazon: portrait 267x428 cards, 5.3 visible, with a
+// 32/700 headline). A CSS scroll-snap rail with no script: the next card
+// peeks in, so the rail reads as scrollable. The first card is the LCP
+// image; the rest of the first screen loads eagerly, the others lazily.
+import { heroImageCandidate } from "@/lib/homepage-hero";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import {
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
+  getHeroSlideObjectPosition,
+  type HeroSlide,
+} from "@scalius/shared/hero-slider";
+
+interface Props {
+  slides: HeroSlide[];
+  priority?: boolean;
+}
+
+const { slides, priority = true } = Astro.props;
+/** Cards on a computer's first screen (5.3 visible). */
+const FIRST_SCREEN = 6;
+---
+
+{slides.length > 0 && (
+  <div class="relative w-full" data-hero-layout="story-cards">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
+      <ul class="story-rail -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 md:gap-4" aria-label="Featured">
+        {slides.map((slide, index) => {
+          const candidate = heroImageCandidate(slide.url, "desktop", "story-cards");
+          const headline = slide.heading?.trim();
+          const Frame = slide.link ? "a" : "div";
+          const isExternal = slide.link?.startsWith("https://");
+          const lead = index === 0 && priority;
+          return (
+            <li class="story-card shrink-0 snap-start">
+              <Frame
+                href={slide.link || undefined}
+                data-astro-prefetch={slide.link ? getStorefrontPrefetchAttribute(slide.link, Astro.url) : undefined}
+                target={isExternal ? "_blank" : undefined}
+                rel={isExternal ? "noopener noreferrer" : undefined}
+                class="group relative block aspect-[5/8] overflow-hidden rounded-xl bg-muted"
+                aria-label={slide.link && !headline && !slide.title ? `Banner ${index + 1}` : undefined}
+              >
+                <img
+                  src={candidate.src}
+                  srcset={candidate.srcset}
+                  sizes={candidate.srcset ? candidate.sizes : undefined}
+                  alt={slide.title}
+                  width="500"
+                  height="800"
+                  class="absolute inset-0 h-full w-full object-cover"
+                  style={`object-position: ${getHeroSlideObjectPosition(slide.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT)};`}
+                  loading={index < FIRST_SCREEN ? "eager" : "lazy"}
+                  fetchpriority={lead ? "high" : "auto"}
+                  decoding={lead ? "sync" : "async"}
+                />
+                {headline && (
+                  <span class="absolute inset-x-0 top-0">
+                    <span class="block bg-black/70 p-4 pb-2 text-2xl font-bold leading-tight text-white [overflow-wrap:anywhere] md:text-[2rem]">
+                      {headline}
+                    </span>
+                    <span class="block h-10 bg-linear-to-b from-black/70 to-transparent" aria-hidden="true" />
+                  </span>
+                )}
+              </Frame>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </div>
+)}
+
+<style>
+  .story-rail {
+    scrollbar-width: none;
+    list-style: none;
+  }
+
+  .story-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 1.6 cards on a phone, then 2.5, 4 and 5.3 (Amazon), so the next card
+     always peeks in. STORY_CARD_SIZES (lib/homepage-hero.ts) matches. */
+  .story-card {
+    width: 62%;
+  }
+
+  @media (min-width: 640px) {
+    .story-card { width: 40%; }
+  }
+
+  @media (min-width: 1024px) {
+    .story-card { width: 25%; }
+  }
+
+  @media (min-width: 1280px) {
+    .story-card { width: 19%; }
+  }
+</style>

@@ -181,9 +181,11 @@ describe("theme page", () => {
     expect(container.textContent).toContain(
       "Your store shows Departments instead. Needs 500 or fewer products and options (you have 1,000).",
     );
-    // Sections without a renderer yet, or without data, say so.
+    // Sections that wait for their data (a subscriber list) say so; the
+    // homepage section library renders the rest.
     const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
-    expect(rows).toContain("Product gridNot on your store yet.");
+    expect(rows).toContain("NewsletterNot on your store yet.");
+    expect(rows).toContain("Product grid");
     expect(rows).toContain("Banners");
   });
 

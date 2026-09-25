@@ -9,6 +9,16 @@ import { UNIX_NOW } from "./shared";
 import { taxClasses } from "./tax";
 import { media } from "./media";
 
+/**
+ * A discount a buyer can see: the rule the buyer pricing projection applies
+ * (a flat amount or a percentage above zero). Written with bare column names
+ * and literal constants because partial indexes and the queries that use them
+ * must match term for term.
+ */
+export const ON_SALE_DISCOUNT_SQL = "((discount_type = 'flat' AND discount_amount_minor > 0) OR (discount_type = 'percentage' AND discount_bps > 0))";
+/** A live SKU with its own discount (product_variants_on_sale_newest_idx). */
+export const ON_SALE_SKU_ROW_SQL = `deleted_at IS NULL AND ${ON_SALE_DISCOUNT_SQL}`;
+
 export const products = sqliteTable(
     "products",
     {
@@ -70,6 +80,14 @@ export const products = sqliteTable(
             sql`${table.createdAt} DESC`,
         ),
         index("products_deleted_at_idx").on(table.deletedAt),
+        // The homepage "on sale" list (core catalog/home-lists.ts) walks only
+        // discounted public products, newest first. It has the public-newest
+        // index's equality columns plus the id tiebreak, so SQLite prefers it
+        // for that list; the query repeats the WHERE word for word
+        // (ON_SALE_DISCOUNT_SQL), so SQLite can prove the partial index applies.
+        index("products_on_sale_newest_idx")
+            .on(table.isActive, table.deletedAt, sql`${table.createdAt} DESC`, table.id)
+            .where(sql.raw(ON_SALE_DISCOUNT_SQL)),
     ],
 );
 
@@ -240,6 +258,11 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
     index("product_variants_image_idx").on(table.imageId),
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
+    // The homepage "on sale" list's SKU-discount candidates, newest first
+    // (ON_SALE_SKU_ROW_SQL, repeated word for word by the query).
+    index("product_variants_on_sale_newest_idx")
+        .on(sql`${table.createdAt} DESC`)
+        .where(sql.raw(ON_SALE_SKU_ROW_SQL)),
     // Manual migration 0055 also creates this partial unique index (not expressible in Drizzle):
     // product_variants_one_default_per_product_idx ON (product_id) WHERE is_default = true AND deleted_at IS NULL
 ]);

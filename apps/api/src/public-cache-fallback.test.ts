@@ -46,7 +46,7 @@ async function readThroughCache(cacheResponse: Response) {
   const worker = new ApiWorker(ctx, {
     SCALIUS_SECRET: "public-cache-fallback-master-secret-0123456789",
   } as Env) as unknown as TestApiWorker;
-  const response = await worker.fetch(new Request("https://api.example.test/api/v1/storefront/homepage?ref=secret", {
+  const response = await worker.fetch(new Request("https://api.example.test/api/v1/categories?ref=secret", {
     headers: { "X-Scalius-Cache-Generation": "abc123" },
   }));
   return { response, warnings: warn.mock.calls.map((call) => String(call[0])) };
@@ -65,7 +65,7 @@ describe("public read through the generation cache", () => {
     expect(await response.json()).toEqual({ success: true, data: "rendered directly" });
     expect(renderedDirectly).toHaveBeenCalledTimes(1);
     expect(warnings).toEqual([
-      "[PublicCache] cache layer answered 500 for /api/v1/storefront/homepage; rendering it directly",
+      "[PublicCache] cache layer answered 500 for /api/v1/categories; rendering it directly",
     ]);
   });
 

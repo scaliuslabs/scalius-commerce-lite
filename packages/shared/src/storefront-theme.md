@@ -16,7 +16,8 @@ numbers come from the storefront study
 | `tokens.ts` | token enums and specs (density, type scale, radius…), palettes, fonts, the token schema, token CSS |
 | `fit.ts` | `StoreShape` (bounded store facts) and the fit conditions variants declare |
 | `blocks.ts` | the block-variant registry and the blocks schema |
-| `sections.ts` | the section registry (17 types, strict settings) |
+| `sections.ts` | the section registry (17 types, strict settings) and the types the storefront renders |
+| `home-data.ts` | what homepage sections read (product lists by source, images), shared by the API and the storefront |
 | `document.ts` | the document schema, the document's contrast pairs, strict parsing, token CSS |
 | `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
 | `resolve.ts` | `resolveStorefrontTheme(document, storeShape)` |
@@ -72,11 +73,26 @@ numbers come from the storefront study
 - **Sections.** Each `type` is an entry in `STOREFRONT_SECTION_REGISTRY` with
   its own `version` and strict settings. Sections are optional, repeatable
   and reorderable; ids are unique; at most 24.
-- **Today's renderers.** Each variant and section also names the existing
+- **Today's renderers.** Each block variant also names the existing
   storefront renderer it maps to (`renders`) until the phase that builds its
   own. `resolved.layout` carries those facts (header, menus, card, grid,
-  gallery, footer, top bar). Sections whose renderer has not landed render
-  nothing, and the Theme page says so.
+  gallery, footer, top bar).
+- **Section renderers and data.** `STOREFRONT_SECTION_RENDERERS` lists the
+  section types the storefront renders (one component each under
+  `apps/storefront/src/components/homepage/`). `brand-wall`,
+  `recently-viewed` and `newsletter` wait for their data (the brand entity,
+  product pages that record views, a subscriber list) and render nothing;
+  the Theme page says so. `home-data.ts` derives what the sections read
+  (`homeSectionRequests`: one product list per source at the largest limit
+  any section asks, capped at 8 lists of 36, and at most 24 images). The
+  API reads exactly those: for the published theme in the homepage batch
+  part (a fixed read that rejects any query string), and for a preview's
+  stored draft on the token-verified `POST /storefront/theme-preview/homepage`
+  (private, never cached). Callers never name reads. The storefront looks
+  each section's data up by the same keys. A section without data
+  renders nothing (no placeholder). Consecutive `banner` sections with the
+  same `two-up` or `four-up` layout share one row. The hero's optional
+  `sideBanners` show only with `contained-banners`.
 - **Cards.** A card id's `renders` is its measured anatomy as data: body
   order (title, price, facts), title emphasis, price colour role, discount
   wording, and the buy action. Tokens own sizes, radius, surface, photo ratio
@@ -126,12 +142,17 @@ Where the data departs from SYNTHESIS.md, and why:
 
 ## Changing the contract
 
-1. To add a section type or a block variant, add a registry entry (strict
-   settings, defaults, `requires`, `fallback`, `contrastPairs`, `renders`)
-   and a storefront renderer. The pairwise matrix test
+1. To add a block variant, add a registry entry (strict settings,
+   defaults, `requires`, `fallback`, `contrastPairs`, `renders`) and a
+   storefront renderer. The pairwise matrix test
    (`storefront-theme/matrix.test.ts`) covers the new variant with every
-   other block, palette and density.
-2. To change a section's settings, bump that entry's `version`.
+   other block, palette and density. To add a section type, add a registry
+   entry (strict settings, defaults, `requires`), its data reads in
+   `home-data.ts`, its renderer, and its type in
+   `STOREFRONT_SECTION_RENDERERS`.
+2. To change a section's settings incompatibly, bump that entry's
+   `version`; an optional field (the hero's `sideBanners`) keeps stored
+   sections valid without one.
 3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
    add a migration that resets stored theme rows to the defaults (0082 is
    the version 4 reset). There is no backward compatibility.

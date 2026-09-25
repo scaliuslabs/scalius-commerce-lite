@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heroImageCandidate, resolveHomepageHero } from "./homepage-hero";
+import { heroImageCandidate, heroImageSizes, heroLeadCandidates, resolveHomepageHero } from "./homepage-hero";
 
 const slide = (url: string) => ({ id: url, url, title: "Banner", heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
 
@@ -43,5 +43,32 @@ describe("heroImageCandidate", () => {
     expect(candidate.srcset).toBeUndefined();
     expect(candidate.src).toBe("https://cdn.example/a.jpg");
     expect(candidate.media).toBe("(min-width: 768px)");
+  });
+});
+
+describe("heroLeadCandidates", () => {
+  const desktop = [slide("https://cdn.example/media/d.webp/1080.webp")];
+  const mobile = [slide("https://cdn.example/media/m.webp/1080.webp")];
+
+  it("preloads each viewport's first banner at the size its layout paints", () => {
+    const contained = heroLeadCandidates({ desktop, mobile }, "contained-banners");
+    expect(contained.map((candidate) => candidate.media)).toEqual(["(max-width: 767px)", "(min-width: 768px)"]);
+    expect(contained[1]!.sizes).toBe(heroImageCandidate(desktop[0]!.url, "desktop").sizes);
+    expect(heroLeadCandidates({ desktop, mobile }, "full-bleed")[1]!.sizes)
+      .toBe("(min-resolution: 2.5dppx) calc((100vw) * 0.667), 100vw");
+    expect(heroImageSizes("split", "desktop")).toBe("50vw");
+    expect(heroImageSizes("split", "mobile")).toBe("100vw");
+  });
+
+  it("offers story cards one candidate for every screen", () => {
+    const [candidate, ...rest] = heroLeadCandidates({ desktop, mobile }, "story-cards");
+    expect(rest).toEqual([]);
+    expect(candidate!.media).toBe("all");
+    expect(candidate!.srcset).toContain("media/d.webp");
+  });
+
+  it("preloads nothing without banners", () => {
+    expect(heroLeadCandidates({ desktop: [], mobile: [] }, "story-cards")).toEqual([]);
+    expect(heroLeadCandidates({ desktop: [], mobile: [] }, "full-bleed")).toEqual([]);
   });
 });

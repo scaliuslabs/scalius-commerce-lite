@@ -20,6 +20,7 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   resolveThemePreviewSession: mocks.resolveThemePreviewSession,
 }));
 
+import { getHomepageData } from "@scalius/core/modules/storefront";
 import { storefrontRoutes } from "./storefront";
 
 function createTestApp() {
@@ -103,5 +104,60 @@ describe("storefront private cache policy", () => {
       expect(response.status).toBe(400);
     }
     expect(mocks.resolveThemePreviewSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps the public homepage read to one fixed contract", async () => {
+    vi.mocked(getHomepageData).mockResolvedValue({ sections: { lists: [], media: [] } } as never);
+    const plain = await createTestApp().request("/api/v1/storefront/homepage");
+    expect(plain.status).toBe(200);
+    expect(getHomepageData).toHaveBeenCalledWith({});
+
+    // Named reads (or any other query) never reach the database or the cache.
+    vi.mocked(getHomepageData).mockClear();
+    for (const query of ["?product=36~newest", "?media=m1", "?utm_source=ads"]) {
+      const response = await createTestApp().request(`/api/v1/storefront/homepage${query}`);
+      expect(response.status).toBe(400);
+    }
+    expect(getHomepageData).not.toHaveBeenCalled();
+  });
+
+  it("reads a preview draft's homepage sections behind its token, privately", async () => {
+    const token = `tpv_${"a".repeat(48)}`;
+    const draft = storefrontTemplateTheme("marketplace");
+    mocks.resolveThemePreviewSession.mockResolvedValue({
+      theme: draft,
+      draftRevision: 7,
+      basePublishedRevision: 4,
+      expiresAt: 1_900_000_000,
+    });
+    const sections = { lists: [{ key: "on-sale", products: [], category: null, collection: null }], media: [] };
+    vi.mocked(getHomepageData).mockResolvedValue({ sections } as never);
+
+    const response = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-cache, no-store, must-revalidate");
+    await expect(response.json()).resolves.toMatchObject({ data: sections });
+    // The reads come from the stored draft, never from the caller.
+    const [, options] = vi.mocked(getHomepageData).mock.calls[0]!;
+    expect(options?.requests?.lists.map((list) => list.key)).toEqual(["on-sale", "newest"]);
+    expect(options?.sectionsOnly).toBe(true);
+
+    mocks.resolveThemePreviewSession.mockResolvedValue(null);
+    const expired = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    expect(expired.status).toBe(404);
+    const extra = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, product: ["36~newest"] }),
+    });
+    expect(extra.status).toBe(400);
   });
 });
