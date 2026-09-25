@@ -34,13 +34,16 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     exposure: "excluded",
     reason: "Legacy oversized category aggregate; use dashboard.categories.get_section.",
   },
+  "dashboard.categories.get_ancestors": {},
   "dashboard.categories.get_section": {},
   "dashboard.categories.list": {
     exposure: "excluded",
     reason:
       "Legacy dashboard list may include oversized category rich text; use dashboard.categories.list_summaries.",
   },
+  "dashboard.categories.list_children": {},
   "dashboard.categories.list_summaries": {},
+  "dashboard.categories.move": { revision: "required" },
   "dashboard.categories.publish_readiness": {},
   "dashboard.categories.restore": { revision: "required" },
   "dashboard.categories.set_status": { revision: "required" },

@@ -243,6 +243,8 @@ export interface StorefrontFeedProduct {
     imageMediaId: string | null;
     imageAlt: string | null;
     category: { id: string; name: string; slug: string } | null;
+    /** The product's published brand record; null omits `<g:brand>` (never a placeholder). */
+    brand: { id: string; name: string; slug: string } | null;
     attributes: StorefrontFeedProductAttribute[];
     variants: StorefrontFeedProductVariant[];
     updatedAt: string | null;

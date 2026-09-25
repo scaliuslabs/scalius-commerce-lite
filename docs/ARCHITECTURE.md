@@ -93,7 +93,8 @@ two public entries:
 | `fulfilment` | The actions that hand units over, all written to the fulfilment ledger (`ledger.ts`, the only writer of `order_fulfillments`; `fulfilled_quantity` is its trigger projection): own-rider parcels, courier bookings and their reconciliation, pickup (ready / picked up with cash at the counter), service done, void, delivery outcomes (delivered, COD collected/failed/returned), and the fulfiller registry plus the automatic-fulfilment seam (Wave B fulfillers) | index |
 | `products` | The merchant-edited product aggregate (products, SKUs, options, media, validation, aggregate revision) and the product rules others read through (public eligibility, buyer pricing, money) | index |
 | `catalog` | Buyer-facing catalogue reads: listings, facets, product page, search, feeds, sitemaps, recommendations, storefront sections, feed diagnostics | index |
-| `categories`, `collections`, `attributes` | Their records, publication rules and admin writes; typed attributes, category trees and brands extend these beside `catalog` | index, browser |
+| `categories`, `collections`, `attributes` | Their records, publication rules and admin writes; `categories` also owns the tree (placement pre-check, moves, trash rules and tree reads over the trigger-maintained closure) | index, browser |
+| `brands` | Brand records, their revision-guarded writes and buyer reads (brand page, list, sitemap); `catalog` joins a product's published brand through it | index, browser |
 | `inventory` | Reservations, deductions, releases, restores, ledger v2, low-stock alerts, stock adjustment | index |
 | `payments` | Gateway port and adapters, sessions, payment application, refunds and reconciliation, COD records | index, browser |
 | `delivery` | Courier providers, shipments, tracking, delivery zones and locations | index, browser |
