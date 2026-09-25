@@ -1,7 +1,12 @@
 ---
+// The applied filters as removable chips. A facet value reads by its label
+// ("Brand: Samsung", not the URL value "samsung"); a range facet is one chip
+// ("Display size: 13–15.6 in") that removes both of its bounds.
 import type { ProductFacet } from "@/lib/api";
 import {
   buildProductListHref,
+  parseProductListRangeKey,
+  productListRangeKey,
   type ProductListFilterState,
   type ProductListSort,
 } from "@/lib/product-list-query";
@@ -29,7 +34,13 @@ const booleanLabels: Record<string, string> = {
   hasDiscount: "On sale",
   freeDelivery: "Free delivery",
 };
-const facetLabels = new Map(facets.map((facet) => [facet.slug, facet.name]));
+const facetsBySlug = new Map(facets.map((facet) => [facet.slug, facet]));
+const valueLabel = (key: string, value: string) =>
+  facetsBySlug.get(key)?.values.find((candidate) => candidate.value === value)?.label ?? value;
+const single = (key: string) => {
+  const value = currentFilters[key];
+  return Array.isArray(value) ? value.at(-1) : value;
+};
 
 type AppliedFilter = {
   key: string;
@@ -56,12 +67,39 @@ function withoutFilterValue(key: string, value?: string): string {
   return buildProductListHref({ pathname, currentFilters: nextFilters, defaultSort });
 }
 
+/** One chip for a range facet's bounds; removing it removes both. */
+function rangeFilter(facet: ProductFacet): AppliedFilter {
+  const minKey = productListRangeKey(facet.slug, "min");
+  const maxKey = productListRangeKey(facet.slug, "max");
+  const min = single(minKey);
+  const max = single(maxKey);
+  const unit = facet.unit ? ` ${facet.unit}` : "";
+  const bounds = min && max ? `${min}–${max}${unit}` : min ? `From ${min}${unit}` : `Up to ${max}${unit}`;
+  const nextFilters = { ...currentFilters };
+  delete nextFilters.page;
+  delete nextFilters[minKey];
+  delete nextFilters[maxKey];
+  return {
+    key: `range:${facet.slug}`,
+    label: `${facet.name}: ${bounds}`,
+    href: buildProductListHref({ pathname, currentFilters: nextFilters, defaultSort }),
+  };
+}
+
 const appliedFilters: AppliedFilter[] = [];
+const rangesShown = new Set<string>();
 
 for (const [key, rawValue] of Object.entries(currentFilters)) {
   if (navigationKeys.has(key) || priceKeys.has(key)) continue;
+  const range = parseProductListRangeKey(key);
+  const rangeFacet = range ? facetsBySlug.get(range.slug) : undefined;
+  if (range && rangeFacet?.display === "range") {
+    if (!rangesShown.has(range.slug)) appliedFilters.push(rangeFilter(rangeFacet));
+    rangesShown.add(range.slug);
+    continue;
+  }
   const values = Array.isArray(rawValue) ? rawValue : [rawValue];
-  const groupLabel = booleanLabels[key] ?? facetLabels.get(key) ?? key;
+  const groupLabel = booleanLabels[key] ?? facetsBySlug.get(key)?.name ?? key;
 
   for (const value of values) {
     if (!value) continue;
@@ -70,7 +108,7 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
       label:
         key === "q"
           ? `Search: “${value}”`
-          : booleanLabels[key] ?? `${groupLabel}: ${value}`,
+          : booleanLabels[key] ?? `${groupLabel}: ${valueLabel(key, value)}`,
       href: withoutFilterValue(
         key,
         key === "q" || booleanLabels[key] ? undefined : value,
@@ -79,12 +117,8 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
   }
 }
 
-const minPrice = Array.isArray(currentFilters.minPrice)
-  ? currentFilters.minPrice.at(-1)
-  : currentFilters.minPrice;
-const maxPrice = Array.isArray(currentFilters.maxPrice)
-  ? currentFilters.maxPrice.at(-1)
-  : currentFilters.maxPrice;
+const minPrice = single("minPrice");
+const maxPrice = single("maxPrice");
 
 if (minPrice || maxPrice) {
   const priceLabel =

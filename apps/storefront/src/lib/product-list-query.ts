@@ -42,6 +42,21 @@ const PRICE_FILTER_SET = new Set<string>(PRODUCT_LIST_PRICE_FILTERS);
 export type ProductListSort = NonNullable<ProductListOptions["sort"]>;
 // Attribute slugs, or merchant option axes as `option.<axis>` (option.size).
 const FACET_KEY_PATTERN = /^(?:[a-z0-9][a-z0-9-]{0,79}|option\.[^\s&=#?]{1,80})$/;
+// A range facet's bounds: `<attribute slug>.min` and `<attribute slug>.max`.
+const RANGE_KEY_PATTERN = /^([a-z0-9][a-z0-9-]{0,79})\.(min|max)$/;
+
+export type ProductListRangeBound = "min" | "max";
+
+/** The URL key of one bound of a range facet (`display-size.min`). */
+export function productListRangeKey(slug: string, bound: ProductListRangeBound): string {
+  return `${slug}.${bound}`;
+}
+
+/** The facet slug and bound a range key names, or null for any other key. */
+export function parseProductListRangeKey(key: string): { slug: string; bound: ProductListRangeBound } | null {
+  const match = RANGE_KEY_PATTERN.exec(key);
+  return match ? { slug: match[1]!, bound: match[2] as ProductListRangeBound } : null;
+}
 
 export interface ProductListQueryState {
   page: number;
@@ -235,11 +250,23 @@ function buildAttributeValueMap(
   facets: readonly ProductFacet[],
 ): Map<string, Set<string>> {
   return new Map(
-    facets.map((facet) => [
-      facet.slug,
-      new Set(facet.values.map(({ value }) => value).filter(Boolean)),
-    ]),
+    facets
+      .filter((facet) => facet.display !== "range")
+      .map((facet) => [
+        facet.slug,
+        new Set(facet.values.map(({ value }) => value).filter(Boolean)),
+      ]),
   );
+}
+
+/**
+ * A facet value from the URL as the facet names it. Values are normalised
+ * lowercase, so `?brand=Samsung` finds `samsung` (and redirects to it).
+ */
+function knownFacetValue(allowed: ReadonlySet<string>, candidate: string): string | null {
+  if (allowed.has(candidate)) return candidate;
+  const lower = candidate.toLowerCase();
+  return allowed.has(lower) ? lower : null;
 }
 
 /**
@@ -272,6 +299,8 @@ export function resolveProductListQueryState({
   const { limit, changed: limitChanged } = normalizePageSize(getLastParam(params, "limit"));
   const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(facets);
+  const rangeFacetSlugs = new Set(facets.filter((facet) => facet.display === "range").map((facet) => facet.slug));
+  const ranges = new Map<string, Partial<Record<ProductListRangeBound, number>>>();
   const options: ProductListOptions = {
     page,
     limit,
@@ -339,6 +368,21 @@ export function resolveProductListQueryState({
   }
 
   for (const [key, rawValues] of renderParams.entries()) {
+    // One bound of a range facet: a single plain number (Bangla digits read
+    // as Latin). Anything else, including the empty fields a form without
+    // JavaScript submits, redirects to the clean URL.
+    const range = parseProductListRangeKey(key);
+    if (range && (rangeFacetSlugs.has(range.slug) || allowUnknownAttributes)) {
+      const raw = rawValues.at(-1)!.trim();
+      const latin = latinDigits(raw)!;
+      const number = latin ? Number(latin) : Number.NaN;
+      if (rawValues.length !== 1 || !Number.isFinite(number) || String(number) !== raw) {
+        shouldRedirect = true;
+      }
+      if (Number.isFinite(number)) ranges.set(range.slug, { ...ranges.get(range.slug), [range.bound]: number });
+      continue;
+    }
+
     const values = Array.from(
       new Set(rawValues.map((value) => value.trim()).filter(Boolean)),
     );
@@ -357,11 +401,14 @@ export function resolveProductListQueryState({
     }
 
     const allowedValues = attributeValues.get(key);
-    const validValues = allowedValues
-      ? values.filter((candidate) => allowedValues.has(candidate))
+    const knownValues = allowedValues
+      ? values.map((candidate) => knownFacetValue(allowedValues, candidate))
       : [];
+    const validValues = Array.from(
+      new Set(knownValues.filter((candidate): candidate is string => candidate !== null)),
+    );
     if (validValues.length > 0) {
-      if (validValues.length !== values.length) {
+      if (validValues.length !== values.length || knownValues.some((known, index) => known !== values[index])) {
         shouldRedirect = true;
       }
       options[key] = validValues;
@@ -376,6 +423,20 @@ export function resolveProductListQueryState({
     }
 
     shouldRedirect = true;
+  }
+
+  for (const [slug, bounds] of ranges) {
+    let { min, max } = bounds;
+    if (min !== undefined && max !== undefined && min > max) {
+      [min, max] = [max, min];
+      shouldRedirect = true;
+    }
+    for (const [bound, number] of [["min", min], ["max", max]] as const) {
+      if (number === undefined) continue;
+      const key = productListRangeKey(slug, bound);
+      options[key] = number;
+      currentFilters[key] = String(number);
+    }
   }
 
   if (!shouldRedirect) {

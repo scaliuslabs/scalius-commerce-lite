@@ -9,6 +9,7 @@ import {
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   DELIVERY_ADDRESS_REQUIRED_REASON,
+  resolveBundlePromotionInterplay,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   summarizeStorefrontCartFulfilment,
@@ -747,6 +748,16 @@ export async function quoteAgentStorefrontCheckout(
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
   const discount = await quoteAgentStorefrontDiscount(db, row, projection, discountCode, input.customerPhone);
   const currency = await getCurrencySettings(db);
+  // Promotions or quantity bundles price the order, never both (as the order checkout commits).
+  const bundleDiscount = resolveBundlePromotionInterplay(
+    projection.items.map((item) => ({
+      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+      unitPriceMinor: item.unitPriceMinor,
+      quantity: item.quantity,
+      bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+    })),
+    discount,
+  );
   const quote = await calculateStorefrontTaxQuote(db, {
     // The same destination checkout commits: no address (pickup, service)
     // means only store-wide rates apply.
@@ -767,7 +778,7 @@ export async function quoteAgentStorefrontCheckout(
       taxClassId: item.taxClassId,
     })),
     shippingMinor: delivery.shippingMinor,
-    promotionDiscountAllocation: discount.taxAllocation,
+    promotionDiscountAllocation: bundleDiscount.allocation,
     currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
   });
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);

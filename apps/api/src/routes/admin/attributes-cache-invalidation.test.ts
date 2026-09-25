@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   addAttributeValue: vi.fn(),
   renameAttributeValue: vi.fn(),
   deleteAttributeValue: vi.fn(),
+  convertAttributeValueType: vi.fn(),
+  createAttributeGroup: vi.fn(),
+  trashAttributeGroup: vi.fn(),
+  replaceCategoryAttributeSet: vi.fn(),
+  getCategoryAttributeSet: vi.fn(),
+  updateAttributeValueRow: vi.fn(),
+  deleteAttributeValueRow: vi.fn(),
 }));
 
 vi.mock("../../utils/cache-generation", () => ({
@@ -40,6 +47,13 @@ vi.mock("@scalius/core/modules/attributes", async (importOriginal) => ({
   addAttributeValue: mocks.addAttributeValue,
   renameAttributeValue: mocks.renameAttributeValue,
   deleteAttributeValue: mocks.deleteAttributeValue,
+  convertAttributeValueType: mocks.convertAttributeValueType,
+  createAttributeGroup: mocks.createAttributeGroup,
+  trashAttributeGroup: mocks.trashAttributeGroup,
+  replaceCategoryAttributeSet: mocks.replaceCategoryAttributeSet,
+  getCategoryAttributeSet: mocks.getCategoryAttributeSet,
+  updateAttributeValueRow: mocks.updateAttributeValueRow,
+  deleteAttributeValueRow: mocks.deleteAttributeValueRow,
 }));
 
 import { adminAttributesRoutes } from "./attributes";
@@ -216,5 +230,106 @@ describe("admin attribute cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.listAttributeValues).not.toHaveBeenCalled();
+  });
+
+  it("passes the projection refresh to value rewrites and bumps after the rename commits", async () => {
+    const { app, env } = createTestApp();
+    const response = await app.request(
+      "/api/v1/admin/attributes/attr_1/values",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldValue: "Blue", newValue: "Navy" }),
+      },
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.renameAttributeValue).toHaveBeenCalledWith({ id: "db" }, "attr_1", "Blue", "Navy", expect.any(Function));
+  });
+
+  it("bumps after typed-attribute writes: groups, category sets, value rows", async () => {
+    const { app, env } = createTestApp();
+    const group = { id: "atg_display01", name: "Display", sortOrder: 0, createdAt: 1, updatedAt: 1, attributeCount: 0 };
+    mocks.createAttributeGroup.mockResolvedValue({ group });
+    mocks.trashAttributeGroup.mockResolvedValue(undefined);
+    mocks.replaceCategoryAttributeSet.mockResolvedValue({ categoryId: "cat_1", attributes: [] });
+    mocks.updateAttributeValueRow.mockResolvedValue({
+      value: { id: "atv_red_0001", value: "Crimson", normalizedValue: "crimson", sortOrder: 0, swatchHex: null },
+      productsUpdated: 3,
+    });
+    const json = (method: string, body: unknown) => ({
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    expect((await app.request("/api/v1/admin/attributes/groups", json("POST", { name: "Display" }), env)).status).toBe(201);
+    expect((await app.request("/api/v1/admin/attributes/groups/atg_display01", { method: "DELETE" }, env)).status).toBe(204);
+    expect((await app.request(
+      "/api/v1/admin/attributes/category-sets/cat_1",
+      json("PUT", { attributes: [{ attributeId: "attr_1" }] }),
+      env,
+    )).status).toBe(200);
+    expect((await app.request(
+      "/api/v1/admin/attributes/attr_1/normalized-values/atv_red_0001",
+      json("PATCH", { value: "Crimson" }),
+      env,
+    )).status).toBe(200);
+
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(4);
+    expect(mocks.replaceCategoryAttributeSet).toHaveBeenCalledWith({ id: "db" }, "cat_1", [{ attributeId: "attr_1" }]);
+    expect(mocks.updateAttributeValueRow).toHaveBeenCalledWith(
+      { id: "db" }, "attr_1", "atv_red_0001", { value: "Crimson" }, expect.any(Function),
+    );
+  });
+
+  it("rejects category sets over 90 attributes and unknown body keys before the service", async () => {
+    const { app, env } = createTestApp();
+    const tooMany = Array.from({ length: 91 }, (_, index) => ({ attributeId: `attr_${index}` }));
+    const oversized = await app.request("/api/v1/admin/attributes/category-sets/cat_1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attributes: tooMany }),
+    }, env);
+    const unknownKey = await app.request("/api/v1/admin/attributes/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Display", colour: "red" }),
+    }, env);
+    expect(oversized.status).toBe(400);
+    expect(unknownKey.status).toBe(400);
+    expect(mocks.replaceCategoryAttributeSet).not.toHaveBeenCalled();
+    expect(mocks.createAttributeGroup).not.toHaveBeenCalled();
+  });
+
+  it("bumps a conversion only when it wrote, and after a failure that may have committed batches", async () => {
+    const { app, env } = createTestApp();
+    const result = {
+      attributeId: "attr_1", fromType: "text", valueType: "number", facetDisplay: "range", unit: "inch",
+      dryRun: true, rows: 2, distinctValues: 2, newValues: 0, unconvertibleCount: 0, unconvertibleSamples: [],
+      converted: 0, skipped: 0, skippedSamples: [], changed: false,
+    };
+    const convert = (body: unknown) => app.request("/api/v1/admin/attributes/attr_1/convert-type", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, env);
+
+    mocks.convertAttributeValueType.mockResolvedValueOnce(result);
+    expect((await convert({ valueType: "number", unit: "inch", dryRun: true })).status).toBe(200);
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
+    mocks.convertAttributeValueType.mockResolvedValueOnce({ ...result, dryRun: false, converted: 2, changed: true });
+    expect((await convert({ valueType: "number", unit: "inch" })).status).toBe(200);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
+    mocks.convertAttributeValueType.mockRejectedValueOnce(new Error("interrupted"));
+    expect((await convert({ valueType: "number" })).status).toBe(500);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(2);
+    expect(mocks.convertAttributeValueType).toHaveBeenLastCalledWith(
+      { id: "db" }, { attributeId: "attr_1", valueType: "number", dryRun: false }, expect.any(Function),
+    );
+
+    expect((await convert({ valueType: "text", unit: "inch" })).status).toBe(400);
   });
 });

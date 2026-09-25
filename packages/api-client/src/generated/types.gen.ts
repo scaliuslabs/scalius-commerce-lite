@@ -598,6 +598,179 @@ export type StorefrontStoreShape = {
     hasContentBlocks: boolean;
 };
 
+export type ProductPageContentBlock = {
+    type: 'rich-text';
+    version: 1;
+    settings: {
+        title: string;
+        html: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'image-with-text';
+    version: 1;
+    settings: {
+        heading: string;
+        body: string;
+        mediaId: string | null;
+        imageSide: 'start' | 'end';
+        cta: {
+            label: string;
+            href: string;
+        } | null;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'feature-list';
+    version: 1;
+    settings: {
+        heading: string;
+        style: 'list' | 'cards';
+        items: Array<{
+            title: string;
+            text: string;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'faq';
+    version: 1;
+    settings: {
+        heading: string;
+        items: Array<{
+            question: string;
+            answer: string;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'video';
+    version: 1;
+    settings: {
+        heading: string;
+        source: {
+            kind: 'embed';
+            url: string;
+            posterMediaId: string | null;
+        } | {
+            kind: 'media';
+            mediaId: string;
+        };
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'gallery-strip';
+    version: 1;
+    settings: {
+        heading: string;
+        mediaIds: Array<string>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'statement';
+    version: 1;
+    settings: {
+        text: string;
+        accent: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'comparison';
+    version: 1;
+    settings: {
+        heading: string;
+        columns: Array<{
+            label: string;
+        }>;
+        rows: Array<{
+            label: string;
+            values: Array<string>;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'pack-picker';
+    version: 1;
+    settings: {
+        heading: string;
+        source: 'variants' | 'bundles';
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'cta-band';
+    version: 1;
+    settings: {
+        heading: string;
+        text: string;
+        label: string;
+        target: {
+            kind: 'order-form';
+        } | {
+            kind: 'buy-box';
+        } | {
+            kind: 'link';
+            href: string;
+        };
+        endsAt: string | null;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'order-form';
+    version: 1;
+    settings: {
+        heading: string;
+        submitLabel: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'guarantee';
+    version: 1;
+    settings: {
+        heading: string;
+        text: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'size-chart';
+    version: 1;
+    settings: {
+        heading: string;
+        columns: Array<string>;
+        rows: Array<Array<string>>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'spec-table';
+    version: 1;
+    settings: {
+        heading: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+};
+
+export type ProductBundleTier = {
+    quantity: number;
+    discountType: 'percentage' | 'fixed_price';
+    discountPercentage: number | null;
+    price: number | null;
+    label: string | null;
+    isActive: boolean;
+};
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -1207,48 +1380,6 @@ export type GetApiV1AgentArtifactsByArtifactIdResponses = {
     200: unknown;
 };
 
-export type GetApiV1AttributesFilterableData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/attributes/filterable';
-};
-
-export type GetApiV1AttributesFilterableErrors = {
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AttributesFilterableError = GetApiV1AttributesFilterableErrors[keyof GetApiV1AttributesFilterableErrors];
-
-export type GetApiV1AttributesFilterableResponses = {
-    /**
-     * Filterable attributes list
-     */
-    200: {
-        success: true;
-        data: {
-            filters: Array<{
-                id: string;
-                name: string;
-                slug: string;
-                values: Array<string>;
-            }>;
-        };
-    };
-};
-
-export type GetApiV1AttributesFilterableResponse = GetApiV1AttributesFilterableResponses[keyof GetApiV1AttributesFilterableResponses];
-
 export type GetApiV1AttributesCategoryByCategoryIdData = {
     body?: never;
     path: {
@@ -1281,11 +1412,47 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
     200: {
         success: true;
         data: {
-            filters: Array<{
+            facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
-                values: Array<string>;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
+                values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
+                    value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
+                    count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
+                }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
         };
     };
@@ -1336,11 +1503,47 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
     200: {
         success: true;
         data: {
-            filters: Array<{
+            facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
-                values: Array<string>;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
+                values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
+                    value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
+                    count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
+                }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
         };
     };
@@ -1387,11 +1590,47 @@ export type GetApiV1AttributesSearchFiltersResponses = {
     200: {
         success: true;
         data: {
-            filters: Array<{
+            facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
-                values: Array<string>;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
+                values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
+                    value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
+                    count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
+                }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
         };
     };
@@ -1520,6 +1759,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
+                listingTemplate: string | null;
                 description: string | null;
                 content: string | null;
                 metaTitle: string | null;
@@ -1579,13 +1819,46 @@ export type GetApiV1CollectionsByIdResponses = {
                 max: number;
             };
             facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
                 values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
                     value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
                     count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
                 }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
         };
     };
@@ -1907,13 +2180,46 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 max: number;
             };
             facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
                 values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
                     value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
                     count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
                 }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
             appliedFilters: {
                 attributes: Array<{
@@ -1921,6 +2227,10 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     name: string;
                     slug: string;
                     values: Array<string>;
+                    range?: {
+                        min: number | null;
+                        max: number | null;
+                    };
                 }>;
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
                 search?: string;
@@ -3633,6 +3943,14 @@ export type GetApiV1StorefrontHomepageResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on `landingProduct`'s landing page; it is `catalog` whenever that product is not public.
+                 */
+                homeMode: 'catalog' | 'landing';
+                landingProduct: {
+                    id: string;
+                    slug: string;
+                } | null;
             };
             sections: {
                 lists: Array<{
@@ -12634,16 +12952,46 @@ export type GetApiV1ProductsResponses = {
                 max: number;
             };
             facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size.
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
                  */
                 slug: string;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
                 values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
                     value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
                     count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
                 }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
             /**
              * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
@@ -13066,6 +13414,99 @@ export type GetApiV1ProductsRecommendationsResponses = {
 
 export type GetApiV1ProductsRecommendationsResponse = GetApiV1ProductsRecommendationsResponses[keyof GetApiV1ProductsRecommendationsResponses];
 
+export type GetApiV1ProductsCompareData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Comma-separated product IDs.
+         */
+        ids: string;
+    };
+    url: '/api/v1/products/compare';
+};
+
+export type GetApiV1ProductsCompareErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsCompareError = GetApiV1ProductsCompareErrors[keyof GetApiV1ProductsCompareErrors];
+
+export type GetApiV1ProductsCompareResponses = {
+    /**
+     * The compared products and their grouped specs
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                discountedPrice: number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                priceVaries: boolean;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+                brand: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+            }>;
+            groups: Array<{
+                /**
+                 * The attribute group; null for attributes without one (listed last).
+                 */
+                id: string | null;
+                name: string | null;
+                rows: Array<{
+                    attributeId: string;
+                    name: string;
+                    slug: string;
+                    unit: string | null;
+                    keySpec: boolean;
+                    highlight: boolean;
+                    /**
+                     * One display value per compared product, in `products` order; null where the product has none.
+                     */
+                    values: Array<string | null>;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ProductsCompareResponse = GetApiV1ProductsCompareResponses[keyof GetApiV1ProductsCompareResponses];
+
 export type GetApiV1ProductsBySlugSectionsBySectionData = {
     body?: never;
     path: {
@@ -13434,6 +13875,36 @@ export type GetApiV1ProductsBySlugResponses = {
                     name: string;
                     slug: string;
                     canonicalPath: string | null;
+                } | null;
+                pageTemplate: string | null;
+                /**
+                 * Blocks other than the tabs (`additionalInfo`), in placement then page order.
+                 */
+                contentBlocks: Array<ProductPageContentBlock>;
+                /**
+                 * The ready files the blocks name; a block's missing file is simply absent.
+                 */
+                contentBlockMedia: Array<{
+                    id: string;
+                    kind: 'image' | 'video';
+                    url: string;
+                    altText: string | null;
+                    width: number | null;
+                    height: number | null;
+                    posterUrl: string | null;
+                }>;
+                /**
+                 * Active quantity tiers. Checkout prices them exactly this way (they add to promotions, which are evaluated at catalog prices).
+                 */
+                bundles: Array<ProductBundleTier>;
+                /**
+                 * "EMI on card payment, from X/month": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible.
+                 */
+                emi: {
+                    provider: string;
+                    months: number;
+                    monthly: number;
+                    monthlyMinor: number;
                 } | null;
                 /**
                  * Active automatic Buy X get Y discounts this product counts toward or is given by.
@@ -14156,13 +14627,46 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 max: number;
             };
             facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
                 values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
                     value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
                     count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
                 }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
             appliedFilters: {
                 attributes: Array<{
@@ -14170,6 +14674,10 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                     name: string;
                     slug: string;
                     values: Array<string>;
+                    range?: {
+                        min: number | null;
+                        max: number | null;
+                    };
                 }>;
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
                 search?: string;
@@ -14299,13 +14807,46 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 max: number;
             };
             facets: Array<{
+                /**
+                 * The attribute id, `option.<axis>`, or `brand`.
+                 */
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 */
                 slug: string;
+                kind: 'attribute' | 'option' | 'brand';
+                /**
+                 * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
+                 */
+                display: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                /**
+                 * Number attributes: the unit of the values and range bounds.
+                 */
+                unit: string | null;
                 values: Array<{
+                    /**
+                     * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
+                     */
                     value: string;
+                    label: string;
+                    /**
+                     * Products matching the other facets' selections and this value.
+                     */
                     count: number;
+                    /**
+                     * `#rrggbb` of an enum value, for swatch facets.
+                     */
+                    swatch: string | null;
                 }>;
+                /**
+                 * `display: range` only: the value bounds over products matching the other selections; `values` is empty.
+                 */
+                range: {
+                    min: number;
+                    max: number;
+                } | null;
             }>;
             appliedFilters: {
                 attributes: Array<{
@@ -14313,6 +14854,10 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                     name: string;
                     slug: string;
                     values: Array<string>;
+                    range?: {
+                        min: number | null;
+                        max: number | null;
+                    };
                 }>;
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
                 search?: string;
@@ -15741,6 +16286,23 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+            }>;
+            /**
+             * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).
+             */
+            bundleDiscountMinor: number;
+            bundleDiscountAmount: number;
+            /**
+             * The bundle tiers that priced this quote (empty when promotions did).
+             */
+            bundles: Array<{
+                productId: string;
+                /**
+                 * The tier the product's cart quantity reached ("3 for ...").
+                 */
+                quantity: number;
+                discountType: 'percentage' | 'fixed_price';
+                label: string | null;
             }>;
             items: Array<{
                 cartKey?: string | null;
@@ -19931,6 +20493,7 @@ export type GetApiV1AdminCollectionsResponses = {
                 sortOrder: number;
                 isActive: boolean;
                 version: number;
+                listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
@@ -19972,6 +20535,10 @@ export type PostApiV1AdminCollectionsData = {
             title?: string;
             subtitle?: string;
         };
+        /**
+         * A listing template id from the theme, or null for the theme's default collection listing.
+         */
+        listingTemplate?: string | null;
     };
     path?: never;
     query?: never;
@@ -20803,6 +21370,7 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 sortOrder: number;
                 isActive: boolean;
                 version: number;
+                listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
@@ -20956,6 +21524,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             sortOrder: number;
             isActive: boolean;
             version: number;
+            listingTemplate: string | null;
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
@@ -20995,6 +21564,10 @@ export type PutApiV1AdminCollectionsByIdData = {
             title?: string;
             subtitle?: string;
         };
+        /**
+         * A listing template id from the theme, or null for the theme's default collection listing.
+         */
+        listingTemplate?: string | null;
     };
     path: {
         id: string;
@@ -36425,6 +36998,14 @@ export type GetApiV1AdminSettingsHomepagePresentationResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+                 */
+                homeMode: 'catalog' | 'landing';
+                /**
+                 * The product a landing homepage shows; required when homeMode is landing.
+                 */
+                landingProductId: string | null;
             };
             revision: number;
         };
@@ -36443,6 +37024,14 @@ export type PostApiV1AdminSettingsHomepagePresentationData = {
         trustStrip: {
             enabled: boolean;
         };
+        /**
+         * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+         */
+        homeMode?: 'catalog' | 'landing';
+        /**
+         * The product a landing homepage shows; required when homeMode is landing.
+         */
+        landingProductId?: string | null;
         expectedRevision: number;
     };
     path?: never;
@@ -36548,6 +37137,14 @@ export type PostApiV1AdminSettingsHomepagePresentationResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+                 */
+                homeMode: 'catalog' | 'landing';
+                /**
+                 * The product a landing homepage shows; required when homeMode is landing.
+                 */
+                landingProductId: string | null;
             };
             revision: number;
         };
@@ -44271,6 +44868,272 @@ export type PutApiV1AdminSettingsPoliciesResponses = {
 };
 
 export type PutApiV1AdminSettingsPoliciesResponse = PutApiV1AdminSettingsPoliciesResponses[keyof PutApiV1AdminSettingsPoliciesResponses];
+
+export type GetApiV1AdminSettingsEmiData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/emi';
+};
+
+export type GetApiV1AdminSettingsEmiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsEmiError = GetApiV1AdminSettingsEmiErrors[keyof GetApiV1AdminSettingsEmiErrors];
+
+export type GetApiV1AdminSettingsEmiResponses = {
+    /**
+     * EMI plans
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Off by default; the line shows only when on and a plan applies.
+             */
+            enabled: boolean;
+            plans: Array<{
+                /**
+                 * A stable id the editor assigns (lowercase letters, numbers, - and _).
+                 */
+                id: string;
+                /**
+                 * The bank or card as buyers know it ("City Bank").
+                 */
+                provider: string;
+                months: number;
+                /**
+                 * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+                 */
+                feePercentage: number;
+                /**
+                 * The smallest price the plan applies to (whole taka in BDT).
+                 */
+                minAmount: number;
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsEmiResponse = GetApiV1AdminSettingsEmiResponses[keyof GetApiV1AdminSettingsEmiResponses];
+
+export type PutApiV1AdminSettingsEmiData = {
+    body: {
+        /**
+         * Off by default; the line shows only when on and a plan applies.
+         */
+        enabled: boolean;
+        plans: Array<{
+            /**
+             * A stable id the editor assigns (lowercase letters, numbers, - and _).
+             */
+            id: string;
+            /**
+             * The bank or card as buyers know it ("City Bank").
+             */
+            provider: string;
+            months: number;
+            /**
+             * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+             */
+            feePercentage: number;
+            /**
+             * The smallest price the plan applies to (whole taka in BDT).
+             */
+            minAmount: number;
+        }>;
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/emi';
+};
+
+export type PutApiV1AdminSettingsEmiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsEmiError = PutApiV1AdminSettingsEmiErrors[keyof PutApiV1AdminSettingsEmiErrors];
+
+export type PutApiV1AdminSettingsEmiResponses = {
+    /**
+     * EMI plans saved
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Off by default; the line shows only when on and a plan applies.
+             */
+            enabled: boolean;
+            plans: Array<{
+                /**
+                 * A stable id the editor assigns (lowercase letters, numbers, - and _).
+                 */
+                id: string;
+                /**
+                 * The bank or card as buyers know it ("City Bank").
+                 */
+                provider: string;
+                months: number;
+                /**
+                 * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+                 */
+                feePercentage: number;
+                /**
+                 * The smallest price the plan applies to (whole taka in BDT).
+                 */
+                minAmount: number;
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsEmiResponse = PutApiV1AdminSettingsEmiResponses[keyof PutApiV1AdminSettingsEmiResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
@@ -53118,7 +53981,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionData = {
     body?: never;
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles';
     };
     query?: {
         offset?: number | null;
@@ -53227,6 +54090,8 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
                 freeDelivery: boolean;
+                emiEligible: boolean;
+                pageTemplate: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | unknown;
@@ -53241,8 +54106,61 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                     additionalInfo: number;
                     options: number;
                     variants: number;
+                    contentBlocks: number;
+                    bundles: number;
                 };
             };
+        } | {
+            section: 'content_blocks';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+                position: number;
+                type: string;
+                version: number;
+                /**
+                 * A tab mirrored from Additional information: read-only here, edited through the additional_info section.
+                 */
+                legacy: boolean;
+                settingsCharacters: number;
+                /**
+                 * Inline while the page stays small; null means read it with the content_block section (itemId).
+                 */
+                settings: {
+                    [key: string]: unknown;
+                } | null;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'content_block';
+            aggregateRevision: number;
+            itemId: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            position: number;
+            type: string;
+            version: number;
+            legacy: boolean;
+            /**
+             * A chunk of the block's settings JSON text.
+             */
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+        } | {
+            section: 'template';
+            aggregateRevision: number;
+            pageTemplate: string | null;
+        } | {
+            section: 'bundles';
+            aggregateRevision: number;
+            items: Array<ProductBundleTier & {
+                id: string;
+            }>;
         } | {
             section: 'text';
             field: 'description' | 'metaTitle' | 'metaDescription';
@@ -53376,6 +54294,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             excludeFromProductFeed?: boolean;
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
+            emiEligible?: boolean;
         };
     } | {
         section: 'text';
@@ -53417,10 +54336,46 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         offset: number;
         deleteCount: number;
         value: string;
+    } | {
+        section: 'content_blocks';
+        expectedAggregateRevision: number;
+        blocks: Array<{
+            id: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            keep: true;
+        } | {
+            id?: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            type: string;
+            version: number;
+            settings: {
+                [key: string]: unknown;
+            };
+        }>;
+    } | {
+        section: 'template';
+        expectedAggregateRevision: number;
+        pageTemplate: string | null;
+    } | {
+        section: 'bundles';
+        expectedAggregateRevision: number;
+        tiers: Array<{
+            quantity: number;
+            discountType: 'percentage';
+            discountPercentage: number;
+            label: string | null;
+            isActive: boolean;
+        } | {
+            quantity: number;
+            discountType: 'fixed_price';
+            price: number;
+            label: string | null;
+            isActive: boolean;
+        }>;
     };
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles';
     };
     query?: never;
     url: '/api/v1/admin/products/{id}/sections/{section}';
@@ -56938,6 +57893,1427 @@ export type GetApiV1AdminAuthAccountSecurityResponses = {
 
 export type GetApiV1AdminAuthAccountSecurityResponse = GetApiV1AdminAuthAccountSecurityResponses[keyof GetApiV1AdminAuthAccountSecurityResponses];
 
+export type GetApiV1AdminAttributesGroupsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/attributes/groups';
+};
+
+export type GetApiV1AdminAttributesGroupsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesGroupsError = GetApiV1AdminAttributesGroupsErrors[keyof GetApiV1AdminAttributesGroupsErrors];
+
+export type GetApiV1AdminAttributesGroupsResponses = {
+    /**
+     * Attribute groups
+     */
+    200: {
+        success: true;
+        data: {
+            groups: Array<{
+                id: string;
+                name: string;
+                sortOrder: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                attributeCount: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesGroupsResponse = GetApiV1AdminAttributesGroupsResponses[keyof GetApiV1AdminAttributesGroupsResponses];
+
+export type PostApiV1AdminAttributesGroupsData = {
+    body: {
+        name: string;
+        sortOrder?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/attributes/groups';
+};
+
+export type PostApiV1AdminAttributesGroupsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesGroupsError = PostApiV1AdminAttributesGroupsErrors[keyof PostApiV1AdminAttributesGroupsErrors];
+
+export type PostApiV1AdminAttributesGroupsResponses = {
+    /**
+     * Group created
+     */
+    201: {
+        success: true;
+        data: {
+            group: {
+                id: string;
+                name: string;
+                sortOrder: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                attributeCount: number;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesGroupsResponse = PostApiV1AdminAttributesGroupsResponses[keyof PostApiV1AdminAttributesGroupsResponses];
+
+export type PutApiV1AdminAttributesGroupsOrderData = {
+    body: {
+        items: Array<{
+            groupId: string;
+            sortOrder: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/attributes/groups/order';
+};
+
+export type PutApiV1AdminAttributesGroupsOrderErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesGroupsOrderError = PutApiV1AdminAttributesGroupsOrderErrors[keyof PutApiV1AdminAttributesGroupsOrderErrors];
+
+export type PutApiV1AdminAttributesGroupsOrderResponses = {
+    /**
+     * Groups reordered
+     */
+    200: {
+        success: true;
+        data: {
+            groups: Array<{
+                id: string;
+                name: string;
+                sortOrder: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                attributeCount: number;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesGroupsOrderResponse = PutApiV1AdminAttributesGroupsOrderResponses[keyof PutApiV1AdminAttributesGroupsOrderResponses];
+
+export type DeleteApiV1AdminAttributesGroupsByGroupIdData = {
+    body?: never;
+    path: {
+        groupId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/groups/{groupId}';
+};
+
+export type DeleteApiV1AdminAttributesGroupsByGroupIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAttributesGroupsByGroupIdError = DeleteApiV1AdminAttributesGroupsByGroupIdErrors[keyof DeleteApiV1AdminAttributesGroupsByGroupIdErrors];
+
+export type DeleteApiV1AdminAttributesGroupsByGroupIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminAttributesGroupsByGroupIdResponse = DeleteApiV1AdminAttributesGroupsByGroupIdResponses[keyof DeleteApiV1AdminAttributesGroupsByGroupIdResponses];
+
+export type PatchApiV1AdminAttributesGroupsByGroupIdData = {
+    body: {
+        name?: string;
+        sortOrder?: number;
+    };
+    path: {
+        groupId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/groups/{groupId}';
+};
+
+export type PatchApiV1AdminAttributesGroupsByGroupIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminAttributesGroupsByGroupIdError = PatchApiV1AdminAttributesGroupsByGroupIdErrors[keyof PatchApiV1AdminAttributesGroupsByGroupIdErrors];
+
+export type PatchApiV1AdminAttributesGroupsByGroupIdResponses = {
+    /**
+     * Group updated
+     */
+    200: {
+        success: true;
+        data: {
+            group: {
+                id: string;
+                name: string;
+                sortOrder: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+            };
+        };
+    };
+};
+
+export type PatchApiV1AdminAttributesGroupsByGroupIdResponse = PatchApiV1AdminAttributesGroupsByGroupIdResponses[keyof PatchApiV1AdminAttributesGroupsByGroupIdResponses];
+
+export type GetApiV1AdminAttributesCategorySetsByCategoryIdData = {
+    body?: never;
+    path: {
+        categoryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/category-sets/{categoryId}';
+};
+
+export type GetApiV1AdminAttributesCategorySetsByCategoryIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesCategorySetsByCategoryIdError = GetApiV1AdminAttributesCategorySetsByCategoryIdErrors[keyof GetApiV1AdminAttributesCategorySetsByCategoryIdErrors];
+
+export type GetApiV1AdminAttributesCategorySetsByCategoryIdResponses = {
+    /**
+     * Effective attribute set
+     */
+    200: {
+        success: true;
+        data: {
+            categoryId: string;
+            attributes: Array<{
+                attributeId: string;
+                name: string;
+                slug: string;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                filterable: boolean;
+                keySpec: boolean;
+                highlight: boolean;
+                groupId: string | null;
+                sortOrder: number;
+                orderKey: number;
+                inheritedFromCategoryId: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesCategorySetsByCategoryIdResponse = GetApiV1AdminAttributesCategorySetsByCategoryIdResponses[keyof GetApiV1AdminAttributesCategorySetsByCategoryIdResponses];
+
+export type PutApiV1AdminAttributesCategorySetsByCategoryIdData = {
+    body: {
+        attributes: Array<{
+            attributeId: string;
+            sortOrder?: number;
+        }>;
+    };
+    path: {
+        categoryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/category-sets/{categoryId}';
+};
+
+export type PutApiV1AdminAttributesCategorySetsByCategoryIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesCategorySetsByCategoryIdError = PutApiV1AdminAttributesCategorySetsByCategoryIdErrors[keyof PutApiV1AdminAttributesCategorySetsByCategoryIdErrors];
+
+export type PutApiV1AdminAttributesCategorySetsByCategoryIdResponses = {
+    /**
+     * Attribute set replaced
+     */
+    200: {
+        success: true;
+        data: {
+            categoryId: string;
+            attributes: Array<{
+                attributeId: string;
+                name: string;
+                slug: string;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
+                filterable: boolean;
+                keySpec: boolean;
+                highlight: boolean;
+                groupId: string | null;
+                sortOrder: number;
+                orderKey: number;
+                inheritedFromCategoryId: string | null;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesCategorySetsByCategoryIdResponse = PutApiV1AdminAttributesCategorySetsByCategoryIdResponses[keyof PutApiV1AdminAttributesCategorySetsByCategoryIdResponses];
+
+export type GetApiV1AdminAttributesByIdNormalizedValuesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        search?: string;
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/attributes/{id}/normalized-values';
+};
+
+export type GetApiV1AdminAttributesByIdNormalizedValuesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesByIdNormalizedValuesError = GetApiV1AdminAttributesByIdNormalizedValuesErrors[keyof GetApiV1AdminAttributesByIdNormalizedValuesErrors];
+
+export type GetApiV1AdminAttributesByIdNormalizedValuesResponses = {
+    /**
+     * Attribute values
+     */
+    200: {
+        success: true;
+        data: {
+            attributeId: string;
+            attributeName: string;
+            valueType: 'text' | 'number' | 'boolean' | 'enum';
+            values: Array<{
+                id: string;
+                value: string;
+                normalizedValue: string;
+                sortOrder: number;
+                swatchHex: string | null;
+                productCount: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesByIdNormalizedValuesResponse = GetApiV1AdminAttributesByIdNormalizedValuesResponses[keyof GetApiV1AdminAttributesByIdNormalizedValuesResponses];
+
+export type PostApiV1AdminAttributesByIdNormalizedValuesData = {
+    body: {
+        value: string;
+        swatchHex?: string | null;
+        sortOrder?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/{id}/normalized-values';
+};
+
+export type PostApiV1AdminAttributesByIdNormalizedValuesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesByIdNormalizedValuesError = PostApiV1AdminAttributesByIdNormalizedValuesErrors[keyof PostApiV1AdminAttributesByIdNormalizedValuesErrors];
+
+export type PostApiV1AdminAttributesByIdNormalizedValuesResponses = {
+    /**
+     * Value created
+     */
+    201: {
+        success: true;
+        data: {
+            value: {
+                id: string;
+                value: string;
+                normalizedValue: string;
+                sortOrder: number;
+                swatchHex: string | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesByIdNormalizedValuesResponse = PostApiV1AdminAttributesByIdNormalizedValuesResponses[keyof PostApiV1AdminAttributesByIdNormalizedValuesResponses];
+
+export type PutApiV1AdminAttributesByIdNormalizedValuesOrderData = {
+    body: {
+        items: Array<{
+            valueId: string;
+            sortOrder: number;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/{id}/normalized-values/order';
+};
+
+export type PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesByIdNormalizedValuesOrderError = PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors[keyof PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors];
+
+export type PutApiV1AdminAttributesByIdNormalizedValuesOrderResponses = {
+    /**
+     * Values reordered
+     */
+    200: {
+        success: true;
+        data: {
+            updated: number;
+            productsRefreshed: number;
+        };
+    };
+};
+
+export type PutApiV1AdminAttributesByIdNormalizedValuesOrderResponse = PutApiV1AdminAttributesByIdNormalizedValuesOrderResponses[keyof PutApiV1AdminAttributesByIdNormalizedValuesOrderResponses];
+
+export type DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdData = {
+    body?: never;
+    path: {
+        id: string;
+        valueId: string;
+    };
+    query?: {
+        mergeIntoValueId?: string;
+    };
+    url: '/api/v1/admin/attributes/{id}/normalized-values/{valueId}';
+};
+
+export type DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdError = DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors[keyof DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors];
+
+export type DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses = {
+    /**
+     * Value deleted
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+            productsMerged: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponse = DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses[keyof DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses];
+
+export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdData = {
+    body: {
+        value?: string;
+        swatchHex?: string | null;
+        sortOrder?: number;
+    };
+    path: {
+        id: string;
+        valueId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/{id}/normalized-values/{valueId}';
+};
+
+export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdError = PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors[keyof PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors];
+
+export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses = {
+    /**
+     * Value updated
+     */
+    200: {
+        success: true;
+        data: {
+            value: {
+                id: string;
+                value: string;
+                normalizedValue: string;
+                sortOrder: number;
+                swatchHex: string | null;
+            };
+            productsUpdated: number;
+        };
+    };
+};
+
+export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponse = PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses[keyof PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses];
+
+export type PostApiV1AdminAttributesByIdConvertTypeData = {
+    body: {
+        valueType: 'text' | 'number' | 'boolean' | 'enum';
+        facetDisplay?: 'checkbox' | 'range' | 'swatch' | 'search_list';
+        unit?: string | null;
+        dryRun?: boolean;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/attributes/{id}/convert-type';
+};
+
+export type PostApiV1AdminAttributesByIdConvertTypeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesByIdConvertTypeError = PostApiV1AdminAttributesByIdConvertTypeErrors[keyof PostApiV1AdminAttributesByIdConvertTypeErrors];
+
+export type PostApiV1AdminAttributesByIdConvertTypeResponses = {
+    /**
+     * Conversion preview or result
+     */
+    200: {
+        success: true;
+        data: {
+            attributeId: string;
+            fromType: 'text' | 'number' | 'boolean' | 'enum';
+            valueType: 'text' | 'number' | 'boolean' | 'enum';
+            facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
+            unit: string | null;
+            dryRun: boolean;
+            rows: number;
+            distinctValues: number;
+            newValues: number;
+            unconvertibleCount: number;
+            unconvertibleSamples: Array<string>;
+            converted: number;
+            skipped: number;
+            skippedSamples: Array<string>;
+            changed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAttributesByIdConvertTypeResponse = PostApiV1AdminAttributesByIdConvertTypeResponses[keyof PostApiV1AdminAttributesByIdConvertTypeResponses];
+
 export type GetApiV1AdminAttributesData = {
     body?: never;
     path?: never;
@@ -56957,7 +59333,7 @@ export type GetApiV1AdminAttributesData = {
         /**
          * Sort field
          */
-        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt';
+        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt' | 'sortOrder';
         /**
          * Sort order
          */
@@ -57062,6 +59438,13 @@ export type GetApiV1AdminAttributesResponses = {
                 updatedAt: string | number;
                 deletedAt: NullableTimestamp;
                 valueCount: number;
+                groupId: string | null;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                sortOrder: number;
+                keySpec: boolean;
+                highlight: boolean;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
             }>;
             pagination: {
                 page: number;
@@ -57084,6 +59467,13 @@ export type PostApiV1AdminAttributesData = {
         slug?: string;
         filterable?: boolean;
         options?: Array<string>;
+        valueType?: 'text' | 'number' | 'boolean' | 'enum';
+        groupId?: string | null;
+        unit?: string | null;
+        sortOrder?: number;
+        keySpec?: boolean;
+        highlight?: boolean;
+        facetDisplay?: 'checkbox' | 'range' | 'swatch' | 'search_list';
     };
     path?: never;
     query?: never;
@@ -57184,6 +59574,13 @@ export type PostApiV1AdminAttributesResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
+                groupId: string | null;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                sortOrder: number;
+                keySpec: boolean;
+                highlight: boolean;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
             };
         };
     };
@@ -57198,7 +59595,7 @@ export type GetApiV1AdminAttributesSummariesData = {
         page?: number;
         limit?: number;
         search?: string;
-        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt';
+        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt' | 'sortOrder';
         order?: 'asc' | 'desc';
         ids?: string;
         trashed?: 'true' | 'false';
@@ -57289,6 +59686,13 @@ export type GetApiV1AdminAttributesSummariesResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
+                groupId: string | null;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                sortOrder: number;
+                keySpec: boolean;
+                highlight: boolean;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
                 deletedAt: string | number | unknown;
             }>;
             pagination: {
@@ -57409,6 +59813,12 @@ export type PutApiV1AdminAttributesByIdData = {
         slug?: string;
         filterable?: boolean;
         options?: Array<string> | null;
+        groupId?: string | null;
+        unit?: string | null;
+        sortOrder?: number;
+        keySpec?: boolean;
+        highlight?: boolean;
+        facetDisplay?: 'checkbox' | 'range' | 'swatch' | 'search_list';
     };
     path: {
         id: string;
@@ -57511,6 +59921,13 @@ export type PutApiV1AdminAttributesByIdResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
+                groupId: string | null;
+                valueType: 'text' | 'number' | 'boolean' | 'enum';
+                unit: string | null;
+                sortOrder: number;
+                keySpec: boolean;
+                highlight: boolean;
+                facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
             };
         };
     };

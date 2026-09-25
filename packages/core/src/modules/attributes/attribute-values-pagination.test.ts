@@ -13,17 +13,33 @@ import {
     renameAttributeValue,
     updateAttribute,
 } from "./attributes.service";
+import type { CatalogProjectionRefresh } from "./projection-refresh";
+import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
 
 let sqlite: DatabaseSync;
 let db: Database;
 let boundParameterCounts: number[];
 
+const refresh: CatalogProjectionRefresh = (ids) => catalogProjectionRefreshStatements(db, ids);
+
+/** An attribute whose presets are live attribute_values rows (the old `options` list). */
 function insertAttribute(id: string, options: string[], deletedAt: number | null = null): void {
     sqlite.prepare(`
         INSERT INTO product_attributes (
-            id, name, slug, filterable, options, created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, 1, ?, 1, 1000, ?)
-    `).run(id, `Attribute ${id}`, id, JSON.stringify(options), deletedAt);
+            id, name, slug, filterable, created_at, updated_at, deleted_at
+        ) VALUES (?, ?, ?, 1, 1, 1000, ?)
+    `).run(id, `Attribute ${id}`, id, deletedAt);
+    const seen = new Set<string>();
+    const insert = sqlite.prepare(`
+        INSERT INTO attribute_values (id, attribute_id, value, normalized_value, sort_order)
+        VALUES (?, ?, ?, lower(?), ?)
+    `);
+    options.forEach((option, index) => {
+        const value = option.trim();
+        if (seen.has(value.toLowerCase())) return;
+        seen.add(value.toLowerCase());
+        insert.run(`atv_${id}_${index}`.replace(/[^A-Za-z0-9_-]/g, "_"), id, value, value, index);
+    });
 }
 
 function insertValue(
@@ -183,7 +199,7 @@ describe("attribute value pagination", () => {
         });
         const updated = await updateAttribute(db, created.attribute!.id, {
             options: maximumOptions.map((value) => value.replace(/x$/, "y")),
-        });
+        }, refresh);
 
         expect(created.attribute).toEqual(expect.objectContaining({
             name: "Maximum presets",
@@ -202,7 +218,7 @@ describe("attribute value pagination", () => {
             'Value "red" already exists for this attribute',
         );
         await expect(
-            renameAttributeValue(db, "swatch", "Blue", " RED "),
+            renameAttributeValue(db, "swatch", "Blue", " RED ", refresh),
         ).rejects.toThrow('Value "RED" already exists for this attribute');
 
         const result = await listAttributeValues(db, "swatch");
@@ -221,8 +237,8 @@ describe("attribute value pagination", () => {
         })).rejects.toThrow("already exists");
         await expect(updateAttribute(db, "material", {
             slug: " TRASHED ".trim().toLowerCase(),
-        })).rejects.toThrow("already exists");
-        await expect(updateAttribute(db, "trashed", { name: "Updated" }))
+        }, refresh)).rejects.toThrow("already exists");
+        await expect(updateAttribute(db, "trashed", { name: "Updated" }, refresh))
             .rejects.toThrow("Attribute not found");
         await expect(addAttributeValue(db, "trashed", "New"))
             .rejects.toThrow("Attribute not found");
@@ -233,7 +249,7 @@ describe("attribute value pagination", () => {
         insertValue("finish", 1, "Matte", 1);
         insertValue("finish", 2, " Glossy ", 2);
 
-        await expect(renameAttributeValue(db, "finish", "Matte", "glossy"))
+        await expect(renameAttributeValue(db, "finish", "Matte", "glossy", refresh))
             .rejects.toThrow('Value "glossy" already exists for this attribute');
     });
 

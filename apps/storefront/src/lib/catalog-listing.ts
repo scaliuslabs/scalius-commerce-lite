@@ -2,15 +2,16 @@
 // what the resolved theme's listing block means for one listing, as data the
 // catalog components render. Measured anatomy: SYNTHESIS.md section 2.4.
 //
-// Today's catalogue has flat categories and untyped attributes. The adapters
-// below read today's data and are where the category tree (Phase 1a:
-// `children` on a category) and typed facets (Phase 1b: `display` on a
-// facet) plug in without touching the components.
+// The adapters below read the catalogue data: the category tree (Phase 1a:
+// `children` on a category) fills sub-category links and shelves, and typed
+// attributes (Phase 1b) name each facet's display (checkboxes, a range,
+// swatches or a searchable list), which catalogFacetDisplay turns into what
+// the filter form renders.
 import type {
   ResolvedStorefrontTheme,
   StorefrontListingToolbarPiece,
 } from "@scalius/shared/storefront-theme";
-import type { ProductFacet } from "@/lib/api";
+import type { ProductFacet, ProductFacetValue } from "@/lib/api";
 import type { ProductGridContext } from "@/lib/product-card-layout";
 import {
   buildProductListHref,
@@ -96,18 +97,21 @@ export function catalogListingControls({
 // ─── Facet display types ────────────────────────────────────────────────
 
 /**
- * How a facet's values render: checkboxes; colour swatches; or checkboxes
- * with a search field for long value lists (Apple Gadgets). Typed
- * attributes (Phase 1b) name it; today it is read from the values.
+ * How a facet renders: checkboxes; colour swatches; checkboxes with a search
+ * field for long value lists (Apple Gadgets); or a min/max pair for a number
+ * attribute. A typed attribute names it (the merchant's choice); option axes
+ * and the brand are read from their values.
  */
-export type CatalogFacetDisplay = "checkbox" | "swatch" | "search-list";
+export type CatalogFacetDisplay = "checkbox" | "swatch" | "search-list" | "range";
 /** Value lists longer than this get a search field (Apple Gadgets: brand lists). */
 export const CATALOG_FACET_SEARCH_MIN_VALUES = 12;
 
 /**
- * Colour words merchants use as values, with the swatch they paint. A facet
- * shows swatches only when every value is one of them, so a swatch never
- * guesses: "Rose Gold" or a Bangla name keeps the checkbox list.
+ * Colour words merchants use as values, with the swatch they paint. An
+ * option axis shows swatches only when every value is one of them, so a
+ * swatch never guesses: "Rose Gold" or a Bangla name keeps the checkbox list.
+ * A typed swatch attribute paints from the merchant's colour and falls back
+ * to this table only for a value without one.
  */
 const SWATCH_COLOURS: Record<string, string> = {
   black: "#111111",
@@ -139,16 +143,35 @@ const SWATCH_COLOURS: Record<string, string> = {
 
 const colourKey = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
 
-/** The facet's display and, for swatches, each value's paint. */
+/** A merchant swatch lands in a `style` attribute: only a plain hex colour paints. */
+const HEX_SWATCH = /^#[0-9a-f]{6}$/i;
+
+type FacetDisplayValue = Pick<ProductFacetValue, "value" | "label" | "swatch">;
+
+const valuePaint = ({ value, label, swatch }: FacetDisplayValue): string | undefined =>
+  (swatch && HEX_SWATCH.test(swatch) ? swatch : undefined) ??
+  SWATCH_COLOURS[colourKey(label)] ??
+  SWATCH_COLOURS[colourKey(value)];
+
+/**
+ * The facet's display and, for swatches, each value's paint keyed by the
+ * submitted value (a typed swatch value with no known colour has none).
+ */
 export function catalogFacetDisplay(
-  facet: Pick<ProductFacet, "values"> & { display?: CatalogFacetDisplay },
+  facet: Pick<ProductFacet, "kind" | "display"> & { values: readonly FacetDisplayValue[] },
 ): { display: CatalogFacetDisplay; swatches: ReadonlyMap<string, string> } {
   const swatches = new Map<string, string>();
-  if (facet.display && facet.display !== "swatch") return { display: facet.display, swatches };
-  for (const { value } of facet.values) {
-    const paint = SWATCH_COLOURS[colourKey(value)];
-    if (paint) swatches.set(value, paint);
+  const paint = () => {
+    for (const value of facet.values) {
+      const colour = valuePaint(value);
+      if (colour) swatches.set(value.value, colour);
+    }
+  };
+  if (facet.kind === "attribute" || facet.display === "range") {
+    if (facet.display === "swatch") paint();
+    return { display: facet.display === "search_list" ? "search-list" : facet.display, swatches };
   }
+  paint();
   if (facet.values.length > 0 && swatches.size === facet.values.length) return { display: "swatch", swatches };
   swatches.clear();
   return {
@@ -227,15 +250,16 @@ export function catalogPopularFilters({
     const value = currentFilters[slug];
     return value === undefined ? [] : Array.isArray(value) ? value : [value];
   };
+  // A range facet has no values to link (its bounds are typed in the form).
   return facets
     .flatMap((facet) =>
       facet.values
         .filter(({ value, count }) => count > 0 && count < total && !selected(facet.slug).includes(value))
-        .map(({ value, count }) => ({ facet, value, count })))
-    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value))
+        .map(({ value, label, count }) => ({ facet, value, label, count })))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
     .slice(0, max)
-    .map(({ facet, value }) => ({
-      label: value,
+    .map(({ facet, value, label }) => ({
+      label,
       active: false,
       href: buildProductListHref({
         pathname,

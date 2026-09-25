@@ -170,6 +170,15 @@ function seedDemoCatalog(database) {
     "INSERT INTO product_rich_content (id, product_id, title, content, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
     "prc_halo", "prod_halo", "Fit and sizing", "<p>Stands 42cm tall.</p>", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
+  // The tab above is mirrored into a block the seed does not carry (its load recreates it).
+  run(
+    "INSERT INTO product_content_blocks (id, product_id, placement, position, type, version, settings, created_at, updated_at) VALUES (?, ?, 'after-buy-box', 0, 'guarantee', 1, ?, ?, ?)",
+    "pcb_halo_promise", "prod_halo", '{"heading":"","text":"Two-year warranty."}', FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+  );
+  run(
+    "INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps, created_at, updated_at) VALUES (?, ?, 2, 'percentage', 1000, ?, ?)",
+    "pbd_halo_pair", "prod_halo", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+  );
   run(
     "INSERT INTO hero_sections (id, name, type, is_active, config, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
     "hero_home", "Home hero", "split", '{"headline":"Light it up"}', FIXED_TIMESTAMP, FIXED_TIMESTAMP,
@@ -372,10 +381,12 @@ describe("demo store export bundle", () => {
       product_variant_option_values: 4,
       product_attribute_values: 1,
       product_rich_content: 1,
+      product_content_blocks: 1,
+      product_bundles: 1,
       hero_sections: 1,
       hero_sliders: 1,
     });
-    expect(bundle.rowTotal).toBe(35);
+    expect(bundle.rowTotal).toBe(37);
     expect(bundle.media).toMatchObject({ count: 5, bytesIncluded: false, directory: null });
     expect(bundle.demoStoreContract.matches).toBe(false);
     expect(bundle.artifacts.seedSql.sha256).toBe(sha256File(path.join(testCase.exportDir, "seed.sql")));
@@ -454,10 +465,14 @@ describe("demo store export bundle", () => {
     target.exec(testCase.readSeedSql());
 
     const bundle = testCase.readBundleJson();
+    // Each loaded legacy tab is mirrored into a block of its own by the schema.
+    const mirroredTabs = bundle.tables.find((entry) => entry.table === "product_rich_content").rows;
     for (const { table, rows } of bundle.tables) {
       expect({ table, rows: target.prepare(`SELECT count(*) AS total FROM "${table}"`).get().total })
-        .toEqual({ table, rows });
+        .toEqual({ table, rows: table === "product_content_blocks" ? rows + mirroredTabs : rows });
     }
+    expect(target.prepare("SELECT id, type FROM product_content_blocks ORDER BY id").all().map((row) => ({ ...row })))
+      .toEqual([{ id: "pcb_halo_promise", type: "guarantee" }, { id: "pcb_prc_halo", type: "rich-text" }]);
     expect(target.prepare("SELECT name, price_minor, category_id FROM products WHERE id = 'prod_halo'").get())
       .toEqual({ name: "Halo Arc Table Lamp", price_minor: 14_950, category_id: "cat_lighting" });
     expect(target.prepare("SELECT sku, stock, image_id FROM product_variants WHERE id = 'var_halo_matte_eu'").get())
@@ -579,17 +594,17 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0091_something_else' WHERE version = 91");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0092_something_else' WHERE version = 92");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 91\/0091_something_else .* can only be exported at revision 91\/0091_catalogue_projection_fill/su);
+      .rejects.toThrow(/is at schema revision 92\/0092_something_else .* can only be exported at revision 92\/0092_attribute_option_presets/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 91`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 92`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))

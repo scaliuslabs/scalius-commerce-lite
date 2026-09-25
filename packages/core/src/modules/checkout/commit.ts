@@ -516,6 +516,22 @@ function buildOrderWriteBatch(
         );
     }
 
+    // An order is priced by its promotion or by its quantity bundles, never
+    // both (checkout/bundle-discounts.ts): its line discounts must stay equal
+    // to its promotion allocations, which refunds and receipts reconcile. The
+    // checkout authority revision fences the tiers bundles were priced from.
+    let bundleDiscountTotal = 0;
+    for (const item of payload.items) {
+        const amount = item.bundleDiscountMinor ?? 0;
+        if (!Number.isSafeInteger(amount) || amount < 0 || amount > item.discountAmountMinor) {
+            throw new ValidationError("Committed bundle discount is invalid.");
+        }
+        bundleDiscountTotal += amount;
+    }
+    if (appliedPromotion && bundleDiscountTotal > 0) {
+        throw new ValidationError("Committed discounts combine a promotion with bundle pricing.");
+    }
+
     if (appliedPromotion) {
         if (appliedPromotion.discounts.some(({ method, promotionCode }) => (method === "code") !== Boolean(promotionCode))) {
             throw new ValidationError("Committed promotion authority is invalid.");

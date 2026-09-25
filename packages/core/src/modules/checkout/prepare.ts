@@ -10,6 +10,7 @@ import {
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
+import { resolveBundlePromotionInterplay } from "./bundle-discounts";
 import {
     PaymentMethod,
     PaymentStatus,
@@ -418,6 +419,7 @@ export async function createStorefrontOrder(
             inventoryTracked: validatedItem.inventoryTracked,
             taxClassId: validatedItem.taxClassId,
             productImageMediaId: validatedItem.productImageMediaId,
+            bundleDiscountMinor: validatedItem.bundleDiscountMinor ?? 0,
         };
     });
 
@@ -441,6 +443,17 @@ export async function createStorefrontOrder(
         },
     });
     assertDiscountCodesApplied(discount);
+    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
+    const bundleDiscount = resolveBundlePromotionInterplay(
+        preparedItems.map((item) => ({
+            lineId: item.taxAllocationLineId,
+            unitPriceMinor: item.unitPriceMinor,
+            quantity: item.quantity,
+            bundleDiscountMinor: item.bundleDiscountMinor,
+        })),
+        discount,
+    );
+    const bundleDiscountByLine = new Map(bundleDiscount.bundleLines.map((line) => [line.lineId, line.amountMinor]));
     const taxQuoteInput = {
         // No address (pickup, service, digital): only store-wide rates apply.
         destination: {
@@ -460,7 +473,7 @@ export async function createStorefrontOrder(
             taxClassId: item.taxClassId,
         })),
         shippingMinor: verifiedShippingMinor,
-        promotionDiscountAllocation: discount.taxAllocation,
+        promotionDiscountAllocation: bundleDiscount.allocation,
         currency: requestCurrency,
     };
     const taxQuote = taxAuthoritySnapshot
@@ -557,11 +570,13 @@ export async function createStorefrontOrder(
                 unitPriceMinor: lineTax.unitPriceMinor,
                 lineSubtotalMinor: lineTax.grossAmountMinor,
                 discountAmountMinor: lineTax.discountMinor,
+                /** The bundle saving in `discountAmountMinor`; 0 when promotions priced the order. */
+                bundleDiscountMinor: bundleDiscountByLine.get(item.taxAllocationLineId) ?? 0,
                 taxableAmountMinor: lineTax.taxableAmountMinor,
                 taxAmountMinor: lineTax.taxMinor,
             };
         }),
-        promotion: discount.snapshot,
+        promotion: bundleDiscount.discount.snapshot,
         requestUrl,
         taxQuote,
     };

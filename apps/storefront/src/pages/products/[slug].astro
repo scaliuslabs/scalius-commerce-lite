@@ -18,6 +18,7 @@ import ProductPageLayout from "@/components/product/ProductPageLayout.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
+import ProductEmiLine from "@/components/product/ProductEmiLine.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { GALLERY_IMAGE_WIDTHS, productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -84,8 +85,11 @@ if (productResult.state === "unavailable" || !layoutData) {
 }
 
 // Theme -> Layout -> Product page: gallery beside or stacked, thumbnails.
-const { layout: themeLayout } = await resolveRequestTheme(Astro, layoutData);
+const { layout: themeLayout, resolved: resolvedTheme } = await resolveRequestTheme(Astro, layoutData);
 const productPageLayout = themeLayout.productPage;
+// The EMI line shows only in a buy box that asks for it (spec, tech); the
+// classic buy box has no such setting and stays as it is.
+const buyBoxShowsEmi = resolvedTheme.blocks.product.buyBox.settings.emi === true;
 
 const productData = productResult.data;
 const { product, category, media, variants, recommendations } = productData;
@@ -646,6 +650,9 @@ const productCategoryAnalytics = productCategory
           actionCopy={productPageCopy}
           fulfilmentBadge={fulfilmentBadge}
         >
+          {buyBoxShowsEmi && product.emi && (
+            <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={currencyCode} currencySymbol={currencySymbol} />
+          )}
           <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
         </ProductSummary>
       </ProductPageLayout>

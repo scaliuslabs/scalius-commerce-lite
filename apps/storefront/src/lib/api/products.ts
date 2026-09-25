@@ -10,6 +10,9 @@ import type {
   PaginatedResponse,
   BuyerPriceRange,
   ProductFacet,
+  ProductFacetDisplay,
+  ProductFacetKind,
+  ProductFacetValue,
   ProductRecommendations,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
@@ -285,28 +288,55 @@ export function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | unde
   return { min, max };
 }
 
+const FACET_KINDS = new Set<ProductFacetKind>(["attribute", "option", "brand"]);
+const FACET_DISPLAYS = new Set<ProductFacetDisplay>(["checkbox", "range", "swatch", "search_list"]);
+/** A swatch paints a `style` attribute, so only a plain hex colour is kept. */
+const FACET_SWATCH = /^#[0-9a-f]{6}$/i;
+const finiteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+/** The listing facets as the catalog components read them; malformed facets and values are dropped. */
 export function normalizeProductFacets(value: unknown): ProductFacet[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((candidate) => {
+  return value.flatMap((candidate): ProductFacet[] => {
     if (!candidate || typeof candidate !== "object") return [];
-    const facet = candidate as Partial<ProductFacet>;
+    const facet = candidate as Record<string, unknown>;
     if (
       typeof facet.id !== "string" ||
       typeof facet.name !== "string" ||
       typeof facet.slug !== "string" ||
       !Array.isArray(facet.values)
     ) return [];
-    const values = facet.values.flatMap((option) => (
-      option &&
-      typeof option === "object" &&
-      typeof option.value === "string" &&
-      typeof option.count === "number" &&
-      Number.isInteger(option.count) &&
-      option.count >= 0
-        ? [{ value: option.value, count: option.count }]
-        : []
-    ));
-    return [{ id: facet.id, name: facet.name, slug: facet.slug, values }];
+    const kind = FACET_KINDS.has(facet.kind as ProductFacetKind)
+      ? facet.kind as ProductFacetKind
+      : facet.slug === "brand" ? "brand" : facet.slug.startsWith("option.") ? "option" : "attribute";
+    const display = FACET_DISPLAYS.has(facet.display as ProductFacetDisplay)
+      ? facet.display as ProductFacetDisplay
+      : "checkbox";
+    const bounds = facet.range as { min?: unknown; max?: unknown } | null | undefined;
+    const range = display === "range" && bounds && finiteNumber(bounds.min) && finiteNumber(bounds.max) && bounds.max >= bounds.min
+      ? { min: bounds.min, max: bounds.max }
+      : null;
+    const values = display === "range" ? [] : facet.values.flatMap((option): ProductFacetValue[] => {
+      if (!option || typeof option !== "object") return [];
+      const { value, label, count, swatch } = option as Record<string, unknown>;
+      if (typeof value !== "string" || !value || typeof count !== "number" || !Number.isInteger(count) || count < 0) return [];
+      return [{
+        value,
+        label: typeof label === "string" && label.trim() ? label : value,
+        count,
+        swatch: typeof swatch === "string" && FACET_SWATCH.test(swatch) ? swatch : null,
+      }];
+    });
+    return [{
+      id: facet.id,
+      name: facet.name,
+      slug: facet.slug,
+      kind,
+      display,
+      unit: typeof facet.unit === "string" && facet.unit.trim() ? facet.unit.trim() : null,
+      values,
+      range,
+    }];
   });
 }
 

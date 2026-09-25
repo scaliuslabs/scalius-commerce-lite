@@ -139,6 +139,10 @@ const homepageDataSchema = z.object({
     trustStrip: z.object({
       enabled: z.boolean(),
     }),
+    homeMode: z.enum(["catalog", "landing"]).openapi({
+      description: "`landing` opens the store on `landingProduct`'s landing page; it is `catalog` whenever that product is not public.",
+    }),
+    landingProduct: z.object({ id: z.string(), slug: z.string() }).nullable(),
   }),
   /**
    * What the theme's homepage sections show: one product list per source

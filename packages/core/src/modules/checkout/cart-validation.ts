@@ -23,6 +23,12 @@ import {
     type ProductMediaProjection,
     resolveSkuImageRepresentation,
 } from "../products/media";
+import {
+    productBundleTiersByProduct,
+    selectActiveProductBundleRows,
+    type ProductBundleRow,
+} from "../products/bundles";
+import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -104,14 +110,34 @@ export interface StorefrontCartValidatedItem {
     productImageMediaId: string | null;
     /** Derived presentation URL; never a video URL and never trusted for checkout facts. */
     productImage: string | null;
+    /**
+     * This line's share of its product's quantity-bundle saving, from the
+     * catalog prices (see `resolveCartBundleSavings`). Checkout applies it as
+     * a line discount next to promotions, capped at what they leave. Absent
+     * means no bundle applies.
+     */
+    bundleDiscountMinor?: number;
+}
+
+/** A product whose cart quantity reached one of its bundle tiers. */
+export interface StorefrontCartBundleSaving {
+    productId: string;
+    /** The tier's quantity ("3 for ..."). */
+    quantity: number;
+    discountType: "percentage" | "fixed_price";
+    label: string | null;
+    savingMinor: number;
 }
 
 export interface StorefrontCartValidationResult {
     valid: boolean;
     issues: StorefrontCartItemIssue[];
     items: StorefrontCartValidatedItem[];
+    /** At catalog prices: bundle savings and promotions are discounts on top. */
     subtotalMinor: number;
     hasFreeDeliveryProduct: boolean;
+    /** Products whose quantity reached a bundle tier; absent means none. */
+    bundles?: StorefrontCartBundleSaving[];
 }
 
 const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
@@ -334,6 +360,8 @@ export function resolveStorefrontCartValidationFromRows(
     productRows: readonly StorefrontCartProductRow[],
     variantRows: readonly StorefrontCartVariantRow[],
     mediaByProduct: ReadonlyMap<string, ProductMediaProjection[]>,
+    /** The products' active bundle tiers (`selectActiveProductBundleRows`). */
+    bundleRows: readonly ProductBundleRow[] = [],
 ): StorefrontCartValidationResult {
     // API callers pass the normalized merchant setting. Direct Core callers
     // intentionally retain the historical BDT checkout authority fallback.
@@ -582,13 +610,60 @@ export function resolveStorefrontCartValidationFromRows(
         });
     });
 
+    const bundles = resolveCartBundleSavings(validatedItems, bundleRows, currencyCode);
+
     return markTrustedStorefrontCartValidationResult({
         valid: issues.length === 0,
         issues,
         items: validatedItems,
         subtotalMinor,
         hasFreeDeliveryProduct,
+        bundles,
     });
+}
+
+/**
+ * Quantity bundles, priced from the lines' catalog unit prices (after catalog
+ * discounts, before buyer-input surcharges) with `bundleGroupPricing`: every
+ * line of a product counts toward its tiers, whatever its SKU or inputs. Sets
+ * each line's `bundleDiscountMinor` and returns the products that reached a
+ * tier. Gift cards are sold at their value and never bundle.
+ */
+function resolveCartBundleSavings(
+    items: StorefrontCartValidatedItem[],
+    bundleRows: readonly ProductBundleRow[],
+    currencyCode: string,
+): StorefrontCartBundleSaving[] {
+    for (const item of items) item.bundleDiscountMinor = 0;
+    if (bundleRows.length === 0) return [];
+    const tiersByProduct = productBundleTiersByProduct(bundleRows);
+    const linesByProduct = new Map<string, StorefrontCartValidatedItem[]>();
+    for (const item of items) {
+        if (item.isGiftCard || !tiersByProduct.has(item.productId)) continue;
+        const lines = linesByProduct.get(item.productId) ?? [];
+        lines.push(item);
+        linesByProduct.set(item.productId, lines);
+    }
+    const savings: StorefrontCartBundleSaving[] = [];
+    for (const [productId, lines] of linesByProduct) {
+        const pricing = bundleGroupPricing(
+            lines.map((line) => ({ key: String(line.index), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
+            tiersByProduct.get(productId)!,
+            currencyCode,
+        );
+        if (!pricing.tier || pricing.savingMinor === 0) continue;
+        pricing.lineSavings.forEach((saving, position) => {
+            lines[position]!.bundleDiscountMinor = saving.savingMinor;
+        });
+        savings.push({
+            productId,
+            quantity: pricing.tier.quantity,
+            discountType: pricing.tier.discountType,
+            label: pricing.tier.label,
+            savingMinor: pricing.savingMinor,
+        });
+    }
+    return savings;
 }
 
 export async function validateStorefrontCartItems(
@@ -602,9 +677,10 @@ export async function validateStorefrontCartItems(
 
     const productIds = [...new Set(items.map((item) => item.productId))];
     const variantIds = [...new Set(items.map((item) => item.variantId))];
-    const [productRows, variantRows] = await Promise.all([
+    const [productRows, variantRows, bundleRows] = await Promise.all([
         selectStorefrontCartProductRows(db, productIds),
         selectStorefrontCartVariantRows(db, productIds, variantIds),
+        selectActiveProductBundleRows(db, productIds),
     ]);
     // Media is presentation snapshot data, so keep it outside catalog authority
     // checks while still persisting the exact image asset chosen at checkout.
@@ -616,6 +692,7 @@ export async function validateStorefrontCartItems(
         productRows as StorefrontCartProductRow[],
         variantRows as StorefrontCartVariantRow[],
         mediaByProduct,
+        (bundleRows ?? []) as ProductBundleRow[],
     );
 }
 
@@ -630,7 +707,8 @@ export function presentStorefrontCartValidation(
     fulfilment: StorefrontCartFulfilmentSummary = summarizeStorefrontCartFulfilment(result, null),
     propertiesHashes: readonly string[] = [],
 ) {
-    const { subtotalMinor, items, ...rest } = result;
+    // Bundle savings are checkout discounts: the tax quote shows them.
+    const { subtotalMinor, items, bundles: _bundles, ...rest } = result;
     return {
         ...rest,
         ...presentStorefrontCartFulfilmentSummary(fulfilment),
@@ -639,6 +717,7 @@ export function presentStorefrontCartValidation(
             baseUnitPriceMinor,
             canonicalProperties,
             isGiftCard: _isGiftCard,
+            bundleDiscountMinor: _bundleDiscountMinor,
             ...item
         }, position) => ({
             ...item,
