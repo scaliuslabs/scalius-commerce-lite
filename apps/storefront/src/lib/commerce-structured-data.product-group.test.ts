@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error -- the release smoke is a plain ESM script without types.
+// The release-check Product JSON-LD smoke itself, so the budgeted shape stays valid for it.
 import { evaluateProductJsonLdHtml } from "../../../../scripts/release-check.mjs";
 import {
   PRODUCT_JSON_LD_DESCRIPTION_MAX_CHARS,
