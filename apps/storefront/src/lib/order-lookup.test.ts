@@ -53,9 +53,15 @@ describe("order lookup input", () => {
       phone: en.trackOrderPhoneInvalidText,
     });
     expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1001", "0171234")).toEqual({
-      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneInvalidText,
+      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneFormatInvalidText,
     });
     expect(getOrderLookupFieldErrors(en, "১০০১", "০১৭১২-৩৪৫৬৭৮")).toEqual({});
+  });
+
+  it("asks for a missing phone, and says a typed one is not valid", () => {
+    expect(getOrderLookupFieldErrors(en, "#1001", "   ").phone).toBe(en.trackOrderPhoneInvalidText);
+    expect(getOrderLookupFieldErrors(en, "#1001", "123").phone).toBe("Enter a valid phone number.");
+    expect(getOrderLookupFieldErrors(en, "#1001", "02123456789").phone).toBe(en.trackOrderPhoneFormatInvalidText);
   });
 });
 

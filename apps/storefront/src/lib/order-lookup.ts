@@ -53,13 +53,17 @@ export type OrderLookupFieldErrors = Partial<Record<"reference" | "phone", strin
 
 /** Each lookup field's own message, so the form shows every problem at once. */
 export function getOrderLookupFieldErrors(
-  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText" | "trackOrderPhoneInvalidText">,
+  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText" | "trackOrderPhoneInvalidText" | "trackOrderPhoneFormatInvalidText">,
   reference: string,
   phone: string,
 ): OrderLookupFieldErrors {
+  // An empty phone asks for it; a typed one that isn't a mobile number says so.
+  const phoneError = normalizeBdMobile(phone)
+    ? null
+    : phone.trim() ? copy.trackOrderPhoneFormatInvalidText : copy.trackOrderPhoneInvalidText;
   return {
     ...(normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText }),
-    ...(normalizeBdMobile(phone) ? {} : { phone: copy.trackOrderPhoneInvalidText }),
+    ...(phoneError ? { phone: phoneError } : {}),
   };
 }
 
