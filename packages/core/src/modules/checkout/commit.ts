@@ -11,7 +11,7 @@ import {
     orderItems,
     orderDiscountAllocations,
     orderItemTaxSnapshots,
-    orderNotificationOutbox,
+    notificationOutbox,
     orderTaxSnapshots,
     orders,
     codTracking,
@@ -487,7 +487,7 @@ function buildOrderWriteBatch(
 
     if (wantsOrderCreatedNotification(payload)) {
         writes.push(
-            db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
+            db.insert(notificationOutbox).values(createOrderNotificationOutboxInsertValues({
                 dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
                 orderId: od.id,
                 customerEmail: od.customerEmail ?? undefined,

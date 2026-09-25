@@ -156,7 +156,7 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     expect(rows("order_item_tax_snapshots", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("checkout_attempts", `order_id = '${orderId}' AND status = 'committed'`)).toBe(1);
     expect(rows("order_receipts", `order_id = '${orderId}' AND status = 'active'`)).toBe(1);
-    expect(rows("order_notification_outbox", `order_id = '${orderId}'`)).toBe(1);
+    expect(rows("notification_outbox", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("meta_capi_purchase_outbox")).toBe(0);
     expect(counters()).toEqual({ stock: 3, reserved_stock: 2, stock_version: 2 });
     expect(sqlite!.prepare(`
@@ -252,7 +252,7 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     await commitStorefrontOrderPayload(db, payload, commit);
     expect(counters()).toMatchObject({ reserved_stock: 1 });
     // An unpaid online checkout never notifies the merchant.
-    expect(rows("order_notification_outbox")).toBe(0);
+    expect(rows("notification_outbox")).toBe(0);
 
     const cutoff = Math.floor(Date.now() / 1000) + 60;
     const first = await archiveStaleIncompleteOrders(db, cutoff);

@@ -38453,6 +38453,10 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_ready_for_pickup: {
+                        subject: string;
+                        body: string;
+                    };
                     order_delivered: {
                         subject: string;
                         body: string;
@@ -38511,6 +38515,9 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     order_shipped: {
                         body: string;
                     };
+                    order_ready_for_pickup: {
+                        body: string;
+                    };
                     order_delivered: {
                         body: string;
                     };
@@ -38562,7 +38569,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
         email?: {
             subject: string;
             body: string;
@@ -38684,6 +38691,10 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_ready_for_pickup: {
+                        subject: string;
+                        body: string;
+                    };
                     order_delivered: {
                         subject: string;
                         body: string;
@@ -38742,6 +38753,9 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     order_shipped: {
                         body: string;
                     };
+                    order_ready_for_pickup: {
+                        body: string;
+                    };
                     order_delivered: {
                         body: string;
                     };
@@ -38788,12 +38802,12 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
         subject: string;
         body: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
         body: string;
         phone: string;
     };
@@ -39029,6 +39043,7 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             order_confirmed: Array<'email' | 'sms' | 'whatsapp'>;
             order_processing: Array<'email' | 'sms' | 'whatsapp'>;
             order_shipped: Array<'email' | 'sms' | 'whatsapp'>;
+            order_ready_for_pickup: Array<'email' | 'sms' | 'whatsapp'>;
             order_delivered: Array<'email' | 'sms' | 'whatsapp'>;
             order_completed: Array<'email' | 'sms' | 'whatsapp'>;
             order_cancelled: Array<'email' | 'sms' | 'whatsapp'>;
@@ -39040,6 +39055,7 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             payment_balance_paid: Array<'email' | 'sms' | 'whatsapp'>;
             support_request_submitted: Array<'email' | 'sms' | 'whatsapp'>;
             support_request_status_updated: Array<'email' | 'sms' | 'whatsapp'>;
+            conversation_reply?: Array<'email' | 'sms'>;
         };
         whatsappTemplate?: {
             templateName: string;
@@ -39198,6 +39214,7 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             order_confirmed: Array<'push'>;
             order_processing: Array<'push'>;
             order_shipped: Array<'push'>;
+            order_ready_for_pickup: Array<'push'>;
             order_delivered: Array<'push'>;
             order_completed: Array<'push'>;
             order_cancelled: Array<'push'>;
@@ -39209,6 +39226,7 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             payment_balance_paid: Array<'push'>;
             support_request_submitted: Array<'push'>;
             support_request_status_updated: Array<'push'>;
+            conversation_message?: Array<'push' | 'email'>;
         };
         emailRecipients: Array<string>;
         expectedRevision: number;

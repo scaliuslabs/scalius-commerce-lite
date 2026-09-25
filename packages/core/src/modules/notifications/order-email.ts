@@ -65,6 +65,8 @@ async function readOrderFacts(db: Database, orderId: string) {
     totalAmountMinor: orders.totalAmountMinor,
     taxLabel: orders.taxLabel,
     pricesIncludeTax: orders.pricesIncludeTax,
+    pickupAddress: orders.pickupAddress,
+    pickupHours: orders.pickupHours,
   }, item: {
     productName: orderItems.productName,
     variantLabel: orderItems.variantLabel,
@@ -238,6 +240,8 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       refund_amount: refundAmount(input.data?.amount, currency),
       support_request: request,
       support_status: status,
+      pickup_address: order.pickupAddress?.trim() ?? "",
+      pickup_hours: order.pickupHours?.trim() ?? "",
     },
     facts: {
       store: { name: store.name, logoUrl: store.logoUrl },

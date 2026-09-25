@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
-import { orderNotificationDeliveryReceipts, settings } from "@scalius/database/schema";
+import { notificationDeliveryReceipts, settings } from "@scalius/database/schema";
 import {
     getNotificationProviderBlock,
     isNotificationProviderBreakerFailure,
@@ -222,7 +222,7 @@ function createProviderHealthDb(options: {
                         : { updatedAt: options.latestSettingsUpdatedAt };
                 },
                 all() {
-                    if (table === orderNotificationDeliveryReceipts) {
+                    if (table === notificationDeliveryReceipts) {
                         calls.receiptReads += 1;
                         return options.receipts ?? [];
                     }
