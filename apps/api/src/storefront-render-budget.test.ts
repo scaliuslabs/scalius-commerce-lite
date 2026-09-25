@@ -23,8 +23,8 @@ import {
 const PAGE_D1_BUDGETS = {
   home: { roundTrips: 13, waves: 2 },
   product: { roundTrips: 21, waves: 3 },
-  category: { roundTrips: 9, waves: 3 },
-  search: { roundTrips: 9, waves: 2 },
+  category: { roundTrips: 7, waves: 3 },
+  search: { roundTrips: 7, waves: 2 },
 } as const;
 
 const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {

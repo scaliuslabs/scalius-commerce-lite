@@ -18,9 +18,13 @@ import {
   getStorefrontProductSection,
   storefrontProductSectionQuerySchema,
   storefrontProductSectionSchema,
+  resolvePublicAttributeFilters,
+  getStorefrontProductComparison,
+  normalizeCompareIds,
+  MAX_COMPARE_PRODUCTS,
 } from "@scalius/core/modules/catalog";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
-import { NotFoundError } from "../utils/api-error";
+import { productFacetSchema } from "../schemas/catalog-facets";
+import { NotFoundError, ValidationError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
 
@@ -122,14 +126,6 @@ const buyerPriceRangeSchema = z.object({
   max: z.number().min(0),
 });
 
-const productFacetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string().openapi({
-    description: "Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size.",
-  }),
-  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
-});
 
 const storefrontFeedVariantSchema = z.object({
   id: z.string(),
@@ -709,6 +705,80 @@ app.openapi(productRecommendationsRoute, async (c) => {
     limit,
   });
   return ok(c, result);
+});
+
+// GET /api/v1/products/compare?ids=
+const compareProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  price: z.number(),
+  discountedPrice: z.number(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+  priceVaries: z.boolean(),
+  hasVariants: z.boolean(),
+  availableForSale: z.boolean(),
+  availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
+  brand: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+  imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
+});
+
+const productSpecGroupSchema = z.object({
+  id: z.string().nullable().openapi({ description: "The attribute group; null for attributes without one (listed last)." }),
+  name: z.string().nullable(),
+  rows: z.array(z.object({
+    attributeId: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    unit: z.string().nullable(),
+    keySpec: z.boolean(),
+    highlight: z.boolean(),
+    values: z.array(z.string().nullable()).max(MAX_COMPARE_PRODUCTS).openapi({
+      description: "One display value per compared product, in `products` order; null where the product has none.",
+    }),
+  })),
+});
+
+const compareProductsRoute = createRoute({
+  method: "get",
+  path: "/compare",
+  operationId: "storefront.products.compare",
+  tags: ["Products"],
+  summary: "Compare up to four products side by side",
+  description:
+    `Public products and their specs grouped by attribute group, one value column per product in the requested order. Ids that are not public are left out. At most ${MAX_COMPARE_PRODUCTS} ids.`,
+  request: {
+    query: z.object({
+      ids: z.string().trim().min(1).max(1_000).openapi({ description: "Comma-separated product IDs." }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The compared products and their grouped specs",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            products: z.array(compareProductSchema).max(MAX_COMPARE_PRODUCTS),
+            groups: z.array(productSpecGroupSchema),
+          })),
+        },
+      },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(compareProductsRoute, async (c) => {
+  const ids = normalizeCompareIds(c.req.valid("query").ids);
+  if (ids.length === 0 || ids.length > MAX_COMPARE_PRODUCTS) {
+    throw new ValidationError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
+  }
+  return ok(c, await getStorefrontProductComparison(c.get("db"), ids));
 });
 
 // GET /api/storefront/products/:slug/sections/:section
