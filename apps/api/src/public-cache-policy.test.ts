@@ -19,6 +19,7 @@ describe("public API cache policy", () => {
     "/api/v1/categories",
     "/api/v1/storefront/pages/slug/about",
     "/api/v1/checkout/config",
+    "/api/v1/checkout-languages/active",
     "/api/v1/hero/sliders?type=mobile",
   ])("caches the anonymous public read %s", (path) => {
     expect(getPublicApiCachePolicy(new Request(`https://api.example.com${path}`)))

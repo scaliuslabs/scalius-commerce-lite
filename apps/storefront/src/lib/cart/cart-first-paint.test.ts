@@ -96,6 +96,26 @@ describe("cart page first paint", () => {
     expect(root().dataset.deliveryMode).toBe("pickup");
   });
 
+  it("reveals the quick-buy storage notice from the URL before paint, never from the server", () => {
+    // The cart HTML is one shared, cached shell: the server must not read the query.
+    const frontmatter = cartPage.slice(0, cartPage.indexOf("\n---", 4));
+    expect(frontmatter).not.toMatch(/Astro\.url\.search/);
+    const noticeScript =
+      cartPage.match(/<script is:inline>((?:(?!<\/script>)[\s\S])*?getElementById\("quickBuyStorageNotice"\)[\s\S]*?)<\/script>/)?.[1] ?? "";
+    expect(noticeScript).not.toBe("");
+    const reveal = (search: string) => {
+      document.body.innerHTML = `<div id="quickBuyStorageNotice" hidden>Storage blocked</div>`;
+      window.history.replaceState(null, "", `/cart${search}`);
+      new Function(noticeScript)();
+      return document.getElementById("quickBuyStorageNotice")!.hidden;
+    };
+
+    expect(reveal("")).toBe(true);
+    expect(reveal("?quickBuyStorage=other")).toBe(true);
+    expect(reveal("?quickBuyStorage=blocked")).toBe(false);
+    window.history.replaceState(null, "", "/");
+  });
+
   it("hides the address with CSS on the pickup and no-delivery paths, so nothing moves when scripts load", () => {
     expect(cartPage).toMatch(/group-data-\[delivery-mode=pickup\]:hidden[^"]*" data-address-fields/);
     expect(cartPage).toMatch(/group-data-\[delivery-need=none\]:hidden" data-delivery-section/);

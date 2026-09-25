@@ -10,7 +10,8 @@ import { requestRuntime, type StorefrontRuntime } from "./runtime";
 import { apiFetch } from "./transport";
 import { getLayoutData, getHomepageData } from "./storefront";
 import { getAllProducts, getProductBySlugResult, getProductsByCategory } from "./products";
-import { getShippingMethods } from "./shipping";
+import { getCities, getShippingMethods } from "./shipping";
+import { getActiveCheckoutLanguage } from "./settings";
 import { getCheckoutConfig } from "./checkout";
 import { loadPageWithLayout } from "@/lib/page-data";
 
@@ -47,6 +48,10 @@ function bodyFor(path: string): { status: number; body: string } {
   }
   if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [{ id: "s1" }] }) };
   if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [{ id: "cod" }] }) };
+  if (path === "/api/v1/locations/cities") return { status: 200, body: envelope([{ id: "dhaka", name: "Dhaka" }]) };
+  if (path === "/api/v1/checkout-languages/active") {
+    return { status: 200, body: envelope({ language: { id: "lang_bn", code: "bn", languageData: {} } }) };
+  }
   return { status: 404, body: "{}" };
 }
 
@@ -140,6 +145,25 @@ describe("page render API budget", () => {
     expect(search.calls).toHaveLength(PAGE_API_CALL_BUDGET);
   });
 
+  it("renders the cart shell, with its checkout copy, from one API call", async () => {
+    const api = backend();
+    const [layout, cities, shipping, language, config] = await render(api, () => Promise.all([
+      getLayoutData(),
+      getCities(),
+      getShippingMethods(),
+      getActiveCheckoutLanguage(),
+      getCheckoutConfig(),
+    ]));
+
+    expect(api.calls).toHaveLength(PAGE_API_CALL_BUDGET);
+    expect(api.calls[0]).toContain(STOREFRONT_BATCH_PATH);
+    expect(layout).not.toBeNull();
+    expect(cities).toEqual([{ id: "dhaka", name: "Dhaka" }]);
+    expect(shipping).toEqual([{ id: "s1" }]);
+    expect(language?.code).toBe("bn");
+    expect(config.gateways).toEqual([{ id: "cod" }]);
+  });
+
   it("keeps each part's own status", async () => {
     const api = backend();
     const [, product] = await render(api, () => Promise.all([
@@ -174,7 +198,7 @@ describe("render read batch transport", () => {
     const api = backend();
     await render(api, () => Promise.all([
       apiFetch(`${apiBaseUrl}/orders/status/cst_x`, {}, { auth: false }),
-      apiFetch(`${apiBaseUrl}/checkout-languages/active`, {}, { auth: false }),
+      apiFetch(`${apiBaseUrl}/search?q=linen`, {}, { auth: false }),
       apiFetch(`${apiBaseUrl}/products`, { method: "POST", body: "{}" }, { auth: false }),
       apiFetch(`${apiBaseUrl}/products`, { headers: { "X-Customer-Session": "s" } }, { auth: false }),
     ]));

@@ -3,8 +3,6 @@
 import {
   createOrder,
   type CreateOrderPayload,
-  getCities as getCitiesFromApi,
-  type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
 import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
@@ -26,16 +24,6 @@ type ProcessOrderOptions = {
   customerSessionToken?: string | null;
   waitUntil?: (promise: Promise<unknown>) => void;
 };
-
-export async function getCities(): Promise<LocationData[]> {
-  try {
-    const citiesData = await getCitiesFromApi();
-    return citiesData || [];
-  } catch (error: unknown) {
-    console.error("Failed to fetch cities from API via library:", error);
-    return [];
-  }
-}
 
 /**
  * Validates a parsed cart item has the required shape and safe value ranges.

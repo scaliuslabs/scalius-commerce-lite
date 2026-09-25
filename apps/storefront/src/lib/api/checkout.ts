@@ -89,6 +89,15 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
 }
 
 /**
+ * Whether `getCheckoutConfig` fell back to the fail-closed config because the
+ * read failed, as opposed to the store's own saved "unavailable" answer. A
+ * page rendered from the fallback must not be stored in the shared cache.
+ */
+export function isCheckoutConfigReadFailure(config: CheckoutConfig): boolean {
+  return config === CHECKOUT_UNAVAILABLE;
+}
+
+/**
  * Check if only COD is active (simple COD-only flow).
  * If advance partial payments are enabled, this flow is disabled because a gateway is required.
  */

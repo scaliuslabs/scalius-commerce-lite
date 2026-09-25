@@ -6,7 +6,7 @@ This note records the performance evidence and release decisions for the Commerc
 
 ## Architecture and performance boundary
 
-- The storefront is an Astro SSR multi-page application on Cloudflare Workers. Anonymous, canonical public reads use the native Worker cache; browser HTML remains `no-store`; cart, checkout, account, recovery, and other buyer-state routes never enter the shared cache.
+- The storefront is an Astro SSR multi-page application on Cloudflare Workers. Anonymous, canonical public reads use the native Worker cache; browser HTML remains `no-store`; checkout, account, recovery, and other buyer-state routes never enter the shared cache. The cart is a buyer-agnostic shell stored like a public page (lines paint from `localStorage`, buyer state comes from no-store APIs), see [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#the-cart-shell).
 - The dashboard is a static TanStack Router single-page app served by the API Worker. TanStack Query owns remote-data freshness, route loaders warm the same keys rendered by components, and the shared data table uses server-side pagination, sorting, and filtering.
 - The API is a Hono Worker backed by D1. Request bindings are passed from `Env`, commerce writes stay authoritative in the relational provider, and independent reads use bounded D1 batches where that removes network round trips.
 - Hosted-service and multi-merchant control-plane concerns remain outside this repository.
