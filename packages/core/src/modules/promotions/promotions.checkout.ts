@@ -88,6 +88,8 @@ export interface RejectedDiscountCode {
     conflictsWith?: string;
     offer?: StorefrontDiscountOffer;
     requiresCustomerPhone?: boolean;
+    /** The code applies, but the order's quantity-bundle saving is bigger, so the bundle is used. */
+    bundleSavesMore?: true;
 }
 
 /**
