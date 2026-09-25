@@ -209895,6 +209895,53 @@
                               },
                               "maxItems": 40
                             },
+                            "media": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "image",
+                                      "video"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "altText": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "posterUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "url",
+                                  "altText",
+                                  "width",
+                                  "height",
+                                  "posterUrl"
+                                ]
+                              },
+                              "description": "The ready files the inlined blocks name, for the editor's previews; a missing file is absent."
+                            },
                             "total": {
                               "type": "integer",
                               "minimum": 0
@@ -209918,6 +209965,7 @@
                             "section",
                             "aggregateRevision",
                             "items",
+                            "media",
                             "total",
                             "offset",
                             "limit",

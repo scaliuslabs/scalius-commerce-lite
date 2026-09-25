@@ -52,6 +52,8 @@ import { ProductKindRulesContext, productKindRules } from "./product-form/produc
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
+import { ProductSectionsProvider, useProductSections } from "./product-form/merchandising/product-sections";
+import { LoadingFallback } from "./shared/LoadingFallback";
 import { productFieldLabel } from "./product-form/utils";
 import { autoHandleFor } from "./search-listing/SearchListingCard";
 import {
@@ -67,7 +69,11 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { saveBarMessages } from "~/i18n/save-bar";
-import type { ProductRevisionConflict } from "@/lib/admin-api-error";
+import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
+import { readApiFieldIssues } from "@/lib/api-field-errors";
+import { getServerFnError } from "@/lib/api-helpers";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import type {
   OptionMatrixEditorHandle,
   ProductCreateComposition,
@@ -75,6 +81,12 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
+
+// The product page's own cards load after the editor, off its first download.
+const loadCards = () => import("./product-form/merchandising/cards");
+const ContentBlocksCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ContentBlocksCard })));
+const BundlesCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.BundlesCard })));
+const ProductPageCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ProductPageCard })));
 
 interface ProductFormProps {
   categories: Category[];
@@ -178,6 +190,11 @@ function ProductEditor({
   const [trashOpen, setTrashOpen] = React.useState(false);
   const duplicate = useDuplicateProduct();
   const trash = useTrashProduct();
+  const queryClient = useQueryClient();
+  // Content blocks, bundles and the page template save on their own, under the same revision.
+  const sections = useProductSections();
+  // The old Additional sections tabs were saved as blocks: this save removes the originals.
+  const tabsMoved = React.useRef(false);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -275,27 +292,65 @@ function ProductEditor({
     }
     // New products send their variants with the product, so their problems block the save too.
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
-    let revision: number | undefined;
+    const pending = isEdit ? sections.dirtyHandles() : [];
+    const sectionProblems = pending.flatMap((handle) => handle.problems ?? []);
+    let values: ProductFormValues | null = null;
     if (!isEdit || productFormDirty) {
       let invalid: FieldErrors<ProductFormValues> = {};
-      const values = await new Promise<ProductFormValues | null>((resolve) => {
+      values = await new Promise<ProductFormValues | null>((resolve) => {
         void form.handleSubmit(resolve, (errors) => {
           invalid = errors;
           resolve(null);
         })();
       });
-      if (!values || matrixBlocks) {
+      if (!values || matrixBlocks || sectionProblems.length > 0) {
         if (matrixBlocks) matrixRef.current?.reveal();
-        const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : [])];
+        const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
         throw new SaveNotCompleted(lines[0], lines);
       }
-      revision = await submit(values);
+    } else if (sectionProblems.length > 0) {
+      throw new SaveNotCompleted(sectionProblems[0], sectionProblems);
+    }
+    let revision = aggregateRevision;
+    for (const handle of pending) {
+      if (!revision) break;
+      try {
+        revision = await handle.save(revision);
+      } catch (error) {
+        throw explainSectionError(handle.label, error);
+      }
+      onAggregateRevisionChange?.(revision);
+    }
+    if (tabsMoved.current) {
+      form.setValue("additionalInfo", [], { shouldDirty: true });
+      values = { ...(values ?? form.getValues()), additionalInfo: [] };
+    }
+    if (values) {
+      revision = await submit(values, revision);
+      if (tabsMoved.current) {
+        tabsMoved.current = false;
+        void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
+      }
     }
     if (isEdit && optionMatrixDirty) await matrixRef.current?.save(revision);
   };
 
+  /** A section's rejected save, in the banner (a newer version opens the conflict dialog). */
+  const explainSectionError = (label: string, error: unknown): Error => {
+    const conflict = readProductRevisionConflict(error);
+    if (conflict) {
+      onRevisionConflict?.(conflict);
+      return new SaveNotCompleted(t("changedElsewhere"));
+    }
+    const issues = readApiFieldIssues(error);
+    const lines = issues
+      ? issues.map((issue) => `${label}: ${issue.message}`)
+      : [`${label}: ${getServerFnError(error)}`];
+    return new SaveNotCompleted(lines[0], lines);
+  };
+
   useSaveBar({
-    dirty: !readOnly && (productFormDirty || optionMatrixDirty || revisionConflict !== null),
+    dirty: !readOnly && (productFormDirty || optionMatrixDirty || sections.dirty || revisionConflict !== null),
     saving: isSubmitting || optionMatrixSaving,
     save,
     discard: () => {
@@ -375,6 +430,7 @@ function ProductEditor({
         >
           <SaveErrorBanner />
           <ProductKindRulesProvider form={form}>
+          <ProductSectionsProvider registry={sections.registry}>
           <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
@@ -400,6 +456,11 @@ function ProductEditor({
                   <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} />
                 </CardContent>
               </Card>
+              {isEdit && productId ? (
+                <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                  <BundlesCard productId={productId} readOnly={readOnly} />
+                </React.Suspense>
+              ) : null}
               <FulfilmentCard form={form} hasOptions={variantPrices !== null} />
               <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
               <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
@@ -411,7 +472,14 @@ function ProductEditor({
                   ? { onReview: onOpenRevisionConflict }
                   : null}
               />
-              <AdditionalSectionsCard form={form} readOnly={readOnly} />
+              {isEdit && productId ? (
+                <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                  <ContentBlocksCard productId={productId} readOnly={readOnly} onTabsMoved={() => { tabsMoved.current = true; }} />
+                </React.Suspense>
+              ) : (
+                // A new product's tabs go with it; once saved they are edited as content blocks.
+                <AdditionalSectionsCard form={form} readOnly={readOnly} />
+              )}
               <AttributesSection form={form} defaultOpen={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
             </div>
@@ -422,8 +490,14 @@ function ProductEditor({
               </div>
               <OrganizationCard form={form} categories={categories} brandName={brandName} />
               <WarrantyCard form={form} readOnly={readOnly} />
+              {isEdit && productId ? (
+                <React.Suspense fallback={<LoadingFallback height="h-40" />}>
+                  <ProductPageCard productId={productId} readOnly={readOnly} />
+                </React.Suspense>
+              ) : null}
             </div>
           </fieldset>
+          </ProductSectionsProvider>
           </ProductKindRulesProvider>
           {readOnly ? null : (
             // Shopify repeats Save at the end of the page, under a divider.

@@ -161,10 +161,19 @@ export async function readProductContentBlockSection(
     });
     const total = Number(header.total);
     const nextOffset = page.offset + items.length < total ? page.offset + items.length : null;
+    // The files the inlined blocks name, so the editor can show them (one bounded read).
+    const mediaIds = new Set<string>();
+    for (const item of items) {
+        if (item.settings) {
+            productContentBlockMediaIds({ type: item.type, settings: item.settings } as ProductContentBlockValue)
+                .forEach((id) => mediaIds.add(id));
+        }
+    }
     return {
         section: "content_blocks" as const,
         aggregateRevision: header.aggregateRevision,
         items,
+        media: await loadProductPageBlockMedia(db, [...mediaIds]),
         total,
         offset: page.offset,
         limit,

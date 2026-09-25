@@ -58,6 +58,8 @@ interface UseProductSubmitOptions {
 interface ProductMutationVariables {
   values: ProductFormValues;
   acknowledgedSkuImageRemovalIds?: string[];
+  /** The revision to save against when sections saved first in this save; the page's otherwise. */
+  expectedAggregateRevision?: number;
 }
 
 /** SKU conflicts name the product that owns the SKU (`SKU_TAKEN`, 409). */
@@ -97,18 +99,19 @@ export function useProductSubmit({
   };
 
   const mutation = useMutation({
-    mutationFn: async ({ values, acknowledgedSkuImageRemovalIds }: ProductMutationVariables) => {
+    mutationFn: async ({ values, acknowledgedSkuImageRemovalIds, expectedAggregateRevision }: ProductMutationVariables) => {
       const dirty = form.formState.dirtyFields;
       const formattedValues = formatFormValuesForSubmission(values, isEdit ? productSubmitChanges(dirty) : undefined);
       if (isEdit) {
         const entityId = productId || values.id;
-        if (!entityId || !aggregateRevision) throw new Error(t("saveFailed"));
+        const expected = expectedAggregateRevision ?? aggregateRevision;
+        if (!entityId || !expected) throw new Error(t("saveFailed"));
         return apiData(putApiV1AdminProductsById({
           path: { id: entityId },
           body: {
             ...formattedValues,
             id: entityId,
-            expectedAggregateRevision: aggregateRevision,
+            expectedAggregateRevision: expected,
             ...(acknowledgedSkuImageRemovalIds ? { acknowledgedSkuImageRemovalIds } : {}),
           },
         }));
@@ -181,10 +184,10 @@ export function useProductSubmit({
     throw new SaveNotCompleted(getServerFnError(error, t("saveFailed")));
   };
 
-  const submit = async (values: ProductFormValues): Promise<number> => {
+  const submit = async (values: ProductFormValues, expectedAggregateRevision?: number): Promise<number> => {
     try {
       sent.current = copyValues(form.getValues());
-      const result = await mutation.mutateAsync({ values });
+      const result = await mutation.mutateAsync({ values, expectedAggregateRevision });
       return result.aggregateRevision;
     } catch (error) {
       return explain(error, values);

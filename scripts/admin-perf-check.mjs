@@ -41,10 +41,13 @@ export const BUNDLE_BUDGETS = {
     "admin/orders/$orderId/index.tsx": 288,
     "admin/products/index.tsx": 290,
     // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.
-    "admin/products/$productId/edit.tsx": 365,
+    // +1 (catalogue dashboard): categories named by their tree path, and saving the
+    // content-block, bundle and template sections in turn under the product revision.
+    "admin/products/$productId/edit.tsx": 366,
     // The editor plus the navigation shell and the save system's real
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
-    "admin/products/new.tsx": 363,
+    // +1 (catalogue dashboard): the same category paths and section-save code as the edit page.
+    "admin/products/new.tsx": 364,
     "admin/inventory/index.tsx": 255,
     "admin/customers/index.tsx": 245,
     "admin/settings/store.tsx": 291,

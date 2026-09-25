@@ -25,7 +25,8 @@ import {
   categoryQueryOptions,
   type CategoryDetail,
 } from "@/lib/api-query-options/categories";
-import { categoryPathLabel, indexCategories, parentChoices } from "@/lib/category-tree";
+import { categoryPathLabel, indexCategories } from "@/lib/category-tree";
+import { parentChoices } from "@/lib/category-parent-choices";
 import { categoryFormSchema, type CategoryFormInput, type CategoryFormValues } from "@/lib/form-schemas";
 import { getPlainText } from "@/lib/format-utils";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
