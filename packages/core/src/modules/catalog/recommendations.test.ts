@@ -151,8 +151,14 @@ describe("product recommendations", () => {
             imageAlt: "Photo 0",
             secondaryImageUrl: null,
         });
-        // Never computed: the stored-list read, then the live ranking and card media.
-        expect(statements).toHaveLength(3);
+        // Never computed: the stored-list read, the live ranking, then the
+        // kept rows' cards and media.
+        expect(statements).toHaveLength(4);
+        // The ranking scores every public product, so it reads the buyer
+        // state alone; card columns are read for the kept rows only.
+        const ranking = statements.find((query) => query.includes("rec_co_purchase"))!;
+        expect(ranking).not.toContain('"products"."name"');
+        expect(ranking).not.toContain("buyer_state_card_sku");
     });
 
     it("treats products in the same dynamic collection as related, but only through published categories", async () => {
@@ -253,7 +259,7 @@ describe("product recommendations", () => {
         // Only the first 20 ids are sources; the rest stay recommendable.
         expect(result.products).toHaveLength(12);
         expect(ids(result).every((id) => many.indexOf(id) >= MAX_RECOMMENDATION_SOURCE_IDS)).toBe(true);
-        expect(statements).toHaveLength(2);
+        expect(statements).toHaveLength(3); // ranking, then cards and media
         expect(maxBoundParameters).toBeLessThanOrEqual(90);
     });
 

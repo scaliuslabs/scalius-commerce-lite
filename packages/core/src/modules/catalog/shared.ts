@@ -165,8 +165,11 @@ export function buildStorefrontBuyerStateConditions(
     },
     options: { drivenByIdSet?: boolean } = {},
 ): { conditions: SQL[]; needsProducts: boolean } {
+    // Search hits and id lookups are small sets that drive the read through
+    // `products` (the FTS rowids, the lookup ids), never the public walk.
     const drivenByIdSet = Boolean(options.drivenByIdSet)
-        || (parsePublicLookupTokens(params.ids).length > 0 && !params.search && !params.category);
+        || Boolean(params.search)
+        || parsePublicLookupTokens(params.ids).length > 0;
     const conditions: SQL[] = [publicBuyerStateCondition({ drivenByIdSet })];
     let needsProducts = false;
     if (params.category) conditions.push(buildCategoryLookupCondition(params.category, buyerState.categoryId));

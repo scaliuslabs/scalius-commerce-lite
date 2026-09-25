@@ -19,8 +19,12 @@ import { enqueueCatalogProjectionRebuild, enqueueRecommendationRefresh } from ".
 export const NIGHTLY_CATALOG_UTC_HOUR = 20;
 /** The cron fires every 15 minutes: exactly one tick falls in this window. */
 const NIGHTLY_WINDOW_MINUTES = 15;
-/** Recommendation lists refreshed per night (about 3 s of D1 time per 100 at 30k products). */
-export const NIGHTLY_RECOMMENDATION_REFRESH_LIMIT = 2_000;
+/**
+ * Recommendation lists refreshed per night, never-computed and oldest first:
+ * about 0.1 s of D1 time each at 30k products (about 5 minutes a night),
+ * so a whole 30k catalogue rolls over in ten nights.
+ */
+export const NIGHTLY_RECOMMENDATION_REFRESH_LIMIT = 3_000;
 
 export function isNightlyCatalogTick(scheduledTime: number | undefined): boolean {
   if (typeof scheduledTime !== "number" || !Number.isFinite(scheduledTime)) return false;
