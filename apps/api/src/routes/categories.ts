@@ -21,6 +21,7 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -130,6 +131,7 @@ const storefrontCategoryProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),

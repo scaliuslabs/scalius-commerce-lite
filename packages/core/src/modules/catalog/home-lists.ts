@@ -24,6 +24,8 @@ import {
     type ProductMediaProjectionRow,
 } from "../products/media";
 import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
+import { storeDecimalPlacesFromCode } from "../products/money";
+import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories/categories.publication";
 import {
     buildCollectionProductSelect,
@@ -100,13 +102,14 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
     resolve(results: readonly unknown[], offset: number): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
-    const slots: Array<{ key: string; rows: number; media: number }> = [];
+    const slots: Array<{ key: string; rows: number; media: number; facts: number }> = [];
     const categoryIds: string[] = [];
 
     const add = (key: string, rows: BatchStatement, ids: SQLWrapper) => {
         const rowsSlot = statements.push(rows) - 1;
         const mediaSlot = statements.push(selectProductMediaProjectionRows(db, ids)) - 1;
-        slots.push({ key, rows: rowsSlot, media: mediaSlot });
+        const factsSlot = statements.push(selectProductCardFactRows(db, ids)) - 1;
+        slots.push({ key, rows: rowsSlot, media: mediaSlot, facts: factsSlot });
     };
 
     for (const list of lists) {
@@ -181,11 +184,16 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 ? []
                 : results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[];
             const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
-            return slots.map(({ key, rows, media }) => {
+            return slots.map(({ key, rows, media, facts }) => {
                 const productRows = results[offset + rows] as RawProduct[];
                 const cards = resolveProductCards(
                     productRows,
                     resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]),
+                    resolveProductCardFacts(
+                        results[offset + facts] as ProductCardFactRow[],
+                        storeDecimalPlacesFromCode(productRows[0]?.storeCurrencyCode),
+                        new Set(productRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                    ),
                 );
                 const source = lists.find((list) => list.key === key)!.source;
                 const category = source.kind === "category" ? categoryById.get(source.categoryId) ?? null : null;

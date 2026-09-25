@@ -4,6 +4,55 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type ProductCardFacts = {
+    /**
+     * The published brand entity.
+     */
+    brand: {
+        name: string;
+        slug: string;
+    } | null;
+    /**
+     * Up to four "Name: value" lines from key-spec attributes, in spec-table order.
+     */
+    keySpecs: Array<string>;
+    /**
+     * Option axes with two or more values, in position order.
+     */
+    options: Array<{
+        /**
+         * The merchant's option axis name.
+         */
+        name: string;
+        kind: 'color' | 'size' | 'other';
+        /**
+         * Values sold on at least one live SKU.
+         */
+        count: number;
+        swatches: Array<{
+            label: string;
+            /**
+             * `#rrggbb` when a swatch attribute value of the same name has one.
+             */
+            hex: string | null;
+        }>;
+    }>;
+    /**
+     * Units sold in the last 30 days from real orders; null below 10.
+     */
+    soldLast30Days: number | null;
+    packSize: string | null;
+    /**
+     * Free when the product ships free, else the cheapest active delivery rate; null without a rate.
+     */
+    delivery: {
+        free: true;
+    } | {
+        free: false;
+        feeFrom: number;
+    } | unknown;
+};
+
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
@@ -201,6 +250,11 @@ export type StorefrontThemeDocument = {
             };
         } | {
             variant: 'quick-add';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'detailed';
             settings: {
                 [key: string]: never;
             };
@@ -1787,6 +1841,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -1806,6 +1861,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -2166,6 +2222,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -3911,6 +3968,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -3930,6 +3988,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    cardFacts?: ProductCardFacts;
                 } | null;
             }>;
             presentation: {
@@ -3978,6 +4037,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                         imageMediaId: string | null;
                         imageAlt: string | null;
                         secondaryImageUrl: string | null;
+                        cardFacts?: ProductCardFacts;
                     }>;
                     category: {
                         id: string;
@@ -4493,6 +4553,7 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 category: {
                     id: string;
@@ -12935,6 +12996,7 @@ export type GetApiV1ProductsResponses = {
                  * The next photo in gallery order, for a card's hover swap. Never a video.
                  */
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -14613,6 +14675,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -14793,6 +14856,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
