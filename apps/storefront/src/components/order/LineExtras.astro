@@ -1,0 +1,18 @@
+---
+// One order line's Wave B extras on the receipt (the account order page uses
+// `lineExtrasMarkup` from the same lib). Each part is owned by its feature and
+// renders nothing when it has nothing to show; without extras there is no markup.
+import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
+import DigitalLineDelivery from "./DigitalLineDelivery.astro";
+import GiftCardLineDelivery from "./GiftCardLineDelivery.astro";
+import ReviewLineAction from "./ReviewLineAction.astro";
+import WarrantyLineInfo from "./WarrantyLineInfo.astro";
+
+export interface Props {
+  line: OrderLine;
+  context: LineExtrasContext;
+}
+
+const { line, context } = Astro.props;
+---
+{line.extras && (<><ReviewLineAction line={line} context={context} /><DigitalLineDelivery line={line} context={context} /><GiftCardLineDelivery line={line} context={context} /><WarrantyLineInfo line={line} context={context} /></>)}

@@ -14,12 +14,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { shellMessages } from "~/i18n/shell";
+import { GIFT_CARDS_NAV_ENABLED } from "../gift-cards/nav";
+import { REVIEWS_NAV_ENABLED } from "../reviews/nav";
 
 type ShellKey = keyof (typeof shellMessages)["en"];
 
 export interface NavLink {
   key: ShellKey;
   to: string;
+  /** A live count beside a sub-page (pending reviews). */
+  badge?: NavBadge;
 }
 
 export interface NavItem {
@@ -38,7 +42,10 @@ export interface NavItem {
   badge?: NavBadge;
 }
 
-export type NavBadge = "inbox";
+export type NavBadge = "inbox" | "reviews";
+
+/** Wave B pages join the menu when their slice turns them on (each flag lives with its feature). */
+const when = (enabled: boolean, link: NavLink): NavLink[] => (enabled ? [link] : []);
 
 export const ADMIN_NAV: readonly NavItem[] = [
   { key: "home", to: "/admin", icon: House },
@@ -53,6 +60,8 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "categories", to: "/admin/categories" },
       { key: "inventory", to: "/admin/inventory" },
       { key: "attributes", to: "/admin/attributes" },
+      ...when(REVIEWS_NAV_ENABLED, { key: "reviews", to: "/admin/reviews", badge: "reviews" }),
+      ...when(GIFT_CARDS_NAV_ENABLED, { key: "giftCards", to: "/admin/gift-cards" }),
     ],
   },
   { key: "customers", to: "/admin/customers", icon: UserRound },

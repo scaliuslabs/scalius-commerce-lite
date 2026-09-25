@@ -25,10 +25,10 @@ vi.mock("./api/customer-auth", () => ({
 }));
 vi.mock("./api/shipping", () => ({ getCities: api.getCities, getZones: api.getZones, getAreas: api.getAreas }));
 vi.mock("./product-media", () => ({ getProductImageUrl: () => "/placeholder-product.svg" }));
-const inbox = vi.hoisted(() => ({ unread: 0 }));
-vi.mock("./account-inbox", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./account-inbox")>()),
-  fetchInboxUnread: async () => inbox.unread,
+const inbox = vi.hoisted(() => ({ unread: 0, reviewsToWrite: 0, giftCards: 0 }));
+vi.mock("./account-tabs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./account-tabs")>()),
+  fetchAccountSummary: async () => ({ unreadInbox: inbox.unread, reviewsToWrite: inbox.reviewsToWrite, downloads: 0, giftCards: inbox.giftCards, activeWarranties: 0 }),
 }));
 
 const { bindSignOut, initializeAccountPage } = await import("./account-page");
@@ -272,6 +272,23 @@ describe("account inbox tab", () => {
     await initializeAccountPage();
     await vi.waitFor(() => expect(element("accountInboxBadge").hidden).toBe(true));
     expect(document.querySelectorAll("#accountTabs")).toHaveLength(1);
+  });
+
+  it("adds a feature tab only while its count is above zero", async () => {
+    const tabs = () => [...document.querySelectorAll<HTMLAnchorElement>("#accountTabs a")].map((link) => link.getAttribute("href"));
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(element("accountInboxBadge").hidden).toBe(true));
+    expect(tabs()).toEqual(["/account", "/account/inbox"]);
+
+    inbox.reviewsToWrite = 2;
+    inbox.giftCards = 1;
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(tabs()).toEqual(["/account", "/account/inbox", "/account/reviews", "/account/gift-cards"]));
+
+    inbox.reviewsToWrite = 0;
+    inbox.giftCards = 0;
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(tabs()).toEqual(["/account", "/account/inbox"]));
   });
 });
 

@@ -10,6 +10,7 @@ import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
 import { formatOrderDate } from "../orderview/formatters";
 import { statusBadgeVariant } from "../orderview/status-badges";
 import type { StaffThread } from "~/lib/api-query-options/inbox";
+import { SubjectContext } from "./subject-context";
 
 /** The thread's context (Shopify Inbox's right rail): customer, order and its requests. */
 export function ContextRail({ thread, className }: { thread: StaffThread; className?: string }) {
@@ -30,6 +31,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
           </Link>
         ) : null}
       </section>
+      <SubjectContext thread={thread} />
       {order ? (
         <section className="flex flex-col gap-2 p-4">
           <h3 className="text-heading-sm">{t("order")}</h3>
