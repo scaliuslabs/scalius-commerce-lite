@@ -302,6 +302,16 @@ const productAttributeSchema = z.object({
   value: z.string(),
 });
 
+/** A specification row on the product page: grouped (the attribute group), in the merchant's order. */
+const productPageAttributeSchema = productAttributeSchema.extend({
+  /** The attribute group's name ("Display", "Performance"); null outside any group. */
+  group: z.string().nullable(),
+  /** The unit after the value ("GB", "inch"); null when none. */
+  unit: z.string().nullable(),
+  /** A key spec: the buy box's fact list and the key-attributes table. */
+  keySpec: z.boolean(),
+});
+
 const productAdditionalInfoSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -416,7 +426,7 @@ const productDetailDataSchema = z.object({
     requiresCustomization: z.boolean(),
     /** The saved buyer-input schema is unreadable: the product can't be bought until the store fixes it. */
     customizationUnavailable: z.boolean(),
-    attributes: z.array(productAttributeSchema),
+    attributes: z.array(productPageAttributeSchema),
     additionalInfo: z.array(productAdditionalInfoSchema),
     /** The published brand record (JSON-LD `brand`, the buy-box brand link); null means none. */
     brand: z.object({

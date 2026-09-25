@@ -259,7 +259,8 @@ export interface Product {
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
-  attributes?: Array<{ name: string; value: string; slug: string }>;
+  /** Specification rows, grouped and in the merchant's order. */
+  attributes?: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean }>;
   /** The published brand record (product page, feeds); never a free-text attribute. */
   brand?: ProductBrand | null;
   categoryId: string | null;
