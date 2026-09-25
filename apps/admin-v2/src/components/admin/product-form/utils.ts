@@ -30,8 +30,23 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   slugEdited: "webAddress",
   variantPriced: "price",
   fulfillmentKind: "fulfilment",
+  isGiftCard: "giftCardProduct",
+  warrantyPolicyId: "warranty",
   customizationSchema: "buyerInputs",
 };
+
+/** Product fields an edit sends only when the merchant changed them ("omit to keep"). */
+export type ProductSubmitChanges = Partial<Record<"customizationSchema" | "fulfillmentKind" | "isGiftCard" | "warrantyPolicyId", boolean>>;
+
+/** The "omit to keep" fields the merchant changed, from the form's dirty state. */
+export function productSubmitChanges(dirty: Partial<Record<keyof ProductFormValues, unknown>>): ProductSubmitChanges {
+  return {
+    customizationSchema: Boolean(dirty.customizationSchema),
+    fulfillmentKind: Boolean(dirty.fulfillmentKind),
+    isGiftCard: Boolean(dirty.isGiftCard),
+    warrantyPolicyId: Boolean(dirty.warrantyPolicyId),
+  };
+}
 
 export function productFieldLabel(field: keyof ProductFormValues): string {
   return translate(productMessages, FIELD_LABELS[field] ?? "product");
@@ -43,16 +58,21 @@ export function productFieldLabel(field: keyof ProductFormValues): string {
  */
 export function formatFormValuesForSubmission(
   values: ProductFormValues,
-  /** Fields the merchant changed; an edit sends buyer inputs and fulfilment only then. Omit for a new product. */
-  changed?: { customizationSchema?: boolean; fulfillmentKind?: boolean },
+  /** Fields the merchant changed; an edit sends these only then ("omit to keep"). Omit for a new product. */
+  changed?: ProductSubmitChanges,
 ): CreateProductInput & { slug: string } {
   // Buyer inputs fence checkouts in flight: only a real change is sent ("omit to keep").
   const sendInputs = changed ? changed.customizationSchema === true : values.customizationSchema.length > 0;
   // One kind for every SKU; "set per variant" leaves the kinds to the variant table.
   const sendKind = values.fulfillmentKind !== "mixed" && (changed ? changed.fulfillmentKind === true : true);
+  // Wave B extras: a new product sends them only when set; an edit only when changed.
+  const sendGiftCard = changed ? changed.isGiftCard === true : values.isGiftCard;
+  const sendWarranty = changed ? changed.warrantyPolicyId === true : values.warrantyPolicyId !== null;
   return {
     ...(sendInputs ? { customizationSchema: customizationInput(values.customizationSchema) } : {}),
     ...(sendKind && values.fulfillmentKind !== "mixed" ? { fulfillmentKind: values.fulfillmentKind } : {}),
+    ...(sendGiftCard ? { isGiftCard: values.isGiftCard } : {}),
+    ...(sendWarranty ? { warrantyPolicyId: values.warrantyPolicyId } : {}),
     name: values.name,
     description: values.description,
     price: values.price ?? 0,

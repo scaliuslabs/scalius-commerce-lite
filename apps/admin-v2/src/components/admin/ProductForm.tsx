@@ -202,6 +202,8 @@ function ProductEditor({
       attributes: [],
       additionalInfo: [],
       fulfillmentKind: "physical",
+      isGiftCard: false,
+      warrantyPolicyId: null,
       customizationSchema: [],
       ...defaultValues,
     },

@@ -204,10 +204,7 @@ export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
       discountType: variant.discountType === "flat" ? "flat" : "percentage",
       discountPercentage: variant.discountPercentage ?? null,
       discountAmount: variant.discountAmount ?? null,
-      // Only kinds the editor offers; a digital SKU (Wave B) keeps its kind (omitted).
-      ...(variant.fulfillmentKind === "physical" || variant.fulfillmentKind === "service"
-        ? { fulfillmentKind: variant.fulfillmentKind }
-        : {}),
+      ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
     }));
 }
 

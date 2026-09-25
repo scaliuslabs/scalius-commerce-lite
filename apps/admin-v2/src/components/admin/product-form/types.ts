@@ -108,8 +108,15 @@ export const productFormSchema = z.object({
   slugEdited: z.boolean().optional(),
   /** The product has options: its variants carry the prices (and their own checks). */
   variantPriced: z.boolean().optional(),
-  /** What the SKUs are: all physical, all services, or set per variant. */
-  fulfillmentKind: z.enum(["physical", "service", "mixed"]),
+  /** What the SKUs are: all physical, all digital, all services, or set per variant. */
+  fulfillmentKind: z.enum(["physical", "digital", "service", "mixed"]),
+  // Wave B product extras. Digital files and licence keys are their own
+  // resources on a saved product (the Digital delivery card); the product
+  // fields are the gift-card switch and the warranty policy.
+  /** Gift-card product: every SKU is a denomination, delivered digitally, never discounted. */
+  isGiftCard: z.boolean(),
+  /** The product's warranty policy (wrp_…), or null for none. */
+  warrantyPolicyId: z.string().nullable(),
   /** Buyer inputs the product page asks for, in order (each checked in its dialog). */
   customizationSchema: z.array(z.custom<BuyerInputDraft>()).max(CUSTOMIZATION_LIMITS.fields, {
     error: () => translate(productMessages, "buyerInputsFull", { max: CUSTOMIZATION_LIMITS.fields }),
