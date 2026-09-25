@@ -37,12 +37,15 @@ export type ConversationNotificationType = (typeof CONVERSATION_NOTIFICATION_TYP
  * Buyer messages whose content a domain resolves at send time (Wave B §10):
  * the API layer's `notification-content/*` resolvers return the variables, so
  * the notifications domain never imports digital, gift-cards or reviews.
- * `gift_card_issued` is about a gift card (subject `gift_card`); the others
+ * `gift_card_issued` (to the card's recipient, with the code) and
+ * `gift_card_sent` (to the buyer, no code) are about a gift card (subject
+ * `gift_card`); the others
  * are about an order.
  */
 export const RESOLVED_NOTIFICATION_TYPES = [
     "order_digital_delivered",
     "gift_card_issued",
+    "gift_card_sent",
     "review_request",
 ] as const;
 

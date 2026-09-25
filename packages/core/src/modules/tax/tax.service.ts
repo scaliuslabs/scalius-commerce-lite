@@ -133,6 +133,10 @@ export interface StorefrontTaxQuoteLineInput {
     unitPriceMinor: number;
     quantity: number;
     taxClassId: string | null;
+    /** Tax-exempt at sale whatever its class (gift-card lines). */
+    taxExempt?: boolean;
+    /** Never given a share of a manual order discount (gift-card lines). */
+    discountExempt?: boolean;
 }
 
 export interface StorefrontTaxQuoteInput {
@@ -189,6 +193,7 @@ export async function calculateStorefrontTaxQuote(
         unitPriceMinor: line.unitPriceMinor,
         quantity: line.quantity,
         taxClassId: line.taxClassId,
+        ...(line.taxExempt === true ? { taxExempt: true } : {}),
     }));
 
     if (input.promotionDiscountAllocation && input.discountMinor) {
@@ -204,7 +209,7 @@ export async function calculateStorefrontTaxQuote(
         }
         : buildStorefrontDiscountAllocation({
             discountMinor: input.discountMinor ?? 0,
-            lines: input.lines,
+            lines: input.lines.filter((line) => line.discountExempt !== true),
         });
 
     return calculateTaxQuote({

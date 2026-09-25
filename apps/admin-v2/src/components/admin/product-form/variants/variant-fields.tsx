@@ -15,6 +15,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
+import { useProductKindRules } from "../product-kind-rules";
 import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model";
 
 /** The message a field shows, if the current (or server's) problem is about it. */
@@ -234,6 +235,8 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
   const t = useMessages(productMessages);
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
+  // What the product kind allows: a gift card has no discount, weight or quantity tracking.
+  const { showDiscount, showWeight, showInventory } = useProductKindRules();
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label={t("sku")} error={errorOf("sku")}>
@@ -241,9 +244,11 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
           <Input value={variant.sku} aria-invalid={invalid} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
         )}
       </Field>
-      <Field label={t("discount")} error={errorOf("discount")}>
-        {(invalid) => <DiscountInput variant={variant} name={name} invalid={invalid} onChange={onChange} />}
-      </Field>
+      {showDiscount ? (
+        <Field label={t("discount")} error={errorOf("discount")}>
+          {(invalid) => <DiscountInput variant={variant} name={name} invalid={invalid} onChange={onChange} />}
+        </Field>
+      ) : null}
       {/* Scan or type: the type is picked from the code, and can still be changed. */}
       <Field label={t("barcode")} help={isUnsavedSku && !variant.barcode ? t("barcodeHint") : undefined} error={errorOf("barcode")}>
         {(invalid) => (
@@ -274,20 +279,24 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
           </NativeSelect>
         )}
       </Field>
-      <Field label={t("weightGrams")} error={errorOf("weight")}>
-        {(invalid) => (
-          <NumberInput
-            value={variant.weight}
-            aria-invalid={invalid}
-            aria-label={t("weightFor", { name })}
-            onValueChange={(weight) => onChange({ weight })}
-          />
-        )}
-      </Field>
-      <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
-        <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
-        {t("trackQuantity")}
-      </label>
+      {showWeight ? (
+        <Field label={t("weightGrams")} error={errorOf("weight")}>
+          {(invalid) => (
+            <NumberInput
+              value={variant.weight}
+              aria-invalid={invalid}
+              aria-label={t("weightFor", { name })}
+              onValueChange={(weight) => onChange({ weight })}
+            />
+          )}
+        </Field>
+      ) : null}
+      {showInventory ? (
+        <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
+          <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
+          {t("trackQuantity")}
+        </label>
+      ) : null}
     </div>
   );
 }

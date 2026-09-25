@@ -32,8 +32,14 @@ import {
     productVariants,
     media,
     orders,
+    giftCards,
+    giftCardTransactions,
+    refundAttempts,
 } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
+import type { Database } from "@scalius/database/client";
+import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
 import { ok, created, noContent } from "../../../utils/api-response";
 import {
@@ -135,7 +141,64 @@ const orderPaymentSchema = z.object({
     codReceiptUrl: z.string().nullable(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
+    giftCard: z.object({
+        id: z.string(),
+        last4: z.string(),
+        storeCredit: z.boolean(),
+    }).nullable().openapi({
+        description: "The gift card this row moved money on (last 4 only): a tender, a refund to that card, or (storeCredit) the card a store-credit refund issued.",
+    }),
 });
+
+type GiftCardPaymentLink = { id: string; last4: string; storeCredit: boolean };
+
+/**
+ * The gift card behind each payment row: a tender and a refund back to its
+ * card name their row in the ledger; a store-credit card names its refund
+ * attempt, and every row of that refund group points to it. Two bounded
+ * reads, run only when the order has such rows.
+ */
+async function listGiftCardPaymentLinks(
+    db: Database,
+    orderId: string,
+    rows: ReadonlyArray<{ paymentMethod: string; paymentType: string }>,
+): Promise<Map<string, GiftCardPaymentLink>> {
+    const links = new Map<string, GiftCardPaymentLink>();
+    if (rows.some((row) => row.paymentMethod === GIFT_CARD_PAYMENT_METHOD)) {
+        const ledger = await db.select({
+            orderPaymentId: giftCardTransactions.orderPaymentId,
+            giftCardId: giftCards.id,
+            last4: giftCards.codeLast4,
+        })
+            .from(giftCardTransactions)
+            .innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId))
+            .where(and(
+                eq(giftCardTransactions.orderId, orderId),
+                inArray(giftCardTransactions.kind, ["redeem", "refund"]),
+            ))
+            .all();
+        for (const row of ledger) {
+            if (row.orderPaymentId) links.set(row.orderPaymentId, { id: row.giftCardId, last4: row.last4, storeCredit: false });
+        }
+    }
+    if (rows.some((row) => row.paymentType === "refund")) {
+        const creditAttempt = alias(refundAttempts, "credit_attempt");
+        const credits = await db.select({
+            refundPaymentId: refundAttempts.refundPaymentId,
+            giftCardId: giftCards.id,
+            last4: giftCards.codeLast4,
+        })
+            .from(giftCards)
+            .innerJoin(creditAttempt, eq(creditAttempt.id, giftCards.sourceRefundAttemptId))
+            .innerJoin(refundAttempts, eq(refundAttempts.refundGroupId, creditAttempt.refundGroupId))
+            .where(and(eq(giftCards.sourceOrderId, orderId), eq(giftCards.source, "refund")))
+            .all();
+        for (const row of credits) {
+            links.set(row.refundPaymentId, { id: row.giftCardId, last4: row.last4, storeCredit: true });
+        }
+    }
+    return links;
+}
 
 const paymentPlanSchema = z.object({
     id: z.string(),
@@ -628,8 +691,14 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     ]);
 
     const amount = (minor: number) => fromMinor(minor, order?.currencyDecimalPlaces ?? 2);
+    // After the parallel reads, so the handler never holds more than six D1 connections.
+    const giftCardLinks = await listGiftCardPaymentLinks(db, orderId, payments);
     return ok(c, {
-        payments: payments.map(({ amountMinor, ...payment }) => ({ ...payment, amount: amount(amountMinor) })),
+        payments: payments.map(({ amountMinor, ...payment }) => ({
+            ...payment,
+            amount: amount(amountMinor),
+            giftCard: giftCardLinks.get(payment.id) ?? null,
+        })),
         plan: plan
             ? (({ totalAmountMinor, depositAmountMinor, balanceDueMinor, ...facts }) => ({
                 ...facts,

@@ -6,7 +6,9 @@ import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
   previewStorefrontBundleSavings,
   resolveBundlePromotionInterplay,
+  selectStorefrontCartProductRows,
 } from "@scalius/core/modules/checkout";
+import type { Database } from "@scalius/database/client";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
@@ -42,6 +44,13 @@ const validateDiscountSchema = z.object({
   }),
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
 });
+
+/** The cart's gift-card products: promotions never apply to them (Wave B §4.2). */
+async function selectGiftCardProductIds(db: Database, productIds: readonly string[]): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const rows = await selectStorefrontCartProductRows(db, productIds);
+  return new Set(rows.filter((row) => row.isGiftCard).map((row) => row.id));
+}
 
 // POST /discounts/validate: buyer/cart data stays in the body, never the URL.
 const validateDiscountRoute = createRoute({
@@ -85,7 +94,10 @@ app.openapi(validateDiscountRoute, async (c) => {
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
   }
-  const currency = await getCurrencyConfig(db);
+  const [currency, giftCardProductIds] = await Promise.all([
+    getCurrencyConfig(db),
+    selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
+  ]);
   const cartLines = lines.map(({ item, index, variantId }) => ({
     id: `cart:${index}:${variantId}`,
     productId: item.id,
@@ -105,6 +117,8 @@ app.openapi(validateDiscountRoute, async (c) => {
         variantId,
         unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
         quantity: item.quantity,
+        // Gift-card lines are outside every promotion (Wave B §4.2).
+        ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
       })),
       shippingAmountMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
     },

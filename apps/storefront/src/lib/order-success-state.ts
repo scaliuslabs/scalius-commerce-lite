@@ -1,7 +1,7 @@
 import type { OrderItem, OrderReceipt } from "./api/types";
 import {
   formatOrderSuccessLabel,
-  formatOrderSuccessPaymentMethod,
+  formatOrderSuccessPaymentMethod as formatGatewayPaymentMethod,
 } from "./order-success-localization";
 import {
   formatCheckoutLanguageText,
@@ -9,8 +9,58 @@ import {
 } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
+import { giftCardCheckoutCopy } from "./checkout/gift-cards";
 
-export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
+export { formatOrderSuccessLabel } from "./order-success-localization";
+
+/** `orders.payment_method` of an order its gift cards paid in full (Wave B §4.3). */
+export const GIFT_CARD_PAYMENT_METHOD = "gift_card";
+
+/** One gift card that paid part of the order, as the receipt shows it (never a code). */
+export interface ReceiptGiftCardTender {
+  last4: string;
+  amount: number;
+}
+
+/**
+ * A receipt or account order, which may carry `giftCardTenders` (read
+ * defensively: the field is optional and older payloads lack it).
+ */
+export type OrderGiftCardFacts = object;
+
+/** The gift cards that paid part of the order (succeeded tenders only); malformed entries are skipped. */
+export function readReceiptGiftCardTenders(order: OrderGiftCardFacts): ReceiptGiftCardTender[] {
+  const tenders = (order as { giftCardTenders?: unknown }).giftCardTenders;
+  if (!Array.isArray(tenders)) return [];
+  return tenders.slice(0, 10).flatMap((tender: unknown) => {
+    if (typeof tender !== "object" || tender === null) return [];
+    const { last4, amount } = tender as { last4?: unknown; amount?: unknown };
+    return typeof last4 === "string" && /^[0-9A-Z]{4}$/.test(last4) &&
+      typeof amount === "number" && Number.isFinite(amount) && amount > 0
+      ? [{ last4, amount }]
+      : [];
+  });
+}
+
+/** "Gift card •••• 7K2Q": one tender row's label. */
+export function receiptGiftCardTenderLabel(tender: ReceiptGiftCardTender, copy: CheckoutLanguageData): string {
+  return formatCheckoutLanguageText(giftCardCheckoutCopy(copy).giftCardLineText, { card: `•••• ${tender.last4}` });
+}
+
+/**
+ * How the order is paid: "Gift card" when the cards paid everything, the
+ * remainder method after "Gift card + " when they paid part, else the method.
+ */
+export function formatOrderSuccessPaymentMethod(
+  value: string | null | undefined,
+  copy: CheckoutLanguageData,
+  order: OrderGiftCardFacts = {},
+): string {
+  const giftCard = giftCardCheckoutCopy(copy).giftCardTitleText;
+  if (normalize(value) === GIFT_CARD_PAYMENT_METHOD) return giftCard;
+  const method = formatGatewayPaymentMethod(value, copy);
+  return readReceiptGiftCardTenders(order).length > 0 ? `${giftCard} + ${method}` : method;
+}
 
 const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
 const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
@@ -67,10 +117,18 @@ function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-/** Every payment method except cash on delivery is an online gateway. */
+/**
+ * Every payment method except cash on delivery and a gift-card-paid order is
+ * an online gateway (a gift card settles at commit: nothing to confirm or retry).
+ */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod";
+  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD;
+}
+
+/** Paid before anything is handed over: online, or entirely by gift card. */
+function isPrepaidPaymentMethod(paymentMethod: string | null | undefined): boolean {
+  return isOnlinePaymentMethod(paymentMethod) || normalize(paymentMethod) === GIFT_CARD_PAYMENT_METHOD;
 }
 
 function isAcceptedPayment(order: Pick<OrderReceipt, "paymentStatus" | "paidAmount">): boolean {
@@ -164,27 +222,37 @@ export function codDueText(order: OrderDeliveryFacts, copy: CheckoutLanguageData
 }
 
 export function getOrderPaymentPresentation(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"> & OrderDeliveryFacts,
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">
+    & OrderDeliveryFacts
+    & OrderGiftCardFacts,
   copy: CheckoutLanguageData,
 ) {
   const isCod = normalize(order.paymentMethod) === "cod";
   const paymentStatus = normalize(order.paymentStatus);
   const isClosed = CLOSED_ORDER_STATUSES.has(normalize(order.status)) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus);
   const codCollection = isCod && ["unpaid", "partial"].includes(paymentStatus);
+  const giftCardTenders = readReceiptGiftCardTenders(order);
+  // Gift cards paid part and cash on delivery collects the rest: that rest is due at the door.
+  const codRemainder = isCod && paymentStatus === "partial" && giftCardTenders.length > 0;
   return {
     isCod,
     isClosed,
     statusLabel: codCollection && isClosed
       ? copy.orderReceiptPaymentStatusNoPaymentDueText
-      : isCod && paymentStatus === "unpaid"
+      : isCod && (paymentStatus === "unpaid" || codRemainder)
         ? codDueText(order, copy)
         : formatOrderSuccessLabel(order.paymentStatus, copy),
     badgeClass: codCollection
       ? "bg-slate-100 text-slate-800"
       : getPaymentStatusBadgeClass(order.paymentStatus),
     methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order),
+    giftCardTenders,
     balanceDue: getOrderSuccessVisibleBalanceDue(order),
-    balanceLabel: isCod ? codDueText(order, copy) : copy.orderReceiptBalanceDueText,
+    balanceLabel: isCod
+      ? codDueText(order, copy)
+      : giftCardTenders.length > 0
+        ? giftCardCheckoutCopy(copy).amountDueText
+        : copy.orderReceiptBalanceDueText,
   };
 }
 
@@ -327,7 +395,7 @@ export function getOrderSuccessNextSteps(
   copy: CheckoutLanguageData,
 ): string[] {
   if (kind !== "order_placed") return [];
-  const paid = isOnlinePaymentMethod(order.paymentMethod);
+  const paid = isPrepaidPaymentMethod(order.paymentMethod);
   // Nothing goes to a courier for a pickup or a service.
   const mode = orderDeliveryMode(order);
   if (mode === "pickup") {
