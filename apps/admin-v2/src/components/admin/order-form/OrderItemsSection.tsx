@@ -8,7 +8,16 @@ import { useOrderForm } from "./OrderFormContext";
 import { ProductSearch } from "./ProductSearch";
 import { ItemSelection } from "./ItemSelection";
 import { OrderItemsTable } from "./OrderItemsTable";
-import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
+import { productQueryOptions, productVariantsQueryOptions } from "@/lib/api-query-options/products";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { useCurrency } from "@/hooks/use-currency";
+import {
+  checkLineProperties,
+  customizationFromView,
+  type CustomizationView,
+  type LinePropertiesCheck,
+} from "./order-line-properties";
+import { linePropertyFieldId } from "./LinePropertyFields";
 import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
 import type { ApiResult } from "@/lib/api";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -49,6 +58,7 @@ function normalizeVariant(variant: RawProductVariant): ProductVariant {
     discountType: variant.discountType ?? null,
     discountPercentage: variant.discountPercentage ?? null,
     discountAmount: variant.discountAmount ?? null,
+    fulfillmentKind: variant.fulfillmentKind ?? "physical",
   };
 }
 
@@ -58,8 +68,17 @@ function normalizeVariants(result: unknown): ProductVariant[] {
   return variants.filter((variant) => !variant.deletedAt).map(normalizeVariant);
 }
 
+/** A product read: its SKUs plus the buyer inputs it asks for. */
+function normalizeProductRead(result: unknown): { variants: ProductVariant[]; customization: Product["customization"] } {
+  const view = (result as { customizationSchema?: CustomizationView | null } | null)?.customizationSchema;
+  return { variants: normalizeVariants(result), customization: customizationFromView(view) };
+}
+
 function normalizeCatalogProduct(product: CatalogProduct): Product {
+  // `requiresCustomization` lands on catalog rows with the Wave A contract; unknown until then.
+  const flag = (product as { requiresCustomization?: unknown }).requiresCustomization;
   return {
+    ...(typeof flag === "boolean" && !flag ? { customization: null } : {}),
     id: product.id,
     name: product.name,
     price: product.price,
@@ -78,6 +97,11 @@ export function OrderItemsSection() {
   const { form, refs, isEdit } = useOrderForm();
   const t = useMessages(orderFormMessages);
   const queryClient = useQueryClient();
+  const { code, fmt } = useCurrency();
+  const minorFactor = 10 ** getDecimalPlaces(code);
+  // The buyer inputs typed for the product being added, and why the last Add was refused.
+  const [propertyValues, setPropertyValues] = React.useState<Record<string, string>>({});
+  const [propertyError, setPropertyError] = React.useState<{ key: string | null; message: string } | null>(null);
 
   const [searchTerm, setSearchTerm] = React.useState("");
   const debouncedSearch = useDebounce(
@@ -125,13 +149,20 @@ export function OrderItemsSection() {
     variantLoadTokenRef.current += 1;
     setIsLoadingVariants(false);
     setSelectedProduct(null);
+    setPropertyValues({});
+    setPropertyError(null);
     setSelectedVariant("");
     setQuantity(1);
     refs.productSearchInputRef.current?.focus();
   };
 
   /** Adds one line unless it would exceed the tracked stock. */
-  const addLine = (product: Product, variant: ProductVariant, lineQuantity: number) => {
+  const addLine = (
+    product: Product,
+    variant: ProductVariant,
+    lineQuantity: number,
+    inputs: Extract<LinePropertiesCheck, { ok: true }> | null = null,
+  ) => {
     const currentItems = form.getValues("items");
     const remainingStock = isEdit
       ? null
@@ -148,10 +179,15 @@ export function OrderItemsSection() {
         productId: product.id,
         variantId: variant.id,
         quantity: lineQuantity,
-        price: discountedUnitPrice(product, variant),
+        // The product/variant sale applies to the base; surcharges are added whole (Wave A §3.3).
+        price: discountedUnitPrice(product, variant) + (inputs ? inputs.surchargeMinor / minorFactor : 0),
         name: product.name,
         variantLabel: orderItemVariantLabel(variant),
         available: isEdit ? null : trackedAvailableStock(variant),
+        fulfillmentKind: variant.fulfillmentKind ?? "physical",
+        ...(inputs && inputs.properties.length > 0
+          ? { properties: inputs.properties, propertiesDisplay: inputs.resolved }
+          : {}),
       },
     ], { shouldDirty: true, shouldValidate: true });
     return true;
@@ -163,14 +199,16 @@ export function OrderItemsSection() {
       clearProductSelection();
       return;
     }
-    // One variant: add it straight away at quantity 1, as Shopify does.
-    if (variants.length === 1) {
+    // One variant and nothing to ask: add it straight away at quantity 1, as Shopify does.
+    if (variants.length === 1 && !product.customization) {
       addLine(product, variants[0]!, 1);
       clearProductSelection();
       return;
     }
     setSelectedProduct({ ...product, variants, variantCount: variants.length });
-    setSelectedVariant("");
+    setSelectedVariant(variants.length === 1 ? variants[0]!.id : "");
+    setPropertyValues({});
+    setPropertyError(null);
     setQuantity(1);
     setTimeout(() => document.getElementById("variant-select-trigger")?.focus(), 0);
   };
@@ -187,12 +225,15 @@ export function OrderItemsSection() {
 
     setSelectedProduct({ ...product, variants: [] });
     setIsLoadingVariants(true);
-    void queryClient
-      .ensureQueryData(productVariantsQueryOptions(product.id))
-      .then((result) => {
+    // A product that may ask for buyer inputs is read whole (SKUs and inputs in one read).
+    const read = product.customization === null
+      ? queryClient.ensureQueryData(productVariantsQueryOptions(product.id)).then((result) => ({ variants: normalizeVariants(result), customization: null }))
+      : queryClient.ensureQueryData(productQueryOptions(product.id)).then(normalizeProductRead);
+    void read
+      .then(({ variants, customization }) => {
         if (variantLoadTokenRef.current !== loadToken) return;
         setIsLoadingVariants(false);
-        showVariants(product, normalizeVariants(result));
+        showVariants({ ...product, customization }, variants);
       })
       .catch(() => {
         if (variantLoadTokenRef.current !== loadToken) return;
@@ -208,7 +249,19 @@ export function OrderItemsSection() {
       setPickerMessage(t("chooseVariantFirst"));
       return;
     }
-    if (addLine(selectedProduct, variant, quantity)) clearProductSelection();
+    // The server's own check (shared): required inputs filled, choices from the list.
+    const inputs = checkLineProperties(selectedProduct.customization ?? null, propertyValues);
+    if (!inputs.ok) {
+      const field = selectedProduct.customization?.fields.find((candidate) => candidate.key === inputs.key);
+      setPropertyError({
+        key: inputs.key,
+        message: t(inputs.reason === "required" ? "inputRequired" : "inputInvalid", { label: field?.label ?? "" }),
+      });
+      if (inputs.key) document.getElementById(linePropertyFieldId(inputs.key))?.focus();
+      return;
+    }
+    setPropertyError(null);
+    if (addLine(selectedProduct, variant, quantity, inputs)) clearProductSelection();
   };
 
   return (
@@ -267,6 +320,16 @@ export function OrderItemsSection() {
                 quantity={quantity}
                 setQuantity={setQuantity}
                 handleAddItem={handleAddItem}
+                buyerInputs={selectedProduct.customization ? {
+                  schema: selectedProduct.customization,
+                  values: propertyValues,
+                  error: propertyError,
+                  onChange: (key, value) => {
+                    setPropertyValues((current) => ({ ...current, [key]: value }));
+                    setPropertyError((current) => (current?.key === key ? null : current));
+                  },
+                  surcharge: (priceMinor) => fmt(priceMinor / minorFactor),
+                } : null}
               />
             )}
           </div>
