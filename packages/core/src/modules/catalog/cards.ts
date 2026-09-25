@@ -16,6 +16,7 @@ import {
     type ProductCardImages,
     type ProductMediaProjection,
 } from "../products/media";
+import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
 
 /** The card columns of a product row joined to a buyer pricing projection. */
 export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
@@ -55,12 +56,15 @@ export type ResolvedProduct = {
     hasVariants: boolean;
     availableForSale: boolean;
     priceVaries: boolean;
+    /** Brand, key specs, options, sold count, pack size and delivery line (card-facts.ts). */
+    cardFacts: ProductCardFacts;
 } & ProductCardImages;
 
 function enrichProduct(
     p: RawProduct,
     images: ProductCardImages,
     decimalPlaces: number,
+    cardFacts: ProductCardFacts,
 ): ResolvedProduct {
     const { hasVariants, availableForSale, storeCurrencyCode: _storeCurrencyCode, ...product } = p;
     return {
@@ -68,17 +72,22 @@ function enrichProduct(
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
         ...images,
+        cardFacts,
     };
 }
 
-/** Buyer cards for product rows, with the card images from their gallery rows. */
+/**
+ * Buyer cards for product rows, with the card images from their gallery rows
+ * and, when the plan read them, their card facts.
+ */
 export function resolveProductCards(
     rows: readonly RawProduct[],
     mediaByProductId: ReadonlyMap<string, ProductMediaProjection[]>,
+    cardFacts: (productId: string) => ProductCardFacts = () => EMPTY_PRODUCT_CARD_FACTS,
 ): Map<string, ResolvedProduct> {
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return new Map(rows.map((row) => [
         row.id,
-        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces),
+        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces, cardFacts(row.id)),
     ]));
 }

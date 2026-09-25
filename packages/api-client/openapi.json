@@ -55,6 +55,147 @@
       }
     },
     "schemas": {
+      "ProductCardFacts": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "slug"
+            ],
+            "description": "The published brand entity."
+          },
+          "keySpecs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "description": "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The merchant's option axis name."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "color",
+                    "size",
+                    "other"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "description": "Values sold on at least one live SKU."
+                },
+                "swatches": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "hex": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "`#rrggbb` when a swatch attribute value of the same name has one."
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "hex"
+                    ]
+                  },
+                  "maxItems": 5
+                }
+              },
+              "required": [
+                "name",
+                "kind",
+                "count",
+                "swatches"
+              ]
+            },
+            "description": "Option axes with two or more values, in position order."
+          },
+          "soldLast30Days": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 10,
+            "description": "Units sold in the last 30 days from real orders; null below 10."
+          },
+          "packSize": {
+            "type": "string",
+            "nullable": true
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "free": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "free"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "free": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  },
+                  "feeFrom": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "free",
+                  "feeFrom"
+                ]
+              },
+              {}
+            ],
+            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate."
+          }
+        },
+        "required": [
+          "brand",
+          "keySpecs",
+          "options",
+          "soldLast30Days",
+          "packSize",
+          "delivery"
+        ]
+      },
       "NullableTimestamp": {
         "type": "string",
         "nullable": true,
@@ -1081,6 +1222,27 @@
                         "type": "string",
                         "enum": [
                           "quick-add"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
+                          "detailed"
                         ]
                       },
                       "settings": {
@@ -7600,6 +7762,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "discountedPrice": {
                                 "type": "number"
                               },
@@ -7683,6 +7848,9 @@
                             "secondaryImageUrl": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "cardFacts": {
+                              "$ref": "#/components/schemas/ProductCardFacts"
                             },
                             "discountedPrice": {
                               "type": "number"
@@ -8867,6 +9035,9 @@
                               "secondaryImageUrl": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
                               },
                               "category": {
                                 "type": "object",
@@ -15047,6 +15218,9 @@
                                     "secondaryImageUrl": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "cardFacts": {
+                                      "$ref": "#/components/schemas/ProductCardFacts"
                                     }
                                   },
                                   "required": [
@@ -15133,6 +15307,9 @@
                                   "secondaryImageUrl": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "cardFacts": {
+                                    "$ref": "#/components/schemas/ProductCardFacts"
                                   }
                                 },
                                 "required": [
@@ -15343,6 +15520,9 @@
                                         "secondaryImageUrl": {
                                           "type": "string",
                                           "nullable": true
+                                        },
+                                        "cardFacts": {
+                                          "$ref": "#/components/schemas/ProductCardFacts"
                                         }
                                       },
                                       "required": [
@@ -17274,6 +17454,9 @@
                                     "secondaryImageUrl": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "cardFacts": {
+                                      "$ref": "#/components/schemas/ProductCardFacts"
                                     }
                                   },
                                   "required": [
@@ -47474,6 +47657,9 @@
                                 "nullable": true,
                                 "description": "The next photo in gallery order, for a card's hover swap. Never a video."
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -53864,6 +54050,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -54562,6 +54751,9 @@
                               "secondaryImageUrl": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
                               },
                               "category": {
                                 "type": "object",

@@ -30,6 +30,7 @@ import {
     storeDecimalPlacesFromCode,
 } from "../products/money";
 import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "../catalog/listing";
+import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "../catalog/card-facts";
 import {
     buildCollectionProductSelect,
     resolveProductCards,
@@ -1022,6 +1023,7 @@ export function planCollectionProducts(
     const statements: BatchStatement[] = [];
     const productSlots: number[] = [];
     const mediaSlots: number[] = [];
+    const factSlots: number[] = [];
     const push = (statement: BatchStatement) => statements.push(statement) - 1;
     /**
      * A product statement and the media statement of the same rows. Eligible
@@ -1037,9 +1039,11 @@ export function planCollectionProducts(
         productSlots.push(push(order
             ? rows.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
             : rows));
-        mediaSlots.push(push(selectProductMediaProjectionRows(db, order
+        const scopedIds = order
             ? ids.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
-            : ids)));
+            : ids;
+        mediaSlots.push(push(selectProductMediaProjectionRows(db, scopedIds)));
+        factSlots.push(push(selectProductCardFactRows(db, scopedIds)));
         return productSlots.length - 1;
     };
 
@@ -1068,9 +1072,15 @@ export function planCollectionProducts(
             const rowsOf = (list: number | null) =>
                 list === null ? [] : results[productSlots[list]!] as RawProduct[];
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
+            const allRows = [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)];
             const resolvedProductsById = resolveProductCards(
-                [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)],
+                allRows,
                 resolveProductMediaProjectionRows(mediaRows),
+                resolveProductCardFacts(
+                    factSlots.flatMap((slot) => results[slot] as ProductCardFactRow[]),
+                    storeDecimalPlacesFromCode(allRows[0]?.storeCurrencyCode),
+                    new Set(allRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                ),
             );
 
             const specificProductsById = new Map<string, ResolvedProduct>();
