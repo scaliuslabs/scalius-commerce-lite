@@ -8,8 +8,9 @@
 // Every consumer keeps reading `env.STOREFRONT_URL`, `env.JWT_SECRET`, etc.;
 // those fields are filled here, once per invocation, never by Wrangler vars.
 
-import { getDb } from "@scalius/database/client";
-import { resolvePlatformConfig } from "@scalius/core/modules/platform";
+import { getDb, type Database } from "@scalius/database/client";
+import { deps } from "@scalius/core/cache-deps";
+import { getPlatformSettings, resolvePlatformConfig } from "@scalius/core/modules/platform";
 import {
   deriveRuntimeSecretsFromEnv,
   readMasterSecret,
@@ -46,14 +47,20 @@ export async function composeApiRuntimeEnv(
     ),
   ]);
 
-  const requestOrigin = publicRequestOrigin(options.requestUrl);
-  const platform = withLocalDevelopmentDefaults(stored, requestOrigin);
-  const apiUrl = platform.apiUrl || requestOrigin || "";
-  const resolved: PlatformConfig = { ...platform, apiUrl };
-
   return {
     ...env,
     ...(secrets ?? {}),
+    ...platformEnvFields(stored, options.requestUrl),
+  } as Env;
+}
+
+/** The env fields that carry the Platform settings, resolved for one request. */
+function platformEnvFields(stored: PlatformConfig, requestUrl: string | undefined): Partial<Env> {
+  const requestOrigin = publicRequestOrigin(requestUrl);
+  const platform = withLocalDevelopmentDefaults(stored, requestOrigin);
+  const apiUrl = platform.apiUrl || requestOrigin || "";
+  const resolved: PlatformConfig = { ...platform, apiUrl };
+  return {
     PLATFORM_CONFIG: resolved,
     STOREFRONT_URL: optional(resolved.storefrontUrl),
     PUBLIC_API_BASE_URL: optional(resolved.apiUrl),
@@ -62,7 +69,33 @@ export async function composeApiRuntimeEnv(
     CDN_DOMAIN_URL: optional(mediaHostFromUrl(resolved.mediaUrl)),
     CUSTOMER_AUTH_COOKIE_DOMAIN: optional(resolved.customerAuthCookieDomain),
     CORS_ALLOWED_ORIGINS: optional(resolved.corsAllowedOrigins.join(",")),
-  } as Env;
+  } as Partial<Env>;
+}
+
+/**
+ * The Platform-settings read of a public render (CACHE-DESIGN.md section 6.4).
+ *
+ * Worker entry resolves the platform origins KV-first, and KV may lag the
+ * settings row. A render inside a dependency scope must not bake that hint
+ * into an entry validated by `set:platform:document`, so it re-reads the row
+ * through the tracked settings path (which declares that key) and replaces the
+ * platform fields of its env. Outside a scope the env is returned unchanged
+ * and nothing is read. An unreadable row keeps the entry-time values and marks
+ * the render uncacheable.
+ */
+export async function withTrackedPlatformEnv(
+  env: Env,
+  db: Database,
+  requestUrl: string,
+): Promise<Env> {
+  if (!deps.active()) return env;
+  try {
+    const stored = await getPlatformSettings(db);
+    return { ...env, ...platformEnvFields(stored, requestUrl) } as Env;
+  } catch {
+    deps.uncacheable("platform-settings-unreadable");
+    return env;
+  }
 }
 
 export function hasMasterSecret(env: Env): boolean {
