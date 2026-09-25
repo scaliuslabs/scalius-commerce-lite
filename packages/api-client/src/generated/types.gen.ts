@@ -12418,20 +12418,9 @@ export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors = {
         };
     };
     /**
-     * Download limit reached (DOWNLOAD_LIMIT_REACHED)
+     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
      */
     409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)
-     */
-    410: {
         success: false;
         error: {
             code: string;
@@ -17813,20 +17802,9 @@ export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors = {
         };
     };
     /**
-     * Download limit reached (DOWNLOAD_LIMIT_REACHED)
+     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
      */
     409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)
-     */
-    410: {
         success: false;
         error: {
             code: string;

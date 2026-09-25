@@ -200,7 +200,7 @@ describe("Download form post", () => {
     const limit = await post({ entitlementId: ENT, returnTo: "/account/orders/ord_1" }, SESSION);
     expect(limit.headers.get("Location")).toBe(`/account/orders/ord_1?download=limit#download-${ENT}`);
 
-    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "DOWNLOAD_EXPIRED", message: "x" } }, { status: 410 }));
+    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "DOWNLOAD_EXPIRED", message: "x" } }, { status: 409 }));
     const expired = await post({ entitlementId: ENT, returnTo: "/account/downloads" }, SESSION);
     expect(expired.headers.get("Location")).toBe(`/account/downloads?download=expired#download-${ENT}`);
   });

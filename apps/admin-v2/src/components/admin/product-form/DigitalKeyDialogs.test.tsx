@@ -71,7 +71,7 @@ describe("digital delivery", () => {
     expect(button(en.importSubmit)?.disabled).toBe(true);
     const textarea = document.querySelector<HTMLTextAreaElement>("#licence-keys-text")!;
     await act(async () => setText(textarea, "AAAA-1111\nBBBB-2222\nAAAA-1111\n\n"));
-    expect(document.body.textContent).toContain("2 keys to import");
+    expect(document.body.textContent).toContain("Keys to import: 2");
     expect(document.body.textContent).toContain("Line 3: repeated");
 
     sdk.createAsset.mockResolvedValue({ asset: { id: "dga_pool" }, upload: null });

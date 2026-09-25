@@ -72,7 +72,7 @@ export const digitalMessages = defineMessages({
     importHelp: "Paste one key per line, or choose a CSV or TXT file (the first column is read). Up to 500 keys at a time.",
     chooseFile: "Choose CSV or TXT file",
     keysField: "Keys",
-    willImport: "{count} keys to import",
+    willImport: "Keys to import: {count}",
     skippedLines: "Skipped lines",
     rejectTooLong: "Line {line}: longer than 200 characters",
     rejectInvalid: "Line {line}: has hidden characters",
@@ -80,7 +80,7 @@ export const digitalMessages = defineMessages({
     andMore: "and {count} more",
     tooMany: "More than 500 keys. Import them in smaller batches.",
     importSubmit: "Import keys",
-    keysImported: "{count} keys imported",
+    keysImported: "Keys imported: {count}",
     alreadyInPool: "{count} were already in the pool.",
     revokeUnused: "Revoke unused",
     revokeTitle: "Revoke unused keys?",
@@ -88,8 +88,8 @@ export const digitalMessages = defineMessages({
     noUnused: "No unused keys.",
     selectKey: "Select key {key}",
     selectFirst: "Select the first {count}",
-    revokeSubmit: "Revoke {count} keys",
-    keysRevoked: "{count} keys revoked",
+    revokeSubmit: "Revoke keys ({count})",
+    keysRevoked: "Keys revoked: {count}",
     showMore: "Show more",
 
     // Order page

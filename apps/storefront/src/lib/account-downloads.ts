@@ -136,8 +136,11 @@ export function downloadStatusText(flag: DownloadStatusFlag): string {
 
 /** What a refused ticket or reveal means for the buyer. */
 export function downloadFlagForApi(status: number, code: string | null, access: DigitalAccess): DownloadStatusFlag {
-  if (status === 409) return "limit";
-  if (status === 410) return code === "DOWNLOAD_EXPIRED" ? "expired" : "revoked";
+  if (status === 409) {
+    if (code === "DOWNLOAD_REVOKED") return "revoked";
+    if (code === "DOWNLOAD_EXPIRED") return "expired";
+    return "limit";
+  }
   if (status === 429) return "rate";
   // A guest has no session to renew: a refused receipt proof means this browser lost access.
   if (status === 401) return access.kind === "account" ? "signin" : "missing";
