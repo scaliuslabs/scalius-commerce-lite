@@ -40,6 +40,21 @@ export const CARD_IMAGE_DIMENSIONS = {
   landscape: { width: 400, height: 300 },
 } as const satisfies Record<StorefrontImageRatio, { width: number; height: number }>;
 
+/**
+ * The margin around a contained photo, as a share of its box width on each
+ * side (Star Tech 204px of 254, Daraz 200 of 250, Chaldal's small photo on a
+ * 194px tile, Amazon's grey well). Cover photos fill their box (0). The card
+ * CSS draws it (`--pc-inset`) and the image `sizes` shrink by it, so the
+ * rendition matches the width actually drawn.
+ */
+export const CARD_PHOTO_INSET: Readonly<Record<string, number>> = {
+  spec: 0.1,
+  "tech-rounded": 0.07,
+  marketplace: 0.1,
+  "quick-add": 0.13,
+  detailed: 0.05,
+};
+
 export interface ProductCardFactValues {
   brand: string | null;
   keySpecs: string[];

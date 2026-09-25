@@ -387,7 +387,8 @@ describe("product card matrix", () => {
     expect(parse(html).querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
     const cards = await renderCards(theme, { phoneLayout: "list-row" });
     // Below the tablet step the photo is the fixed list-row column.
-    expect(cards.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) 120px, /);
+    // (retail: the phone-density cap is listed first, then the plain entries).
+    expect(cards.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/(?:^|, )\(max-width: \d+px\) calc\(\(120px\) \* 1\)|(?:^|, )\(max-width: \d+px\) 120px, /);
     const grid = parse(await container.renderToString(ProductGrid, { props: {}, locals, request: new Request("https://shop.test/") }));
     expect(grid.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
   });

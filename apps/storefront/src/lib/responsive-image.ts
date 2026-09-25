@@ -94,6 +94,23 @@ function splitSizesEntry(entry: string): { condition: string | null; length: str
 }
 
 /**
+ * `sizes` scaled by `factor`: every entry's length becomes
+ * `calc((length) * factor)`, conditions kept. A card photo drawn inside a
+ * padded box (a contained photo with a margin) is narrower than the slot
+ * the grid gives it; scaling by the share it fills keeps the chosen
+ * rendition at the width actually drawn.
+ */
+export function scaleSizes(sizes: string, factor: number): string {
+  if (!(factor > 0) || factor >= 1) return sizes;
+  const scale = Number(factor.toFixed(3));
+  return splitTopLevel(sizes).map((entry) => {
+    const { condition, length } = splitSizesEntry(entry);
+    const inner = /^calc\((.*)\)$/.exec(length)?.[1] ?? length;
+    return `${condition ? `${condition} ` : ""}calc((${inner}) * ${scale})`;
+  }).join(", ");
+}
+
+/**
  * `sizes` that ask a DPR 3 phone for about 2x pixels. A 390px phone at DPR 3
  * would otherwise pick a ~1100px file (the 1600w rendition) for a 366px LCP
  * photo: the extra density is barely visible, but it costs 2-3x the bytes on
