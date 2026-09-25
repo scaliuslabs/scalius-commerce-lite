@@ -516,6 +516,19 @@ function buildOrderWriteBatch(
         );
     }
 
+    // Quantity-bundle savings are the only line discount besides the promotion
+    // (checkout/bundle-discounts.ts); the checkout authority revision fences
+    // the tiers they were priced from.
+    const bundleLineDiscounts = new Map<string, number>();
+    for (const item of payload.items) {
+        const amount = item.bundleDiscountMinor ?? 0;
+        if (!Number.isSafeInteger(amount) || amount < 0 || amount > item.discountAmountMinor) {
+            throw new ValidationError("Committed bundle discount is invalid.");
+        }
+        if (amount > 0) bundleLineDiscounts.set(item.taxAllocationLineId, amount);
+    }
+    const bundleDiscountTotal = [...bundleLineDiscounts.values()].reduce((total, amount) => total + amount, 0);
+
     if (appliedPromotion) {
         if (appliedPromotion.discounts.some(({ method, promotionCode }) => (method === "code") !== Boolean(promotionCode))) {
             throw new ValidationError("Committed promotion authority is invalid.");
@@ -526,8 +539,8 @@ function buildOrderWriteBatch(
         );
         if (
             allocationTotal !== appliedPromotion.totalDiscountMinor
-            || allocationTotal !== od.discountAmountMinor
-            || allocationTotal !== payload.taxQuote.discountMinor
+            || allocationTotal + bundleDiscountTotal !== od.discountAmountMinor
+            || allocationTotal + bundleDiscountTotal !== payload.taxQuote.discountMinor
         ) {
             throw new ValidationError("Committed promotion allocation does not match the order total.");
         }
@@ -535,7 +548,7 @@ function buildOrderWriteBatch(
             item.taxAllocationLineId,
             item,
         ]));
-        const lineDiscounts = new Map<string, number>();
+        const lineDiscounts = new Map<string, number>(bundleLineDiscounts);
         let shippingDiscountMinor = 0;
         for (const allocation of appliedPromotion.allocations) {
             if (allocation.target === "shipping") {

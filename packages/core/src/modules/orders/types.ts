@@ -419,6 +419,11 @@ export interface StorefrontOrderCommitPayload {
         unitPriceMinor: number;
         lineSubtotalMinor: number;
         discountAmountMinor: number;
+        /**
+         * The quantity-bundle part of `discountAmountMinor`; the rest is the
+         * promotion's (checkout/bundle-discounts.ts). Absent means none.
+         */
+        bundleDiscountMinor?: number;
         taxableAmountMinor: number;
         taxAmountMinor: number;
     }[];

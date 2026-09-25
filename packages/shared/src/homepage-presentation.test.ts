@@ -28,7 +28,20 @@ describe("homepage presentation", () => {
         categoryIds: ["cat-2", "cat-1"],
       },
       trustStrip: { enabled: true },
+      homeMode: "catalog",
+      landingProductId: null,
     });
+  });
+
+  it("opens on a landing page only with its product", () => {
+    expect(sanitizeHomepagePresentationConfig({ homeMode: "landing", landingProductId: " prod_1 " }))
+      .toMatchObject({ homeMode: "landing", landingProductId: "prod_1" });
+    expect(sanitizeHomepagePresentationConfig({ homeMode: "landing", landingProductId: "" }))
+      .toMatchObject({ homeMode: "catalog", landingProductId: null });
+    expect(sanitizeHomepagePresentationConfig({ homeMode: "shop", landingProductId: "prod_1" }))
+      .toMatchObject({ homeMode: "catalog", landingProductId: "prod_1" });
+    expect(sanitizeHomepagePresentationConfig({ homeMode: "landing", landingProductId: "x".repeat(181) }))
+      .toMatchObject({ homeMode: "catalog", landingProductId: null });
   });
 
   it("bounds the category rail", () => {

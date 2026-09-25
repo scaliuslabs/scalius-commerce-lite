@@ -48,6 +48,7 @@ import {
     productVariantMutationSchema,
     selectedProductOptionSchema,
 } from "../../schemas/entities";
+import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
 
@@ -117,6 +118,10 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
             discountPercentage: z.number().nullable(),
             discountAmount: z.number().nullable(),
             freeDelivery: z.boolean(),
+            /** Shows the store's "EMI on card payment" line when the store has EMI plans. */
+            emiEligible: z.boolean(),
+            /** The product page template id; null is the theme's default product page. */
+            pageTemplate: z.string().nullable(),
             createdAt: z.union([z.string(), z.number()]),
             updatedAt: z.union([z.string(), z.number()]),
             deletedAt: z.union([z.string(), z.number()]).nullable(),
@@ -131,9 +136,12 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
                 additionalInfo: z.number().int().nonnegative(),
                 options: z.number().int().nonnegative(),
                 variants: z.number().int().nonnegative(),
+                contentBlocks: z.number().int().nonnegative(),
+                bundles: z.number().int().nonnegative(),
             }),
         }),
     }),
+    ...productMerchandisingSectionResponseSchemas,
     z.object({
         section: z.literal("text"),
         field: z.enum(["description", "metaTitle", "metaDescription"]),
@@ -697,6 +705,9 @@ const writableProductSectionSchema = z.enum([
     "attributes",
     "additional_info",
     "additional_info_text",
+    "content_blocks",
+    "template",
+    "bundles",
 ]);
 
 const updateProductSectionRoute = createRoute({

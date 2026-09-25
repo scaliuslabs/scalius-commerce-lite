@@ -25,6 +25,7 @@ import { successEnvelope, paginationSchema, errorResponses } from "../schemas/re
 import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
 
 import { ok } from "../utils/api-response";
+import { productPageMerchandisingFields } from "../schemas/product-merchandising";
 import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
@@ -406,6 +407,7 @@ const productDetailDataSchema = z.object({
       slug: z.string(),
       canonicalPath: z.string().nullable(),
     }).nullable(),
+    ...productPageMerchandisingFields,
     offers: z.array(z.object({
       promotionId: z.string(),
       title: z.string(),

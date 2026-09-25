@@ -194,6 +194,31 @@ export interface Product {
   requiresCustomization?: boolean;
   /** The store's buyer-input setup is unreadable: the product can't be bought. */
   customizationUnavailable?: boolean;
+  /** Product page only: the template id from the theme; null is the theme's default page. */
+  pageTemplate?: string | null;
+  /** Product page only: active quantity tiers, priced by checkout exactly as listed. */
+  bundles?: ProductBundleTier[];
+  /** Product page only: "EMI on card payment, from X/month"; null when it must not show. */
+  emi?: ProductEmiOffer | null;
+}
+
+/** A quantity tier ("2 for 10% off", "3 for ৳900") in major units. */
+export interface ProductBundleTier {
+  quantity: number;
+  discountType: "percentage" | "fixed_price";
+  discountPercentage: number | null;
+  /** The price of the whole set for `fixed_price`. */
+  price: number | null;
+  label: string | null;
+  isActive: boolean;
+}
+
+/** The lowest monthly amount of the store's EMI plans for a product. Informational only. */
+export interface ProductEmiOffer {
+  provider: string;
+  months: number;
+  monthly: number;
+  monthlyMinor: number;
 }
 
 /** One buyer input as the product page renders it (schema order). */

@@ -31,6 +31,7 @@ import { STOREFRONT_CUSTOMER_OPERATIONS } from "./storefront-customers";
 import { STOREFRONT_AGENT_OPERATIONS } from "./storefront-agent";
 import { SYSTEM_OPERATIONS } from "./system";
 import { DASHBOARD_CATALOG_PROJECTION_OPERATIONS } from "./dashboard-catalog-projections";
+import { DASHBOARD_MERCHANDISING_OPERATIONS } from "./dashboard-merchandising";
 import type { OperationRegistryEntry } from "./entry";
 
 export type { OperationRegistryEntry } from "./entry";
@@ -71,6 +72,7 @@ export const OPERATIONS = {
   ...STOREFRONT_AGENT_OPERATIONS,
   ...SYSTEM_OPERATIONS,
   ...DASHBOARD_CATALOG_PROJECTION_OPERATIONS,
+  ...DASHBOARD_MERCHANDISING_OPERATIONS,
 } satisfies Record<string, OperationRegistryEntry>;
 
 /** The per-domain groups, for the one-group-per-operation check. */
@@ -95,6 +97,7 @@ export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistr
   STOREFRONT_AGENT_OPERATIONS,
   SYSTEM_OPERATIONS,
   DASHBOARD_CATALOG_PROJECTION_OPERATIONS,
+  DASHBOARD_MERCHANDISING_OPERATIONS,
 ];
 
 export type OperationId = keyof typeof OPERATIONS;

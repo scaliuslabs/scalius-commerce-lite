@@ -14,5 +14,6 @@ export * from "./customer-request-policy";
 export * from "./checkout-flow";
 export * from "./business-settings.service";
 export * from "./store-policies.service";
+export * from "./emi-settings.service";
 export * from "./store-money";
 export * from "./phone-country-policy";

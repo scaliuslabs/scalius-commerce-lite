@@ -51,6 +51,14 @@ const SEED = `
   INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width) VALUES
     ('media_linen', 'linen.jpg', 'image', 'media/linen.jpg', 1, 'image/jpeg', 'ready', 1600, 1600, 1600);
   INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES ('pmed_linen', 'p_linen', 'media_linen', 1, 0);
+  -- A legacy tab (mirrored into a block), a body block, a bundle tier and EMI plans:
+  -- the product page reads them in the waves it already has.
+  INSERT INTO product_rich_content (id, product_id, title, content, sort_order) VALUES ('prc_care', 'p_linen', 'Care', '<p>Hand wash.</p>', 0);
+  INSERT INTO product_content_blocks (id, product_id, placement, position, type, version, settings) VALUES
+    ('pcb_promise', 'p_linen', 'after-buy-box', 0, 'guarantee', 1, '{"heading":"","text":"7-day returns."}');
+  INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps) VALUES ('pbd_linen_pair', 'p_linen', 2, 'percentage', 1000);
+  INSERT INTO settings (id, key, value, type, category) VALUES
+    ('emi', 'document', '{"enabled":true,"plans":[{"id":"city-6","provider":"City Bank","months":6,"feeBps":300,"minAmountMinor":0}]}', 'json', 'emi');
 `;
 
 /**
@@ -206,6 +214,20 @@ describe("storefront page render D1 budget", () => {
     expect(homepage.collections).toHaveLength(2);
     // The banner's original upload was pointed at its rendition in the same batch.
     expect(homepage.hero.desktop.images[0]!.url).toBe("https://media.test/media/hero.jpg/1600.webp");
+  });
+
+  it("measures the product page with its tabs, content blocks, bundle tiers and EMI line", async () => {
+    const { bodies } = await renderPage("product");
+    const product = (bodies[1] as { data: { product: Record<string, unknown> } }).data.product;
+    expect(product.additionalInfo).toEqual([{ id: "prc_care", title: "Care", content: "<p>Hand wash.</p>" }]);
+    expect(product.contentBlocks).toEqual([
+      { id: "pcb_promise", placement: "after-buy-box", type: "guarantee", version: 1, settings: { heading: "", text: "7-day returns." } },
+    ]);
+    expect(product.bundles).toEqual([
+      { quantity: 2, discountType: "percentage", discountPercentage: 10, price: null, label: null, isActive: true },
+    ]);
+    // ৳2,500 + 3% = ৳2,575 over 6 months = ৳429.17 -> ৳430.
+    expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
   });
 
   // Load every route module first: a first dynamic import would otherwise
