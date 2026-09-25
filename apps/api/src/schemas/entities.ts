@@ -642,6 +642,8 @@ export const collectionSummarySchema = z.object({
   sortOrder: z.number(),
   isActive: z.boolean(),
   version: z.number().int().min(1),
+  /** A listing template id from the theme; null is the theme's default collection listing. */
+  listingTemplate: z.string().nullable(),
   canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),

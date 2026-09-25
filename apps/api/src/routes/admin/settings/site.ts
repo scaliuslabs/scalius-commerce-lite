@@ -7,8 +7,10 @@ import {
   isValidSeoReturnPolicyUrl,
 } from "@scalius/shared/seo-return-policy";
 import {
+  HOMEPAGE_MODES,
   MAX_HOMEPAGE_CATEGORY_IDS,
   MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH,
+  MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH,
 } from "@scalius/shared/homepage-presentation";
 import {
   HEADER_LOGO_WIDTH_DEFAULT,
@@ -1495,6 +1497,12 @@ const homepagePresentationConfigSchema = z.object({
   trustStrip: z.object({
     enabled: z.boolean(),
   }),
+  homeMode: z.enum(HOMEPAGE_MODES).openapi({
+    description: "`landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.",
+  }),
+  landingProductId: z.string().min(1).max(MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH).nullable().openapi({
+    description: "The product a landing homepage shows; required when homeMode is landing.",
+  }),
 });
 
 const homepagePresentationDocumentSchema = z.object({
@@ -1538,6 +1546,9 @@ const saveHomepagePresentationRoute = createRoute({
         "application/json": {
           schema: homepagePresentationConfigSchema.extend({
             expectedRevision: z.number().int().nonnegative(),
+            // Omitted keeps the saved home mode and landing product.
+            homeMode: homepagePresentationConfigSchema.shape.homeMode.optional(),
+            landingProductId: homepagePresentationConfigSchema.shape.landingProductId.optional(),
           }),
         },
       },

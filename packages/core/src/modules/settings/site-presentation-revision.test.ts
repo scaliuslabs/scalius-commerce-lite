@@ -65,6 +65,8 @@ describe("header, footer and homepage revision authority", () => {
     await saveHomepagePresentationSettings(db, {
       categoryRail: { enabled: false, title: "", categoryIds: [] },
       trustStrip: { enabled: false },
+      homeMode: "catalog",
+      landingProductId: null,
     }, 0);
 
     await expect(saveHomepagePresentationSettings(db, {
@@ -74,6 +76,8 @@ describe("header, footer and homepage revision authority", () => {
         categoryIds: ["cat-b", "cat-a", "cat-b"],
       },
       trustStrip: { enabled: true },
+      homeMode: "catalog",
+      landingProductId: null,
     }, 1)).resolves.toEqual({
       config: {
         categoryRail: {
@@ -82,6 +86,8 @@ describe("header, footer and homepage revision authority", () => {
           categoryIds: ["cat-b", "cat-a"],
         },
         trustStrip: { enabled: true },
+        homeMode: "catalog",
+        landingProductId: null,
       },
       revision: 2,
     });
@@ -89,6 +95,8 @@ describe("header, footer and homepage revision authority", () => {
     await expect(saveHomepagePresentationSettings(db, {
       categoryRail: { enabled: false, title: "Stale", categoryIds: [] },
       trustStrip: { enabled: false },
+      homeMode: "catalog",
+      landingProductId: null,
     }, 1)).rejects.toMatchObject({
       status: 409,
       code: "SETTINGS_REVISION_CONFLICT",
@@ -103,8 +111,26 @@ describe("header, footer and homepage revision authority", () => {
           categoryIds: ["cat-b", "cat-a"],
         },
         trustStrip: { enabled: true },
+        homeMode: "catalog",
+        landingProductId: null,
       },
       revision: 2,
     });
+  });
+
+  it("opens the store on a landing product only while that product exists", async () => {
+    const rail = { categoryRail: { enabled: false, title: "", categoryIds: [] }, trustStrip: { enabled: false } };
+    await expect(saveHomepagePresentationSettings(db, { ...rail, homeMode: "landing", landingProductId: null }, 0))
+      .rejects.toMatchObject({ status: 400, details: { field: "landingProductId" } });
+    await expect(saveHomepagePresentationSettings(db, { ...rail, homeMode: "landing", landingProductId: "prod_missing" }, 0))
+      .rejects.toMatchObject({ status: 400, details: { field: "landingProductId" } });
+    sqlite.exec("INSERT INTO products (id, name, slug, price_minor) VALUES ('prod_landing', 'Honey', 'honey', 90000)");
+    await expect(saveHomepagePresentationSettings(db, { ...rail, homeMode: "landing", landingProductId: "prod_landing" }, 0))
+      .resolves.toMatchObject({ config: { homeMode: "landing", landingProductId: "prod_landing" }, revision: 1 });
+    // A save that does not send the home mode (an older editor) keeps it.
+    await expect(saveHomepagePresentationSettings(db, { ...rail, trustStrip: { enabled: true } }, 1))
+      .resolves.toMatchObject({ config: { homeMode: "landing", landingProductId: "prod_landing", trustStrip: { enabled: true } }, revision: 2 });
+    await expect(saveHomepagePresentationSettings(db, { ...rail, homeMode: "catalog" }, 2))
+      .resolves.toMatchObject({ config: { homeMode: "catalog", landingProductId: "prod_landing" }, revision: 3 });
   });
 });

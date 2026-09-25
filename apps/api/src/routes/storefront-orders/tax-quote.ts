@@ -17,6 +17,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
+    resolveBundlePromotionInterplay,
     assertStorefrontLineFulfilment,
     resolveCartPaymentMethods,
     storefrontLinePropertiesHashes,
@@ -92,6 +93,18 @@ const taxQuoteResponseSchema = z.object({
   rejectedCodes: z.array(rejectedDiscountCodeSchema).openapi({
     description: "Submitted codes that do not apply right now, with the reason. They add nothing to the totals.",
   }),
+  bundleDiscountMinor: z.number().int().nonnegative().openapi({
+    description: "Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).",
+  }),
+  bundleDiscountAmount: z.number().nonnegative(),
+  bundles: z.array(z.object({
+    productId: z.string(),
+    quantity: z.number().int().openapi({ description: "The tier the product's cart quantity reached (\"3 for ...\")." }),
+    discountType: z.enum(["percentage", "fixed_price"]),
+    label: z.string().nullable(),
+  })).openapi({
+    description: "The bundle tiers that priced this quote (empty when promotions did).",
+  }),
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
     productId: z.string(),
@@ -160,7 +173,7 @@ async function resolveAuthoritativeTaxQuote(
   cartValidation: TaxQuoteCartValidationResult,
   delivery: TaxQuoteDeliveryResult,
   currencyCode: string,
-): Promise<{ quote: TaxQuote; discount: StorefrontDiscountQuote }> {
+): Promise<{ quote: TaxQuote; discount: StorefrontDiscountQuote; bundleDiscountMinor: number }> {
   const decimalPlaces = getDecimalPlaces(currencyCode);
   const discount = await quoteStorefrontDiscount(db, {
     codes: input.discountCodes,
@@ -179,6 +192,16 @@ async function resolveAuthoritativeTaxQuote(
     },
   });
 
+  // Promotions or quantity bundles price the order, never both (the rule the order commits).
+  const bundleDiscount = resolveBundlePromotionInterplay(
+    cartValidation.items.map((item) => ({
+      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+      unitPriceMinor: item.unitPriceMinor,
+      quantity: item.quantity,
+      bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+    })),
+    discount,
+  );
   const quote = await calculateStorefrontTaxQuote(db, {
     // No address (pickup, service, digital): only store-wide rates apply.
     destination: {
@@ -198,10 +221,10 @@ async function resolveAuthoritativeTaxQuote(
       taxClassId: item.taxClassId,
     })),
     shippingMinor: delivery.shippingMinor,
-    promotionDiscountAllocation: discount.taxAllocation,
+    promotionDiscountAllocation: bundleDiscount.allocation,
     currency: { code: currencyCode, decimalPlaces },
   });
-  return { quote, discount };
+  return { quote, discount: bundleDiscount.discount, bundleDiscountMinor: bundleDiscount.bundleDiscountMinor };
 }
 
 app.openapi(taxQuoteRoute, async (c) => {
@@ -236,7 +259,7 @@ app.openapi(taxQuoteRoute, async (c) => {
   }, cartValidation);
   const lineTypes = assertStorefrontLineFulfilment(cartValidation, delivery);
   const linePropertiesHashes = await storefrontLinePropertiesHashes(cartValidation);
-  const { quote, discount } = await resolveAuthoritativeTaxQuote(
+  const { quote, discount, bundleDiscountMinor } = await resolveAuthoritativeTaxQuote(
     db,
     {
       discountCodes: data.discountCodes,
@@ -277,6 +300,14 @@ app.openapi(taxQuoteRoute, async (c) => {
     pickup: delivery.pickup,
     allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
     ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
+    bundleDiscountMinor,
+    bundleDiscountAmount: toAmount(bundleDiscountMinor),
+    bundles: (bundleDiscountMinor > 0 ? cartValidation.bundles ?? [] : []).map((bundle) => ({
+      productId: bundle.productId,
+      quantity: bundle.quantity,
+      discountType: bundle.discountType,
+      label: bundle.label,
+    })),
     items: cartValidation.items.map((item, position) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,

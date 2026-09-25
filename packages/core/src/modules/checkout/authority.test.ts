@@ -105,6 +105,8 @@ function authorityRows(): Record<string, unknown>[][] {
       deletedAt: null,
       kind: "delivery",
     }],
+    // Active bundle tiers of the cart's products.
+    [],
     [{
       revision: 1,
       hasActiveAdminPushTarget: 0,
@@ -156,7 +158,7 @@ describe("storefront checkout authority read", () => {
     const snapshot = await loadStorefrontCheckoutAuthority(fixture.db, input);
 
     expect(fixture.batch).toHaveBeenCalledOnce();
-    expect(fixture.batches[0]).toHaveLength(11);
+    expect(fixture.batches[0]).toHaveLength(12);
     expect(snapshot).toMatchObject({
       currency: { currencyCode: "BDT", currencySymbol: "৳" },
       checkoutSettings: {
@@ -201,11 +203,13 @@ describe("storefront checkout authority read", () => {
     await fixture.db.batch(plan.statements as never);
 
     const statements = fixture.batches[0]!;
-    expect(statements).toHaveLength(11);
+    expect(statements).toHaveLength(12);
     expect(Math.max(...statements.map((statement) => statement.values.length))).toBeLessThan(100);
     expect(statements[2]?.query).toContain("json_each(?)");
     expect(statements[3]?.query).toContain("json_each(?)");
     expect(statements[4]?.query).toContain("json_each(?)");
+    expect(statements[7]?.query).toContain("product_bundles");
+    expect(statements[7]?.query).toContain("json_each(?)");
   });
 
   it("resolves many checkouts from one shared authority batch", async () => {
@@ -218,7 +222,7 @@ describe("storefront checkout authority read", () => {
     const results = await fixture.db.batch(plan.statements as never);
     const snapshots = await plan.resolve(results as unknown[]);
 
-    expect(plan.statements).toHaveLength(11);
+    expect(plan.statements).toHaveLength(12);
     expect(snapshots).toHaveLength(200);
     expect(snapshots.every((snapshot) =>
       snapshot.cartValidation.valid

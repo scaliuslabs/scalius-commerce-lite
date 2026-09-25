@@ -336,15 +336,44 @@ export async function getHomepagePresentationSettings(
   return { config: value, revision };
 }
 
+/** The homepage presentation a save sends; an omitted home mode keeps the saved one. */
+export type HomepagePresentationSaveInput =
+  Omit<HomepagePresentationConfig, "homeMode" | "landingProductId">
+  & Partial<Pick<HomepagePresentationConfig, "homeMode" | "landingProductId">>;
+
 export async function saveHomepagePresentationSettings(
   db: Database,
-  config: HomepagePresentationConfig,
+  input: HomepagePresentationSaveInput,
   expectedRevision: number,
 ): Promise<{ config: HomepagePresentationConfig; revision: number }> {
+  // The write compares-and-swaps on the revision, so reading the saved mode
+  // first cannot resurrect a value another save replaced.
+  const saved = input.homeMode === undefined || input.landingProductId === undefined
+    ? (await homepageDocument.readDetailed(db)).value
+    : null;
+  const config: HomepagePresentationConfig = {
+    ...input,
+    homeMode: input.homeMode ?? saved!.homeMode,
+    landingProductId: input.landingProductId === undefined ? saved!.landingProductId : input.landingProductId,
+  };
+  const sanitized = sanitizeHomepagePresentationConfig(config);
+  if (config.homeMode === "landing" && sanitized.homeMode !== "landing") {
+    throw new ValidationError("Choose the product the landing homepage shows.", { field: "landingProductId" });
+  }
+  if (sanitized.homeMode === "landing") {
+    // The storefront still falls back to the catalog homepage whenever the
+    // product is not buyable; this refuses a product that is gone.
+    const product = await db.select({ id: products.id }).from(products)
+      .where(and(eq(products.id, sanitized.landingProductId!), sql`${products.deletedAt} IS NULL`))
+      .get();
+    if (!product) {
+      throw new ValidationError("That product is unavailable or in trash. Choose another product.", { field: "landingProductId" });
+    }
+  }
   const { value, revision } = await savePresentationDocument(
     homepageDocument,
     db,
-    sanitizeHomepagePresentationConfig(config),
+    sanitized,
     expectedRevision,
   );
   return { config: value, revision };
