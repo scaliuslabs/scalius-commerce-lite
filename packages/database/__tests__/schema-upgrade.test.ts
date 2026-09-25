@@ -301,7 +301,31 @@ describe("provider-neutral schema upgrades", () => {
       },
       {
         version: 83,
-        name: "0083_on_sale_indexes",
+        name: "0083_order_line_fulfilment",
+        sqliteStatements: 52,
+        postgresStatements: 59,
+      },
+      {
+        version: 84,
+        name: "0084_line_item_properties",
+        sqliteStatements: 9,
+        postgresStatements: 11,
+      },
+      {
+        version: 85,
+        name: "0085_conversations",
+        sqliteStatements: 29,
+        postgresStatements: 37,
+      },
+      {
+        version: 86,
+        name: "0086_notification_outbox",
+        sqliteStatements: 20,
+        postgresStatements: 20,
+      },
+      {
+        version: 87,
+        name: "0087_on_sale_indexes",
         sqliteStatements: 3,
         postgresStatements: 3,
       },
@@ -436,7 +460,11 @@ describe("provider-neutral schema upgrades", () => {
           { version: 80, name: "0080_whole_taka_amounts" },
           { version: 81, name: "0081_theme_document_v3" },
           { version: 82, name: "0082_theme_document_v4" },
-          { version: 83, name: "0083_on_sale_indexes" },
+          { version: 83, name: "0083_order_line_fulfilment" },
+          { version: 84, name: "0084_line_item_properties" },
+          { version: 85, name: "0085_conversations" },
+          { version: 86, name: "0086_notification_outbox" },
+          { version: 87, name: "0087_on_sale_indexes" },
         ],
       });
     } finally {

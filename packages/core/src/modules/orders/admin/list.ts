@@ -656,7 +656,8 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
         for (const row of orderRows) {
             const parcel = parcels.get(row.id);
             details.set(row.id, {
-                shippingAddress: row.shippingAddress,
+                // Nullable from migration 0083; always present until Wave A S3.
+                shippingAddress: row.shippingAddress ?? "",
                 notes: row.notes,
                 courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
                 trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,
