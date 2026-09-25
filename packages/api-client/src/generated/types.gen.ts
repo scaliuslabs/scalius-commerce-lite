@@ -896,15 +896,6 @@ export type ProductBundleTier = {
     isActive: boolean;
 };
 
-/**
- * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
- */
-export type ProductReviews = {
-    summary: PublicReviewSummary;
-    items: Array<PublicReview>;
-    nextCursor: string | null;
-} | null;
-
 export type PublicReviewSummary = {
     /**
      * Average of published reviews, truncated to two decimals; 0 with none.
@@ -937,6 +928,12 @@ export type PublicReview = {
         body: string;
         repliedAt: string;
     } | null;
+};
+
+export type ProductReviews = {
+    summary: PublicReviewSummary;
+    items: Array<PublicReview>;
+    nextCursor: string | null;
 };
 
 export type AdminReviewPage = {
@@ -985,19 +982,17 @@ export type AdminReviewSummary = {
     pending: number;
     published: number;
     rejected: number;
-    product: ProductReviewStatsSummary;
-};
-
-export type ProductReviewStatsSummary = {
-    productId: string;
-    productName: string;
-    count: number;
-    average: number;
-    histogram: Array<{
-        rating: number;
+    product: {
+        productId: string;
+        productName: string;
         count: number;
-    }>;
-} | null;
+        average: number;
+        histogram: Array<{
+            rating: number;
+            count: number;
+        }>;
+    } | null;
+};
 
 export type ReviewSettings = {
     enabled: boolean;
@@ -14747,7 +14742,14 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthly: number;
                     monthlyMinor: number;
                 } | null;
-                reviews: ProductReviews;
+                /**
+                 * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
+                 */
+                reviews: {
+                    summary: PublicReviewSummary;
+                    items: Array<PublicReview>;
+                    nextCursor: string | null;
+                } | null;
                 /**
                  * The product's warranty policy (its current terms); null without one.
                  */
