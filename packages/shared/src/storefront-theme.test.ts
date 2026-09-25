@@ -41,7 +41,7 @@ const clone = (): StorefrontThemeDocument => structuredClone(DEFAULT_STOREFRONT_
 
 /**
  * What the version 3 default (the Classic preset) rendered, captured from
- * the v3 code at 878e43cf6. The v4 default must render exactly this until
+ * the v3 code at 878e43cf6. The default (v4 and v5) must render exactly this until
  * the new block renderers land, so today's store and the owner-protected
  * product page stay pixel-identical.
  */
@@ -74,14 +74,14 @@ const V3_CLASSIC = {
   sections: ["hero", "collections", "category-tiles", "usp-strip"],
 } as const;
 
-describe("storefront theme document v4", () => {
+describe("storefront theme document v5", () => {
   it("parses every template as a complete document in its own palette", () => {
     expect(STOREFRONT_TEMPLATES.map((template) => template.id)).toEqual([...STOREFRONT_TEMPLATE_IDS]);
     expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(10);
     for (const template of STOREFRONT_TEMPLATES) {
       const theme = storefrontTemplateTheme(template.id);
       expect(issues(theme), template.id).toEqual([]);
-      expect(theme).toMatchObject({ version: 4, template: template.id });
+      expect(theme).toMatchObject({ version: 5, template: template.id });
       expect(theme.tokens.colors).toEqual(STOREFRONT_THEME_PALETTES[template.palette]);
       expect(Object.isFrozen(template.blocks.product.below)).toBe(true);
     }
@@ -176,7 +176,7 @@ describe("storefront theme document v4", () => {
   });
 
   it("rejects old versions, unknown keys and values outside the curated sets", () => {
-    expect(issues({ ...clone(), version: 3 })).not.toEqual([]);
+    expect(issues({ ...clone(), version: 4 })).not.toEqual([]);
     expect(issues({ ...clone(), template: "classic" })).not.toEqual([]);
     expect(issues({ ...clone(), mode: "configured" })).not.toEqual([]);
     expect(issues({ ...clone(), extra: true })).not.toEqual([]);
@@ -258,7 +258,7 @@ describe("storefront theme document v4", () => {
     expect(parseStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual(DEFAULT_STOREFRONT_THEME);
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
-    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 3 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 4 }))).toBeNull();
   });
 
   it("builds CSS tokens from constants and validated colours only", () => {

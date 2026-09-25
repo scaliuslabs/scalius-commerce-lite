@@ -23,7 +23,7 @@ type ResolvedListing = ResolvedStorefrontTheme["blocks"]["listing"];
 type ThemeGrid = ResolvedStorefrontTheme["layout"]["grid"];
 
 export type CatalogListingLayout = ResolvedListing["layout"]["variant"] & (
-  "sidebar-grid" | "bar-drawer" | "list" | "shelves" | "quick-grid"
+  "grid" | "list" | "shelves" | "quick-grid"
 );
 
 export interface CatalogListingPresentation {
@@ -31,7 +31,10 @@ export interface CatalogListingPresentation {
   /**
    * Where the facets live: a sticky column beside the results from 1024px
    * (a bottom sheet on phones), or a drawer behind a Filter button at every
-   * width with a filter bar above the results (Target, Dawn, Aarong).
+   * width with a filter bar above the results (Target, Dawn, Aarong). From
+   * the theme's `listing.filters.style`: both sidebar styles render the
+   * column; `bar-dropdowns` renders the filter bar and drawer until its own
+   * dropdown bar lands (fidelity slice 3).
    */
   filters: "sidebar" | "drawer";
   /** One card per grid cell, one product per row (Amazon), or the dense quick-add grid (Chaldal). */
@@ -43,20 +46,20 @@ export interface CatalogListingPresentation {
   paging: ResolvedListing["paging"];
 }
 
-const LAYOUTS: Record<CatalogListingLayout, Pick<CatalogListingPresentation, "filters" | "results" | "shelves">> = {
-  "sidebar-grid": { filters: "sidebar", results: "grid", shelves: false },
-  "bar-drawer": { filters: "drawer", results: "grid", shelves: false },
-  list: { filters: "sidebar", results: "list", shelves: false },
-  shelves: { filters: "drawer", results: "grid", shelves: true },
-  "quick-grid": { filters: "drawer", results: "quick", shelves: false },
+const LAYOUTS: Record<CatalogListingLayout, Pick<CatalogListingPresentation, "results" | "shelves">> = {
+  grid: { results: "grid", shelves: false },
+  list: { results: "list", shelves: false },
+  shelves: { results: "grid", shelves: true },
+  "quick-grid": { results: "quick", shelves: false },
 };
 
 /** The resolved listing block as the catalog components render it. */
 export function catalogListingPresentation(listing: ResolvedListing): CatalogListingPresentation {
-  const layout = (listing.layout.variant in LAYOUTS ? listing.layout.variant : "sidebar-grid") as CatalogListingLayout;
+  const layout = (listing.layout.variant in LAYOUTS ? listing.layout.variant : "grid") as CatalogListingLayout;
   return {
     layout,
     ...LAYOUTS[layout],
+    filters: listing.filters.spec.placement === "sidebar" ? "sidebar" : "drawer",
     toolbar: new Set(listing.toolbar),
     phoneLayout: listing.phoneLayout,
     paging: listing.paging,

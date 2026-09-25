@@ -1,12 +1,10 @@
 ---
 // The shared product listing body for /search, categories and collections,
-// laid out by the theme's listing template (lib/catalog-listing.ts):
-// - sidebar-grid (the default, today's listing): a sticky filter column
-//   from 1024px, a bottom sheet on phones;
-// - bar-drawer: a filter bar with the facets in a drawer at every width;
-// - list: the sidebar with one product per row;
-// - shelves: the filter bar with sub-listing shelves on the plain first page;
-// - quick-grid: the filter bar over Chaldal's dense quick-add grid.
+// laid out by the theme's listing template (lib/catalog-listing.ts). The
+// layout arranges the results (grid, list rows, shelves on the plain first
+// page, Chaldal's quick-add grid); the filter style places the facets (a
+// sticky column from 1024px with a bottom sheet on phones for the sidebar
+// styles, a filter bar with the facets in a drawer otherwise).
 // Toolbar pieces (count, sort, per-page, grid/list, chips) render when the
 // theme lists them and their data exists. Filters are a GET form, so they
 // work without JavaScript.

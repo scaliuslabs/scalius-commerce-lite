@@ -9,8 +9,9 @@ import {
 import { CardStyleSketch, SKETCH_RATIOS } from "./ThemeChoices";
 
 describe("card sketch", () => {
+  // The standard card follows the template's photo ratio token; every other card owns its ratio.
   it.each(STOREFRONT_IMAGE_RATIOS)("draws the %s photo ratio the storefront card uses", (imageRatio) => {
-    const theme = storefrontTemplateTheme("rounded-tech");
+    const theme = storefrontTemplateTheme("department-mall");
     theme.tokens.imageRatio = imageRatio;
     const card = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard;
     expect(card.imageRatio).toBe(imageRatio);
