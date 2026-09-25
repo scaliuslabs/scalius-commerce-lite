@@ -200,7 +200,8 @@ describe("catalogue-scale query plans", () => {
         `);
         await project(db, queries);
         const small = await getStorefrontProducts(db, { page: 1, limit: 2 });
-        expect(small.facets.map((facet) => facet.slug)).toEqual(["maker"]);
+        // The shop-all categories the products sit in come first (the category-tree facet).
+        expect(small.facets.map((facet) => facet.slug)).toEqual(["category", "maker"]);
         expect(queries.filter((query) => query.sql.includes("product_facet_values")).length).toBe(1);
 
         // 2,001 public products: the unscoped count stops at the limit and the
