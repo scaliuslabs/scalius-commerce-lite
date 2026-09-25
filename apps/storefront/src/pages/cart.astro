@@ -863,6 +863,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   import {
     initCartFunctionality,
     isDiscountValidationPending,
+    refreshCartBlockingState,
     resumeCartPageFromHistory,
     updateCheckoutButtonState,
   } from "@/lib/cart/client";
@@ -1439,6 +1440,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     if (codOnly && giftCardStep) {
       const useGiftCardStep = () => {
         codOnly = false;
+        // The cart no longer needs cash to pay: the payment step takes the card.
+        if (meta) meta.dataset.codOnly = "false";
+        refreshCartBlockingState();
         giftCardStep.hidden = true;
         initialSubmitText = checkoutCopy.continueToPaymentText;
         setSubmitButtonText(initialSubmitText);
