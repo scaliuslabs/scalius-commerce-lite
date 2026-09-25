@@ -3,7 +3,7 @@
  * Render-only listing coverage (no browser): renders the real catalog Astro
  * components with Astro's container API for every listing layout, toolbar
  * piece, phone layout and paging mode, and checks the markup each promises.
- * The default listing (department-mall: the comfortable sidebar) is pinned
+ * The default listing (department-mall: Amazon's dense column) is pinned
  * as whole-markup baselines in __fixtures__ (`UPDATE_CATALOG_BASELINE=1`
  * rewrites them after an intended change).
  */
@@ -256,7 +256,7 @@ const BASELINES: Record<string, () => Record<string, unknown>> = {
     listingProps("https://shop.test/categories/sarees?size=L", { products: [], pagination: { page: 1, totalPages: 0, total: 0 } }),
 };
 
-describe("default listing (sidebar-comfortable grid)", () => {
+describe("default listing (department-mall: Amazon's dense column)", () => {
   it.each(Object.keys(BASELINES))("renders the %s state as its baseline", async (name) => {
     const html = normalize(
       await render("/src/components/catalog/CatalogListing.astro", DEFAULT_STOREFRONT_THEME, BASELINES[name]!(), EMPTY_SLOT),
@@ -621,12 +621,12 @@ describe("filter styles (fidelity slice 3)", () => {
     ],
   };
 
-  it("the dense column carries Amazon's numbers, sends ten values per group and fetches the rest on See more", async () => {
+  it("the dense column carries Daraz's numbers, sends ten values per group and fetches the rest on See more", async () => {
     const theme = storefrontTemplateTheme("marketplace");
     const document = await renderListing(theme, { ...plain(), facets: [FOURTEEN, ...FACETS.slice(0, 1)] }, TREE_STORE_SHAPE);
     const column = document.querySelector("#filter-section")!;
     expect(column.getAttribute("data-placement")).toBe("sidebar");
-    expect(column.getAttribute("style")).toBe("--catalog-filter-column:240px;--catalog-filter-row:22px;--catalog-filter-label:14px");
+    expect(column.getAttribute("style")).toBe("--catalog-filter-column:190px;--catalog-filter-row:18px;--catalog-filter-label:13px");
     const form = column.querySelector("form")!;
     expect(form.getAttribute("data-filter-style")).toBe("sidebar-dense");
     // No in-listing search field in the dense column (the header searches).

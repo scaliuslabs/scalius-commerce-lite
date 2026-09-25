@@ -230,6 +230,9 @@ export type StorefrontThemeDocument = {
             filters: {
                 style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
                 openByDefault: boolean;
+                column?: number;
+                rowPitch?: number;
+                label?: number;
             };
             toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';

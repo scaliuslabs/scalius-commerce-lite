@@ -1211,6 +1211,21 @@
                       },
                       "openByDefault": {
                         "type": "boolean"
+                      },
+                      "column": {
+                        "type": "integer",
+                        "minimum": 180,
+                        "maximum": 340
+                      },
+                      "rowPitch": {
+                        "type": "integer",
+                        "minimum": 16,
+                        "maximum": 36
+                      },
+                      "label": {
+                        "type": "integer",
+                        "minimum": 12,
+                        "maximum": 18
                       }
                     },
                     "required": [
