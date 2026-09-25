@@ -34,6 +34,7 @@ function isHeroRequestEligible(url: URL): boolean {
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/products" },
   { path: "/api/v1/categories" },
+  { path: "/api/v1/brands" },
   { path: "/api/v1/collections" },
   // One fixed read: a query string is rejected by the route, and never cached or batched.
   { path: "/api/v1/storefront/homepage", exact: true, isEligible: (url) => url.searchParams.size === 0 },

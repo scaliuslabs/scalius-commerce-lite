@@ -4,6 +4,7 @@ import {
   checkUcpDiscovery,
   evaluateDiscoveryCacheHeaders,
   evaluateFeedContinuationLink,
+  evaluateProductJsonLdHtml,
   evaluateRequiredDocs,
   evaluateRobotsTxt,
   evaluateSitemapIndexSections,
@@ -160,6 +161,7 @@ describe("release discovery policy", () => {
       "/sitemap-static.xml",
       "/sitemap-products.xml?page=1",
       "/sitemap-categories.xml",
+      "/sitemap-brands.xml",
       "/sitemap-collections.xml",
       "/sitemap-pages.xml",
       "/sitemap-articles.xml",
@@ -170,6 +172,47 @@ describe("release discovery policy", () => {
       ok: false,
       errors: ["sitemap index must advertise the static pages sitemap."],
     });
+  });
+
+  it("requires the brands sitemap in the index", () => {
+    const sections = [
+      "/sitemap-static.xml",
+      "/sitemap-products.xml?page=1",
+      "/sitemap-categories.xml",
+      "/sitemap-collections.xml",
+      "/sitemap-pages.xml",
+      "/sitemap-articles.xml",
+    ].map((path) => `${origin}${path}`);
+
+    expect(evaluateSitemapIndexSections(sections, { storefrontOrigin: origin })).toMatchObject({
+      ok: false,
+      errors: ["sitemap index must advertise the brands sitemap."],
+    });
+  });
+
+  it("accepts a Product JSON-LD brand only as a named Brand, and its absence", () => {
+    const productHtml = (brand) => `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: "Ceiling Fan",
+      image: [`${origin}/media/fan.webp`],
+      ...(brand === undefined ? {} : { brand }),
+      offers: {
+        "@type": "Offer",
+        url: `${origin}/products/ceiling-fan`,
+        price: "4500",
+        priceCurrency: "BDT",
+        availability: "https://schema.org/InStock",
+      },
+    })}</script>`;
+    const check = (brand) => evaluateProductJsonLdHtml(productHtml(brand), { storefrontOrigin: origin });
+
+    expect(check(undefined).ok).toBe(true);
+    expect(check({ "@type": "Brand", name: "Walton" }).ok).toBe(true);
+    expect(check({ "@type": "Brand", name: "Generic" }).errors)
+      .toEqual(["Product JSON-LD brand must not be a placeholder: Generic"]);
+    expect(check({ "@type": "Brand", name: "  " }).ok).toBe(false);
+    expect(check("Walton").ok).toBe(false);
   });
 
   it("accepts public cache headers with a positive TTL", () => {

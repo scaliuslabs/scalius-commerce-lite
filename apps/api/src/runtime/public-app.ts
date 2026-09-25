@@ -16,7 +16,7 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "config";
   if (
-    ["attributes", "collections", "search", "products", "categories", "media"]
+    ["attributes", "collections", "search", "products", "categories", "brands", "media"]
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "catalog";
   if (["pages", "articles"].some((segment) =>

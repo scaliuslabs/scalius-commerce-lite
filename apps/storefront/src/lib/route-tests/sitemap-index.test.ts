@@ -78,6 +78,9 @@ describe("sitemap index route", () => {
       "https://storefront.example.test/sitemap-categories.xml",
     );
     expect(body).toContain(
+      "https://storefront.example.test/sitemap-brands.xml",
+    );
+    expect(body).toContain(
       "https://storefront.example.test/sitemap-collections.xml",
     );
     expect(body).toContain("https://storefront.example.test/sitemap-pages.xml");

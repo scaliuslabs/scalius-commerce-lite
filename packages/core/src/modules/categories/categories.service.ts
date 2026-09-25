@@ -7,6 +7,7 @@ import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzl
 import { ftsMatch } from "../../search/fts5";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
+import { CATEGORY_TREE_MAX_DEPTH } from "@scalius/shared/catalog-tree";
 import {
     CATEGORY_BATCH_LIMIT,
     type CreateCategoryInput,
@@ -41,6 +42,16 @@ import {
     MEDIA_REFERENCE_DELETING_MESSAGE,
     noDeletingMediaReferences,
 } from "../media/media-reference-guard";
+import {
+    assertCategoryPlacement,
+    categoriesHaveNoChildrenOutsideCondition,
+    categoriesHaveNoLiveChildrenOutsideCondition,
+    categoriesHaveRestorableParentsCondition,
+    loadCategoryChildBlockers,
+    loadCategoryTrashedParentBlockers,
+    rethrowCategoryTreeRefusal,
+    type CategoryTreeBlocker,
+} from "./categories.tree";
 
 export const CATEGORY_TEXT_CHUNK_SIZE = 12_000;
 export const categorySectionValues = ["summary", "text"] as const;
@@ -189,6 +200,45 @@ function allCategoriesTrashedCondition(
     ) = ${claims.length}`;
 }
 
+function throwCategoryChildBlockers(blockers: readonly CategoryTreeBlocker[], permanent: boolean): void {
+    if (blockers.length === 0) return;
+    throw new ValidationError(
+        permanent
+            ? "A category with sub-categories (including sub-categories in trash) cannot be deleted permanently."
+            : "A category with sub-categories cannot be moved to trash.",
+        {
+            suggestion: permanent
+                ? "Delete its sub-categories permanently in the same selection, or move them to another parent first."
+                : "Move its sub-categories to another parent, or trash them in the same selection.",
+            subcategories: blockers.map(({ id, name }) => ({ id, name })),
+        },
+    );
+}
+
+function throwCategoryTrashedParentBlockers(blockers: readonly CategoryTreeBlocker[]): void {
+    if (blockers.length === 0) return;
+    throw new ValidationError(
+        "A sub-category cannot be restored while its parent category is in trash.",
+        {
+            suggestion: "Restore the parent category in the same selection, or restore it first.",
+            categories: blockers.map(({ id, name, parentId }) => ({ id, name, parentId })),
+        },
+    );
+}
+
+function noClaimedCategoryIsLiveCondition(
+    claims: readonly CategoryRevisionClaim[],
+): SQL {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM categories AS claimed
+        WHERE claimed.id IN (
+            SELECT CAST(json_extract(value, '$.id') AS TEXT)
+            FROM json_each(${JSON.stringify(claims)})
+        )
+          AND claimed.deleted_at IS NULL
+    )`;
+}
+
 function isCategorySlugConstraintError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return /categories(?:_slug_idx|\.slug)|UNIQUE constraint failed: categories\.slug/i.test(message);
@@ -282,6 +332,8 @@ export async function listCategories(
             excludeFromSitemap: categories.excludeFromSitemap,
             status: categories.status,
             revision: categories.revision,
+            parentId: categories.parentId,
+            depth: categories.depth,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
@@ -503,6 +555,9 @@ export async function getCategoryById(db: Database, id: string) {
             excludeFromSitemap: categories.excludeFromSitemap,
             status: categories.status,
             revision: categories.revision,
+            parentId: categories.parentId,
+            depth: categories.depth,
+            listingTemplate: categories.listingTemplate,
             deletedAt: sql<number | null>`CAST(${categories.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
@@ -549,6 +604,9 @@ export async function createCategory(
         }
     }
 
+    const parentId = data.parentId ?? null;
+    await assertCategoryPlacement(db, null, parentId);
+
     const categoryId = "cat_" + nanoid();
     const imageUrl = data.image?.url || null;
     const mediaGuard = noDeletingMediaReferences(`${data.content}\u0000${imageUrl ?? ""}`);
@@ -567,6 +625,8 @@ export async function createCategory(
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
                 status: data.status,
                 revision: 1,
+                parentId,
+                listingTemplate: data.listingTemplate ?? null,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
                 deletedAt: null,
@@ -602,7 +662,7 @@ export async function createCategory(
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
         }
-        throw error;
+        rethrowCategoryTreeRefusal(error, null, parentId);
     }
 
     return { id: categoryId, revision: 1, status: data.status };
@@ -637,6 +697,7 @@ export async function updateCategory(
             id: categories.id,
             deletedAt: categories.deletedAt,
             revision: categories.revision,
+            parentId: categories.parentId,
         })
         .from(categories)
         .where(eq(categories.id, id))
@@ -667,6 +728,8 @@ export async function updateCategory(
 
     const claims = [{ id, expectedRevision: data.expectedRevision }];
     const lifecycleCondition = await unpublishLifecycleCondition(db, data.status, claims);
+    const parentChanges = data.parentId !== undefined && data.parentId !== existing.parentId;
+    if (parentChanges) await assertCategoryPlacement(db, id, data.parentId ?? null);
     const updateMediaGuard = noDeletingMediaReferences(`${data.content}\u0000${data.image?.url || ""}`);
 
     try {
@@ -684,6 +747,8 @@ export async function updateCategory(
                 noIndex: data.noIndex ?? false,
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
                 status: data.status,
+                ...(parentChanges ? { parentId: data.parentId ?? null } : {}),
+                ...(data.listingTemplate !== undefined ? { listingTemplate: data.listingTemplate } : {}),
                 revision: sql`${categories.revision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
@@ -715,7 +780,7 @@ export async function updateCategory(
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
         }
-        throw error;
+        rethrowCategoryTreeRefusal(error, id, data.parentId ?? null);
     }
 }
 
@@ -782,8 +847,13 @@ export async function bulkDeleteCategories(
 ): Promise<void> {
     const claims = normalizeCategoryRevisionClaims(revisionClaims, CATEGORY_BATCH_LIMIT);
     const targetCategoryIds = new Set(claims.map((claim) => claim.id));
+    const claimsJson = JSON.stringify(claims);
 
     throwCategoryDeleteProductUsage(await loadCategoryDeleteProductUsage(db, claims));
+    throwCategoryChildBlockers(
+        await loadCategoryChildBlockers(db, claimsJson, { liveOnly: !permanent }),
+        permanent,
+    );
 
     if (permanent) {
         const categoryStates = await db
@@ -828,6 +898,7 @@ export async function bulkDeleteCategories(
         const statements: SQLiteBatchItem[] = [
             buildCategoryRevisionGuard(db, claims, "trashed"),
             categoryDeleteUsageGuard(db, claims),
+            buildBatchGuard(db, categoriesHaveNoChildrenOutsideCondition(claimsJson), "CATEGORY_DELETE_HAS_CHILDREN"),
             db.update(products)
                 .set({
                     aggregateRevision: sql`${products.aggregateRevision} + 1`,
@@ -903,18 +974,25 @@ export async function bulkDeleteCategories(
             );
         }
 
-        statements.push(
-            db.delete(categories)
-                .where(and(
-                    categoryClaimIdsCondition(claims),
-                    isNotNull(categories.deletedAt),
-                    allCategoriesTrashedCondition(claims),
-                ))
-                .returning({ id: categories.id }),
-        );
+        // Deepest first: `parent_id` is ON DELETE RESTRICT, which SQLite checks
+        // row by row, so a parent is deleted only after its claimed children.
+        for (let depth = CATEGORY_TREE_MAX_DEPTH; depth >= 0; depth -= 1) {
+            statements.push(
+                db.delete(categories)
+                    .where(and(
+                        categoryClaimIdsCondition(claims),
+                        eq(categories.depth, depth),
+                        isNotNull(categories.deletedAt),
+                        // Deeper claimed rows are already gone here, so
+                        // "every claim is trashed" reads as "none is live".
+                        noClaimedCategoryIsLiveCondition(claims),
+                    ))
+                    .returning({ id: categories.id }),
+            );
+        }
         try {
             const results = await safeBatch(db, statements as never) as unknown[][];
-            const deletedRows = results.at(-1) ?? [];
+            const deletedRows = results.slice(-(CATEGORY_TREE_MAX_DEPTH + 1)).flat();
             if (deletedRows.length !== claims.length) {
                 throw new ConflictError(
                     "Only categories already in trash can be permanently deleted.",
@@ -925,6 +1003,9 @@ export async function bulkDeleteCategories(
                 await rethrowCategoryRevisionConflict(db, claims, error, "trashed");
             } catch (translated) {
                 if (translated !== error) throw translated;
+            }
+            if (isBatchGuardError(error, "CATEGORY_DELETE_HAS_CHILDREN")) {
+                throwCategoryChildBlockers(await loadCategoryChildBlockers(db, claimsJson, { liveOnly: false }), true);
             }
             if (isBatchGuardError(error, "CATEGORY_DELETE_IN_USE")) {
                 throw new ValidationError(
@@ -953,6 +1034,7 @@ export async function bulkDeleteCategories(
                 categoryRevisionClaimsMatchCondition(claims, "active"),
                 categoriesHaveNoActiveDynamicCollectionReferencesCondition(claims),
                 categoriesHaveNoAssignedProductsCondition(claims),
+                categoriesHaveNoLiveChildrenOutsideCondition(claimsJson),
             ))
             .returning({ id: categories.id })
             .all();
@@ -970,6 +1052,7 @@ export async function bulkDeleteCategories(
             }
             await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
             throwCategoryDeleteProductUsage(await loadCategoryDeleteProductUsage(db, claims));
+            throwCategoryChildBlockers(await loadCategoryChildBlockers(db, claimsJson, { liveOnly: true }), false);
             throw new ConflictError(
                 "No categories were moved to trash. Reload the category list and try again.",
             );
@@ -985,10 +1068,13 @@ export async function restoreCategories(
     revisionClaims: CategoryRevisionClaim[],
 ): Promise<void> {
     const claims = normalizeCategoryRevisionClaims(revisionClaims, CATEGORY_BATCH_LIMIT);
+    const claimsJson = JSON.stringify(claims);
+    throwCategoryTrashedParentBlockers(await loadCategoryTrashedParentBlockers(db, claimsJson));
 
     try {
         await safeBatch(db, [
             buildCategoryRevisionGuard(db, claims, "trashed"),
+            buildBatchGuard(db, categoriesHaveRestorableParentsCondition(claimsJson), "CATEGORY_RESTORE_PARENT_TRASHED"),
             db
                 .update(categories)
                 .set({
@@ -1007,6 +1093,9 @@ export async function restoreCategories(
             await rethrowCategoryRevisionConflict(db, claims, error, "trashed");
         } catch (translated) {
             if (translated !== error) throw translated;
+        }
+        if (isBatchGuardError(error, "CATEGORY_RESTORE_PARENT_TRASHED")) {
+            throwCategoryTrashedParentBlockers(await loadCategoryTrashedParentBlockers(db, claimsJson));
         }
         throw error;
     }

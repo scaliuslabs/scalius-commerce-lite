@@ -5,6 +5,7 @@ const PUBLIC_PREFIXES = [
   "/api/v1/analytics",
   "/api/v1/articles",
   "/api/v1/attributes",
+  "/api/v1/brands",
   "/api/v1/categories",
   "/api/v1/checkout",
   "/api/v1/checkout-languages",
