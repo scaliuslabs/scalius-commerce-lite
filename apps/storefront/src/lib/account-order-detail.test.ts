@@ -273,6 +273,16 @@ describe("account order detail", () => {
     expect(text("orderPayment")).toBe("Cash on delivery No payment due");
   });
 
+  it("drops the 'send a request' line when a closed order offers no request", () => {
+    renderOrderDetail(detail({ status: "cancelled", statusLabel: "Cancelled" }, { supportRequestActions: [] }), null);
+    expect(document.getElementById("orderSupportIntro")?.hidden).toBe(true);
+    expect(document.getElementById("orderSupportActions")?.hidden).toBe(true);
+    renderOrderDetail(detail(), null);
+    expect(document.getElementById("orderSupportIntro")?.hidden).toBe(false);
+    expect(text("orderSupportIntro")).toBe("Need help with this order?");
+    expect(document.getElementById("orderSupportActions")?.hidden).toBe(false);
+  });
+
   it("never offers payment for a refunded or partly refunded order", () => {
     for (const paymentStatus of ["refunded", "partially_refunded"]) {
       renderOrderDetail(detail(

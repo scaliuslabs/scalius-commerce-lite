@@ -406,8 +406,13 @@ function openSupportForm(type: CustomerOrderSupportRequestType): void {
 }
 
 function renderSupport(detail: AccountOrderDetail): void {
+  // A closed order (cancelled, refunded) offers no request: no "Send a request" line for it.
+  const canRequest = detail.supportRequestActions.length > 0;
   const intro = byId("orderSupportIntro");
-  if (intro) intro.textContent = detail.supportRequestIntro;
+  if (intro) {
+    intro.textContent = canRequest ? detail.supportRequestIntro : "";
+    intro.hidden = !canRequest;
+  }
   const requests = byId("orderSupportRequests");
   if (requests) {
     requests.innerHTML = detail.supportRequests.map((request) => `
@@ -419,6 +424,7 @@ function renderSupport(detail: AccountOrderDetail): void {
   }
   const actions = byId("orderSupportActions");
   if (actions) {
+    actions.hidden = !canRequest;
     actions.innerHTML = detail.supportRequestActions.map((action) => `
       <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
         <span class="font-medium">${escapeHtml(action.label)}</span>
