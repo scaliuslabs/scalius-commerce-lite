@@ -243,7 +243,7 @@ function listingProps(url: string, overrides: Record<string, unknown> = {}, face
 
 const EMPTY_SLOT = { empty: '<section data-catalog-empty-state>Nothing here</section>' };
 
-/** The default (sidebar-grid) listing states whose markup must not change. */
+/** The default (grid with the sidebar filters) listing states whose markup must not change. */
 const BASELINES: Record<string, () => Record<string, unknown>> = {
   plain: () => listingProps("https://shop.test/categories/sarees"),
   filtered: () =>
@@ -292,6 +292,8 @@ function themeWith(
   const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
   const { variant, settings, ...rest } = listing;
   if (variant) theme.blocks.listing.layout = { variant, settings: settings ?? {} } as never;
+  // Layouts that used to carry their own filter bar keep it in these tests.
+  if (variant === "shelves" || variant === "quick-grid") theme.blocks.listing.filters = { style: "drawer", openByDefault: false };
   Object.assign(theme.blocks.listing, rest);
   if (card) theme.blocks.card = card;
   return theme;
@@ -314,8 +316,8 @@ const gridSizes = (context: "grid" | "beside-filters") => {
 };
 
 describe("listing layouts", () => {
-  it("bar-drawer puts the facets in a drawer behind a filter bar, over a full-width grid", async () => {
-    const document = await renderListing(themeWith({ variant: "bar-drawer", toolbar: ["result-count", "sort", "per-page"] }), plain());
+  it("the drawer filter style puts the facets in a drawer behind a filter bar, over a full-width grid", async () => {
+    const document = await renderListing(themeWith({ filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort", "per-page"] }), plain());
     const drawer = document.querySelector("#filter-section")!;
     expect(drawer.getAttribute("data-catalog-dialog")).toBe("drawer");
     expect(drawer.className).not.toContain("lg:static");
@@ -349,10 +351,10 @@ describe("listing layouts", () => {
     expect(frame.getAttribute("data-catalog-results")).toBe("quick");
     expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
     expect(document.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
-    // Without the quick-add card it falls back to the sidebar grid.
+    // Without the quick-add card it falls back to the plain grid; the filter style stays the theme's.
     const fallback = await renderListing(themeWith({ variant: "quick-grid" }), plain());
     expect(fallback.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-results")).toBe(false);
-    expect(fallback.querySelector("#filter-section")!.className).toContain("lg:static");
+    expect(fallback.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
   });
 
   it("shelves group the first page by sub-listing, with View all links, and fall back to the grid", async () => {

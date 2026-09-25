@@ -5,7 +5,7 @@
 // every other variant renders its registry anatomy (variants/anatomy.astro).
 import "@/styles/theme-cards.css";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { buildStorefrontThemeTokens, type StorefrontCardRenderer } from "@scalius/shared/storefront-theme";
+import { buildStorefrontThemeTokens, type ResolvedStorefrontCard } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import {
   productCardImageLoading,
@@ -68,7 +68,7 @@ const {
 // grid the image `sizes` follow.
 const { theme, resolved, layout } = await currentRequestTheme(Astro.locals);
 const variant = resolved.blocks.card.variant;
-const anatomy: StorefrontCardRenderer = layout.productCard;
+const anatomy: ResolvedStorefrontCard = layout.productCard;
 const ratio = theme.tokens.imageRatio;
 const grid = productGridSpec(layout.grid, ratio);
 const containerWidth =

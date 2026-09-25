@@ -37,7 +37,7 @@ interface ThemeLocals {
 
 /**
  * The theme document the storefront renders for a value from the API. The
- * value must pass the strict v4 schema; anything else renders
+ * value must pass the strict v5 schema; anything else renders
  * `DEFAULT_STOREFRONT_THEME` whole (a fail-safe, never a per-field repair).
  */
 export function readStorefrontTheme(value: unknown): StorefrontThemeDocument {

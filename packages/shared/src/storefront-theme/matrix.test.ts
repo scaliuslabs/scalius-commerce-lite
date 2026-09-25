@@ -8,6 +8,8 @@ import {
   EMPTY_STORE_SHAPE,
   STOREFRONT_DENSITIES,
   STOREFRONT_HEADER_TONES,
+  STOREFRONT_LISTING_FILTER_STYLES,
+  STOREFRONT_NAVIGATION_SOURCES,
   STOREFRONT_PRODUCT_STICKY,
   STOREFRONT_THEME_PALETTES,
   STOREFRONT_THEME_PALETTE_KEYS,
@@ -32,6 +34,9 @@ const FACTORS: Array<{ name: string; values: readonly string[] }> = [
   { name: "sticky.phoneBottom", values: STOREFRONT_PRODUCT_STICKY.phoneBottom },
   { name: "sticky.desktop", values: STOREFRONT_PRODUCT_STICKY.desktop },
   { name: "headerTone", values: STOREFRONT_HEADER_TONES },
+  { name: "filters", values: STOREFRONT_LISTING_FILTER_STYLES },
+  { name: "navigation.source", values: STOREFRONT_NAVIGATION_SOURCES },
+  { name: "navigation.maxTopItems", values: ["1", "6", "18"] },
 ];
 
 const pairKey = (a: number, va: string, b: number, vb: string) => `${a}=${va}|${b}=${vb}`;
@@ -105,6 +110,13 @@ function documentFor(row: string[], palette: keyof typeof STOREFRONT_THEME_PALET
     phoneBottom: value("sticky.phoneBottom"),
     desktop: value("sticky.desktop"),
   } as never;
+  const style = value("filters") as (typeof STOREFRONT_LISTING_FILTER_STYLES)[number];
+  theme.blocks.listing.filters = { style, openByDefault: style.startsWith("sidebar") };
+  theme.blocks.navigation = {
+    ...theme.blocks.navigation,
+    source: value("navigation.source") as (typeof STOREFRONT_NAVIGATION_SOURCES)[number],
+    maxTopItems: Number(value("navigation.maxTopItems")),
+  };
   theme.tokens = { ...theme.tokens, colors: { ...STOREFRONT_THEME_PALETTES[palette] }, density, headerTone: value("headerTone") as never };
   return theme;
 }
@@ -113,7 +125,7 @@ const SHAPES = [
   EMPTY_STORE_SHAPE,
   storeShapeFromFacts({ productCount: 20, skuCount: 20, topCategoryCount: 2, categoryDepth: 1, menu: [{}, {}], hasCollections: false, hasDeliveryMethods: true }),
   storeShapeFromFacts({
-    productCount: 5000, skuCount: 50_000, topCategoryCount: 18, categoryDepth: 3,
+    productCount: 5000, skuCount: 50_000, topCategoryCount: 18, categoryDepth: 4, categoryGroups: 5,
     menu: Array.from({ length: 12 }, () => ({ subMenu: [{ subMenu: [{}, {}] }, { subMenu: [{}, {}] }] })),
     brandCount: 300, hasCollections: true, hasDeliveryMethods: true, hasKeySpecs: true, hasEmiPlans: true,
     hasDigitalLines: true, hasReviews: true, hasQuestions: true, hasContentBlocks: true,
@@ -148,6 +160,8 @@ describe("block variant matrix", () => {
           expect(listStorefrontThemeDocumentContrastProblems(theme), label).toEqual([]);
           for (const shape of SHAPES) {
             const resolved = resolveStorefrontTheme(theme, shape);
+            expect(resolved.blocks.listing.filters.style, label).toBe(theme.blocks.listing.filters.style);
+            expect(resolved.facts.navTopItems, label).toBeLessThanOrEqual(theme.blocks.navigation.maxTopItems);
             const blocks: Record<string, string> = {};
             const chosen = {
               topBar: resolved.blocks.topBar, header: resolved.blocks.header, desktopNav: resolved.blocks.desktopNav,
@@ -155,7 +169,7 @@ describe("block variant matrix", () => {
               gallery: resolved.blocks.product.gallery, buyBox: resolved.blocks.product.buyBox, footer: resolved.blocks.footer,
             };
             for (const slot of BLOCK_FACTORS) {
-              expect(failedFitConditions(storefrontVariantSpec(slot, chosen[slot].variant).requires, { shape, blocks }), label).toEqual([]);
+              expect(failedFitConditions(storefrontVariantSpec(slot, chosen[slot].variant).requires, { facts: resolved.facts, blocks }), label).toEqual([]);
               blocks[slot] = chosen[slot].variant;
             }
             // Two cards across a 360px phone at every density.

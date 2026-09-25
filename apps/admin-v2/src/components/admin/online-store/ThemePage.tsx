@@ -22,6 +22,7 @@ import {
   type FitCondition,
   type ResolvedStorefrontThemeLayout,
   type StoreShape,
+  type StorefrontFitFacts,
   type StorefrontTemplateId,
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
@@ -305,8 +306,12 @@ const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
   { role: "buttonText", label: "colorButtonText" },
 ];
 
-/** A fit condition in plain words: what the store needs for a choice to show as chosen. */
-function useFitReason(shape: StoreShape) {
+/**
+ * A fit condition in plain words: what the store needs for a choice to show
+ * as chosen, with the value the resolver judged it on (the store shape plus
+ * the navigation the header renders).
+ */
+function useFitReason(facts: StorefrontFitFacts) {
   const t = useMessages(onlineStoreMessages);
   const option = (key: string) => t(key as MessageKey);
   const reason = (condition: FitCondition): string => {
@@ -314,7 +319,7 @@ function useFitReason(shape: StoreShape) {
     if ("block" in condition) return t("fitNeedsCard", { name: option(`cardStyle_${condition.variants[0]}`) });
     const what = option(`fact_${condition.fact}`);
     if ("equals" in condition) return t("fitNeeds", { what });
-    const value = formatNumber(shape[condition.fact]);
+    const value = formatNumber(facts[condition.fact]);
     if (condition.min !== undefined && condition.max !== undefined) {
       return t("fitBetween", { what, min: formatNumber(condition.min), max: formatNumber(condition.max), value });
     }
@@ -374,8 +379,8 @@ function ThemeCards({ saved, revision, storeShape, refetch, site }: {
     },
   });
   const option = (key: string) => t(key as MessageKey);
-  const fitReason = useFitReason(storeShape);
   const resolved = resolveThemeForStore(theme, storeShape);
+  const fitReason = useFitReason(resolved.facts);
   const problems = themeContrastProblems(theme);
   const { headerDraft } = site;
   // A changed theme matches no template: say which one it is based on, and

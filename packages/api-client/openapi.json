@@ -73,7 +73,7 @@
           "version": {
             "type": "number",
             "enum": [
-              4
+              5
             ]
           },
           "template": {
@@ -599,6 +599,35 @@
                   }
                 ]
               },
+              "navigation": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "menu",
+                      "category-tree",
+                      "tree+menu"
+                    ]
+                  },
+                  "maxTopItems": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18
+                  },
+                  "linkBudget": {
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 150
+                  }
+                },
+                "required": [
+                  "source",
+                  "maxTopItems",
+                  "linkBudget"
+                ],
+                "additionalProperties": false
+              },
               "desktopNav": {
                 "oneOf": [
                   {
@@ -1079,28 +1108,7 @@
                           "variant": {
                             "type": "string",
                             "enum": [
-                              "sidebar-grid"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "bar-drawer"
+                              "grid"
                             ]
                           },
                           "settings": {
@@ -1189,6 +1197,28 @@
                       }
                     ]
                   },
+                  "filters": {
+                    "type": "object",
+                    "properties": {
+                      "style": {
+                        "type": "string",
+                        "enum": [
+                          "sidebar-dense",
+                          "sidebar-comfortable",
+                          "bar-dropdowns",
+                          "drawer"
+                        ]
+                      },
+                      "openByDefault": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "style",
+                      "openByDefault"
+                    ],
+                    "additionalProperties": false
+                  },
                   "toolbar": {
                     "type": "array",
                     "items": {
@@ -1226,6 +1256,7 @@
                 },
                 "required": [
                   "layout",
+                  "filters",
                   "toolbar",
                   "phoneLayout",
                   "paging"
@@ -1754,6 +1785,7 @@
             "required": [
               "topBar",
               "header",
+              "navigation",
               "desktopNav",
               "mobileNav",
               "card",
@@ -3278,6 +3310,11 @@
             "minimum": 0,
             "maximum": 4
           },
+          "categoryGroups": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
           "menuTopItems": {
             "type": "integer",
             "minimum": 0,
@@ -3328,6 +3365,7 @@
           "skuCount",
           "topCategoryCount",
           "categoryDepth",
+          "categoryGroups",
           "menuTopItems",
           "menuDepth",
           "menuGroups",
