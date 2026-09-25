@@ -598,6 +598,28 @@ export type StorefrontStoreShape = {
     hasContentBlocks: boolean;
 };
 
+export type AppliedGiftCard = {
+    /**
+     * Opaque, short-lived apply handle. Send it as `giftCards[].handle` with the tax quote and the order; never the code.
+     */
+    handle: string;
+    handleExpiresAt: string;
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+};
+
+export type GiftCardBalance = {
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+    status: 'active' | 'disabled' | 'expired';
+};
+
 export type OrderLineExtras = {
     review?: OrderLineReviewExtra;
     downloads?: Array<OrderLineDownloadExtra>;
@@ -650,12 +672,46 @@ export type OrderLineWarrantyExtra = {
     openClaimId: string | null;
 };
 
+export type OrderGiftCardTender = {
+    last4: string;
+    amount: number;
+    amountMinor: number;
+};
+
 export type CustomerAccountSummary = {
     unreadInbox: number;
     reviewsToWrite: number;
     downloads: number;
     giftCards: number;
     activeWarranties: number;
+};
+
+export type BuyerGiftCard = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    createdAt: string;
+    transactions: Array<BuyerGiftCardTransaction>;
+};
+
+export type BuyerGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    createdAt: string;
 };
 
 export type ProductPageContentBlock = {
@@ -829,6 +885,58 @@ export type ProductBundleTier = {
     price: number | null;
     label: string | null;
     isActive: boolean;
+};
+
+export type AdminGiftCardSummary = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    customer: {
+        id: string;
+        name: string;
+    } | null;
+    recipientName: string | null;
+    recipientContactMasked: string | null;
+    createdAt: string;
+    version: number;
+};
+
+export type AdminGiftCardDetail = AdminGiftCardSummary & {
+    note: string | null;
+    message: string | null;
+    recipientEmail: string | null;
+    recipientPhone: string | null;
+    sourceOrder: {
+        id: string;
+        orderNumber: string;
+    } | null;
+    issuedBy: {
+        id: string;
+        name: string;
+    } | null;
+};
+
+export type AdminGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    actorType: 'system' | 'admin' | 'customer';
+    actorName: string | null;
+    reason: string | null;
+    createdAt: string;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -9089,6 +9197,218 @@ export type GetApiV1CheckoutConfigResponses = {
 
 export type GetApiV1CheckoutConfigResponse = GetApiV1CheckoutConfigResponses[keyof GetApiV1CheckoutConfigResponses];
 
+export type PostApiV1CheckoutGiftCardsApplyData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/apply';
+};
+
+export type PostApiV1CheckoutGiftCardsApplyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyError = PostApiV1CheckoutGiftCardsApplyErrors[keyof PostApiV1CheckoutGiftCardsApplyErrors];
+
+export type PostApiV1CheckoutGiftCardsApplyResponses = {
+    /**
+     * The card can pay
+     */
+    200: {
+        success: true;
+        data: AppliedGiftCard;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyResponse = PostApiV1CheckoutGiftCardsApplyResponses[keyof PostApiV1CheckoutGiftCardsApplyResponses];
+
+export type PostApiV1CheckoutGiftCardsBalanceData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/balance';
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceError = PostApiV1CheckoutGiftCardsBalanceErrors[keyof PostApiV1CheckoutGiftCardsBalanceErrors];
+
+export type PostApiV1CheckoutGiftCardsBalanceResponses = {
+    /**
+     * Gift card balance
+     */
+    200: {
+        success: true;
+        data: GiftCardBalance;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceResponse = PostApiV1CheckoutGiftCardsBalanceResponses[keyof PostApiV1CheckoutGiftCardsBalanceResponses];
+
 export type PostApiV1CustomerAuthSendOtpData = {
     body?: {
         method?: 'email' | 'phone';
@@ -10542,6 +10862,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 requiresCardForm: boolean;
                 hostedRedirect: boolean;
             };
+            giftCardTenders: Array<OrderGiftCardTender>;
         };
     };
 };
@@ -12156,6 +12477,308 @@ export type GetApiV1CustomerAuthAccountSummaryResponses = {
 };
 
 export type GetApiV1CustomerAuthAccountSummaryResponse = GetApiV1CustomerAuthAccountSummaryResponses[keyof GetApiV1CustomerAuthAccountSummaryResponses];
+
+export type GetApiV1CustomerAuthGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards';
+};
+
+export type GetApiV1CustomerAuthGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsError = GetApiV1CustomerAuthGiftCardsErrors[keyof GetApiV1CustomerAuthGiftCardsErrors];
+
+export type GetApiV1CustomerAuthGiftCardsResponses = {
+    /**
+     * Gift cards saved to the account, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            giftCards: Array<BuyerGiftCard>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsResponse = GetApiV1CustomerAuthGiftCardsResponses[keyof GetApiV1CustomerAuthGiftCardsResponses];
+
+export type PostApiV1CustomerAuthGiftCardsSaveData = {
+    body: {
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/save';
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveError = PostApiV1CustomerAuthGiftCardsSaveErrors[keyof PostApiV1CustomerAuthGiftCardsSaveErrors];
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponses = {
+    /**
+     * The saved card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: BuyerGiftCard;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponse = PostApiV1CustomerAuthGiftCardsSaveResponses[keyof PostApiV1CustomerAuthGiftCardsSaveResponses];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/{giftCardId}/reveal';
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealError = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses = {
+    /**
+     * The formatted code (XXXX-XXXX-XXXX-XXXX)
+     */
+    200: {
+        success: true;
+        data: {
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponse = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
@@ -15775,6 +16398,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 paymentStatus: string;
                 paidAmount: number;
                 balanceDue: number;
+                giftCardTenders: Array<OrderGiftCardTender>;
                 createdAt: string | null;
                 updatedAt: string | null;
                 items: Array<{
@@ -16124,6 +16748,12 @@ export type PostApiV1OrdersCartValidationData = {
         zone?: string | null;
         area?: string | null;
         shippingMethodId?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -16228,6 +16858,11 @@ export type PostApiV1OrdersCartValidationResponses = {
              * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             delivery?: {
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -16282,6 +16917,12 @@ export type PostApiV1OrdersTaxQuoteData = {
          */
         discountCodes?: Array<string>;
         customerPhone?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -16340,6 +16981,27 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             taxAmount: number;
             totalMinor: number;
             totalAmount: number;
+            amountDueMinor: number;
+            amountDue: number;
+            /**
+             * The gift cards that pay part of this order, in the order they were added. A gift card never pays for gift-card lines; tender never changes taxes or discounts.
+             */
+            giftCardTenders: Array<{
+                handle: string;
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+                balance: number;
+                balanceMinor: number;
+            }>;
+            /**
+             * Gift cards that apply nothing, with the reason. An unusable card always reads "This gift card can't be used."
+             */
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             shippingMethod: {
                 id: string;
                 name: string;
@@ -16357,7 +17019,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 hours: string | null;
             } | null;
             /**
-             * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
+             * Payment methods for the amount due. Exactly ["gift_card"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
             /**
@@ -16526,8 +17188,18 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod' | 'gift_card';
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
+        /**
+         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
+         */
+        expectedAmountDueMinor?: number;
     };
     path?: never;
     query?: never;
@@ -16626,6 +17298,14 @@ export type PostApiV1OrdersResponses = {
             currencyCode: string;
             decimalPlaces: number;
             requiresShipping?: boolean;
+            amountDue?: number;
+            amountDueMinor?: number;
+            paidAmountMinor?: number;
+            giftCardTenders?: Array<{
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+            }>;
             message: string;
         };
     };
@@ -24834,6 +25514,7 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
                 unitPriceMinor: number;
                 quantity: number;
                 collectionIds?: Array<string>;
+                giftCard?: boolean;
             }>;
             shippingAmountMinor: number;
             submittedCodes: Array<string>;
@@ -46452,8 +47133,15 @@ export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         amount?: number;
         reason?: string;
-        gateway?: 'stripe' | 'sslcommerz' | 'cod';
+        /**
+         * Refund only payments taken by this method (gift_card: only the gift-card tenders).
+         */
+        gateway?: 'gift_card' | 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
+         */
+        settlement?: 'original' | 'store_credit';
         /**
          * One key per refund (per dialog opening). Repeating it returns the first refund.
          */
@@ -46551,6 +47239,16 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
+            settlement?: 'original' | 'store_credit';
+            /**
+             * The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).
+             */
+            storeCredit?: {
+                giftCardId: string;
+                last4: string;
+                amount: number;
+                amountMinor: number;
+            };
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -50751,6 +51449,14 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 codReceiptUrl: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
+                /**
+                 * The gift card this row moved money on (last 4 only): a tender, a refund to that card, or (storeCredit) the card a store-credit refund issued.
+                 */
+                giftCard: {
+                    id: string;
+                    last4: string;
+                    storeCredit: boolean;
+                } | null;
             }>;
             plan: {
                 id: string;
@@ -64148,6 +64854,730 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 };
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
+
+export type GetApiV1AdminGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'active' | 'disabled' | 'expired' | 'empty';
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type GetApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsError = GetApiV1AdminGiftCardsErrors[keyof GetApiV1AdminGiftCardsErrors];
+
+export type GetApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift cards
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<AdminGiftCardSummary>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsResponse = GetApiV1AdminGiftCardsResponses[keyof GetApiV1AdminGiftCardsResponses];
+
+export type PostApiV1AdminGiftCardsData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        expiresAt?: string | null;
+        customerId?: string | null;
+        recipient?: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+        } | null;
+        message?: string | null;
+        note?: string | null;
+        notify?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type PostApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsError = PostApiV1AdminGiftCardsErrors[keyof PostApiV1AdminGiftCardsErrors];
+
+export type PostApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift card issued
+     */
+    201: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+            /**
+             * XXXX-XXXX-XXXX-XXXX, shown once.
+             */
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsResponse = PostApiV1AdminGiftCardsResponses[keyof PostApiV1AdminGiftCardsResponses];
+
+export type GetApiV1AdminGiftCardsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards/summary';
+};
+
+export type GetApiV1AdminGiftCardsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryError = GetApiV1AdminGiftCardsSummaryErrors[keyof GetApiV1AdminGiftCardsSummaryErrors];
+
+export type GetApiV1AdminGiftCardsSummaryResponses = {
+    /**
+     * Outstanding balance per currency
+     */
+    200: {
+        success: true;
+        data: {
+            outstanding: Array<{
+                currencyCode: string;
+                balance: number;
+                balanceMinor: number;
+                cards: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryResponse = GetApiV1AdminGiftCardsSummaryResponses[keyof GetApiV1AdminGiftCardsSummaryResponses];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdError = GetApiV1AdminGiftCardsByGiftCardIdErrors[keyof GetApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Gift card detail
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardDetail;
+            transactions: Array<AdminGiftCardTransaction>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponse = GetApiV1AdminGiftCardsByGiftCardIdResponses[keyof GetApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdData = {
+    body: {
+        version: number;
+        status?: 'active' | 'disabled';
+        expiresAt?: string | null;
+        customerId?: string | null;
+        note?: string | null;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdError = PatchApiV1AdminGiftCardsByGiftCardIdErrors[keyof PatchApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Updated gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponse = PatchApiV1AdminGiftCardsByGiftCardIdResponses[keyof PatchApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        reason: string;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/adjust';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustError = PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses = {
+    /**
+     * Adjusted gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponse = PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/resend';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendError = PostApiV1AdminGiftCardsByGiftCardIdResendErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdResendErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponses = {
+    /**
+     * Queued
+     */
+    200: {
+        success: true;
+        data: {
+            queued: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponse = PostApiV1AdminGiftCardsByGiftCardIdResendResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdResendResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
