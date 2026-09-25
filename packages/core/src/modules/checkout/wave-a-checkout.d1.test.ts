@@ -24,6 +24,7 @@ import {
     validateStorefrontCartItems,
 } from "./cart-validation";
 import type { CreateStorefrontOrderInput } from "../orders/types";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 
 const CUSTOMIZATION = JSON.stringify({
     version: 1,
@@ -249,6 +250,42 @@ describe("Wave A checkout", () => {
         for (const statement of batch!) expect(statement.values.length).toBeLessThanOrEqual(100);
         expect(one("SELECT count(*) AS n FROM order_items WHERE order_id = ?", result.orderId)).toEqual({ n: 99 });
         expect(one("SELECT reserved_stock FROM product_variants WHERE id = 'v_tee'")).toEqual({ reserved_stock: 99 });
+    });
+
+    it("keeps cache dependency writes inside the commit: none for stock within its band, one product for a sell-out", async () => {
+        // Count what the 0093 triggers write, per commit.
+        sqlite.exec(`
+            CREATE TABLE amp (k TEXT PRIMARY KEY, n INTEGER NOT NULL);
+            CREATE TRIGGER amp_dep_ins AFTER INSERT ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
+            CREATE TRIGGER amp_dep_upd AFTER UPDATE ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
+            CREATE TRIGGER amp_clock AFTER UPDATE ON cache_clock BEGIN INSERT INTO amp VALUES ('clock', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
+        `);
+        // The steady state of a live store: projections already built.
+        await rebuildCatalogProjections(db);
+        const measure = async (items: Line[]) => {
+            sqlite.exec("DELETE FROM amp");
+            const clock = (one("SELECT seq FROM cache_clock") as { seq: number }).seq;
+            batches = [];
+            await checkout({ ...address, shippingMethodId: "m_ship", items });
+            const counts = Object.fromEntries(all<{ k: string; n: number }>("SELECT k, n FROM amp").map((row) => [row.k, row.n]));
+            return {
+                statements: batches[0]!.length,
+                keys: all<{ dep: string }>("SELECT dep FROM cache_dep WHERE seq > ? ORDER BY dep", clock).map((row) => row.dep),
+                depWrites: counts.dep ?? 0,
+                clockWrites: counts.clock ?? 0,
+            };
+        };
+        // 99 lines of one SKU that stays in stock: the batch is unchanged and writes no key.
+        const inBand = await measure(Array.from({ length: 99 }, (_, index) =>
+            line("p_tee", "v_tee", 1, 1000, [{ key: "fit", value: "regular" }, { key: "engraving", value: `No ${index}` }])));
+        expect(inBand).toEqual({ statements: 40, keys: [], depWrites: 0, clockWrites: 0 });
+        // The last 3 mugs: the SKU and the card cross into sold out.
+        const soldOut = await measure([line("p_mug", "v_mug", 3, 300)]);
+        // The SKU trigger (product) and the buyer-state band trigger (product, band order of its scopes).
+        expect(soldOut.keys).toEqual(["lo:band:all", "p:p_mug", "t:product_buyer_state", "t:product_variants"]);
+        expect(soldOut.statements).toBeLessThanOrEqual(40);
+        expect(soldOut.depWrites).toBeLessThanOrEqual(6);
+        expect(soldOut.clockWrites).toBeLessThanOrEqual(2);
     });
 
     it("offers cash on delivery only when something is handed over in person", async () => {
