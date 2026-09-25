@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent } from "react";
 import { useLocation, useRouter } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Eye, PanelLeft, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, PanelLeft, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { UserAvatar, UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
 import markImg from "@/assets/favicon.png";
@@ -12,23 +12,16 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 import { SETTINGS_ITEM, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
-import { SEARCH_KEYS, isMac } from "./GlobalSearch";
 import { NAV_ICON_BUTTON, NAV_ROW } from "./nav-button";
+import { ariaKeys, comboCaps, SHORTCUTS } from "./shortcuts";
 import { ShellLink } from "./ShellLink";
-import { StoreBadge, useStoreIdentity } from "./store-identity";
 import { useShell } from "./shell";
 
-// Push notifications pull in Firebase, the settings list its search index:
-// both load after the shell.
-const NotificationDropdown = lazy(() =>
-  import("@/components/admin/NotificationDropdown").then((module) => ({ default: module.NotificationDropdown })),
-);
+// The settings list carries its search index; the phone drawer its dialog code.
 const SettingsNav = lazy(() => import("../settings/SettingsNav").then((module) => ({ default: module.SettingsNav })));
 const SidebarMobileSheet = lazy(() =>
   import("@/components/ui/sidebar-mobile-sheet").then((module) => ({ default: module.SidebarMobileSheet })),
 );
-
-const TOGGLE_KEYS = isMac ? "Meta+B" : "Control+B";
 
 interface SidebarProps {
   nav: VisibleNavItem[];
@@ -42,15 +35,7 @@ function historyIndex(state: unknown): number {
 }
 
 function Mark() {
-  return <img src={withDashboardBasePath(markImg)} alt="" className="size-6" />;
-}
-
-function Bell({ userId }: { userId: string }) {
-  return (
-    <Suspense fallback={<span className="size-11 shrink-0 md:size-8" />}>
-      <NotificationDropdown userId={userId} />
-    </Suspense>
-  );
+  return <img src={withDashboardBasePath(markImg)} alt="" className="size-5" />;
 }
 
 interface TipState {
@@ -61,16 +46,18 @@ interface TipState {
 }
 
 /**
- * One tooltip for the whole navigation, fixed to the right of the hovered or
- * keyboard-focused `data-tip` button (the frame clips its own overflow, so it
- * can't live inside): the button's accessible name and, for `data-tip="keys"`
- * (the collapse toggle), ⌘B.
+ * One tooltip for the whole navigation (Shopify's dark one), fixed to the
+ * right of the hovered or keyboard-focused `data-tip` button (the frame clips
+ * its own overflow, so it can't live inside): the button's accessible name
+ * and, for `data-tip="keys"` (the collapse toggle), its shortcut.
  */
 function useNavTooltip() {
   const [tip, setTip] = useState<TipState | null>(null);
   const show = (event: PointerEvent | FocusEvent) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-tip]");
     if (event.type === "focus" && !target?.matches(":focus-visible")) return;
+    // Touch has no hover: a tap never leaves a tooltip behind.
+    if ("pointerType" in event && event.pointerType === "touch") return;
     if (!target) return setTip(null);
     const box = target.getBoundingClientRect();
     setTip({ label: target.getAttribute("aria-label") ?? "", keys: target.dataset.tip === "keys", x: box.right + 8, y: box.top + box.height / 2 });
@@ -81,13 +68,16 @@ function useNavTooltip() {
     <span
       aria-hidden
       style={{ "--tip-x": `${tip.x}px`, "--tip-y": `${tip.y}px` } as CSSProperties}
-      className="pointer-events-none fixed left-(--tip-x) top-(--tip-y) z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg bg-popover px-2.5 py-1 text-body text-popover-foreground shadow-popover"
+      className="pointer-events-none fixed left-(--tip-x) top-(--tip-y) z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg bg-topbar px-2 py-1 text-body text-topbar-foreground shadow-popover"
     >
       {tip.label}
       {tip.keys ? (
         <span className="flex gap-1">
-          <kbd className="text-caption">{isMac ? "⌘" : "Ctrl"}</kbd>
-          <kbd className="text-caption">B</kbd>
+          {comboCaps(SHORTCUTS.navigation.combos[0]).map((cap) => (
+            <kbd key={cap} className="border-topbar-hover bg-topbar-subdued text-caption">
+              {cap}
+            </kbd>
+          ))}
         </span>
       ) : null}
     </span>
@@ -97,18 +87,17 @@ function useNavTooltip() {
 
 /**
  * Shopify's navigation on the near-black frame. From md: a 240px panel (logo
- * and collapse button, Search, the sections, Settings and the store row) or,
- * collapsed with ⌘B, a 56px icon rail with tooltips; Settings swaps the panel
- * for the settings list beside the rail. On phones the same panel is a drawer.
- * The width eases between states and a new panel slides in; neither moves on
- * first paint.
+ * and collapse button, the sections, Settings) or, collapsed with ⌘B, a 56px
+ * icon rail with tooltips; Settings swaps the panel for the settings list
+ * beside the rail. On phones the same panel is a drawer. The width eases
+ * between states and a new panel slides in; neither moves on first paint.
+ * Search, notifications and the store menu live in the canvas' top bar.
  */
 export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
   const t = useMessages(shellMessages);
   const router = useRouter();
   const path = useLocation({ select: (location) => location.pathname });
   const { collapsed, drawerOpen, setDrawerOpen } = useShell();
-  // One navigation is mounted at a time (its bell owns the push listener).
   const desktop = useMediaQuery("(min-width: 768px)");
   const inSettings = matchesPath(path, SETTINGS_ITEM.to);
   const panelKey = inSettings ? "settings" : collapsed ? null : "main";
@@ -135,7 +124,7 @@ export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
     inSettings ? (
       <SettingsPanel user={user} onBack={leaveSettings} onClose={drawer ? closeDrawer : undefined} />
     ) : (
-      <MainPanel nav={nav} user={user} showSettings={showSettings} onClose={drawer ? closeDrawer : undefined} />
+      <MainPanel nav={nav} showSettings={showSettings} onClose={drawer ? closeDrawer : undefined} />
     );
 
   if (!desktop) {
@@ -154,11 +143,11 @@ export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
         data-nav=""
         data-nav-state={inSettings ? "settings" : collapsed ? "rail" : "panel"}
         className={cn(
-          "flex h-full shrink-0 overflow-clip transition-[width] duration-200 ease-out",
+          "flex h-full shrink-0 overflow-clip transition-[width] duration-200 ease-out print:hidden",
           inSettings ? "w-74" : collapsed ? "w-14" : "w-60",
         )}
       >
-        {inSettings || collapsed ? <Rail nav={nav} user={user} showSettings={showSettings} inSettings={inSettings} /> : null}
+        {inSettings || collapsed ? <Rail nav={nav} showSettings={showSettings} inSettings={inSettings} /> : null}
         {panelKey ? (
           <nav
             key={panelKey}
@@ -174,32 +163,38 @@ export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
   );
 }
 
-/** The panel's top row: the mark (home) and the collapse button, or Close in the phone drawer. */
+/** The panel's top row, level with the top bar: the mark (home) and the collapse button, or Close in the phone drawer. */
 function PanelTop({ onClose }: { onClose?: () => void }) {
   const t = useMessages(shellMessages);
   const { toggleCollapsed } = useShell();
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between px-3 md:mt-1.5">
-      <ShellLink to="/admin" current={false} aria-label={t("home")} onClick={onClose} className={cn(NAV_ICON_BUTTON, "-ml-1")}>
+    <div className="flex h-14 shrink-0 items-center justify-between px-2">
+      <ShellLink to="/admin" current={false} aria-label={t("home")} onClick={onClose} className={NAV_ICON_BUTTON}>
         <Mark />
       </ShellLink>
       {onClose ? (
         <button type="button" onClick={onClose} aria-label={t("closeMenu")} className={NAV_ICON_BUTTON}>
-          <X className="size-5" aria-hidden />
+          <X aria-hidden />
         </button>
       ) : (
-        <button data-tip="keys" type="button" onClick={toggleCollapsed} aria-label={t("collapseNavigation")} aria-keyshortcuts={TOGGLE_KEYS} className={NAV_ICON_BUTTON}>
-          <PanelLeft className="size-5" aria-hidden />
+        <button
+          data-tip="keys"
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={t("collapseNavigation")}
+          aria-keyshortcuts={ariaKeys("navigation")}
+          className={NAV_ICON_BUTTON}
+        >
+          <PanelLeft aria-hidden />
         </button>
       )}
     </div>
   );
 }
 
-function MainPanel({ nav, user, showSettings, onClose }: { nav: VisibleNavItem[]; user: UserMenuUser; showSettings: boolean; onClose?: () => void }) {
+function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; showSettings: boolean; onClose?: () => void }) {
   const t = useMessages(shellMessages);
   const path = useLocation({ select: (location) => location.pathname });
-  const { setSearchOpen } = useShell();
   const { storefrontUrl } = useStorefrontUrl();
   const ungrouped = nav.filter((item) => !item.group);
   const groups = [...new Set(nav.flatMap((item) => (item.group ? [item.group] : [])))];
@@ -220,7 +215,7 @@ function MainPanel({ nav, user, showSettings, onClose }: { nav: VisibleNavItem[]
           <span className="truncate">{t(item.key)}</span>
           {item.badge === "inbox" ? <InboxNavBadge /> : null}
         </ShellLink>
-        {/* Shopify's eye on the Online store row: the storefront in a new tab. */}
+        {/* Shopify's eye on the Online store row: the storefront in a new tab (always shown on touch). */}
         {item.key === "onlineStore" && storefrontUrl ? (
           <a
             href={storefrontUrl}
@@ -228,9 +223,9 @@ function MainPanel({ nav, user, showSettings, onClose }: { nav: VisibleNavItem[]
             rel="noopener noreferrer"
             aria-label={t("viewStore")}
             onClick={onClose}
-            className={cn(NAV_ICON_BUTTON, "absolute right-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 max-md:opacity-100")}
+            className={cn(NAV_ICON_BUTTON, "absolute right-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100")}
           >
-            <Eye className="size-5" aria-hidden />
+            <Eye aria-hidden />
           </a>
         ) : null}
         {open && item.children.length > 0 ? (
@@ -242,7 +237,7 @@ function MainPanel({ nav, user, showSettings, onClose }: { nav: VisibleNavItem[]
                   preload="intent"
                   current={child === activeChild}
                   onClick={onClose}
-                  className={cn(NAV_ROW, "pl-9 text-sidebar-muted-foreground")}
+                  className={cn(NAV_ROW, "pl-8 text-sidebar-muted-foreground")}
                 >
                   <span className="truncate">{t(child.key)}</span>
                   {child.badge === "reviews" ? <ReviewsNavBadge /> : null}
@@ -258,115 +253,87 @@ function MainPanel({ nav, user, showSettings, onClose }: { nav: VisibleNavItem[]
   return (
     <>
       <PanelTop onClose={onClose} />
-      <div className="px-3 pb-2">
-        <button
-          type="button"
-          onClick={() => {
-            onClose?.();
-            setSearchOpen(true);
-          }}
-          aria-keyshortcuts={SEARCH_KEYS}
-          className="flex h-11 w-full items-center gap-2 rounded-lg bg-sidebar-hover px-2 text-body text-sidebar-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring md:h-8"
-        >
-          <Search className="size-5 shrink-0" aria-hidden />
-          {t("search")}
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      {/* Only the list scrolls; Settings stays reachable on short screens. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
         <ul className="flex flex-col gap-0.5">{ungrouped.map(renderItem)}</ul>
         {groups.map((group) => (
           <div key={group} className="mt-4">
-            <p className="flex h-7 items-center gap-1 px-2 text-body text-sidebar-muted-foreground">
+            <p className="flex h-7 items-center gap-1 px-2 text-caption font-medium text-sidebar-muted-foreground">
               {t(group)}
-              <ChevronRight className="size-3.5" aria-hidden />
+              <ChevronRight className="size-3 rtl:rotate-180" aria-hidden />
             </p>
             <ul className="flex flex-col gap-0.5">{nav.filter((item) => item.group === group).map(renderItem)}</ul>
           </div>
         ))}
       </div>
-      <div className="flex shrink-0 flex-col gap-0.5 px-3 pb-3">
-        {showSettings ? (
+      {showSettings ? (
+        <div className="shrink-0 px-2 pb-2">
           <ShellLink to={SETTINGS_ITEM.to} current={false} onClick={onClose} className={NAV_ROW}>
             <SETTINGS_ITEM.icon aria-hidden />
             <span className="truncate">{t("settings")}</span>
           </ShellLink>
-        ) : null}
-        <StoreRow user={user} />
-      </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-/** Shopify's store row: the store badge and name open the account menu; the bell sits at the end. */
-function StoreRow({ user }: { user: UserMenuUser }) {
-  const t = useMessages(shellMessages);
-  const store = useStoreIdentity();
-  const label = store.name || store.host;
-  return (
-    <div className="flex items-center gap-1">
-      <UserMenu user={user} side="top">
-        <button type="button" aria-label={label ? undefined : t("accountMenu")} className={cn(NAV_ROW, "flex-1")}>
-          <StoreBadge name={store.name} />
-          <span className="truncate">{label}</span>
-        </button>
-      </UserMenu>
-      <Bell userId={user.id} />
-    </div>
-  );
-}
-
 /** The collapsed navigation: every section as an icon with a tooltip, groups set apart by a rule. */
-function Rail({ nav, user, showSettings, inSettings }: { nav: VisibleNavItem[]; user: UserMenuUser; showSettings: boolean; inSettings: boolean }) {
+function Rail({ nav, showSettings, inSettings }: { nav: VisibleNavItem[]; showSettings: boolean; inSettings: boolean }) {
   const t = useMessages(shellMessages);
   const path = useLocation({ select: (location) => location.pathname });
-  const { toggleCollapsed, setSearchOpen } = useShell();
-  const store = useStoreIdentity();
+  const { toggleCollapsed } = useShell();
   let lastGroup: string | undefined;
   return (
-    <nav aria-label={t("mainNavigation")} className="flex h-full w-14 shrink-0 flex-col items-center gap-0.5 pb-3">
-      <div className="flex h-14 shrink-0 items-center md:mt-1.5">
+    <nav aria-label={t("mainNavigation")} className="flex h-full w-14 shrink-0 flex-col items-center pb-2">
+      <div className="flex h-14 shrink-0 items-center">
         {inSettings ? (
           <ShellLink to="/admin" current={false} aria-label={t("home")} className={NAV_ICON_BUTTON}>
             <Mark />
           </ShellLink>
         ) : (
           // The mark turns into the expand button under the pointer, as in Shopify.
-          <button data-tip="keys" type="button" onClick={toggleCollapsed} aria-label={t("expandNavigation")} aria-keyshortcuts={TOGGLE_KEYS} className={cn(NAV_ICON_BUTTON, "group/expand")}>
+          <button
+            data-tip="keys"
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={t("expandNavigation")}
+            aria-keyshortcuts={ariaKeys("navigation")}
+            className={cn(NAV_ICON_BUTTON, "group/expand")}
+          >
             <span className="group-hover/expand:hidden group-focus-visible/expand:hidden">
               <Mark />
             </span>
-            <PanelLeft className="hidden size-5 group-hover/expand:block group-focus-visible/expand:block" aria-hidden />
+            <PanelLeft className="hidden size-4 group-hover/expand:block group-focus-visible/expand:block" aria-hidden />
           </button>
         )}
       </div>
-      <button data-tip="" type="button" onClick={() => setSearchOpen(true)} aria-label={t("search")} aria-keyshortcuts={SEARCH_KEYS} className={cn(NAV_ICON_BUTTON, "mb-2")}>
-        <Search className="size-5" aria-hidden />
-      </button>
-      <ul className="flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto">
+      <ul className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overscroll-contain">
         {nav.map((item) => {
           const divider = item.group !== lastGroup;
           lastGroup = item.group;
           return (
             <li key={item.key} className="flex flex-col items-center">
-              {divider ? <span aria-hidden className="my-2 h-px w-5 bg-sidebar-border" /> : null}
-              <ShellLink data-tip="" to={item.to} preload="intent" current={!inSettings && isSectionActive(path, item)} aria-label={t(item.key)} className={NAV_ICON_BUTTON}>
-                <item.icon className="size-5" aria-hidden />
+              {divider ? <span aria-hidden className="my-2 h-px w-4 bg-sidebar-border" /> : null}
+              <ShellLink
+                data-tip=""
+                to={item.to}
+                preload="intent"
+                current={!inSettings && isSectionActive(path, item)}
+                aria-label={t(item.key)}
+                className={NAV_ICON_BUTTON}
+              >
+                <item.icon aria-hidden />
               </ShellLink>
             </li>
           );
         })}
       </ul>
       {showSettings ? (
-        <ShellLink data-tip="" to={SETTINGS_ITEM.to} current={inSettings} aria-label={t("settings")} className={NAV_ICON_BUTTON}>
-          <SETTINGS_ITEM.icon className="size-5" aria-hidden />
+        <ShellLink data-tip="" to={SETTINGS_ITEM.to} current={inSettings} aria-label={t("settings")} className={cn(NAV_ICON_BUTTON, "mt-2")}>
+          <SETTINGS_ITEM.icon aria-hidden />
         </ShellLink>
       ) : null}
-      <Bell userId={user.id} />
-      <UserMenu user={user} side="right">
-        <button type="button" aria-label={store.name || t("accountMenu")} className={NAV_ICON_BUTTON}>
-          <StoreBadge name={store.name} />
-        </button>
-      </UserMenu>
     </nav>
   );
 }
@@ -379,29 +346,29 @@ function SettingsPanel({ user, onBack, onClose }: { user: UserMenuUser; onBack: 
   const t = useMessages(shellMessages);
   return (
     <>
-      <div className="flex h-14 shrink-0 items-center gap-1 px-3 md:mt-1.5">
-        <button type="button" onClick={onBack} aria-label={t("back")} className={cn(NAV_ICON_BUTTON, "-ml-1")}>
-          <ChevronLeft className="size-5" aria-hidden />
+      <div className="flex h-14 shrink-0 items-center gap-1 px-2">
+        <button type="button" onClick={onBack} aria-label={t("back")} className={NAV_ICON_BUTTON}>
+          <ChevronLeft className="rtl:rotate-180" aria-hidden />
         </button>
-        <h2 className="flex-1 text-heading-sm text-sidebar-foreground">{t("settings")}</h2>
+        <h2 className="flex-1 truncate text-nav font-semibold text-sidebar-foreground">{t("settings")}</h2>
         {onClose ? (
           <button type="button" onClick={onClose} aria-label={t("closeMenu")} className={NAV_ICON_BUTTON}>
-            <X className="size-5" aria-hidden />
+            <X aria-hidden />
           </button>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
         <Suspense fallback={null}>
           <SettingsNav variant="sidebar" onNavigate={onClose} />
         </Suspense>
       </div>
-      <div className="shrink-0 border-t border-sidebar-border px-3 py-2">
+      <div className="shrink-0 border-t border-sidebar-border p-2">
         <UserMenu user={user} side="top">
-          <button type="button" className={cn(NAV_ROW, "h-auto min-h-11 gap-3 py-1.5 md:h-auto")}>
+          <button type="button" className={cn(NAV_ROW, "h-auto min-h-11 gap-2 py-1 md:h-auto")}>
             <UserAvatar user={user} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{user.name}</span>
-              <span className="block truncate text-sidebar-muted-foreground">{user.email}</span>
+              <span className="block truncate font-medium text-sidebar-foreground">{user.name}</span>
+              <span className="block truncate text-caption text-sidebar-muted-foreground">{user.email}</span>
             </span>
           </button>
         </UserMenu>

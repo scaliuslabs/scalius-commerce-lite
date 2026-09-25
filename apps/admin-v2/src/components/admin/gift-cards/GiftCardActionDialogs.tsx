@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { GIFT_CARD_LIMITS } from "@scalius/core/modules/gift-cards/browser";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
+import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -43,11 +45,16 @@ export function giftCardErrorText(error: unknown, fallback: GiftCardMessageKey):
   return getServerFnError(error, translate(giftCardsMessages, fallback));
 }
 
-/** The shell every card action shares: title, help, an error banner, the form and a two-button footer. */
-function ActionDialog({ open, onOpenChange, busy, formId, title, description, error, submitLabel, onSubmit, children }: {
+/**
+ * The shell every card action shares: title, help, an error banner, the form and a
+ * two-button footer. Closing with unsaved edits (Esc, outside click, Cancel) asks first.
+ */
+function ActionDialog({ open, onOpenChange, busy, dirty, formId, title, description, error, submitLabel, onSubmit, children }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
+  /** The form differs from what the dialog opened with. */
+  dirty: boolean;
   formId: string;
   title: string;
   description?: string;
@@ -61,23 +68,27 @@ function ActionDialog({ open, onOpenChange, busy, formId, title, description, er
     event.preventDefault();
     if (!busy) onSubmit();
   };
+  const { requestClose, discardDialog } = useDirtyDialogClose({ dirty, busy, onClose: () => onOpenChange(false) });
   return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
-        <form id={formId} method="post" noValidate className="space-y-4" onSubmit={submit}>
-          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
-          {children}
-        </form>
-        <DialogFooter>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-          <Button type="submit" form={formId} loading={busy}>{submitLabel}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            {description ? <DialogDescription>{description}</DialogDescription> : null}
+          </DialogHeader>
+          <form id={formId} method="post" noValidate className="space-y-4" onSubmit={submit}>
+            {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+            {children}
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={requestClose}>{t("cancel")}</Button>
+            <Button type="submit" form={formId} loading={busy}>{submitLabel}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog {...discardDialog} />
+    </>
   );
 }
 
@@ -132,6 +143,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
       open={open}
       onOpenChange={onOpenChange}
       busy={mutation.isPending}
+      dirty={direction !== "increase" || amount !== null || reason !== ""}
       formId="gift-card-adjust"
       title={t("adjustBalance")}
       description={t("adjustHelp")}
@@ -234,11 +246,14 @@ export function ExpiryDialog({ card, open, onOpenChange }: {
   };
 
   const error = invalid ? t("expiryInvalid") : undefined;
+  const savedDay = giftCardLastDay(card.expiresAt) ?? "";
+  const dirty = savedDay ? mode !== "date" || day !== savedDay : mode !== "never";
   return (
     <ActionDialog
       open={open}
       onOpenChange={onOpenChange}
       busy={mutation.isPending}
+      dirty={dirty}
       formId="gift-card-expiry-form"
       title={t("expiryTitle")}
       description={t("expiryDialogHelp")}
@@ -306,13 +321,13 @@ export function EditDetailsDialog({ card, open, onOpenChange }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reset]);
 
+  const customerId = customer?.id ?? null;
+  const nextNote = note.trim() || null;
+  const changes = {
+    ...(customerId !== (card.customer?.id ?? null) ? { customerId } : {}),
+    ...(nextNote !== (card.note ?? null) ? { note: nextNote } : {}),
+  };
   const submit = () => {
-    const customerId = customer?.id ?? null;
-    const nextNote = note.trim() || null;
-    const changes = {
-      ...(customerId !== (card.customer?.id ?? null) ? { customerId } : {}),
-      ...(nextNote !== (card.note ?? null) ? { note: nextNote } : {}),
-    };
     if (Object.keys(changes).length === 0) {
       onOpenChange(false);
       return;
@@ -333,6 +348,7 @@ export function EditDetailsDialog({ card, open, onOpenChange }: {
       open={open}
       onOpenChange={onOpenChange}
       busy={mutation.isPending}
+      dirty={Object.keys(changes).length > 0}
       formId="gift-card-details"
       title={t("editDetailsTitle")}
       error={mutation.isError ? giftCardErrorText(mutation.error, "saveFailed") : null}

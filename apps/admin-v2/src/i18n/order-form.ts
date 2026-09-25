@@ -93,6 +93,8 @@ export const orderFormMessages = defineMessages({
     fixDeliveryCharge: "Fix the delivery charge",
     calculating: "Calculating the total…",
     totalFailed: "Couldn't calculate the total.",
+    waitForTotal: "Wait for the total to finish calculating, then save.",
+    unsavedOrder: "Unsaved order",
 
     reviewChanges: "Review changes",
     confirmTitle: "Save changes to order {number}?",
@@ -237,6 +239,8 @@ export const orderFormMessages = defineMessages({
     fixDeliveryCharge: "ডেলিভারি চার্জ ঠিক করুন",
     calculating: "মোট হিসাব করা হচ্ছে…",
     totalFailed: "মোট হিসাব করা যায়নি।",
+    waitForTotal: "মোট হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন, তারপর সেভ করুন।",
+    unsavedOrder: "সেভ না করা অর্ডার",
 
     reviewChanges: "পরিবর্তন দেখুন",
     confirmTitle: "অর্ডার {number}-এর পরিবর্তন সেভ করবেন?",

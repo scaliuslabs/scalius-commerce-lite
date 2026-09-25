@@ -176,6 +176,13 @@ describe("order mutation failures", () => {
     expect(orderErrorMessage(new AdminApiResponseError("Only 2 of that item are left to send.", 409))).toBe("Only 2 of that item are left to send.");
   });
 
+  it("leaves the saved amendment's announcement to the editor's save bar", async () => {
+    sdk.postApiV1AdminOrdersByIdAmendments.mockResolvedValue({ id: "ord_1" });
+    await run(renderMutation(useConfirmManualOrderAmendment), { id: "ord_1" } as never);
+    expect(refreshedOrderQuery("detail", "ord_1")).toBe(true);
+    expect(toastMocks.success).not.toHaveBeenCalled();
+  });
+
   it("keeps the amendment failure for the edit page's review dialog", async () => {
     sdk.postApiV1AdminOrdersByIdAmendments.mockRejectedValue(new Error("stale"));
     await run(renderMutation(useConfirmManualOrderAmendment), { id: "ord_1" } as never);

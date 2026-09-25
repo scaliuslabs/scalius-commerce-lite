@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { NAV_ICON_BUTTON } from "./layout/nav-button";
+import { TOP_BAR_BUTTON } from "./layout/nav-button";
 
 interface AdminNotification {
   id: string;
@@ -84,14 +84,14 @@ export function NotificationDropdown({ userId }: { userId: string }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(NAV_ICON_BUTTON, "relative")}
+          className={cn(TOP_BAR_BUTTON, "relative")}
           aria-label={unread > 0 ? t("unreadNotifications", { count: unread }) : t("notifications")}
         >
-          <Bell className="size-5" aria-hidden />
+          <Bell aria-hidden />
           {unread > 0 ? <span className="absolute right-2 top-2 size-2 rounded-full bg-destructive md:right-1 md:top-1" aria-hidden /> : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent side="right" align="end" sideOffset={8} className="w-80 p-0">
+      <PopoverContent align="end" sideOffset={8} className="w-80 p-0">
         <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
           <h2 className="text-body font-semibold">{t("notifications")}</h2>
           {unread > 0 ? (

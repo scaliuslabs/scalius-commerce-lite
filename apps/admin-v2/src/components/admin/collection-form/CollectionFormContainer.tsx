@@ -9,7 +9,8 @@ import {
   putApiV1AdminCollectionsById,
 } from "@scalius/api-client/sdk";
 import { FormContainer } from "~/components/admin/shared/FormContainer";
-import { SaveNotCompleted } from "~/components/admin/shared/use-form-save-bar";
+import { SaveConflict, SaveNotCompleted } from "~/components/admin/shared/SaveBar";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
@@ -151,6 +152,7 @@ export function CollectionForm({
         },
       };
       let savedCollectionId: string;
+      let saved: { id: string; version: number };
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         const expectedVersion = values.version || defaultValues?.version;
@@ -158,12 +160,15 @@ export function CollectionForm({
         const result = await apiData(putApiV1AdminCollectionsById({
           path: { id: entityId },
           body: { ...submission, expectedVersion },
-        }));
-        form.reset({ ...values, id: result.id, version: result.version });
+        })).catch((error: unknown) => {
+          if (error instanceof AdminApiResponseError && error.code === "COLLECTION_REVISION_CONFLICT") throw new SaveConflict();
+          throw error;
+        });
+        saved = { id: result.id, version: result.version };
         savedCollectionId = entityId;
       } else {
         const result = await apiData(postApiV1AdminCollections({ body: submission }));
-        form.reset({ ...values, id: result.id, version: result.version });
+        saved = { id: result.id, version: result.version };
         savedCollectionId = result.id;
       }
 
@@ -183,6 +188,7 @@ export function CollectionForm({
           replace: true,
         });
       }
+      return saved;
     } finally {
       setIsSubmitting(false);
     }
@@ -237,6 +243,7 @@ export function CollectionForm({
       canSave={canSave}
       form={form}
       onSave={saveCollection}
+      savedValues={(result) => result as Partial<CollectionFormInput>}
       unsavedLabel={isEdit ? undefined : tf("unsavedCollection")}
       savedMessage={tf("saved")}
     >
