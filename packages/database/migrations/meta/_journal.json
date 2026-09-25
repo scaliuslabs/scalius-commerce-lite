@@ -617,6 +617,13 @@
       "when": 1790300018000,
       "tag": "0087_on_sale_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1790300019000,
+      "tag": "0088_catalogue_schema",
+      "breakpoints": true
     }
   ]
 }
