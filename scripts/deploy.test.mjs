@@ -7,6 +7,7 @@ import {
   getExternalSchemaPreflightCommand,
   getBuildCommandForTarget,
   getDeployCommandForTarget,
+  getDistSecretCommands,
   getSequentialWorkspaceCommand,
   getStorefrontCustomDomainUrl,
   getTypecheckCommandForTarget,
@@ -233,6 +234,18 @@ describe("deploy target wiring", () => {
     expect(() => getTypecheckCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
     );
+  });
+
+  it("scans dist and runs canary builds for every app a target ships", () => {
+    expect(getDistSecretCommands(["storefront"]).map(({ cmd }) => cmd)).toEqual([
+      "node scripts/check-dist-secrets.mjs apps/storefront",
+      "node scripts/check-build-canaries.mjs storefront",
+    ]);
+    expect(getDistSecretCommands(["api", "storefront"]).map(({ cmd }) => cmd)).toEqual([
+      "node scripts/check-dist-secrets.mjs apps/admin-v2 apps/api apps/storefront",
+      "node scripts/check-build-canaries.mjs admin-v2 api storefront",
+    ]);
+    expect(() => getDistSecretCommands(["removed-worker"])).toThrow("Unknown deploy target: removed-worker");
   });
 
   it("selects D1 from the binding when the committed config carries no vars", () => {
