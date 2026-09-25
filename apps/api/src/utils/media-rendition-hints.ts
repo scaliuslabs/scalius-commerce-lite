@@ -15,6 +15,8 @@
  * message per id per `HINT_TTL_SECONDS` (a KV marker). Never throws.
  */
 
+import type { MediaVariantsQueue } from "@scalius/core/modules/media";
+
 export const MEDIA_RENDITION_HINT_KV_PREFIX = "media:rendition-hint:";
 /** One enqueue per media id per cron period: the backfill runs every 15 minutes. */
 export const MEDIA_RENDITION_HINT_TTL_SECONDS = 15 * 60;
@@ -80,8 +82,11 @@ function maskMediaId(id: string): string {
 }
 
 export interface MediaRenditionHintEnv {
-  CACHE?: Pick<KVNamespace, "get" | "put">;
-  JOBS_QUEUE?: Pick<Queue, "send">;
+  CACHE?: {
+    get(key: string): Promise<string | null>;
+    put(key: string, value: string, options: { expirationTtl: number }): Promise<void>;
+  };
+  JOBS_QUEUE?: MediaVariantsQueue;
   IMAGES?: ImagesBinding;
 }
 
