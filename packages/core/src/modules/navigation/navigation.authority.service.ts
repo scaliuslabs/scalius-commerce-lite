@@ -26,6 +26,7 @@ import {
 } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
+import { deps } from "../../cache-deps";
 import {
     AppError,
     ConflictError,
@@ -1352,11 +1353,24 @@ function publishedHierarchyToTargets(
     });
 }
 
+/**
+ * A published menu read depends on its own menu row and publication. The
+ * publication-item triggers key a row by its new menu id only, so an item
+ * moved to another menu would not advance the old menu's key; `nav:*`
+ * (advanced by every publication change) covers that until the registry
+ * derives those keys from both row images.
+ */
+function declarePublishedMenu(menuId: string): void {
+    deps.navigation(menuId);
+    deps.anyNavigation();
+}
+
 export async function getPublishedNavigationMenuTree(
     db: Database,
     menuId: string,
     input: { maxItems?: number } = {},
 ) {
+    declarePublishedMenu(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
@@ -1519,6 +1533,7 @@ export async function listPublishedNavigationMenuItems(
         cursor?: NavigationItemCursor;
     } = {},
 ) {
+    declarePublishedMenu(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
@@ -1740,6 +1755,8 @@ export async function saveNavigationPlacement(
 }
 
 export async function getNavigationPlacementManifest(db: Database) {
+    // Every enabled placement and its menu's published revision.
+    deps.anyNavigation();
     const rows = await db
         .select({
             id: navigationPlacements.id,
