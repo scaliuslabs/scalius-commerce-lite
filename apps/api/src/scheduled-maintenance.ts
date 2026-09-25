@@ -61,12 +61,13 @@ export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
 /** CPU guard against the 30 s cron CPU limit (~tens of ms of our CPU per image). */
 export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
 /**
- * A large backlog (the 0094 ladder migration sends every image back to its
- * original) is fanned out to the jobs queue beyond what this run renders
- * inline: up to this many images per 15-minute run, 10 `sendBatch` calls
- * of 100 (the Queues per-call limit). Queue consumers render them in
- * parallel (Queues runs up to 250 concurrent consumer invocations), so a
- * demo-sized catalogue is re-rendered within minutes instead of hours.
+ * With the jobs queue, the backlog is fanned out instead of rendered inline
+ * two at a time: up to this many images per 15-minute run, 10 `sendBatch`
+ * calls of 100 (the Queues per-call limit), no delay. Queue consumers render
+ * them in parallel (Queues runs up to 250 concurrent consumer invocations),
+ * so a large backlog (the 0094 ladder migration sends every image back to
+ * its original) is re-rendered within minutes instead of one 240-image run
+ * per 15 minutes. Each job bumps the generation when it renders.
  * Each image is eight Images transforms: 1,000 images are 8,000 unique
  * transformations, billed per unique transformation per month (5,000
  * included; a free account stops transforming beyond that and its cards
@@ -547,15 +548,14 @@ async function runScheduledMaintenanceInner(
       const queue = env.JOBS_QUEUE;
       if (queue) {
         const fanout = await timed("media_rendition_fanout", () =>
-          enqueueMediaVariantsBacklog(db, queue, {
-            skip: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
-            limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
-          }),
+          enqueueMediaVariantsBacklog(db, queue, { skip: 0, limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN }),
         ).catch(() => null);
         if (fanout && fanout.queued > 0) {
           console.log(`[scheduled] Media rendition backlog: queued=${fanout.queued}, hasMore=${fanout.hasMore}`);
+          return;
         }
       }
+      // No queue, or it refused the backlog: render inline.
       const renditions = await timed("media_rendition_backfill", () =>
         backfillMissingMediaVariants(db, env.BUCKET, images, {
           deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,

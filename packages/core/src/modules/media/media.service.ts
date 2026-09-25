@@ -1082,13 +1082,12 @@ export interface MediaVariantsBatchQueue {
 }
 
 /**
- * The backlog beyond what one scheduled run renders inline: after the
+ * The scheduled backfill's candidates (same filter and order), sent to the
+ * jobs queue with no delay so consumers render them in parallel: after the
  * rendition ladder migration (0094) every image publishes its original
- * again, and one cron run renders at most a few hundred. The next `limit`
- * candidates after the first `skip` (the ones the inline backfill takes in
- * this run, same order) go to the jobs queue with no delay, where consumers
- * render them in parallel. Disjoint from the inline run, so no image is
- * rendered twice; a job for an image that is done by then skips it.
+ * again, and rendering inline two at a time would take one 240-image cron
+ * run per 15 minutes. `skip` leaves the first candidates to an inline run.
+ * A job for an image that is done by then skips it.
  */
 export async function enqueueMediaVariantsBacklog(
     db: Database,
