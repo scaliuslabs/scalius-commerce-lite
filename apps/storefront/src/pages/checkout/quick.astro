@@ -249,7 +249,7 @@ const secondaryButtonClass =
             <div>
               <label for="customerPhone" class={labelClass}>{copy.customerPhoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
               <input id="customerPhone" name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value={form.customerPhone} placeholder={copy.customerPhonePlaceholder} aria-invalid={errorFor("customerPhone") ? "true" : undefined} aria-describedby="customerPhone-help customerPhone-error" class={fieldClass} />
-              <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{copy.customerPhoneHelp}</p>
+              <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{mode === "pickup" ? copy.customerPhonePickupHelp : mode === "none" ? copy.customerPhoneServiceHelp : copy.customerPhoneHelp}</p>
               {errorFor("customerPhone") && <p id="customerPhone-error" class={errorClass}>{errorFor("customerPhone")}</p>}
             </div>
             {lang.fieldVisibility.showEmailField && (
