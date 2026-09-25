@@ -4,6 +4,7 @@ import {
   hydrateCartFromStorage,
   syncCartFromStorage,
   addToCart,
+  startBuyNow,
   addDiscountCode,
   removeCartItemByKey,
   removeDiscountCode,
@@ -362,7 +363,8 @@ async function processQuickBuy() {
       if (data.cartItem) {
         // Buyer inputs (from the product page's no-JS form) come with the
         // line; the analytics events below never carry them.
-        if (!(await addToCart(data.cartItem))) return;
+        // Buy now buys only this item; the buyer's cart is set aside, untouched.
+        if (!(await startBuyNow(data.cartItem))) return;
 
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
@@ -1250,13 +1252,16 @@ async function handleApplyDiscount() {
       return;
     }
     const rejection = preview.rejectedCodes.find((candidate) => candidate.code === code);
-    if (rejection && !isPendingCodeReason(rejection.reason)) {
+    // A code the bundle saving beats is kept: it wins again if the cart changes.
+    if (rejection && !isPendingCodeReason(rejection.reason) && !rejection.bundleSavesMore) {
       showDiscountMessage(describeRejectedCode(rejection, copy), "error");
       return;
     }
     codeInput.value = "";
     addDiscountCode(code);
-    if (rejection) {
+    if (rejection?.bundleSavesMore) {
+      showDiscountMessage(describeRejectedCode(rejection, copy), "success");
+    } else if (rejection) {
       showDiscountMessage("", "success");
       if (rejection.requiresCustomerPhone) {
         document.getElementById("customerPhone-input")?.focus();

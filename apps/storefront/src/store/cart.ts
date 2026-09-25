@@ -209,6 +209,11 @@ if (typeof window !== "undefined") {
   window.addEventListener?.("storage", (event) => {
     if (event.key === CART_STORAGE_KEY && hasHydratedFromStorage) readCartFromStorage(true);
   });
+  // Leaving a Buy now checkout (including Back into a cached page) puts the
+  // buyer's own cart back.
+  window.addEventListener?.("pageshow", () => {
+    if (!isBuyNowCheckoutPath(window.location.pathname)) endBuyNow();
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -804,8 +809,81 @@ export function removeOrderedLines(
   if (patches.length > 0) applyLocalLinePatch(patches);
 }
 
+/**
+ * "Buy now" buys only that item: the buyer's cart is set aside here while the
+ * checkout holds just the Buy now line, and comes back after the order or as
+ * soon as the buyer leaves the checkout (the Buy now line is not added to it).
+ * localStorage, so it survives the checkout's reloads and a hosted payment.
+ */
+export const BUY_NOW_STASH_KEY = "cart:v3:buy-now";
+
+/** Pages that belong to a Buy now checkout; anywhere else the cart comes back. */
+export function isBuyNowCheckoutPath(pathname: string): boolean {
+  return pathname === "/cart"
+    || pathname === "/checkout"
+    || pathname.startsWith("/checkout/")
+    || pathname.startsWith("/buy/")
+    || pathname === "/order-success"
+    || pathname === "/payment-recovery";
+}
+
+/** Sets the cart aside and starts a checkout holding only this line. */
+export async function startBuyNow(item: NewCartLine): Promise<boolean> {
+  ensureCartHydrated();
+  const prepared = await prepareNewLine(item);
+  if (!prepared) return false;
+  try {
+    // A second Buy now replaces the first; the buyer's own cart stays set aside.
+    if (localStorage.getItem(BUY_NOW_STASH_KEY) === null) {
+      localStorage.setItem(BUY_NOW_STASH_KEY, JSON.stringify(cartStore.get()));
+    }
+  } catch {
+    // Without storage nothing could be put back: add to the cart as before.
+    return addToCart(item);
+  }
+  commitNonLineCartState({ ...EMPTY_CART_STATE });
+  return applyLocalLinePatch([
+    {
+      lineKey: prepared.key,
+      productId: item.id,
+      variantId: prepared.line.variantId!,
+      quantity: prepared.quantity,
+      item: prepared.line,
+    },
+  ]).ok;
+}
+
+/** Puts back the cart a Buy now set aside, if any; the Buy now cart is dropped. */
+export function endBuyNow(): void {
+  if (typeof window === "undefined") return;
+  let stashed: string | null;
+  try {
+    stashed = localStorage.getItem(BUY_NOW_STASH_KEY);
+    if (stashed === null) return;
+    localStorage.removeItem(BUY_NOW_STASH_KEY);
+  } catch {
+    return;
+  }
+  ensureCartHydrated();
+  try {
+    commitNonLineCartState(normalizeStoredCart(JSON.parse(stashed)));
+  } catch {
+    // An unreadable stash leaves the current cart as it is.
+  }
+}
+
+function discardBuyNowStash(): void {
+  try {
+    localStorage.removeItem(BUY_NOW_STASH_KEY);
+  } catch {
+    // Nothing was kept.
+  }
+}
+
 export function clearCart(): void {
   ensureCartHydrated();
+  // Clearing (sign-out on a shared device) also drops a cart set aside by Buy now.
+  if (typeof window !== "undefined") discardBuyNowStash();
   const current = cartStore.get();
   if (Object.keys(current.items).length === 0 && current.discountCodes.length === 0) return;
   const entries = Object.entries(current.items);

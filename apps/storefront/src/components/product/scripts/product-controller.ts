@@ -1,4 +1,4 @@
-import { addToCart, replaceCartLine, type CartItemOption } from "@/store/cart";
+import { addToCart, replaceCartLine, startBuyNow, type CartItemOption } from "@/store/cart";
 import { clearCartLineEdit, readCartLineEdit, type CartLineEdit } from "@/lib/cart/line-edit";
 import { getCurrencyCode } from "@/lib/currency";
 import {
@@ -640,7 +640,12 @@ async function addSelected(redirect: boolean) {
     ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
   };
   const edit = state.edit;
-  const added = edit ? await replaceCartLine(edit.lineKey, line) : await addToCart(line);
+  // Buy now buys only this item; the buyer's cart is set aside, untouched.
+  const added = edit
+    ? await replaceCartLine(edit.lineKey, line)
+    : redirect
+      ? await startBuyNow(line)
+      : await addToCart(line);
   if (!added)
     return showError("This product option could not be added. Please refresh and try again.");
   if (edit) {
