@@ -71,6 +71,10 @@ export default function ProductShortcode({ productData }: { productData: Product
   const originalPrice = roundPriceToPrecision(presentation.pricing.originalPrice, decimals);
   const starting = shouldShowStartingVariantPrice(options.length > 0, matchingVariant);
   const canAdd = Boolean(matchingVariant && isVariantAvailable(matchingVariant));
+  // Required buyer inputs (engraving, a fit choice) are filled on the product
+  // page; a product whose inputs can't be read is not buyable here either.
+  const needsProductPage = product.requiresCustomization === true || product.customizationUnavailable === true;
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const selected = images.find((image) => image.id === matchingVariant?.imageId);
@@ -83,12 +87,14 @@ export default function ProductShortcode({ productData }: { productData: Product
     window.setTimeout(() => setToast(null), 3000);
   };
 
-  const add = (redirect: boolean) => {
+  const add = async (redirect: boolean) => {
+    if (adding) return;
     if (!matchingVariant || !isVariantAvailable(matchingVariant)) {
       showToast(options.some((option) => !selection[option.id]) ? "Please select all required options." : "Selected combination is unavailable.", "error");
       return;
     }
-    const added = addToCart({
+    setAdding(true);
+    const added = await addToCart({
       id: product.id,
       slug: product.slug,
       name: product.name,
@@ -99,7 +105,8 @@ export default function ProductShortcode({ productData }: { productData: Product
       variantId: matchingVariant.id,
       options: matchingVariant.selectedOptions.map(({ name, value }) => ({ name, label: value })),
       freeDelivery: product.freeDelivery,
-    });
+      ...(matchingVariant.fulfillmentKind ? { fulfillmentKind: matchingVariant.fulfillmentKind } : {}),
+    }).finally(() => setAdding(false));
     if (!added) return showToast("This product option could not be added. Please refresh and try again.", "error");
     void import("@/lib/analytics").then(({ trackFbAddToCart }) => {
       trackFbAddToCart({
@@ -178,10 +185,18 @@ export default function ProductShortcode({ productData }: { productData: Product
               <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setQuantity((value) => value + 1)}><Plus className="h-4 w-4" /></Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <Button variant="outline" size="lg" disabled={!canAdd} onClick={() => add(false)}><ShoppingCart className="mr-2 h-4 w-4" />Add to Cart</Button>
-            <Button size="lg" disabled={isUnavailable} onClick={() => add(true)}><Check className="mr-2 h-4 w-4" />Buy Now</Button>
-          </div>
+          {needsProductPage ? (
+            <div className="pt-2">
+              <Button asChild size="lg" className="w-full">
+                <a href={`/products/${encodeURIComponent(product.slug)}`}>View product</a>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button variant="outline" size="lg" disabled={!canAdd || adding} onClick={() => void add(false)}><ShoppingCart className="mr-2 h-4 w-4" />Add to Cart</Button>
+              <Button size="lg" disabled={isUnavailable || adding} onClick={() => void add(true)}><Check className="mr-2 h-4 w-4" />Buy Now</Button>
+            </div>
+          )}
           {toast ? <div className={cn("rounded-md p-3 text-sm", toast.type === "success" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{toast.msg}</div> : null}
         </div>
       </div>

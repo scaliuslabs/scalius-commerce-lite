@@ -85,6 +85,53 @@ type AnalyticsDedupeWindow = Window & {
 const ANALYTICS_DEDUPE_STORAGE_KEY = "scalius_analytics_dedupe_v1";
 const MAX_PERSISTED_DEDUPE_KEYS = 100;
 
+/**
+ * The only commerce facts a pixel, tag manager or CAPI ever receives: ids,
+ * quantities, unit prices, names, category, currency and totals. Buyer
+ * inputs on a cart line (engraving text, notes, gift messages) are buyer
+ * content and must never reach analytics (Wave A P6), so every funnel
+ * tracker copies just these fields, whatever object its caller passes.
+ */
+const FB_COMMERCE_FIELDS = [
+  "content_ids",
+  "content_category",
+  "content_name",
+  "content_type",
+  "currency",
+  "num_items",
+  "value",
+  "order_id",
+  "search_string",
+] as const;
+
+type FbCommerceData = {
+  content_ids?: string[];
+  content_category?: string;
+  content_name?: string;
+  content_type?: "product" | "product_group";
+  contents?: FbCommerceContent[];
+  currency?: string;
+  num_items?: number;
+  value?: number;
+  order_id?: string;
+  search_string?: string;
+};
+
+export function pickFbCommerceData<T extends FbCommerceData>(data: T): T {
+  const picked: Record<string, unknown> = {};
+  for (const field of FB_COMMERCE_FIELDS) {
+    if (data[field] !== undefined) picked[field] = data[field];
+  }
+  if (Array.isArray(data.contents)) {
+    picked.contents = data.contents.map(({ id, quantity, item_price }) => ({
+      id,
+      quantity,
+      ...(item_price !== undefined ? { item_price } : {}),
+    }));
+  }
+  return picked as T;
+}
+
 function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
   if (Array.isArray(value)) {
     return value
@@ -678,6 +725,7 @@ export function trackFbViewContent(data: {
   currency?: string;
   value?: number;
 }): void {
+  data = pickFbCommerceData(data);
   const eventId = createMetaEventId("ViewContent");
 
   // Client-side Pixel
@@ -732,6 +780,7 @@ export function trackFbAddToCart(data: {
   currency?: string;
   value?: number;
 }): void {
+  data = pickFbCommerceData(data);
   const eventId = createMetaEventId("AddToCart");
 
   // Client-side Pixel
@@ -786,6 +835,7 @@ export function trackFbInitiateCheckout(data: {
   num_items?: number;
   value?: number;
 }): void {
+  data = pickFbCommerceData(data);
   const eventId = createMetaEventId("InitiateCheckout");
 
   // Client-side Pixel
@@ -833,6 +883,7 @@ export function trackFbAddPaymentInfo(data?: {
   currency?: string;
   value?: number;
 }): void {
+  data = data ? pickFbCommerceData(data) : data;
   const eventId = createMetaEventId("AddPaymentInfo");
 
   // Client-side Pixel
@@ -883,6 +934,7 @@ export function trackFbPurchase(
   userData: CapiUserData, // This is crucial for matching purchase events.
   options: MetaEventOptions = {},
 ): void {
+  data = pickFbCommerceData(data);
   const eventId =
     options.eventId ?? createMetaEventId("Purchase", data.order_id);
 
@@ -993,6 +1045,7 @@ export function trackFbSearch(data: {
   search_string: string;
   value?: number;
 }): void {
+  data = pickFbCommerceData(data);
   const eventId = createMetaEventId("Search");
 
   // Client-side Pixel

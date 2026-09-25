@@ -6,6 +6,7 @@ import {
   buildOnlineStoreJsonLd,
   gtinJsonLdForVariant,
   normalizeSchemaCountryCode,
+  physicalOfferShippingDetails,
   toHttpUrl,
 } from "./commerce-structured-data";
 
@@ -335,5 +336,36 @@ describe("commerce structured data helpers", () => {
     expect(normalizeSchemaCountryCode(undefined)).toBe("BD");
     expect(normalizeSchemaCountryCode("Bangladesh")).toBe("BD");
     expect(normalizeSchemaCountryCode("NP")).toBe("NP");
+  });
+
+  it("claims shipping only for physical offers, never services, digital items or gift cards", () => {
+    const shippingDetails = buildOfferShippingDetails({
+      shippingMethods: [{
+        id: "inside-dhaka",
+        name: "Inside Dhaka",
+        fee: 80,
+        description: null,
+        isActive: true,
+        sortOrder: 1,
+        createdAt: null,
+        updatedAt: null,
+      }],
+      currencyCode: "BDT",
+      freeDelivery: false,
+      country: "Bangladesh",
+    });
+    expect(shippingDetails).toHaveLength(1);
+
+    // Physical goods keep today's details, including SKUs read before kinds existed.
+    expect(physicalOfferShippingDetails(shippingDetails, {}, [{ fulfillmentKind: "physical" }])).toBe(shippingDetails);
+    expect(physicalOfferShippingDetails(shippingDetails, {}, [{}])).toBe(shippingDetails);
+    expect(physicalOfferShippingDetails(shippingDetails, {}, [
+      { fulfillmentKind: "service" },
+      { fulfillmentKind: "physical" },
+    ])).toBe(shippingDetails);
+
+    expect(physicalOfferShippingDetails(shippingDetails, {}, [{ fulfillmentKind: "service" }])).toEqual([]);
+    expect(physicalOfferShippingDetails(shippingDetails, {}, [{ fulfillmentKind: "digital" }])).toEqual([]);
+    expect(physicalOfferShippingDetails(shippingDetails, { isGiftCard: true }, [{ fulfillmentKind: "physical" }])).toEqual([]);
   });
 });

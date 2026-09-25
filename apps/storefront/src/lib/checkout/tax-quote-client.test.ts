@@ -36,6 +36,10 @@ function validQuote(
     taxAmount: 49.5,
     totalMinor: 37_950,
     totalAmount: 379.5,
+    deliveryMethodKind: "delivery",
+    requiresShipping: true,
+    pickup: null,
+    allowedPaymentMethods: ["cod"],
     shippingMethod: {
       id: "shipping_1",
       name: "Standard delivery",
@@ -58,6 +62,10 @@ function validQuote(
       unitPrice: 150,
       productName: "Cotton Panjabi",
       variantLabel: "M / Blue / Long",
+      fulfillmentType: "ship",
+      properties: [],
+      propertiesPriceMinor: 0,
+      propertiesHash: "none",
     }],
     ...overrides,
   };
@@ -146,7 +154,7 @@ describe("tax quote client contract", () => {
   it("preserves a bounded multiline delivery description", () => {
     const quote = validQuote({
       shippingMethod: {
-        ...validQuote().shippingMethod,
+        ...validQuote().shippingMethod!,
         description: "Orders before noon\nusually arrive next day.",
       },
     });
@@ -196,7 +204,7 @@ describe("tax quote client contract", () => {
   it("rejects a quote for a different delivery method", async () => {
     const quote = validQuote({
       shippingMethod: {
-        ...validQuote().shippingMethod,
+        ...validQuote().shippingMethod!,
         id: "shipping_other",
       },
     });
@@ -215,7 +223,7 @@ describe("tax quote client contract", () => {
       success: true,
       data: validQuote({
         shippingMethod: {
-          ...validQuote().shippingMethod,
+          ...validQuote().shippingMethod!,
           baseAmountMinor: 4_000,
         },
       }),
@@ -225,7 +233,7 @@ describe("tax quote client contract", () => {
       success: true,
       data: validQuote({
         shippingMethod: {
-          ...validQuote().shippingMethod,
+          ...validQuote().shippingMethod!,
           feeWaived: true,
         },
       }),
@@ -302,5 +310,63 @@ describe("tax quote client contract", () => {
     ]);
     expect(JSON.stringify((error as TaxQuoteCartChangedError).issues))
       .not.toContain("privatePhone");
+  });
+});
+
+describe("tax quote on the pickup and no-delivery paths (Wave A)", () => {
+  const withInputs = () => ({
+    ...checkoutData(),
+    cartItems: JSON.stringify({
+      "line:v3:prod_1:variant:var_1:p:0123456789abcdef": {
+        id: "prod_1",
+        variantId: "var_1",
+        quantity: 1,
+        name: "Engraved pen",
+        properties: [{ key: "engraving", value: "Anika", label: "Engraving", displayValue: "Anika", priceMinor: 20_000 }],
+      },
+    }),
+  });
+
+  it("sends only the pickup rate for pickup, and nothing for a cart with nothing physical", () => {
+    const pickup = buildTaxQuoteRequest({ ...withInputs(), deliveryMode: "pickup", shippingMethodId: "pickup_1" });
+    expect(pickup).not.toHaveProperty("city");
+    expect(pickup).not.toHaveProperty("zone");
+    expect(pickup).not.toHaveProperty("area");
+    expect(pickup.shippingMethodId).toBe("pickup_1");
+    // Buyer inputs go by key and value only; labels and prices are the server's.
+    expect(pickup.items[0]?.properties).toEqual([{ key: "engraving", value: "Anika" }]);
+
+    const none = buildTaxQuoteRequest({ ...withInputs(), deliveryMode: "none" });
+    expect(none).not.toHaveProperty("city");
+    expect(none).not.toHaveProperty("shippingMethodId");
+  });
+
+  it("reads a quote with no delivery method and refuses one that charges for delivery anyway", () => {
+    const noDelivery = validQuote({
+      shippingMethod: null,
+      deliveryMethodKind: null,
+      requiresShipping: false,
+      shippingMinor: 0,
+      shippingAmount: 0,
+      taxMinor: 0,
+      taxAmount: 0,
+      totalMinor: 28_000,
+      totalAmount: 280,
+      allowedPaymentMethods: ["cod", "sslcommerz"],
+    });
+    const parsed = parseTaxQuoteEnvelope({ success: true, data: noDelivery });
+    expect(parsed.shippingMethod).toBeNull();
+    expect(parsed.requiresShipping).toBe(false);
+    expect(parsed.allowedPaymentMethods).toEqual(["cod", "sslcommerz"]);
+
+    expect(() => parseTaxQuoteEnvelope({
+      success: true,
+      data: { ...noDelivery, shippingMinor: 5_000, shippingAmount: 50, totalMinor: 33_000, totalAmount: 330 },
+    })).toThrow(TaxQuoteContractError);
+  });
+
+  it("fails closed when the quote does not say which payment methods the cart may use", () => {
+    const { allowedPaymentMethods: _omitted, ...quote } = validQuote();
+    expect(() => parseTaxQuoteEnvelope({ success: true, data: quote })).toThrow(TaxQuoteContractError);
   });
 });

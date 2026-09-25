@@ -157,6 +157,8 @@ interface Window {
   getCartBlockedMessage?: () => string;
   updateCartQuantity?: (cartKey: string, quantity: number) => void;
   removeFromCart?: (cartKey: string) => void;
+  /** Hands a line with buyer inputs to its product page; returns true to follow the link. */
+  editCartLine?: (cartKey: string) => boolean;
   removeCartIssueItem?: (cartKey: string) => void;
   reduceCartIssueItem?: (cartKey: string) => void;
   refreshCartIssueItem?: (cartKey: string) => void;

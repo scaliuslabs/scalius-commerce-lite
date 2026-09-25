@@ -84,16 +84,28 @@ export const policies = [
     sample: "const productJsonLd = JSON.stringify(schema);",
   },
   {
-    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery) submit with method=post",
-    why: "phone, OTP, cart, discount, and payment values must not enter URLs before hydration or without JavaScript",
+    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery, product buyer inputs) submit with method=post",
+    why: "phone, OTP, cart, discount, payment and buyer-input values must not enter URLs before hydration or without JavaScript",
     paths: [
       `${storefront}/components/AuthModal.tsx`,
       `${storefront}/pages/cart.astro`,
       `${storefront}/pages/payment-recovery.astro`,
+      `${storefront}/components/product/ProductBuyerInputs.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
     sample: '<form action="/cart" class="x">',
+  },
+  {
+    rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
+    why: "engraving text, notes and gift messages are buyer content; they must never reach pixels, tag managers or the Conversions API (Wave A P6)",
+    paths: [
+      `${storefront}/lib/analytics.ts`,
+      `${storefront}/lib/tracking/meta-capi.ts`,
+      `${storefront}/components/product/lib/product-analytics.ts`,
+    ],
+    forbid: [/\bproperties\b/],
+    sample: "contents: items.map((item) => ({ id: item.id, properties: item.properties })),",
   },
   {
     rule: "the agent continuation page renders without the storefront Layout",

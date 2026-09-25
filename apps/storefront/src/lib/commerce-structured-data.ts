@@ -1,5 +1,5 @@
-import type { ShippingMethod } from "@/lib/api/types";
-import { splitDeliveryRates } from "@/lib/delivery-facts";
+import type { ProductVariant, ShippingMethod } from "@/lib/api/types";
+import { productFulfilment, splitDeliveryRates } from "@/lib/delivery-facts";
 
 export interface StorefrontBusinessInfo {
   companyName?: string | null;
@@ -429,6 +429,19 @@ export function buildOfferShippingDetails({
   return freeDelivery
     ? [detail(0)]
     : delivery.map((method) => detail(method.fee, method.name));
+}
+
+/**
+ * An Offer carries shippingDetails only for physical goods: never for a
+ * service, a digital item or a gift card (Wave A §15 Q12). A SKU without a
+ * known kind is physical.
+ */
+export function physicalOfferShippingDetails<T>(
+  shippingDetails: T[],
+  product: { isGiftCard?: boolean | null },
+  offerVariants: ReadonlyArray<Pick<ProductVariant, "fulfillmentKind">>,
+): T[] {
+  return productFulfilment(product, offerVariants) === "physical" ? shippingDetails : [];
 }
 
 export function gtinPropertyForBarcodeType(type: VariantBarcodeType): string | null {

@@ -36,6 +36,12 @@ import type {
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { ProductCondition } from "@scalius/shared/product-condition";
+import type {
+  DeliveryMethodKind,
+  FulfillmentKind,
+  FulfillmentType,
+} from "@scalius/shared/fulfilment";
+import type { CustomizationFieldType } from "@scalius/shared/line-properties";
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 
 export type {
@@ -178,6 +184,33 @@ export interface Product {
   variants?: ProductVariant[];
   /** Automatic Buy X get Y discounts this product counts toward (product page only). */
   offers?: ProductBuyGetOffer[];
+  /** Gift-card product (product page only): every SKU is a denomination. */
+  isGiftCard?: boolean;
+  /** Buyer inputs asked above Add to cart (product page only); null when none. */
+  customization?: ProductCustomization | null;
+  /** Some buyer input is required: quick-buy must send the buyer to the product page. */
+  requiresCustomization?: boolean;
+  /** The store's buyer-input setup is unreadable: the product can't be bought. */
+  customizationUnavailable?: boolean;
+}
+
+/** One buyer input as the product page renders it (schema order). */
+export interface ProductCustomizationField {
+  key: string;
+  label: string;
+  type: CustomizationFieldType;
+  required: boolean;
+  help: string | null;
+  /** text/textarea only. */
+  maxLength: number | null;
+  /** text/textarea/checkbox surcharge per unit, in major units; 0 for selects. */
+  price: number;
+  priceMinor: number;
+  options: Array<{ value: string; label: string; price: number; priceMinor: number }>;
+}
+
+export interface ProductCustomization {
+  fields: ProductCustomizationField[];
 }
 
 /**
@@ -229,6 +262,8 @@ export interface ProductVariant {
   discountType: "percentage" | "flat" | null;
   discountPercentage: number | null;
   discountAmount: number | null;
+  /** physical (shipped or picked up), digital, or service (performed, no delivery). */
+  fulfillmentKind?: FulfillmentKind;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -452,7 +487,62 @@ export interface SeoSettings {
 // Order & Cart Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
 
-export interface OrderItem {
+/** A buyer input frozen on an order line ("Engraving: Anika (+৳200)"). */
+export interface OrderLineProperty {
+  key: string;
+  type: CustomizationFieldType;
+  label: string;
+  value: string;
+  /** The choice label for selects, "Yes" for ticked boxes, the text otherwise. */
+  displayValue: string;
+  /** Surcharge per unit, in major units. */
+  price: number;
+  priceMinor: number;
+}
+
+/** How an order line reaches the buyer and what it carries (Wave A). */
+export interface OrderLineFulfilmentFacts {
+  fulfillmentType?: FulfillmentType;
+  /** Units handed over so far (sent, picked up, performed). */
+  fulfilledQuantity?: number;
+  properties?: OrderLineProperty[];
+  propertiesPrice?: number;
+  propertiesPriceMinor?: number;
+  baseUnitPriceMinor?: number | null;
+}
+
+export interface OrderPickup {
+  address: string | null;
+  hours: string | null;
+  /** When the store marked the order ready to collect; null until then. */
+  readyAt: string | null;
+}
+
+/** One handed-over action as the buyer sees it: a parcel sent, a pickup, a performed service. */
+export interface BuyerOrderFulfilment {
+  id: string;
+  kind: FulfillmentType;
+  createdAt: string | null;
+  lines: Array<{ orderItemId: string; quantity: number }>;
+  tracking: {
+    shipmentId: string;
+    courierName: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+    status: string;
+  } | null;
+}
+
+/** Order-level delivery facts every buyer order projection carries (Wave A). */
+export interface OrderFulfilmentFacts {
+  /** Some line ships, so the order has a delivery address. */
+  requiresShipping?: boolean;
+  /** The order's one delivery method; null when nothing physical was bought. */
+  shippingMethodKind?: DeliveryMethodKind | null;
+  pickup?: OrderPickup | null;
+}
+
+export interface OrderItem extends OrderLineFulfilmentFacts {
   id: string;
   productId: string;
   variantId: string | null;
@@ -507,7 +597,7 @@ export interface OrderReceiptDiscount {
   shippingAmount: number;
 }
 
-export interface OrderReceipt {
+export interface OrderReceipt extends OrderFulfilmentFacts {
   id: string;
   /** Short per-store number ("#1001"); absent until every order has one. */
   orderNumber?: number | null;
@@ -517,7 +607,8 @@ export interface OrderReceipt {
   customerEmail: string | null;
   /** True when the order is saved to a customer account. */
   accountLinked: boolean;
-  shippingAddress: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: string | null;
   totalAmount: number;
   shippingCharge: number;
   discountAmount: number | null;
@@ -539,8 +630,9 @@ export interface OrderReceipt {
   totalAmountMinor?: number | null;
   taxLabel?: string | null;
   pricesIncludeTax?: boolean;
-  city: string;
-  zone: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  city: string | null;
+  zone: string | null;
   area: string | null;
   cityName: string | null;
   zoneName: string | null;
@@ -558,6 +650,10 @@ export interface OrderReceipt {
   supportRequestIntro: string;
   /** Where the order is: the same tracker and dated updates as the account order page. */
   tracking?: OrderReceiptTracking | null;
+  /** Each handed-over action: a parcel sent, a pickup, a performed service. */
+  fulfillments?: BuyerOrderFulfilment[];
+  /** The order thread, once the buyer or the store has written on it. */
+  conversationId?: string | null;
 }
 
 export interface OrderReceiptTracking {
