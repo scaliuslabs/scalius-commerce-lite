@@ -26,12 +26,18 @@ describe("generic notification outbox", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let sent: NotificationQueueMessage[];
-  const queue = { send: vi.fn(async (message: NotificationQueueMessage) => { sent.push(message); }) };
+  const queue = {
+    send: vi.fn(async (message: NotificationQueueMessage) => { sent.push(message); }),
+    sendBatch: vi.fn(async (messages: Iterable<{ body: NotificationQueueMessage }>) => {
+      for (const message of messages) sent.push(message.body);
+    }),
+  };
 
   beforeEach(() => {
     ({ sqlite, db } = createSqliteD1Database());
     sent = [];
     queue.send.mockClear();
+    queue.sendBatch.mockClear();
     sqlite.exec(`INSERT INTO orders (id, customer_name, customer_phone, customer_email, shipping_address, city, zone,
         city_name, zone_name, total_amount_minor, subtotal_amount_minor, status)
       VALUES ('${ORDER_ID}', 'Rahim Uddin', '+8801711111111', 'rahim@example.test', 'House 1', 'city_1', 'zone_1',
@@ -169,6 +175,91 @@ describe("generic notification outbox", () => {
     const flushed = await flushPendingNotificationOutbox({ db, queue });
     expect(flushed).toMatchObject({ scanned: 1, enqueued: 1, staleQueued: 1 });
     expect(sent).toHaveLength(2);
+  });
+
+  it("flushes up to 200 due rows in claimed batches of at most 100 messages, ids only", async () => {
+    await db.batch(Array.from({ length: 230 }, (_, index) => db.insert(notificationOutbox).values(
+      createOrderNotificationOutboxInsertValues({
+        dedupeKey: `bulk:${index}`,
+        orderId: ORDER_ID,
+        notificationType: "order_confirmed",
+        source: "test",
+      }),
+    )) as never);
+    // One row is held by a live consumer claim: the flush must not steal it.
+    const held = String(outboxRows()[0]!.id);
+    sqlite.exec(`UPDATE notification_outbox SET status = 'processing', claim_id = 'other', claim_expires_at = unixepoch() + 600 WHERE id = '${held}'`);
+
+    const flushed = await flushPendingNotificationOutbox({ db, queue, limit: 500 });
+    expect(flushed).toMatchObject({ scanned: 200, enqueued: 200, failed: 0, skipped: 0 });
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(queue.sendBatch.mock.calls.length).toBeGreaterThan(1);
+    for (const [messages] of queue.sendBatch.mock.calls) {
+      expect([...messages].length).toBeLessThanOrEqual(100);
+    }
+    expect(sent).toHaveLength(200);
+    expect(new Set(sent.map((message) => message.outboxId)).size).toBe(200);
+    expect(sent.every((message) => Object.keys(message).sort().join() === "outboxId,type" && message.type === "notification")).toBe(true);
+    expect(sent.some((message) => message.outboxId === held)).toBe(false);
+
+    const statuses = sqlite.prepare("SELECT status, count(*) AS n FROM notification_outbox GROUP BY status ORDER BY status").all();
+    expect(statuses).toEqual([
+      { status: "pending", n: 29 },
+      { status: "processing", n: 1 },
+      { status: "queued", n: 200 },
+    ]);
+    // A second run takes the rest; queued rows are not sent again.
+    expect(await flushPendingNotificationOutbox({ db, queue, limit: 200 })).toMatchObject({ scanned: 29, enqueued: 29 });
+    expect(sent).toHaveLength(229);
+  });
+
+  it("marks a whole failed batch retryable with backoff", async () => {
+    const recorded = await recordAndEnqueueNotification({
+      db,
+      queue: undefined,
+      notification: { subjectType: "order", subjectId: ORDER_ID, audience: "customer", notificationType: "order_confirmed", dedupeKey: "batch-fail", source: "test" },
+    });
+    const failing = { send: vi.fn(), sendBatch: vi.fn().mockRejectedValue(new Error("queue down")) };
+    expect(await flushPendingNotificationOutbox({ db, queue: failing })).toMatchObject({ scanned: 1, enqueued: 0, failed: 1 });
+    const row = sqlite.prepare("SELECT status, attempts, next_attempt_at > unixepoch() AS later, claim_id FROM notification_outbox WHERE id = ?")
+      .get(recorded.outboxId);
+    expect(row).toEqual({ status: "failed", attempts: 1, later: 1, claim_id: null });
+  });
+
+  it("keeps a notBefore row scheduled until it is due", async () => {
+    const notBefore = Math.floor(Date.now() / 1000) + 7 * 86_400;
+    const result = await recordAndEnqueueNotification({
+      db,
+      queue,
+      notification: {
+        subjectType: "order",
+        subjectId: ORDER_ID,
+        audience: "customer",
+        notificationType: "review_request",
+        dedupeKey: `order:${ORDER_ID}:review_request`,
+        source: "test",
+        notBefore,
+      },
+    });
+    expect(result).toMatchObject({ created: true, enqueued: false, scheduledFor: notBefore });
+    expect(result.skippedReason).toBeUndefined();
+    expect(sqlite.prepare("SELECT status, next_attempt_at FROM notification_outbox").get())
+      .toEqual({ status: "pending", next_attempt_at: notBefore });
+    expect(sent).toHaveLength(0);
+    expect(await flushPendingNotificationOutbox({ db, queue })).toMatchObject({ scanned: 0 });
+    expect(await claimNotificationOutboxForProcessing(db, result.outboxId)).toEqual({ claimed: false, reason: "busy" });
+
+    // Its day comes.
+    sqlite.exec("UPDATE notification_outbox SET next_attempt_at = unixepoch() - 1");
+    expect(await flushPendingNotificationOutbox({ db, queue })).toMatchObject({ scanned: 1, enqueued: 1 });
+    expect(sent).toEqual([{ type: "notification", outboxId: result.outboxId }]);
+
+    // A past or absent notBefore is due at once.
+    const now = createNotificationOutboxInsertValues({
+      subjectType: "order", subjectId: ORDER_ID, audience: "customer", notificationType: "order_confirmed",
+      dedupeKey: "past", source: "test", notBefore: 1,
+    });
+    expect(Number(now.nextAttemptAt)).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
   });
 
   it("lists, retries and manually resends order rows with their receipts", async () => {

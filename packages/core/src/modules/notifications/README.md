@@ -96,6 +96,12 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 - Configuration/readiness failures are not retry work. Missing email provider setup, no active SMS provider, thrown SMS/WhatsApp setup/decrypt failures, undecryptable credentials, invalid keys/tokens, authorization failures, sender/account blockers, and bad Firebase credentials are skipped receipts with merchant-actionable admin copy. Proven bad provider setup writes a provider-health marker so future sends skip the same external provider until Email, SMS, WhatsApp, or Firebase settings are saved. Transient provider outages remain failed/retryable, but receipt attempts are capped so unknown provider failures settle as `delivery_attempt_limit_reached` instead of retrying forever; capped failures that still match credential/config/account evidence also pause the provider before settling.
 - Stale queue recovery: scheduled maintenance replays parent outbox rows that remain `queued` for more than one hour. The replay uses the same `outboxId`, so channel receipts continue to skip already accepted/skipped targets, and the scheduler logs `staleQueued` for alerting.
 
+### Resolved and staff-alert types (Wave B §10)
+- `order_digital_delivered`, `gift_card_issued` (subject `gift_card`) and `review_request` carry ids only in the outbox; `apps/api/src/queue-notifications.ts` calls the API-layer resolvers in `apps/api/src/notification-content/*` at send time and passes their string variables to `sendResolvedNotification()` as `extraTemplateData` (never persisted). A resolver returning `null` ends the row as sent with one skipped `nothing_to_send` receipt (terminal: no retry, no dead letter). This domain never imports digital, gift-cards or reviews.
+- Code-bearing types (`order_digital_delivered`, `gift_card_issued`) store no `raw_response` in delivery receipts, and the resolved values are scrubbed from every recorded provider status and error.
+- `review_pending` and `digital_keys_exhausted` are staff alerts (`sendStaffAlertNotification()`): push and staff email, no buyer content.
+- `NotificationInput.notBefore` schedules a row (its `next_attempt_at`); the scheduled flush sends up to 200 due rows per run with `queue.sendBatch`, 50 claimed rows per batch, `{ type: "notification", outboxId }` only.
+
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 
 ### `auth.send_otp`
