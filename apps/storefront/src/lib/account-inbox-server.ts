@@ -42,7 +42,16 @@ export const MAX_FORM_BYTES = 3 * 5 * 1024 * 1024 + 256 * 1024;
 /** Which thread a request acts on. */
 export type ConversationTarget =
   | { kind: "thread"; conversationId: string }
-  | { kind: "order"; orderId: string; access: ConversationAccess };
+  | { kind: "order"; orderId: string; access: ConversationAccess }
+  /** A guest's warranty claim thread, reached with the order's receipt proof (Wave B §5.2). */
+  | { kind: "claim"; orderId: string; claimId: string };
+
+/** A target proven with an order's receipt cookie rather than the account session. */
+export function isReceiptTarget(
+  target: ConversationTarget,
+): target is Extract<ConversationTarget, { kind: "claim" }> | { kind: "order"; orderId: string; access: "receipt" } {
+  return target.kind === "claim" || (target.kind === "order" && target.access === "receipt");
+}
 
 export type ReadResult<T> =
   | { ok: true; data: T }
@@ -58,7 +67,7 @@ export function buyerCredentialHeaders(request: Request, target: ConversationTar
   const headers = new Headers({ Accept: "application/json" });
   const connectingIp = request.headers.get("cf-connecting-ip");
   if (connectingIp) headers.set("cf-connecting-ip", connectingIp);
-  if (target.kind === "order" && target.access === "receipt") {
+  if (isReceiptTarget(target)) {
     const proof = readOrderReceiptCookie(request.headers.get("cookie"), target.orderId);
     if (!proof) return null;
     headers.set("X-Receipt-Token", proof);
@@ -178,7 +187,7 @@ export async function readConversation(
   beforeSeq?: number,
 ): Promise<ReadResult<BuyerConversationThread | null>> {
   const headers = buyerCredentialHeaders(request, target);
-  if (!headers) return { ok: false, reason: target.kind === "order" && target.access === "receipt" ? "no_access" : "signed_out" };
+  if (!headers) return { ok: false, reason: isReceiptTarget(target) ? "no_access" : "signed_out" };
   const response = await callApi(
     withQuery(conversationApiPaths(target).read, { beforeSeq }),
     { method: "GET", headers },
@@ -215,9 +224,11 @@ export async function markConversationRead(
 
 /** The image URL builder for a thread as this buyer reaches it. */
 export function attachmentUrlFor(target: ConversationTarget, thread: Pick<BuyerConversationThread, "id">) {
-  return (attachmentId: string) => target.kind === "order" && target.access === "receipt"
-    ? conversationAttachmentUrl({ access: "receipt", orderId: target.orderId }, attachmentId)
-    : conversationAttachmentUrl({ access: "account", conversationId: thread.id }, attachmentId);
+  return (attachmentId: string) => target.kind === "claim"
+    ? conversationAttachmentUrl({ access: "claim", orderId: target.orderId, claimId: target.claimId }, attachmentId)
+    : target.kind === "order" && target.access === "receipt"
+      ? conversationAttachmentUrl({ access: "receipt", orderId: target.orderId }, attachmentId)
+      : conversationAttachmentUrl({ access: "account", conversationId: thread.id }, attachmentId);
 }
 
 /** Streams one private image through the storefront origin. Never cached, never sniffed. */
@@ -301,7 +312,7 @@ async function uploadImages(
     const form = new FormData();
     form.append("file", file, file.name || "image");
     if (target.kind === "thread") form.append("conversationId", target.conversationId);
-    else if (target.access === "account") form.append("orderId", target.orderId);
+    else if (target.kind === "order" && target.access === "account") form.append("orderId", target.orderId);
     const response = await callApi(path, { method: "POST", headers, body: form }, UPLOAD_TIMEOUT_MS);
     if (!response || response.status !== 201) return { ok: false, result: await refusal(response, "upload") };
     const data = await envelopeData<{ attachmentId?: unknown }>(response);
@@ -336,7 +347,7 @@ export async function sendConversationMessage(
 ): Promise<WriteResult> {
   const result = await sendWithImages(request, target, form);
   // A guest has no session to renew: a refused receipt proof means this browser lost access.
-  return !result.ok && result.flag === "signin" && target.kind === "order" && target.access === "receipt"
+  return !result.ok && result.flag === "signin" && isReceiptTarget(target)
     ? { ok: false, flag: "missing" }
     : result;
 }
@@ -352,7 +363,7 @@ async function sendWithImages(
   const images = checkAttachmentFiles(form.getAll("images"));
   if (!images.ok) return { ok: false, flag: "image" };
   if (!buyerCredentialHeaders(request, target)) {
-    return { ok: false, flag: target.kind === "order" && target.access === "receipt" ? "missing" : "signin" };
+    return { ok: false, flag: isReceiptTarget(target) ? "missing" : "signin" };
   }
 
   let attachmentIds: string[] = [];
