@@ -53,6 +53,7 @@ import {
   MEDIA_REFERENCE_DELETING_MESSAGE,
   noDeletingMediaReferences,
 } from "../media/media-reference-guard";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 export {
   createPageSchema,
@@ -621,12 +622,12 @@ export async function updatePage(
   try {
     updated = await db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         ...updateData,
         publishedAt: nextPublishedAt,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(
         and(
           eq(pages.id, id),
@@ -721,13 +722,13 @@ export async function bulkDeletePages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         deletedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -743,12 +744,12 @@ export async function bulkPublishPages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: true,
         publishedAt: sql`unixepoch()`,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -764,12 +765,12 @@ export async function bulkUnpublishPages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -785,13 +786,13 @@ export async function restorePages(
     "trashed",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         deletedAt: null,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNotNull(pages.deletedAt))),
   );
 }
