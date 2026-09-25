@@ -56,6 +56,7 @@ import {
   Sketch,
   VisualChoice,
 } from "./ThemeChoices";
+import { TypographyCard } from "./TypographyCard";
 import {
   COLOR_FIELD_IDS,
   COLOR_ROLE_TOKEN,
@@ -464,6 +465,8 @@ function ThemeCards({ saved, revision, storeShape, refetch, site }: {
           ))}
         </div>
       </SectionCard>
+
+      <TypographyCard theme={theme} setDraft={setDraft} />
 
       <SectionCard title={t("header")}>
         <VisualChoice
