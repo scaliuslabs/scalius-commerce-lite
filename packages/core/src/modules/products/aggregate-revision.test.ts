@@ -82,6 +82,8 @@ describe("product aggregate revision batches", () => {
             "guard",
             "mutation",
             "revision",
+            // The gift-card product rules guard (gift-card-rules.ts).
+            "guard",
             "projection",
         ]);
         expect(result).toEqual({

@@ -83,6 +83,32 @@ describe("conversation access (C1) and identity safety (C2)", () => {
     expect((await listBuyerThreads(db, "acct_verified")).items).toEqual([]);
   });
 
+  it("derives buyer access for warranty-claim and review threads from their order (decision 28)", async () => {
+    sqlite.exec(`
+      INSERT INTO conversations (id, subject_type, subject_id, order_id, status, last_message_at, created_at, updated_at)
+        VALUES ('cnv_claim_owned01', 'warranty_claim', 'wcl_owned', 'order_owned', 'open', 1780000100, 1780000100, 1780000100),
+               ('cnv_review_owned1', 'review', 'rev_owned', 'order_owned', 'open', 1780000200, 1780000200, 1780000200),
+               ('cnv_review_guest1', 'review', 'rev_guest', 'order_guest', 'open', 1780000300, 1780000300, 1780000300);
+    `);
+    const owner = { kind: "customer", customerId: "acct_verified" } as const;
+    await expect(resolveBuyerThread(db, owner, "cnv_claim_owned01")).resolves.toMatchObject({ subjectType: "warranty_claim" });
+    await expect(resolveBuyerThread(db, owner, "cnv_review_owned1")).resolves.toMatchObject({ subjectType: "review" });
+    await expect(resolveBuyerThread(db, { kind: "guest_receipt", orderId: "order_owned" }, "cnv_claim_owned01")).resolves.toBeTruthy();
+    // Another order's threads stay 404 for the owner, another account and the wrong receipt.
+    await expect(resolveBuyerThread(db, owner, "cnv_review_guest1")).rejects.toThrow("Conversation not found");
+    await expect(resolveBuyerThread(db, { kind: "customer", customerId: "acct_other" }, "cnv_claim_owned01")).rejects.toThrow("Conversation not found");
+    await expect(resolveBuyerThread(db, { kind: "guest_receipt", orderId: "order_guest" }, "cnv_review_owned1")).rejects.toThrow("Conversation not found");
+    expect((await listBuyerThreads(db, "acct_verified")).items.map((item) => item.id)).toEqual(["cnv_review_owned1", "cnv_claim_owned01"]);
+    expect((await listBuyerThreads(db, "acct_other")).items).toEqual([]);
+
+    // Claiming the guest order carries its review thread into the account, with no thread write.
+    const before = sqlite.prepare("SELECT * FROM conversations").all();
+    sqlite.exec("UPDATE orders SET account_owner_customer_id = 'acct_other' WHERE id = 'order_guest'");
+    await expect(resolveBuyerThread(db, { kind: "customer", customerId: "acct_other" }, "cnv_review_guest1")).resolves.toMatchObject({ id: "cnv_review_guest1" });
+    expect((await listBuyerThreads(db, "acct_other")).items.map((item) => item.id)).toEqual(["cnv_review_guest1"]);
+    expect(sqlite.prepare("SELECT * FROM conversations").all()).toEqual(before);
+  });
+
   it("allows store threads only for verified accounts and only to their owner", async () => {
     await expect(createStoreThread(db, "acct_unverified", { subject: "Question", body: "Do you ship abroad?" }))
       .rejects.toThrow("Verify your phone or email");
