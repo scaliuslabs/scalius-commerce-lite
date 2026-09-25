@@ -305,6 +305,7 @@ const SHORTCUTS: ReadonlyArray<{ keys: string[]; label: keyof (typeof shellMessa
   { keys: ["G W"], label: "onlineStore" },
   { keys: ["G S"], label: "settings" },
   { keys: ["⌘/Ctrl S"], label: "shortcutSave" },
+  { keys: ["⌘/Ctrl B"], label: "shortcutNavigation" },
   { keys: ["?"], label: "shortcutHelp" },
 ];
 
