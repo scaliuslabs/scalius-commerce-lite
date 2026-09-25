@@ -16,6 +16,7 @@ import {
 } from "@/lib/account-inbox";
 import { readInbox } from "@/lib/account-inbox-server";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { ACCOUNT_PAGE_CONTAINER } from "@/lib/account-format";
 
 const cursor = readInboxCursor(Astro.url.searchParams.get("cursor"));
 const [layoutData, inbox] = await Promise.all([getLayoutData(), readInbox(Astro.request, cursor)]);
@@ -37,7 +38,7 @@ const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medi
 
 <Layout title={copy.inboxTitle} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-3xl px-4 py-8" data-account-inbox>
+  <section class={ACCOUNT_PAGE_CONTAINER} data-account-inbox>
     <nav aria-label="Account" class="mb-6 flex gap-1 border-b border-border">
       <a href="/account" data-astro-prefetch={accountPrefetch} class={`${tab} border-transparent text-muted-foreground hover:text-foreground`}>{copy.accountTab}</a>
       <a href="/account/inbox" aria-current="page" data-astro-prefetch="false" class={`${tab} border-primary text-foreground`}>{copy.inboxTitle}</a>

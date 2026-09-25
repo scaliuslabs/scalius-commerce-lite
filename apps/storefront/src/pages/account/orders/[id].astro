@@ -4,6 +4,7 @@ import StoreContact from "@/components/StoreContact.astro";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { getLayoutData } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { ACCOUNT_PAGE_CONTAINER } from "@/lib/account-format";
 
 const layoutData = await getLayoutData();
 const orderId = Astro.params.id ?? "";
@@ -14,7 +15,7 @@ const heading = "mb-4 text-base font-semibold text-foreground";
 
 <Layout title="Order" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-5xl px-4 py-8" data-order-detail-page data-order-id={orderId}>
+  <section class={ACCOUNT_PAGE_CONTAINER} data-order-detail-page data-order-id={orderId}>
     <div id="orderLoading" class="flex min-h-[360px] items-center justify-center">
       <p class="text-sm text-muted-foreground">Loading your order…</p>
     </div>
@@ -130,6 +131,7 @@ const heading = "mb-4 text-base font-semibold text-foreground";
 
 <script>
   import { bindOrderDetailPage, loadOrderDetail } from "@/lib/account-order-detail";
+  import { focusMainHeadingIfLost } from "@/lib/focus-main-heading";
 
   type DetailWindow = Window & { __scaliusOrderDetailBound?: boolean };
   const detailWindow = window as DetailWindow;
@@ -141,8 +143,8 @@ const heading = "mb-4 text-base font-semibold text-foreground";
   if (!detailWindow.__scaliusOrderDetailBound) {
     detailWindow.__scaliusOrderDetailBound = true;
     document.addEventListener("astro:page-load", start);
-    // Signing in from this page shows the order right here.
-    window.addEventListener("customer-login", () => void loadOrderDetail());
+    // Signing in from this page shows the order right here; focus lands on its heading.
+    window.addEventListener("customer-login", () => void loadOrderDetail().then(focusMainHeadingIfLost));
   }
 
   if (document.readyState === "loading") {

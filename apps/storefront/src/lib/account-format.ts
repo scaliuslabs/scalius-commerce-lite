@@ -5,6 +5,9 @@ import { formatMoney } from "@/lib/currency";
 import { getOrderPaymentPresentation } from "@/lib/order-success-state";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
+/** One content width for /account, its inbox and an order, so the Account/Inbox tabs never shift. */
+export const ACCOUNT_PAGE_CONTAINER = "container mx-auto max-w-5xl px-4 py-8";
+
 export function accountMoney(amount: number, currencyCode?: string | null): string {
   return formatMoney(amount, currencyCode ? { code: currencyCode } : undefined);
 }
