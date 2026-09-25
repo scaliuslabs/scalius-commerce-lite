@@ -45,6 +45,19 @@ describe("customer auth proxy", () => {
     );
   });
 
+  it("forwards the query string, so the next page of orders is the next page", async () => {
+    const response = await ALL({
+      request: new Request("https://storefront.example.test/api/customer-auth/orders?cursor=c_2&limit=5"),
+      params: { path: "orders" },
+    } as never) as Response;
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/customer-auth/orders?cursor=c_2&limit=5",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it.each(["phone/../admin", "orders/a.b/verify", "orders/a%2F/verify"])("rejects %s", async (path) => {
     const response = await call(path);
 
