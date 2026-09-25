@@ -524,6 +524,8 @@ export const categorySummarySchema = z.object({
   productCount: z.number(),
   status: categoryStatusSchema,
   revision: z.number().int().min(1),
+  parentId: z.string().nullable(),
+  depth: z.number().int().min(0).max(3),
   publishReady: z.boolean(),
 });
 
@@ -545,6 +547,9 @@ export const categoryDetailSchema = z.object({
   updatedAt: z.number(),
   status: categoryStatusSchema,
   revision: z.number().int().min(1),
+  parentId: z.string().nullable(),
+  depth: z.number().int().min(0).max(3),
+  listingTemplate: z.string().nullable(),
   publishReadiness: z.object({
     ready: z.boolean(),
     eligibleProductCount: z.number().int().min(0),
