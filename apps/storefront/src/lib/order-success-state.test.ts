@@ -10,6 +10,7 @@ import {
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
+  isDigitalLinePreparing,
   isOrderStatusView,
   receiptGiftCardTenderLabel,
   shouldClearCheckoutCartForOrder,
@@ -363,6 +364,29 @@ describe("order success receipt details", () => {
     expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([
       "We'll call you to confirm your order, then hand it to the courier.",
     ]);
+  });
+
+  it("tells a digital-only order its downloads come here and by email, never that someone will call", () => {
+    const copy = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+    const line = { quantity: 1, fulfillmentType: "digital" as const, fulfilledQuantity: 0 };
+    const digital = { ...makeOrder({ paymentMethod: "sslcommerz", shippingMethodKind: null, requiresShipping: false }), items: [line] };
+    expect(getOrderSuccessNextSteps(digital, "order_placed", copy)).toEqual([copy.orderReceiptNextStepsDigitalPaidText]);
+    expect(getOrderSuccessNextSteps({ ...digital, paymentMethod: "cod" }, "order_placed", copy))
+      .toEqual([copy.orderReceiptNextStepsDigitalText]);
+    expect(getOrderSuccessNextSteps(digital, "order_placed", copy).join(" ")).not.toMatch(/arrange|call/i);
+    // A service alongside the download is still arranged with the buyer.
+    const mixed = { ...digital, items: [line, { quantity: 1, fulfillmentType: "service" as const, fulfilledQuantity: 0 }] };
+    expect(getOrderSuccessNextSteps(mixed, "order_placed", copy)).toEqual([copy.orderReceiptNextStepsServicePaidText]);
+  });
+
+  it("says a paid download is being prepared until its units are delivered", () => {
+    const paid = makeOrder({ paymentStatus: "paid", status: "processing" });
+    const line = { quantity: 2, fulfillmentType: "digital" as const, fulfilledQuantity: 1 };
+    expect(isDigitalLinePreparing(line, paid)).toBe(true);
+    expect(isDigitalLinePreparing({ ...line, fulfilledQuantity: 2 }, paid)).toBe(false);
+    expect(isDigitalLinePreparing(line, { ...paid, paymentStatus: "unpaid" })).toBe(false);
+    expect(isDigitalLinePreparing(line, { ...paid, status: "cancelled" })).toBe(false);
+    expect(isDigitalLinePreparing({ ...line, fulfillmentType: "ship" }, paid)).toBe(false);
   });
 
   it("never promises a courier for a pickup or a service order, and says what the cash is due on", () => {

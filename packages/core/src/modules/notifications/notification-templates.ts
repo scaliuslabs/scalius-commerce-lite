@@ -28,6 +28,7 @@ export const NOTIFICATION_VARIABLES = [
   "support_status",
   "pickup_address",
   "pickup_hours",
+  "pending_downloads",
   // Resolved at send time by the API layer (Wave B §10); never persisted.
   "download_names",
   "licence_keys",
@@ -80,6 +81,7 @@ export function variablesForEvent(event: TemplatedNotificationType): readonly No
   }
   if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
   if (event === "order_ready_for_pickup") return [...ORDER_VARIABLES, "pickup_address", "pickup_hours"];
+  if (event === "order_delivered") return [...ORDER_VARIABLES, "pending_downloads"];
   if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
     return [...ORDER_VARIABLES, "refund_amount"];
   }
@@ -145,8 +147,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_delivered: {
         subject: "Order {{order_number}} delivered",
-        message: "Your order has been delivered. Thank you for shopping with us.",
-        sms: "your order {{order_number}} has been delivered. Enjoy!",
+        message: "Your order has been delivered. Thank you for shopping with us.\nStill being prepared: {{pending_downloads}}. Your download will arrive by email when it's ready.",
+        sms: "your order {{order_number}} has been delivered. Enjoy!\nYour download arrives by email when it's ready: {{pending_downloads}}",
       },
       order_completed: {
         subject: "Order {{order_number}} completed",
@@ -250,8 +252,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_delivered: {
         subject: "অর্ডার {{order_number}} ডেলিভারি হয়েছে",
-        message: "আপনার অর্ডার ডেলিভারি হয়েছে। আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ।",
-        sms: "আপনার অর্ডার {{order_number}} ডেলিভারি হয়েছে। ধন্যবাদ!",
+        message: "আপনার অর্ডার ডেলিভারি হয়েছে। আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ।\nএখনও প্রস্তুত হচ্ছে: {{pending_downloads}}। ডাউনলোড প্রস্তুত হলে ইমেইলে পাঠানো হবে।",
+        sms: "আপনার অর্ডার {{order_number}} ডেলিভারি হয়েছে। ধন্যবাদ!\nডাউনলোড প্রস্তুত হলে ইমেইলে পাবেন: {{pending_downloads}}",
       },
       order_completed: {
         subject: "অর্ডার {{order_number}} সম্পন্ন হয়েছে",

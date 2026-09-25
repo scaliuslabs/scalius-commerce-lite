@@ -9478,6 +9478,144 @@
         "security": []
       }
     },
+    "/api/v1/collections/directory": {
+      "get": {
+        "operationId": "storefront.collections.directory",
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Active collections a buyer can shop, with their product count and a photo",
+        "responses": {
+          "200": {
+            "description": "Collection directory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collections": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productCount": {
+                                "type": "integer"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "canonicalPath",
+                              "productCount",
+                              "imageUrl",
+                              "imageAlt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "collections"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/collections/{id}": {
       "get": {
         "operationId": "storefront.collections.get",
@@ -275525,6 +275663,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.checkout-journey"
+          ]
+        },
+        {
+          "operationId": "storefront.collections.directory",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.collections.directory"
           ]
         },
         {

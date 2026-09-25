@@ -135,7 +135,8 @@ const scriptCopy = JSON.stringify({
               data-review-more
               hidden={!nextHref}
             >{copy.reviewsShowMoreText}</a>
-            <a href={productReviewsPageHref(product.slug)} class="product-reviews-all" data-review-all>{copy.reviewsSeeAllText}</a>
+            {/* Both only when there are more reviews than the page shows. */}
+            <a href={productReviewsPageHref(product.slug)} class="product-reviews-all" data-review-all hidden={!nextHref}>{copy.reviewsSeeAllText}</a>
           </div>
         </div>
       </div>
