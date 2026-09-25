@@ -53,11 +53,19 @@ export function installNavPanels(doc: Document = document): void {
   const view = doc.defaultView as PanelsWindow | null;
   if (!view || view.__scaliusNavPanels) return;
   view.__scaliusNavPanels = true;
+  // Intent starts in the header: a pointer crossing it is on its way to the menu.
   const intent = (event: Event) => {
-    const nav = (event.target as Element | null)?.closest?.<HTMLElement>("[data-nav-panels]");
-    if (!nav || requested.has(nav)) return;
-    requested.add(nav);
-    void fill(nav);
+    const target = event.target as Element | null;
+    const scope = target?.closest?.("#site-header, [data-nav-panels]");
+    if (!scope) return;
+    const navs = scope.matches("[data-nav-panels]")
+      ? [scope as HTMLElement]
+      : Array.from(scope.querySelectorAll<HTMLElement>("[data-nav-panels]"));
+    for (const nav of navs) {
+      if (requested.has(nav)) continue;
+      requested.add(nav);
+      void fill(nav);
+    }
   };
   doc.addEventListener("pointerover", intent, { passive: true });
   doc.addEventListener("focusin", intent);
