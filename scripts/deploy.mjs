@@ -75,6 +75,7 @@ export const storefrontStaticPostDeployWarmPaths = [
   "/sitemap-static.xml",
   "/sitemap-products.xml",
   "/sitemap-categories.xml",
+  "/sitemap-brands.xml",
   "/sitemap-collections.xml",
   "/sitemap-pages.xml",
   "/sitemap-articles.xml",

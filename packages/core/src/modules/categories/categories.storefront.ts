@@ -5,6 +5,14 @@ import { categories } from "@scalius/database/schema";
 import { sql, eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
+import {
+    publicCategoryTreeContextQueries,
+    type CategoryBreadcrumbItem,
+    type PublicCategoryChild,
+} from "./categories.tree";
+
+/** Sub-category links a category page carries (pills, shelves, drill levels). */
+export const STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT = 48;
 
 export const STOREFRONT_CATEGORY_TEXT_CHUNK = 12_000;
 
@@ -28,6 +36,8 @@ export async function getPublicCategories(db: Database) {
             canonicalPath: categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
+            parentId: categories.parentId,
+            depth: categories.depth,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
@@ -90,34 +100,47 @@ export async function getPublicCategorySummaries(
 }
 
 /**
- * Returns a single category by slug for the storefront.
- * Returns null if not found or soft-deleted.
+ * Returns a single category by slug for the storefront, with its published
+ * sub-categories and its public breadcrumb (root first, ending with the
+ * category). The three reads share one batch, so the tree adds no round trip.
+ * Returns null if not found, not published or soft-deleted.
  */
 export async function getPublicCategoryBySlug(db: Database, slug: string) {
-    const category = await db
-        .select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-            description: categories.description,
-            content: categories.content,
-            imageUrl: categories.imageUrl,
-            metaTitle: categories.metaTitle,
-            metaDescription: categories.metaDescription,
-            canonicalPath: categories.canonicalPath,
-            noIndex: categories.noIndex,
-            excludeFromSitemap: categories.excludeFromSitemap,
-            createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
-            updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
-        })
-        .from(categories)
-        .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
-        .get();
-
+    const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT);
+    const [rows, children, breadcrumb] = await db.batch([
+        db
+            .select({
+                id: categories.id,
+                name: categories.name,
+                slug: categories.slug,
+                description: categories.description,
+                content: categories.content,
+                imageUrl: categories.imageUrl,
+                metaTitle: categories.metaTitle,
+                metaDescription: categories.metaDescription,
+                canonicalPath: categories.canonicalPath,
+                noIndex: categories.noIndex,
+                excludeFromSitemap: categories.excludeFromSitemap,
+                parentId: categories.parentId,
+                depth: categories.depth,
+                listingTemplate: categories.listingTemplate,
+                createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
+            })
+            .from(categories)
+            .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+            .limit(1),
+        tree.children,
+        tree.breadcrumb,
+    ]);
+    const category = rows[0];
     if (!category) return null;
 
     return {
         ...category,
+        depth: Number(category.depth),
+        children: children as PublicCategoryChild[],
+        breadcrumb: (breadcrumb as CategoryBreadcrumbItem[]).map((item) => ({ ...item, depth: Number(item.depth) })),
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
     };

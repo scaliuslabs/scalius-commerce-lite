@@ -1,6 +1,7 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import { listCollectionProductOptions } from "./collections.service";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 
 function setup() {
   const harness = createSqliteD1Database();
@@ -55,6 +56,8 @@ describe("collection product picker on D1", () => {
       INSERT INTO product_variants (id, product_id, sku, option_combination_key, price_minor, stock, reserved_stock, track_inventory, is_default) VALUES
         ('var_cap', 'prod_cap', 'CAP', NULL, 20000, 5, 0, 1, 1);
     `);
+    // Seeded with raw SQL: fill the stored buyer state as a release does.
+    await rebuildCatalogProjections(db);
 
     const both = await listCollectionProductOptions(db, { categoryIds: ["cat_a", "cat_b"] });
     // The draft Tupi and the SKU-less scarf are members, but buyers never see them.

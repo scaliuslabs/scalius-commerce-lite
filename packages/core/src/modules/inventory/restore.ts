@@ -5,7 +5,8 @@
 
 import { eq, sql } from "drizzle-orm";
 import { productVariants } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
@@ -71,10 +72,13 @@ export async function restoreDeductedStock(
             updatedAt: sql`unixepoch()`,
           };
 
-  await db
-    .update(productVariants)
-    .set(updateSet)
-    .where(eq(productVariants.id, variantId));
+  await safeBatch(db, [
+    db
+      .update(productVariants)
+      .set(updateSet)
+      .where(eq(productVariants.id, variantId)),
+    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+  ] as never);
 
   const newStock =
     pool === "regular"

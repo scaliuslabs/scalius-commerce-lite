@@ -49,6 +49,8 @@ describe("SEO canonical path helpers", () => {
     expect(
       isValidResourceCanonicalPath("collection", "/collections/col_1"),
     ).toBe(true);
+    expect(isValidResourceCanonicalPath("brand", "/brands/walton")).toBe(true);
+    expect(isValidResourceCanonicalPath("brand", "/brands/hp")).toBe(true);
     expect(isValidResourceCanonicalPath("page", "/returns")).toBe(true);
     expect(
       isValidResourceCanonicalPath("article", "/blog/choose-running-shoes"),
@@ -67,6 +69,10 @@ describe("SEO canonical path helpers", () => {
     expect(
       isValidResourceCanonicalPath("collection", "/collections/summer-edit"),
     ).toBe(false);
+    expect(isValidResourceCanonicalPath("brand", "/brands/walton/phones")).toBe(false);
+    expect(isValidResourceCanonicalPath("brand", "/brand/walton")).toBe(false);
+    expect(isValidResourceCanonicalPath("brand", "/categories/walton")).toBe(false);
+    expect(isValidResourceCanonicalPath("page", "/brands")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/company/about")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/products")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/health")).toBe(false);

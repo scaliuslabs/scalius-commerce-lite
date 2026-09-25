@@ -335,6 +335,24 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 14,
         postgresStatements: 17,
       },
+      {
+        version: 89,
+        name: "0089_wave_a_contract_columns",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 90,
+        name: "0090_catalogue_schema",
+        sqliteStatements: 77,
+        postgresStatements: 97,
+      },
+      {
+        version: 91,
+        name: "0091_catalogue_projection_fill",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -472,6 +490,9 @@ describe("provider-neutral schema upgrades", () => {
           { version: 86, name: "0086_notification_outbox" },
           { version: 87, name: "0087_on_sale_indexes" },
           { version: 88, name: "0088_wave_a_contract" },
+          { version: 89, name: "0089_wave_a_contract_columns" },
+          { version: 90, name: "0090_catalogue_schema" },
+          { version: 91, name: "0091_catalogue_projection_fill" },
         ],
       });
     } finally {

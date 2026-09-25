@@ -15,6 +15,7 @@ import { processPaymentConfirmed } from "../payments/process-payment";
 import { processRefund } from "../payments/refund-service";
 import { getStorefrontFeedProducts } from "../catalog/feed";
 import { getStorefrontProducts } from "../catalog/listing";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { presentStorefrontCartValidation, validateStorefrontCartItems } from "../checkout/cart-validation";
 import { createOrder } from "./admin/create";
 import { quoteManualOrder } from "./admin/quote";
@@ -200,6 +201,8 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       INSERT INTO product_variants (id, product_id, sku, price_minor, discount_type, discount_amount_minor, stock, is_default, track_inventory)
       VALUES ('pin_sku', 'pin', 'PIN-1', 25, 'flat', 5, 5, 1, 1);
     `);
+    // Seeded with raw SQL: fill the stored buyer state as a release does.
+    await rebuildCatalogProjections(db);
 
     const feed = await getStorefrontFeedProducts(db, { limit: 10 });
     expect(feed.products.map((product) => ({ id: product.id, price: product.price, sale: product.discountedPrice })))
@@ -223,6 +226,9 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     await expect(listed(8.7, 8.75)).resolves.toEqual([]);
     sqlite!.exec(`INSERT INTO settings (id, key, value, type, category)
       VALUES ('currency_doc', 'document', '{"currencyCode":"KWD"}', 'json', 'currency')`);
+    // The currency locks once products exist; this raw switch refreshes the
+    // stored card prices (cash rounding) the way a rebuild would.
+    await rebuildCatalogProjections(db);
     await expect(listed(0.87, 0.875)).resolves.toEqual(["tee"]);
     await expect(getStorefrontProducts(db, { minPrice: 0.87, maxPrice: 0.875 }))
       .resolves.toMatchObject({ products: [{ id: "tee", discountedPrice: 0.874 }] });

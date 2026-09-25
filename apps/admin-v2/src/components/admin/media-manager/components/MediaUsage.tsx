@@ -14,6 +14,7 @@ const KIND_LABEL = {
   product: "usageProduct",
   category: "usageCategory",
   collection: "usageCollection",
+  brand: "usageBrand",
   page: "usagePage",
   article: "usageArticle",
   banner: "usageBanner",

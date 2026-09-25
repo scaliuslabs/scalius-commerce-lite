@@ -11,6 +11,8 @@
     "./modules/analytics/browser": "./src/modules/analytics/browser.ts",
     "./modules/attributes": "./src/modules/attributes/index.ts",
     "./modules/attributes/browser": "./src/modules/attributes/browser.ts",
+    "./modules/brands": "./src/modules/brands/index.ts",
+    "./modules/brands/browser": "./src/modules/brands/browser.ts",
     "./modules/catalog": "./src/modules/catalog/index.ts",
     "./modules/categories": "./src/modules/categories/index.ts",
     "./modules/categories/browser": "./src/modules/categories/browser.ts",

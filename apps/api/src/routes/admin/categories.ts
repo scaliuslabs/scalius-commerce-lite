@@ -20,12 +20,17 @@ import {
     categoryTextFieldValues,
     getCategorySection,
     listCategoryAgentSummaries,
+    listCategoryChildren,
+    getCategoryAncestors,
+    moveCategory,
+    CATEGORY_CHILDREN_LIMIT,
 } from "@scalius/core/modules/categories";
 import {
     createCategorySchema,
     updateCategorySchema,
     updateCategoryStatusSchema,
     categoryRevisionClaimSchema,
+    moveCategorySchema,
     CATEGORY_BATCH_LIMIT,
 } from "@scalius/core/modules/categories/browser";
 import { categories } from "@scalius/database/schema";
@@ -85,6 +90,8 @@ const formOptionsRoute = createRoute({
                     id: z.string(),
                     name: z.string(),
                     status: categoryStatusSchema,
+                    parentId: z.string().nullable(),
+                    depth: z.number().int().min(0).max(3),
                 })),
             })) } },
         },
@@ -95,11 +102,59 @@ const formOptionsRoute = createRoute({
 app.openapi(formOptionsRoute, async (c) => {
     const db = c.get("db");
     const result = await db
-        .select({ id: categories.id, name: categories.name, status: categories.status })
+        .select({
+            id: categories.id,
+            name: categories.name,
+            status: categories.status,
+            parentId: categories.parentId,
+            depth: categories.depth,
+        })
         .from(categories)
         .where(isNull(categories.deletedAt))
         .orderBy(asc(categories.name), asc(categories.id));
     return ok(c, { categories: result });
+});
+
+// ── Tree ──
+
+const treeNodeSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    status: categoryStatusSchema,
+    revision: z.number().int().min(1),
+    parentId: z.string().nullable(),
+    depth: z.number().int().min(0).max(3),
+    childCount: z.number().int().min(0),
+});
+
+const listChildrenRoute = createRoute({
+    method: "get",
+    path: "/children",
+    operationId: "dashboard.categories.list_children",
+    tags: ["Admin - Categories"],
+    summary: "List one level of the category tree",
+    description: "Live categories directly under `parentId` (omitted: the top level), in name order, each with its live child count.",
+    request: {
+        query: z.object({
+            parentId: categoryIdSchema.optional(),
+            limit: z.coerce.number().int().min(1).max(CATEGORY_CHILDREN_LIMIT).optional().default(CATEGORY_CHILDREN_LIMIT),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Child categories",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                categories: z.array(treeNodeSchema).max(CATEGORY_CHILDREN_LIMIT),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listChildrenRoute, async (c) => {
+    const { parentId, limit } = c.req.valid("query");
+    return ok(c, { categories: await listCategoryChildren(c.get("db"), parentId ?? null, { limit }) });
 });
 
 // ── List Categories ──
@@ -261,6 +316,69 @@ app.openapi(publishReadinessRoute, async (c) => {
     const readiness = await getCategoryPublishReadiness(c.get("db"), c.req.valid("param").id);
     if (!readiness) throw new NotFoundError("Category not found");
     return ok(c, readiness);
+});
+
+const ancestorsRoute = createRoute({
+    method: "get",
+    path: "/{id}/ancestors",
+    operationId: "dashboard.categories.get_ancestors",
+    tags: ["Admin - Categories"],
+    summary: "Get a category's place in the tree",
+    description: "The category's ancestors, root first, ending with the category (at most four).",
+    request: { params: z.object({ id: categoryIdSchema }) },
+    responses: {
+        200: {
+            description: "Ancestors, root first",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                ancestors: z.array(z.object({
+                    id: z.string(),
+                    name: z.string(),
+                    slug: z.string(),
+                    canonicalPath: z.string().nullable(),
+                    depth: z.number().int().min(0).max(3),
+                })).min(1).max(4),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(ancestorsRoute, async (c) => {
+    const ancestors = await getCategoryAncestors(c.get("db"), c.req.valid("param").id);
+    if (ancestors.length === 0) throw new NotFoundError("Category not found");
+    return ok(c, { ancestors: ancestors.map((item) => ({ ...item, depth: Number(item.depth) })) });
+});
+
+const moveRoute = createRoute({
+    method: "patch",
+    path: "/{id}/parent",
+    operationId: "dashboard.categories.move",
+    tags: ["Admin - Categories"],
+    summary: "Move a category in the tree",
+    description:
+        "Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 CATEGORY_PLACEMENT_REFUSED) for a cycle, a fifth level, or a trashed or missing parent.",
+    request: {
+        params: z.object({ id: categoryIdSchema }),
+        body: { content: { "application/json": { schema: moveCategorySchema } } },
+    },
+    responses: {
+        200: {
+            description: "Category moved (or already there)",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                revision: z.number().int().min(1),
+                parentId: z.string().nullable(),
+                changed: z.boolean(),
+            })) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(moveRoute, async (c) => {
+    const result = await moveCategory(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
+    if (result.changed) await bumpCacheGeneration(c);
+    return ok(c, result);
 });
 
 // ── Get Category by ID ──

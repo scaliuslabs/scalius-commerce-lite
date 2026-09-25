@@ -1593,6 +1593,348 @@ export type GetApiV1CollectionsByIdResponses = {
 
 export type GetApiV1CollectionsByIdResponse = GetApiV1CollectionsByIdResponses[keyof GetApiV1CollectionsByIdResponses];
 
+export type GetApiV1BrandsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/brands';
+};
+
+export type GetApiV1BrandsErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1BrandsError = GetApiV1BrandsErrors[keyof GetApiV1BrandsErrors];
+
+export type GetApiV1BrandsResponses = {
+    /**
+     * Published brands, sort order then name
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                logo: {
+                    mediaId: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1BrandsResponse = GetApiV1BrandsResponses[keyof GetApiV1BrandsResponses];
+
+export type GetApiV1BrandsSitemapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/brands/sitemap';
+};
+
+export type GetApiV1BrandsSitemapErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1BrandsSitemapError = GetApiV1BrandsSitemapErrors[keyof GetApiV1BrandsSitemapErrors];
+
+export type GetApiV1BrandsSitemapResponses = {
+    /**
+     * Brand sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1BrandsSitemapResponse = GetApiV1BrandsSitemapResponses[keyof GetApiV1BrandsSitemapResponses];
+
+export type GetApiV1BrandsBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/brands/{slug}';
+};
+
+export type GetApiV1BrandsBySlugErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1BrandsBySlugError = GetApiV1BrandsBySlugErrors[keyof GetApiV1BrandsBySlugErrors];
+
+export type GetApiV1BrandsBySlugResponses = {
+    /**
+     * Brand
+     */
+    200: {
+        success: true;
+        data: {
+            brand: {
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                logo: {
+                    mediaId: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+                description: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                listingTemplate: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            };
+        };
+    };
+};
+
+export type GetApiV1BrandsBySlugResponse = GetApiV1BrandsBySlugResponses[keyof GetApiV1BrandsBySlugResponses];
+
+export type GetApiV1BrandsBySlugProductsData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+        /**
+         * Sort order
+         */
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        /**
+         * Search within the brand
+         */
+        search?: string;
+        /**
+         * Minimum effective buyer-SKU price
+         */
+        minPrice?: number | null;
+        /**
+         * Maximum effective buyer-SKU price
+         */
+        maxPrice?: number | null;
+        /**
+         * Free delivery filter
+         */
+        freeDelivery?: 'true' | 'false';
+        /**
+         * Has discount filter
+         */
+        hasDiscount?: 'true' | 'false';
+    };
+    url: '/api/v1/brands/{slug}/products';
+};
+
+export type GetApiV1BrandsBySlugProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1BrandsBySlugProductsError = GetApiV1BrandsBySlugProductsErrors[keyof GetApiV1BrandsBySlugProductsErrors];
+
+export type GetApiV1BrandsBySlugProductsResponses = {
+    /**
+     * Brand products with pagination and filters
+     */
+    200: {
+        success: true;
+        data: {
+            brand: {
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                logo: {
+                    mediaId: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+                description: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                listingTemplate: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            };
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+            priceRange: {
+                min: number;
+                max: number;
+            };
+            facets: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<{
+                    value: string;
+                    count: number;
+                }>;
+            }>;
+            appliedFilters: {
+                attributes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    values: Array<string>;
+                }>;
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                search?: string;
+                minPrice?: number;
+                maxPrice?: number;
+                freeDelivery?: 'true' | 'false';
+                hasDiscount?: 'true' | 'false';
+            };
+        };
+    };
+};
+
+export type GetApiV1BrandsBySlugProductsResponse = GetApiV1BrandsBySlugProductsResponses[keyof GetApiV1BrandsBySlugProductsResponses];
+
 export type GetApiV1HeroSlidersData = {
     body?: never;
     path?: never;
@@ -12523,6 +12865,11 @@ export type GetApiV1ProductsFeedResponses = {
                     name: string;
                     slug: string;
                 } | null;
+                brand: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
                 attributes: Array<{
                     name: string;
                     slug: string;
@@ -13082,6 +13429,12 @@ export type GetApiV1ProductsBySlugResponses = {
                     title: string;
                     content: string;
                 }>;
+                brand: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                } | null;
                 /**
                  * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
@@ -13250,6 +13603,8 @@ export type GetApiV1CategoriesResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
+                parentId: string | null;
+                depth: number;
             }>;
         };
     };
@@ -13311,6 +13666,52 @@ export type GetApiV1CategoriesSummariesResponses = {
 
 export type GetApiV1CategoriesSummariesResponse = GetApiV1CategoriesSummariesResponses[keyof GetApiV1CategoriesSummariesResponses];
 
+export type GetApiV1CategoriesTreeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/categories/tree';
+};
+
+export type GetApiV1CategoriesTreeErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesTreeError = GetApiV1CategoriesTreeErrors[keyof GetApiV1CategoriesTreeErrors];
+
+export type GetApiV1CategoriesTreeResponses = {
+    /**
+     * Category tree
+     */
+    200: {
+        success: true;
+        data: {
+            nodes: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                imageUrl: string | null;
+                parentId: string | null;
+                depth: number;
+            }>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1CategoriesTreeResponse = GetApiV1CategoriesTreeResponses[keyof GetApiV1CategoriesTreeResponses];
+
 export type GetApiV1CategoriesBySlugData = {
     body?: never;
     path: {
@@ -13367,13 +13768,150 @@ export type GetApiV1CategoriesBySlugResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
+                parentId: string | null;
+                depth: number;
                 content: string | null;
+                listingTemplate: string | null;
+                /**
+                 * Published sub-categories, name order (sub-category pills and shelves).
+                 */
+                children: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    imageUrl: string | null;
+                }>;
+                /**
+                 * Published ancestors, root first, ending with this category.
+                 */
+                breadcrumb: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    depth: number;
+                }>;
             };
         };
     };
 };
 
 export type GetApiV1CategoriesBySlugResponse = GetApiV1CategoriesBySlugResponses[keyof GetApiV1CategoriesBySlugResponses];
+
+export type GetApiV1CategoriesBySlugChildrenData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/categories/{slug}/children';
+};
+
+export type GetApiV1CategoriesBySlugChildrenErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugChildrenError = GetApiV1CategoriesBySlugChildrenErrors[keyof GetApiV1CategoriesBySlugChildrenErrors];
+
+export type GetApiV1CategoriesBySlugChildrenResponses = {
+    /**
+     * Published sub-categories in name order
+     */
+    200: {
+        success: true;
+        data: {
+            children: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                imageUrl: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugChildrenResponse = GetApiV1CategoriesBySlugChildrenResponses[keyof GetApiV1CategoriesBySlugChildrenResponses];
+
+export type GetApiV1CategoriesBySlugBreadcrumbData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/categories/{slug}/breadcrumb';
+};
+
+export type GetApiV1CategoriesBySlugBreadcrumbErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugBreadcrumbError = GetApiV1CategoriesBySlugBreadcrumbErrors[keyof GetApiV1CategoriesBySlugBreadcrumbErrors];
+
+export type GetApiV1CategoriesBySlugBreadcrumbResponses = {
+    /**
+     * Published ancestors, root first, ending with the category
+     */
+    200: {
+        success: true;
+        data: {
+            breadcrumb: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                depth: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugBreadcrumbResponse = GetApiV1CategoriesBySlugBreadcrumbResponses[keyof GetApiV1CategoriesBySlugBreadcrumbResponses];
 
 export type GetApiV1CategoriesBySlugSectionsBySectionData = {
     body?: never;
@@ -13490,6 +14028,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
          * Has discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
+         */
+        includeSubcategories?: 'true' | 'false';
     };
     url: '/api/v1/categories/{slug}/products';
 };
@@ -13552,7 +14094,30 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
+                parentId: string | null;
+                depth: number;
                 content: string | null;
+                listingTemplate: string | null;
+                /**
+                 * Published sub-categories, name order (sub-category pills and shelves).
+                 */
+                children: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    imageUrl: string | null;
+                }>;
+                /**
+                 * Published ancestors, root first, ending with this category.
+                 */
+                breadcrumb: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    depth: number;
+                }>;
             };
             products: Array<{
                 id: string;
@@ -13625,6 +14190,10 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         slug: string;
     };
     query?: {
+        /**
+         * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
+         */
+        includeSubcategories?: 'true' | 'false';
         page?: number;
         limit?: number;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
@@ -16035,12 +16604,118 @@ export type GetApiV1AdminCategoriesFormOptionsResponses = {
                 id: string;
                 name: string;
                 status: 'draft' | 'published' | 'internal';
+                parentId: string | null;
+                depth: number;
             }>;
         };
     };
 };
 
 export type GetApiV1AdminCategoriesFormOptionsResponse = GetApiV1AdminCategoriesFormOptionsResponses[keyof GetApiV1AdminCategoriesFormOptionsResponses];
+
+export type GetApiV1AdminCategoriesChildrenData = {
+    body?: never;
+    path?: never;
+    query?: {
+        parentId?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/categories/children';
+};
+
+export type GetApiV1AdminCategoriesChildrenErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesChildrenError = GetApiV1AdminCategoriesChildrenErrors[keyof GetApiV1AdminCategoriesChildrenErrors];
+
+export type GetApiV1AdminCategoriesChildrenResponses = {
+    /**
+     * Child categories
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                status: 'draft' | 'published' | 'internal';
+                revision: number;
+                parentId: string | null;
+                depth: number;
+                childCount: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesChildrenResponse = GetApiV1AdminCategoriesChildrenResponses[keyof GetApiV1AdminCategoriesChildrenResponses];
 
 export type GetApiV1AdminCategoriesData = {
     body?: never;
@@ -16173,6 +16848,8 @@ export type GetApiV1AdminCategoriesResponses = {
                 productCount: number;
                 status: 'draft' | 'published' | 'internal';
                 revision: number;
+                parentId: string | null;
+                depth: number;
                 publishReady: boolean;
             }>;
             pagination: {
@@ -16208,6 +16885,14 @@ export type PostApiV1AdminCategoriesData = {
             size: number;
             createdAt: string | string;
         } | null;
+        /**
+         * The parent category's id, or null for a top-level category. The tree has at most four levels.
+         */
+        parentId?: string | null;
+        /**
+         * A listing template id from the theme, or null for the theme's default category listing.
+         */
+        listingTemplate?: string | null;
         status?: 'draft' | 'published' | 'internal';
     };
     path?: never;
@@ -16651,6 +17336,219 @@ export type GetApiV1AdminCategoriesByIdPublishReadinessResponses = {
 
 export type GetApiV1AdminCategoriesByIdPublishReadinessResponse = GetApiV1AdminCategoriesByIdPublishReadinessResponses[keyof GetApiV1AdminCategoriesByIdPublishReadinessResponses];
 
+export type GetApiV1AdminCategoriesByIdAncestorsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}/ancestors';
+};
+
+export type GetApiV1AdminCategoriesByIdAncestorsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdAncestorsError = GetApiV1AdminCategoriesByIdAncestorsErrors[keyof GetApiV1AdminCategoriesByIdAncestorsErrors];
+
+export type GetApiV1AdminCategoriesByIdAncestorsResponses = {
+    /**
+     * Ancestors, root first
+     */
+    200: {
+        success: true;
+        data: {
+            ancestors: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                canonicalPath: string | null;
+                depth: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdAncestorsResponse = GetApiV1AdminCategoriesByIdAncestorsResponses[keyof GetApiV1AdminCategoriesByIdAncestorsResponses];
+
+export type PatchApiV1AdminCategoriesByIdParentData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * The parent category's id, or null for a top-level category. The tree has at most four levels.
+         */
+        parentId: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}/parent';
+};
+
+export type PatchApiV1AdminCategoriesByIdParentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminCategoriesByIdParentError = PatchApiV1AdminCategoriesByIdParentErrors[keyof PatchApiV1AdminCategoriesByIdParentErrors];
+
+export type PatchApiV1AdminCategoriesByIdParentResponses = {
+    /**
+     * Category moved (or already there)
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            parentId: string | null;
+            changed: boolean;
+        };
+    };
+};
+
+export type PatchApiV1AdminCategoriesByIdParentResponse = PatchApiV1AdminCategoriesByIdParentResponses[keyof PatchApiV1AdminCategoriesByIdParentResponses];
+
 export type DeleteApiV1AdminCategoriesByIdData = {
     body: {
         expectedRevision: number;
@@ -16856,6 +17754,9 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             updatedAt: number;
             status: 'draft' | 'published' | 'internal';
             revision: number;
+            parentId: string | null;
+            depth: number;
+            listingTemplate: string | null;
             publishReadiness: {
                 ready: boolean;
                 eligibleProductCount: number;
@@ -16892,6 +17793,14 @@ export type PutApiV1AdminCategoriesByIdData = {
             size: number;
             createdAt: string | string;
         } | null;
+        /**
+         * The parent category's id, or null for a top-level category. The tree has at most four levels.
+         */
+        parentId?: string | null;
+        /**
+         * A listing template id from the theme, or null for the theme's default category listing.
+         */
+        listingTemplate?: string | null;
         expectedRevision: number;
         status: 'draft' | 'published' | 'internal';
     };
@@ -17523,6 +18432,1047 @@ export type PostApiV1AdminCategoriesByIdRestoreResponses = {
 };
 
 export type PostApiV1AdminCategoriesByIdRestoreResponse = PostApiV1AdminCategoriesByIdRestoreResponses[keyof PostApiV1AdminCategoriesByIdRestoreResponses];
+
+export type GetApiV1AdminBrandsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: 'draft' | 'published';
+        trashed?: 'true' | 'false';
+        sort?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+    };
+    url: '/api/v1/admin/brands';
+};
+
+export type GetApiV1AdminBrandsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsError = GetApiV1AdminBrandsErrors[keyof GetApiV1AdminBrandsErrors];
+
+export type GetApiV1AdminBrandsResponses = {
+    /**
+     * Brands with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                status: 'draft' | 'published';
+                sortOrder: number;
+                revision: number;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                productCount: number;
+                logo: {
+                    mediaId: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsResponse = GetApiV1AdminBrandsResponses[keyof GetApiV1AdminBrandsResponses];
+
+export type PostApiV1AdminBrandsData = {
+    body: {
+        name: string;
+        /**
+         * Buyer-facing brand story shown on the brand page (sanitised rich text).
+         */
+        description?: string | null;
+        /**
+         * A ready image from Files, or null for no logo.
+         */
+        logoMediaId?: string | null;
+        /**
+         * Brand wall and brand list order, lowest first; ties sort by name.
+         */
+        sortOrder?: number;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
+        canonicalPath?: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
+        /**
+         * A listing template id from the theme, or null for the theme's default brand listing.
+         */
+        listingTemplate?: string | null;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
+        status?: 'draft' | 'published';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/brands';
+};
+
+export type PostApiV1AdminBrandsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsError = PostApiV1AdminBrandsErrors[keyof PostApiV1AdminBrandsErrors];
+
+export type PostApiV1AdminBrandsResponses = {
+    /**
+     * Brand created
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            slug: string;
+            revision: number;
+            status: 'draft' | 'published';
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsResponse = PostApiV1AdminBrandsResponses[keyof PostApiV1AdminBrandsResponses];
+
+export type GetApiV1AdminBrandsFormOptionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        search?: string;
+    };
+    url: '/api/v1/admin/brands/form-options';
+};
+
+export type GetApiV1AdminBrandsFormOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsFormOptionsError = GetApiV1AdminBrandsFormOptionsErrors[keyof GetApiV1AdminBrandsFormOptionsErrors];
+
+export type GetApiV1AdminBrandsFormOptionsResponses = {
+    /**
+     * Live brands in name order
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<{
+                id: string;
+                name: string;
+                status: 'draft' | 'published';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsFormOptionsResponse = GetApiV1AdminBrandsFormOptionsResponses[keyof GetApiV1AdminBrandsFormOptionsResponses];
+
+export type GetApiV1AdminBrandsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/brands/{id}';
+};
+
+export type GetApiV1AdminBrandsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsByIdError = GetApiV1AdminBrandsByIdErrors[keyof GetApiV1AdminBrandsByIdErrors];
+
+export type GetApiV1AdminBrandsByIdResponses = {
+    /**
+     * Brand
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            slug: string;
+            status: 'draft' | 'published';
+            sortOrder: number;
+            revision: number;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
+            productCount: number;
+            logo: {
+                mediaId: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            } | null;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
+            description: string | null;
+            metaTitle: string | null;
+            metaDescription: string | null;
+            canonicalPath: string | null;
+            listingTemplate: string | null;
+            logoMediaId: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminBrandsByIdResponse = GetApiV1AdminBrandsByIdResponses[keyof GetApiV1AdminBrandsByIdResponses];
+
+export type PutApiV1AdminBrandsByIdData = {
+    body: {
+        name: string;
+        /**
+         * Buyer-facing brand story shown on the brand page (sanitised rich text).
+         */
+        description?: string | null;
+        /**
+         * A ready image from Files, or null for no logo.
+         */
+        logoMediaId?: string | null;
+        /**
+         * Brand wall and brand list order, lowest first; ties sort by name.
+         */
+        sortOrder?: number;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
+        canonicalPath?: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
+        /**
+         * A listing template id from the theme, or null for the theme's default brand listing.
+         */
+        listingTemplate?: string | null;
+        slug: string;
+        status: 'draft' | 'published';
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/brands/{id}';
+};
+
+export type PutApiV1AdminBrandsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminBrandsByIdError = PutApiV1AdminBrandsByIdErrors[keyof PutApiV1AdminBrandsByIdErrors];
+
+export type PutApiV1AdminBrandsByIdResponses = {
+    /**
+     * Brand updated
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            status: 'draft' | 'published';
+        };
+    };
+};
+
+export type PutApiV1AdminBrandsByIdResponse = PutApiV1AdminBrandsByIdResponses[keyof PutApiV1AdminBrandsByIdResponses];
+
+export type PatchApiV1AdminBrandsByIdStatusData = {
+    body: {
+        expectedRevision: number;
+        status: 'draft' | 'published';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/brands/{id}/status';
+};
+
+export type PatchApiV1AdminBrandsByIdStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminBrandsByIdStatusError = PatchApiV1AdminBrandsByIdStatusErrors[keyof PatchApiV1AdminBrandsByIdStatusErrors];
+
+export type PatchApiV1AdminBrandsByIdStatusResponses = {
+    /**
+     * Brand status changed
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            status: 'draft' | 'published';
+        };
+    };
+};
+
+export type PatchApiV1AdminBrandsByIdStatusResponse = PatchApiV1AdminBrandsByIdStatusResponses[keyof PatchApiV1AdminBrandsByIdStatusResponses];
+
+export type PostApiV1AdminBrandsTrashData = {
+    body: {
+        brands: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/brands/trash';
+};
+
+export type PostApiV1AdminBrandsTrashErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsTrashError = PostApiV1AdminBrandsTrashErrors[keyof PostApiV1AdminBrandsTrashErrors];
+
+export type PostApiV1AdminBrandsTrashResponses = {
+    /**
+     * Move brands to trash
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsTrashResponse = PostApiV1AdminBrandsTrashResponses[keyof PostApiV1AdminBrandsTrashResponses];
+
+export type PostApiV1AdminBrandsRestoreData = {
+    body: {
+        brands: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/brands/restore';
+};
+
+export type PostApiV1AdminBrandsRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsRestoreError = PostApiV1AdminBrandsRestoreErrors[keyof PostApiV1AdminBrandsRestoreErrors];
+
+export type PostApiV1AdminBrandsRestoreResponses = {
+    /**
+     * Restore brands from trash
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsRestoreResponse = PostApiV1AdminBrandsRestoreResponses[keyof PostApiV1AdminBrandsRestoreResponses];
+
+export type PostApiV1AdminBrandsDeletePermanentlyData = {
+    body: {
+        brands: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/brands/delete-permanently';
+};
+
+export type PostApiV1AdminBrandsDeletePermanentlyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsDeletePermanentlyError = PostApiV1AdminBrandsDeletePermanentlyErrors[keyof PostApiV1AdminBrandsDeletePermanentlyErrors];
+
+export type PostApiV1AdminBrandsDeletePermanentlyResponses = {
+    /**
+     * Permanently delete brands in trash
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsDeletePermanentlyResponse = PostApiV1AdminBrandsDeletePermanentlyResponses[keyof PostApiV1AdminBrandsDeletePermanentlyResponses];
 
 export type GetApiV1AdminCollectionsFormOptionsData = {
     body?: never;
@@ -24263,7 +26213,7 @@ export type GetApiV1AdminMediaByIdUsageResponses = {
         data: {
             count: number;
             references: Array<{
-                kind: 'product' | 'category' | 'collection' | 'page' | 'article' | 'banner' | 'theme' | 'navigation' | 'invoice' | 'social_image' | 'video_cover' | 'staff_photo';
+                kind: 'product' | 'category' | 'collection' | 'brand' | 'page' | 'article' | 'banner' | 'theme' | 'navigation' | 'invoice' | 'social_image' | 'video_cover' | 'staff_photo';
                 id: string | null;
                 name: string | null;
                 trashed: boolean;
@@ -50278,6 +52228,10 @@ export type PostApiV1AdminProductsData = {
         description: string | null;
         price: number;
         categoryId: string | null;
+        /**
+         * A live brand id (brd_…). Omit to keep the current brand; null removes it.
+         */
+        brandId?: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -51261,6 +53215,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 price: number;
                 categoryId: string | null;
                 categoryName: string | null;
+                brandId: string | null;
                 slug: string;
                 canonicalPath: string | null;
                 noIndex: boolean;
@@ -51409,6 +53364,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             name?: string;
             price?: number;
             categoryId?: string | null;
+            brandId?: string | null;
             isActive?: boolean;
             discountType?: 'percentage' | 'flat';
             discountPercentage?: number | null;
@@ -51761,6 +53717,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             description: string | null;
             price: number;
             categoryId: string | null;
+            brandId: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
             canonicalPath: string | null;
@@ -51900,6 +53857,10 @@ export type PutApiV1AdminProductsByIdData = {
         description: string | null;
         price: number;
         categoryId: string | null;
+        /**
+         * A live brand id (brd_…). Omit to keep the current brand; null removes it.
+         */
+        brandId?: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -56365,6 +58326,109 @@ export type PutApiV1AdminAttributesByIdValuesResponses = {
 };
 
 export type PutApiV1AdminAttributesByIdValuesResponse = PutApiV1AdminAttributesByIdValuesResponses[keyof PutApiV1AdminAttributesByIdValuesResponses];
+
+export type PostApiV1AdminCatalogProjectionsRebuildData = {
+    body: {
+        /**
+         * Cursor from the previous call; omit or null to start.
+         */
+        afterProductId?: string | null;
+        /**
+         * Products this call recomputes (default 900).
+         */
+        limit?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/projections/rebuild';
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildError = PostApiV1AdminCatalogProjectionsRebuildErrors[keyof PostApiV1AdminCatalogProjectionsRebuildErrors];
+
+export type PostApiV1AdminCatalogProjectionsRebuildResponses = {
+    /**
+     * One rebuild chunk committed
+     */
+    200: {
+        success: true;
+        data: {
+            processed: number;
+            nextAfterProductId: string | null;
+            done: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildResponse = PostApiV1AdminCatalogProjectionsRebuildResponses[keyof PostApiV1AdminCatalogProjectionsRebuildResponses];
 
 export type GetApiV1AdminTaxesData = {
     body?: never;

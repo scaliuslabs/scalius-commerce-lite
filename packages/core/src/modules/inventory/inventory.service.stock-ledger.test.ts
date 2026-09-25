@@ -11,6 +11,9 @@ import {
 } from "./inventory.service";
 import { checkAndAlertLowStock } from "./alerts";
 
+// The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
+
 vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
 }));

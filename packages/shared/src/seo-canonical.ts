@@ -1,7 +1,7 @@
 export const CANONICAL_PATH_MAX_LENGTH = 2048;
 
 export type CanonicalResourceKind =
-  "product" | "category" | "collection" | "article" | "page";
+  "product" | "category" | "collection" | "brand" | "article" | "page";
 
 const CANONICAL_SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CANONICAL_COLLECTION_SEGMENT_PATTERN =
@@ -12,6 +12,7 @@ const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "api",
   "buy",
   "blog",
+  "brands",
   "cart",
   "categories",
   "checkout",

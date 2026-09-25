@@ -13,6 +13,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { checkAndAlertLowStock } from "./alerts";
 import { buildStockMovementClaim } from "./stock-movement-claims";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import {
   validateAbsoluteStockCount,
   validateSignedStockAdjustment,
@@ -258,7 +259,13 @@ async function commitCounterOperation(
 
   const [movementRows, operationRows, updateRows] = await safeBatch(
     db,
-    [movementInsert, operationInsert, stockUpdate] as never,
+    [
+      movementInsert,
+      operationInsert,
+      stockUpdate,
+      // Buyer state reads the counter this batch just wrote.
+      ...catalogBuyerStateRefreshStatementsForSkus(db, [input.variantId]),
+    ] as never,
   ) as Array<Array<{ id?: string; operationKey?: string }>>;
 
   return Boolean(

@@ -1,6 +1,7 @@
 import { createRuntimeApiApp } from "./base-app";
 import { attributeRoutes } from "../routes/attributes";
 import { categoryRoutes } from "../routes/categories";
+import { brandRoutes } from "../routes/brands";
 import { collectionRoutes } from "../routes/collections";
 import { serveMediaRoute } from "../routes/media-server";
 import { productRoutes } from "../routes/products";
@@ -12,6 +13,7 @@ app.route("/collections", collectionRoutes);
 app.route("/search", searchRoutes);
 app.route("/products", productRoutes);
 app.route("/categories", categoryRoutes);
+app.route("/brands", brandRoutes);
 if (process.env.NODE_ENV === "development") app.route("/media", serveMediaRoute);
 
 export default app;
