@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderForm } from "~/components/admin/OrderForm";
@@ -15,6 +16,7 @@ import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "../-OrderFormRouteError";
 import { orderEditState, savedDeliveryMethod } from "../-order-form-route-state";
+import { formItems, formProducts } from "~/components/admin/order-form/order-form-data";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
@@ -25,10 +27,10 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
       // The cash still to collect, for the review's "before → after" line, and the delivery method.
       queryClient.ensureQueryData(orderQueryOptions(params.orderId)),
     ]);
-    const { shippingMethodId, savedShippingMethod } = savedDeliveryMethod(order);
+    const { shippingMethodId, shippingMethodKind, savedShippingMethod } = savedDeliveryMethod(order);
     return {
       ...data,
-      defaultValues: { ...data.defaultValues, shippingMethodId },
+      defaultValues: { ...data.defaultValues, shippingMethodId, shippingMethodKind },
       savedShippingMethod,
       cashToCollect: order.balanceDue,
     };
@@ -46,16 +48,32 @@ function EditOrderPage() {
   const t = useMessages(orderFormMessages);
   const orderLabel = formatOrderNumber(data.order.orderNumber, orderId);
   const edit = orderEditState(data.editReadiness);
+  // Saved lines with what each SKU is and its frozen buyer inputs; products with the inputs they ask.
+  const form = useMemo(() => {
+    const products = formProducts(data.productsWithVariants);
+    const saved = data.defaultValues;
+    return {
+      products,
+      defaultValues: {
+        ...saved,
+        shippingAddress: saved.shippingAddress ?? "",
+        city: saved.city ?? "",
+        zone: saved.zone ?? "",
+        items: formItems(saved.items, products),
+      },
+    };
+  }, [data.defaultValues, data.productsWithVariants]);
 
   if (edit.mode === "amend") {
     return (
       <OrderForm
         mode="amend"
-        products={data.productsWithVariants}
-        defaultValues={data.defaultValues}
+        products={form.products}
+        defaultValues={form.defaultValues}
         orderLabel={orderLabel}
         cashToCollect={data.cashToCollect}
         savedShippingMethod={data.savedShippingMethod}
+        amendShipsNothing={!data.defaultValues.shippingMethodKind && data.defaultValues.requiresShipping === false}
       />
     );
   }

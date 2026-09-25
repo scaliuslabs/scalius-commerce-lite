@@ -23,6 +23,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
+import { isPhysicalLine } from "./order-line-properties";
 import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -76,10 +77,12 @@ export function SummarySection() {
   const { fmt, code } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
-  const [city, zone, area, shippingMethodId] = useWatch({
+  const [city, zone, area, shippingMethodId, items] = useWatch({
     control: form.control,
-    name: ["city", "zone", "area", "shippingMethodId"],
+    name: ["city", "zone", "area", "shippingMethodId", "items"],
   });
+  // Only physical lines need a delivery method; a cart of services has none (and no charge).
+  const hasPhysical = !items?.length || items.some(isPhysicalLine);
   const zones = useDeliveryZones();
   const rates = deliveryRatesForAddress(zones, { city, zone, area });
   const pickedRate = rates.find((rate) => rate.id === shippingMethodId);
@@ -95,20 +98,31 @@ export function SummarySection() {
   const pickRate = React.useCallback((rate: (typeof rates)[number] | undefined) => {
     const set = { shouldDirty: true, shouldValidate: true };
     form.setValue("shippingMethodId", rate?.id ?? null, set);
+    // A pickup rate means no address; a custom charge is a delivery.
+    form.setValue("shippingMethodKind", rate?.kind ?? null, set);
     if (rate) form.setValue("shippingCharge", rate.fee, set);
   }, [form]);
+
+  // Nothing physical left in the order: no delivery method and no delivery charge.
+  React.useEffect(() => {
+    if (hasPhysical) return;
+    const set = { shouldDirty: true, shouldValidate: true };
+    if (form.getValues("shippingMethodId") !== null) form.setValue("shippingMethodId", null, set);
+    if (form.getValues("shippingMethodKind") != null) form.setValue("shippingMethodKind", null, set);
+    if (form.getValues("shippingCharge") !== 0) form.setValue("shippingCharge", 0, set);
+  }, [form, hasPhysical]);
 
   // New orders: choosing the city or zone picks that zone's delivery method and charge, as checkout does.
   React.useEffect(() => {
     // Waits for the zones, so a method carried over from a checkout isn't dropped while they load.
-    if (isEdit || !city || !zones || customChosen.current) return;
+    if (isEdit || !city || !zones || customChosen.current || !hasPhysical) return;
     const current = form.getValues("shippingMethodId");
     if (current && rates.some((rate) => rate.id === current)) return;
     const suggested = rates.find((rate) => rate.kind === "delivery");
     if (suggested || current) pickRate(suggested);
     // Rates are compared by id (offeredKey); the list itself is rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, city, zones, offeredKey, form, pickRate]);
+  }, [isEdit, city, zones, offeredKey, form, pickRate, hasPhysical]);
 
   const quote = manualQuote.isCurrent ? manualQuote.data : null;
   const subtotal = quote?.subtotalAmount ?? localTotals.subtotal;
@@ -133,8 +147,9 @@ export function SummarySection() {
         {isEdit ? null : <CardDescription>{t("codNote")}</CardDescription>}
       </CardHeader>
       <CardContent className="space-y-4">
+        {hasPhysical ? null : <p className="text-body text-muted-foreground">{t("noDeliveryNeeded")}</p>}
         <div className="grid gap-4 sm:grid-cols-2">
-          {rates.length > 0 || savedOption ? (
+          {hasPhysical && (rates.length > 0 || savedOption) ? (
             <div className="space-y-2">
               <Label htmlFor="order-delivery-method">{t("deliveryMethod")}</Label>
               <SearchableSelect
@@ -145,6 +160,7 @@ export function SummarySection() {
                   if (savedOption && value === savedOption.id) {
                     customChosen.current = false;
                     form.setValue("shippingMethodId", value, { shouldDirty: true });
+                    form.setValue("shippingMethodKind", savedOption.kind ?? null, { shouldDirty: true, shouldValidate: true });
                     return;
                   }
                   const rate = rates.find((candidate) => candidate.id === value);
@@ -153,7 +169,11 @@ export function SummarySection() {
                   if (!rate) refs.shippingChargeRef.current?.focus();
                 }}
                 options={[
-                  ...rates.map((rate) => ({ value: rate.id, label: `${rate.name} · ${fmt(rate.fee)}` })),
+                  ...rates.map((rate) => ({
+                    value: rate.id,
+                    label: `${rate.name} · ${fmt(rate.fee)}`,
+                    ...(rate.kind === "pickup" ? { description: rate.pickupAddress ? t("pickupAt", { address: rate.pickupAddress }) : t("pickup") } : {}),
+                  })),
                   ...(savedOption ? [{ value: savedOption.id, label: savedOption.name }] : []),
                   { value: CUSTOM_CHARGE, label: t("customCharge") },
                 ]}
@@ -161,7 +181,7 @@ export function SummarySection() {
             </div>
           ) : null}
 
-          <FormField
+          {hasPhysical ? <FormField
             control={form.control}
             name="shippingCharge"
             render={({ field }) => (
@@ -180,9 +200,10 @@ export function SummarySection() {
                       refs.shippingChargeRef.current = el;
                     }}
                     onValueChange={(value) => {
-                      // A typed charge is a custom charge.
+                      // A typed charge is a custom charge, delivered to the address.
                       customChosen.current = true;
                       form.setValue("shippingMethodId", null, { shouldDirty: true });
+                      form.setValue("shippingMethodKind", null, { shouldDirty: true, shouldValidate: true });
                       field.onChange(value ?? 0);
                     }}
                     onKeyDown={(e) => handleKeyDown(e, refs.discountAmountRef)}
@@ -191,7 +212,7 @@ export function SummarySection() {
                 <FormMessage />
               </FormItem>
             )}
-          />
+          /> : null}
 
           <FormField
             control={form.control}

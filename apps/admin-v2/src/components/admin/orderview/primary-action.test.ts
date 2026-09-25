@@ -113,4 +113,45 @@ describe("order primary phone action", () => {
       expect(resolveOrderPrimaryAction(order({ status }), all)).toBeNull();
     }
   });
+
+  describe("orders that don't ship", () => {
+    const pickupLine = { ...item, id: "pickup_1", quantity: 2, fulfillmentType: "pickup" as const, fulfilledQuantity: 0 };
+    const serviceLine = { ...item, id: "service_1", fulfillmentType: "service" as const, fulfilledQuantity: 0 };
+    const pickup = order({
+      status: "confirmed", requiresShipping: false, shippingMethodKind: "pickup", balanceDue: 1000, items: [pickupLine],
+    });
+
+    it("marks a pickup order ready first, then picked up", () => {
+      expect(resolveOrderPrimaryAction(pickup, all)).toBe("markReadyForPickup");
+      expect(resolveOrderPrimaryAction({ ...pickup, pickupReadyAt: "2026-09-25T09:00:00Z" }, all)).toBe("markPickedUp");
+      expect(resolveOrderPrimaryAction(pickup, { ...all, canManageOrderShipments: false })).toBe("collectCod");
+    });
+
+    it("never offers a courier or own rider for pickup or service lines", () => {
+      expect(resolveOrderPrimaryAction(pickup, all)).not.toBe("sendOwnCourier");
+      expect(unitsLeftToSend(pickup)).toBe(0);
+    });
+
+    it("marks a service done once nothing is left to collect", () => {
+      const service = order({ status: "confirmed", requiresShipping: false, shippingMethodKind: null, items: [serviceLine] });
+      expect(resolveOrderPrimaryAction(service, all)).toBe("markServiceDone");
+      const both = order({ status: "confirmed", requiresShipping: false, items: [pickupLine, serviceLine], pickupReadyAt: "2026-09-25T09:00:00Z" });
+      expect(resolveOrderPrimaryAction(both, all)).toBe("markPickedUp");
+    });
+
+    it("collects the counter cash on a handed-over order that is still confirmed", () => {
+      const collected = order({ status: "confirmed", requiresShipping: false, items: [{ ...pickupLine, fulfilledQuantity: 2 }] });
+      expect(resolveOrderPrimaryAction(collected, all)).toBe("collectCod");
+    });
+
+    it("sends the ship lines of a mixed order before the service", () => {
+      const mixed = order({ status: "confirmed", requiresShipping: true, items: [{ ...item, fulfillmentType: "ship" as const }, serviceLine] });
+      expect(resolveOrderPrimaryAction(mixed, all)).toBe("sendOwnCourier");
+      const shipped = order({
+        status: "shipped", requiresShipping: true,
+        items: [{ ...item, fulfillmentType: "ship" as const, fulfilledQuantity: 1 }, serviceLine],
+      });
+      expect(resolveOrderPrimaryAction(shipped, all)).toBe("markServiceDone");
+    });
+  });
 });

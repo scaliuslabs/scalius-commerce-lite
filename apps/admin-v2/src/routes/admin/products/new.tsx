@@ -35,6 +35,8 @@ const defaultValues = {
   productCondition: DEFAULT_PRODUCT_CONDITION,
   slug: "",
   media: [],
+  fulfillmentKind: "physical" as const,
+  customizationSchema: [],
 };
 
 export const Route = createFileRoute("/admin/products/new")({
@@ -74,7 +76,7 @@ function NewProductPage() {
         setOptionMatrixIssue(null);
         setOptionMatrixDirty(false);
       }}
-      optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange }) => (
+      optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
         <Suspense fallback={<LoadingFallback height="h-48" />}>
           <OptionMatrixEditor
             ref={matrixRef}
@@ -86,6 +88,7 @@ function NewProductPage() {
             onDraftChange={setCreateComposition}
             onDraftIssueChange={setOptionMatrixIssue}
             onDirtyChange={setOptionMatrixDirty}
+            fulfilmentMode={fulfilmentMode}
           />
         </Suspense>
       )}

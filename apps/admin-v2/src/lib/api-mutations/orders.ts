@@ -11,11 +11,13 @@ import {
   postApiV1AdminOrders,
   postApiV1AdminOrdersByIdAmendments,
   postApiV1AdminOrdersByIdCod,
-  postApiV1AdminOrdersByIdFulfill,
+  postApiV1AdminOrdersByIdFulfillments,
+  postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid,
   postApiV1AdminOrdersByIdMarkDelivered,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdResend,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry,
   postApiV1AdminOrdersByIdPaymentRecoveryLink,
+  postApiV1AdminOrdersByIdPickupReady,
   postApiV1AdminOrdersByIdRefund,
   postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile,
   postApiV1AdminOrdersByIdRestore,
@@ -28,7 +30,6 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
-  postApiV1AdminOrdersByIdShipmentsByShipmentIdReturned,
   postApiV1AdminOrdersByIdTimeline,
   putApiV1AdminOrdersByIdDetails,
   putApiV1AdminOrdersByIdStatus,
@@ -285,22 +286,71 @@ export function useCreateOrderShipment() {
   });
 }
 
-/** Own-courier "Mark as sent"; the dialog shows a failure inline. */
-export function useCreateFulfillmentShipment() {
+export type CreateFulfillmentInput = { orderId: string } &
+  ApiBody<typeof postApiV1AdminOrdersByIdFulfillments>;
+
+const FULFILLMENT_TOASTS: Record<CreateFulfillmentInput["kind"], OrderDetailMessageKey> = {
+  ship: "toast.fulfilled",
+  pickup: "toast.pickedUp",
+  service: "toast.serviceDone",
+};
+
+/**
+ * Hand units over: sent with your own rider, picked up at the counter, or a
+ * service performed. One `requestKey` per opened dialog, so a double click or
+ * a retry replays the first fulfilment instead of recording a second one.
+ * The dialog shows a failure inline.
+ */
+export function useCreateFulfillment() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({
-    mutationFn: ({ orderId, ...body }: { orderId: string } &
-      ApiBody<typeof postApiV1AdminOrdersByIdFulfill>) =>
-      apiData(postApiV1AdminOrdersByIdFulfill({ path: { id: orderId }, body })),
+    mutationFn: ({ orderId, ...body }: CreateFulfillmentInput) =>
+      apiData(postApiV1AdminOrdersByIdFulfillments({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.fulfilled"));
+      toast.success(msg(FULFILLMENT_TOASTS[variables.kind]));
     },
+    // Recorded or not, the order may have moved: reload it; cash may be recorded by someone else.
     onError: (err, variables) => {
-      void onOrderError(queryClient, variables.orderId, err, { banner: false });
+      void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true });
       invalidateOrderInventoryQueries(queryClient);
     },
+  });
+}
+
+/**
+ * Void a fulfilment (an own-rider parcel that came back): its units go back
+ * on the unsent list, still reserved. The confirm dialog owns the key.
+ */
+export function useVoidFulfillment() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, fulfillmentId, requestKey }: { orderId: string; fulfillmentId: string; requestKey: string }) =>
+      apiData(postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid({
+        path: { id: orderId, fulfillmentId },
+        body: { requestKey },
+      })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      invalidateOrderInventoryQueries(queryClient);
+      toast.success(msg("toast.fulfillmentVoided"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, refresh: true }),
+  });
+}
+
+/** Tell the buyer a pickup order is ready to collect; one key per click attempt. */
+export function useMarkPickupReady() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, requestKey }: { orderId: string; requestKey: string }) =>
+      apiData(postApiV1AdminOrdersByIdPickupReady({ path: { id: orderId }, body: { requestKey } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.pickupReady"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
   });
 }
 
@@ -313,23 +363,6 @@ export function useMarkOrderDelivered() {
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       toast.success(msg("toast.status.delivered"));
-    },
-    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
-  });
-}
-
-/**
- * An own-courier parcel of a part-sent order came back undelivered: its units
- * are unsent again (still reserved, so stock doesn't move).
- */
-export function useMarkParcelReturned() {
-  const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
-      apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReturned({ path: { id: orderId, shipmentId } })),
-    onSuccess: (_data, variables) => {
-      invalidateOrder(queryClient, variables.orderId);
-      toast.success(msg("toast.parcelReturned"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
   });

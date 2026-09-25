@@ -44,10 +44,21 @@ export function orderEditState(readiness: { items: EditState; details: EditState
  * saved method is preselected (and named even when no longer offered), never
  * "Custom charge" for an order placed with a named method.
  */
-export function savedDeliveryMethod(order: { shippingMethodId: string | null; shippingMethodName: string | null }) {
-  if (!order.shippingMethodId) return { shippingMethodId: null, savedShippingMethod: null };
+export function savedDeliveryMethod(order: {
+  shippingMethodId: string | null;
+  shippingMethodName: string | null;
+  /** Pickup orders keep no address; the edit form must not ask for one. */
+  shippingMethodKind?: "delivery" | "pickup" | null;
+}) {
+  const shippingMethodKind = order.shippingMethodKind ?? null;
+  if (!order.shippingMethodId) return { shippingMethodId: null, shippingMethodKind, savedShippingMethod: null };
   return {
     shippingMethodId: order.shippingMethodId,
-    savedShippingMethod: { id: order.shippingMethodId, name: order.shippingMethodName ?? order.shippingMethodId },
+    shippingMethodKind,
+    savedShippingMethod: {
+      id: order.shippingMethodId,
+      name: order.shippingMethodName ?? order.shippingMethodId,
+      kind: shippingMethodKind,
+    },
   };
 }

@@ -15,10 +15,12 @@ export const ORDER_SEARCH_LIST = "orders";
 
 export const ORDER_SORTS = ["createdAt", "relevance", "updatedAt", "totalAmount", "customerName"] as const;
 /** Server-side tabs, in tab order after "All". */
-export const ORDER_VIEWS = ["unfulfilled", "unpaid", "cod_to_collect", "delivery_failed", "returned"] as const;
+export const ORDER_VIEWS = ["unfulfilled", "ready_for_pickup", "unpaid", "cod_to_collect", "delivery_failed", "returned"] as const;
 export const PAYMENT_STATUSES = ORDER_PAYMENT_STATUSES;
 export const PAYMENT_METHODS = ["cod", "stripe", "sslcommerz"] as const;
 export const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
+/** How the order reaches the buyer: shipped to an address, picked up, or nothing physical (a service). */
+export const DELIVERY_METHODS = ["delivery", "pickup", "none"] as const;
 export const PAYMENT_RECOVERY_STATES = [
   "recoverable",
   "awaiting_payment",
@@ -37,6 +39,7 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   paymentStatus?: (typeof PAYMENT_STATUSES)[number];
   paymentMethod?: (typeof PAYMENT_METHODS)[number];
   fulfillmentStatus?: (typeof FULFILLMENT_STATUSES)[number];
+  deliveryMethod?: (typeof DELIVERY_METHODS)[number];
   paymentRecovery?: (typeof PAYMENT_RECOVERY_STATES)[number];
   startDate?: string;
   endDate?: string;
@@ -65,6 +68,7 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     paymentStatus: normalizeOptionalEnumSearchParam(search.paymentStatus, PAYMENT_STATUSES),
     paymentMethod: normalizeOptionalEnumSearchParam(search.paymentMethod, PAYMENT_METHODS),
     fulfillmentStatus: normalizeOptionalEnumSearchParam(search.fulfillmentStatus, FULFILLMENT_STATUSES),
+    deliveryMethod: normalizeOptionalEnumSearchParam(search.deliveryMethod, DELIVERY_METHODS),
     paymentRecovery: normalizeOptionalEnumSearchParam(search.paymentRecovery, PAYMENT_RECOVERY_STATES),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
@@ -81,6 +85,7 @@ export function orderFilterQuery(search: OrderListSearch, term: string): Omit<Or
     paymentStatus: search.paymentStatus,
     paymentMethod: search.paymentMethod,
     fulfillmentStatus: search.fulfillmentStatus,
+    deliveryMethod: search.deliveryMethod,
     paymentRecovery: search.paymentRecovery,
     sort: search.sort,
     order: search.order,
@@ -99,6 +104,7 @@ export const CLEARED_ORDER_FILTERS: Partial<OrderListSearch> = {
   paymentStatus: undefined,
   paymentMethod: undefined,
   fulfillmentStatus: undefined,
+  deliveryMethod: undefined,
   paymentRecovery: undefined,
   startDate: undefined,
   endDate: undefined,
@@ -133,6 +139,7 @@ export function countOrderFilters(search: OrderListSearch): number {
     search.paymentStatus,
     search.paymentMethod,
     search.fulfillmentStatus,
+    search.deliveryMethod,
     search.paymentRecovery,
     search.startDate || search.endDate,
     search.openRequest,

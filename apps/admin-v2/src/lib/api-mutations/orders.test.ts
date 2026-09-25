@@ -14,7 +14,9 @@ const sdk = vi.hoisted(() => ({
   deleteApiV1AdminOrdersByIdTimelineByEventId: vi.fn(),
   postApiV1AdminOrdersByIdAmendments: vi.fn(),
   postApiV1AdminOrdersByIdCod: vi.fn(),
-  postApiV1AdminOrdersByIdFulfill: vi.fn(),
+  postApiV1AdminOrdersByIdFulfillments: vi.fn(),
+  postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid: vi.fn(),
+  postApiV1AdminOrdersByIdPickupReady: vi.fn(),
   postApiV1AdminOrdersByIdPaymentRecoveryLink: vi.fn(),
   postApiV1AdminOrdersByIdRefund: vi.fn(),
   postApiV1AdminOrdersByIdReturnsByReturnIdReceive: vi.fn(),
@@ -34,13 +36,15 @@ import {
   orderErrorMessage,
   useAddOrderComment,
   useConfirmManualOrderAmendment,
-  useCreateFulfillmentShipment,
+  useCreateFulfillment,
   useIssueOrderPaymentRecoveryLink,
+  useMarkPickupReady,
   useReceiveOrderReturn,
   useRefundOrder,
   useResolveOrderSupportRequest,
   useUpdateOrderCod,
   useUpdateOrderStatus,
+  useVoidFulfillment,
 } from "./orders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -159,8 +163,8 @@ describe("order mutation failures", () => {
 
   it("leaves a plain field error to the dialog when the order didn't change", async () => {
     client.setQueryData(queryKeys.orders.detail("ord_1"), { id: "ord_1", version: 3 });
-    sdk.postApiV1AdminOrdersByIdFulfill.mockRejectedValue(new AdminApiResponseError("Choose at least one item to send.", 400));
-    await run(renderMutation(useCreateFulfillmentShipment), { orderId: "ord_1", requestKey: "k", items: [] });
+    sdk.postApiV1AdminOrdersByIdFulfillments.mockRejectedValue(new AdminApiResponseError("Choose at least one item to send.", 400));
+    await run(renderMutation(useCreateFulfillment), { orderId: "ord_1", requestKey: "k", kind: "ship", lines: [] });
 
     expect(noticeMocks.showOrderNotice).not.toHaveBeenCalled();
     expect(toastMocks.error).not.toHaveBeenCalled();
@@ -211,12 +215,46 @@ describe("order mutation requests", () => {
   });
 
   it("sends the own-courier retry key and the quantities per line", async () => {
-    sdk.postApiV1AdminOrdersByIdFulfill.mockResolvedValue({});
-    await run(renderMutation(useCreateFulfillmentShipment), { orderId: "ord_1", requestKey: "key-1", items: [{ itemId: "i1", quantity: 2 }] });
-    expect(sdk.postApiV1AdminOrdersByIdFulfill).toHaveBeenCalledWith({
+    sdk.postApiV1AdminOrdersByIdFulfillments.mockResolvedValue({});
+    await run(renderMutation(useCreateFulfillment), { orderId: "ord_1", requestKey: "key-1", kind: "ship", lines: [{ itemId: "i1", quantity: 2 }] });
+    expect(sdk.postApiV1AdminOrdersByIdFulfillments).toHaveBeenCalledWith({
       path: { id: "ord_1" },
-      body: { requestKey: "key-1", items: [{ itemId: "i1", quantity: 2 }] },
+      body: { requestKey: "key-1", kind: "ship", lines: [{ itemId: "i1", quantity: 2 }] },
     });
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.fulfilled"));
+  });
+
+  it("records a pickup with the cash taken at the counter, once for a double click", async () => {
+    sdk.postApiV1AdminOrdersByIdFulfillments.mockReturnValue(new Promise(() => undefined));
+    const hook = renderMutation(useCreateFulfillment);
+    const pickup = { orderId: "ord_1", requestKey: "pickup-1", kind: "pickup" as const, cashReceived: 1200 };
+    await act(async () => {
+      hook.current.mutate(pickup);
+      hook.current.mutate(pickup);
+    });
+    expect(sdk.postApiV1AdminOrdersByIdFulfillments).toHaveBeenCalledTimes(1);
+    expect(sdk.postApiV1AdminOrdersByIdFulfillments).toHaveBeenCalledWith({
+      path: { id: "ord_1" },
+      body: { requestKey: "pickup-1", kind: "pickup", cashReceived: 1200 },
+    });
+  });
+
+  it("voids a fulfilment with its confirm key and reloads the order", async () => {
+    sdk.postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid.mockResolvedValue({ quantity: 2 });
+    await run(renderMutation(useVoidFulfillment), { orderId: "ord_1", fulfillmentId: "ful_1", requestKey: "void-1" });
+    expect(sdk.postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid).toHaveBeenCalledWith({
+      path: { id: "ord_1", fulfillmentId: "ful_1" },
+      body: { requestKey: "void-1" },
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.fulfillmentVoided"));
+    expect(refreshedOrderQuery("detail", "ord_1")).toBe(true);
+  });
+
+  it("marks a pickup order ready with its retry key", async () => {
+    sdk.postApiV1AdminOrdersByIdPickupReady.mockResolvedValue({ pickupReadyAt: "2026-09-25T10:00:00Z" });
+    await run(renderMutation(useMarkPickupReady), { orderId: "ord_1", requestKey: "ready-1" });
+    expect(sdk.postApiV1AdminOrdersByIdPickupReady).toHaveBeenCalledWith({ path: { id: "ord_1" }, body: { requestKey: "ready-1" } });
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.pickupReady"));
   });
 
   it("sends the cancel reason with the status", async () => {

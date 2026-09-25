@@ -18,21 +18,22 @@ import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { formatOrderTimestamp } from "./formatters";
+import { fulfilledUnits } from "./fulfilment-groups";
 import type { Order } from "./types";
 
 type CancelReason = NonNullable<UpdateOrderStatusInput["reason"]>;
 export const CANCEL_REASONS: CancelReason[] = ["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"];
 
-/** Units that go back on sale when the order is cancelled: unsent, stock-tracked items only. */
+/** Units that go back on sale when the order is cancelled: not handed over, stock-tracked items only. */
 export function restockedUnits(order: Pick<Order, "items">): number {
   return order.items
     .filter((item) => item.inventoryTracked !== false)
-    .reduce((sum, item) => sum + Math.max(0, item.quantity - (item.shippedQuantity ?? 0)), 0);
+    .reduce((sum, item) => sum + Math.max(0, item.quantity - fulfilledUnits(item)), 0);
 }
 
-/** Units with a courier: the order can't be cancelled until they come back or are delivered. */
+/** Units handed over (with a courier, picked up, performed): the order can't be cancelled then. */
 export function unitsWithCourier(order: Pick<Order, "items">): number {
-  return order.items.reduce((sum, item) => sum + Math.max(0, item.shippedQuantity ?? 0), 0);
+  return order.items.reduce((sum, item) => sum + fulfilledUnits(item), 0);
 }
 
 /** Why Cancelled isn't offered, in the merchant's words; null when it can be. */

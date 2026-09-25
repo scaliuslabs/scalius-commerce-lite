@@ -90,7 +90,10 @@ export function useProductSubmit({
 
   const mutation = useMutation({
     mutationFn: async ({ values, acknowledgedSkuImageRemovalIds }: ProductMutationVariables) => {
-      const formattedValues = formatFormValuesForSubmission(values);
+      const dirty = form.formState.dirtyFields;
+      const formattedValues = formatFormValuesForSubmission(values, isEdit
+        ? { customizationSchema: Boolean(dirty.customizationSchema), fulfillmentKind: Boolean(dirty.fulfillmentKind) }
+        : undefined);
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId || !aggregateRevision) throw new Error(t("saveFailed"));
