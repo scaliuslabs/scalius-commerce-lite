@@ -17,6 +17,7 @@ import {
   type StorefrontCardLook,
   type StorefrontCardRenderer,
   type StorefrontFooterRenderer,
+  type StorefrontBuyBoxRenderer,
   type StorefrontGalleryRenderer,
   type StorefrontHeaderRenderer,
   type StorefrontListingFilterSpec,
@@ -127,6 +128,8 @@ export interface ResolvedStorefrontThemeLayout {
   density: StorefrontDensity;
   grid: StorefrontDensitySpec;
   productPage: StorefrontGalleryRenderer;
+  /** The buy box's look (null: today's classic) and its EMI and WhatsApp strips. */
+  buyBox: StorefrontBuyBoxRenderer;
 }
 
 /** The card as renderers read it: its anatomy, the nearest ratio token and its concrete look. */
@@ -331,6 +334,7 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       density: tokens.density,
       grid: STOREFRONT_DENSITY_SPECS[tokens.density],
       productPage: renders<StorefrontGalleryRenderer>("gallery", resolved.gallery),
+      buyBox: renders<StorefrontBuyBoxRenderer>("buyBox", resolved.buyBox),
     },
   };
 }

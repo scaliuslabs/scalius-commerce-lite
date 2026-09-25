@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_STORE_SHAPE,
+  STOREFRONT_BUY_BOX_LOOKS,
   STOREFRONT_CARD_LOOKS,
   STOREFRONT_FILTER_MIN_RESULTS,
   STOREFRONT_LISTING_FILTER_SPECS,
@@ -327,5 +328,36 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
     expect(storefrontThemeDocumentSchema.safeParse(oldLayout).success).toBe(false);
     const { navigation: _navigation, ...withoutNavigation } = theme.blocks;
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, blocks: withoutNavigation }).success).toBe(false);
+  });
+});
+
+describe("slice 5: product page per template", () => {
+  const resolved = (id: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(id), EMPTY_STORE_SHAPE);
+
+  it("keeps the classic page on the default template and gives every other buy box its reference look", () => {
+    const classic = resolved("department-mall");
+    expect(classic.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
+    expect(classic.layout.buyBox).toEqual({ look: null, emi: false, whatsapp: false });
+    expect(resolved("boutique").layout.buyBox.look).toEqual(STOREFRONT_BUY_BOX_LOOKS.boutique);
+    expect(resolved("spec-catalogue").layout.buyBox).toMatchObject({ look: STOREFRONT_BUY_BOX_LOOKS.spec, emi: true });
+    expect(resolved("marketplace").layout.buyBox.look?.facts).toBe("column");
+    expect(resolved("mass-retail").layout.buyBox.look?.facts).toBe("tiles");
+  });
+
+  it("renders real gallery variants: Dawn stacked, Target grid, Amazon's narrow strip, a 3:4 stage", () => {
+    expect(resolved("boutique").layout.productPage.gallery).toBe("stacked");
+    expect(resolved("mass-retail").layout.productPage.gallery).toBe("grid");
+    expect(resolved("heritage-editorial").layout.productPage).toMatchObject({ gallery: "beside", stageRatio: 0.75 });
+    const theme = storefrontTemplateTheme("marketplace");
+    theme.blocks.product.gallery = { variant: "thumbs-left", settings: {} };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productPage).toMatchObject({ thumbnails: "beside", thumbnailSize: 48 });
+  });
+
+  it("lists reviews on every template that shows them and warranty where the reference does", () => {
+    for (const id of ["spec-catalogue", "rounded-tech", "marketplace", "mass-retail"] as const) {
+      expect(resolved(id).blocks.product.below, id).toEqual(expect.arrayContaining(["warranty", "reviews"]));
+    }
+    expect(resolved("department-mall").blocks.product.below).toEqual(["description", "reviews", "related"]);
+    expect(resolved("daily-essentials").blocks.product.below).not.toContain("reviews");
   });
 });
