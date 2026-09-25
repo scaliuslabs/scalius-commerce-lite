@@ -1,5 +1,9 @@
-import { getDb } from "@scalius/database/client";
+import { getDb, type Database } from "@scalius/database/client";
+import { cacheGeneration } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { reviewsChangedSince, sweepReviewRequests } from "@scalius/core/modules/reviews";
+import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
@@ -19,7 +23,7 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
-import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
+import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
@@ -36,7 +40,10 @@ export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
 export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
-export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 25;
+/** Due outbox rows per run, sent by `sendBatch` (Wave B §11.3): 19,200/day at the 15-minute cron. */
+export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 200;
+/** Due review requests turned into outbox rows per run (Wave B §2.3). */
+export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
@@ -49,7 +56,7 @@ export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /**
  * Rendition backfill budget. Each image costs one R2 read, one Images info
- * call, up to six Images transforms, six R2 writes and a few D1 queries: a
+ * call, up to thirteen Images transforms and R2 writes, and a few D1 queries: a
  * few seconds of wall time but little Worker CPU (the transforms run in the
  * Images service). The backfill runs last and starts no new image once the
  * run is this old, so the run ends well inside the 15-minute cron wall limit
@@ -60,6 +67,21 @@ export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
 export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
 /** CPU guard against the 30 s cron CPU limit (~tens of ms of our CPU per image). */
 export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
+/**
+ * With the jobs queue, the backlog is fanned out instead of rendered inline
+ * two at a time: up to this many images per 15-minute run, 10 `sendBatch`
+ * calls of 100 (the Queues per-call limit), no delay. Queue consumers render
+ * them in parallel (Queues runs up to 250 concurrent consumer invocations),
+ * so a large backlog (the 0094 ladder migration sends every image back to
+ * its original) is re-rendered within minutes instead of one 240-image run
+ * per 15 minutes. Each job bumps the generation when it renders.
+ * Each image is up to thirteen Images transforms (the 1.2x ladder): 1,000
+ * images are 13,000 unique transformations, billed per unique transformation
+ * per month (5,000 included; a free account stops transforming beyond that
+ * and its cards keep their placeholders until the allowance resets). New
+ * dashboard uploads encode their ladder in the browser and cost none.
+ */
+export const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = 1_000;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -113,6 +135,19 @@ async function timedScheduledOperation<T>(
     );
     throw error;
   }
+}
+
+/**
+ * When the store's public cache generation last moved (0 before the first
+ * bump). The coalesced review bump compares review changes against it.
+ */
+async function readCacheGenerationUpdatedAt(db: Database): Promise<number> {
+  const row = await db
+    .select({ updatedAt: cacheGeneration.updatedAt })
+    .from(cacheGeneration)
+    .where(eq(cacheGeneration.id, "default"))
+    .get();
+  return row?.updatedAt ?? 0;
 }
 
 async function enqueueReconciledRefundNotifications(
@@ -266,6 +301,48 @@ async function runScheduledMaintenanceInner(
   });
 
   await isolated(async () => {
+    // Due review requests become outbox rows before the flush below sends them.
+    const reviewRequests = await timed("review_request_sweep", () =>
+      sweepReviewRequests(db, { limit: REVIEW_REQUEST_SWEEP_LIMIT }),
+    );
+    if (reviewRequests.queued > 0 || reviewRequests.skipped > 0) {
+      console.log(
+        `[scheduled] Review request sweep: queued=${reviewRequests.queued}, skipped=${reviewRequests.skipped}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
+    // Buyer reviews that auto-publish do not bump the cache generation inline
+    // (Wave B §2.5): one store-wide bump here when any published review
+    // changed since the generation last moved, at most four an hour.
+    const generationUpdatedAt = await timed("review_cache_generation_read", () =>
+      readCacheGenerationUpdatedAt(db),
+    );
+    if (await timed("review_changes_check", () => reviewsChangedSince(db, generationUpdatedAt))) {
+      await timed("review_cache_generation", () => bumpCacheGeneration({ env, executionCtx }));
+      console.log("[scheduled] Review changes reached the public cache generation");
+    }
+  });
+
+  await isolated(async () => {
+    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
+    // or gift-card lines were not handed over. A no-op until Wave B registers
+    // an automatic fulfiller. It runs before the
+    // notification flush so the mail it queues (keys, gift cards, the staff
+    // key-exhausted alert) goes out in this same run.
+    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
+      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    }));
+    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
+      console.log(
+        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
+          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
     const notificationOutbox = await timed("notification_outbox_flush", () =>
       flushPendingNotificationOutbox({
         db,
@@ -287,19 +364,6 @@ async function runScheduledMaintenanceInner(
   });
 
   await isolated(async () => {
-    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
-    // or gift-card lines were not handed over. A no-op until Wave B registers
-    // an automatic fulfiller.
-    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db));
-    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
-      console.log(
-        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
-          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
-      );
-    }
-  });
-
-  await isolated(async () => {
     // Conversation images uploaded but never attached within an hour.
     const orphanAttachments = await timed("conversation_attachment_sweep", () =>
       sweepOrphanConversationAttachments(db, env.BUCKET),
@@ -308,6 +372,16 @@ async function runScheduledMaintenanceInner(
       console.log(
         `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
       );
+    }
+  });
+
+  await isolated(async () => {
+    // Digital file uploads abandoned for 24 hours (Wave B §3.1).
+    const digitalUploads = await timed("digital_upload_sweep", () =>
+      sweepDigitalUploads(db, env.BUCKET),
+    );
+    if (digitalUploads.aborted > 0) {
+      console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
     }
   });
 
@@ -531,6 +605,17 @@ async function runScheduledMaintenanceInner(
   await isolated(async () => {
     const images = env.IMAGES;
     if (images) {
+      const queue = env.JOBS_QUEUE;
+      if (queue) {
+        const fanout = await timed("media_rendition_fanout", () =>
+          enqueueMediaVariantsBacklog(db, queue, { skip: 0, limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN }),
+        ).catch(() => null);
+        if (fanout && fanout.queued > 0) {
+          console.log(`[scheduled] Media rendition backlog: queued=${fanout.queued}, hasMore=${fanout.hasMore}`);
+          return;
+        }
+      }
+      // No queue, or it refused the backlog: render inline.
       const renditions = await timed("media_rendition_backfill", () =>
         backfillMissingMediaVariants(db, env.BUCKET, images, {
           deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,

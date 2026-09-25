@@ -10,6 +10,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { autoHandleFor } from "~/components/admin/search-listing/SearchListingCard";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
@@ -78,6 +80,15 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }),
   });
 
+  const dirty =
+    name !== (attribute?.name ?? "") ||
+    slug !== (attribute?.slug ?? "") ||
+    filterable !== (attribute?.filterable ?? true) ||
+    options.join("\u0000") !== (attribute?.options ?? []).join("\u0000") ||
+    draftValue.trim() !== "";
+  // Esc, an outside click or Cancel with unsaved edits asks first.
+  const { requestClose, discardDialog } = useDirtyDialogClose({ dirty, busy: save.isPending, onClose });
+
   const addValue = () => {
     const value = draftValue.trim();
     if (!value) return;
@@ -91,126 +102,129 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && !save.isPending && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{attribute ? t("editAttribute") : t("addAttribute")}</DialogTitle>
-        </DialogHeader>
-        <form
-          id="attribute-form"
-          method="post"
-          noValidate
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setChecked({ name: true, slug: true });
-            setServerError(null);
-            if (name.trim().length < 2 || slugInvalid || save.isPending) return;
-            save.mutate();
-          }}
-        >
-          {serverError?.field === "form" ? (
-            <p role="alert" className="text-body text-destructive">{serverError.message}</p>
-          ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="attribute-name">{t("name")}</Label>
-              <Input
-                id="attribute-name"
-                autoFocus
-                maxLength={100}
-                placeholder={t("namePlaceholder")}
-                value={name}
-                aria-invalid={Boolean(errors.name)}
-                aria-describedby={errors.name ? "attribute-name-error" : undefined}
-                onBlur={() => setChecked((current) => ({ ...current, name: true }))}
-                onChange={(event) => setName(event.target.value)}
-              />
-              {errors.name ? <p id="attribute-name-error" className="text-body text-destructive">{errors.name}</p> : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="attribute-handle">{t("handle")}</Label>
-              <Input
-                id="attribute-handle"
-                maxLength={100}
-                inputMode="url"
-                autoCapitalize="none"
-                placeholder={autoHandle || t("handlePlaceholder")}
-                value={slug}
-                aria-invalid={Boolean(errors.slug)}
-                aria-describedby="attribute-handle-help"
-                onBlur={() => setChecked((current) => ({ ...current, slug: true }))}
-                onChange={(event) => {
-                  setServerError(null);
-                  setSlug(typedHandle(event.target.value));
-                }}
-              />
-              <p id="attribute-handle-help" className={errors.slug ? "text-body text-destructive" : "text-body text-muted-foreground"}>
-                {errors.slug ?? t(autoHandle === undefined ? "handleHelp" : "handleAuto")}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="attribute-value">{t("presetValues")}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="attribute-value"
-                maxLength={100}
-                value={draftValue}
-                aria-describedby="attribute-value-help"
-                onChange={(event) => {
-                  setDraftValue(event.target.value);
-                  setDuplicate(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addValue();
-                  }
-                }}
-              />
-              <Button type="button" variant="outline" onClick={addValue} disabled={!draftValue.trim()}>
-                {t("addValue")}
-              </Button>
-            </div>
-            <p id="attribute-value-help" className="text-body text-muted-foreground">
-              {duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}
-            </p>
-            {options.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {options.map((option) => (
-                  <Badge key={option} variant="secondary">
-                    {option}
-                    <button
-                      type="button"
-                      onClick={() => setOptions(options.filter((item) => item !== option))}
-                      aria-label={t("removeValue", { value: option })}
-                      className="ml-1 rounded-full"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
+    <>
+      <Dialog open={open} onOpenChange={(next) => !next && requestClose()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{attribute ? t("editAttribute") : t("addAttribute")}</DialogTitle>
+          </DialogHeader>
+          <form
+            id="attribute-form"
+            method="post"
+            noValidate
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setChecked({ name: true, slug: true });
+              setServerError(null);
+              if (name.trim().length < 2 || slugInvalid || save.isPending) return;
+              save.mutate();
+            }}
+          >
+            {serverError?.field === "form" ? (
+              <p role="alert" className="text-body text-destructive">{serverError.message}</p>
             ) : null}
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <Label htmlFor="attribute-filterable">{t("filterableYes")}</Label>
-              <p className="text-body text-muted-foreground">{t("filterableHint")}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="attribute-name">{t("name")}</Label>
+                <Input
+                  id="attribute-name"
+                  autoFocus
+                  maxLength={100}
+                  placeholder={t("namePlaceholder")}
+                  value={name}
+                  aria-invalid={Boolean(errors.name)}
+                  aria-describedby={errors.name ? "attribute-name-error" : undefined}
+                  onBlur={() => setChecked((current) => ({ ...current, name: true }))}
+                  onChange={(event) => setName(event.target.value)}
+                />
+                {errors.name ? <p id="attribute-name-error" className="text-body text-destructive">{errors.name}</p> : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-handle">{t("handle")}</Label>
+                <Input
+                  id="attribute-handle"
+                  maxLength={100}
+                  inputMode="url"
+                  autoCapitalize="none"
+                  placeholder={autoHandle || t("handlePlaceholder")}
+                  value={slug}
+                  aria-invalid={Boolean(errors.slug)}
+                  aria-describedby="attribute-handle-help"
+                  onBlur={() => setChecked((current) => ({ ...current, slug: true }))}
+                  onChange={(event) => {
+                    setServerError(null);
+                    setSlug(typedHandle(event.target.value));
+                  }}
+                />
+                <p id="attribute-handle-help" className={errors.slug ? "text-body text-destructive" : "text-body text-muted-foreground"}>
+                  {errors.slug ?? t(autoHandle === undefined ? "handleHelp" : "handleAuto")}
+                </p>
+              </div>
             </div>
-            <Switch id="attribute-filterable" checked={filterable} onCheckedChange={setFilterable} />
-          </div>
-        </form>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={save.isPending}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" form="attribute-form" loading={save.isPending}>
-            {attribute ? t("save") : t("create")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <div className="space-y-2">
+              <Label htmlFor="attribute-value">{t("presetValues")}</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="attribute-value"
+                  maxLength={100}
+                  value={draftValue}
+                  aria-describedby="attribute-value-help"
+                  onChange={(event) => {
+                    setDraftValue(event.target.value);
+                    setDuplicate(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addValue();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={addValue} disabled={!draftValue.trim()}>
+                  {t("addValue")}
+                </Button>
+              </div>
+              <p id="attribute-value-help" className="text-body text-muted-foreground">
+                {duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}
+              </p>
+              {options.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {options.map((option) => (
+                    <Badge key={option} variant="secondary">
+                      {option}
+                      <button
+                        type="button"
+                        onClick={() => setOptions(options.filter((item) => item !== option))}
+                        aria-label={t("removeValue", { value: option })}
+                        className="ml-1 rounded-full"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+              <div>
+                <Label htmlFor="attribute-filterable">{t("filterableYes")}</Label>
+                <p className="text-body text-muted-foreground">{t("filterableHint")}</p>
+              </div>
+              <Switch id="attribute-filterable" checked={filterable} onCheckedChange={setFilterable} />
+            </div>
+          </form>
+          <DialogFooter>
+            <Button variant="outline" onClick={requestClose} disabled={save.isPending}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" form="attribute-form" loading={save.isPending}>
+              {attribute ? t("save") : t("create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog {...discardDialog} />
+    </>
   );
 }

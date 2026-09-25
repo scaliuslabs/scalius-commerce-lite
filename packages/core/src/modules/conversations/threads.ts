@@ -179,7 +179,13 @@ export async function assertBuyerOrderAccess(
   throw new NotFoundError("Conversation not found");
 }
 
-/** Resolves a thread the buyer may read and post to, or 404s (never 403: ids are not confirmed). */
+/**
+ * Resolves a thread the buyer may read and post to, or 404s (never 403: ids
+ * are not confirmed). Store threads belong to their verified account. Every
+ * other thread with an `order_id` (order, warranty_claim, review) derives
+ * buyer access from that order, so one rule covers them all and a claimed
+ * order carries its threads into the claiming account with no thread write.
+ */
 export async function resolveBuyerThread(
   db: Database,
   actor: ConversationActor,
@@ -187,12 +193,13 @@ export async function resolveBuyerThread(
 ): Promise<ThreadRow> {
   const thread = await readThread(db, conversationId);
   if (!thread) throw new NotFoundError("Conversation not found");
-  if (thread.subjectType === "order" && thread.orderId) {
-    await assertBuyerOrderAccess(db, actor, thread.orderId);
+  if (thread.subjectType === "store") {
+    if (actor.kind !== "customer" || thread.customerId !== actor.customerId) throw new NotFoundError("Conversation not found");
+    if (!await isVerifiedCustomerAccount(db, actor.customerId)) throw new NotFoundError("Conversation not found");
     return thread;
   }
-  if (thread.subjectType === "store" && actor.kind === "customer" && thread.customerId === actor.customerId) {
-    if (!await isVerifiedCustomerAccount(db, actor.customerId)) throw new NotFoundError("Conversation not found");
+  if (thread.orderId) {
+    await assertBuyerOrderAccess(db, actor, thread.orderId);
     return thread;
   }
   throw new NotFoundError("Conversation not found");
@@ -790,7 +797,10 @@ function keysetAfter(cursor: BuyerThreadCursor | null): SQL | undefined {
   );
 }
 
-/** Store threads and the threads of orders the account owns, newest first. */
+/**
+ * Store threads and every order-scoped thread (order, warranty_claim, review)
+ * of orders the account owns, newest first.
+ */
 export async function listBuyerThreads(
   db: Database,
   customerId: string,
@@ -799,6 +809,7 @@ export async function listBuyerThreads(
   const cursor = decodeConversationCursor(options.cursor);
   const owned = db.select({ id: orders.id }).from(orders)
     .where(and(eq(orders.accountOwnerCustomerId, customerId), isNull(orders.deletedAt)));
+  const orderScoped = and(ne(conversations.subjectType, "store"), inArray(conversations.orderId, owned));
   const verified = await isVerifiedCustomerAccount(db, customerId);
   const rows = await db
     .select()
@@ -808,9 +819,9 @@ export async function listBuyerThreads(
       verified
         ? or(
           and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store")),
-          and(eq(conversations.subjectType, "order"), inArray(conversations.orderId, owned)),
+          orderScoped,
         )
-        : and(eq(conversations.subjectType, "order"), inArray(conversations.orderId, owned)),
+        : orderScoped,
       keysetAfter(cursor),
     ))
     .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
@@ -913,6 +924,7 @@ async function staffSummaries(db: Database, rows: Array<{
   return rows.map(({ thread, orderNumber, orderCustomerName, customerName, assigneeName }) => ({
     id: thread.id,
     subjectType: thread.subjectType,
+    subjectId: thread.subjectId,
     subject: thread.subject,
     status: thread.status,
     orderId: thread.orderId,

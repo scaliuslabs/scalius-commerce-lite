@@ -3,6 +3,8 @@ import {
   DEFAULT_STOREFRONT_THEME,
   EMPTY_STORE_SHAPE,
   STOREFRONT_TEMPLATES,
+  STOREFRONT_TYPE_PAIRINGS,
+  buildStorefrontThemeTokens,
   resolveStorefrontTheme,
   storeShapeFromFacts,
   storefrontSectionDefault,
@@ -17,13 +19,19 @@ import {
   cardForBackground,
   colorFieldForPath,
   moveSection,
+  previewFamily,
+  resetTypeTokens,
   resolveThemeForStore,
   sameThemeLook,
   selectedTemplate,
   setBlockVariant,
   setThemeColor,
+  setTypeTokens,
+  templateTypeTokens,
   themeContrastProblems,
   themeDraftInvalid,
+  typePairingPreview,
+  typeTokensAreTemplateDefault,
 } from "./theme-settings";
 
 const richText: StorefrontSection = {
@@ -131,11 +139,15 @@ describe("theme colors", () => {
   });
 
   it("moves the card by the template's own card-to-page step instead of flattening it", () => {
-    // Retail: white cards (#ffffff) on warm paper (#fbfaf7), a step of (+4, +5, +8).
+    // Retail: white cards (#ffffff) on a white page, so the card follows the page.
     const retail = setThemeColor(storefrontTemplateTheme("department-mall"), "background", "#f0ebe3");
     expect(retail.tokens.colors.background).toBe("#f0ebe3");
-    expect(retail.tokens.colors.card).toBe("#f4f0eb");
-    expect(retail.tokens.colors.popover).toBe("#f4f0eb");
+    expect(retail.tokens.colors.card).toBe("#f0ebe3");
+    expect(retail.tokens.colors.popover).toBe("#f0ebe3");
+    // Boutique: linen cards on the same linen page stay equal as well; heritage's
+    // raised paper keeps its (+5, +7, +9) step.
+    const heritage = setThemeColor(storefrontTemplateTheme("heritage-editorial"), "background", "#f0ebe3");
+    expect(heritage.tokens.colors.card).not.toBe("#f0ebe3");
     // Midnight: raised panels (#141416) over the page (#0a0a0b) keep their lift.
     const midnight = setThemeColor(storefrontTemplateTheme("rounded-tech"), "background", "#101014");
     expect(midnight.tokens.colors.card).toBe("#1a1a1f");
@@ -185,5 +197,44 @@ describe("theme colors", () => {
 
   it("adds sections with their default settings", () => {
     expect(storefrontSectionDefault("faq", "faq")).toEqual({ id: "faq", type: "faq", version: 1, settings: { heading: "", items: [] } });
+  });
+});
+
+describe("typography", () => {
+  it("draws each pairing with the stacks the storefront's token CSS sets, under preview names", () => {
+    for (const pairing of STOREFRONT_TYPE_PAIRINGS) {
+      const theme = { ...DEFAULT_STOREFRONT_THEME, tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, typography: pairing } };
+      const css = buildStorefrontThemeTokens(theme);
+      const preview = typePairingPreview(pairing);
+      // Same families in the same order: the Latin face, the pairing's Bengali face, then the fallbacks.
+      expect(preview.heading.stack.replaceAll(previewFamily(""), "")).toBe(css["theme-font-heading"]);
+      expect(preview.body.stack.replaceAll(previewFamily(""), "")).toBe(css["theme-font-body"]);
+      expect(String(preview.heading.weight)).toBe(css["theme-heading-weight"]);
+      expect(preview.heading.stack.startsWith(`"${previewFamily(preview.heading.family)}", "${previewFamily(preview.bangla)}"`)).toBe(true);
+    }
+  });
+
+  it("falls through to a Bangla family in every pairing", () => {
+    for (const pairing of STOREFRONT_TYPE_PAIRINGS) {
+      expect(["Noto Sans Bengali", "Noto Serif Bengali", "Hind Siliguri"]).toContain(typePairingPreview(pairing).bangla);
+    }
+  });
+
+  it("knows each template's type tokens, sets them and puts them back", () => {
+    for (const { id } of STOREFRONT_TEMPLATES) {
+      const theme = storefrontTemplateTheme(id);
+      expect(typeTokensAreTemplateDefault(theme)).toBe(true);
+      const { typography, typeScale, headingCase } = theme.tokens;
+      expect(templateTypeTokens(theme)).toEqual({ typography, typeScale, headingCase });
+    }
+    const theme = storefrontTemplateTheme("heritage-editorial");
+    const changed = setTypeTokens(theme, { typography: "fresh", headingCase: "sentence" });
+    expect(changed.tokens).toEqual({ ...theme.tokens, typography: "fresh", headingCase: "sentence" });
+    expect(typeTokensAreTemplateDefault(changed)).toBe(false);
+    expect(selectedTemplate(changed)).toBeNull();
+    expect(storefrontThemeDocumentSchema.safeParse(changed).success).toBe(true);
+    const reset = resetTypeTokens(changed);
+    expect(reset).toEqual(theme);
+    expect(selectedTemplate(reset)).toBe("heritage-editorial");
   });
 });

@@ -18,6 +18,7 @@ import type {
   OrderReceiptDiscount,
 } from "./types";
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
+import type { OrderLineExtras } from "../order-line-extras";
 
 // ---------------------------------------------------------------------------
 // Response shapes for customer auth API endpoints
@@ -654,6 +655,8 @@ export interface CustomerOrderDetail {
     unitPrice: number;
     lineTotal: number;
     createdAt: string | null;
+    /** Wave B facts about the line (review, downloads, gift cards, warranty); absent until each feature ships. */
+    extras?: OrderLineExtras | null;
   }>;
   shipments: Array<CustomerOrderShipment & {
     note: string | null;

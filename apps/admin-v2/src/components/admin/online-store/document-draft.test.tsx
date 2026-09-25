@@ -2,8 +2,18 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { SaveBarEntry } from "~/components/admin/shared/SaveBar";
 import { useDocumentDraft } from "./shared";
+
+const useSaveBarEntry = vi.hoisted(() => ({ current: null as SaveBarEntry | null }));
+vi.mock("~/components/admin/shared/SaveBar", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/components/admin/shared/SaveBar")>()),
+  useSaveBar: (entry: SaveBarEntry) => {
+    useSaveBarEntry.current = entry;
+    return true;
+  },
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,6 +51,78 @@ describe("online store document draft", () => {
     const later = { ...theirs, homepageTitle: "Later" };
     act(() => root.render(<Card saved={later} />));
     expect(hook.current!.draft).toEqual(later);
+    expect(hook.current!.dirty).toBe(false);
+
+    act(() => root.unmount());
+  });
+
+  it("is clean after a save the server normalised, and keeps what was typed while it saved", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const hook: { current: ReturnType<typeof useDocumentDraft<Preferences>> | null } = { current: null };
+    let finish: (() => void) | null = null;
+    function Card({ saved, onSave }: { saved: Preferences; onSave: (draft: Preferences) => Promise<void> }) {
+      hook.current = useDocumentDraft<Preferences>({ saved, save: onSave });
+      return null;
+    }
+    const opened = { homepageTitle: "Shop", homepageMetaDescription: "Old", productCatalogEnabled: true };
+    // The server trims the title and returns its own copy (the page puts it in the query cache).
+    const onSave = (draft: Preferences) => new Promise<void>((resolve) => {
+      finish = () => {
+        root.render(<Card saved={{ ...draft, homepageTitle: draft.homepageTitle.trim() }} onSave={onSave} />);
+        resolve();
+      };
+    });
+    act(() => root.render(<Card saved={opened} onSave={onSave} />));
+    act(() => hook.current!.setDraft((draft) => ({ ...draft, homepageTitle: " My shop " })));
+
+    let saving: Promise<void> = Promise.resolve();
+    act(() => {
+      saving = (useSaveBarEntry.current!.save() as Promise<void>);
+    });
+    await act(async () => {
+      finish!();
+      await saving;
+    });
+    expect(hook.current!.draft.homepageTitle).toBe("My shop");
+    expect(hook.current!.dirty).toBe(false);
+
+    // A second save: the description is typed while the request is in flight, and the
+    // server's copy arrives before the save settles. The typed text stays, and stays dirty.
+    act(() => hook.current!.setDraft((draft) => ({ ...draft, homepageTitle: "Our shop  " })));
+    act(() => {
+      saving = (useSaveBarEntry.current!.save() as Promise<void>);
+    });
+    act(() => hook.current!.setDraft((draft) => ({ ...draft, homepageMetaDescription: "Typed meanwhile" })));
+    await act(async () => {
+      finish!();
+      await saving;
+    });
+    expect(hook.current!.draft).toEqual({
+      homepageTitle: "Our shop",
+      homepageMetaDescription: "Typed meanwhile",
+      productCatalogEnabled: true,
+    });
+    expect(hook.current!.dirty).toBe(true);
+
+    // A third save whose result is refetched only after the request settled.
+    let settle: (() => void) | null = null;
+    let sent: Preferences | null = null;
+    const onLateSave = (draft: Preferences) => new Promise<void>((resolve) => {
+      sent = draft;
+      settle = resolve;
+    });
+    act(() => root.render(<Card saved={hook.current!.draft} onSave={onLateSave} />));
+    act(() => hook.current!.setDraft((draft) => ({ ...draft, homepageTitle: " Late shop" })));
+    act(() => {
+      saving = (useSaveBarEntry.current!.save() as Promise<void>);
+    });
+    await act(async () => {
+      settle!();
+      await saving;
+    });
+    act(() => root.render(<Card saved={{ ...sent!, homepageTitle: "Late shop" }} onSave={onLateSave} />));
+    expect(hook.current!.draft.homepageTitle).toBe("Late shop");
     expect(hook.current!.dirty).toBe(false);
 
     act(() => root.unmount());

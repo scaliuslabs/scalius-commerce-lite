@@ -245,11 +245,12 @@ describe("fulfilment ledger", () => {
               unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, fulfillment_type)
             VALUES ('i_dig', 'o_dig', 'p_dig', 'v_dig', 1, 'E-book', 0, 50000, 50000, 0, 0, 0, 'digital');
         `);
-        // Wave A registers no automatic fulfiller: the line waits, fail closed.
-        expect(await autoFulfilOrder(db, "o_dig")).toMatchObject({ skipped: "unsettled" });
+        // Without an automatic fulfiller the line waits, fail closed.
+        const withoutDigital: FulfillerRegistry = { ...FULFILLER_REGISTRY, digital: null };
+        expect(await autoFulfilOrder(db, "o_dig", withoutDigital)).toMatchObject({ skipped: "unsettled" });
         sqlite.exec(`UPDATE orders SET payment_status = 'paid', paid_amount_minor = 50000, balance_due_minor = 0 WHERE id = 'o_dig'`);
         expect(await listOrdersAwaitingAutoFulfil(db)).toEqual(["o_dig"]);
-        expect(await autoFulfilOrder(db, "o_dig")).toMatchObject({ fulfilledTypes: [], unavailableTypes: ["digital"] });
+        expect(await autoFulfilOrder(db, "o_dig", withoutDigital)).toMatchObject({ fulfilledTypes: [], unavailableTypes: ["digital"] });
 
         let deliveries = 0;
         const registry: FulfillerRegistry = {
@@ -263,6 +264,87 @@ describe("fulfilment ledger", () => {
         expect(deliveries).toBe(1);
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = 'o_dig'")).toEqual({ status: "delivered", fulfillment_status: "complete" });
         expect(await listOrdersAwaitingAutoFulfil(db)).toEqual([]);
+    });
+
+    function paidDigitalOrder(id: string, status = "pending") {
+        sqlite.exec(`
+            INSERT OR IGNORE INTO products (id, name, slug, price_minor, is_active) VALUES ('p_dig', 'E-book', 'ebook', 50000, 1);
+            INSERT OR IGNORE INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory, fulfillment_kind)
+            VALUES ('v_dig', 'p_dig', 'EBOOK', 50000, 0, 1, 0, 'digital');
+            INSERT INTO orders (id, customer_name, customer_phone, requires_shipping, currency_code, currency_decimal_places,
+              subtotal_amount_minor, total_amount_minor, status, payment_method, payment_status, paid_amount_minor, balance_due_minor,
+              fulfillment_status, inventory_pool, inventory_action, version)
+            VALUES ('${id}', 'Buyer', '+8801700000000', 0, 'BDT', 2, 50000, 50000, '${status}', 'stripe', 'paid', 50000, 0,
+              'pending', 'regular', 'none', 1);
+            INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, inventory_tracked,
+              unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, fulfillment_type)
+            VALUES ('i_${id}', '${id}', 'p_dig', 'v_dig', 1, 'E-book', 0, 50000, 50000, 0, 0, 0, 'digital');
+        `);
+    }
+
+    const digitalRegistry = (): FulfillerRegistry => ({
+        ...FULFILLER_REGISTRY,
+        digital: { mode: "auto", fulfiller: { prepare: async () => [] } },
+    });
+
+    it("B0: the auto-fulfil sweep reads only owed automatic lines, through the partial index", async () => {
+        paidDigitalOrder("o_sweep");
+        // A settled order with only physical lines is never visited.
+        const shipped = await order();
+        sqlite.exec(`UPDATE orders SET payment_status = 'paid' WHERE id = '${shipped}'`);
+        expect(await listOrdersAwaitingAutoFulfil(db)).toEqual(["o_sweep"]);
+
+        // The statement the sweep really runs is planned on the partial index.
+        const queries: Array<{ query: string; values: readonly unknown[] }> = [];
+        const { db: traced } = createSqliteD1Database({
+            sqlite,
+            onQuery: (query, values) => { queries.push({ query, values }); },
+        });
+        expect(await listOrdersAwaitingAutoFulfil(traced, 50, "after_payment")).toEqual(["o_sweep"]);
+        expect(queries).toHaveLength(1);
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${queries[0]!.query}`)
+            .all(...(queries[0]!.values as never[]))
+            .map((row) => String((row as { detail: string }).detail))
+            .join("\n");
+        expect(plan).toContain("order_items_auto_pending_idx");
+        expect(plan).not.toMatch(/SCAN orders\b/);
+
+        await autoFulfilOrder(db, "o_sweep", digitalRegistry());
+        expect(await listOrdersAwaitingAutoFulfil(db)).toEqual([]);
+    });
+
+    it("B0: after_confirmation waits for staff to confirm before handing anything over", async () => {
+        sqlite.exec(`INSERT INTO settings (id, key, value, type, category, revision)
+            VALUES ('set_checkout', 'document', '{"autoFulfilMode":"after_confirmation"}', 'json', 'checkout', 1)`);
+        paidDigitalOrder("o_wait");
+        let deliveries = 0;
+        const registry: FulfillerRegistry = {
+            ...FULFILLER_REGISTRY,
+            digital: { mode: "auto", fulfiller: { prepare: async () => { deliveries += 1; return []; } } },
+        };
+
+        expect(await autoFulfilOrder(db, "o_wait", registry)).toMatchObject({ skipped: "awaiting_confirmation", fulfilledTypes: [] });
+        expect(await listOrdersAwaitingAutoFulfil(db)).toEqual([]);
+        expect(deliveries).toBe(0);
+        expect(one("SELECT count(*) AS n FROM order_fulfillments WHERE order_id = 'o_wait'")).toEqual({ n: 0 });
+
+        await updateOrderStatus(db, "o_wait", "confirmed");
+        expect(await listOrdersAwaitingAutoFulfil(db)).toEqual(["o_wait"]);
+        expect(await autoFulfilOrder(db, "o_wait", registry)).toMatchObject({ fulfilledTypes: ["digital"], delivered: true });
+        expect(deliveries).toBe(1);
+        expect(one("SELECT status FROM orders WHERE id = 'o_wait'")).toEqual({ status: "delivered" });
+    });
+
+    it("B0: after_payment (the default) hands over a pending paid order at once", async () => {
+        paidDigitalOrder("o_now");
+        expect(await autoFulfilOrder(db, "o_now", digitalRegistry())).toMatchObject({ fulfilledTypes: ["digital"], delivered: true });
+    });
+
+    it("B0: an unreadable delivery-timing setting waits for confirmation", async () => {
+        sqlite.exec(`INSERT INTO settings (id, key, value, type, category, revision)
+            VALUES ('set_checkout', 'document', '{"autoFulfilMode":"whenever"}', 'json', 'checkout', 1)`);
+        paidDigitalOrder("o_bad");
+        expect(await autoFulfilOrder(db, "o_bad", digitalRegistry())).toMatchObject({ skipped: "awaiting_confirmation" });
     });
 
     it("keeps the ledger of every action in one batch per action (D1 budget)", async () => {

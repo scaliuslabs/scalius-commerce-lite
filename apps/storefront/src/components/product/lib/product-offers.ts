@@ -1,5 +1,5 @@
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import type { ProductBuyGetOffer } from "@/lib/api/types";
+import type { ProductBundleTier, ProductBuyGetOffer } from "@/lib/api/types";
 import type { ProductActionCopy } from "./product-actions";
 
 const ITEM = "\u0000item\u0000";
@@ -37,4 +37,31 @@ export function describeBuyGetOffer(
   return at < 0
     ? { before: text, item: "", after: "" }
     : { before: text.slice(0, at), item, after: text.slice(at + ITEM.length) };
+}
+
+/**
+ * The product's active quantity tiers, fewest units first, as the product page
+ * lists them next to the price: "Buy 2, save 10%" or "Buy 3 for ৳600".
+ */
+export function describeBundleTiers(
+  tiers: readonly ProductBundleTier[],
+  copy: { productBundleTierText: string; productBundleSetPriceText: string },
+  formatPrice: (amount: number) => string,
+): Array<{ quantity: number; label: string | null; text: string }> {
+  return tiers
+    .filter((tier) => tier.isActive && tier.quantity >= 2)
+    .flatMap((tier) => {
+      if (tier.discountType === "percentage" && tier.discountPercentage && tier.discountPercentage > 0) {
+        const percent = Number.isInteger(tier.discountPercentage)
+          ? String(tier.discountPercentage)
+          : tier.discountPercentage.toFixed(2).replace(/\.?0+$/, "");
+        return [{ tier, text: formatCheckoutLanguageText(copy.productBundleTierText, { quantity: tier.quantity, saving: `${percent}%` }) }];
+      }
+      if (tier.discountType === "fixed_price" && tier.price !== null && tier.price > 0) {
+        return [{ tier, text: formatCheckoutLanguageText(copy.productBundleSetPriceText, { quantity: tier.quantity, price: formatPrice(tier.price) }) }];
+      }
+      return [];
+    })
+    .sort((left, right) => left.tier.quantity - right.tier.quantity)
+    .map(({ tier, text }) => ({ quantity: tier.quantity, label: tier.label?.trim() || null, text }));
 }

@@ -15,6 +15,7 @@ import { catalogMoneySchema, skuStockSchema, skuWeightSchema } from "./types";
 import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
 import { createProductOptionMatrixSchema } from "./option-matrix";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
+import { addGiftCardInputIssues } from "./gift-card-rules";
 
 const canonicalPathSchema = z
     .string()
@@ -79,6 +80,14 @@ export const productMediaInputSchema = z.array(z.object({
         });
     }
 });
+
+/** A warranty policy id; the write checks it exists and is not archived. */
+export const productWarrantyPolicyIdSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^wrp_[A-Za-z0-9_-]+$/u, "Choose a warranty policy from the list.");
 
 /** Shared attribute schema used in create and update */
 const productAttributeSchema = z.array(
@@ -150,6 +159,12 @@ const productBaseSchema = z.object({
     customizationSchema: customizationSchemaInputSchema.nullable().optional(),
     /** Sets every live SKU's fulfilment kind at once (the Shipping card's select). Omit to keep. */
     fulfillmentKind: editableFulfillmentKindSchema.optional(),
+    /** Gift-card product: every SKU is a digital, untracked, undiscounted denomination. Omit to keep (a new product is not). */
+    isGiftCard: z.boolean().optional()
+        .describe("Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep."),
+    /** A live warranty policy (wrp_…); null removes it. Omit to keep. */
+    warrantyPolicyId: productWarrantyPolicyIdSchema.nullable().optional()
+        .describe("A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."),
 });
 
 function requireCanonicalProductHandle(
@@ -221,6 +236,7 @@ export const createProductSchema = productBaseSchema
             }
         });
     })
+    .superRefine(addGiftCardInputIssues)
     .refine((value) => !(value.optionMatrix && value.defaultSku), {
         message: "Send either optionMatrix or defaultSku, not both.",
         path: ["defaultSku"],
@@ -239,7 +255,8 @@ export const updateProductSchema = productBaseSchema
             .optional(),
     })
     .superRefine(requireCanonicalProductHandle)
-    .superRefine(requireSellablePrice);
+    .superRefine(requireSellablePrice)
+    .superRefine(addGiftCardInputIssues);
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

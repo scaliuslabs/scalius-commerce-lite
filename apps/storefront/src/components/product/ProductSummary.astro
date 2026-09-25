@@ -13,13 +13,10 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
+import { getBuyerStockSummary, isVariantAvailable } from "@/lib/product-sellable-variants";
 import {
-  createInitialSelection,
-  filterVariantsBySelection,
   getVariantOptionAvailabilityMap,
-  resolveExactVariantSelection,
-  selectedValueMap,
+  initialVariantPresentation,
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
@@ -27,7 +24,7 @@ import {
   getProductActionsPresentation,
   type ProductActionCopy,
 } from "./lib/product-actions";
-import { describeBuyGetOffer } from "./lib/product-offers";
+import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 
 interface Props {
@@ -66,13 +63,12 @@ const actionCopy: ProductActionCopy = pageCopy;
 const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
 // A link to a sold-out combination still shows that combination, marked sold out.
-const initialSelection = initialUnavailableVariant
-  ? selectedValueMap(initialUnavailableVariant)
-  : initialVariant
-    ? selectedValueMap(initialVariant)
-    : createInitialSelection(options, variants);
-const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
-const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
+const {
+  selection: initialSelection,
+  selectedVariant: initialSelectedVariant,
+  stockVariant,
+  pricingVariants,
+} = initialVariantPresentation(options, variants, initialVariant, initialUnavailableVariant);
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
 const stockActionPresentation = getProductActionsPresentation({
   productName: product.name,
@@ -88,10 +84,22 @@ const actionPresentation = customizationUnavailable
       buyNow: { ...stockActionPresentation.buyNow, disabled: true },
     }
   : stockActionPresentation;
-// Buyer inputs make the buy area a real form (safe before hydration and
-// without JavaScript); without them the classic markup is untouched.
+// The buy area is always a real form posting to /buy/<slug> (safe before
+// hydration and without JavaScript); buyer inputs add their fields to it.
 const buyerInputFields = customizationUnavailable ? [] : (product.customization?.fields ?? []);
-const buyFormId = buyerInputFields.length > 0 ? "product-buy-form" : undefined;
+const buyFormId = "product-buy-form";
+const hasBuyerInputs = buyerInputFields.length > 0;
+// Without JavaScript the option buttons cannot choose a SKU; a plain select of
+// the buyer's purchasable combinations does, in the same form.
+const noScriptVariants = options.length > 0
+  ? variants
+      .filter((variant) => isVariantAvailable(variant))
+      .map((variant) => ({
+        id: variant.id,
+        label: variant.selectedOptions.map((option) => option.value).join(" / "),
+      }))
+      .filter((variant) => variant.label)
+  : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
 const stockAvailable = buyerStockSummary.tone === "available";
 
@@ -103,16 +111,15 @@ const productPricing: ProductPricing = {
   currencyDecimalPlaces,
   currencyCode,
 };
-const pricingVariants = stockVariant
-  ? [stockVariant]
-  : Object.keys(initialSelection).length
-    ? filterVariantsBySelection(variants, initialSelection)
-    : variants;
 const pricePresentation = getBuyerVariantPricePresentation(productPricing, pricingVariants);
 // "From" only when the buyer's choices really are priced differently.
 const showsStartingPrice =
   shouldShowStartingVariantPrice(options.length > 0, stockVariant) && pricePresentation.isStartingAt;
 const pricing = pricePresentation.pricing;
+// Quantity tiers beside the price, worded from the tier alone ("Buy 2, save
+// 10%", "Buy 3 for ৳600") so they hold for every SKU; checkout prices them.
+const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);
+const bundleListLabel = bundleTiers.map((tier) => [tier.label, tier.text].filter(Boolean).join(": ")).join("; ");
 const discountBadge = pricing.hasDiscount
   ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
   : null;
@@ -165,6 +172,7 @@ function optionAriaLabel(
   <div class="flex h-full flex-col">
     <div class="mb-2 border-b border-border pb-2">
       <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
+      <slot name="after-title" />
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p class="product-price whitespace-nowrap text-xl font-semibold text-foreground lg:text-3xl" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
@@ -177,6 +185,16 @@ function optionAriaLabel(
         </s>
         <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
       </div>
+      {bundleTiers.length > 0 ? (
+        <ul class="mt-2 flex flex-wrap gap-1.5" data-product-bundles aria-label={bundleListLabel}>
+          {bundleTiers.map((tier) => (
+            <li class="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-sm text-foreground" data-bundle-quantity={tier.quantity}>
+              {tier.label ? <span class="font-semibold text-primary">{tier.label}</span> : null}
+              <span>{tier.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <slot name="after-price" />
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
@@ -258,7 +276,7 @@ function optionAriaLabel(
         <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
       ) : null}
 
-      {buyFormId ? (
+      {hasBuyerInputs ? (
         <ProductBuyerInputs
           formId={buyFormId}
           slug={product.slug}
@@ -268,6 +286,22 @@ function optionAriaLabel(
           currencyPlaces={moneyPlaces(currencyDecimalPlaces, currencyCode)}
           formatMoney={formatPrice}
         />
+      ) : (
+        <form id={buyFormId} method="post" action={`/buy/${encodeURIComponent(product.slug)}`} data-product-buy-form>
+          <input type="hidden" name="variant" value={initialSelectedVariant?.id ?? ""} />
+        </form>
+      )}
+
+      {noScriptVariants.length > 0 ? (
+        <noscript>
+          <style is:inline>.variant-option-selector{display:none}</style>
+          <label for="product-variant-noscript" class="mb-1 block text-sm font-medium text-foreground">{options.map((option) => option.name).join(" / ")}</label>
+          <select id="product-variant-noscript" name="variant" form={buyFormId} class="block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground">
+            {noScriptVariants.map((variant) => (
+              <option value={variant.id} selected={variant.id === initialSelectedVariant?.id}>{variant.label}</option>
+            ))}
+          </select>
+        </noscript>
       ) : null}
 
       <div>
@@ -282,10 +316,10 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="flex gap-2 pt-1">
-        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+        <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
           <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+        <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
           <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>

@@ -19,11 +19,14 @@ import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/c
 import {
     resolveBundlePromotionInterplay,
     assertStorefrontLineFulfilment,
+    quoteStorefrontGiftCardTender,
     resolveCartPaymentMethods,
     storefrontLinePropertiesHashes,
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
+import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
+import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -40,7 +43,11 @@ import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import {
+    giftCardHandlesSchema,
+    giftCardIssueSchema,
+    giftCardQuoteTenderSchema,
     persistedStorefrontVariantIdSchema,
+    presentGiftCardTenderQuote,
     storefrontShippingMethodSnapshotSchema,
     getCustomerSessionTokenFromRequest,
 } from "./shared";
@@ -76,6 +83,15 @@ const taxQuoteResponseSchema = z.object({
   taxAmount: z.number(),
   totalMinor: z.number().int(),
   totalAmount: z.number(),
+  /** The total less the applied gift cards: what cash on delivery or a gateway collects (the total without cards). */
+  amountDueMinor: z.number().int(),
+  amountDue: z.number(),
+  giftCardTenders: z.array(giftCardQuoteTenderSchema).openapi({
+    description: "The gift cards that pay part of this order, in the order they were added. A gift card never pays for gift-card lines; tender never changes taxes or discounts.",
+  }),
+  giftCardIssues: z.array(giftCardIssueSchema).openapi({
+    description: "Gift cards that apply nothing, with the reason. An unusable card always reads \"This gift card can't be used.\"",
+  }),
   /** Null when the cart has nothing physical (no delivery method, no fee). */
   shippingMethod: storefrontShippingMethodSnapshotSchema.nullable(),
   deliveryMethodKind: deliveryMethodKindSchema.nullable(),
@@ -83,7 +99,9 @@ const taxQuoteResponseSchema = z.object({
   requiresShipping: z.boolean(),
   /** Pickup location and hours, for a pickup method. */
   pickup: z.object({ address: z.string().nullable(), hours: z.string().nullable() }).nullable(),
-  allowedPaymentMethods: allowedPaymentMethodsSchema,
+  allowedPaymentMethods: allowedPaymentMethodsSchema.openapi({
+    description: "Payment methods for the amount due. Exactly [\"gift_card\"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.",
+  }),
   discounts: z.array(quotedDiscountLineSchema).openapi({
     description: "One line per applied discount (automatic and code), with its own amount.",
   }),
@@ -145,6 +163,7 @@ const taxQuoteRoute = createRoute({
             shippingMethodId: z.string().min(1).max(180).optional().nullable(),
             discountCodes: discountCodesSchema,
             customerPhone: phoneNumberSchema.optional().nullable(),
+            giftCards: giftCardHandlesSchema,
           }).strict(),
         },
       },
@@ -187,6 +206,8 @@ async function resolveAuthoritativeTaxQuote(
         variantId: item.variantId,
         unitPriceMinor: item.unitPriceMinor,
         quantity: item.quantity,
+        // Gift-card lines are outside every promotion (§4.2).
+        ...(item.isGiftCard ? { giftCard: true } : {}),
       })),
       shippingAmountMinor: delivery.shippingMinor,
     },
@@ -219,6 +240,8 @@ async function resolveAuthoritativeTaxQuote(
       unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
+      // A gift card is money, not a taxable sale (§4.2).
+      ...(item.isGiftCard ? { taxExempt: true } : {}),
     })),
     shippingMinor: delivery.shippingMinor,
     promotionDiscountAllocation: bundleDiscount.allocation,
@@ -270,6 +293,16 @@ app.openapi(taxQuoteRoute, async (c) => {
     delivery,
     currency.currencyCode,
   );
+  // Gift cards pay what is left after discounts and tax, never gift-card lines (§4.3).
+  const giftCardTender = await quoteStorefrontGiftCardTender(db, {
+    handles: (data.giftCards ?? []).map((card) => card.handle),
+    masterSecret: readMasterSecret(c.env),
+    taxQuote: quote,
+    giftCardLineIds: new Set(cartValidation.items
+      .filter((item) => item.isGiftCard)
+      .map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId))),
+  });
+  const coveredByGiftCards = giftCardTender.appliedTotalMinor > 0 && giftCardTender.amountDueMinor === 0;
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,
@@ -294,11 +327,14 @@ app.openapi(taxQuoteRoute, async (c) => {
     taxAmount: toAmount(quote.taxMinor),
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
+    ...presentGiftCardTenderQuote(giftCardTender, quote.decimalPlaces),
     shippingMethod: delivery.shippingMethod,
     deliveryMethodKind: delivery.kind,
     requiresShipping: delivery.fulfilment.requiresShipping,
     pickup: delivery.pickup,
-    allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
+    allowedPaymentMethods: coveredByGiftCards
+      ? [GIFT_CARD_PAYMENT_METHOD]
+      : resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
     ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
     bundleDiscountMinor,
     bundleDiscountAmount: toAmount(bundleDiscountMinor),

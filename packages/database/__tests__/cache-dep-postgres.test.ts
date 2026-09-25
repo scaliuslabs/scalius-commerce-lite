@@ -1,4 +1,4 @@
-// PostgreSQL side of migration 0093. Opt-in: point SCALIUS_TEST_POSTGRES_URL
+// PostgreSQL side of migration 0100. Opt-in: point SCALIUS_TEST_POSTGRES_URL
 // at a disposable server; each test creates and drops its own databases.
 // - The sidecar upgrades an 0092 schema to exactly the fresh schema compiled
 //   from the SQLite chain (tables, triggers and trigger functions).
@@ -57,7 +57,7 @@ async function applySidecar(client: Client): Promise<void> {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
-    throw new Error(`0093_cache_dependencies: ${(error as Error).message}`);
+    throw new Error(`0100_cache_dependencies: ${(error as Error).message}`);
   }
 }
 
@@ -80,11 +80,11 @@ async function catalog(client: Client) {
   };
 }
 
-describe.runIf(postgresUrl)("0093 cache dependencies on PostgreSQL", () => {
-  it("upgrades an 0092 schema to exactly the fresh 0093 schema", async () => {
+describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
+  it("upgrades an 0099 schema to exactly the fresh 0100 schema", async () => {
     const [fresh, before] = await Promise.all([
       compileCanonicalPostgresSchema(),
-      compileCanonicalPostgresSchema({ beforeMigration: "0093_" }),
+      compileCanonicalPostgresSchema({ beforeMigration: "0100_" }),
     ]);
     const freshDatabase = await database(fresh.sql);
     const upgraded = await database(before.sql);

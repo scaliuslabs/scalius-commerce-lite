@@ -6,7 +6,7 @@ const BOOKKEEPING = new Set(["revision", "version", "aggregateRevision", "update
 
 /**
  * A row's `updated_at` is a sitemap `<lastmod>` (and the feed's `updatedAt`)
- * and advances the `lm:seo` cache key (migration 0093). A write that sets a
+ * and advances the `lm:seo` cache key (migration 0100). A write that sets a
  * row to the values it already has must leave it alone, so the lastmod stays
  * truthful and no discovery cache is invalidated for nothing.
  *

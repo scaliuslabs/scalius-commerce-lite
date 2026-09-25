@@ -52,9 +52,23 @@ vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
   linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 
+// Gift-card tenders and issued cards are covered on the real schema by
+// gift-card d1 tests; this mock database has no gift-card tables.
+vi.mock("@scalius/core/modules/gift-cards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/gift-cards")>()),
+  listOrderGiftCardTenders: vi.fn(async () => []),
+  listLineIssuedCards: vi.fn(async () => new Map()),
+}));
+
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/promotions")>()),
   listOrderDiscountLines: mocks.listOrderDiscountLines,
+}));
+
+// Per-line digital extras read D1; this suite's database is a stub.
+vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/digital")>()),
+  listLineDeliveries: vi.fn(async () => new Map()),
 }));
 
 vi.mock("../utils/order-receipt-token", () => ({

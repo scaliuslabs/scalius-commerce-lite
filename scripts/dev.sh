@@ -296,6 +296,9 @@ validate_numeric_setting() {
 
 start_api() {
   echo "Starting API worker (port $API_PORT)..."
+  # apps/api `pnpm dev` names the Worker from the same source (wrangler --name):
+  # wrangler's dev registry is machine-wide, so parallel stacks need distinct names.
+  echo "API worker name: $(cd "$ROOT_DIR" && node scripts/dev-ports.mjs api-worker-name)"
   if [ "$DRY_RUN" = "1" ]; then
     echo "[dry-run] cd apps/api && $PNPM_BIN dev"
     return

@@ -103,8 +103,8 @@ async function rejects(client: Client, sql: string, pattern: RegExp): Promise<vo
 describe.runIf(postgresUrl)("0090 catalogue schema PostgreSQL sidecar", () => {
   it("upgrades an 0089 schema to exactly the fresh 0090 schema", async () => {
     const [fresh, before] = await Promise.all([
-      // 0091-0092 change no DDL; 0093 has its own parity test.
-      compileCanonicalPostgresSchema({ beforeMigration: "0093_" }),
+      // The fresh 0090 schema: later schema migrations have sidecar tests of their own.
+      compileCanonicalPostgresSchema({ beforeMigration: "0091_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0090_" }),
     ]);
     const freshDatabase = await database(fresh.sql);

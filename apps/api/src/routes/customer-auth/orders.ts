@@ -41,6 +41,13 @@ import {
 import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
+import {
+  composeOrderLineExtras,
+  orderGiftCardTenderSchema,
+  orderLineExtrasShape,
+  presentOrderGiftCardTenders,
+  withOrderLineExtras,
+} from "../shared/order-line-extras";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -242,6 +249,7 @@ const customerOrderDetailSchema = z.object({
     taxableAmountMinor: z.number().int().nullable(),
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
+    ...orderLineExtrasShape,
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
@@ -305,6 +313,8 @@ const customerOrderDetailSchema = z.object({
   /** Each discount the order used: `amount` off the items, `shippingAmount` off delivery. */
   discounts: z.array(orderDiscountLineSchema),
   paymentRecovery: customerPaymentRecoverySchema,
+  /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
+  giftCardTenders: z.array(orderGiftCardTenderSchema),
 });
 
 const getCustomerOrderDetailRoute = createRoute({
@@ -349,9 +359,18 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
       order: getCustomerPaymentSessionOrderForDetail(order),
     }),
   ]);
+  const lineExtras = await composeOrderLineExtras(c.get("db"), {
+    orderId,
+    orderItemIds: detail.items.map((item) => item.id),
+    audience: "buyer",
+    currencyDecimalPlaces: order.currencyDecimalPlaces,
+  });
+  const giftCardTenders = await presentOrderGiftCardTenders(c.get("db"), orderId, order.currencyDecimalPlaces);
 
   return ok(c, {
     ...detail,
+    giftCardTenders,
+    items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
     paymentRecovery,
   });

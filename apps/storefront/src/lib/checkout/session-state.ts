@@ -2,6 +2,8 @@ const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
   "scalius_checkout_payment_method",
+  // Gift-card apply handles (gift-cards.ts GIFT_CARD_STORAGE_KEY): gone with the checkout.
+  "scalius_checkout_gift_cards",
 ] as const;
 
 const CHECKOUT_RUNTIME_KEYS = ["checkoutId"] as const;
@@ -11,6 +13,7 @@ const CHECKOUT_FORM_DRAFT_FIELDS = [
   "customerName",
   "customerPhone",
   "customerEmail",
+  "customerWhatsapp",
   "deliveryMode",
   "shippingAddress",
   "city",

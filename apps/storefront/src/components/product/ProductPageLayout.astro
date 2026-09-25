@@ -19,22 +19,28 @@ const { gallery } = Astro.props;
 </div>
 
 <style>
-  /* Stacked product page: photos full width on top, details centred below. */
+  /* Stacked product page: the photos on top and the details below share one
+     centred column, and the breadcrumb starts where it starts, so every left
+     edge lines up. The column keeps the name and price near the fold under
+     the square photo and its thumbnail strip: on a short landscape screen
+     (1024x768) it shrinks to fit, never below 24rem. */
   @media (min-width: 64rem) {
     .product-layout[data-gallery="stacked"] > :global(*) {
       grid-column: 1 / -1;
       width: 100%;
-      max-width: 48rem;
+      max-width: var(--product-stacked-column);
       margin-inline: auto;
     }
     .product-layout[data-gallery="stacked"] :global(.gallery-layout) {
       position: static;
     }
-    /* Keep the name and price near the fold under the square photo and its
-       thumbnail strip: on a short landscape screen (1024x768) the photo
-       shrinks to fit, never below 24rem. */
-    .product-layout[data-gallery="stacked"] > :global(#product-gallery) {
-      max-width: max(24rem, min(36rem, calc(100svh - 20rem)));
+    :global([data-product-stacked-crumbs] ol) {
+      max-width: var(--product-stacked-column);
+      margin-inline: auto;
     }
+  }
+  .product-layout,
+  :global([data-product-stacked-crumbs]) {
+    --product-stacked-column: max(24rem, min(36rem, calc(100svh - 20rem)));
   }
 </style>

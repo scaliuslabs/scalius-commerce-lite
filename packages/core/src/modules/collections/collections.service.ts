@@ -6,7 +6,20 @@ import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQ
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+
+/** A save made at a version that is no longer current: the editor reloads the latest and keeps its edits. */
+export class CollectionRevisionConflictError extends AppError {
+    constructor(collectionId: string, expectedVersion: number, currentVersion: number | null) {
+        super(
+            409,
+            "COLLECTION_REVISION_CONFLICT",
+            "Collection changed while you were editing it. Reload and try again.",
+            { collectionId, expectedVersion, currentVersion },
+        );
+        this.name = "CollectionRevisionConflictError";
+    }
+}
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
@@ -30,6 +43,7 @@ import {
     storeDecimalPlacesFromCode,
 } from "../products/money";
 import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "../catalog/listing";
+import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "../catalog/card-facts";
 import {
     buildCollectionProductSelect,
     resolveProductCards,
@@ -594,7 +608,7 @@ export async function updateCollection(
         .get();
     if (!existing) throw new NotFoundError("Collection not found");
     if (existing.version !== data.expectedVersion) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, existing.version);
     }
 
     if (
@@ -644,7 +658,7 @@ export async function updateCollection(
         .returning()
         .get();
     if (!updated) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, null);
     }
     return updated;
 }
@@ -666,7 +680,7 @@ export async function updateCollectionProducts(
         .get();
     if (!existing) throw new NotFoundError("Collection not found");
     if (existing.version !== data.expectedVersion) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, existing.version);
     }
     const config = normalizeCollectionConfig(existing.config);
     if (config.source !== "manual") {
@@ -715,7 +729,7 @@ export async function updateCollectionProducts(
         .returning({ id: collections.id, version: collections.version })
         .get();
     if (!updated) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, null);
     }
     return updated;
 }
@@ -1102,6 +1116,7 @@ export function planCollectionProducts(
     const statements: BatchStatement[] = [];
     const productSlots: number[] = [];
     const mediaSlots: number[] = [];
+    const factSlots: number[] = [];
     const push = (statement: BatchStatement) => statements.push(statement) - 1;
     /**
      * A product statement and the media statement of the same rows. Eligible
@@ -1117,9 +1132,11 @@ export function planCollectionProducts(
         productSlots.push(push(order
             ? rows.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
             : rows));
-        mediaSlots.push(push(selectProductMediaProjectionRows(db, order
+        const scopedIds = order
             ? ids.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
-            : ids)));
+            : ids;
+        mediaSlots.push(push(selectProductMediaProjectionRows(db, scopedIds)));
+        factSlots.push(push(selectProductCardFactRows(db, scopedIds)));
         return productSlots.length - 1;
     };
 
@@ -1150,7 +1167,15 @@ export function planCollectionProducts(
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
             const allRows = [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)];
             const mediaByProduct = resolveProductMediaProjectionRows(mediaRows);
-            const resolvedProductsById = resolveProductCards(allRows, mediaByProduct);
+            const resolvedProductsById = resolveProductCards(
+                allRows,
+                mediaByProduct,
+                resolveProductCardFacts(
+                    factSlots.flatMap((slot) => results[slot] as ProductCardFactRow[]),
+                    storeDecimalPlacesFromCode(allRows[0]?.storeCurrencyCode),
+                    new Set(allRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                ),
+            );
 
             const specificProductsById = new Map<string, ResolvedProduct>();
             for (const prod of rowsOf(pinnedList)) {
@@ -1253,4 +1278,66 @@ export async function resolveCollectionProductsBatch(
     deps.collections(parsedCollections.map(({ id }) => id));
     const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })));
     return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : []);
+}
+
+/** The most collections `/collections` lists (a directory, not a paged catalogue). */
+export const COLLECTION_DIRECTORY_LIMIT = 60;
+
+export interface PublicCollectionDirectoryEntry {
+    id: string;
+    name: string;
+    canonicalPath: string | null;
+    /** Products a buyer sees on the collection's page (the catalogue's own count). */
+    productCount: number;
+    /** The featured product's photo, else the collection's first product's. */
+    imageUrl: string | null;
+    imageAlt: string | null;
+}
+
+/**
+ * Every active collection for the `/collections` directory, in the merchant's
+ * order, with its product count and a photo. Two D1 waves: the collections,
+ * then one batch with each collection's first product (and its card media)
+ * and its visible count. Collections nobody can shop (no visible product)
+ * are left out.
+ */
+export async function listPublicCollectionDirectory(db: Database): Promise<PublicCollectionDirectoryEntry[]> {
+    // Which collections are listed, and each one's whole member set (its count).
+    deps.anyCollection();
+    const rows = await db
+        .select({
+            id: collections.id,
+            name: collections.name,
+            config: collections.config,
+            canonicalPath: collections.canonicalPath,
+        })
+        .from(collections)
+        .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
+        .orderBy(asc(collections.sortOrder), asc(collections.name))
+        .limit(COLLECTION_DIRECTORY_LIMIT)
+        .all();
+    if (rows.length === 0) return [];
+    for (const row of rows) declareCollectionMembership(row.config);
+
+    const plan = planCollectionProducts(db, rows.map((row) => ({ key: row.id, config: row.config, maxProducts: 1 })));
+    const counts = rows.map((row) => storefrontCollectionVisibleCountQuery(
+        db,
+        collectionMembershipForConfig(normalizeCollectionConfig(row.config)),
+    ));
+    const results = await safeBatch(db, [...plan.statements, ...counts] as Parameters<typeof safeBatch>[1]);
+    const resolved = plan.resolve(results);
+    return rows.flatMap((row, index) => {
+        const productCount = Number((results[plan.statements.length + index] as Array<{ count: number }> | undefined)?.[0]?.count ?? 0);
+        if (productCount === 0) return [];
+        const entry = resolved.get(row.id);
+        const cover = entry?.featuredProduct ?? entry?.products.find((product) => product.imageUrl) ?? null;
+        return [{
+            id: row.id,
+            name: row.name,
+            canonicalPath: row.canonicalPath ?? null,
+            productCount,
+            imageUrl: cover?.imageUrl ?? null,
+            imageAlt: cover?.imageAlt ?? null,
+        }];
+    });
 }

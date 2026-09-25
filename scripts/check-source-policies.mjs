@@ -4,7 +4,7 @@
 // belongs in a behaviour test. Each policy carries the production rule it
 // protects and a `sample` that must violate it, so a regex that silently stops
 // matching fails `check-source-policies.test.mjs`.
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,6 +32,7 @@ const storefront = "apps/storefront/src";
 /**
  * paths: files or directories. forbid: no file may match any pattern.
  * require: every file must match every pattern. extensions: optional file filter.
+ * optionalPaths: skip listed paths that do not exist yet (a later slice adds them).
  * sample: text that must violate the policy.
  */
 export const policies = [
@@ -100,10 +101,47 @@ export const policies = [
       `${storefront}/components/product/ProductBuyerInputs.astro`,
       `${storefront}/components/conversation/ConversationReplyForm.astro`,
       `${storefront}/pages/account/inbox/index.astro`,
+      `${storefront}/lib/account-downloads.ts`,
+      // Gift-card codes (Wave B §11.1): checkout apply, balance check, save and reveal.
+      `${storefront}/pages/checkout.astro`,
+      `${storefront}/pages/gift-card-balance.astro`,
+      `${storefront}/pages/account/gift-cards.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
     sample: '<form action="/cart" class="x">',
+  },
+  {
+    rule: "Wave B buyer forms (reviews, downloads and licence keys, gift cards, warranty claims) submit with method=post",
+    why: "review text, gift-card codes, receipt-scoped actions and claim details must not enter URLs before hydration or without JavaScript (Wave B §11.1); files land slice by slice, so a missing one is skipped until its slice ships",
+    optionalPaths: true,
+    paths: [
+      // Reviews (B2)
+      `${storefront}/components/order/ReviewLineAction.astro`,
+      `${storefront}/components/order/review-line-action.ts`,
+      `${storefront}/pages/account/reviews.astro`,
+      `${storefront}/lib/account-reviews.ts`,
+      `${storefront}/components/product/reviews`,
+      // Digital goods (B3)
+      `${storefront}/components/order/DigitalLineDelivery.astro`,
+      `${storefront}/components/order/digital-line-delivery.ts`,
+      `${storefront}/pages/account/downloads.astro`,
+      // Gift cards (B4)
+      `${storefront}/components/order/GiftCardLineDelivery.astro`,
+      `${storefront}/components/order/gift-card-line-delivery.ts`,
+      `${storefront}/pages/account/gift-cards.astro`,
+      `${storefront}/pages/gift-card-balance.astro`,
+      `${storefront}/pages/checkout.astro`,
+      `${storefront}/components/checkout`,
+      // Warranty (B5)
+      `${storefront}/components/order/WarrantyLineInfo.astro`,
+      `${storefront}/components/order/warranty-line-info.ts`,
+      `${storefront}/pages/account/warranties.astro`,
+      // The guest order lookup that leads to every receipt-scoped form above.
+      `${storefront}/pages/track-order.astro`,
+    ],
+    forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
+    sample: '<form action="/account/reviews" class="x">',
   },
   {
     rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
@@ -149,6 +187,9 @@ export const policies = [
     paths: [
       "packages/core/src/modules/orders/order-support-requests.ts",
       "packages/core/src/modules/conversations",
+      // Warranty claims are records plus a thread (Wave B W5); remedies go
+      // through returns, refunds or manual orders in their own domains.
+      "packages/core/src/modules/warranty",
     ],
     forbid: [
       /from\s+["']\.\.\/(?:inventory|delivery|fulfillment|fulfilment|checkout)(?:\/|["'])/,
@@ -173,6 +214,30 @@ export const policies = [
     paths: ["packages/core/src/modules/conversations"],
     forbid: [/\.(?:insert|update|delete)\(\s*(?:customers|orders|customerHistory)\s*\)/],
     sample: "await db.update(customers).set({ email });",
+  },
+  {
+    rule: "review stats and gift-card balances move only through their trigger projections",
+    why: "product_review_stats is a projection of published reviews (Wave B R3) and gift_cards.balance_minor of the append-only transaction ledger (G1); a direct write desynchronises them",
+    paths: ["apps/api/src", "packages/core/src"],
+    forbid: [
+      /\.(?:insert|update|delete)\(\s*productReviewStats\s*\)/,
+      /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+[`"]?product_review_stats\b/i,
+      /\.set\(\s*\{[^}]*\bbalanceMinor\s*:/,
+      /\bSET\s+[^;`]*\bbalance_minor\s*=/i,
+    ],
+    sample: "await db.update(productReviewStats).set({ reviewCount: 0 });",
+  },
+  {
+    rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
+    why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
+    paths: [
+      "packages/core/src/modules/gift-cards",
+      "packages/core/src/modules/digital",
+      "packages/core/src/modules/reviews",
+      "apps/api/src/notification-content",
+    ],
+    forbid: [/\bconsole\.\w+\s*\([^)]*\b(?:code|codes|licenceKey|licenceKeys|keyPlaintext|plaintext|body|title)\b/],
+    sample: 'console.warn("gift card redeem failed", code);',
   },
   {
     rule: "production code never calls the legacy multi-SKU stock helpers",
@@ -251,7 +316,9 @@ export function policyViolations(policy, files) {
 export function collectSourcePolicyViolations() {
   const violations = policies.flatMap((policy) => policyViolations(
     policy,
-    policy.paths.flatMap((path) => codeFiles(path, policy.extensions ? new Set(policy.extensions) : undefined)).map((file) => ({
+    policy.paths
+      .filter((path) => !policy.optionalPaths || existsSync(resolve(root, path)))
+      .flatMap((path) => codeFiles(path, policy.extensions ? new Set(policy.extensions) : undefined)).map((file) => ({
       name: relative(root, file),
       text: readFileSync(file, "utf8"),
     })),

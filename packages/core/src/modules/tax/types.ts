@@ -49,6 +49,11 @@ export interface TaxQuoteLineInput {
     unitPriceMinor: number;
     quantity: number;
     taxClassId: string | null;
+    /**
+     * No rate applies, whatever the class (a gift card is money, not a
+     * taxable sale: Wave B §4.2). Absent means taxed by its class.
+     */
+    taxExempt?: boolean;
 }
 
 export interface TaxDiscountAllocationInput {

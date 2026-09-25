@@ -87,7 +87,6 @@ const checkoutLanguageDataSchema = z
       "Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.",
   });
 const checkoutLanguageFieldVisibilitySchema = z.object({
-  showEmailField: z.boolean(),
   showOrderNotesField: z.boolean(),
   showAreaField: z.boolean(),
 });
@@ -120,7 +119,6 @@ const publicCheckoutLanguageSchema = z.object({
 });
 
 const defaultFieldVisibility = {
-  showEmailField: true,
   showOrderNotesField: true,
   showAreaField: true
 };
@@ -271,7 +269,6 @@ async function getActiveCheckoutLanguage(db: Database) {
 
   if (!language) {
     const fallbackFieldVisibility = {
-      showEmailField: true,
       showOrderNotesField: true,
       showAreaField: true
     };

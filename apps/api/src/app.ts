@@ -87,6 +87,17 @@ import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
 import { adminAgentAccessRoutes } from "./routes/admin/agent-access";
+import { adminReviewRoutes } from "./routes/admin/reviews";
+import {
+  adminDigitalAssetRoutes,
+  adminDigitalEntitlementRoutes,
+  adminProductDigitalAssetRoutes,
+} from "./routes/admin/digital-assets";
+import { adminWarrantyPolicyRoutes } from "./routes/admin/warranty-policies";
+import { adminGiftCardRoutes } from "./routes/admin/gift-cards";
+import { adminWarrantyClaimRoutes } from "./routes/admin/warranty-claims";
+import { productReviewRoutes } from "./routes/product-reviews";
+import { checkoutGiftCardRoutes } from "./routes/checkout-gift-cards";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
@@ -137,6 +148,7 @@ app.use("/storefront/agent-contexts/*", agentPrincipalMiddleware);
 app.route("/storefront/agent-contexts", storefrontAgentContextRoutes);
 app.route("/storefront/agent-continuations", storefrontAgentContinuationRoutes);
 app.route("/checkout", checkoutRoutes);
+app.route("/checkout/gift-cards", checkoutGiftCardRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
@@ -206,6 +218,7 @@ app.use("/orders/*", cookieOriginGuardMiddleware);
 
 // Register routes (mix of public and protected)
 app.route("/products", productRoutes);
+app.route("/products", productReviewRoutes);
 app.route("/categories", categoryRoutes);
 app.route("/cache", cacheControlRoutes);
 app.route("/orders", orderRoutes);
@@ -239,11 +252,18 @@ app.route("/admin/settings", adminSettingsRoutes);
 app.route("/admin/orders", adminOrdersRoutes);
 app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/products", adminProductsRoutes);
+app.route("/admin/products", adminProductDigitalAssetRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 app.route("/admin/catalog", adminCatalogProjectionRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
 app.route("/admin/agent-access", adminAgentAccessRoutes);
+app.route("/admin/reviews", adminReviewRoutes);
+app.route("/admin/digital-assets", adminDigitalAssetRoutes);
+app.route("/admin/digital-entitlements", adminDigitalEntitlementRoutes);
+app.route("/admin/warranty-policies", adminWarrantyPolicyRoutes);
+app.route("/admin/gift-cards", adminGiftCardRoutes);
+app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);

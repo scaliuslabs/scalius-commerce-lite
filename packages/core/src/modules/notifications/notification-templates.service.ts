@@ -5,7 +5,7 @@ import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { notificationTemplatesDocument } from "../settings/documents";
 import type { MessageLanguage } from "./message-copy";
-import type { OrderNotificationType } from "./notification-types";
+import type { TemplatedNotificationType } from "./notification-types";
 import {
   TEMPLATE_LIMITS,
   defaultNotificationTemplates,
@@ -39,7 +39,7 @@ function checkText(
   path: Array<string | number>,
   value: string,
   max: number,
-  event: OrderNotificationType,
+  event: TemplatedNotificationType,
 ): void {
   if (!value.trim()) {
     issues.push({ path, message: "Enter some text." });
@@ -68,7 +68,7 @@ function checkText(
  */
 export async function saveNotificationTemplate(
   db: Database,
-  input: { event: OrderNotificationType; email?: EmailTemplate; sms?: SmsTemplate },
+  input: { event: TemplatedNotificationType; email?: EmailTemplate; sms?: SmsTemplate },
   options: { expectedRevision: number },
 ): Promise<{ templates: NotificationTemplates; revision: number; language: MessageLanguage }> {
   const { event } = input;

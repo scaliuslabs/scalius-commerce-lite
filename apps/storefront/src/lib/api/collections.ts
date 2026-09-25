@@ -7,13 +7,14 @@ import type {
   Product,
   BuyerPriceRange,
 } from "./types";
-import { normalizeProductFacets, type ProductListOptions } from "./products";
+import { normalizeProductFacets, normalizeRatingFacet, type ProductListOptions } from "./products";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
   getApiV1Collections,
   getApiV1CollectionsById,
   getApiV1CollectionsSitemap,
+  getApiV1CollectionsDirectory,
 } from "@scalius/api-client/sdk";
 
 export interface SitemapCollection {
@@ -61,6 +62,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     pagination?: CollectionWithProducts["pagination"];
     priceRange?: BuyerPriceRange;
     facets?: unknown;
+    ratingFacet?: unknown;
   }>(payload);
   if (
     !candidate?.collection ||
@@ -90,6 +92,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     pagination: candidate.pagination,
     priceRange: candidate.priceRange,
     facets: normalizeProductFacets(candidate.facets),
+    ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
   } as CollectionWithProducts;
 }
 
@@ -114,6 +117,32 @@ export async function getAllCollections(): Promise<Collection[] | null> {
     },
     { ttlSeconds: CACHE_TTL.LONG },
   );
+}
+
+/** One card on `/collections`. */
+export interface CollectionDirectoryEntry {
+  id: string;
+  name: string;
+  canonicalPath: string | null;
+  productCount: number;
+  imageUrl: string | null;
+  imageAlt: string | null;
+}
+
+/**
+ * The `/collections` directory: the collections a buyer can shop, in the
+ * merchant's order, with their product count and a photo. Joins the page's
+ * read batch; `null` when it can't be read.
+ */
+export async function getCollectionDirectory(): Promise<CollectionDirectoryEntry[] | null> {
+  try {
+    const { data } = await getApiV1CollectionsDirectory({ client: getConfiguredSdkClient() });
+    const collections = unwrapData<{ collections: CollectionDirectoryEntry[] }>(data)?.collections;
+    return Array.isArray(collections) ? collections : null;
+  } catch (error: unknown) {
+    console.error("Error fetching the collection directory:", error);
+    return null;
+  }
 }
 
 /**

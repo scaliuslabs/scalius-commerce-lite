@@ -1,0 +1,37 @@
+---
+// Owned by B4 (gift cards): the gift cards the line issued, on the receipt
+// (same facts as gift-card-line-delivery.ts renders on the account order page).
+// Never a code: last 4, value, and where it was sent.
+import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
+import {
+  GIFT_CARD_LINE_COPY,
+  lineGiftCardDestination,
+  lineGiftCardText,
+  lineGiftCardsShowCodeLink,
+  readLineGiftCards,
+} from "./gift-card-line-delivery";
+
+export interface Props {
+  line: OrderLine;
+  context: LineExtrasContext;
+}
+
+const { line, context } = Astro.props;
+const cards = readLineGiftCards(line.extras?.giftCards);
+const showCodeLink = lineGiftCardsShowCodeLink(cards, context);
+---
+{cards.length > 0 && (
+  <div class="mt-2 text-sm" data-line-gift-cards>
+    <ul class="space-y-1">
+      {cards.map((card) => (
+        <li class="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span class="font-medium text-foreground">{lineGiftCardText(card)}</span>
+          <span class="text-muted-foreground">{lineGiftCardDestination(card)}</span>
+        </li>
+      ))}
+    </ul>
+    {showCodeLink && (
+      <a href="/account/gift-cards" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{GIFT_CARD_LINE_COPY.showCode}</a>
+    )}
+  </div>
+)}

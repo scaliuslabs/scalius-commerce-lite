@@ -109,6 +109,20 @@ export function checkoutAddressForMode(
   };
 }
 
+/** The cash payment's name for the path: "Cash on delivery", "Pay at pickup", "Pay on service". */
+export function cashOnDeliveryLabel(
+  mode: CheckoutDeliveryMode,
+  copy: {
+    cashOnDeliveryText: string;
+    orderReceiptPaymentMethodPayAtPickupText: string;
+    orderReceiptPaymentMethodPayOnServiceText: string;
+  },
+): string {
+  if (mode === "pickup") return copy.orderReceiptPaymentMethodPayAtPickupText;
+  if (mode === "none") return copy.orderReceiptPaymentMethodPayOnServiceText;
+  return copy.cashOnDeliveryText;
+}
+
 /** Cash-on-delivery wording for the path: at the door, at the counter, or at the service. */
 export function cashOnDeliveryDescription(
   mode: CheckoutDeliveryMode,

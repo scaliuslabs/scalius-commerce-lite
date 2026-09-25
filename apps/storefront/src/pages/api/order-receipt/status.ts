@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { apiFetch } from "@/lib/api/transport";
 import type { OrderReceipt } from "@/lib/api/types";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-import { getOrderSuccessStateKind } from "@/lib/order-success-state";
+import { getOrderSuccessStateKind, isDigitalLinePreparing } from "@/lib/order-success-state";
 
 const RECEIPT_STATUS_TIMEOUT_MS = 5_000;
 const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -78,6 +78,8 @@ export const GET: APIRoute = async ({ request, url }) => {
       data: {
         state: getOrderSuccessStateKind(order),
         updatedAt: order.updatedAt ?? null,
+        // The receipt checks back until its paid downloads are delivered.
+        downloadsPreparing: (order.items ?? []).some((line) => isDigitalLinePreparing(line, order)),
       },
     }, 200);
   } catch (error) {

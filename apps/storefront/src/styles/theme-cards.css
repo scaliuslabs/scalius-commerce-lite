@@ -1,10 +1,16 @@
 /*
  * Product cards (Theme -> Layout -> Card): surfaces, the photo box, the
- * placeholder, the anatomy's type and spacing, actions and list rows. Only
+ * placeholder, each variant's own drawing, actions and list rows. Only
  * pages that render cards load this sheet (ProductCard.astro imports it), so
  * the product page's critical CSS stays small. Unlayered, like
  * theme-foundation.css: it wins over utilities by specificity and does not
  * depend on which sheet loads first.
+ *
+ * The standard card follows the theme's tokens (radius, surface, photo ratio
+ * and fit) and stays pixel-identical. Every other card carries its own look
+ * as custom properties on its root (anatomy.astro: --pc-ratio, --pc-fit,
+ * --pc-radius, --pc-title-*, --pc-price-*, from STOREFRONT_CARD_LOOKS) and
+ * is drawn below per `data-card-variant`, after its reference site.
  */
 
 /* Product cards: the surface language per Style. Card corners follow the
@@ -124,115 +130,870 @@
   outline-offset: -3px;
 }
 
-/* The hover photo exists only where hover exists. */
+/* The hover photo: created by CardMedia's script on intent, appended only
+   once decoded, then faded in while the pointer is on the card. */
+.site-root .product-card-hover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .site-root .product-card-hover-image {
-    display: block;
+  .site-root [data-theme-component="product-card"]:hover .product-card-media[data-hover-ready] > .product-card-hover-image {
+    opacity: 1;
   }
 }
 
-/* Card anatomy (every variant but `standard`): density sets the type sizes
-   and spacing, the type scale sets the price weight. Phones keep 14px
-   titles (Bangla legibility) and 44px actions. */
+/* ─── Every card but standard: the card's own look ─────────────────────── */
+
 .site-root {
-  --card-pad: 0.75rem;
-  --card-gap: 0.375rem;
-  --card-title-size: 0.875rem;
-  --card-price-size: 1rem;
-  --card-meta-size: 0.8125rem;
-  --card-price-weight: 800;
   --card-row-media: 7.5rem;
 }
 
-.site-root[data-theme-density="dense"] {
-  --card-pad: 0.5rem;
-  --card-gap: 0.25rem;
-}
-
-.site-root[data-theme-density="comfortable"] {
-  --card-pad: 1rem;
-  --card-gap: 0.5rem;
-  --card-price-size: 1.0625rem;
+/* Specificity (0,3,0), after the template's surface rules: the card's own
+   radius and tile win over a soft-radius template; a flat look clears the
+   tile again just below, so flat cards sit on the page like their
+   references (Dawn, Aarong, Target, Amazon) and never on a card-coloured
+   block. */
+.site-root [data-theme-component="product-card"].product-card {
+  --pc-pad-x: 0.75rem;
+  --pc-pad-y: 0.75rem;
+  --pc-gap: 0.375rem;
+  --pc-meta: 0.8125rem;
+  --pc-title: var(--pc-title-m, 0.875rem);
+  --pc-price: var(--pc-price-m, 1rem);
+  border-radius: var(--pc-radius, 0);
+  background: var(--card);
+  color: var(--foreground);
+  letter-spacing: 0;
 }
 
 @media (min-width: 40rem) {
-  .site-root {
-    --card-pad: 1rem;
-    --card-title-size: 0.9375rem;
-    --card-price-size: 1.125rem;
-  }
-
-  .site-root[data-theme-density="dense"] {
-    --card-pad: 0.625rem;
-    --card-title-size: 0.875rem;
-    --card-price-size: 1.0625rem;
-  }
-
-  .site-root[data-theme-density="comfortable"] {
-    --card-pad: 1.25rem;
-    --card-title-size: 1rem;
-    --card-price-size: 1.25rem;
-  }
-
-  .site-root[data-theme-density="airy"] {
-    --card-pad: 0.75rem;
-    --card-price-size: 1rem;
+  .site-root [data-theme-component="product-card"].product-card {
+    --pc-title: var(--pc-title-d, 0.9375rem);
+    --pc-price: var(--pc-price-d, 1.125rem);
   }
 }
 
-.site-root[data-theme-type-scale="flat"] {
-  --card-price-weight: 600;
+/* A flat card's radius rounds its photo, not the card, and it has no tile. */
+.site-root[data-theme-card-style="flat"] .product-card {
+  border-radius: 0;
+  background: transparent;
 }
 
-.site-root[data-theme-type-scale="display"] {
-  --card-price-weight: 400;
+.site-root .product-card .product-card-media.product-card-well {
+  aspect-ratio: var(--pc-ratio, 1);
+  background: var(--card);
 }
 
-.site-root .product-card-stack {
-  gap: var(--card-gap);
-  padding: var(--card-pad);
+.site-root[data-theme-card-style="flat"] .product-card .product-card-well {
+  border-radius: var(--pc-radius, 0);
 }
 
-.site-root .product-card-name {
-  font-size: var(--card-title-size);
+.site-root .product-card .product-card-photo {
+  object-fit: var(--pc-fit, cover);
+  padding: 0;
+}
+
+.site-root .product-card[data-card-fit="contain"] .product-card-photo {
+  padding: var(--pc-inset);
+}
+
+.site-root .product-card .product-card-stack {
+  gap: var(--pc-gap);
+  padding: var(--pc-pad-y) var(--pc-pad-x);
+}
+
+.site-root[data-theme-card-style="flat"] .product-card .product-card-stack {
+  padding-inline: 0;
+  padding-bottom: 0;
+}
+
+.site-root .product-card .product-card-name {
+  font-size: var(--pc-title);
+  font-weight: var(--pc-title-w, 500);
   line-height: 1.4;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 
-.site-root .product-card-price {
-  font-size: var(--card-price-size);
-  font-weight: var(--card-price-weight);
+.site-root .product-card .product-card-price {
+  font-size: var(--pc-price);
+  font-weight: var(--pc-price-w, 700);
   line-height: 1.2;
-  letter-spacing: -0.01em;
 }
 
-.site-root .product-card-meta {
-  font-size: var(--card-meta-size);
+.site-root .product-card .product-card-price-row {
+  column-gap: 0.5rem;
+  row-gap: 0.125rem;
+}
+
+.site-root .product-card .product-card-meta {
+  font-size: var(--pc-meta);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-/* Card actions: the button shape token; 44px touch targets, the density's
-   control height for a mouse. */
-.site-root .product-card-action {
+.site-root .product-card .product-card-push {
+  margin-top: auto;
+}
+
+/* Actions: 44px touch targets on phones, the variant's height for a mouse. */
+.site-root .product-card .product-card-action {
   min-height: 2.75rem;
   border-radius: var(--theme-button-radius, var(--radius));
 }
 
-.site-root .product-card-round-action {
-  width: 2.75rem;
-  height: 2.75rem;
+.site-root .product-card .pc-action-solid {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.site-root .product-card .pc-action-outline {
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+.site-root .product-card .pc-action-hint {
+  border: 1px solid var(--border);
+  color: var(--foreground);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .site-root .product-card-action {
-    min-height: var(--theme-control-height, 2.75rem);
+  .site-root .product-card .product-card-action {
+    min-height: var(--pc-action-h, var(--theme-control-height, 2.75rem));
+  }
+
+  .site-root .product-card a.pc-action-solid:hover {
+    background: color-mix(in oklab, var(--primary) 88%, var(--foreground));
+  }
+
+  .site-root .product-card a.pc-action-outline:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
 }
 
-/* List rows (ProductGrid `phoneLayout="list-row"`): below the tablet step,
-   one card per row with the photo beside the text (Amazon, Target, Star
-   Tech phone listings). Every card variant keeps its own anatomy. */
+.site-root .product-card .product-card-round-action {
+  width: 2.75rem;
+  height: 2.75rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* The discount mark beside the price: words in the sale colour, a tinted
+   chip (Apple Gadgets), or Amazon's red deal box on its own line. */
+.site-root .product-card .pc-discount-text {
+  color: var(--destructive);
+}
+
+.site-root .product-card .pc-discount-chip {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.site-root .product-card .pc-deal-row {
+  flex-basis: 100%;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.site-root .product-card .pc-discount-deal {
+  display: inline-block;
+  padding: 0.25rem 0.375rem;
+  border-radius: 2px;
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  font-size: 0.75rem;
+  line-height: 1.1;
+}
+
+/* Photo marks: a square tag and a flag flush with the photo's edge. */
+.site-root .product-card .pc-badge-tag {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.site-root .product-card .pc-badge-flag {
+  border-radius: 0 2rem 2rem 0;
+  box-shadow: none;
+}
+
+/* Target's "reg ৳1,200" under the price, not struck. */
+.site-root .product-card .pc-price-reg {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+}
+
+/* Five stars, filled to the average (the stars are drawn, the numbers are
+   read: the screen-reader sentence carries the rating). */
+.site-root .product-card .pc-rating-stars {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  --pc-star: var(--foreground);
+}
+
+.site-root .product-card .pc-rating-average {
+  display: none;
+}
+
+.site-root .product-card .pc-stars {
+  position: relative;
+  display: inline-block;
+  font-size: 0.875rem;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.site-root .product-card .pc-stars::before {
+  content: "★★★★★";
+  color: color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+
+.site-root .product-card .pc-stars::after {
+  content: "★★★★★";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--pc-stars, 0%);
+  overflow: hidden;
+  color: var(--pc-star);
+}
+
+.site-root .product-card .pc-rating-count {
+  color: var(--muted-foreground);
+}
+
+/* Amazon's small Add to cart pill at the start of the row. */
+.site-root .product-card .pc-action-compact {
+  width: auto;
+  align-self: flex-start;
+  padding-inline: 1rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+}
+
+.site-root .product-card .pc-savings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.site-root .product-card .pc-specs {
+  list-style: disc;
+  padding-inline-start: 1rem;
+}
+
+.site-root .product-card .pc-specs > li + li {
+  margin-top: 0.25rem;
+}
+
+.site-root .product-card .pc-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.site-root .product-card .pc-swatch {
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.site-root .product-card .pc-swatch:first-child {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+.site-root .product-card .pc-compare {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  min-height: 2.25rem;
+}
+
+.site-root .product-card .pc-compare[aria-pressed="true"] {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ─── boutique: Dawn ───────────────────────────────────────────────────────
+   Square lifestyle photo on a grey well, no chrome; title 13/400 with
+   Dawn's tracking, price 16/400; "Sale" / "Sold out" pills at the photo's
+   bottom-left. */
+.site-root .product-card[data-card-variant="boutique"] {
+  --pc-pad-y: 0.8125rem;
+  --pc-gap: 0.3125rem;
+}
+
+.site-root .product-card[data-card-variant="boutique"] .product-card-well {
+  background: var(--muted);
+}
+
+.site-root .product-card[data-card-variant="boutique"] .product-card-name {
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.site-root .product-card[data-card-variant="boutique"] .product-card-price,
+.site-root .product-card[data-card-variant="boutique"] .pc-price-regular {
+  letter-spacing: 0.06em;
+}
+
+.site-root .product-card[data-card-variant="boutique"] .pc-price-regular {
+  font-size: 0.875rem;
+}
+
+.site-root .product-card[data-card-variant="boutique"] .product-card-badges {
+  top: auto;
+  bottom: 0.75rem;
+  left: 0.75rem;
+}
+
+.site-root .product-card[data-card-variant="boutique"] .product-card-badge {
+  border: 0;
+  border-radius: 2.5rem;
+  padding: 0.3125rem 0.8125rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  box-shadow: none;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.site-root .product-card[data-card-variant="boutique"] [data-card-sold-out] {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--foreground);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card[data-card-variant="boutique"]:hover .product-card-link {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+
+/* ─── portrait: Aarong ─────────────────────────────────────────────────────
+   Tall 3:4 photo, no chrome; bold 16/700 name in two lines, price 16/400. */
+.site-root .product-card[data-card-variant="portrait"] {
+  --pc-pad-y: 1rem;
+  --pc-gap: 0.5rem;
+}
+
+.site-root .product-card[data-card-variant="portrait"] .product-card-well {
+  background: var(--muted);
+}
+
+.site-root .product-card[data-card-variant="portrait"] .product-card-name {
+  line-height: 1.5;
+}
+
+.site-root .product-card[data-card-variant="portrait"] .product-card-price {
+  letter-spacing: 0.02em;
+}
+
+.site-root .product-card[data-card-variant="portrait"] .product-card-badges {
+  top: 0;
+  left: 0;
+}
+
+.site-root .product-card[data-card-variant="portrait"] .product-card-badge {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.25rem 0.625rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ─── fashion-value: Fabrilife ─────────────────────────────────────────────
+   A white tile with a hairline (its look's surface); a red "-40%" tag on the
+   photo; the title, a "Save ৳600" chip with its tag icon and the 20/700
+   price with the struck price and "-40%" at the left, the round dark cart at
+   the right. */
+.site-root .product-card[data-card-variant="fashion-value"] {
+  --pc-pad-x: 0.625rem;
+  --pc-pad-y: 0.625rem;
+  --pc-gap: 0.375rem;
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .product-card-well {
+  background: var(--muted);
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .product-card-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title title" "savings action" "price action";
+  align-content: start;
+  padding: var(--pc-pad-y) var(--pc-pad-x);
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .pc-title { grid-area: title; }
+.site-root .product-card[data-card-variant="fashion-value"] .pc-savings { grid-area: savings; font-size: 0.6875rem; }
+.site-root .product-card[data-card-variant="fashion-value"] .pc-price { grid-area: price; margin-top: 0; align-self: end; }
+.site-root .product-card[data-card-variant="fashion-value"] .pc-round-body { grid-area: action; align-self: center; }
+
+.site-root .product-card[data-card-variant="fashion-value"] .pc-savings-chip {
+  padding: 0.125rem 0.4375rem;
+  border-radius: 3px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .pc-savings-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .pc-price-regular,
+.site-root .product-card[data-card-variant="fashion-value"] .pc-discount {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .pc-price {
+  column-gap: 0.375rem;
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .product-card-round-action {
+  width: 3.125rem;
+  height: 3.125rem;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .product-card-badges {
+  top: 0.625rem;
+  left: 0.625rem;
+}
+
+.site-root .product-card[data-card-variant="fashion-value"] .product-card-badge {
+  border-radius: 4px;
+  padding: 0.1875rem 0.5rem;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+/* ─── spec: Star Tech ──────────────────────────────────────────────────────
+   A white tile with a hairline (its look's surface) and its photo inset,
+   the 14/600 title, four spec bullets, a rule, the bold 17/600 price always
+   in the sale colour (priceTone) centred, a full-width tinted "Buy now" bar
+   with a cart and "Add to Compare" under it. */
+.site-root .product-card[data-card-variant="spec"] {
+  --pc-pad-x: 1.25rem;
+  --pc-pad-y: 1rem;
+  --pc-gap: 0.75rem;
+  --pc-action-h: 2.5rem;
+  background: var(--card);
+}
+
+/* The photo sits inset on white over a hairline that spans the tile (204px of 254). */
+.site-root .product-card[data-card-variant="spec"] .product-card-well {
+  border-bottom: 1px solid var(--border);
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-title {
+  padding-bottom: 0.25rem;
+  line-height: 1.45;
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-specs {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: color-mix(in oklab, var(--foreground) 62%, var(--card));
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-specs > li + li {
+  margin-top: 0.375rem;
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-price {
+  justify-content: center;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-price-regular {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-emi {
+  text-align: center;
+  font-size: 0.75rem;
+}
+
+.site-root .product-card[data-card-variant="spec"] .product-card-action {
+  border-radius: 0.3125rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.site-root .product-card[data-card-variant="spec"] .pc-action-solid {
+  background: color-mix(in oklab, var(--primary) 9%, var(--card));
+  color: var(--primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card[data-card-variant="spec"] a.pc-action-solid:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+/* "Save: 5,400৳" flush with the tile's left edge, rounded on the right. */
+.site-root .product-card[data-card-variant="spec"] .product-card-badges {
+  top: 0.75rem;
+  left: 0;
+}
+
+.site-root .product-card[data-card-variant="spec"] .product-card-badge {
+  border-radius: 0 2rem 2rem 0;
+  box-shadow: none;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+
+/* ─── tech-rounded: Apple Gadgets ──────────────────────────────────────────
+   A 20px raised card with a hairline; a 1.31 landscape photo contained on
+   white; title and price 18/600, a "৳500 OFF" chip, an outline pill. */
+.site-root .product-card[data-card-variant="tech-rounded"] {
+  --pc-pad-x: 1.25rem;
+  --pc-pad-y: 0.75rem;
+  --pc-gap: 0.375rem;
+  --pc-action-h: 2.25rem;
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+.site-root .product-card[data-card-variant="tech-rounded"] .product-card-name {
+  line-height: 1.35;
+}
+
+.site-root .product-card[data-card-variant="tech-rounded"] .pc-price-regular {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.site-root .product-card[data-card-variant="tech-rounded"] .pc-discount-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.125rem 0.625rem;
+}
+
+.site-root .product-card[data-card-variant="tech-rounded"] .product-card-action {
+  border-radius: 999px;
+  margin-top: 0.25rem;
+}
+
+/* ─── retail: Target ───────────────────────────────────────────────────────
+   No card chrome; the photo rounded 8px on grey; price first 22/700 with
+   "Sale" in red, the brand bold, title 14/400, the delivery line, a
+   full-width pill. */
+.site-root .product-card[data-card-variant="retail"] {
+  --pc-pad-y: 0.75rem;
+  --pc-gap: 0.25rem;
+  --pc-action-h: 2.5rem;
+}
+
+.site-root .product-card[data-card-variant="retail"] .product-card-well {
+  background: var(--muted);
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-brand {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.site-root .product-card[data-card-variant="retail"] .product-card-name {
+  line-height: 1.43;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-discount {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-swatches {
+  gap: 0.375rem;
+  margin-bottom: 0.25rem;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-swatch {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-swatch:first-child {
+  outline-width: 1px;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-stars {
+  font-size: 0.8125rem;
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-delivery {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.site-root .product-card[data-card-variant="retail"] .product-card-action {
+  border-radius: 999px;
+  margin-top: 0.75rem;
+  font-weight: 700;
+}
+
+/* ─── marketplace: Daraz ───────────────────────────────────────────────────
+   A white 2px tile (a shadow on hover); the photo edge to edge; title
+   13/400 in two lines; price 18/400 in the sale colour on its own line,
+   then the struck price and "-15%"; "129 sold in 30 days". */
+.site-root .product-card[data-card-variant="marketplace"] {
+  --pc-pad-x: 0.5rem;
+  --pc-pad-y: 0.5rem;
+  --pc-gap: 0.25rem;
+  --pc-meta: 0.75rem;
+  border-radius: 2px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+.site-root[data-theme-card-style="flat"] .product-card[data-card-variant="marketplace"] .product-card-stack {
+  padding: var(--pc-pad-y) var(--pc-pad-x) 0.75rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card[data-card-variant="marketplace"]:hover {
+    box-shadow: 0 2px 10px color-mix(in oklab, var(--foreground) 16%, transparent);
+  }
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .product-card-name {
+  line-height: 1.385;
+  min-height: 2.77em;
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .product-card-price {
+  flex-basis: 100%;
+  line-height: 1.3;
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .pc-discount {
+  font-weight: 400;
+  color: var(--foreground);
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .pc-price-regular,
+.site-root .product-card[data-card-variant="marketplace"] .pc-discount {
+  font-size: 0.75rem;
+}
+
+/* "129 sold in 30 days" and the stars share a line (Daraz). */
+.site-root .product-card[data-card-variant="marketplace"] .product-card-stack {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .product-card-stack > * {
+  flex: 1 1 100%;
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .product-card-stack > .pc-sold,
+.site-root .product-card[data-card-variant="marketplace"] .product-card-stack > .pc-rating {
+  flex: 0 1 auto;
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .pc-rating-stars {
+  --pc-star: var(--primary);
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .pc-stars {
+  font-size: 0.75rem;
+}
+
+/* ─── quick-add: Chaldal ───────────────────────────────────────────────────
+   A plain tile; the photo with a round 56px outlined "+" at its bottom
+   right; price first 18/700 (red on sale), the name 16/400, then the pack
+   size at the left and the delivery chip at the right. */
+.site-root .product-card[data-card-variant="quick-add"] {
+  --pc-pad-y: 0.5rem;
+  --pc-gap: 0.25rem;
+  --pc-meta: 0.75rem;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-stack {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-stack > * {
+  flex: 1 1 100%;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-stack > .pc-pack {
+  flex: 1 1 auto;
+  margin-top: auto;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-stack > .pc-delivery {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-stack > .pc-price {
+  margin-top: 0;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .pc-delivery-text {
+  display: inline-block;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .pc-price-regular {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-badges {
+  top: 0.5rem;
+  left: 0.5rem;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-badge {
+  padding: 0.125rem 0.375rem;
+  font-size: 0.6875rem;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-name {
+  line-height: 1.25;
+}
+
+.site-root .product-card[data-card-variant="quick-add"] .product-card-round-action {
+  right: 0.5rem;
+  bottom: 0.5rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card[data-card-variant="quick-add"] .product-card-round-action:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+/* ─── detailed: Amazon ─────────────────────────────────────────────────────
+   The photo contained on a grey well; colour dots; title 16/400 in three
+   lines; "Options: 4 sizes"; "1K+ bought in past month"; the superscript
+   price (28px whole units) with the struck list price; the delivery line. */
+.site-root .product-card[data-card-variant="detailed"] {
+  --pc-pad-x: 0.75rem;
+  --pc-pad-y: 0.75rem;
+  --pc-gap: 0.375rem;
+  --pc-meta: 0.875rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .product-card-well {
+  background: var(--muted);
+}
+
+.site-root[data-theme-card-style="flat"] .product-card[data-card-variant="detailed"] .product-card-stack {
+  padding: var(--pc-pad-y) var(--pc-pad-x) 1rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .product-card-name {
+  line-height: 1.5;
+}
+
+.site-root .product-card[data-card-variant="detailed"] {
+  --pc-action-h: 2rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-options-count,
+.site-root .product-card[data-card-variant="detailed"] .pc-rating-count {
+  color: var(--primary);
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-rating-stars {
+  --pc-star: var(--primary);
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-rating-average {
+  display: inline;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price {
+  align-items: flex-end;
+  column-gap: 0.375rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-super > span[aria-hidden] {
+  display: inline-flex;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-whole {
+  font-size: var(--pc-price);
+  line-height: 1;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-symbol,
+.site-root .product-card[data-card-variant="detailed"] .pc-price-fraction,
+.site-root .product-card[data-card-variant="detailed"] .pc-price-from {
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  margin-top: 0.125rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-symbol {
+  margin-inline-end: 0.0625rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-from {
+  margin-inline-end: 0.25rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-price-regular {
+  font-size: 0.8125rem;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-delivery strong {
+  text-transform: uppercase;
+}
+
+/* ─── List rows ────────────────────────────────────────────────────────────
+   ProductGrid `phoneLayout="list-row"`: below the tablet step, one card per
+   row with the photo beside the text (Amazon, Target, Star Tech phone
+   listings). Every card variant keeps its own anatomy. */
 @container product-grid (width < 36rem) {
   .product-grid[data-phone-layout="list-row"] {
     grid-template-columns: minmax(0, 1fr);
@@ -248,18 +1009,22 @@
     min-height: 100%;
     padding-inline: 0.75rem;
   }
+
+  .site-root .product-grid[data-phone-layout="list-row"] > .product-card[data-card-variant="spec"] .product-card-well {
+    border-bottom: 0;
+  }
 }
 
-/* Photos: a restrained 1.03 zoom on hover (portrait cards cross-fade to the
-   second photo instead). */
+/* Photos: a restrained 1.03 zoom on hover; a card with a second photo
+   cross-fades to it instead. */
 .site-root .product-card-media > img {
   transition:
     transform 200ms var(--theme-ease),
-    opacity 200ms var(--theme-ease);
+    opacity 120ms linear;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .site-root [data-theme-component="product-card"]:hover .product-card-media > img:first-child {
+  .site-root [data-theme-component="product-card"]:hover .product-card-media:not([data-hover-src]) > img:first-child {
     transform: scale(1.03);
   }
 }

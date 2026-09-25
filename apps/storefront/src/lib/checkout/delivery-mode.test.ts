@@ -6,6 +6,7 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout
 import {
   applyCheckoutDeliveryMode,
   cashOnDeliveryDescription,
+  cashOnDeliveryLabel,
   checkoutAddressForMode,
   CHECKOUT_REQUIRED_FIELDS,
   missingCheckoutFields,
@@ -69,6 +70,10 @@ describe("checkout paths (Wave A §2.7)", () => {
     expect(cashOnDeliveryDescription("delivery", copy)).toBe(copy.payOnDeliveryText);
     expect(cashOnDeliveryDescription("pickup", copy)).toBe(copy.payAtPickupText);
     expect(cashOnDeliveryDescription("none", copy)).toBe(copy.payAtServiceText);
+    // Its name: only a delivery is "Cash on delivery".
+    expect(cashOnDeliveryLabel("delivery", copy)).toBe("Cash on delivery");
+    expect(cashOnDeliveryLabel("pickup", copy)).toBe("Pay at pickup");
+    expect(cashOnDeliveryLabel("none", copy)).toBe("Pay on service");
   });
 });
 

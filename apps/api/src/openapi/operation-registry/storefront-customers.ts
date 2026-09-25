@@ -2,6 +2,12 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const STOREFRONT_CUSTOMER_OPERATIONS = {
+  "storefront.customer_auth_account_summary.get_account_summary": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason:
+      "Customer-cookie counts that only decide which hosted account tabs show; agents read the underlying records through their own reviewed operations.",
+  },
   "storefront.customer_auth_logout.logout": {
     exposure: "excluded",
     principals: ["customer"],

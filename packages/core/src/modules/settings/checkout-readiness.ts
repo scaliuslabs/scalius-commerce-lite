@@ -10,7 +10,13 @@ import {
     type Readiness,
     type ReadinessIssue,
 } from "@scalius/shared/readiness";
-import type { CustomerAuthOtpChannel, CustomerAuthPolicyConfig } from "@scalius/shared/customer-auth-policy";
+import {
+    CUSTOMER_AUTH_OTP_CHANNELS,
+    offeredChannels,
+    type ChannelReadiness,
+    type CustomerAuthOtpChannel,
+    type CustomerIdentitySettings,
+} from "@scalius/shared/customer-auth-policy";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
@@ -186,40 +192,13 @@ export async function getCustomerSignInReadiness(
         return customerSignInReadiness(customerSignInRequired, false);
     }
 
-    const { policy } = (await customerAuthDocument.fromRows(rows)).value;
-
-    for (const channel of policy.otpChannels) {
-        try {
-            if (channel === "email") {
-                const emailReadiness = await getEmailProviderReadiness({
-                    db,
-                    encryptionKey: options.encryptionKey,
-                    env: options.runtimeEnv,
-                });
-                if (isReady(emailReadiness)) {
-                    return customerSignInReadiness(customerSignInRequired, true);
-                }
-            } else if (channel === "sms") {
-                const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
-                if (isReady(smsReadiness)) {
-                    return customerSignInReadiness(customerSignInRequired, true);
-                }
-            } else {
-                const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
-                if (whatsapp.accessToken && whatsapp.phoneNumberId && whatsapp.authTemplateName) {
-                    return customerSignInReadiness(customerSignInRequired, true);
-                }
-            }
-        } catch {
-            // Provider reads fail closed. The caller receives only the safe readiness issue.
-        }
-    }
-
-    return customerSignInReadiness(customerSignInRequired, false);
+    const identity = (await customerAuthDocument.fromRows(rows)).value;
+    const ready = await getCustomerChannelReadiness(db, options, identity.channels);
+    return customerSignInReadiness(customerSignInRequired, offeredChannels(identity, ready).length > 0);
 }
 
-/** Whether one sign-in code channel can actually send right now. */
-async function isCustomerAuthChannelReady(
+/** Whether one code channel's provider can send right now. Provider reads fail closed. */
+export async function isCustomerAuthChannelReady(
     db: Database,
     channel: CustomerAuthOtpChannel,
     options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
@@ -231,30 +210,34 @@ async function isCustomerAuthChannelReady(
         }
         if (channel === "sms") return isReady(await getSmsProviderReadiness(db, options.encryptionKey));
         const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
-        return Boolean(whatsapp.accessToken && whatsapp.phoneNumberId && whatsapp.authTemplateName);
+        return Boolean(whatsapp.accessToken && whatsapp.phoneNumberId);
     } catch {
         return false;
     }
 }
 
-/**
- * The sign-in channels buyers are offered: the store's chosen ones that can
- * send, plus phone sign-in (SMS, then WhatsApp) whenever those codes can be
- * sent. Nothing that can't deliver a code is offered; when nothing can, the
- * store's own choice stays so the dialog can say codes are unavailable.
- */
-export async function getOfferedCustomerAuthPolicy(
+/** Readiness of each listed channel (all three by default). */
+export async function getCustomerChannelReadiness(
     db: Database,
-    policy: CustomerAuthPolicyConfig,
     options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
-): Promise<CustomerAuthPolicyConfig> {
-    const candidates = [...new Set<CustomerAuthOtpChannel>([...policy.otpChannels, "sms", "whatsapp"])];
-    const ready = await Promise.all(candidates.map((channel) => isCustomerAuthChannelReady(db, channel, options)));
-    const otpChannels = candidates.filter((_, index) => ready[index]);
-    if (otpChannels.length === 0) return policy;
-    return {
-        ...policy,
-        otpChannels,
-        defaultOtpChannel: otpChannels.includes(policy.defaultOtpChannel) ? policy.defaultOtpChannel : otpChannels[0]!,
-    };
+    channels: readonly CustomerAuthOtpChannel[] = CUSTOMER_AUTH_OTP_CHANNELS,
+): Promise<ChannelReadiness> {
+    const ready = await Promise.all(channels.map((channel) => isCustomerAuthChannelReady(db, channel, options)));
+    const result: ChannelReadiness = { email: false, sms: false, whatsapp: false };
+    channels.forEach((channel, index) => { result[channel] = ready[index]!; });
+    return result;
+}
+
+/**
+ * The identity settings buyers see: the merchant's fields, and only the
+ * chosen channels that can send right now (possibly none: then sign-in says
+ * codes are unavailable). A channel the merchant didn't choose is never added.
+ */
+export async function getOfferedCustomerIdentity(
+    db: Database,
+    settings: CustomerIdentitySettings,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+): Promise<CustomerIdentitySettings> {
+    const ready = await getCustomerChannelReadiness(db, options, settings.channels);
+    return { ...settings, channels: offeredChannels(settings, ready) };
 }

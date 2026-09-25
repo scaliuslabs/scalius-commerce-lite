@@ -96,6 +96,25 @@ describe("admin product mutation OpenAPI responses", () => {
         expect(update).toContain('"affectedSkus"');
     });
 
+    it("accepts digital kinds, the gift-card flag and a warranty policy (Wave B)", () => {
+        const spec = buildAdminProductsSpec();
+        const create = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.post);
+        const update = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}"]?.put);
+        const detail = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}"]?.get);
+        const variantCreate = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}/variants"]?.post);
+        const matrix = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}/options/matrix"]?.put);
+
+        for (const body of [create, update]) {
+            expect(body).toContain('"isGiftCard":{"type":"boolean"');
+            expect(body).toContain('"warrantyPolicyId":{"type":"string","nullable":true');
+            expect(body).toContain('"enum":["physical","digital","service"]');
+        }
+        expect(variantCreate).toContain('"enum":["physical","digital","service"]');
+        expect(matrix).toContain('"enum":["physical","digital","service"]');
+        expect(detail).toContain('"isGiftCard":{"type":"boolean"}');
+        expect(detail).toContain('"warrantyPolicyId":{"type":"string","nullable":true}');
+    });
+
     it("uses mediaCount rather than the removed imageCount list field", () => {
         const spec = buildAdminProductsSpec();
         const list = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.get);

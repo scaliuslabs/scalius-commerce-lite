@@ -216,9 +216,37 @@ describe("storefront product API helpers", () => {
       data: [],
       pagination,
       facets: [],
+      ratingFacet: [],
       priceRange: undefined,
       correctedQuery: null,
     });
+  });
+
+  it("keeps the listing's rating facet rows, highest first, and drops malformed ones", async () => {
+    const pagination = { page: 1, limit: 20, total: 2, totalPages: 1 };
+    mocks.getApiV1Products.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          products: [],
+          pagination,
+          ratingFacet: [
+            { min: 2, count: 9 },
+            { min: 4, count: 3 },
+            { min: 5, count: 1 },
+            { min: 3, count: -1 },
+            { min: "4", count: 2 },
+          ],
+        },
+      },
+    });
+
+    await expect(getAllProducts({ minRating: 4, sort: "rating" })).resolves.toMatchObject({
+      ratingFacet: [{ min: 4, count: 3 }, { min: 2, count: 9 }],
+    });
+    expect(mocks.getApiV1Products).toHaveBeenCalledWith(expect.objectContaining({
+      query: expect.objectContaining({ minRating: 4, sort: "rating" }),
+    }));
   });
 
   it("uses the fresh category projection cache namespace", async () => {

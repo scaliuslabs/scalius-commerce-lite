@@ -350,10 +350,48 @@ describe("route permissions", () => {
     expect(allowed([PERMISSIONS.ORDERS_VIEW], "/api/v1/admin/settings/delivery-providers")).toBe(false);
   });
 
+  it("lets any signed-in staff member read and save their own keyboard shortcuts", () => {
+    expect(getRoutePermission("/api/v1/admin/auth/shortcuts", "GET")).toEqual({ allowAnyAdmin: true });
+    expect(getRoutePermission("/api/v1/admin/auth/shortcuts", "PUT")).toEqual({ allowAnyAdmin: true });
+    expect(allowed([PERMISSIONS.ORDERS_VIEW], "/api/v1/admin/auth/shortcuts", "PUT")).toBe(true);
+    expect(allowed([], "/api/v1/admin/auth/shortcuts", "PUT")).toBe(false);
+  });
+
   it("gates removing staff behind staff management", () => {
     expect(allowed([PERMISSIONS.TEAM_MANAGE], "/api/v1/admin/auth/users/user_2/remove", "POST")).toBe(true);
     expect(allowed([PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES], "/api/v1/admin/auth/users/user_2/remove", "POST"))
       .toBe(false);
+  });
+
+  it("keeps review moderation and gift-card money behind their own permissions", () => {
+    expect(allowed([PERMISSIONS.REVIEWS_VIEW], "/api/v1/admin/reviews")).toBe(true);
+    expect(allowed([PERMISSIONS.REVIEWS_VIEW], "/api/v1/admin/reviews/moderate", "POST")).toBe(false);
+    expect(allowed([PERMISSIONS.REVIEWS_MODERATE], "/api/v1/admin/reviews/moderate", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.REVIEWS_MODERATE], "/api/v1/admin/reviews/rev_1/conversation", "POST")).toBe(false);
+    expect(allowed(
+      [PERMISSIONS.REVIEWS_MODERATE, PERMISSIONS.CONVERSATIONS_REPLY],
+      "/api/v1/admin/reviews/rev_1/conversation",
+      "POST",
+    )).toBe(true);
+
+    expect(allowed([PERMISSIONS.GIFT_CARDS_VIEW], "/api/v1/admin/gift-cards/gc_1")).toBe(true);
+    expect(allowed([PERMISSIONS.GIFT_CARDS_VIEW], "/api/v1/admin/gift-cards", "POST")).toBe(false);
+    expect(allowed([PERMISSIONS.ORDERS_EDIT, PERMISSIONS.ORDERS_REFUND], "/api/v1/admin/gift-cards/gc_1/adjust", "POST"))
+      .toBe(false);
+    expect(allowed([PERMISSIONS.GIFT_CARDS_MANAGE], "/api/v1/admin/gift-cards/gc_1/adjust", "POST")).toBe(true);
+
+    expect(allowed([PERMISSIONS.PRODUCTS_EDIT], "/api/v1/admin/digital-assets/dga_1/uploads/up_1/parts/1", "PUT"))
+      .toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_EDIT], "/api/v1/admin/digital-entitlements/de_1/reset", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_EDIT], "/api/v1/admin/orders/ord_1/digital/resend", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_EDIT], "/api/v1/admin/orders/ord_1/warranty-claims", "POST")).toBe(false);
+    expect(allowed(
+      [PERMISSIONS.ORDERS_EDIT, PERMISSIONS.CONVERSATIONS_REPLY],
+      "/api/v1/admin/orders/ord_1/warranty-claims",
+      "POST",
+    )).toBe(true);
+    expect(allowed([PERMISSIONS.PRODUCTS_VIEW], "/api/v1/admin/warranty-policies")).toBe(true);
+    expect(allowed([PERMISSIONS.PRODUCTS_VIEW], "/api/v1/admin/warranty-policies", "POST")).toBe(false);
   });
 
   it("guards only the versioned admin API", () => {
@@ -381,6 +419,14 @@ describe("page permissions", () => {
     expect(can([PERMISSIONS.TEAM_MANAGE], "/admin/settings/users/user_2")).toBe(true);
     expect(can([PERMISSIONS.TEAM_VIEW], "/admin/settings/users/user_2")).toBe(false);
     expect(can([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW], "/admin/settings/shipping/areas")).toBe(true);
+  });
+
+  it("gates the review, gift-card and warranty-policy pages", () => {
+    expect(can([PERMISSIONS.REVIEWS_VIEW], "/admin/reviews")).toBe(true);
+    expect(can([PERMISSIONS.PRODUCTS_VIEW], "/admin/reviews")).toBe(false);
+    expect(can([PERMISSIONS.GIFT_CARDS_VIEW], "/admin/gift-cards/gc_1")).toBe(true);
+    expect(can([PERMISSIONS.ORDERS_VIEW], "/admin/gift-cards")).toBe(false);
+    expect(can([PERMISSIONS.PRODUCTS_EDIT], "/admin/settings/warranty-policies")).toBe(true);
   });
 });
 

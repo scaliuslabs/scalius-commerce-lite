@@ -58,6 +58,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/products/new": { permission: PERMISSIONS.PRODUCTS_CREATE },
 
+  // Reviews and gift cards (Products menu)
+  "/admin/reviews": { permission: PERMISSIONS.REVIEWS_VIEW },
+  "/admin/gift-cards": { permission: PERMISSIONS.GIFT_CARDS_VIEW },
+
   // Categories
   "/admin/categories": { permission: PERMISSIONS.CATEGORIES_VIEW },
   "/admin/categories/new": { permission: PERMISSIONS.CATEGORIES_CREATE },
@@ -130,6 +134,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     ],
   },
   "/admin/settings/policies": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/warranty-policies": { permission: PERMISSIONS.PRODUCTS_EDIT },
   "/admin/settings/apps": { anyOf: [...APPS_PAGE_PERMISSIONS] },
   "/admin/settings/customer-accounts": {
     permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
@@ -180,6 +185,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/orders\/[^/]+$/,
     config: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+
+  // Gift cards: one card (changes are gated inside the page)
+  {
+    pattern: /^\/admin\/gift-cards\/[^/]+$/,
+    config: { permission: PERMISSIONS.GIFT_CARDS_VIEW },
   },
 
   // Inbox: one thread

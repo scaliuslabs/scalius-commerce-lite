@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import {
   getCustomerSession,
-  logoutCustomer,
   sendCustomerOtp,
   verifyCustomerOtp,
   type AuthState,
@@ -15,14 +14,11 @@ import {
   type NewCustomerAccountDetails,
   type NewCustomerSuggestion,
 } from "@/lib/api/customer-auth";
+import { signOutCustomer } from "@/lib/customer-sign-out";
+import { focusMainHeading } from "@/lib/focus-main-heading";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/transport";
-import {
-  normalizeCustomerAuthPolicy,
-  getDefaultCustomerAuthOtpChannel,
-  type CustomerAuthOtpChannel,
-  type CustomerAuthPolicyConfig,
-} from "@scalius/shared/customer-auth-policy";
+import type { CustomerAuthOtpChannel, CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
@@ -50,17 +46,18 @@ type Field = "contact" | "code" | "name" | "phone" | "email";
 type Step = "contact" | "code" | "details" | "signed_in";
 
 interface AuthSettings {
-  policy: CustomerAuthPolicyConfig;
+  /** Customer accounts, as published: only chosen channels that can send. */
+  identity: CustomerIdentitySettings | null;
   phonePolicy: PhoneCountryPolicy;
   ready: boolean;
 }
 
 function settingsFromConfig(config: CheckoutConfig | null | undefined): AuthSettings {
   if (!config) {
-    return { policy: normalizeCustomerAuthPolicy("email"), phonePolicy: { countries: [], mode: "include" }, ready: false };
+    return { identity: null, phonePolicy: { countries: [], mode: "include" }, ready: false };
   }
   return {
-    policy: normalizeCustomerAuthPolicy(config.customerAuthPolicy, config.authVerificationMethod),
+    identity: config.customerIdentity ?? null,
     phonePolicy: {
       countries: Array.isArray(config.allowedCountries) ? config.allowedCountries : [],
       mode: config.allowedCountriesMode ?? "include",
@@ -105,7 +102,7 @@ export default function AuthModal() {
   const [settings, setSettings] = useState<AuthSettings>(() => settingsFromConfig(window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined));
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<Step>("contact");
-  const [channel, setChannel] = useState<CustomerAuthOtpChannel>(() => getDefaultCustomerAuthOtpChannel(settings.policy));
+  const [channel, setChannel] = useState<CustomerAuthOtpChannel>(() => resolveCustomerAuthUi(settings.identity).otpChannel);
   const [contact, setContact] = useState("");
   const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
@@ -126,9 +123,11 @@ export default function AuthModal() {
   const inFlight = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  /** Set by a sign-in in this opening; focus then goes to the page's heading on close. */
+  const signedInRef = useRef(false);
   const prefillRef = useRef<AuthModalPrefill>({});
 
-  const ui = useMemo(() => resolveCustomerAuthUi(settings.policy, channel), [settings.policy, channel]);
+  const ui = useMemo(() => resolveCustomerAuthUi(settings.identity, channel), [settings.identity, channel]);
   const isEmail = ui.requestMethod === "email";
   const locked = attemptsLeft === 0;
 
@@ -188,7 +187,7 @@ export default function AuthModal() {
         void fetchCheckoutConfig().then((config) => {
           const next = settingsFromConfig(config);
           setSettings({ ...next, ready: true });
-          setChannel(getDefaultCustomerAuthOtpChannel(next.policy));
+          setChannel(resolveCustomerAuthUi(next.identity).otpChannel);
         });
       }
       if (hasCustomerAuthMirrorCookie()) void getCustomerSession().then(applySession);
@@ -201,12 +200,30 @@ export default function AuthModal() {
 
   const close = useCallback(() => setIsOpen(false), []);
 
-  // Focus the first field on every step; trap Tab; Esc closes; focus returns.
+  // While open the page doesn't scroll. On close focus returns to the opener,
+  // or, after signing in (the page now shows the account or the order), to
+  // the page's main heading. Once per close, never on a step change.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      const target = returnFocusRef.current;
+      returnFocusRef.current = null;
+      const signedInHere = signedInRef.current;
+      signedInRef.current = false;
+      window.requestAnimationFrame(() => {
+        if (signedInHere && focusMainHeading()) return;
+        if (target?.isConnected) target.focus();
+      });
+    };
+  }, [isOpen]);
+
+  // Focus the first field on every step; trap Tab; Esc closes.
   useEffect(() => {
     if (!isOpen) return;
     const dialog = dialogRef.current;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
       const first = dialog?.querySelector<HTMLElement>("[data-autofocus]");
       (first ?? dialog)?.focus();
@@ -236,10 +253,6 @@ export default function AuthModal() {
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      const target = returnFocusRef.current;
-      returnFocusRef.current = null;
-      window.requestAnimationFrame(() => target?.isConnected && target.focus());
     };
   }, [close, isOpen, step]);
 
@@ -285,6 +298,7 @@ export default function AuthModal() {
   });
 
   const signedIn = (next: CustomerInfo) => {
+    signedInRef.current = true;
     setCustomer(next);
     setStep("signed_in");
     window.dispatchEvent(new CustomEvent("customer-login", { detail: next }));
@@ -345,10 +359,11 @@ export default function AuthModal() {
   };
 
   const signOut = () => run(async () => {
-    await logoutCustomer();
+    // Also empties this browser's cart and checkout state (shared devices).
+    await signOutCustomer();
+    signedInRef.current = false;
     setCustomer(null);
     resetFlow({});
-    window.dispatchEvent(new CustomEvent("customer-logout"));
   });
 
   if (!isOpen) return null;
@@ -359,7 +374,10 @@ export default function AuthModal() {
   const destinationLabel = isEmail ? "Email" : "Phone number";
   const errorFor = (field: Field) => fieldErrors[field] ?? "";
   const clearError = (field: Field) => setFieldErrors(({ [field]: _cleared, ...rest }) => rest);
-  const alertText = error || (limit && sendWait > 0 ? `${limit} Try again in ${formatWait(sendWait)}.` : "");
+  // The wait shows once: on the code step the resend button counts it down.
+  const alertText = error || (limit && sendWait > 0
+    ? step === "code" ? limit : `${limit} Try again in ${formatWait(sendWait)}.`
+    : "");
 
   return (
     <div
@@ -469,7 +487,12 @@ export default function AuthModal() {
                     className={inputClass}
                   />
                   {errorFor("contact") && <p id="auth-contact-error" className="text-sm text-destructive">{errorFor("contact")}</p>}
-                  {settings.ready && !ui.phoneSignIn && (
+                  {settings.ready && !ui.available && (
+                    <p data-sign-in-unavailable role="alert" className="text-sm text-destructive">
+                      Sign-in codes aren't available right now. Contact the store.
+                    </p>
+                  )}
+                  {settings.ready && ui.available && !ui.phoneSignIn && (
                     <p data-phone-sign-in-note className="text-sm text-muted-foreground">
                       Phone sign-in isn't available yet. Use your email.
                     </p>

@@ -8,6 +8,8 @@ import {
     productAttributes,
     productBuyerState,
     brands,
+    productReviewStats,
+    warrantyPolicies,
 } from "@scalius/database/schema";
 import { and, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
@@ -50,6 +52,7 @@ import {
     type ProductBundleRow,
 } from "../products/bundles";
 import { parseStoredEmiSettings, productEmiOffer, storeEmiSettingsSql } from "../products/emi";
+import { productPageReviews, reviewStatsSelection } from "./product-reviews";
 import {
     DEFAULT_RECOMMENDATION_LIMIT,
     getStorefrontProductRecommendations,
@@ -119,6 +122,18 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 noIndex: categories.noIndex,
                 excludeFromSitemap: categories.excludeFromSitemap,
             },
+            // Review stats come with the row (a PK join on the projection).
+            ...reviewStatsSelection(),
+            // The product's live warranty policy (Wave B §5): its current terms.
+            warranty: {
+                id: warrantyPolicies.id,
+                name: warrantyPolicies.name,
+                provider: warrantyPolicies.provider,
+                durationValue: warrantyPolicies.durationValue,
+                durationUnit: warrantyPolicies.durationUnit,
+                replacementDays: warrantyPolicies.replacementDays,
+                terms: warrantyPolicies.terms,
+            },
             // The published brand record only (never a "Brand" attribute).
             brand: {
                 id: brands.id,
@@ -134,6 +149,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         ))
         .leftJoin(brands, publicBrandJoinCondition(products.brandId))
         .leftJoin(productBuyerState, eq(productBuyerState.productId, products.id))
+        .leftJoin(productReviewStats, eq(productReviewStats.productId, products.id))
+        .leftJoin(warrantyPolicies, and(
+            eq(warrantyPolicies.id, products.warrantyPolicyId),
+            isNull(warrantyPolicies.archivedAt),
+        ))
         .where(and(
             eq(products.slug, slug),
             eq(products.isActive, true),
@@ -158,6 +178,15 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         emiEligible,
         buyerFromMinor,
         storeEmiSettings,
+        warranty,
+        reviewsEnabled,
+        reviewCount,
+        ratingAvgCenti,
+        count1,
+        count2,
+        count3,
+        count4,
+        count5,
         ...product
     } = productRow;
     // The product (row, SKUs, options, attributes, content, bundles) and the
@@ -170,7 +199,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     if (productBrandId) deps.brand(productBrandId);
     else deps.anyBrand();
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
-    const customization = readStoredCustomization(storedCustomization, decimalPlaces);
+    const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const variantRowsPromise = db.select({
@@ -248,6 +277,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
     ];
 
+    // Published reviews: one indexed read in this wave, only when the product
+    // has any (the stats came with the product row).
+    const reviewsPromise = productPageReviews(db, product.id, {
+        reviewsEnabled, reviewCount, ratingAvgCenti, count1, count2, count3, count4, count5,
+    });
+
     promises.push(
         getStorefrontProductRecommendations(db, {
             productIds: [product.id],
@@ -261,11 +296,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const optionMapPromise = loadProductOptions(db, [product.id]);
     const selectedOptionMapPromise = variantRowsPromise.then((rows) =>
         loadVariantSelectedOptions(db, rows.map((variant) => variant.id)));
-    const [results, optionMap, selectedOptionMap, blockMedia] = await Promise.all([
+    const [results, optionMap, selectedOptionMap, blockMedia, reviews] = await Promise.all([
         Promise.all(promises),
         optionMapPromise,
         selectedOptionMapPromise,
         blockMediaPromise,
+        reviewsPromise,
     ]);
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
@@ -353,6 +389,18 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
             /** Active quantity tiers, priced by checkout exactly as shown. */
             bundles: content.bundles.map((tier) => presentProductBundleTier(tier, decimalPlaces)),
+            /** Published reviews (summary and the first page); null when the store's reviews are off. */
+            reviews,
+            /** The product's warranty policy (its current terms); null without one. */
+            warranty: warranty?.id
+                ? {
+                    name: warranty.name,
+                    provider: warranty.provider,
+                    duration: { value: warranty.durationValue, unit: warranty.durationUnit },
+                    replacementDays: warranty.replacementDays,
+                    terms: warranty.terms,
+                }
+                : null,
             emi: productEmiOffer({
                 emiEligible: emiEligible === true,
                 priceMinor: buyerFromMinor ?? null,

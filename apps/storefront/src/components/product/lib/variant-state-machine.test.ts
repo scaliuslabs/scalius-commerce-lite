@@ -3,6 +3,7 @@ import {
   createInitialSelection,
   filterVariantsBySelection,
   getVariantOptionAvailabilityMap,
+  initialVariantPresentation,
   reconcileSelectionForValue,
   resolveExactVariantSelection,
   resolveVariantImageForSelection,
@@ -112,4 +113,24 @@ describe("generic product option selection", () => {
 
     expect(resolveVariantImageForSelection(mixed, { size: "small" })).toBeNull();
   });
+});
+
+describe("the product page's opening choice", () => {
+  // Regression: og:price and the Product offer used the cheapest SKU (a
+  // discounted Large) while the buy box opened on Small at full price.
+  it("prices the page from the SKU the buy box opens on", () => {
+    const cheaperLarge = variants.map((each) => each.id === "lm" ? { ...each, price: 60 } : each);
+    const opening = initialVariantPresentation(options, cheaperLarge);
+    expect(opening.selectedVariant?.id).toBe("sm");
+    expect(opening.pricingVariants.map((each) => each.id)).toEqual(["sm"]);
+  });
+
+  it("keeps a requested SKU, and a requested sold-out one", () => {
+    expect(initialVariantPresentation(options, variants, variants[2]).pricingVariants.map((each) => each.id)).toEqual(["lm"]);
+    const soldOut = initialVariantPresentation(options, variants, null, variants[1]);
+    expect(soldOut.stockVariant?.id).toBe("sg");
+    expect(soldOut.selection).toEqual({ size: "small", finish: "gloss" });
+  });
+
+
 });

@@ -5,9 +5,10 @@
 // every other variant renders its registry anatomy (variants/anatomy.astro).
 import "@/styles/theme-cards.css";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { buildStorefrontThemeTokens, type StorefrontCardRenderer } from "@scalius/shared/storefront-theme";
+import { buildStorefrontThemeTokens, type ResolvedStorefrontCard } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import {
+  listingFilterColumnPx,
   productCardImageLoading,
   productCardImageSizes,
   productGridFirstRow,
@@ -15,7 +16,8 @@ import {
   type ProductGridContext,
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
-import { productCardModel, type ProductCardProduct } from "./card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, productCardModel, type ProductCardProduct } from "./card-model";
+import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import StandardCard from "./variants/standard.astro";
 import AnatomyCard from "./variants/anatomy.astro";
 
@@ -47,6 +49,12 @@ interface Props {
   headingLevel?: "h2" | "h3";
   /** The grid's column cap (a homepage grid section's `columns`), for image `sizes`. */
   maxColumns?: number;
+  /**
+   * The filter column beside a `beside-filters` grid, in px; by default the
+   * listing's own (`listingFilterColumnPx(resolved filters)`: the template's
+   * column, else its style's), 0 for a bar or drawer.
+   */
+  filterColumnPx?: number;
 }
 
 const {
@@ -61,29 +69,47 @@ const {
   sizes: sizesOverride,
   headingLevel = "h3",
   maxColumns,
+  filterColumnPx: filterColumnOverride,
 } = Astro.props;
 
-// The card variant and its anatomy come from the resolved theme; the photo
-// ratio and fit are tokens; density and the container width set the fluid
-// grid the image `sizes` follow.
-const { theme, resolved, layout } = await currentRequestTheme(Astro.locals);
+// The card variant and its anatomy come from the resolved theme. The
+// standard card follows the theme's photo tokens; every other card its own
+// look (ratio, fit, radius, surface, type), whatever the template. Density
+// and the container width set the fluid grid the image `sizes` follow.
+const { resolved, layout } = await currentRequestTheme(Astro.locals);
 const variant = resolved.blocks.card.variant;
-const anatomy: StorefrontCardRenderer = layout.productCard;
-const ratio = theme.tokens.imageRatio;
+const anatomy: ResolvedStorefrontCard = layout.productCard;
+const ratio = anatomy.imageRatio;
 const grid = productGridSpec(layout.grid, ratio);
 const containerWidth =
-  containerWidthOverride ?? buildStorefrontThemeTokens(theme)["theme-container-width"]!;
+  containerWidthOverride ?? buildStorefrontThemeTokens(resolved)["theme-container-width"]!;
 const loading = productCardImageLoading(
   productGridFirstRow(grid, containerWidth, maxColumns),
   { index, aboveFold },
 );
-const sizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns);
+// The listing's own column when it passes one (a category's listing template
+// can override the theme's filters), else the theme's for a grid beside them.
+const filterColumnPx = filterColumnOverride
+  ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
+const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
+// Every card but standard (kept as it was): the photo's own width inside its
+// margin, and DPR 3 phones fetch about 2x pixels, so a card photo is never
+// much wider than drawn.
+const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
+const sizes = variant === "standard" ? slotSizes : capSizesDensity(scaleSizes(slotSizes, 1 - 2 * inset));
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,
   hoverImage: anatomy.hoverImage,
   quickBuy: anatomy.quickBuy,
+  // Ratings show only while the store takes reviews and has a published one.
+  ratings: resolved.facts.hasReviews,
 });
+// Intrinsic size in the card's own photo ratio (the box's CSS ratio), so the
+// photo never shifts the grid.
+const dimensions = variant === "standard"
+  ? CARD_IMAGE_DIMENSIONS[ratio]
+  : { width: 400, height: Math.round(400 / anatomy.look.image.ratio) };
 ---
 
 {
@@ -95,6 +121,9 @@ const model = productCardModel(product, {
       anatomy={anatomy}
       model={model}
       ratio={ratio}
+      dimensions={dimensions}
+      inset={inset}
+      productId={product.id}
       sizes={sizes}
       loading={loading}
       headingLevel={headingLevel}

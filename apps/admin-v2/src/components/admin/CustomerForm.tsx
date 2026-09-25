@@ -97,8 +97,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
     updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerInput(data) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
     onSuccess: (result) => {
-      const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id || defaultValues?.id;
-      form.reset({ ...form.getValues(), ...(id ? { id } : {}) });
+      const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id;
       if (!isEdit && id) {
         void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id }, replace: true });
       }

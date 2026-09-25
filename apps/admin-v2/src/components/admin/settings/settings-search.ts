@@ -26,6 +26,7 @@ export const SETTINGS_CARDS = [
   { page: "taxes", card: "taxGroups" },
   { page: "taxes", card: "taxRates" },
   { page: "taxes", card: "taxOverrides" },
+  { page: "customerAccounts", card: "customerFields" },
   { page: "customerAccounts", card: "customerSignIn" },
   { page: "notifications", card: "customerNotifications" },
   { page: "notifications", card: "staffNotifications" },

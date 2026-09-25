@@ -1,0 +1,102 @@
+---
+// Account Reviews (Wave B §2.4, §9.2): "To review", every delivered item
+// still waiting for a review with its form, and "Reviews you wrote", each
+// with its status, the store's reply, and edit or remove while it can
+// change. Server-rendered from the session cookie, so it works without
+// JavaScript: every form is a plain POST to /api/reviews/submit and comes
+// back here with only an outcome flag and the line's anchor.
+import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
+import { getLayoutData } from "@/lib/api";
+import {
+  pickReviewFormCopy,
+  readReviewNotice,
+  reviewNoticeMarkup,
+  toReviewListMarkup,
+  writtenReviewListMarkup,
+} from "@/lib/account-reviews";
+import { readBuyerReviewsForRequest } from "@/lib/account-reviews-server";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
+import { formatAccountDate } from "@/lib/account-format";
+import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { resolveStoreName } from "@/lib/store-identity";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+
+export const prerender = false;
+
+const [layoutData, reviews, summary] = await Promise.all([
+  getLayoutData(),
+  readBuyerReviewsForRequest(Astro.request, { kind: "account" }),
+  readAccountSummaryForRequest(Astro.request),
+]);
+Astro.response.headers.set("Cache-Control", "private, no-store");
+if (!reviews.ok && reviews.reason !== "signed_out") Astro.response.status = 503;
+
+const copy = pickReviewFormCopy(null, getCheckoutLanguagePreset(layoutData?.storefrontCopy?.languageCode));
+const notice = readReviewNotice(Astro.url.search);
+const data = reviews.ok ? reviews.data : { toReview: [], reviews: [] };
+const pageOptions = {
+  copy,
+  notice,
+  storeName: resolveStoreName(layoutData?.business),
+  imageUrl: (url: string | null) => (hasProductImage(url) ? getProductImageUrl(url, 160) : null),
+  formatDate: (iso: string | null) => formatAccountDate(iso, { time: false }),
+};
+const toReviewMarkup = toReviewListMarkup(data.toReview, pageOptions);
+const writtenMarkup = writtenReviewListMarkup(data.reviews, pageOptions);
+// A notice whose line is on neither list (or that names none) shows at the top.
+const placed = notice?.lineId
+  ? data.toReview.some((line) => line.orderItemId === notice.lineId) || data.reviews.some((review) => review.orderItemId === notice.lineId)
+  : false;
+const topNotice = notice && !placed ? reviewNoticeMarkup(notice, copy) : "";
+const shellState = reviews.ok ? "ok" : reviews.reason === "signed_out" ? "signed_out" : "unavailable";
+---
+
+<Layout title={copy.reviewsAccountTitleText} layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <AccountShell
+    current="reviews"
+    summary={summary}
+    state={shellState}
+    title={copy.reviewsAccountTitleText}
+    signedOut={{ title: copy.reviewsSignInTitleText, action: copy.reviewsSignInText }}
+    unavailable={{ text: copy.reviewsUnavailableText, retryHref: "/account/reviews", retryText: copy.reviewsRetryText }}
+  >
+    {reviews.ok && (
+      <div class="space-y-8">
+        {topNotice && <Fragment set:html={topNotice} />}
+
+        <section aria-labelledby="to-review-heading" id="to-review">
+          <h2 id="to-review-heading" class="mb-3 text-lg font-semibold text-foreground">
+            {copy.reviewsToReviewTitleText}
+            {data.toReview.length > 0 && <span class="ml-1 text-muted-foreground">({data.toReview.length})</span>}
+          </h2>
+          {data.toReview.length > 0 ? (
+            <ul class="space-y-4" set:html={toReviewMarkup} />
+          ) : (
+            <div class={`${ui.empty} py-8`}>
+              <p class={ui.emptyBody}>{copy.reviewsNothingToReviewText}</p>
+              <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-4`}>Go to your orders</a>
+            </div>
+          )}
+        </section>
+
+        <section aria-labelledby="written-heading" id="written">
+          <h2 id="written-heading" class="mb-3 text-lg font-semibold text-foreground">{copy.reviewsWrittenTitleText}</h2>
+          {data.reviews.length > 0 ? (
+            <ul class="space-y-4" set:html={writtenMarkup} />
+          ) : (
+            <p class={`${ui.empty} py-8 text-sm text-muted-foreground`}>{copy.reviewsNoneWrittenText}</p>
+          )}
+        </section>
+      </div>
+    )}
+  </AccountShell>
+</Layout>
+
+<script>
+  import { setupReviewForms } from "@/components/order/review-form-client";
+
+  setupReviewForms();
+</script>

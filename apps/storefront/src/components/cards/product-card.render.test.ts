@@ -13,6 +13,7 @@ import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import {
   DEFAULT_STOREFRONT_THEME,
+  EMPTY_STORE_SHAPE,
   STOREFRONT_DENSITIES,
   STOREFRONT_IMAGE_FITS,
   STOREFRONT_IMAGE_RATIOS,
@@ -120,22 +121,36 @@ const PRODUCTS = {
   allFacts: product("facts", {
     discountedPrice: 1000,
     freeDelivery: true,
-    brand: { name: "Walton" },
-    keySpecs: ["Intel Core i5-1335U", "8GB DDR4, 512GB SSD", "15.6\" FHD IPS", "Backlit keyboard", "Fingerprint reader"],
+    cardFacts: {
+      brand: { name: "Walton", slug: "walton" },
+      keySpecs: ["Processor: Intel Core i5-1335U", "RAM: 8GB DDR4", "Display: 15.6\" FHD IPS", "Keyboard: Backlit", "Security: Fingerprint reader"],
+      options: [
+        // "Midnight" is no CSS colour and has no swatch colour: it is left out, never guessed.
+        { name: "Colour", kind: "color", count: 3, swatches: [{ label: "Navy", hex: "#1f2a44" }, { label: "Light Blue", hex: null }, { label: "Midnight", hex: null }] },
+        { name: "Size", kind: "size", count: 5, swatches: [] },
+      ],
+      soldLast30Days: 129,
+      packSize: "400 gm",
+      delivery: { free: false, feeFrom: 60 },
+    },
     rating: { average: 4.64, count: 128 },
-    soldCount: 129,
-    packSize: "400 gm",
     emiMonthlyFrom: 2500,
   }),
   // Every fact at zero or blank: nothing may render (no fake zero states).
   zeroFacts: product("zero", {
-    brand: { name: "  " },
-    keySpecs: [" "],
+    cardFacts: {
+      brand: { name: "  ", slug: "blank" },
+      keySpecs: [" "],
+      options: [{ name: "Size", kind: "size", count: 1, swatches: [] }],
+      soldLast30Days: 9,
+      packSize: "",
+      delivery: null,
+    },
     rating: { average: 0, count: 0 },
-    soldCount: 9,
-    packSize: "",
     emiMonthlyFrom: 0,
   }),
+  // One of our own uploads without renditions: never on a card.
+  original: product("original", { imageUrl: "https://cdn.shop.test/media/media_original.jpg" }),
 };
 type Fixture = keyof typeof PRODUCTS;
 const FIXTURES = Object.keys(PRODUCTS) as Fixture[];
@@ -147,8 +162,15 @@ function themeWith(card: string, tokens: Partial<StorefrontThemeDocument["tokens
   return storefrontThemeDocumentSchema.parse(theme);
 }
 
-async function renderCards(theme: StorefrontThemeDocument, props: object = {}): Promise<Record<Fixture, Element>> {
-  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme)) };
+/** A store that takes reviews and has a published one (cards may show ratings). */
+const REVIEWED_STORE = { ...EMPTY_STORE_SHAPE, hasReviews: true };
+
+async function renderCards(
+  theme: StorefrontThemeDocument,
+  props: object = {},
+  shape = REVIEWED_STORE,
+): Promise<Record<Fixture, Element>> {
+  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape)) };
   const html = await Promise.all(
     FIXTURES.map((fixture, index) =>
       container.renderToString(ProductCard, {
@@ -175,31 +197,75 @@ const DISCOUNT_WORDING: Record<StorefrontCardRenderer["discount"], string> = {
   off: "৳240 OFF",
 };
 
+/**
+ * The buyer-visible treatments of one rendered card (the structural half of
+ * the fidelity bar; the harness measures the same traits in a browser): the
+ * photo box, the tile, the price's place, size and colour, the struck
+ * price, the discount mark, the rating, the facts, the title, the button and
+ * Compare.
+ */
+function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["layout"]["productCard"]): Record<string, string> {
+  const style = card.getAttribute("style") ?? "";
+  const cssVar = (name: string) => new RegExp(`--${name}:([^;]+)`).exec(style)?.[1] ?? "theme";
+  const body = card.querySelector(".product-card-body")!;
+  const order = Array.from(body.children).map((child) =>
+    child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("p.mt-auto") ? "price" : null)
+    .filter(Boolean);
+  const price = card.querySelector(".product-card-price") ?? body.querySelector("p.mt-auto > span:last-child")!;
+  const regular = card.querySelector(".pc-price-regular, s")!;
+  const strikeAt = regular.compareDocumentPosition(price) & 4 ? "before" : "after";
+  const marks = Array.from(card.querySelectorAll("[data-card-discount]")).map((mark) =>
+    `${mark.closest(".product-card-media") ? "photo" : "price"}:${text(mark)}:${Array.from(mark.classList).filter((name) => /^pc-(badge|discount)-/.test(name)).join("+")}`);
+  const rating = card.querySelector('[data-card-fact="rating"]');
+  const action = card.querySelector("a[href^='/buy/']");
+  return {
+    // The standard card follows the template's tokens (department-mall: a
+    // square cover photo, 15/500 titles, an 18px price), in the same units.
+    ratio: String(anatomy.look.image.ratio),
+    fit: `${anatomy.look.image.fit}/${cssVar("pc-inset") === "theme" ? "0%" : cssVar("pc-inset")}`,
+    surface: `${anatomy.look.surface}/${anatomy.look.radius}`,
+    pricePlace: order.indexOf("price") < order.indexOf("title") ? "before-title" : "after-title",
+    priceSize: String(anatomy.look.price?.size.desktop ?? 18),
+    priceColour: price.classList.contains("pc-price-super") ? "superscript" : ["text-primary", "text-destructive", "text-foreground"].find((name) => price.classList.contains(name)) ?? "?",
+    strike: `${strikeAt}:${text(regular).replace(/[\d৳,.\s]/g, "").replace("Regularprice", "")}${regular.querySelector("s") || regular.tagName === "S" ? ":struck" : ""}`,
+    discount: marks.sort().join("|"),
+    rating: rating ? (rating.classList.contains("pc-rating-stars") ? "stars" : "score") : "none",
+    facts: Array.from(card.querySelectorAll("[data-card-fact]")).map((node) => node.getAttribute("data-card-fact")).sort().join(","),
+    title: `${card.querySelector(".product-card-link")!.parentElement!.className.match(/line-clamp-\d/)![0]}/${anatomy.look.title?.weight ?? 500}/${anatomy.look.title?.size.desktop ?? 15}`,
+    button: action ? `${anatomy.action}:${text(action).split(":")[0]}` : "none",
+    compare: card.querySelector("[data-compare-toggle]") ? "compare" : "none",
+  };
+}
+
 // ─── The matrix ───────────────────────────────────────────────────────────
 
 describe("product card matrix", () => {
   it("covers every card variant with every density, image ratio and fit", () => {
     expect(MATRIX).toHaveLength(CARD_VARIANTS.length * STOREFRONT_DENSITIES.length * STOREFRONT_IMAGE_RATIOS.length * STOREFRONT_IMAGE_FITS.length);
-    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add"]);
+    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "detailed"]);
   });
 
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
     const theme = themeWith(card, { density, imageRatio, imageFit });
     const anatomy = requestThemeFor(theme).layout.productCard;
     const cards = await renderCards(theme);
-    const { width, height } = CARD_IMAGE_DIMENSIONS[imageRatio];
+    // The standard card follows the theme's ratio token; every other card its own look.
+    const ownRatio = card === "standard" ? imageRatio : anatomy.imageRatio;
+    const { width, height } = card === "standard"
+      ? CARD_IMAGE_DIMENSIONS[imageRatio]
+      : { width: 400, height: Math.round(400 / anatomy.look.image.ratio) };
 
     for (const fixture of FIXTURES) {
       const element = cards[fixture];
       expect(element.getAttribute("data-card-variant")).toBe(card);
-      expect(element.getAttribute("data-card-ratio")).toBe(imageRatio);
+      expect(element.getAttribute("data-card-ratio")).toBe(ownRatio);
       // The photo box is always there; its ratio is the token (CSS), so a
       // missing photo keeps the same box: the placeholder, never a gap.
       const media = element.querySelector(":scope > .product-card-media")!;
       expect(media).not.toBeNull();
       const photo = media.querySelector(":scope > img.product-card-photo");
       const placeholder = media.querySelector("[data-card-placeholder]");
-      const hasPhoto = Boolean(PRODUCTS[fixture].imageUrl);
+      const hasPhoto = Boolean(PRODUCTS[fixture].imageUrl) && fixture !== "original";
       expect(Boolean(photo)).toBe(hasPhoto);
       expect(Boolean(placeholder)).toBe(!hasPhoto);
       if (photo) {
@@ -208,33 +274,45 @@ describe("product card matrix", () => {
         expect(photo.getAttribute("alt")).toBe(PRODUCTS[fixture].name);
       } else {
         expect(placeholder!.getAttribute("aria-hidden")).toBe("true");
-        expect(media.querySelector(".product-card-hover-image")).toBeNull();
+        expect(media.hasAttribute("data-hover-src")).toBe(false);
       }
-      // One stretched title link to the product plus at most the buy action.
+      // No hover photo is in the HTML: the box names it for the intent script.
+      expect(media.querySelector(".product-card-hover-image")).toBeNull();
+      // One stretched title link to the product plus at most the buy action (and Compare).
       const links = Array.from(element.querySelectorAll("a"));
       expect(links.filter((link) => link.classList.contains("product-card-link")).map((link) => link.getAttribute("href")))
         .toEqual([`/products/${PRODUCTS[fixture].slug}`]);
-      expect(links.length).toBeLessThanOrEqual(2);
+      expect(links.length).toBeLessThanOrEqual(anatomy.compare ? 3 : 2);
       // Titles are clamped; the anatomy's titles also break long words.
       const title = element.querySelector(".product-card-link")!.parentElement!;
-      expect(title.className).toMatch(/\bline-clamp-[12]\b/);
+      expect(title.className).toMatch(/\bline-clamp-[123]\b/);
       if (card !== "standard") expect(title.classList.contains("product-card-name")).toBe(true);
     }
 
     // No fake zero states: blank or zero facts render nothing.
     expect(cards.zeroFacts.querySelector("[data-card-fact]")).toBeNull();
-    expect(text(cards.zeroFacts)).not.toMatch(/\b\d+ sold\b|\(0\)|★|EMI/);
+    expect(text(cards.zeroFacts)).not.toMatch(/\b\d+ sold\b|\(0\)|★|EMI|Options|bought/);
 
     // Hover photo only where the card shows one, and only with a primary photo.
-    expect(Boolean(cards.onSale.querySelector(".product-card-hover-image"))).toBe(anatomy.hoverImage);
-    expect(cards.noPhoto.querySelector(".product-card-hover-image")).toBeNull();
+    const hoverBox = (element: Element) => element.querySelector(".product-card-media")!.getAttribute("data-hover-src");
+    expect(Boolean(hoverBox(cards.onSale))).toBe(anatomy.hoverImage);
+    if (anatomy.hoverImage) expect(hoverBox(cards.onSale)).toBe(image("sale-back"));
+    expect(hoverBox(cards.noPhoto)).toBeNull();
 
-    // The discount, worded and placed by the anatomy.
+    // The discount, worded and placed by the anatomy ("both": the wording on
+    // the photo and the percentage again after the struck price).
     const imageDiscount = cards.onSale.querySelector(".product-card-media [data-card-discount]");
     const priceDiscount = cards.onSale.querySelector(".product-card-price-row [data-card-discount]");
     const wording = card === "standard" ? "-20%" : DISCOUNT_WORDING[anatomy.discount];
-    expect(text(anatomy.badge === "image" ? imageDiscount : priceDiscount)).toBe(wording);
-    expect(anatomy.badge === "image" ? priceDiscount : imageDiscount).toBeNull();
+    if (anatomy.badge === "both") {
+      expect(text(imageDiscount)).toBe(wording);
+      expect(text(priceDiscount)).toBe("-20%");
+    } else {
+      expect(text(anatomy.badge === "image" ? imageDiscount : priceDiscount)).toBe(wording);
+      expect(anatomy.badge === "image" ? priceDiscount : imageDiscount).toBeNull();
+    }
+    // No discount, no mark and no struck price anywhere.
+    expect(cards.withOptions.querySelector("[data-card-discount], s, .pc-price-reg")).toBeNull();
     // Amount wordings fall back to the percentage when the price varies by option.
     expect(text(cards.soldOut)).toContain("Sold out");
 
@@ -247,9 +325,18 @@ describe("product card matrix", () => {
     const fact = (name: string) => text(cards.allFacts.querySelector(`[data-card-fact="${name}"]`));
     if (expectedFacts.includes("key-specs")) {
       expect(cards.allFacts.querySelectorAll('[data-card-fact="key-specs"] li')).toHaveLength(KEY_SPECS_MAX);
+      expect(text(cards.allFacts.querySelector('[data-card-fact="key-specs"] li'))).toBe("Processor: Intel Core i5-1335U");
     }
     if (expectedFacts.includes("rating")) expect(fact("rating")).toContain("4.6");
-    if (expectedFacts.includes("sold")) expect(fact("sold")).toBe("129 sold");
+    if (expectedFacts.includes("sold")) {
+      expect(fact("sold")).toBe(card === "detailed" ? "100+ bought in past month" : "129 sold in 30 days");
+    }
+    if (expectedFacts.includes("swatches")) {
+      // A swatch colour from the swatch attribute, or an exact CSS colour name; never a guess.
+      const swatches = Array.from(cards.allFacts.querySelectorAll(".pc-swatch"));
+      expect(swatches.map((swatch) => swatch.getAttribute("style"))).toEqual(["--swatch:#1f2a44", "--swatch:lightblue"]);
+    }
+    if (expectedFacts.includes("options")) expect(fact("options")).toBe("Options: 5 sizes");
     if (expectedFacts.includes("savings")) expect(fact("savings")).toBe("Save ৳200");
     if (expectedFacts.includes("emi")) expect(fact("emi")).toBe("EMI from ৳2,500/month");
     if (expectedFacts.includes("delivery")) expect(fact("delivery")).toBe("Free delivery");
@@ -281,7 +368,9 @@ describe("product card matrix", () => {
       expect(text(buy)).toBe(`${label}: Product sale`);
       if (anatomy.action === "round") {
         expect(buy.classList.contains("product-card-round-action")).toBe(true);
-        expect(buy.parentElement!.classList.contains("product-card-media")).toBe(true);
+        // Chaldal's "+" sits on the photo; Fabrilife's cart beside the price.
+        const home = card === "fashion-value" ? "product-card-body" : "product-card-media";
+        expect(buy.parentElement!.classList.contains(home)).toBe(true);
       } else {
         expect(buy.classList.contains("product-card-action")).toBe(true);
         // Options are chosen on the product page (a hint under the card
@@ -298,9 +387,76 @@ describe("product card matrix", () => {
     // The price tone is a colour role: the action colour, the sale colour
     // while discounted, or ink.
     const priceClass = cards.onSale.querySelector(".product-card-price")!.classList;
-    const tone = anatomy.priceTone === "primary" ? "text-primary" : anatomy.priceTone === "sale" ? "text-destructive" : "text-foreground";
+    const tone = anatomy.priceTone === "primary" ? "text-primary"
+      : anatomy.priceTone === "sale" || anatomy.priceTone === "sale-always" ? "text-destructive" : "text-foreground";
     expect(priceClass.contains(tone)).toBe(true);
+    // Without a discount the sale colour stays for Star Tech's always-red price only.
+    const plainTone = cards.withOptions.querySelector(".product-card-price")!.classList;
+    expect(plainTone.contains("text-destructive")).toBe(anatomy.priceTone === "sale-always");
+    // The struck price as the reference words it.
+    const regular = cards.onSale.querySelector(".pc-price-regular")!;
+    expect(text(regular)).toContain("৳1,200");
+    expect(Boolean(regular.querySelector("s"))).toBe(anatomy.strike !== "reg");
+    if (anatomy.strike === "list") expect(text(regular)).toMatch(/^List:/);
+    if (anatomy.strike === "reg") expect(text(regular)).toMatch(/^reg /);
+    const current = cards.onSale.querySelector(".product-card-price")!;
+    const before = Boolean(regular.compareDocumentPosition(current) & 4);
+    expect(before).toBe(anatomy.strike === "before");
     expect(cards.withOptions.querySelector(".product-card-price")!.textContent).toContain("From ৳1,200");
+
+    // Compare (Star Tech): a plain link to the comparison without JavaScript.
+    const compare = cards.onSale.querySelector("[data-compare-toggle]");
+    expect(Boolean(compare)).toBe(anatomy.compare);
+    if (compare) expect(compare.getAttribute("href")).toBe("/compare?ids=sale");
+  });
+
+  it("makes every two cards differ in at least three buyer-visible treatments on a product with every fact", async () => {
+    const all: Record<string, Record<string, string>> = {};
+    for (const card of CARD_VARIANTS) {
+      const theme = themeWith(card, {});
+      all[card] = cardTraits((await renderCards(theme)).allFacts, requestThemeFor(theme).layout.productCard);
+    }
+    const short: string[] = [];
+    for (let i = 0; i < CARD_VARIANTS.length; i += 1) {
+      for (let j = i + 1; j < CARD_VARIANTS.length; j += 1) {
+        const [a, b] = [CARD_VARIANTS[i]!, CARD_VARIANTS[j]!];
+        const differing = Object.keys(all[a]!).filter((trait) => all[a]![trait] !== all[b]![trait]);
+        if (differing.length < 3) short.push(`${a}~${b}: ${differing.join(", ") || "nothing"}`);
+      }
+    }
+    expect(short).toEqual([]);
+  });
+
+  it("draws Amazon's superscript price and the delivery line from the stored rate", async () => {
+    const cards = await renderCards(themeWith("detailed", {}));
+    const price = cards.onSale.querySelector(".pc-price-super")!;
+    expect(text(price.querySelector(".pc-price-symbol"))).toBe("৳");
+    expect(text(price.querySelector(".pc-price-whole"))).toBe("960");
+    expect(text(cards.onSale.querySelector(".pc-price-regular"))).toContain("৳1,200");
+    expect(text(cards.bangla.querySelector('[data-card-fact="delivery"]'))).toBe("Free delivery");
+    const fee = await renderCards(themeWith("detailed", {}));
+    expect(text(fee.allFacts.querySelector('[data-card-fact="delivery"]'))).toBe("Free delivery");
+    const retail = await container.renderToString(ProductCard, {
+      props: {
+        product: { ...PRODUCTS.allFacts, freeDelivery: false },
+        currencySymbol: "৳",
+        currencyCode: "BDT",
+      },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(themeWith("retail", {}))) },
+      request: new Request("https://shop.test/"),
+    });
+    expect(text(parse(retail).querySelector('[data-card-fact="delivery"]'))).toBe("Delivery from ৳60");
+  });
+
+  it("shows no rating on any card while the store has no published review or reviews are off", async () => {
+    for (const card of ["standard", "retail", "marketplace", "detailed"]) {
+      const cards = await renderCards(card === "standard" ? DEFAULT_STOREFRONT_THEME : themeWith(card, {}), {}, EMPTY_STORE_SHAPE);
+      expect(cards.allFacts.querySelector('[data-card-fact="rating"]'), card).toBeNull();
+      expect(cards.allFacts.querySelector(".sc-stars"), card).toBeNull();
+    }
+    const standard = await renderCards(DEFAULT_STOREFRONT_THEME);
+    expect(text(standard.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("(128)");
+    expect(standard.zeroFacts.querySelector('[data-card-fact="rating"]')).toBeNull();
   });
 
   it("keeps the standard card's markup (the protected Department mall look)", async () => {
@@ -328,7 +484,8 @@ describe("product card matrix", () => {
     expect(parse(html).querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
     const cards = await renderCards(theme, { phoneLayout: "list-row" });
     // Below the tablet step the photo is the fixed list-row column.
-    expect(cards.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) 120px, /);
+    // (retail: the phone-density cap is listed first, then the plain entries).
+    expect(cards.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/(?:^|, )\(max-width: \d+px\) calc\(\(120px\) \* 1\)|(?:^|, )\(max-width: \d+px\) 120px, /);
     const grid = parse(await container.renderToString(ProductGrid, { props: {}, locals, request: new Request("https://shop.test/") }));
     expect(grid.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
   });

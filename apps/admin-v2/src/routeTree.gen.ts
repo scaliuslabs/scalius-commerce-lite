@@ -39,6 +39,8 @@ import { Route as AdminCustomersNewRouteImport } from './routes/admin/customers/
 import { Route as AdminDiscountsIndexRouteImport } from './routes/admin/discounts/index'
 import { Route as AdminDiscountsDiscountIdRouteImport } from './routes/admin/discounts/$discountId'
 import { Route as AdminDiscountsNewRouteImport } from './routes/admin/discounts/new'
+import { Route as AdminGiftCardsIndexRouteImport } from './routes/admin/gift-cards/index'
+import { Route as AdminGiftCardsGiftCardIdRouteImport } from './routes/admin/gift-cards/$giftCardId'
 import { Route as AdminInboxIndexRouteImport } from './routes/admin/inbox/index'
 import { Route as AdminInboxConversationIdRouteImport } from './routes/admin/inbox/$conversationId'
 import { Route as AdminInventoryIndexRouteImport } from './routes/admin/inventory/index'
@@ -53,6 +55,7 @@ import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
 import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
+import { Route as AdminReviewsIndexRouteImport } from './routes/admin/reviews/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminSettingsAdvancedRouteImport } from './routes/admin/settings/advanced'
 import { Route as AdminSettingsAppsRouteImport } from './routes/admin/settings/apps'
@@ -236,6 +239,17 @@ const AdminDiscountsNewRoute = AdminDiscountsNewRouteImport.update({
   path: '/discounts/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminGiftCardsIndexRoute = AdminGiftCardsIndexRouteImport.update({
+  id: '/gift-cards/',
+  path: '/gift-cards/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminGiftCardsGiftCardIdRoute =
+  AdminGiftCardsGiftCardIdRouteImport.update({
+    id: '/gift-cards/$giftCardId',
+    path: '/gift-cards/$giftCardId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminInboxIndexRoute = AdminInboxIndexRouteImport.update({
   id: '/inbox/',
   path: '/inbox/',
@@ -306,6 +320,11 @@ const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
 const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
   id: '/products/new',
   path: '/products/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReviewsIndexRoute = AdminReviewsIndexRouteImport.update({
+  id: '/reviews/',
+  path: '/reviews/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
@@ -507,6 +526,7 @@ export interface FileRoutesByFullPath {
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/$discountId': typeof AdminDiscountsDiscountIdRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
@@ -532,11 +552,13 @@ export interface FileRoutesByFullPath {
   '/admin/collections/': typeof AdminCollectionsIndexRoute
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
+  '/admin/gift-cards/': typeof AdminGiftCardsIndexRoute
   '/admin/inbox/': typeof AdminInboxIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -582,6 +604,7 @@ export interface FileRoutesByTo {
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/$discountId': typeof AdminDiscountsDiscountIdRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
@@ -606,11 +629,13 @@ export interface FileRoutesByTo {
   '/admin/collections': typeof AdminCollectionsIndexRoute
   '/admin/customers': typeof AdminCustomersIndexRoute
   '/admin/discounts': typeof AdminDiscountsIndexRoute
+  '/admin/gift-cards': typeof AdminGiftCardsIndexRoute
   '/admin/inbox': typeof AdminInboxIndexRoute
   '/admin/inventory': typeof AdminInventoryIndexRoute
   '/admin/online-store': typeof AdminOnlineStoreIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
+  '/admin/reviews': typeof AdminReviewsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -659,6 +684,7 @@ export interface FileRoutesById {
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/$discountId': typeof AdminDiscountsDiscountIdRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
@@ -684,11 +710,13 @@ export interface FileRoutesById {
   '/admin/collections/': typeof AdminCollectionsIndexRoute
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
+  '/admin/gift-cards/': typeof AdminGiftCardsIndexRoute
   '/admin/inbox/': typeof AdminInboxIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -738,6 +766,7 @@ export interface FileRouteTypes {
     | '/admin/customers/new'
     | '/admin/discounts/$discountId'
     | '/admin/discounts/new'
+    | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
     | '/admin/online-store/banners'
@@ -763,11 +792,13 @@ export interface FileRouteTypes {
     | '/admin/collections/'
     | '/admin/customers/'
     | '/admin/discounts/'
+    | '/admin/gift-cards/'
     | '/admin/inbox/'
     | '/admin/inventory/'
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/reviews/'
     | '/admin/settings/'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -813,6 +844,7 @@ export interface FileRouteTypes {
     | '/admin/customers/new'
     | '/admin/discounts/$discountId'
     | '/admin/discounts/new'
+    | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
     | '/admin/online-store/banners'
@@ -837,11 +869,13 @@ export interface FileRouteTypes {
     | '/admin/collections'
     | '/admin/customers'
     | '/admin/discounts'
+    | '/admin/gift-cards'
     | '/admin/inbox'
     | '/admin/inventory'
     | '/admin/online-store'
     | '/admin/pages'
     | '/admin/products'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -889,6 +923,7 @@ export interface FileRouteTypes {
     | '/admin/customers/new'
     | '/admin/discounts/$discountId'
     | '/admin/discounts/new'
+    | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
     | '/admin/online-store/banners'
@@ -914,11 +949,13 @@ export interface FileRouteTypes {
     | '/admin/collections/'
     | '/admin/customers/'
     | '/admin/discounts/'
+    | '/admin/gift-cards/'
     | '/admin/inbox/'
     | '/admin/inventory/'
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/reviews/'
     | '/admin/settings/'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1163,6 +1200,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDiscountsNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/gift-cards/': {
+      id: '/admin/gift-cards/'
+      path: '/gift-cards'
+      fullPath: '/admin/gift-cards/'
+      preLoaderRoute: typeof AdminGiftCardsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/gift-cards/$giftCardId': {
+      id: '/admin/gift-cards/$giftCardId'
+      path: '/gift-cards/$giftCardId'
+      fullPath: '/admin/gift-cards/$giftCardId'
+      preLoaderRoute: typeof AdminGiftCardsGiftCardIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/inbox/': {
       id: '/admin/inbox/'
       path: '/inbox'
@@ -1259,6 +1310,13 @@ declare module '@tanstack/react-router' {
       path: '/products/new'
       fullPath: '/admin/products/new'
       preLoaderRoute: typeof AdminProductsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reviews/': {
+      id: '/admin/reviews/'
+      path: '/reviews'
+      fullPath: '/admin/reviews/'
+      preLoaderRoute: typeof AdminReviewsIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings/': {
@@ -1570,6 +1628,7 @@ interface AdminRouteChildren {
   AdminCustomersNewRoute: typeof AdminCustomersNewRoute
   AdminDiscountsDiscountIdRoute: typeof AdminDiscountsDiscountIdRoute
   AdminDiscountsNewRoute: typeof AdminDiscountsNewRoute
+  AdminGiftCardsGiftCardIdRoute: typeof AdminGiftCardsGiftCardIdRoute
   AdminInboxConversationIdRoute: typeof AdminInboxConversationIdRoute
   AdminInventoryLabelsRoute: typeof AdminInventoryLabelsRoute
   AdminOnlineStoreBannersRoute: typeof AdminOnlineStoreBannersRoute
@@ -1584,11 +1643,13 @@ interface AdminRouteChildren {
   AdminCollectionsIndexRoute: typeof AdminCollectionsIndexRoute
   AdminCustomersIndexRoute: typeof AdminCustomersIndexRoute
   AdminDiscountsIndexRoute: typeof AdminDiscountsIndexRoute
+  AdminGiftCardsIndexRoute: typeof AdminGiftCardsIndexRoute
   AdminInboxIndexRoute: typeof AdminInboxIndexRoute
   AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
   AdminOnlineStoreIndexRoute: typeof AdminOnlineStoreIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
+  AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
   AdminCollectionsCollectionIdEditRoute: typeof AdminCollectionsCollectionIdEditRoute
@@ -1614,6 +1675,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersNewRoute: AdminCustomersNewRoute,
   AdminDiscountsDiscountIdRoute: AdminDiscountsDiscountIdRoute,
   AdminDiscountsNewRoute: AdminDiscountsNewRoute,
+  AdminGiftCardsGiftCardIdRoute: AdminGiftCardsGiftCardIdRoute,
   AdminInboxConversationIdRoute: AdminInboxConversationIdRoute,
   AdminInventoryLabelsRoute: AdminInventoryLabelsRoute,
   AdminOnlineStoreBannersRoute: AdminOnlineStoreBannersRoute,
@@ -1628,11 +1690,13 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCollectionsIndexRoute: AdminCollectionsIndexRoute,
   AdminCustomersIndexRoute: AdminCustomersIndexRoute,
   AdminDiscountsIndexRoute: AdminDiscountsIndexRoute,
+  AdminGiftCardsIndexRoute: AdminGiftCardsIndexRoute,
   AdminInboxIndexRoute: AdminInboxIndexRoute,
   AdminInventoryIndexRoute: AdminInventoryIndexRoute,
   AdminOnlineStoreIndexRoute: AdminOnlineStoreIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
+  AdminReviewsIndexRoute: AdminReviewsIndexRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
   AdminCollectionsCollectionIdEditRoute: AdminCollectionsCollectionIdEditRoute,

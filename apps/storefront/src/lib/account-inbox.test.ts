@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   checkAttachmentFiles,
@@ -9,7 +9,6 @@ import {
   conversationStatusMessage,
   conversationTitle,
   currentReturnPath,
-  fetchInboxUnread,
   inboxBadgeText,
   isClientMessageKey,
   newClientMessageKey,
@@ -150,14 +149,6 @@ describe("inbox list", () => {
     expect(inboxBadgeText(-2)).toBe("");
     expect(inboxBadgeText(7)).toBe("7");
     expect(inboxBadgeText(150)).toBe("99+");
-  });
-
-  it("reads the unread count through the same-origin proxy and treats failures as zero", async () => {
-    const fetcher = vi.fn(async () => Response.json({ success: true, data: { unread: 4 } }));
-    await expect(fetchInboxUnread(fetcher as unknown as typeof fetch)).resolves.toBe(4);
-    expect(fetcher).toHaveBeenCalledWith("/api/customer-auth/conversations/unread", expect.objectContaining({ credentials: "same-origin" }));
-    await expect(fetchInboxUnread((async () => new Response("", { status: 401 })) as unknown as typeof fetch)).resolves.toBe(0);
-    await expect(fetchInboxUnread((async () => { throw new Error("offline"); }) as unknown as typeof fetch)).resolves.toBe(0);
   });
 });
 

@@ -4,10 +4,12 @@ import { Link } from "@tanstack/react-router";
 import { Braces } from "lucide-react";
 import { toast } from "sonner";
 import {
-  type OrderNotificationType,
+  type TemplatedNotificationType,
   TEMPLATE_LIMITS,
+  customerChannelsForType,
   defaultNotificationTemplates,
   findUnknownVariables,
+  isOrderNotificationType,
   renderSmsTemplate,
   sampleOrderEmail,
   sampleVariables,
@@ -66,7 +68,7 @@ type Problem =
   | { key: "unknownVariables"; names: string };
 
 /** What's wrong with one template field, as the server would say it. */
-export function templateProblem(text: string, max: number, event: OrderNotificationType): Problem | null {
+export function templateProblem(text: string, max: number, event: TemplatedNotificationType): Problem | null {
   if (!text.trim()) return { key: "required" };
   if (text.length > max) return { key: "tooLong", max };
   const unknown = findUnknownVariables(text, event);
@@ -90,7 +92,7 @@ function VariableMenu({
   disabled,
   onInsert,
 }: {
-  event: OrderNotificationType;
+  event: TemplatedNotificationType;
   disabled: boolean;
   onInsert: (token: string) => void;
 }) {
@@ -158,7 +160,7 @@ function TestSmsDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  event: OrderNotificationType;
+  event: TemplatedNotificationType;
   body: string;
 }) {
   const t = useMessages(notificationTemplateMessages);
@@ -192,7 +194,7 @@ function TestSmsDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{t("testSmsTitle")}</DialogTitle>
-          <DialogDescription>{t("testSmsHelp")}</DialogDescription>
+          <DialogDescription>{isOrderNotificationType(event) ? t("testSmsHelp") : t("testSmsHelpSample")}</DialogDescription>
         </DialogHeader>
         <form
           method="post"
@@ -227,8 +229,12 @@ function TestSmsDialog({
   );
 }
 
-/** Shopify-style editor for one customer message: email and SMS copy, variables, live preview, test sends. */
-export function NotificationTemplateEditor({ event }: { event: OrderNotificationType }) {
+/**
+ * Shopify-style editor for one customer message (an order event, or the
+ * digital delivery, gift card or review request message): email and SMS copy,
+ * variables, live preview, test sends.
+ */
+export function NotificationTemplateEditor({ event }: { event: TemplatedNotificationType }) {
   const t = useMessages(notificationTemplateMessages);
   const channels = useMessages(notificationsMessages);
   const events = useMessages(notificationEventMessages);
@@ -279,6 +285,10 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
   const emailPreview = sampleOrderEmail({ event, language, store, template: email, origin: store.storefrontUrl });
   const smsPreview = renderSmsTemplate(event, language, sms.body, sampleVariables(store.name ?? "", language));
   const saved = rules.data?.channels[event];
+  // Order events render in the order summary frame with a sample order; the
+  // digital, gift card and review messages in the plain message frame.
+  const orderEvent = isOrderNotificationType(event);
+  const whatsappAllowed = (customerChannelsForType(event) as readonly string[]).includes("whatsapp");
   // Unknown until the rules load; a test send then fails inline instead.
   const channelReady = (channel: "email" | "sms") => !rules.data || isReady(rules.data[channel]);
   const problems = {
@@ -323,7 +333,7 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
     <>
       <SettingsCard
         title={channels("email")}
-        description={t("emailHelp")}
+        description={orderEvent ? t("emailHelp") : t("emailHelpMessage")}
         action={
           <Button
             type="button"
@@ -395,12 +405,12 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
         {emailTestError ? (
           <p role="alert" className="text-body text-destructive">{emailTestError}</p>
         ) : (
-          <p className="text-body text-muted-foreground">{t("testEmailTo")}</p>
+          <p className="text-body text-muted-foreground">{orderEvent ? t("testEmailTo") : t("testEmailToSample")}</p>
         )}
         {usesStoreName(email.subject, email.body) ? <StoreNameNote store={store} /> : null}
         <div className="space-y-1.5">
           <p className="text-body font-medium">{t("preview")}</p>
-          <p className="text-body text-muted-foreground">{t("previewNote")}</p>
+          <p className="text-body text-muted-foreground">{orderEvent ? t("previewNote") : t("previewNoteSample")}</p>
           {/* A sandboxed document: the real email markup, no scripts, no navigation. */}
           <iframe
             title={t("emailPreview")}
@@ -468,16 +478,18 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
           <p className="text-body font-medium">{t("preview")}</p>
           <p data-testid="sms-preview" className="whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-body">{smsPreview}</p>
           <SmsCounter text={smsPreview} />
-          <p className="text-body text-muted-foreground">{t("smsCountNote")}</p>
+          <p className="text-body text-muted-foreground">{orderEvent ? t("smsCountNote") : t("smsCountNoteSample")}</p>
         </div>
         <TestSmsDialog open={smsTestOpen} onOpenChange={setSmsTestOpen} event={event} body={sms.body} />
       </SettingsCard>
 
-      <SettingsCard title={channels("whatsapp")}>
-        <p className="text-body text-muted-foreground">
-          {t("whatsappInfo", { template: rules.data?.whatsappTemplate.templateName ?? "order_status_update" })}
-        </p>
-      </SettingsCard>
+      {whatsappAllowed ? (
+        <SettingsCard title={channels("whatsapp")}>
+          <p className="text-body text-muted-foreground">
+            {t("whatsappInfo", { template: rules.data?.whatsappTemplate.templateName ?? "order_status_update" })}
+          </p>
+        </SettingsCard>
+      ) : null}
     </>
   );
 }

@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { taxClasses } from "./tax";
 import { media } from "./media";
+import { warrantyPolicies } from "./warranty";
 
 /**
  * A discount a buyer can see: the rule the buyer pricing projection applies
@@ -79,6 +80,8 @@ export const products = sqliteTable(
         pageTemplate: text("page_template"),
         /** Shows EMI plans on the product page when the store has them (informational only). */
         emiEligible: integer("emi_eligible", { mode: "boolean" }).notNull().default(true),
+        /** The product's warranty policy (Wave B); checkout freezes its current revision onto lines. */
+        warrantyPolicyId: text("warranty_policy_id").references(() => warrantyPolicies.id, { onDelete: "set null" }),
     },
     (table) => [
         check("products_is_gift_card_check", sql`${table.isGiftCard} IN (0, 1)`),
@@ -105,6 +108,9 @@ export const products = sqliteTable(
         ),
         check("products_page_template_shape", sql.raw(templateIdCheck("page_template"))),
         check("products_emi_eligible_check", sql`${table.emiEligible} IN (0, 1)`),
+        index("products_warranty_policy_idx")
+            .on(table.warrantyPolicyId)
+            .where(sql`${table.warrantyPolicyId} IS NOT NULL`),
         // The homepage "on sale" list (core catalog/home-lists.ts) walks only
         // discounted public products, newest first. It has the public-newest
         // index's equality columns plus the id tiebreak, so SQLite prefers it
@@ -283,6 +289,10 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
     index("product_variants_image_idx").on(table.imageId),
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
+    // Store shape (`hasDigitalLines`) and digital readiness read only live digital SKUs.
+    index("product_variants_digital_live_idx")
+        .on(table.productId)
+        .where(sql`${table.fulfillmentKind} = 'digital' AND ${table.deletedAt} IS NULL`),
     // The homepage "on sale" list's SKU-discount candidates, newest first
     // (ON_SALE_SKU_ROW_SQL, repeated word for word by the query).
     index("product_variants_on_sale_newest_idx")

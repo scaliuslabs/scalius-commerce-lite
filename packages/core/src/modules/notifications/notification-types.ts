@@ -33,15 +33,61 @@ export const CONVERSATION_NOTIFICATION_TYPES = [
 
 export type ConversationNotificationType = (typeof CONVERSATION_NOTIFICATION_TYPES)[number];
 
+/**
+ * Buyer messages whose content a domain resolves at send time (Wave B §10):
+ * the API layer's `notification-content/*` resolvers return the variables, so
+ * the notifications domain never imports digital, gift-cards or reviews.
+ * `gift_card_issued` (to the card's recipient, with the code) and
+ * `gift_card_sent` (to the buyer, no code) are about a gift card (subject
+ * `gift_card`); the others
+ * are about an order.
+ */
+export const RESOLVED_NOTIFICATION_TYPES = [
+    "order_digital_delivered",
+    "gift_card_issued",
+    "gift_card_sent",
+    "review_request",
+] as const;
+
+export type ResolvedNotificationType = (typeof RESOLVED_NOTIFICATION_TYPES)[number];
+
+/** Staff alerts about an order raised by a domain, not by an order status (Wave B §10). */
+export const STAFF_ALERT_NOTIFICATION_TYPES = [
+    "review_pending",
+    "digital_keys_exhausted",
+] as const;
+
+export type StaffAlertNotificationType = (typeof STAFF_ALERT_NOTIFICATION_TYPES)[number];
+
+/**
+ * Messages that carry a gift-card code or licence keys. Their delivery
+ * receipts store no provider response, and the dispatcher scrubs the resolved
+ * values from every status it records.
+ */
+export const CODE_BEARING_NOTIFICATION_TYPES = [
+    "order_digital_delivered",
+    "gift_card_issued",
+] as const;
+
 // Bundlers treat a top-level spread as a possible side effect, and one would
 // keep the whole browser entry (templates, message copy) in the dashboard's
 // always-loaded code; the pure initializer keeps this module tree-shakeable.
 export const NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
     ...ORDER_NOTIFICATION_TYPES,
     ...CONVERSATION_NOTIFICATION_TYPES,
+    ...RESOLVED_NOTIFICATION_TYPES,
+    ...STAFF_ALERT_NOTIFICATION_TYPES,
 ] as const)();
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+/** Buyer messages rendered from a merchant-editable template (email + SMS copy). */
+export const TEMPLATED_NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
+    ...ORDER_NOTIFICATION_TYPES,
+    ...RESOLVED_NOTIFICATION_TYPES,
+] as const)();
+
+export type TemplatedNotificationType = (typeof TEMPLATED_NOTIFICATION_TYPES)[number];
 
 /** What a notification is about; the outbox and receipts are keyed by it. */
 export const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital"] as const;
@@ -81,14 +127,15 @@ export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS
 export type AdminNotificationChannel = (typeof ADMIN_NOTIFICATION_CHANNELS)[number];
 
 export function customerChannelsForType(type: NotificationType): readonly CustomerNotificationChannel[] {
-    if (type === "conversation_message") return [];
-    if (type === "conversation_reply") return ["email", "sms"];
+    if (type === "conversation_message" || isStaffAlertNotificationType(type)) return [];
+    // Codes, keys and review links are not in the order WhatsApp template.
+    if (type === "conversation_reply" || isResolvedNotificationType(type)) return ["email", "sms"];
     return CUSTOMER_NOTIFICATION_CHANNELS;
 }
 
 export function adminChannelsForType(type: NotificationType): readonly AdminNotificationChannel[] {
-    if (type === "conversation_reply") return [];
-    if (type === "conversation_message") return ADMIN_NOTIFICATION_CHANNELS;
+    if (type === "conversation_reply" || isResolvedNotificationType(type)) return [];
+    if (type === "conversation_message" || isStaffAlertNotificationType(type)) return ADMIN_NOTIFICATION_CHANNELS;
     return ["push"];
 }
 
@@ -98,6 +145,22 @@ export function isOrderNotificationType(value: string): value is OrderNotificati
 
 export function isConversationNotificationType(value: string): value is ConversationNotificationType {
     return (CONVERSATION_NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+export function isResolvedNotificationType(value: string): value is ResolvedNotificationType {
+    return (RESOLVED_NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+export function isStaffAlertNotificationType(value: string): value is StaffAlertNotificationType {
+    return (STAFF_ALERT_NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+export function isCodeBearingNotificationType(value: string): boolean {
+    return (CODE_BEARING_NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+export function isTemplatedNotificationType(value: string): value is TemplatedNotificationType {
+    return (TEMPLATED_NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
 export function isNotificationType(value: string): value is NotificationType {

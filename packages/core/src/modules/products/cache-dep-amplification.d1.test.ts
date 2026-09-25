@@ -1,4 +1,4 @@
-// Write amplification of the 0093 cache dependency triggers on the real
+// Write amplification of the 0100 cache dependency triggers on the real
 // write paths (CACHE-DESIGN.md §6.11, §11): a 90-product bulk change, a
 // product save whose facets did not change, and a catalogue rebuild that
 // finds no drift. `depWrites` counts cache_dep row writes (each is the row

@@ -27,16 +27,12 @@ import {
 
 async function createAuthDb(options: {
     guestCheckoutEnabled: boolean;
-    authVerificationMethod?: string;
-    policy?: Record<string, unknown>;
+    identity?: Record<string, unknown>;
 }) {
     const harness = createSqliteD1Database();
     await checkoutDocument.write(harness.db, { guestCheckoutEnabled: options.guestCheckoutEnabled });
     harness.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('auth', 'document', ?, 'json', 'customer_auth')")
-        .run(JSON.stringify({
-            authVerificationMethod: options.authVerificationMethod ?? "email",
-            policy: options.policy ?? null,
-        }));
+        .run(JSON.stringify(options.identity ?? { email: "required", whatsapp: "off", channels: ["email"] }));
     return harness;
 }
 
@@ -87,12 +83,7 @@ describe("customer checkout sign-in readiness", () => {
         mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [], activeProvider: "mimsms" });
         const { db } = await createAuthDb({
             guestCheckoutEnabled: false,
-            policy: {
-                otpChannels: ["sms"],
-                requiredContactFields: ["phone"],
-                optionalContactFields: ["email"],
-                defaultOtpChannel: "sms",
-            },
+            identity: { email: "optional", whatsapp: "off", channels: ["sms"] },
         });
 
         await expect(getCustomerSignInReadiness(db, {

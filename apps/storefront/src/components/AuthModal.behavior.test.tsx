@@ -44,7 +44,10 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  window.__CHECKOUT_CONFIG__ = { authVerificationMethod: "email", allowedCountries: ["BD"] } as CheckoutConfig;
+  window.__CHECKOUT_CONFIG__ = {
+    allowedCountries: ["BD"],
+    customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
+  } as unknown as CheckoutConfig;
 });
 
 afterEach(async () => {
@@ -194,6 +197,44 @@ describe("sign-in dialog", () => {
     expect(resend.disabled).toBe(false);
   });
 
+  it("moves focus to the page's main heading after signing in, not to the body", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp.mockResolvedValue({ success: true, status: "signed_in", customer, isNewUser: false });
+    const page = document.createElement("main");
+    page.innerHTML = `<div id="signedOut"><h1>Sign in to see your orders</h1><button id="opener">Sign in</button></div><div id="signedIn" class="hidden"><h1>Account</h1></div>`;
+    document.body.prepend(page);
+    // The account page swaps its signed-out prompt for the account on sign-in.
+    const onLogin = () => {
+      page.querySelector("#signedOut")!.classList.add("hidden");
+      page.querySelector("#signedIn")!.classList.remove("hidden");
+    };
+    window.addEventListener("customer-login", onLogin);
+    page.querySelector<HTMLButtonElement>("#opener")!.focus();
+
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    await type("#customer-otp", "123456");
+    await submit();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_600); });
+    window.removeEventListener("customer-login", onLogin);
+
+    await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("Account"));
+    expect(document.activeElement?.tagName).toBe("H1");
+    expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("returns focus to the opener when the dialog closes without a sign-in", async () => {
+    const opener = document.createElement("button");
+    opener.textContent = "Account";
+    document.body.prepend(opener);
+    opener.focus();
+    await open();
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
   it("counts down an honest wait when codes are rate limited, never mentioning IP", async () => {
     mocks.sendCustomerOtp.mockResolvedValue({ success: false, error: "Too many codes.", retryAfterSeconds: 120 });
     await open();
@@ -216,7 +257,24 @@ describe("sign-in dialog", () => {
     expect(title()).toBe("Sign in");
     await submit();
     expect(host.querySelector("#customer-otp")).not.toBeNull();
-    expect(alertText()).toBe("Too many codes. Enter the latest code we sent. Try again in 30:00.");
+    // The wait shows once, on the resend button, not again in the alert.
+    expect(alertText()).toBe("Too many codes. Enter the latest code we sent.");
+    expect(host.textContent).toContain("Send a new code in 30:00");
+    expect(host.textContent?.match(/\d+:\d\d/g)).toEqual(["30:00"]);
+  });
+
+  it("shows a rate-limited resend's wait once, on the resend button", async () => {
+    mocks.sendCustomerOtp
+      .mockResolvedValueOnce({ success: true, resendAfterSeconds: 0 })
+      .mockResolvedValueOnce({ success: false, error: "Too many codes.", retryAfterSeconds: 52 });
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Send a new code")!.click());
+
+    expect(alertText()).toBe("Too many codes.");
+    expect(host.textContent).toContain("Send a new code in 0:52");
+    expect(host.textContent).not.toContain("Try again in");
   });
 
   it("reopens on the new-account step with the accepted code instead of asking for a new one", async () => {
@@ -261,15 +319,25 @@ describe("sign-in dialog", () => {
     [["sms"], false],
   ])("with sign-in channels %j, says phone sign-in isn't available: %s", async (otpChannels, noted) => {
     window.__CHECKOUT_CONFIG__ = {
-      authVerificationMethod: "email",
       allowedCountries: ["BD"],
-      customerAuthPolicy: { otpChannels, defaultOtpChannel: otpChannels[0], requiredContactFields: [], optionalContactFields: [] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: otpChannels },
     } as unknown as CheckoutConfig;
     await open();
 
     const note = host.querySelector("[data-phone-sign-in-note]");
     expect(Boolean(note)).toBe(noted);
     if (noted) expect(note?.textContent?.trim()).toBe("Phone sign-in isn't available yet. Use your email.");
+  });
+
+  it("says sign-in codes are unavailable when no chosen channel can send (fail closed)", async () => {
+    window.__CHECKOUT_CONFIG__ = {
+      allowedCountries: ["BD"],
+      customerIdentity: { email: "required", whatsapp: "off", channels: [] },
+    } as unknown as CheckoutConfig;
+    await open();
+    expect(host.querySelector("[data-sign-in-unavailable]")?.textContent?.trim())
+      .toBe("Sign-in codes aren't available right now. Contact the store.");
+    expect(host.querySelector("[data-phone-sign-in-note]")).toBeNull();
   });
 
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {

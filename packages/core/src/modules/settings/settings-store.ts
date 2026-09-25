@@ -188,6 +188,30 @@ export interface SettingsDocument<T extends object> {
 }
 
 /**
+ * A read that must fail closed: `ok: false` when the relational read failed
+ * or the stored row is not valid, never the defaults in disguise.
+ */
+export type StrictSettingsRead<T> =
+  | { ok: true; value: T; revision: number }
+  | { ok: false; reason: "unreadable" | "invalid" };
+
+export async function readSettingsDocumentStrict<T extends object>(
+  document: SettingsDocument<T>,
+  db: Database,
+  ctx?: SettingsDocumentContext,
+): Promise<StrictSettingsRead<T>> {
+  let result: SettingsDocumentReadResult<T>;
+  try {
+    result = await document.readDetailed(db, ctx);
+  } catch (error) {
+    console.warn(`[Settings] ${document.key} could not be read: ${maskedMessage(error)}`);
+    return { ok: false, reason: "unreadable" };
+  }
+  if (result.invalid) return { ok: false, reason: "invalid" };
+  return { ok: true, value: result.value, revision: result.revision };
+}
+
+/**
  * One batchable read of several documents' rows. Inside a public render's
  * dependency scope it declares `set:<document>:document` for each document
  * asked for (present or not), the key the settings triggers advance.

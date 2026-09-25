@@ -10,6 +10,7 @@ import {
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
+    warrantyPolicies,
 } from "@scalius/database/schema";
 import { and, sql, eq, isNull, or } from "drizzle-orm";
 import {
@@ -56,6 +57,11 @@ import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
 import {
+    GIFT_CARD_PRODUCT_RULES_MESSAGE,
+    buildGiftCardProductRulesGuard,
+    rethrowGiftCardProductRuleViolation,
+} from "../gift-card-rules";
+import {
     toStoredCustomizationSchema,
     type CustomizationSchemaInput,
     type CustomizationView,
@@ -79,6 +85,27 @@ async function assertLiveBrand(db: Database, brandId: string | null | undefined)
     if (!brand) {
         throw new ValidationError("That brand is unavailable or in trash. Choose another brand.", { field: "brandId" });
     }
+}
+
+/**
+ * A warranty policy a product may point at: it exists and is not archived.
+ * Not part of the checkout authority fence: commit freezes whatever revision
+ * is current, and a warranty never changes the price.
+ */
+async function assertLiveWarrantyPolicy(db: Database, policyId: string | null | undefined): Promise<void> {
+    if (!policyId) return;
+    if (!await isLiveWarrantyPolicy(db, policyId)) {
+        throw new ValidationError("That warranty policy is unavailable or archived. Choose another policy.", { field: "warrantyPolicyId" });
+    }
+}
+
+async function isLiveWarrantyPolicy(db: Database, policyId: string): Promise<boolean> {
+    const policy = await db
+        .select({ id: warrantyPolicies.id })
+        .from(warrantyPolicies)
+        .where(and(eq(warrantyPolicies.id, policyId), isNull(warrantyPolicies.archivedAt)))
+        .get();
+    return Boolean(policy);
 }
 
 export function defaultVariantValues(productId: string, priceMinor: number) {
@@ -400,6 +427,7 @@ export async function createProduct(
     // Typed attribute value rows, validated before any other read (unknown enum values are created first).
     const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
+    await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
 
     await assertSkusFree(db, data.optionMatrix
         ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
@@ -411,13 +439,15 @@ export async function createProduct(
     const priceMinor = data.optionMatrix?.variants.length
         ? Math.min(...data.optionMatrix.variants.map((variant) => toStoreMinor(variant.price, currency)))
         : toStoreMinor(data.price, currency);
+    const isGiftCard = data.isGiftCard === true;
     const baseDefaultVariant = defaultVariantValues(productId, priceMinor);
     const defaultVariant = {
         ...baseDefaultVariant,
         sku: data.optionMatrix ? baseDefaultVariant.sku : data.defaultSku?.sku ?? await readableDefaultSku(db, data.name),
-        trackInventory: data.defaultSku?.trackInventory ?? false,
+        // A gift card's SKUs are digital and untracked (validation refused anything else).
+        trackInventory: isGiftCard ? false : data.defaultSku?.trackInventory ?? false,
         weight: data.defaultSku?.weight ?? null,
-        fulfillmentKind: data.defaultSku?.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
+        fulfillmentKind: isGiftCard ? "digital" as const : data.defaultSku?.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
         ...(data.defaultSku?.barcode
             ? resolveNewVariantBarcode(baseDefaultVariant.id, data.defaultSku.barcode, data.defaultSku.barcodeType)
             : {}),
@@ -432,6 +462,7 @@ export async function createProduct(
             priceMinor,
             categoryId: data.categoryId,
             brandId: data.brandId ?? null,
+            warrantyPolicyId: data.warrantyPolicyId ?? null,
             slug,
             metaTitle: data.metaTitle || null,
             metaDescription: data.metaDescription,
@@ -445,6 +476,7 @@ export async function createProduct(
             discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
             discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
             freeDelivery: data.freeDelivery,
+            isGiftCard,
             customizationSchema,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -536,8 +568,8 @@ export async function createProduct(
                 reservedStock: 0,
                 preorderStock: 0,
                 isDefault: false,
-                trackInventory: matrixVariant.trackInventory,
-                fulfillmentKind: matrixVariant.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
+                trackInventory: isGiftCard ? false : matrixVariant.trackInventory,
+                fulfillmentKind: isGiftCard ? "digital" as const : matrixVariant.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
                 barcode: barcode.barcode,
                 barcodeType: barcode.barcodeType,
                 discountType: matrixVariant.discountType,
@@ -608,6 +640,7 @@ export async function createProduct(
         await db.batch([
             productInsert(slug),
             ...batchOps,
+            buildGiftCardProductRulesGuard(db, productId),
             ...catalogProjectionRefreshStatements(db, [productId]),
         ] as never);
     };
@@ -623,6 +656,7 @@ export async function createProduct(
         }
     } catch (error) {
         if (isProductSlugConstraintError(error)) throw new ConflictError("A product with this slug already exists");
+        rethrowGiftCardProductRuleViolation(error);
         rethrowProductVariantIdentityConstraint(error);
     }
     return { id: productId, aggregateRevision: 1 };
@@ -642,6 +676,7 @@ type ProductSavePlan = {
         discountBps: number;
         discountAmountMinor: number;
         fulfillmentKind: string;
+        trackInventory: boolean;
     }>;
     mediaPlan: ProductMediaPlan;
     clearSkuImageIds: readonly string[];
@@ -663,6 +698,9 @@ async function unchangedProductSaveRevision(
     if (data.isActive && plan.activeVariants.length === 0) return null;
     if (data.fulfillmentKind !== undefined
         && plan.activeVariants.some((variant) => variant.fulfillmentKind !== data.fulfillmentKind)) return null;
+    // A gift card forces every live SKU digital and untracked.
+    if (data.isGiftCard === true
+        && plan.activeVariants.some((variant) => variant.fulfillmentKind !== "digital" || variant.trackInventory)) return null;
     if (isSimpleDefaultSkuSet([...plan.activeVariants])) {
         const sku = plan.activeVariants[0]!;
         if (sku.priceMinor !== plan.priceMinor || sku.discountType !== "percentage"
@@ -677,6 +715,8 @@ async function unchangedProductSaveRevision(
             priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             brandId: products.brandId,
+            warrantyPolicyId: products.warrantyPolicyId,
+            isGiftCard: products.isGiftCard,
             slug: products.slug,
             metaTitle: products.metaTitle,
             metaDescription: products.metaDescription,
@@ -725,6 +765,8 @@ async function unchangedProductSaveRevision(
         priceMinor: optionPrices.length > 0 ? Math.min(...optionPrices) : plan.priceMinor,
         categoryId: data.categoryId,
         brandId: data.brandId,
+        warrantyPolicyId: data.warrantyPolicyId,
+        isGiftCard: data.isGiftCard,
         slug: data.slug,
         metaTitle: data.metaTitle,
         metaDescription: data.metaDescription,
@@ -771,6 +813,33 @@ async function unchangedProductSaveRevision(
     return current.aggregateRevision;
 }
 
+/** Clear errors for a gift-card save the batch guard would otherwise refuse. */
+function assertGiftCardUpdateAllowed(
+    data: UpdateProductInput,
+    activeVariants: ReadonlyArray<{
+        isDefault: boolean;
+        trackInventory: boolean;
+        reservedStock: number;
+        discountBps: number;
+        discountAmountMinor: number;
+    }>,
+): void {
+    if ((data.discountPercentage ?? 0) > 0 || (data.discountAmount ?? 0) > 0) {
+        throw new ValidationError("Gift cards can't be discounted. Set the discount to 0.", { field: "discountPercentage" });
+    }
+    if (data.fulfillmentKind !== undefined && data.fulfillmentKind !== "digital") {
+        throw new ValidationError("Gift cards are delivered digitally.", { field: "fulfillmentKind" });
+    }
+    // This save resets the simple SKU's discount; option SKUs keep theirs.
+    if (activeVariants.some((variant) => !variant.isDefault && (variant.discountBps > 0 || variant.discountAmountMinor > 0))) {
+        throw new ValidationError(GIFT_CARD_PRODUCT_RULES_MESSAGE, { field: "isGiftCard" });
+    }
+    // Tracking turns off in this save, which open reservations forbid (as a SKU edit does).
+    if (activeVariants.some((variant) => variant.trackInventory && variant.reservedStock > 0)) {
+        throw new ConflictError("Release reserved stock before making this product a gift card: gift cards don't track quantity.");
+    }
+}
+
 /**
  * Updates an existing product, replacing ordered media, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
@@ -781,7 +850,7 @@ export async function updateProduct(
     data: UpdateProductInput,
 ): Promise<ProductAggregateRevisionResult> {
     const existingProduct = await db
-        .select({ id: products.id, storeCurrencyCode: storeCurrencyCodeSql() })
+        .select({ id: products.id, isGiftCard: products.isGiftCard, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(eq(products.id, id))
         .get();
@@ -808,6 +877,7 @@ export async function updateProduct(
 
     const attributeRows = await prepareProductAttributeValueRows(db, id, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
+    await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
     const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
     const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
     const productPrice = catalogPriceColumns(data, currency);
@@ -837,9 +907,15 @@ export async function updateProduct(
             discountBps: productVariants.discountBps,
             discountAmountMinor: productVariants.discountAmountMinor,
             fulfillmentKind: productVariants.fulfillmentKind,
+            trackInventory: productVariants.trackInventory,
+            reservedStock: productVariants.reservedStock,
         })
         .from(productVariants)
         .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
+    // Omitted keeps the flag. A gift card forces every live SKU digital and
+    // untracked in this batch; discounts and open reservations are refused.
+    const isGiftCard = data.isGiftCard ?? existingProduct.isGiftCard === true;
+    if (isGiftCard) assertGiftCardUpdateAllowed(data, activeVariants);
     const mediaPlan = await validateProductMediaPlan(db, id, data.media, true);
     const submittedMediaIds = new Set(mediaPlan.rows.map((row) => row.id));
     const removedAssociationIds = mediaPlan.existingRows
@@ -881,6 +957,8 @@ export async function updateProduct(
                 categoryId: data.categoryId,
                 // Omitted keeps the stored brand; null removes it.
                 ...(data.brandId !== undefined ? { brandId: data.brandId } : {}),
+                // Omitted keeps the warranty; null removes it.
+                ...(data.warrantyPolicyId !== undefined ? { warrantyPolicyId: data.warrantyPolicyId } : {}),
                 slug: data.slug,
                 metaTitle: data.metaTitle,
                 metaDescription: data.metaDescription,
@@ -894,6 +972,7 @@ export async function updateProduct(
                 discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
                 discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
                 freeDelivery: data.freeDelivery,
+                ...(data.isGiftCard !== undefined ? { isGiftCard: data.isGiftCard } : {}),
                 ...(customizationSchema !== undefined ? { customizationSchema } : {}),
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
@@ -918,7 +997,7 @@ export async function updateProduct(
     if (data.isActive && activeVariants.length === 0) {
         batchOps.push(db.insert(productVariants).values({
             ...defaultVariantValues(id, priceMinor),
-            fulfillmentKind: data.fulfillmentKind ?? "physical",
+            fulfillmentKind: isGiftCard ? "digital" : data.fulfillmentKind ?? "physical",
         }));
     } else if (hasInvalidSkuTopology(activeVariants)) {
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
@@ -939,9 +1018,19 @@ export async function updateProduct(
         );
     }
 
-    // The Shipping card's kind applies to every live SKU. The editor offers
-    // physical and service only; digital waits for its Wave B fulfiller.
-    if (data.fulfillmentKind !== undefined) {
+    // The Shipping card's kind applies to every live SKU. Checkout refuses a
+    // digital line until it is deliverable, so accepting the kind is safe.
+    if (isGiftCard) {
+        batchOps.push(db.update(productVariants)
+            .set({ fulfillmentKind: "digital", trackInventory: false, updatedAt: sql`unixepoch()` })
+            .where(and(
+                eq(productVariants.productId, id),
+                isNull(productVariants.deletedAt),
+                sql`(${productVariants.fulfillmentKind} <> 'digital' OR ${productVariants.trackInventory} = 1)`,
+                // A reservation that raced in keeps tracking on, and the guard refuses the save.
+                sql`(${productVariants.trackInventory} = 0 OR ${productVariants.reservedStock} = 0)`,
+            )));
+    } else if (data.fulfillmentKind !== undefined) {
         batchOps.push(db.update(productVariants)
             .set({ fulfillmentKind: data.fulfillmentKind, updatedAt: sql`unixepoch()` })
             .where(and(
@@ -951,6 +1040,7 @@ export async function updateProduct(
             )));
     }
 
+    batchOps.push(buildGiftCardProductRulesGuard(db, id));
     // The catalogue projections read this batch's own writes.
     batchOps.push(...catalogProjectionRefreshStatements(db, [id]));
 
@@ -958,6 +1048,7 @@ export async function updateProduct(
         const results = await safeBatch(db, batchOps as never) as unknown[];
         return readProductAggregateRevisionResult(results[1]);
     } catch (error) {
+        rethrowGiftCardProductRuleViolation(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,
@@ -1046,11 +1137,6 @@ function customizationInputFromView(view: CustomizationView | null): Customizati
     };
 }
 
-/** A copy keeps service SKUs as services; anything else starts physical. */
-function copiedFulfillmentKind(kind: string): "physical" | "service" {
-    return kind === "service" ? "service" : "physical";
-}
-
 /**
  * Copies a product as a new draft: text, pricing, media, attributes, extra
  * sections, buyer inputs and its options with every live variant. Copies start with no
@@ -1097,11 +1183,16 @@ export async function duplicateProduct(
         price: source.price,
         categoryId: source.categoryId,
         brandId: source.brandId,
+        // A copy keeps a live warranty; an archived one is not offered to new products.
+        warrantyPolicyId: source.warrantyPolicyId && await isLiveWarrantyPolicy(db, source.warrantyPolicyId)
+            ? source.warrantyPolicyId
+            : null,
         isActive: false,
         discountType: source.discountType === "flat" ? "flat" : "percentage",
         discountPercentage: source.discountPercentage,
         discountAmount: source.discountAmount,
         freeDelivery: source.freeDelivery,
+        isGiftCard: source.isGiftCard,
         metaTitle: source.metaTitle,
         metaDescription: source.metaDescription,
         canonicalPath: null,
@@ -1141,7 +1232,7 @@ export async function duplicateProduct(
                         discountType: variant.discountType === "flat" ? "flat" : "percentage",
                         discountPercentage: variant.discountType === "flat" ? null : variant.discountPercentage,
                         discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
-                        fulfillmentKind: copiedFulfillmentKind(variant.fulfillmentKind),
+                        fulfillmentKind: variant.fulfillmentKind,
                     })),
                 },
             }
@@ -1151,7 +1242,7 @@ export async function duplicateProduct(
                     trackInventory: liveVariants[0]?.trackInventory ?? false,
                     stock: 0,
                     weight: liveVariants[0]?.weight ?? null,
-                    fulfillmentKind: copiedFulfillmentKind(liveVariants[0]?.fulfillmentKind ?? "physical"),
+                    fulfillmentKind: liveVariants[0]?.fulfillmentKind ?? "physical",
                 },
             }),
     });

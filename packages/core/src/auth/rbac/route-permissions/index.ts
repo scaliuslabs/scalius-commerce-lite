@@ -18,6 +18,10 @@ import { BRAND_ROUTE_PERMISSIONS } from "./brands";
 import { CATALOG_PROJECTION_ROUTE_PERMISSIONS } from "./catalog-projections";
 import { MERCHANDISING_ROUTE_PERMISSIONS } from "./merchandising";
 import { ATTRIBUTE_TYPED_ROUTE_PERMISSIONS } from "./attributes-typed";
+import { REVIEW_ROUTE_PERMISSIONS } from "./reviews";
+import { GIFT_CARD_ROUTE_PERMISSIONS } from "./gift-cards";
+import { DIGITAL_ROUTE_PERMISSIONS } from "./digital";
+import { WARRANTY_ROUTE_PERMISSIONS } from "./warranty";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -42,6 +46,10 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   CATALOG_PROJECTION_ROUTE_PERMISSIONS,
   MERCHANDISING_ROUTE_PERMISSIONS,
   ATTRIBUTE_TYPED_ROUTE_PERMISSIONS,
+  REVIEW_ROUTE_PERMISSIONS,
+  GIFT_CARD_ROUTE_PERMISSIONS,
+  DIGITAL_ROUTE_PERMISSIONS,
+  WARRANTY_ROUTE_PERMISSIONS,
 ];
 
 /**

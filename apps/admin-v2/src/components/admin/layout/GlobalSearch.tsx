@@ -1,91 +1,69 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Search } from "lucide-react";
-import { useMessages } from "~/i18n";
-import { shellMessages } from "~/i18n/shell";
-import { GO_SHORTCUTS } from "./AdminNav";
+import { GO_KEY, goKeys, matchesShortcut, SEQUENCE_MS, typingIn } from "./shortcuts";
+import { useStaffShortcuts } from "./staff-shortcuts";
+import { useShell } from "./shell";
 import type { GlobalSearchProps } from "./GlobalSearchDialog";
 
-// cmdk loads in its own chunk after the shell; the dialog itself stays mounted.
+// cmdk loads in its own chunk after the shell; the dialogs themselves stay mounted.
 const GlobalSearchDialog = lazy(() =>
   import("./GlobalSearchDialog").then((module) => ({ default: module.GlobalSearchDialog })),
 );
 const ShortcutsDialog = lazy(() =>
-  import("./GlobalSearchDialog").then((module) => ({ default: module.ShortcutsDialog })),
+  import("./ShortcutsDialog").then((module) => ({ default: module.ShortcutsDialog })),
 );
 
-const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-const SEQUENCE_MS = 1000;
-
-function typingIn(target: EventTarget | null) {
-  const element = target as HTMLElement | null;
-  return Boolean(element?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']"));
-}
-
 /**
- * Top-bar search. ⌘K / Ctrl+K or S opens it; G then H, O, P, C, D or S jumps
- * to a section (Shopify's sequences); ? lists the shortcuts. Shortcuts never
- * fire while typing.
+ * The search and shortcut host, mounted once with the shell; the top bar's
+ * search field and help button open its dialogs too. Keys come from the
+ * shortcut registry: ⌘K / Ctrl+K or S opens search, ? lists every shortcut,
+ * and G then a letter goes to a page (the defaults plus this staff member's
+ * own choices). Nothing fires while typing.
  */
-export function GlobalSearch(props: GlobalSearchProps) {
+export function GlobalSearch(props: Omit<GlobalSearchProps, "goKeys">) {
   const { canOpen } = props;
-  const t = useMessages(shellMessages);
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const { searchOpen, setSearchOpen, helpOpen, setHelpOpen } = useShell();
+  const shortcuts = useStaffShortcuts();
+  const keys = useMemo(() => goKeys(shortcuts.data?.shortcuts), [shortcuts.data]);
+  const destinations = useMemo(() => new Map([...keys].map(([to, key]) => [key, to])), [keys]);
 
   useEffect(() => {
     let goPressedAt = 0;
     const onKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if (key === "k" && (event.metaKey || event.ctrlKey)) {
+      if (matchesShortcut("search", event) && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        setOpen((value) => !value);
+        setSearchOpen((value) => !value);
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey || typingIn(event.target)) return;
-      if (Date.now() - goPressedAt < SEQUENCE_MS && GO_SHORTCUTS[key]) {
+      const key = event.key.toLowerCase();
+      const to = destinations.get(key);
+      if (Date.now() - goPressedAt < SEQUENCE_MS && to) {
         goPressedAt = 0;
-        const to = GO_SHORTCUTS[key]!;
         if (canOpen(to)) {
           event.preventDefault();
           void navigate({ to });
         }
         return;
       }
-      if (key === "g") goPressedAt = Date.now();
-      else if (event.key === "?") {
+      if (key === GO_KEY) goPressedAt = Date.now();
+      else if (matchesShortcut("help", event)) {
         event.preventDefault();
         setHelpOpen(true);
-      } else if (key === "s") {
+      } else if (matchesShortcut("search", event)) {
         event.preventDefault();
-        setOpen(true);
+        setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canOpen, navigate]);
+  }, [canOpen, navigate, setSearchOpen, setHelpOpen, destinations]);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-keyshortcuts={isMac ? "Meta+K S" : "Control+K S"}
-        data-topbar-search=""
-        className="flex h-9 w-full max-w-160 items-center gap-2 rounded-xl bg-topbar-subdued pl-3 pr-2 text-body text-topbar-foreground outline-none hover:bg-topbar-hover focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Search className="size-4 shrink-0" aria-hidden />
-        <span className="flex-1 truncate text-left">{t("search")}</span>
-        <span className="hidden items-center gap-1 sm:flex" aria-hidden>
-          <kbd className="flex h-5 min-w-5 items-center justify-center rounded-md bg-topbar-hover px-1 text-caption text-topbar-foreground">{isMac ? "⌘" : "Ctrl"}</kbd>
-          <kbd className="flex h-5 min-w-5 items-center justify-center rounded-md bg-topbar-hover px-1 text-caption text-topbar-foreground">K</kbd>
-        </span>
-      </button>
-      <Suspense fallback={null}>
-        <GlobalSearchDialog {...props} open={open} setOpen={setOpen} />
-        <ShortcutsDialog open={helpOpen} setOpen={setHelpOpen} />
-      </Suspense>
-    </>
+    <Suspense fallback={null}>
+      <GlobalSearchDialog {...props} goKeys={keys} open={searchOpen} setOpen={setSearchOpen} />
+      <ShortcutsDialog {...props} open={helpOpen} setOpen={setHelpOpen} />
+    </Suspense>
   );
 }

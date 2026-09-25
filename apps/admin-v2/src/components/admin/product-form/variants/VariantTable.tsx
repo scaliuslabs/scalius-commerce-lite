@@ -38,12 +38,29 @@ import {
   type DraftVariant,
   type VariantGroup,
 } from "./option-matrix-editor-model";
+import { useProductKindRules } from "../product-kind-rules";
 import { AdvancedSkuFields, InventoryQuantityInput, VariantImagePicker, type IssueFor } from "./variant-fields";
 
 /** Phone: select, photo, name, menu (price and quantity below). Wider: one line with every column. */
 const ROW_GRID = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_2.25rem]";
 /** The same rows with a Fulfilment column, shown only while variants differ (physical vs service). */
 const ROW_GRID_KIND = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_7.5rem_2.25rem]";
+/** Without a Quantity column: kinds that never track quantity (gift cards). */
+const ROW_GRID_NO_QUANTITY = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_2.25rem]";
+const ROW_GRID_NO_QUANTITY_KIND = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_7.5rem_2.25rem]";
+
+/** The table's columns: the grid, where the row menu sits, and how wide the bulk bar is. */
+type RowLayout = { grid: string; actions: string; bulkSpan: string; kind: boolean; quantity: boolean };
+const ROW_LAYOUTS: Record<"base" | "kind" | "noQuantity" | "noQuantityKind", RowLayout> = {
+  base: { grid: ROW_GRID, actions: "col-start-4 md:col-start-6", bulkSpan: "md:col-span-5", kind: false, quantity: true },
+  kind: { grid: ROW_GRID_KIND, actions: "col-start-4 md:col-start-7", bulkSpan: "md:col-span-6", kind: true, quantity: true },
+  noQuantity: { grid: ROW_GRID_NO_QUANTITY, actions: "col-start-4 md:col-start-5", bulkSpan: "md:col-span-4", kind: false, quantity: false },
+  noQuantityKind: { grid: ROW_GRID_NO_QUANTITY_KIND, actions: "col-start-4 md:col-start-6", bulkSpan: "md:col-span-5", kind: true, quantity: false },
+};
+function rowLayout(kind: boolean, quantity: boolean): RowLayout {
+  if (quantity) return kind ? ROW_LAYOUTS.kind : ROW_LAYOUTS.base;
+  return kind ? ROW_LAYOUTS.noQuantityKind : ROW_LAYOUTS.noQuantity;
+}
 type EditableKind = "physical" | "service";
 
 type Money = ReturnType<typeof useCurrency> & {
@@ -121,8 +138,11 @@ export function VariantTable(props: VariantTableProps) {
     whole: (amount: number) => (requiresWholeCashAmounts(code) ? `${symbol}${formatNumber(Math.round(amount))}` : fmt(amount)),
   }) as Money, [code, symbol, fmt, salePrice]);
 
-  const kindColumn = Boolean(props.fulfilmentColumn);
-  const grid = kindColumn ? ROW_GRID_KIND : ROW_GRID;
+  // The product kind decides the columns: a gift card tracks no quantity.
+  const { showInventory } = useProductKindRules();
+  const layout = rowLayout(Boolean(props.fulfilmentColumn), showInventory);
+  const kindColumn = layout.kind;
+  const grid = layout.grid;
   const [query, setQuery] = React.useState("");
   const [view, setView] = React.useState<"all" | "notForSale">("all");
   const [groupAxis, setGroupAxis] = React.useState(0);
@@ -224,7 +244,7 @@ export function VariantTable(props: VariantTableProps) {
       money={money}
       canRemove={canRemoveAny}
       printable={!props.printingDisabled && variant.id.startsWith("var_")}
-      kindColumn={kindColumn}
+      layout={layout}
       onChange={onChange}
       onSelect={onSelect}
       onToggleExpand={onToggleExpand}
@@ -302,7 +322,7 @@ export function VariantTable(props: VariantTableProps) {
                 allSelected={selectedCount >= variants.length}
                 printableIds={props.printingDisabled ? [] : [...selected].filter((id) => id.startsWith("var_"))}
                 printingDisabled={props.printingDisabled}
-                wide={kindColumn}
+                layout={layout}
                 panel={panel}
                 onPanel={setPanel}
                 onClear={() => setSelected(new Set())}
@@ -318,9 +338,9 @@ export function VariantTable(props: VariantTableProps) {
                 <span><span className="sr-only">{t("photo")}</span></span>
                 <span className="font-medium">{t("variant")}</span>
                 <span className="hidden font-medium md:block">{t("price")}</span>
-                <span className="hidden font-medium md:block">{t("quantity")}</span>
+                {layout.quantity ? <span className="hidden font-medium md:block">{t("quantity")}</span> : null}
                 {kindColumn ? <span className="hidden font-medium md:block">{t("fulfilment")}</span> : null}
-                <span className={kindColumn ? "col-start-4 md:col-start-7" : "col-start-4 md:col-start-6"}><span className="sr-only">{r("actions")}</span></span>
+                <span className={layout.actions}><span className="sr-only">{r("actions")}</span></span>
               </>
             )}
           </div>
@@ -354,7 +374,7 @@ export function VariantTable(props: VariantTableProps) {
                       images={props.images}
                       money={money}
                       selectedCount={group.variants.filter((variant) => selected.has(variant.id)).length}
-                      kindColumn={kindColumn}
+                      layout={layout}
                       onToggle={onToggleGroup}
                       onSelect={onSelect}
                       onChangeMany={props.onChangeMany}
@@ -384,7 +404,7 @@ type VariantRowProps = {
   money: Money;
   canRemove: boolean;
   printable: boolean;
-  kindColumn: boolean;
+  layout: RowLayout;
   onChange: (id: string, patch: Partial<DraftVariant>) => void;
   onSelect: (ids: readonly string[], checked: boolean) => void;
   onToggleExpand: (id: string) => void;
@@ -393,9 +413,10 @@ type VariantRowProps = {
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, images, money, canRemove, printable, kindColumn,
+  variant, name, label, depth, selected, expanded, issue, committed, images, money, canRemove, printable, layout,
   onChange, onSelect, onToggleExpand, onRemove, onPrint,
 }: VariantRowProps) {
+  const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const errorOf = (field: DraftIssue["field"]) => (issue && issue.field === field ? issue.message : undefined);
@@ -412,7 +433,7 @@ const VariantRow = React.memo(function VariantRow({
   ], [canRemove, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
 
   return (
-    <div data-variant-row={variant.id} className={cn(kindColumn ? ROW_GRID_KIND : ROW_GRID, "border-b py-1.5", selected && "bg-muted/50")}>
+    <div data-variant-row={variant.id} className={cn(layout.grid, "border-b py-1.5", selected && "bg-muted/50")}>
       <div className="flex justify-center">
         <Checkbox checked={selected} onCheckedChange={(checked) => onSelect([variant.id], checked === true)} aria-label={r("select", { name })} />
       </div>
@@ -463,22 +484,24 @@ const VariantRow = React.memo(function VariantRow({
           />
           {priceError ? <p className="text-body text-destructive">{priceError}</p> : null}
         </div>
-        <div className="min-w-0">
-          <span className="block text-body text-muted-foreground md:hidden">{t("quantity")}</span>
-          {variant.trackInventory ? (
-            <InventoryQuantityInput
-              cell="stock"
-              ariaLabel={t("quantityFor", { name })}
-              invalid={Boolean(stockError)}
-              value={variant.stock}
-              committed={committed}
-              onChange={(stock) => change({ stock })}
-            />
-          ) : (
-            <p className="py-2 text-body text-muted-foreground">{t("notTracked")}</p>
-          )}
-          {stockError ? <p className="text-body text-destructive">{stockError}</p> : null}
-        </div>
+        {layout.quantity ? (
+          <div className="min-w-0">
+            <span className="block text-body text-muted-foreground md:hidden">{t("quantity")}</span>
+            {variant.trackInventory ? (
+              <InventoryQuantityInput
+                cell="stock"
+                ariaLabel={t("quantityFor", { name })}
+                invalid={Boolean(stockError)}
+                value={variant.stock}
+                committed={committed}
+                onChange={(stock) => change({ stock })}
+              />
+            ) : (
+              <p className="py-2 text-body text-muted-foreground">{t("notTracked")}</p>
+            )}
+            {stockError ? <p className="text-body text-destructive">{stockError}</p> : null}
+          </div>
+        ) : null}
         {kindColumn ? (
           <div className="col-span-2 min-w-0 md:col-span-1">
             <span className="block text-body text-muted-foreground md:hidden">{t("fulfilment")}</span>
@@ -490,7 +513,7 @@ const VariantRow = React.memo(function VariantRow({
           </div>
         ) : null}
       </div>
-      <div className={cn("col-start-4 row-start-1 flex justify-end", kindColumn ? "md:col-start-7" : "md:col-start-6")}>
+      <div className={cn(layout.actions, "row-start-1 flex justify-end")}>
         <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} />
       </div>
       {expanded ? (
@@ -508,7 +531,7 @@ type GroupRowProps = {
   images: ProductSkuImageChoice[];
   money: Money;
   selectedCount: number;
-  kindColumn: boolean;
+  layout: RowLayout;
   onToggle: (valueId: string) => void;
   onSelect: (ids: readonly string[], checked: boolean) => void;
   onChangeMany: VariantTableProps["onChangeMany"];
@@ -520,14 +543,15 @@ function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
     && previous.images === next.images
     && previous.money === next.money
     && previous.selectedCount === next.selectedCount
-    && previous.kindColumn === next.kindColumn
+    && previous.layout === next.layout
     && previous.onChangeMany === next.onChangeMany
     && previous.group.label === next.group.label
     && previous.group.variants.length === next.group.variants.length
     && previous.group.variants.every((variant, index) => variant === next.group.variants[index]);
 }
 
-const GroupRow = React.memo(function GroupRow({ group, open, images, money, selectedCount, kindColumn, onToggle, onSelect, onChangeMany }: GroupRowProps) {
+const GroupRow = React.memo(function GroupRow({ group, open, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
+  const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const ids = group.variants.map((variant) => variant.id);
   const tracked = group.variants.filter((variant) => variant.trackInventory);
@@ -540,7 +564,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
   const range = prices.length ? `${formatNumber(Math.min(...prices))}–${formatNumber(Math.max(...prices))}` : undefined;
   const allSelected = selectedCount === ids.length;
   return (
-    <div className={cn(kindColumn ? ROW_GRID_KIND : ROW_GRID, "border-b bg-muted/30 py-2")}>
+    <div className={cn(layout.grid, "border-b bg-muted/30 py-2")}>
       <div className="flex justify-center">
         <Checkbox
           checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
@@ -579,7 +603,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
             if (price !== null && Number.isFinite(price)) onChangeMany(new Set(ids), { price: Math.max(0, price) });
           }}
         />
-        {tracked.length > 0 ? (
+        {!layout.quantity ? null : tracked.length > 0 ? (
           <NumberInput
             integer
             value={commonStock ?? null}
@@ -629,10 +653,10 @@ function KindSelect({ value, label, onChange }: {
   );
 }
 
-function BulkBar({ count, allSelected, printableIds, printingDisabled, wide, panel, onPanel, onClear, onPrint, onRemove }: {
+function BulkBar({ count, allSelected, printableIds, printingDisabled, layout, panel, onPanel, onClear, onPrint, onRemove }: {
   count: number;
-  /** The table has a Fulfilment column. */
-  wide: boolean;
+  /** The table's columns: the bar spans them, and without a Quantity column there is no quantity edit. */
+  layout: RowLayout;
   allSelected: boolean;
   printableIds: string[];
   printingDisabled: boolean;
@@ -646,15 +670,17 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, wide, pan
   const r = useMessages(resourceMessages);
   const toggle = (next: BulkPanel) => onPanel(panel === next ? null : next);
   return (
-    <div className={cn("col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1", wide ? "md:col-span-6" : "md:col-span-5")}>
+    <div className={cn("col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1", layout.bulkSpan)}>
       <strong className="font-medium text-foreground">{r("selected", { count })}</strong>
       <Button type="button" variant="link" size="sm" onClick={onClear}>{t("clearSelection")}</Button>
       <Button type="button" variant={panel === "price" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "price"} onClick={() => toggle("price")}>
         {t("editPrices")}
       </Button>
-      <Button type="button" variant={panel === "stock" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "stock"} onClick={() => toggle("stock")}>
-        {t("editQuantities")}
-      </Button>
+      {layout.quantity ? (
+        <Button type="button" variant={panel === "stock" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "stock"} onClick={() => toggle("stock")}>
+          {t("editQuantities")}
+        </Button>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="sm">

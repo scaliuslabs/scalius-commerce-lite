@@ -47,6 +47,9 @@ import { LineProperties } from "./LineProperties";
 import { ManualFulfillmentDialog, type ManualFulfillmentKind } from "./ManualFulfillmentDialog";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
+import { DigitalLinesCard } from "./DigitalLinesCard";
+import { GiftCardLinesCard } from "./GiftCardLinesCard";
+import { WarrantyLinesCard } from "./WarrantyLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
   canHandOver,
@@ -131,6 +134,9 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
           returned={returned}
         />
       ))}
+      <DigitalLinesCard order={order} />
+      <GiftCardLinesCard order={order} />
+      <WarrantyLinesCard order={order} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * Provider-neutral trigger scenario for migration 0093: plain SQL writes and
+ * Provider-neutral trigger scenario for migration 0100: plain SQL writes and
  * the keys each one must (and must not) advance. The D1, Turso (node:sqlite
  * and the real Turso engine) and PostgreSQL tests run the same steps.
  */

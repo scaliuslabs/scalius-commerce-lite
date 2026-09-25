@@ -53,11 +53,12 @@ const { shippingMethods, shippingMethodLabel, pickupLocationLabel, modeSwitch, .
   <script is:inline type="application/json" data-shipping-rates set:html={serializeJsonForInlineScript(shippingMethods)} />
   <fieldset id="shippingMethods" class="rounded-lg" aria-describedby="shippingMethodNotice shippingMethodNote shippingMethodError">
     <legend class="mb-2 block text-sm font-medium text-foreground" data-shipping-legend>{shippingMethodLabel}</legend>
-    <p id="shippingMethodNote" class="mb-2 text-sm text-muted-foreground" role="status" data-shipping-note>
-      {copy.chooseAddressText}
-    </p>
+    <p id="shippingMethodNote" class="mb-2 hidden text-sm text-muted-foreground" role="status" data-shipping-note></p>
     <p id="shippingMethodNotice" class="mb-2 hidden rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert" data-shipping-notice></p>
-    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" data-shipping-options></div>
+    {/* The same stand-in `enhanceShippingMethods` shows until an address is chosen. */}
+    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" data-shipping-options>
+      <p class="flex min-h-[4.25rem] items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground">{copy.chooseAddressText}</p>
+    </div>
   </fieldset>
   <p id="shippingMethodError" class="mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
 </div>

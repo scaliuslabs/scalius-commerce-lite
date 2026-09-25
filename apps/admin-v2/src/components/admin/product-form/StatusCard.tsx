@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared/product-condition";
 import { useMessages } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { useProductKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
 
 const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
@@ -25,6 +26,7 @@ interface StatusCardProps {
 
 export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: StatusCardProps) {
   const t = useMessages(productMessages);
+  const { showShipping } = useProductKindRules();
 
   return (
     <Card>
@@ -52,18 +54,21 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="freeDelivery"
-          render={({ field }) => (
-            <FormItem className="flex items-center justify-between">
-              <FormLabel>{t("freeDelivery")}</FormLabel>
-              <FormControl>
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-            </FormItem>
-          )}
-        />
+        {/* Nothing ships for a gift card (the product kind rules). */}
+        {showShipping ? (
+          <FormField
+            control={form.control}
+            name="freeDelivery"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between">
+                <FormLabel>{t("freeDelivery")}</FormLabel>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        ) : null}
 
         <FormField
           control={form.control}

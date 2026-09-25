@@ -12,6 +12,9 @@ interface Props {
   label: string;
   /** Why the number is needed and its format, shown under the field. */
   help?: string;
+  /** Help for a pickup order and for an order with nothing to deliver (the cart page switches between them). */
+  pickupHelp?: string;
+  serviceHelp?: string;
   placeholder?: string;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
@@ -28,6 +31,8 @@ interface Props {
 const {
   label,
   help,
+  pickupHelp,
+  serviceHelp,
   placeholder,
   allowedCountries = [],
   allowedCountriesMode = "include",
@@ -109,7 +114,22 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
       class="h-full min-w-0 flex-1 border-none bg-transparent px-3 text-base text-foreground outline-none"
     />
   </div>
-  {help && <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{help}</p>}
+  {
+    help && (
+      <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">
+        {pickupHelp || serviceHelp ? (
+          <>
+            {/* The page root's delivery need and mode pick the sentence that is true. */}
+            <span class="group-data-[delivery-need=none]:hidden group-data-[delivery-mode=pickup]:hidden">{help}</span>
+            <span class="hidden group-data-[delivery-mode=pickup]:inline group-data-[delivery-need=none]:hidden">{pickupHelp || help}</span>
+            <span class="hidden group-data-[delivery-need=none]:inline">{serviceHelp || help}</span>
+          </>
+        ) : (
+          help
+        )}
+      </p>
+    )
+  }
   <p
     id="customerPhone-error"
     role="alert"
