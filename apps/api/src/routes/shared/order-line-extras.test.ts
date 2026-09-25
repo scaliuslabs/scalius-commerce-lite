@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { composeOrderLineExtras, withOrderLineExtras } from "./order-line-extras";
 
-// The feature domains are empty stubs until B1/B3/B4/B5: composing extras must
-// read nothing and leave every order item byte-identical.
+// B3 filled the digital reader; it is stubbed here so the remaining domains are
+// still proven to read nothing and leave every order item byte-identical.
+const digital = vi.hoisted(() => ({ deliveries: new Map<string, unknown>() }));
+vi.mock("@scalius/core/modules/digital", () => ({
+  listLineDeliveries: vi.fn(async () => digital.deliveries),
+}));
+
+beforeEach(() => {
+  digital.deliveries = new Map();
+});
 const noDatabase = new Proxy({}, {
   get() {
     throw new Error("order-line extras must not read the database while the domains are empty");
@@ -33,6 +41,24 @@ describe("composeOrderLineExtras", () => {
       currencyDecimalPlaces: 2,
     });
     expect(extras.size).toBe(0);
+  });
+
+  it("presents a line's downloads with ISO expiry and keys by last 4", async () => {
+    digital.deliveries = new Map([["oi_2", {
+      downloads: [{ entitlementId: "dge_1", displayName: "Guide", downloadCount: 1, downloadLimit: 5, expiresAt: 1_900_000_000, revoked: false }],
+      licenceKeys: [{ keyId: "dlk_1", last4: "7K2Q" }],
+    }]]);
+    const extras = await composeOrderLineExtras(noDatabase, {
+      orderId: "ord_1",
+      orderItemIds: ["oi_1", "oi_2"],
+      audience: "buyer",
+      currencyDecimalPlaces: 0,
+    });
+    expect([...extras.keys()]).toEqual(["oi_2"]);
+    expect(extras.get("oi_2")).toEqual({
+      downloads: [{ entitlementId: "dge_1", displayName: "Guide", downloadCount: 1, downloadLimit: 5, expiresAt: "2030-03-17T17:46:40.000Z", revoked: false }],
+      licenceKeys: [{ keyId: "dlk_1", last4: "7K2Q" }],
+    });
   });
 
   it("attaches a line's extras only to that line", () => {

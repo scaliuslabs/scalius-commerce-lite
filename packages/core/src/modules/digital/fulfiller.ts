@@ -70,7 +70,7 @@ async function readReadyAssets(db: Database, productIds: readonly string[]): Pro
             downloadLimit: digitalAssets.downloadLimit,
             accessDays: digitalAssets.accessDays,
             available: sql<number>`CASE WHEN ${digitalAssets.kind} = 'licence_keys'
-                THEN (SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = ${digitalAssets.id} AND k.status = 'available')
+                THEN (SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'available')
                 ELSE 0 END`,
         }).from(digitalAssets)
             .where(and(inArray(digitalAssets.productId, unique.slice(offset, offset + PRODUCT_CHUNK)), eq(digitalAssets.status, "ready")))
