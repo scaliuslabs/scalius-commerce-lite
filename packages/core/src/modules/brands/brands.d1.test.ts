@@ -130,9 +130,14 @@ describe("brand records", () => {
         await restoreBrands(db, [{ id: brand.id, expectedRevision: 2 }]);
         await trashBrands(db, [{ id: brand.id, expectedRevision: 3 }]);
         const before = sqlite!.prepare("SELECT aggregate_revision AS revision FROM products WHERE id = 'prod_fan'").get() as { revision: number };
+        await rebuildCatalogProjections(db);
+        const stateBrand = () => sqlite!.prepare("SELECT brand_id AS brandId FROM product_buyer_state WHERE product_id = 'prod_fan'").get();
+        expect(stateBrand()).toEqual({ brandId: brand.id });
         await permanentlyDeleteBrands(db, [{ id: brand.id, expectedRevision: 4 }]);
         expect(sqlite!.prepare("SELECT brand_id AS brandId, aggregate_revision AS revision FROM products WHERE id = 'prod_fan'").get())
             .toEqual({ brandId: null, revision: before.revision + 1 });
+        // The stored buyer state loses the brand in the same batch.
+        expect(stateBrand()).toEqual({ brandId: null });
     });
 });
 
