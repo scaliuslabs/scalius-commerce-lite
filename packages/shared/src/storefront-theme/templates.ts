@@ -4,9 +4,12 @@
 // (SYNTHESIS.md section 4). Choosing a template copies it into the
 // document; changing a block keeps `template` as the "based on" label.
 import {
+  STOREFRONT_NAVIGATION_LINK_BUDGET,
   storefrontBlockDefault,
   type StorefrontBlockSlot,
+  type StorefrontListingFilters,
   type StorefrontListingToolbarPiece,
+  type StorefrontNavigation,
   type StorefrontProductModule,
   type StorefrontThemeBlocks,
 } from "./blocks";
@@ -52,11 +55,13 @@ function home(type: StorefrontSectionType, id: string, settings: Record<string, 
 function blocks(spec: {
   topBar: string;
   header: [string, Record<string, unknown>?];
+  navigation: Omit<StorefrontNavigation, "linkBudget"> & { linkBudget?: number };
   desktopNav: [string, Record<string, unknown>?];
   mobileNav: [string, Record<string, unknown>?];
   card: [string, Record<string, unknown>?];
   listing: {
     layout: [string, Record<string, unknown>?];
+    filters: StorefrontListingFilters;
     toolbar: StorefrontListingToolbarPiece[];
     phoneLayout: "grid" | "list-row";
     paging: "numbered" | "load-more" | "infinite";
@@ -72,6 +77,7 @@ function blocks(spec: {
   return {
     topBar: pick("topBar", spec.topBar),
     header: pick("header", ...spec.header),
+    navigation: { linkBudget: STOREFRONT_NAVIGATION_LINK_BUDGET, ...spec.navigation },
     desktopNav: pick("desktopNav", ...spec.desktopNav),
     mobileNav: pick("mobileNav", ...spec.mobileNav),
     card: pick("card", ...spec.card),
@@ -110,10 +116,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "announcement",
       header: ["boutique-inline"],
+      navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["boutique"],
-      listing: { layout: ["bar-drawer"], toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: {
         gallery: "stacked",
         buyBox: ["boutique"],
@@ -143,10 +150,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "none",
       header: ["fashion-department", { subBrandRow: true }],
+      navigation: { source: "tree+menu", maxTopItems: 11 },
       desktopNav: ["mega-panel"],
       mobileNav: ["accordion-drawer"],
       card: ["portrait"],
-      listing: { layout: ["shelves"], toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["shelves"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "portrait", buyBox: ["fashion"], below: ["description", "related", "recently-viewed"], sticky: NO_STICKY },
       footer: "newsletter-grey",
     }),
@@ -170,10 +178,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "announcement",
       header: ["fashion-department"],
+      navigation: { source: "tree+menu", maxTopItems: 6 },
       desktopNav: ["mega-panel", { promoImages: true }],
       mobileNav: ["bottom-tabs"],
       card: ["fashion-value"],
-      listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite" },
       product: {
         gallery: "thumbs-below",
         buyBox: ["fashion"],
@@ -204,11 +213,12 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "none",
       header: ["spec-two-row"],
+      navigation: { source: "category-tree", maxTopItems: 18 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" }],
       card: ["spec"],
       listing: {
-        layout: ["sidebar-grid"],
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
         toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page"],
         phoneLayout: "list-row",
         paging: "numbered",
@@ -242,10 +252,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "none",
       header: ["tech-rounded"],
+      navigation: { source: "category-tree", maxTopItems: 9 },
       desktopNav: ["dropdown"],
       mobileNav: ["bottom-tabs"],
       card: ["tech-rounded"],
-      listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: {
         gallery: "thumbs-below",
         buyBox: ["tech"],
@@ -275,11 +286,12 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "utility",
       header: ["marketplace-search"],
+      navigation: { source: "tree+menu", maxTopItems: 18 },
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
       card: ["marketplace"],
       listing: {
-        layout: ["sidebar-grid"],
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
         toolbar: ["breadcrumb", "aspect-chips", "result-count", "sort", "grid-list-toggle"],
         phoneLayout: "grid",
         paging: "numbered",
@@ -311,11 +323,12 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "utility",
       header: ["retail-pill"],
+      navigation: { source: "tree+menu", maxTopItems: 17 },
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
       card: ["retail"],
       listing: {
-        layout: ["bar-drawer"],
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
         toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "applied-chips"],
         phoneLayout: "list-row",
         paging: "numbered",
@@ -349,12 +362,13 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "announcement",
       header: ["mall-departments"],
+      navigation: { source: "tree+menu", maxTopItems: 8 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["standard"],
       // No per-page: the default listing stays today's (pixel-identical), and
       // most stores get no extra crawl variant.
-      listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
     }),
@@ -377,10 +391,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "none",
       header: ["grocery-shell"],
+      navigation: { source: "tree+menu", maxTopItems: 16 },
       desktopNav: ["departments-rail", { open: "always" }],
       mobileNav: ["accordion-drawer"],
       card: ["quick-add"],
-      listing: { layout: ["quick-grid"], toolbar: ["breadcrumb", "sort"], phoneLayout: "grid", paging: "load-more" },
+      listing: { layout: ["quick-grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["breadcrumb", "sort"], phoneLayout: "grid", paging: "load-more" },
       product: { gallery: "thumbs-below", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
       footer: "minimal-columns",
     }),
@@ -403,10 +418,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     blocks: blocks({
       topBar: "announcement",
       header: ["boutique-inline"],
+      navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["boutique", { hoverImage: false }],
-      listing: { layout: ["bar-drawer"], toolbar: ["result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "stacked", buyBox: ["boutique"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",
     }),

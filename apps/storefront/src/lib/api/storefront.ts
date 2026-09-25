@@ -117,7 +117,7 @@ export interface LayoutData {
   footer: FooterData;
   currency?: CurrencyData;
   /**
-   * The published theme document (v4). Untrusted until
+   * The published theme document (v5). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;

@@ -29,8 +29,10 @@ describe("listing presentation", () => {
       );
       return { layout, filters, results, shelves };
     };
-    expect(presentation("department-mall")).toEqual({ layout: "sidebar-grid", filters: "sidebar", results: "grid", shelves: false });
-    expect(presentation("boutique")).toEqual({ layout: "bar-drawer", filters: "drawer", results: "grid", shelves: false });
+    expect(presentation("department-mall")).toEqual({ layout: "grid", filters: "sidebar", results: "grid", shelves: false });
+    expect(presentation("spec-catalogue")).toEqual({ layout: "grid", filters: "sidebar", results: "grid", shelves: false });
+    expect(presentation("mass-retail")).toEqual({ layout: "grid", filters: "sidebar", results: "grid", shelves: false });
+    expect(presentation("boutique")).toEqual({ layout: "grid", filters: "drawer", results: "grid", shelves: false });
     expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", filters: "drawer", results: "grid", shelves: true });
     expect(presentation("daily-essentials")).toEqual({ layout: "quick-grid", filters: "drawer", results: "quick", shelves: false });
     const list = catalogListingPresentation({

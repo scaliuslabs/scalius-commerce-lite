@@ -239,7 +239,7 @@ describe("theme page", () => {
     expect(checked(groups[0]!)).toEqual(["mega-panel"]);
     expect(checked(groups[1]!)).toEqual(["bottom-tabs"]);
     // Five flat menu links have no groups for a mega panel: the page says so.
-    expect(card.textContent).toContain("Your store shows Dropdown instead. Needs 2 or more menu groups with two or more links (you have 0).");
+    expect(card.textContent).toContain("Your store shows Dropdown instead. Needs 2 or more navigation groups with two or more links (you have 0).");
 
     await pressSave();
     expect(api.theme).toHaveBeenCalledTimes(1);

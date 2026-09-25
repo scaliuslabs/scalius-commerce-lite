@@ -1,5 +1,6 @@
-// The storefront theme document (version 4): the template it is based on,
-// the tokens, one variant per block and the page sections. The dashboard
+// The storefront theme document (version 5): the template it is based on,
+// the tokens, one variant per block (plus the shared navigation source and
+// the listing's filter style) and the page sections. The dashboard
 // and a future builder write it; the storefront renders it. Contract:
 // ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
 import { z } from "zod";
@@ -24,7 +25,7 @@ import {
 import { storefrontSectionListSchema } from "./sections";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 4 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 5 as const;
 
 /** Templates are named by archetype, never by the site they were measured on. */
 export const STOREFRONT_TEMPLATE_IDS = [

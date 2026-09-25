@@ -4,14 +4,14 @@
 // order, title emphasis, price tone, discount wording, facts and buy action
 // are data; sizes, radius, surface, photo ratio and fit are the theme's
 // tokens (theme-foundation.css). Facts without data render nothing.
-import type { StorefrontCardRenderer, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import type { ResolvedStorefrontCard, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
 import CardMedia from "../parts/CardMedia.astro";
 import { cardDiscountLabel, cardFactPresent, type ProductCardModel } from "../card-model";
 
 interface Props {
   variant: string;
-  anatomy: StorefrontCardRenderer;
+  anatomy: ResolvedStorefrontCard;
   model: ProductCardModel;
   ratio: StorefrontImageRatio;
   sizes: string;

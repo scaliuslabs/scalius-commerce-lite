@@ -11,29 +11,42 @@ const count = z.number().int().min(0).max(STORE_SHAPE_COUNT_CAP);
 
 /**
  * What the store holds, as far as layout choices care. The API computes it
- * with bounded reads (`@scalius/core` storefront service) and serves it
- * beside the theme, so the storefront and the dashboard resolve the same
- * document against the same facts.
+ * with bounded reads (`@scalius/core` storefront/store-shape.ts, one
+ * statement in the layout batch) and serves it beside the theme, so the
+ * storefront and the dashboard resolve the same document against the same
+ * facts. Category facts count only what a buyer can reach: published, live
+ * categories whose every ancestor is published, holding public products.
  */
 export const storeShapeSchema = z.object({
   /** Active, listed products. */
   productCount: count,
   /** Sellable SKUs (product variants) of those products. */
   skuCount: count,
-  /** Published top-level categories. */
+  /** Published root categories with a public product in their published subtree. */
   topCategoryCount: count,
-  /** Levels in the category tree (0 without categories; categories are flat today). */
+  /**
+   * Levels of the category tree that hold public products (1 for a flat
+   * list, up to 4): 1 + the deepest `category_closure` depth of a published
+   * category, every ancestor published, with a public product of its own.
+   */
   categoryDepth: z.number().int().min(0).max(4),
+  /**
+   * Tree groups, as `menuGroups` for the menu: the most published
+   * second-level categories with two or more published children under one
+   * published root (mega panels built from the tree need two).
+   */
+  categoryGroups: count,
   /** Header menu (Online store -> Navigation): top-level items... */
   menuTopItems: count,
   /** ...its levels (0 without a menu)... */
   menuDepth: z.number().int().min(0).max(3),
   /** ...and mega-panel groups: the most second-level items with two or more links under one top item. */
   menuGroups: count,
+  /** Published brands with a public product. */
   brandCount: count,
   hasCollections: z.boolean(),
   hasDeliveryMethods: z.boolean(),
-  /** Typed spec attributes flagged as key specs (spec cards, spec tables). */
+  /** A live attribute flagged `key_spec` has a value on a public product (spec cards, spec tables). */
   hasKeySpecs: z.boolean(),
   hasEmiPlans: z.boolean(),
   hasDigitalLines: z.boolean(),
@@ -50,6 +63,7 @@ export const EMPTY_STORE_SHAPE: StoreShape = Object.freeze({
   skuCount: 0,
   topCategoryCount: 0,
   categoryDepth: 0,
+  categoryGroups: 0,
   menuTopItems: 0,
   menuDepth: 0,
   menuGroups: 0,
@@ -64,9 +78,33 @@ export const EMPTY_STORE_SHAPE: StoreShape = Object.freeze({
   hasContentBlocks: false,
 });
 
+/**
+ * Where the header menus take their links from (`blocks.navigation.source`):
+ * the merchant's header menu, the published category tree, or the tree's
+ * roots followed by the menu's other items. Declared here because the
+ * navigation facts below depend on it.
+ */
+export const STOREFRONT_NAVIGATION_SOURCES = ["menu", "category-tree", "tree+menu"] as const;
+export type StorefrontNavigationSource = (typeof STOREFRONT_NAVIGATION_SOURCES)[number];
+
+/**
+ * The facts fit conditions read: the store shape plus the navigation the
+ * header actually renders (its source resolved, top items capped by
+ * `maxTopItems`). Menu patterns fit against `nav*`, so a tree-driven header
+ * is judged by the tree and a menu-driven one by the menu.
+ */
+export interface StorefrontFitFacts extends StoreShape {
+  /** Top-level entries on a header surface: the source's roots, at most `maxTopItems`. */
+  navTopItems: number;
+  /** Levels the header menus can show (0-3). */
+  navDepth: number;
+  /** Groups with two or more links under one top entry (mega panels). */
+  navGroups: number;
+}
+
 type KeysOfType<T, V> = { [K in keyof T]: T[K] extends V ? K : never }[keyof T];
-export type StoreShapeCountFact = KeysOfType<StoreShape, number>;
-export type StoreShapeFlagFact = KeysOfType<StoreShape, boolean>;
+export type StoreShapeCountFact = KeysOfType<StorefrontFitFacts, number>;
+export type StoreShapeFlagFact = KeysOfType<StorefrontFitFacts, boolean>;
 
 export type FitCondition =
   | { readonly fact: StoreShapeCountFact; readonly min?: number; readonly max?: number }
@@ -83,9 +121,37 @@ export const anyOf = (...conditions: FitCondition[]): FitCondition => ({ anyOf: 
 export const blockIs = (block: string, ...variants: string[]): FitCondition => ({ block, variants });
 
 export interface FitContext {
-  shape: StoreShape;
+  facts: StorefrontFitFacts;
   /** Variant ids of the blocks resolved so far, by slot. */
   blocks: Readonly<Record<string, string>>;
+}
+
+/**
+ * The fit facts for a store shape and a resolved navigation source:
+ * - `menu`: the header menu's own top items, levels and groups;
+ * - `category-tree`: the tree's roots, levels (at most 3 in a menu) and groups;
+ * - `tree+menu`: roots plus menu items (an upper bound: an item that points at
+ *   a root merges into it), the deeper and richer of the two.
+ * Top items are capped by `maxTopItems`: a surface shows that many and puts
+ * the rest behind "More" or "All categories".
+ */
+export function storefrontFitFacts(
+  shape: StoreShape,
+  navigation: { source: StorefrontNavigationSource; maxTopItems: number },
+): StorefrontFitFacts {
+  const menu = { top: shape.menuTopItems, depth: shape.menuDepth, groups: shape.menuGroups };
+  const tree = { top: shape.topCategoryCount, depth: Math.min(3, shape.categoryDepth), groups: shape.categoryGroups };
+  const nav = navigation.source === "menu"
+    ? menu
+    : navigation.source === "category-tree"
+      ? tree
+      : { top: tree.top + menu.top, depth: Math.max(tree.depth, menu.depth), groups: Math.max(tree.groups, menu.groups) };
+  return {
+    ...shape,
+    navTopItems: Math.min(nav.top, navigation.maxTopItems, STORE_SHAPE_COUNT_CAP),
+    navDepth: nav.depth,
+    navGroups: nav.groups,
+  };
 }
 
 function conditionHolds(condition: FitCondition, context: FitContext): boolean {
@@ -94,8 +160,8 @@ function conditionHolds(condition: FitCondition, context: FitContext): boolean {
     const variant = context.blocks[condition.block];
     return variant !== undefined && condition.variants.includes(variant);
   }
-  if ("equals" in condition) return context.shape[condition.fact] === condition.equals;
-  const value = context.shape[condition.fact];
+  if ("equals" in condition) return context.facts[condition.fact] === condition.equals;
+  const value = context.facts[condition.fact];
   return (condition.min === undefined || value >= condition.min)
     && (condition.max === undefined || value <= condition.max);
 }
@@ -126,6 +192,7 @@ export function storeShapeFromFacts(facts: {
   skuCount: number;
   topCategoryCount: number;
   categoryDepth: number;
+  categoryGroups?: number;
   menu: readonly StoreShapeMenuItem[];
   brandCount?: number;
   hasCollections: boolean;
@@ -143,7 +210,8 @@ export function storeShapeFromFacts(facts: {
     productCount: capped(facts.productCount),
     skuCount: capped(facts.skuCount),
     topCategoryCount: capped(facts.topCategoryCount),
-    categoryDepth: Math.min(4, Math.max(0, facts.categoryDepth)),
+    categoryDepth: Math.min(4, Math.max(0, Math.floor(facts.categoryDepth))),
+    categoryGroups: capped(facts.categoryGroups ?? 0),
     menuTopItems: capped(facts.menu.length),
     menuDepth: Math.min(3, menuDepth(facts.menu)),
     menuGroups: capped(Math.max(0, ...groups)),

@@ -1152,7 +1152,7 @@ describe("site settings cache invalidation", () => {
     ).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid version 4 theme documents before saving or invalidating cache", async () => {
+  it("rejects invalid version 5 theme documents before saving or invalidating cache", async () => {
     const { app, env } = createTestApp();
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
     lowContrast.tokens.colors.foreground = "#f5f5f5";
