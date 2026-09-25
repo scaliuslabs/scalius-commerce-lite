@@ -5,9 +5,12 @@ import {
     PartialRefundProcessedError,
     processRefund,
     type RefundNotificationFact,
+    type RefundRequest,
     reconcileRefundAttemptForOrder,
     listPaymentMethodIds,
 } from "@scalius/core/modules/payments";
+import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
+import { enqueueNotificationOutboxById } from "@scalius/core/modules/notifications";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -27,6 +30,9 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── Inline response schemas ────────────────────────────────────────────────
 
+/** Where a refund goes: back to the original payments, or one new gift card. */
+const REFUND_SETTLEMENTS = ["original", "store_credit"] as const satisfies ReadonlyArray<NonNullable<RefundRequest["settlement"]>>;
+
 const refundResultSchema = z.object({
     success: z.boolean(),
     gateway: z.string(),
@@ -35,6 +41,15 @@ const refundResultSchema = z.object({
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
     replayed: z.boolean().optional(),
+    settlement: z.enum(REFUND_SETTLEMENTS).optional(),
+    storeCredit: z.object({
+        giftCardId: z.string(),
+        last4: z.string(),
+        amount: z.number(),
+        amountMinor: z.number().int(),
+    }).optional().openapi({
+        description: "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).",
+    }),
     notificationCount: z.number(),
     sideEffectErrors: z.number(),
     error: z.string().optional(),
@@ -240,16 +255,41 @@ async function recordDirectRefundSideEffects(options: {
     return { notificationCount, sideEffectErrors };
 }
 
+/**
+ * Hands the store-credit card's `gift_card_issued` row (committed with the
+ * refund) to the queue. A failure leaves it for the scheduled outbox flush.
+ */
+async function enqueueStoreCreditNotification(options: {
+    db: Database;
+    queue: Env["JOBS_QUEUE"] | undefined;
+    outboxId: string | undefined;
+}): Promise<{ notificationCount: number; sideEffectErrors: number }> {
+    if (!options.outboxId || !options.queue) return { notificationCount: 0, sideEffectErrors: 0 };
+    try {
+        await enqueueNotificationOutboxById({ db: options.db, queue: options.queue, outboxId: options.outboxId });
+        return { notificationCount: 1, sideEffectErrors: 0 };
+    } catch (error: unknown) {
+        console.error(
+            "[orders-refund] Store-credit notification not enqueued yet; the outbox flush will retry:",
+            error instanceof Error ? error.message : "unknown error",
+        );
+        return { notificationCount: 0, sideEffectErrors: 1 };
+    }
+}
+
 function publicRefundResult<T extends {
     refundNotification?: unknown;
     availabilityTransitionVariantIds?: unknown;
+    storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
 }>(result: T): Omit<T, "refundNotification" | "availabilityTransitionVariantIds"> {
     const {
         refundNotification: _refundNotification,
         availabilityTransitionVariantIds: _cacheSignal,
         ...publicResult
     } = result;
-    return publicResult;
+    if (!publicResult.storeCredit) return publicResult;
+    const { notificationOutboxId: _outboxId, ...storeCredit } = publicResult.storeCredit;
+    return { ...publicResult, storeCredit };
 }
 
 // ─── POST /:id/refund ────────────────────────────────────────────────────────
@@ -268,8 +308,13 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(listPaymentMethodIds() as [string, ...string[]]).optional(),
+                        gateway: z.enum([GIFT_CARD_PAYMENT_METHOD, ...listPaymentMethodIds()] as [string, ...string[]]).optional().openapi({
+                            description: "Refund only payments taken by this method (gift_card: only the gift-card tenders).",
+                        }),
                         manualSettlementConfirmed: z.boolean().optional(),
+                        settlement: z.enum(REFUND_SETTLEMENTS).optional().openapi({
+                            description: "original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.",
+                        }),
                         requestKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional().openapi({
                             description: "One key per refund (per dialog opening). Repeating it returns the first refund.",
                         }),
@@ -291,7 +336,9 @@ app.openapi(refundOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const db = c.get("db");
+    // The durable key also seals a store-credit card's code (fails closed when missing).
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
     let result: Awaited<ReturnType<typeof processRefund>>;
     try {
         result = await processRefund(
@@ -303,6 +350,8 @@ app.openapi(refundOrderRoute, async (c) => {
                 gateway: data.gateway,
                 manualSettlementConfirmed: data.manualSettlementConfirmed,
                 requestKey: data.requestKey,
+                settlement: data.settlement,
+                actorUserId: actorId,
             },
             encryptionKey,
         );
@@ -327,10 +376,19 @@ app.openapi(refundOrderRoute, async (c) => {
         await recordOrderEvent(db, {
             orderId,
             kind: "refund_recorded",
-            actorId: (c.get("user") as { id?: string } | undefined)?.id ?? null,
+            actorId,
             body: data.reason?.trim() || null,
             requestKey: data.requestKey,
-            data: { amount: result.amount, full: result.isFullRefund },
+            data: {
+                amount: result.amount,
+                full: result.isFullRefund,
+                // Ids and last 4 only: the code never enters the timeline.
+                ...(result.storeCredit ? {
+                    settlement: "store_credit",
+                    giftCardId: result.storeCredit.giftCardId,
+                    giftCardLast4: result.storeCredit.last4,
+                } : {}),
+            },
         });
     }
     const sideEffects = await recordDirectRefundSideEffects({
@@ -340,10 +398,15 @@ app.openapi(refundOrderRoute, async (c) => {
         result,
         context: c,
     });
+    const storeCreditSideEffects = await enqueueStoreCreditNotification({
+        db,
+        queue: c.env.JOBS_QUEUE,
+        outboxId: result.storeCredit?.notificationOutboxId,
+    });
     return ok(c, {
         ...publicRefundResult(result),
-        notificationCount: sideEffects.notificationCount,
-        sideEffectErrors: sideEffects.sideEffectErrors,
+        notificationCount: sideEffects.notificationCount + storeCreditSideEffects.notificationCount,
+        sideEffectErrors: sideEffects.sideEffectErrors + storeCreditSideEffects.sideEffectErrors,
     });
 });
 
