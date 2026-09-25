@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
     reconcileRefundAttemptForOrder: vi.fn(),
     bumpCacheGeneration: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
+    enqueueNotificationOutboxById: vi.fn(),
+}));
+
+vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
+    enqueueNotificationOutboxById: mocks.enqueueNotificationOutboxById,
 }));
 
 vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
@@ -162,9 +168,72 @@ describe("admin refund notification routes", () => {
                 reason: "requested_by_customer",
                 gateway: "cod",
                 manualSettlementConfirmed: true,
+                actorUserId: "admin_1",
             },
             "credential-key",
         );
+    });
+
+    it("refunds as store credit, returns the card by last 4 and hands its notification to the queue", async () => {
+        mocks.processRefund.mockResolvedValue({
+            success: true,
+            gateway: "cod",
+            amount: 500,
+            isFullRefund: false,
+            manualSettlementRecorded: false,
+            settlement: "store_credit",
+            storeCredit: {
+                giftCardId: "gc_0000000001",
+                last4: "7K2Q",
+                amount: 500,
+                amountMinor: 50000,
+                notificationOutboxId: "outbox_gc_1",
+            },
+            availabilityTransitionVariantIds: [],
+            refundNotification: {
+                notificationType: "order_partially_refunded",
+                dedupeKey: "refund:order_1:refund_order_1_4:partial",
+                amount: 500,
+            },
+        });
+        mocks.enqueueNotificationOutboxById.mockResolvedValue({ outboxId: "outbox_gc_1", enqueued: true });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 500, reason: "requested_by_customer", settlement: "store_credit" }),
+        }, env);
+
+        expect(response.status).toBe(200);
+        expect(mocks.processRefund).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ settlement: "store_credit", actorUserId: "admin_1" }),
+            "credential-key",
+        );
+        expect(mocks.enqueueNotificationOutboxById).toHaveBeenCalledWith({ db, queue, outboxId: "outbox_gc_1" });
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).toMatchObject({
+            settlement: "store_credit",
+            storeCredit: { giftCardId: "gc_0000000001", last4: "7K2Q", amount: 500, amountMinor: 50000 },
+            notificationCount: 2,
+            sideEffectErrors: 0,
+        });
+        expect(body.data.storeCredit).not.toHaveProperty("notificationOutboxId");
+        expect(JSON.stringify(body)).not.toContain("outbox_gc_1");
+    });
+
+    it("refuses an unknown settlement before the refund authority runs", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 5, reason: "requested_by_customer", settlement: "voucher" }),
+        }, env);
+
+        expect(response.status).toBe(400);
+        expect(mocks.processRefund).not.toHaveBeenCalled();
     });
 
     it("returns committed success when cache and notification follow-up both fail", async () => {
