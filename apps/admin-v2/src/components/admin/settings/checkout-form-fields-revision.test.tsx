@@ -15,6 +15,9 @@ const sdk = vi.hoisted(() => ({
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children, ...props }: { to: string; children: import("react").ReactNode }) => <a href={to} {...props}>{children}</a>,
+}));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { SaveErrorBanner, SaveScope, type SaveScopeState } from "../shared/SaveBar";
@@ -33,7 +36,7 @@ const language = (revision: number, fieldVisibility: Record<string, boolean>) =>
   fieldVisibility,
   revision,
 });
-const ALL_ON = { showEmailField: true, showOrderNotesField: true, showAreaField: true };
+const ALL_ON = { showOrderNotesField: true, showAreaField: true };
 
 function checkbox(label: string): HTMLButtonElement {
   const row = [...document.querySelectorAll("label")].find((element) => element.textContent === label)!;
@@ -119,7 +122,7 @@ describe("checkout form fields (the two-tab repro)", () => {
     await act(async () => { saved = await scope!.saveAll(); });
     expect(saved).toBe(true);
     expect(sdk.putApiV1AdminSettingsCheckoutLanguagesById.mock.calls[1]![0].body).toEqual({
-      fieldVisibility: { showEmailField: true, showOrderNotesField: false, showAreaField: false },
+      fieldVisibility: { showOrderNotesField: false, showAreaField: false },
       expectedRevision: 1,
     });
   });

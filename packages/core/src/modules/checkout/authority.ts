@@ -10,6 +10,7 @@ import {
 import {
     checkoutDocument,
     currencyDocument,
+    customerAuthDocument,
     customerCountriesDocument,
     metaConversionsDocument,
     notificationsDocument,
@@ -19,6 +20,7 @@ import {
     type CurrencySettings,
     type CustomerCountries,
 } from "../settings/documents";
+import type { CheckoutContactFieldSettings } from "./contact-fields";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import {
     resolveProductMediaProjectionRows,
@@ -52,6 +54,7 @@ import {
 /** Settings documents every checkout snapshot reads in its first statement. */
 const CHECKOUT_SETTINGS_DOCUMENTS = [
     currencyDocument,
+    customerAuthDocument,
     customerCountriesDocument,
     notificationsDocument,
     metaConversionsDocument,
@@ -86,6 +89,8 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
     allowedCountries: CustomerCountries;
+    /** Settings → Customer accounts: which contact fields checkout collects. */
+    contactFields: CheckoutContactFieldSettings;
     activePaymentMethods: PaymentMethodsConfig;
     taxAuthority: StorefrontTaxAuthoritySnapshot;
     sideEffects: {
@@ -215,7 +220,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[0] as GatewaySettingsStoredRow[]
                 : [];
             const documentContext = { encryptionKey: credentialEncryptionKey };
-            const [currencyDocumentRead, countriesRead, notificationsRead, metaRead, checkoutRead] = await Promise.all([
+            const [currencyDocumentRead, countriesRead, notificationsRead, metaRead, checkoutRead, identityRead] = await Promise.all([
                 currencyDocument.fromRows(genericRows, documentContext),
                 customerCountriesDocument.fromRows(genericRows, documentContext),
                 notificationsDocument.fromRows(genericRows, documentContext),
@@ -224,6 +229,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     Array.isArray(results[1]) ? results[1] as GatewaySettingsStoredRow[] : [],
                     documentContext,
                 ),
+                customerAuthDocument.fromRows(genericRows, documentContext),
             ]);
             const currency = currencyDocumentRead.value;
             const site = checkoutRead.value;
@@ -342,6 +348,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                 partialPaymentAmount: site.partialPaymentAmount,
                             },
                             allowedCountries,
+                            contactFields: {
+                                email: identityRead.value.email,
+                                whatsapp: identityRead.value.whatsapp,
+                            },
                             activePaymentMethods,
                             taxAuthority,
                             sideEffects: {

@@ -438,6 +438,7 @@ export async function submitAgentStorefrontCheckout(
       authorityRevision: authority.authorityRevision,
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
+      contactFields: authority.contactFields,
     }),
     authority.taxAuthority,
   ));

@@ -220,6 +220,8 @@ const createOrderSchema = z.object({
     .max(100, "Customer name must be less than 100 characters"),
   customerPhone: phoneNumberSchema,
   customerEmail: z.email().nullable(),
+  /** Kept only when Customer accounts asks for a separate WhatsApp number. */
+  customerWhatsapp: z.string().trim().max(32).nullable().optional(),
   /**
    * Required only when something ships: a physical line with a delivery
    * rate. Pickup, service-only and digital orders omit it (and it is ignored
@@ -483,6 +485,7 @@ app.openapi(createOrderRoute, async (c) => {
         orderCreatedNotificationEnabled:
           checkoutAuthority.sideEffects.orderCreatedNotification,
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
+        contactFields: checkoutAuthority.contactFields,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },

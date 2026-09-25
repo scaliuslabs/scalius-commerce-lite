@@ -1,5 +1,6 @@
 ---
 // src/pages/cart.astro
+import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
@@ -84,6 +85,8 @@ const checkoutUnavailableMessage =
   checkoutLanguageResponse?.languageData.checkoutUnavailableMessage ||
   ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutUnavailableMessage;
 const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);
+// Settings → Customer accounts decides the contact fields (phone always).
+const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
 const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
@@ -91,7 +94,6 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   code: "en",
   languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
   fieldVisibility: {
-    showEmailField: true,
     showOrderNotesField: true,
     showAreaField: true,
   },
@@ -512,10 +514,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 </div>
 
                 {
-                  lang.fieldVisibility.showEmailField && (
+                  contactFields.email !== "hidden" && (
                     <div class="sm:col-span-2">
                       <label for="customerEmail" class={labelClass}>
-                        {copy.customerEmailLabel}
+                        {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
+                        {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
                       </label>
                       <input
                         type="email"
@@ -525,10 +528,30 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                         inputmode="email"
                         aria-describedby="customerEmail-error"
                         maxlength="254"
+                        required={contactFields.email === "required"}
                         placeholder={copy.customerEmailPlaceholder}
                         class={fieldClass}
                       />
                       <p id="customerEmail-error" class={errorClass} role="alert"></p>
+                    </div>
+                  )
+                }
+                {
+                  contactFields.whatsapp === "optional" && (
+                    <div class="sm:col-span-2">
+                      <label for="customerWhatsapp" class={labelClass}>{copy.customerWhatsappLabel}</label>
+                      <input
+                        type="tel"
+                        id="customerWhatsapp"
+                        name="customerWhatsapp"
+                        inputmode="tel"
+                        autocomplete="off"
+                        aria-describedby="customerWhatsapp-help customerWhatsapp-error"
+                        maxlength="20"
+                        class={fieldClass}
+                      />
+                      <p id="customerWhatsapp-help" class="mt-1 text-sm text-muted-foreground">{copy.customerWhatsappHelpText}</p>
+                      <p id="customerWhatsapp-error" class={errorClass} role="alert"></p>
                     </div>
                   )
                 }

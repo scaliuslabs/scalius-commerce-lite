@@ -6,10 +6,7 @@ import {
     getDecimalPlaces,
     normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
-import type {
-    CustomerAuthMethod,
-    CustomerAuthPolicyConfig,
-} from "@scalius/shared/customer-auth-policy";
+import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { isReady } from "@scalius/shared/readiness";
 import {
     COD_LABEL,
@@ -24,7 +21,7 @@ import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
     getCheckoutReadiness,
-    getOfferedCustomerAuthPolicy,
+    getOfferedCustomerIdentity,
     type CheckoutReadiness,
 } from "./checkout-readiness";
 import {
@@ -39,8 +36,8 @@ export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
     activeDefaultMethod?: string;
     guestCheckoutEnabled: boolean;
-    authVerificationMethod: CustomerAuthMethod;
-    customerAuthPolicy: CustomerAuthPolicyConfig;
+    /** Customer accounts settings; `channels` lists only chosen channels that can send now. */
+    customerIdentity: CustomerIdentitySettings;
     checkoutMode: string;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: number;
@@ -82,8 +79,8 @@ export async function getCheckoutConfig(
     const localCurrencySymbol = currency.currencySymbol;
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
     const { checkoutMode, partialPaymentEnabled, partialPaymentAmount } = checkout;
-    const [customerAuthPolicy, checkoutReadiness] = await Promise.all([
-        getOfferedCustomerAuthPolicy(db, customerAuth.policy, { encryptionKey, runtimeEnv }),
+    const [customerIdentity, checkoutReadiness] = await Promise.all([
+        getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv }),
         getCheckoutReadiness(db, { encryptionKey, runtimeEnv }),
     ]);
 
@@ -91,8 +88,7 @@ export async function getCheckoutConfig(
         return {
             gateways: [],
             guestCheckoutEnabled: checkout.guestCheckoutEnabled,
-            authVerificationMethod: customerAuth.authVerificationMethod,
-            customerAuthPolicy,
+            customerIdentity,
             checkoutMode,
             partialPaymentEnabled,
             partialPaymentAmount,
@@ -145,8 +141,7 @@ export async function getCheckoutConfig(
         gateways,
         activeDefaultMethod,
         guestCheckoutEnabled: checkout.guestCheckoutEnabled,
-        authVerificationMethod: customerAuth.authVerificationMethod,
-        customerAuthPolicy,
+        customerIdentity,
         checkoutMode,
         partialPaymentEnabled,
         partialPaymentAmount,

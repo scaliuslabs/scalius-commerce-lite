@@ -85,10 +85,7 @@ function createDb(options: FakeDbOptions = {}) {
         then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(selectedTable === settings
           ? [{
             category: "customer_auth",
-            value: JSON.stringify({
-              authVerificationMethod: "sms_otp",
-              policy: { otpChannels: ["sms", "email"], defaultOtpChannel: "sms" },
-            }),
+            value: JSON.stringify({ email: "optional", whatsapp: "off", channels: ["sms", "email"] }),
             revision: 1,
           }]
           : []).then(resolve),

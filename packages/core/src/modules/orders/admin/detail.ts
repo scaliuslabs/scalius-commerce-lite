@@ -85,6 +85,7 @@ async function getOrderDetailsOnce(
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
+            customerWhatsapp: orders.customerWhatsapp,
             customerId: orders.customerId,
             ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,

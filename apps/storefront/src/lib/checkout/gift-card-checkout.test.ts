@@ -24,7 +24,6 @@ const baseConfig: CheckoutConfig = {
   ],
   activeDefaultMethod: "cod",
   guestCheckoutEnabled: true,
-  authVerificationMethod: "email",
   checkoutMode: "single",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,

@@ -18,12 +18,7 @@ import { signOutCustomer } from "@/lib/customer-sign-out";
 import { focusMainHeading } from "@/lib/focus-main-heading";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/transport";
-import {
-  normalizeCustomerAuthPolicy,
-  getDefaultCustomerAuthOtpChannel,
-  type CustomerAuthOtpChannel,
-  type CustomerAuthPolicyConfig,
-} from "@scalius/shared/customer-auth-policy";
+import type { CustomerAuthOtpChannel, CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
@@ -51,17 +46,18 @@ type Field = "contact" | "code" | "name" | "phone" | "email";
 type Step = "contact" | "code" | "details" | "signed_in";
 
 interface AuthSettings {
-  policy: CustomerAuthPolicyConfig;
+  /** Customer accounts, as published: only chosen channels that can send. */
+  identity: CustomerIdentitySettings | null;
   phonePolicy: PhoneCountryPolicy;
   ready: boolean;
 }
 
 function settingsFromConfig(config: CheckoutConfig | null | undefined): AuthSettings {
   if (!config) {
-    return { policy: normalizeCustomerAuthPolicy("email"), phonePolicy: { countries: [], mode: "include" }, ready: false };
+    return { identity: null, phonePolicy: { countries: [], mode: "include" }, ready: false };
   }
   return {
-    policy: normalizeCustomerAuthPolicy(config.customerAuthPolicy, config.authVerificationMethod),
+    identity: config.customerIdentity ?? null,
     phonePolicy: {
       countries: Array.isArray(config.allowedCountries) ? config.allowedCountries : [],
       mode: config.allowedCountriesMode ?? "include",
@@ -106,7 +102,7 @@ export default function AuthModal() {
   const [settings, setSettings] = useState<AuthSettings>(() => settingsFromConfig(window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined));
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<Step>("contact");
-  const [channel, setChannel] = useState<CustomerAuthOtpChannel>(() => getDefaultCustomerAuthOtpChannel(settings.policy));
+  const [channel, setChannel] = useState<CustomerAuthOtpChannel>(() => resolveCustomerAuthUi(settings.identity).otpChannel);
   const [contact, setContact] = useState("");
   const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
@@ -131,7 +127,7 @@ export default function AuthModal() {
   const signedInRef = useRef(false);
   const prefillRef = useRef<AuthModalPrefill>({});
 
-  const ui = useMemo(() => resolveCustomerAuthUi(settings.policy, channel), [settings.policy, channel]);
+  const ui = useMemo(() => resolveCustomerAuthUi(settings.identity, channel), [settings.identity, channel]);
   const isEmail = ui.requestMethod === "email";
   const locked = attemptsLeft === 0;
 
@@ -191,7 +187,7 @@ export default function AuthModal() {
         void fetchCheckoutConfig().then((config) => {
           const next = settingsFromConfig(config);
           setSettings({ ...next, ready: true });
-          setChannel(getDefaultCustomerAuthOtpChannel(next.policy));
+          setChannel(resolveCustomerAuthUi(next.identity).otpChannel);
         });
       }
       if (hasCustomerAuthMirrorCookie()) void getCustomerSession().then(applySession);
@@ -491,7 +487,12 @@ export default function AuthModal() {
                     className={inputClass}
                   />
                   {errorFor("contact") && <p id="auth-contact-error" className="text-sm text-destructive">{errorFor("contact")}</p>}
-                  {settings.ready && !ui.phoneSignIn && (
+                  {settings.ready && !ui.available && (
+                    <p data-sign-in-unavailable role="alert" className="text-sm text-destructive">
+                      Sign-in codes aren't available right now. Contact the store.
+                    </p>
+                  )}
+                  {settings.ready && ui.available && !ui.phoneSignIn && (
                     <p data-phone-sign-in-note className="text-sm text-muted-foreground">
                       Phone sign-in isn't available yet. Use your email.
                     </p>

@@ -4,17 +4,14 @@ import {
     orderPaymentRecoveryChallenges,
     orders,
 } from "@scalius/database/schema";
-import { AppError, RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
-import { isReady } from "@scalius/shared/readiness";
-import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
-import { getSmsProviderReadiness } from "../../integrations/sms";
-import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import type { EmailRuntimeContext } from "../../integrations/email";
 import { createAuthOtpDeliveryKey, maskOtpIdentifier } from "../customers/otp-delivery-receipts";
-import type { OtpQueuePayload } from "../customers/otp-transport";
+import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
 import { OTP_LOCKED_MESSAGE } from "../customers/customer-auth-otp-challenges";
-import { maskContact } from "../customers/customer-identity";
+import { chooseOrderCodeChannel } from "../customers/customer-code-channels";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from "./admin/recovery-link";
 import {
@@ -88,6 +85,7 @@ type RecoveryOrderContact = {
     customerName: string | null;
     customerPhone: string;
     customerEmail: string | null;
+    customerWhatsapp: string | null;
 };
 
 export async function sendOrderPaymentRecoveryOtp(
@@ -155,16 +153,13 @@ export async function sendOrderPaymentRecoveryOtp(
         destination,
         orderNumber: order.orderNumber,
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
-        queuePayload: {
-            type: "auth.send_otp",
+        queuePayload: buildOtpQueuePayload({
+            channel,
+            purpose: ORDER_PAYMENT_RECOVERY_PURPOSE,
             challengeKey: challenge.challengeKey,
             deliveryKey,
-            purpose: ORDER_PAYMENT_RECOVERY_PURPOSE,
             otpExpiresAt: challenge.expiresAt,
-            method,
-            allowedMethod: channelToAllowedMethod(channel),
-            channel,
-        },
+        }),
         challengeKey: challenge.challengeKey,
         deliveryKey,
     };
@@ -251,49 +246,6 @@ export async function consumeLatestOrderOtpChallenge(
     });
 }
 
-/** The order has no email and the store can't text: no code can reach the buyer. */
-export class NoOrderCodeChannelError extends AppError {
-    constructor() {
-        super(
-            409,
-            "NO_CODE_CHANNEL",
-            "This order has no email address, and this store can't send text messages, so we can't send you a code.",
-        );
-    }
-}
-
-/** "b•••@example.com" or "01•••••678": enough for the buyer to know where to look. */
-export function maskOrderContact(method: RecoveryMethod, target: string): string {
-    return maskContact(method, target);
-}
-
-/**
- * Where a code for this order can actually go: the phone on the order when the
- * store can text (SMS, then WhatsApp), else the email on the order. The code
- * never goes to a contact the visitor typed.
- */
-export async function chooseOrderCodeChannel(
-    db: Database,
-    order: { customerPhone: string; customerEmail: string | null },
-    input: { channel?: CustomerAuthOtpChannel; emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string },
-): Promise<{ channel: CustomerAuthOtpChannel; method: RecoveryMethod; target: string; destination: string }> {
-    const [sms, whatsApp, email] = await Promise.all([
-        getSmsProviderReadiness(db, input.credentialEncryptionKey),
-        getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey),
-        getEmailProviderReadiness({ db, env: input.emailEnv, encryptionKey: input.credentialEncryptionKey }),
-    ]);
-    const orderEmail = order.customerEmail?.trim().toLowerCase() || null;
-    const available: CustomerAuthOtpChannel[] = [];
-    if (isReady(sms)) available.push("sms");
-    if (whatsApp.accessToken && whatsApp.phoneNumberId) available.push("whatsapp");
-    if (isReady(email) && orderEmail) available.push("email");
-    const channel = input.channel && available.includes(input.channel) ? input.channel : available[0];
-    if (!channel) throw new NoOrderCodeChannelError();
-    const method: RecoveryMethod = channel === "email" ? "email" : "phone";
-    const target = method === "email" ? orderEmail! : order.customerPhone;
-    return { channel, method, target, destination: maskOrderContact(method, target) };
-}
-
 export async function deleteOrderPaymentRecoveryChallenge(
     db: Database,
     input: { challengeKey: string; deliveryKey: string },
@@ -349,6 +301,7 @@ async function getRecoveryOrderContact(
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
+            customerWhatsapp: orders.customerWhatsapp,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -594,12 +547,6 @@ async function encryptRecoveryDeliveryValue(
     } catch {
         throw new ServiceUnavailableError(`${label} could not be encrypted.`);
     }
-}
-
-export function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {
-    if (channel === "whatsapp") return "whatsapp_otp";
-    if (channel === "sms") return "sms_otp";
-    return "email";
 }
 
 function currentUnixSeconds(): number {

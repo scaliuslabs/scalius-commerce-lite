@@ -13,6 +13,7 @@ const CHECKOUT_FORM_DRAFT_FIELDS = [
   "customerName",
   "customerPhone",
   "customerEmail",
+  "customerWhatsapp",
   "deliveryMode",
   "shippingAddress",
   "city",

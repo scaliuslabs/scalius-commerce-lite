@@ -30,12 +30,11 @@ const checkoutConfigSchema = z.object({
   gateways: z.array(checkoutGatewaySchema).max(32),
   activeDefaultMethod: z.string().optional(),
   guestCheckoutEnabled: z.boolean(),
-  authVerificationMethod: z.enum(["email", "sms_otp", "whatsapp_otp", "both"]),
-  customerAuthPolicy: z.object({
-    otpChannels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
-    requiredContactFields: z.array(z.enum(["email", "phone"])).max(2),
-    optionalContactFields: z.array(z.enum(["email", "phone"])).max(2),
-    defaultOtpChannel: z.enum(["email", "sms", "whatsapp"]),
+  /** Settings → Customer accounts. `channels` lists only chosen code channels that can send now. */
+  customerIdentity: z.object({
+    email: z.enum(["required", "optional", "hidden"]),
+    whatsapp: z.enum(["off", "same_as_phone", "separate"]),
+    channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
   }),
   checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
   partialPaymentEnabled: z.boolean(),

@@ -28,6 +28,8 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const actions = useOrderActionPermissions();
   const [editing, setEditing] = useState(false);
   const contact = customerContactLinks(order.customerPhone);
+  // WhatsApp goes to the separate number the buyer gave, when there is one.
+  const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact.whatsapp;
   const address = formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName);
   const canEditDetails = actions.canEditOrders && order.editReadiness.details.allowed;
   const record = order.customerRecord ?? null;
@@ -58,6 +60,9 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           ) : null}
           {orderedAs ? <p className="text-muted-foreground">{t("customer.orderedAs", { name: order.customerName })}</p> : null}
           <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</p>
+          {order.customerWhatsapp ? (
+            <p className="font-mono text-muted-foreground">{t("contact.whatsapp")}: {formatPhoneForDisplay(order.customerWhatsapp)}</p>
+          ) : null}
           {order.customerEmail ? (
             <a href={`mailto:${order.customerEmail}`} className="flex min-h-11 items-center break-all text-muted-foreground hover:text-foreground sm:min-h-0">
               {order.customerEmail}
@@ -67,9 +72,9 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             <Button variant="outline" size="sm" asChild>
               <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>{t("contact.call")}</a>
             </Button>
-            {contact.whatsapp ? (
+            {whatsappLink ? (
               <Button variant="outline" size="sm" asChild>
-                <a href={contact.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={t("contact.whatsappName", { name: order.customerName })}>
+                <a href={whatsappLink} target="_blank" rel="noopener noreferrer" aria-label={t("contact.whatsappName", { name: order.customerName })}>
                   {t("contact.whatsapp")}
                 </a>
               </Button>
