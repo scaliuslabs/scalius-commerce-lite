@@ -916,8 +916,8 @@ describe("navigation", () => {
     expect(Boolean(header.querySelector("[data-nav-compact-from='desktop-nav']"))).toBe(condensed);
     // The scroll reserve under the sticky header is the variant's data.
     const reserve = headerCondense(classic ? null : headerSpec(entry.header, {}), { foldsMenuRow: condensed });
-    expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-phone: ${reserve.phone}rem`);
-    expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-desktop: ${reserve.desktop}rem`);
+    expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-phone: ${reserve.phone}`);
+    expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-desktop: ${reserve.desktop}`);
     if (v3) {
       const nav = page.querySelector("#desktop-nav")!;
       expect(nav.getAttribute("data-nav-style")).toBe(desktop === "dropdown" ? "menu" : "mega");

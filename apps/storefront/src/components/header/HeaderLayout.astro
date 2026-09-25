@@ -87,6 +87,17 @@ const {
     margin-bottom: var(--hdr-condense-phone, 0rem);
   }
 
+  /* Menu links keep 44px targets on touch screens (DesktopNav). */
+  #site-header {
+    --nav-link-height: var(--nav-link-height-fine, 2.5rem);
+  }
+
+  @media (pointer: coarse) {
+    #site-header {
+      --nav-link-height: var(--nav-link-height-coarse, 2.75rem);
+    }
+  }
+
   @media (min-width: 64rem) {
     #main-header.is-scrolled {
       margin-bottom: var(--hdr-condense-desktop, 0rem);
