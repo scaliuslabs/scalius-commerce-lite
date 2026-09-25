@@ -1353,12 +1353,24 @@ function publishedHierarchyToTargets(
     });
 }
 
+/**
+ * A published menu read depends on its own menu row and publication. The
+ * publication-item triggers key a row by its new menu id only, so an item
+ * moved to another menu would not advance the old menu's key; `nav:*`
+ * (advanced by every publication change) covers that until the registry
+ * derives those keys from both row images.
+ */
+function declarePublishedMenu(menuId: string): void {
+    deps.navigation(menuId);
+    deps.anyNavigation();
+}
+
 export async function getPublishedNavigationMenuTree(
     db: Database,
     menuId: string,
     input: { maxItems?: number } = {},
 ) {
-    deps.navigation(menuId);
+    declarePublishedMenu(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
@@ -1521,7 +1533,7 @@ export async function listPublishedNavigationMenuItems(
         cursor?: NavigationItemCursor;
     } = {},
 ) {
-    deps.navigation(menuId);
+    declarePublishedMenu(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
