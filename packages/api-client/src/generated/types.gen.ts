@@ -4249,6 +4249,13 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -4268,6 +4275,13 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
                 } | null;
             }>;
             presentation: {
@@ -4316,6 +4330,13 @@ export type GetApiV1StorefrontHomepageResponses = {
                         imageMediaId: string | null;
                         imageAlt: string | null;
                         secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
                     }>;
                     category: {
                         id: string;
@@ -4831,6 +4852,13 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
                 }>;
                 category: {
                     id: string;
@@ -14194,6 +14222,19 @@ export type GetApiV1ProductsRecommendationsResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
         };
     };
@@ -14532,6 +14573,19 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             total: number;
             offset: number;
@@ -14824,6 +14878,19 @@ export type GetApiV1ProductsBySlugResponses = {
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
                     createdAt: string | null;
+                    /**
+                     * Published-review rating; null when the product has no published review.
+                     */
+                    rating: {
+                        /**
+                         * Average of the published reviews, two decimals truncated (4.66).
+                         */
+                        average: number;
+                        /**
+                         * Published reviews.
+                         */
+                        count: number;
+                    } | null;
                 }>;
             };
         };

@@ -45,6 +45,7 @@ const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, res
 const thread: StaffThread = {
   id: "cnv_thread0000001",
   subjectType: "order",
+  subjectId: null,
   subject: null,
   status: "open",
   orderId: "ord_1",

@@ -16266,6 +16266,23 @@
                                     "secondaryImageUrl": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "rating": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "average": {
+                                          "type": "number"
+                                        },
+                                        "count": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "average",
+                                        "count"
+                                      ],
+                                      "description": "Published-review average and count; null without a published review."
                                     }
                                   },
                                   "required": [
@@ -16285,7 +16302,8 @@
                                     "imageUrl",
                                     "imageMediaId",
                                     "imageAlt",
-                                    "secondaryImageUrl"
+                                    "secondaryImageUrl",
+                                    "rating"
                                   ]
                                 },
                                 "maxItems": 24
@@ -16352,6 +16370,23 @@
                                   "secondaryImageUrl": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "rating": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "average": {
+                                        "type": "number"
+                                      },
+                                      "count": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "required": [
+                                      "average",
+                                      "count"
+                                    ],
+                                    "description": "Published-review average and count; null without a published review."
                                   }
                                 },
                                 "required": [
@@ -16371,7 +16406,8 @@
                                   "imageUrl",
                                   "imageMediaId",
                                   "imageAlt",
-                                  "secondaryImageUrl"
+                                  "secondaryImageUrl",
+                                  "rating"
                                 ]
                               }
                             },
@@ -16562,6 +16598,23 @@
                                         "secondaryImageUrl": {
                                           "type": "string",
                                           "nullable": true
+                                        },
+                                        "rating": {
+                                          "type": "object",
+                                          "nullable": true,
+                                          "properties": {
+                                            "average": {
+                                              "type": "number"
+                                            },
+                                            "count": {
+                                              "type": "integer"
+                                            }
+                                          },
+                                          "required": [
+                                            "average",
+                                            "count"
+                                          ],
+                                          "description": "Published-review average and count; null without a published review."
                                         }
                                       },
                                       "required": [
@@ -16581,7 +16634,8 @@
                                         "imageUrl",
                                         "imageMediaId",
                                         "imageAlt",
-                                        "secondaryImageUrl"
+                                        "secondaryImageUrl",
+                                        "rating"
                                       ]
                                     },
                                     "maxItems": 36
@@ -18493,6 +18547,23 @@
                                     "secondaryImageUrl": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "rating": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "average": {
+                                          "type": "number"
+                                        },
+                                        "count": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "average",
+                                        "count"
+                                      ],
+                                      "description": "Published-review average and count; null without a published review."
                                     }
                                   },
                                   "required": [
@@ -18512,7 +18583,8 @@
                                     "imageUrl",
                                     "imageMediaId",
                                     "imageAlt",
-                                    "secondaryImageUrl"
+                                    "secondaryImageUrl",
+                                    "rating"
                                   ]
                                 },
                                 "maxItems": 36
@@ -51789,6 +51861,28 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "rating": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "average": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5,
+                                    "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "Published reviews."
+                                  }
+                                },
+                                "required": [
+                                  "average",
+                                  "count"
+                                ],
+                                "description": "Published-review rating; null when the product has no published review."
                               }
                             },
                             "required": [
@@ -51809,7 +51903,8 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
-                              "createdAt"
+                              "createdAt",
+                              "rating"
                             ]
                           }
                         }
@@ -53268,6 +53363,28 @@
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "rating": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "average": {
+                                        "type": "number",
+                                        "minimum": 1,
+                                        "maximum": 5,
+                                        "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                      },
+                                      "count": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "Published reviews."
+                                      }
+                                    },
+                                    "required": [
+                                      "average",
+                                      "count"
+                                    ],
+                                    "description": "Published-review rating; null when the product has no published review."
                                   }
                                 },
                                 "required": [
@@ -53288,7 +53405,8 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
-                                  "createdAt"
+                                  "createdAt",
+                                  "rating"
                                 ]
                               },
                               "maxItems": 10
@@ -54504,6 +54622,28 @@
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "rating": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "average": {
+                                        "type": "number",
+                                        "minimum": 1,
+                                        "maximum": 5,
+                                        "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                      },
+                                      "count": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "Published reviews."
+                                      }
+                                    },
+                                    "required": [
+                                      "average",
+                                      "count"
+                                    ],
+                                    "description": "Published-review rating; null when the product has no published review."
                                   }
                                 },
                                 "required": [
@@ -54524,7 +54664,8 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
-                                  "createdAt"
+                                  "createdAt",
+                                  "rating"
                                 ]
                               }
                             }
