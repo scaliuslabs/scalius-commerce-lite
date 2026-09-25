@@ -769,7 +769,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
             </div>
             <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow">
-              <span>{copy.shippingText}</span>
+              {/* A pickup order has no shipping: the row names the pickup. */}
+              <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>
+              <span class="hidden group-data-[delivery-mode=pickup]:inline">{copy.deliveryModePickupText}</span>
               <span id="shippingCost" class="text-right font-medium tabular-nums text-foreground">—</span>
             </div>
             <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>

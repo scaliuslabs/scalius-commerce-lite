@@ -187,7 +187,8 @@ describe("delivery facts by what the product is", () => {
   it("claims no delivery rates for a service and says when it is paid", () => {
     const facts = buildDeliveryFacts({ ...settings, fulfilment: "service", payAtServiceText: "Pay when the service is done" });
     expect(facts.map((fact) => fact.kind)).toEqual(["cod", "returns"]);
-    expect(facts[0]).toEqual({ kind: "cod", title: "Cash on delivery", detail: "Pay when the service is done" });
+    // A service is not delivered: its cash payment is "Pay on service".
+    expect(facts[0]).toEqual({ kind: "cod", title: "Pay on service", detail: "Pay when the service is done" });
   });
 
   it("claims no delivery and no cash on delivery for a digital item", () => {
