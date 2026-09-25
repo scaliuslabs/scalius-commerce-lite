@@ -21,6 +21,9 @@ const devPorts = readDevPorts();
 const API_DEV_ORIGIN = devOrigins(devPorts).apiUrl;
 
 export default defineConfig({
+  // The dashboard reads no env: never load .env* files, so no local value can
+  // be inlined into the browser bundle (scripts/check-build-canaries.mjs).
+  envDir: false,
   build: {
     // Only content-hashed bundles enter the immutable cache namespace
     // (public/_headers). Files copied from public/ keep their stable URLs.

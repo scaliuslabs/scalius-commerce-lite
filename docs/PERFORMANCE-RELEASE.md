@@ -310,6 +310,7 @@ pnpm build --concurrency=1
 pnpm check:env
 pnpm check:admin-perf
 pnpm check:dist-secrets
+pnpm check:build-canaries
 pnpm repo:check
 pnpm release:check
 pnpm ops:check --queues
