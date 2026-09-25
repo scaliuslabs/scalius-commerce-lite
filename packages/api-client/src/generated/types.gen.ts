@@ -743,6 +743,7 @@ export type OrderGiftCardTender = {
 export type CustomerAccountSummary = {
     unreadInbox: number;
     reviewsToWrite: number;
+    reviewsWritten: number;
     downloads: number;
     giftCards: number;
     activeWarranties: number;
@@ -787,6 +788,19 @@ export type BuyerReview = {
     editedAt: string | null;
     version: number;
     canEdit: boolean;
+};
+
+export type BuyerProductReviewState = {
+    state: 'eligible';
+    orderItemId: string;
+    displayName: string;
+} | {
+    state: 'reviewed';
+    review: BuyerReview;
+} | {
+    state: 'ineligible';
+} | {
+    state: 'disabled';
 };
 
 export type ReviewWriteResult = {
@@ -13272,6 +13286,98 @@ export type PostApiV1CustomerAuthReviewsResponses = {
 };
 
 export type PostApiV1CustomerAuthReviewsResponse = PostApiV1CustomerAuthReviewsResponses[keyof PostApiV1CustomerAuthReviewsResponses];
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdData = {
+    body?: never;
+    path: {
+        productId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/reviews/products/{productId}';
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdError = GetApiV1CustomerAuthReviewsProductsByProductIdErrors[keyof GetApiV1CustomerAuthReviewsProductsByProductIdErrors];
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponses = {
+    /**
+     * Review state
+     */
+    200: {
+        success: true;
+        data: BuyerProductReviewState;
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponse = GetApiV1CustomerAuthReviewsProductsByProductIdResponses[keyof GetApiV1CustomerAuthReviewsProductsByProductIdResponses];
 
 export type PatchApiV1CustomerAuthReviewsByIdData = {
     body: EditReviewBody;

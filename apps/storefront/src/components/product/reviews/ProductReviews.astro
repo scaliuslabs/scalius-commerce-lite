@@ -11,9 +11,17 @@
 // /api/reviews/<productId> and update the list in place.
 //
 // Reviews off: nothing. On with no published review: the zero-state row.
+//
+// "Write a review" is personal, and this HTML is shared and publicly cached,
+// so the page ships one neutral link (to the account's Reviews page, which is
+// what a browser without JavaScript follows). After hydration review-cta.ts
+// asks /api/reviews/<productId>/mine (same-origin, no-store) and turns it into
+// Sign in to review, the inline form, Edit your review, or "verified buyers
+// only".
 import "./product-reviews.css";
 import type { Product } from "@/lib/api";
 import ReviewsOverview from "./ReviewsOverview.astro";
+import type { ReviewFormCopy } from "@/lib/account-reviews";
 import {
   DEFAULT_REVIEW_VIEW,
   REVIEW_SORTS,
@@ -30,9 +38,11 @@ export interface Props {
   language: string;
   /** The store's name for "Response from …" (Business settings); null says "the store". */
   storeName: string | null;
+  /** The review form's words, for the inline "Write a review" form. */
+  formCopy: ReviewFormCopy;
 }
 
-const { product, copy, language, storeName } = Astro.props;
+const { product, copy, language, storeName, formCopy } = Astro.props;
 const reviews = readProductReviews(product.reviews);
 const summary = reviews?.summary ?? null;
 const hasReviews = Boolean(summary && summary.count > 0);
@@ -73,7 +83,22 @@ const scriptCopy = JSON.stringify({
     data-review-copy={hasReviews ? scriptCopy : undefined}
     data-review-cursor={reviews?.nextCursor ?? ""}
   >
-    <h2 id="reviews-heading" class="product-reviews-heading">{copy.reviewsTitleText}</h2>
+    <div
+      class="product-reviews-head"
+      data-review-cta
+      data-review-form-copy={JSON.stringify({
+        ...formCopy,
+        reviewsSignInToReviewText: copy.reviewsSignInToReviewText,
+        reviewsVerifiedOnlyText: copy.reviewsVerifiedOnlyText,
+        reviewsVisibleSoonText: copy.reviewsVisibleSoonText,
+        reviewsWriteCtaText: copy.reviewsWriteCtaText,
+      })}
+    >
+      <h2 id="reviews-heading" class="product-reviews-heading">{copy.reviewsTitleText}</h2>
+      <a href="/account/reviews" class="product-reviews-write" data-review-cta-link data-astro-prefetch="false">{copy.reviewsWriteCtaText}</a>
+      <p class="product-reviews-cta-note" data-review-cta-note hidden></p>
+    </div>
+    <div class="product-reviews-own" data-review-cta-panel aria-live="polite" hidden></div>
 
     {!hasReviews ? (
       <p class="product-reviews-empty" data-review-empty>{copy.reviewsEmptyText}</p>
@@ -120,7 +145,9 @@ const scriptCopy = JSON.stringify({
 
 <script>
   import { setupProductReviews } from "./product-reviews";
+  import { setupReviewCta } from "./review-cta";
 
   setupProductReviews();
+  setupReviewCta();
   document.addEventListener("astro:page-load", setupProductReviews);
 </script>

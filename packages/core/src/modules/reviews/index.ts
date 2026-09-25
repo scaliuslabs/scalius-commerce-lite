@@ -8,6 +8,7 @@ export type { LineExtrasInput } from "../../utils/line-extras";
 export type { ReviewBuyer } from "./shared";
 export {
   countReviewableLinesForCustomer,
+  countWrittenReviewsForCustomer,
   listLineReviewStates,
   listReviewableLines,
   REVIEWABLE_LINES_MAX,
@@ -17,8 +18,10 @@ export {
   editReview,
   getBuyerReview,
   listBuyerReviews,
+  readBuyerProductReviewState,
   submitReview,
   withdrawReview,
+  type BuyerProductReviewState,
   type BuyerReview,
   type EditReviewInput,
   type ReviewWriteOptions,
