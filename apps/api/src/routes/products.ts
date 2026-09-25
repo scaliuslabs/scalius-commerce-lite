@@ -198,6 +198,8 @@ const storefrontFeedProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+  /** The published brand record; null means no brand (feeds omit `<g:brand>`, never a placeholder). */
+  brand: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   attributes: z.array(storefrontFeedAttributeSchema),
   variants: z.array(storefrontFeedVariantSchema),
   updatedAt: z.string().nullable(),
@@ -397,6 +399,13 @@ const productDetailDataSchema = z.object({
     customizationUnavailable: z.boolean(),
     attributes: z.array(productAttributeSchema),
     additionalInfo: z.array(productAdditionalInfoSchema),
+    /** The published brand record (JSON-LD `brand`, the buy-box brand link); null means none. */
+    brand: z.object({
+      id: z.string(),
+      name: z.string(),
+      slug: z.string(),
+      canonicalPath: z.string().nullable(),
+    }).nullable(),
     offers: z.array(z.object({
       promotionId: z.string(),
       title: z.string(),

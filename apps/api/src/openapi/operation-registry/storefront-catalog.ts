@@ -17,6 +17,7 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
     reason:
       "Unbounded browser category aggregate; use storefront.categories.get_section for reconstructable bounded detail.",
   },
+  "storefront.categories.get_breadcrumb": { limits: { request: 16_384 } },
   "storefront.categories.get_section": { limits: { request: 16_384, response: 32_768 } },
   "storefront.categories.list": {
     exposure: "excluded",
@@ -31,7 +32,9 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
     reason:
       "Browser category listing embeds the unbounded category aggregate; use storefront.categories.list_product_summaries plus storefront.categories.get_section.",
   },
+  "storefront.categories.list_children": { limits: { request: 16_384 } },
   "storefront.categories.list_summaries": { limits: { request: 16_384 } },
+  "storefront.categories.tree": { limits: { request: 16_384 } },
   "storefront.collections.get": { limits: { request: 16_384 } },
   "storefront.collections.list": { limits: { request: 16_384 } },
   "storefront.products_feed.get_feed": {
