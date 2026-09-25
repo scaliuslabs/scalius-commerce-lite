@@ -190,7 +190,7 @@ async function getOrderDetailsOnce(
     if (!orderRow) return null;
     // A second wave keeps the read within six simultaneous D1 connections.
     const [fulfillments, conversation] = await Promise.all([
-        listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces),
+        listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces, orderRow.status),
         findOrderConversationForStaff(db, id),
     ]);
     const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;

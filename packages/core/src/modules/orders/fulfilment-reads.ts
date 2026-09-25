@@ -11,6 +11,7 @@ import {
 import { and, asc, eq } from "drizzle-orm";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
+import { fulfilmentVoidBlockedReason } from "./line-presentation";
 import type {
     AdminOrderFulfilmentView,
     BuyerOrderFulfilmentView,
@@ -40,6 +41,7 @@ async function readOrderFulfilments(db: Database, orderId: string, activeOnly: b
             shipmentId: orderFulfillments.shipmentId,
             courierName: deliveryShipments.courierName,
             providerType: deliveryShipments.providerType,
+            providerId: deliveryShipments.providerId,
             trackingId: deliveryShipments.trackingId,
             trackingUrl: deliveryShipments.trackingUrl,
             shipmentStatus: deliveryShipments.status,
@@ -106,9 +108,19 @@ export async function listAdminOrderFulfilments(
     db: Database,
     orderId: string,
     currencyDecimalPlaces: number,
+    orderStatus: string,
 ): Promise<AdminOrderFulfilmentView[]> {
     const rows = await readOrderFulfilments(db, orderId, false);
-    return rows.map(({ row, lines }) => ({
+    return rows.map(({ row, lines }) => {
+        const voidBlockedReason = fulfilmentVoidBlockedReason({
+            status: row.status,
+            shipmentId: row.shipmentId,
+            shipmentProviderType: row.providerType,
+            shipmentProviderId: row.providerId,
+            shipmentStatus: row.shipmentStatus,
+            orderStatus,
+        });
+        return {
         id: row.id,
         kind: row.kind as FulfillmentType,
         status: row.status,
@@ -120,7 +132,10 @@ export async function listAdminOrderFulfilments(
         voidedAt: epochToIso(row.voidedAt),
         lines,
         tracking: trackingOf(row),
-    }));
+        canVoid: voidBlockedReason === null,
+        voidBlockedReason,
+        };
+    });
 }
 
 /** The order thread's id, if the buyer or staff started one. */

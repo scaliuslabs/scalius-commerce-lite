@@ -9,6 +9,7 @@ import {
 } from "@scalius/core/modules/delivery";
 import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
 import { eq } from "drizzle-orm";
+import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import { NotFoundError } from "../../utils/api-error";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
 import {
@@ -67,11 +68,15 @@ export async function checkAndSyncShipmentStatus(options: {
     ? await getDeliveryProvider(db, updatedShipment.providerId)
     : null;
 
+  // The ledger follows the parcel (F11): before the order moves for units
+  // the courier holds, after it for units the courier never took.
+  await syncCourierFulfilmentFromShipment(db, shipment.id, updatedShipment.status);
   const orderSync = await updateOrderStatusFromShipment(
     db,
     shipment.id,
     updatedShipment.status,
   );
+  await syncCourierFulfilmentFromShipment(db, shipment.id, updatedShipment.status);
   const orderStatusChange = orderSync?.statusChange ?? null;
 
   if (

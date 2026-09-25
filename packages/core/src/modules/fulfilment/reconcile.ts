@@ -25,8 +25,9 @@ import type {
     UnknownShipmentResolutionResult,
 } from "../orders/types";
 import type { UnknownShipmentResolutionInput } from "../orders/validation";
-import { parseShipmentMetadata, markAllOrderItemsSent, clearShipmentClaim } from "./shared";
+import { parseShipmentMetadata, clearShipmentClaim } from "./shared";
 import { reconcileInventoryForStatus } from "../orders/status/lifecycle";
+import { recordCourierBookingFulfilment } from "./ledger";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     return value && typeof value === "object" && !Array.isArray(value)
@@ -507,7 +508,7 @@ export async function reconcileOrderShipment(
         }
 
         if (targetOrderStatus === OrderStatus.SHIPPED || targetOrderStatus === OrderStatus.DELIVERED) {
-            await markAllOrderItemsSent(db, orderId);
+            await recordCourierBookingFulfilment(db, orderId, shipmentId);
         }
         const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
             db,
@@ -594,6 +595,7 @@ export async function reconcileOrderShipment(
             .where(and(eq(orders.id, orderId), eq(orders.shipmentClaimId, shipmentId)));
     }
 
+    await recordCourierBookingFulfilment(db, orderId, shipmentId);
     const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
         db,
         orderId,
