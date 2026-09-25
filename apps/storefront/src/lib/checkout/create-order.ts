@@ -8,8 +8,33 @@ import type { CartValidationIssue } from "../api/orders";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
+import { giftCardRequestFields } from "./gift-cards";
 
-type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
+/**
+ * The order body the storefront sends: the generated request plus the
+ * gift-card tender (apply handles and the amount due the buyer was shown).
+ * `paymentMethod` may also be `gift_card` when the cards cover everything.
+ */
+export type CheckoutOrderRequest = Omit<CreateOrderPayload, "paymentMethod"> & {
+  paymentMethod: string;
+  giftCards?: Array<{ handle: string }>;
+  expectedAmountDueMinor?: number;
+};
+
+/** The tender fields of an order body; none without cards (the old payload). */
+export function giftCardOrderFields(
+  checkoutData: Record<string, unknown>,
+): Pick<CheckoutOrderRequest, "giftCards" | "expectedAmountDueMinor"> {
+  const { giftCards } = giftCardRequestFields(checkoutData.giftCards);
+  if (!giftCards) return {};
+  const expected = checkoutData.expectedAmountDueMinor;
+  if (typeof expected !== "number" || !Number.isSafeInteger(expected) || expected < 0) {
+    throw new Error(
+      "Your order total is no longer verified. Refresh the checkout total and try again.",
+    );
+  }
+  return { giftCards, expectedAmountDueMinor: expected };
+}
 
 /** Card gateways return a client secret; hosted gateways return the provider URL. */
 export type InitialPaymentSession = {
@@ -149,7 +174,9 @@ export async function createOrder(
     );
   }
 
-  const payload: CreateOrderPayload = {
+  const tender = giftCardOrderFields(checkoutData);
+
+  const payload: CheckoutOrderRequest = {
     checkoutRequestId,
     expectedQuoteFingerprint,
     customerName: readString(checkoutData.customerName),
@@ -165,7 +192,8 @@ export async function createOrder(
       ? null
       : readOptionalString(checkoutData.shippingMethodId),
     discountCodes: readDiscountCodes(checkoutData),
-    paymentMethod: paymentMethod as PaymentMethod,
+    paymentMethod,
+    ...tender,
   };
 
   const res = await fetch("/api/checkout/create-order", {

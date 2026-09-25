@@ -36,6 +36,7 @@ import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import { readReceiptGiftCardTenders, receiptGiftCardTenderLabel } from "@/lib/order-success-state";
 import { lineExtrasMarkup } from "@/lib/order-line-extras";
 import {
   orderProgressMarkup,
@@ -58,6 +59,14 @@ import {
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
+
+/**
+ * The order's payment facts plus the detail's `giftCardTenders` (optional:
+ * read defensively until every client carries it).
+ */
+function paymentFacts(detail: AccountOrderDetail) {
+  return { ...detail.order, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
+}
 
 interface StripeCardElement {
   mount(selector: string): void;
@@ -547,6 +556,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
+    const giftCardTenders = readReceiptGiftCardTenders(paymentFacts(detail));
+    const paymentLine = orderPaymentLine(paymentFacts(detail));
     const { delivery, lines } = summarizeOrderDiscounts({
       discounts: detail.discounts,
       shipping: major(order.shippingAmountMinor ?? 0),
@@ -572,6 +583,12 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
       tax > 0 ? row(`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, cell(minor(tax))) : "",
       row("Total", cell(minor(order.totalAmountMinor ?? 0)), true),
+      // Gift cards are payment: one row per card after the total, then what is left.
+      ...giftCardTenders.map((tender) =>
+        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"))),
+      giftCardTenders.length > 0 && paymentLine.balanceDue > 0
+        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"))
+        : "",
     ].join("");
   }
 }
@@ -629,7 +646,9 @@ function renderDelivery(detail: AccountOrderDetail): void {
 
 function renderPayment(detail: AccountOrderDetail): void {
   const { order } = detail;
-  const line = orderPaymentLine(order);
+  // "Gift card + Cash on delivery" and "৳800 due on delivery" when cards paid part.
+  const line = orderPaymentLine(paymentFacts(detail));
+  const paidByGiftCards = readReceiptGiftCardTenders(paymentFacts(detail)).length > 0;
   const money = (value: number) => accountMoney(value, order.currencyCode);
   const refunds = detail.refundAttempts.map((refund) => `
     <div class="border-t border-border pt-2">
@@ -641,7 +660,8 @@ function renderPayment(detail: AccountOrderDetail): void {
     payment.innerHTML = [
       `<p class="font-medium text-foreground">${escapeHtml(line.method)}</p>`,
       `<p class="text-muted-foreground">${escapeHtml(line.state)}</p>`,
-      line.balanceDue > 0 && order.paidAmount > 0 ? `<p class="text-muted-foreground">${escapeHtml(money(order.paidAmount))} paid</p>` : "",
+      // The card rows in the summary already say what the gift cards paid.
+      line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(money(order.paidAmount))} paid</p>` : "",
       detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(money(detail.cod.collectedAmount))} collected</p>` : "",
       detail.paymentPlan ? `<p class="text-muted-foreground">Advance ${escapeHtml(money(detail.paymentPlan.depositAmount))}</p>` : "",
       refunds,

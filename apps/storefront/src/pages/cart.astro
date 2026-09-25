@@ -27,6 +27,7 @@ import {
 } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import { termsSegments } from "@/lib/checkout/terms-text";
+import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
@@ -98,6 +99,7 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   isDefault: true,
 };
 const copy = lang.languageData;
+const giftCopy = giftCardCheckoutCopy(copy);
 const policyPath = (kind: "terms" | "privacy") =>
   layoutData?.policies?.find((policy) => policy.kind === kind)?.path ?? null;
 const hasAgreementPolicies = Boolean(policyPath("terms") && policyPath("privacy"));
@@ -674,6 +676,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </button>
 
               {
+                // A cash-on-delivery-only store places the order here; a gift
+                // card is used on the payment step (script only: without it
+                // the field there cannot apply a card anyway).
+                codOnly && (
+                  <button
+                    type="button"
+                    id="giftCardCheckoutStep"
+                    hidden
+                    class="mt-3 inline-flex min-h-11 w-full items-center justify-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {giftCopy.giftCardCheckoutStepText}
+                  </button>
+                )
+              }
+
+              {
                 // Buyers are only asked to agree to policies the store has published.
                 codOnly && hasAgreementPolicies && (
                   <p class="mt-3 text-center text-sm text-muted-foreground">
@@ -877,6 +895,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
   import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
+  import { readStoredGiftCards } from "@/lib/checkout/gift-cards";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
   import {
     checkoutInformationFields,
@@ -909,7 +928,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   const cartPageSignal = cartPageAbortController.signal;
 
   const meta = document.getElementById("checkout-meta");
-  const codOnly = meta?.dataset.codOnly === "true";
+  // A cash-on-delivery-only store places the order from this page, unless the
+  // buyer brings a gift card: then the payment step (where its field is) follows.
+  let codOnly = meta?.dataset.codOnly === "true";
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
   // The frontmatter always serializes a fully resolved language (English
@@ -1389,7 +1410,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       return !input?.value || input.value === "{}" || input.value === "[]";
     };
 
-    const initialSubmitText = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
+    let initialSubmitText = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
     const checkoutFormMessage = document.getElementById("checkoutFormMessage");
     let submitAfterCustomerSessionCheck = false;
     let submitAfterCartValidation = false;
@@ -1403,6 +1424,25 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       setSubmitButtonText(initialSubmitText);
       updateCheckoutButtonState();
     };
+
+    // Gift cards are applied on the payment step: a COD-only store sends a
+    // buyer who has one (or already applied one) there instead of placing
+    // the order from this page.
+    const giftCardStep = document.getElementById("giftCardCheckoutStep") as HTMLButtonElement | null;
+    if (codOnly && giftCardStep) {
+      const useGiftCardStep = () => {
+        codOnly = false;
+        giftCardStep.hidden = true;
+        initialSubmitText = checkoutCopy.continueToPaymentText;
+        setSubmitButtonText(initialSubmitText);
+      };
+      if (readStoredGiftCards().length > 0) {
+        useGiftCardStep();
+      } else {
+        giftCardStep.hidden = false;
+        giftCardStep.addEventListener("click", useGiftCardStep, { signal: cartPageSignal });
+      }
+    }
 
     const showCheckoutFormError = (message: string, focusTarget?: HTMLElement | null) => {
       if (!checkoutFormMessage) return;
