@@ -122,7 +122,7 @@ describe("account order detail", () => {
     expect(steps[1]?.getAttribute("aria-current")).toBe("step");
     expect(text("orderExpectedDelivery")).toBe("Expected delivery: 1-2 days");
     expect(text("orderTimeline")).toBe("Confirmed The store confirmed your order. 24 Sep 2026, 8:00 AM Order placed We received your order. 24 Sep 2026, 5:46 AM");
-    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery (Inside Dhaka) ৳80 Total ৳1,080");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Total ৳1,080");
     expect(document.querySelector("#orderItems a")?.getAttribute("href")).toBe("/products/bb-tee");
     expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 ৳1,000");
     const page = document.body.textContent ?? "";
@@ -139,16 +139,62 @@ describe("account order detail", () => {
       ] },
     ), null);
     expect(text("orderSummary")).toBe(
-      "Subtotal ৳1,000 Delivery (Inside Dhaka) ৳80 Free (R2SJSHIP) Discount · R2SJPROD −৳200 Discount · Eid sale (R2SJORD10) −৳230 Total ৳570",
+      "Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Free (R2SJSHIP) Discount · R2SJPROD −৳200 Discount · Eid sale (R2SJORD10) −৳230 Total ৳570",
     );
     expect(document.querySelector("#orderSummary s")?.textContent).toBe("৳80");
     expect(text("orderNote")).toBe("Your note দয়া করে ফোন করুন 🙏");
     expect(document.getElementById("orderNote")?.classList.contains("hidden")).toBe(false);
   });
 
+  it("shows an order-level discount once, in the summary, with each item at its full price", () => {
+    const order = detail(
+      { discountAmount: 100, discountAmountMinor: 10_000, totalAmount: 980, totalAmountMinor: 98_000 },
+      { discounts: [{ promotionId: "p2", title: "Eid sale", code: "EID10", kind: "order", amount: 100, shippingAmount: 0 }] },
+    );
+    order.items = [{ ...order.items[0]!, discountAmountMinor: 10_000, taxableAmountMinor: 90_000 }];
+    renderOrderDetail(order, null);
+    expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 ৳1,000");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Discount · Eid sale (EID10) −৳100 Total ৳980");
+  });
+
+  it("keeps an item-level saving on its item", () => {
+    const order = detail(
+      { discountAmount: 200, discountAmountMinor: 20_000, totalAmount: 880, totalAmountMinor: 88_000 },
+      { discounts: [{ promotionId: "p1", title: "Tee deal", code: null, kind: "product", amount: 200, shippingAmount: 0 }] },
+    );
+    order.items = [{ ...order.items[0]!, discountAmountMinor: 20_000, taxableAmountMinor: 80_000 }];
+    renderOrderDetail(order, null);
+    expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 Discount -৳200 ৳800");
+  });
+
+  it("shows a free pickup as Pickup and its location, and cash as Pay at pickup", () => {
+    const order = detail({
+      shippingAddress: null, city: null, zone: null, cityName: null, zoneName: null, areaName: null,
+      shippingMethodName: "STAB Pickup Gulshan", shippingCharge: 0, shippingAmountMinor: 0, shippingMethodBaseAmountMinor: 0,
+      totalAmount: 1000, totalAmountMinor: 100_000, balanceDue: 1000, expectedDelivery: null,
+      requiresShipping: false, shippingMethodKind: "pickup", pickup: { address: "Gulshan 1", hours: null, readyAt: null },
+    });
+    renderOrderDetail(order, null);
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Pickup STAB Pickup Gulshan Total ৳1,000");
+    expect(text("orderPayment")).toBe("Pay at pickup ৳1,000 due at pickup");
+    expect(document.body.textContent).not.toMatch(/Shipping|Free|Cash on delivery/);
+  });
+
+  it("names cash on a service-only order Pay on service", () => {
+    const order = detail({
+      shippingAddress: null, city: null, zone: null, cityName: null, zoneName: null, areaName: null,
+      shippingMethodId: null, shippingMethodName: null, shippingMethodBaseAmountMinor: null,
+      shippingCharge: 0, shippingAmountMinor: 0, totalAmount: 1000, totalAmountMinor: 100_000, balanceDue: 1000,
+      requiresShipping: false, shippingMethodKind: null, pickup: null,
+    });
+    renderOrderDetail(order, null);
+    expect(text("orderPayment")).toBe("Pay on service ৳1,000 due when the service is done");
+    expect(document.body.textContent).not.toContain("Cash on delivery");
+  });
+
   it("shows a discount without allocations as one plain line, and no note block without a note", () => {
     renderOrderDetail(detail({ discountAmount: 150, discountAmountMinor: 15_000, totalAmountMinor: 93_000 }), null);
-    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery (Inside Dhaka) ৳80 Discount −৳150 Total ৳930");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Discount −৳150 Total ৳930");
     expect(document.getElementById("orderNote")?.classList.contains("hidden")).toBe(true);
   });
 
@@ -223,7 +269,7 @@ describe("account order detail", () => {
     expect(text("orderAddress")).toBe(
       "Recipient Name 01711-111111 Gulshan store Pick up at Gulshan store, Road 11 Hours: 10am–8pm We'll let you know when your order is ready to collect.",
     );
-    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Pickup (Gulshan store) ৳80 Total ৳1,080");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Pickup · Gulshan store ৳80 Total ৳1,080");
     expect(text("orderItems")).toContain("Pickup Preparing");
     expect([...document.querySelectorAll("#orderProgress li")].map((step) => step.textContent?.replace(/\s+/g, " ").trim()))
       .toEqual(["Order placed (done)", "Confirmed", "Ready for pickup", "Picked up"]);

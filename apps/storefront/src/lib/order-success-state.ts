@@ -182,7 +182,7 @@ export function getOrderPaymentPresentation(
     badgeClass: codCollection
       ? "bg-slate-100 text-slate-800"
       : getPaymentStatusBadgeClass(order.paymentStatus),
-    methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy),
+    methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order),
     balanceDue: getOrderSuccessVisibleBalanceDue(order),
     balanceLabel: isCod ? codDueText(order, copy) : copy.orderReceiptBalanceDueText,
   };
