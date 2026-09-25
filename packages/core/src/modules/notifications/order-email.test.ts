@@ -6,7 +6,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SendEmailOptions } from "../../integrations/email/provider";
 import { sendOrderNotificationEmail, sendStaffOrderEmails } from "./notifications.service";
 import type { OrderNotificationType } from "./notification-types";
-import { composeOrderSms, readOrderMessageContext } from "./order-email";
+import { composeOrderSms, pendingDownloadNames, readOrderMessageContext } from "./order-email";
 
 const transport = vi.hoisted(() => ({ sendEmail: vi.fn() }));
 vi.mock("../../integrations/email", () => ({ sendEmail: transport.sendEmail }));
@@ -537,5 +537,18 @@ describe("customer order email composition and delivery", () => {
     expect(credit.variables.refund_amount).toBe("৳258 as store credit on a gift card ending 7K2Q. Use it at checkout.");
     const cash = await readOrderMessageContext({ orderId: "order_email", type: "order_refunded", data: { amount: 258 } }, db);
     expect(cash.variables.refund_amount).toBe("৳258");
+  });
+});
+
+describe("the delivered message and downloads still being prepared", () => {
+  it("names only the download lines not yet delivered", () => {
+    const line = { productName: "Recipe book", fulfillmentType: "digital", quantity: 2, fulfilledQuantity: 1 };
+    expect(pendingDownloadNames([
+      line,
+      { ...line, productName: "Font pack", fulfilledQuantity: 2 },
+      { ...line, productName: "Clay mug", fulfillmentType: "ship", fulfilledQuantity: 0 },
+      { ...line, productName: "  " },
+    ])).toBe("Recipe book");
+    expect(pendingDownloadNames([{ ...line, fulfilledQuantity: 2 }])).toBe("");
   });
 });

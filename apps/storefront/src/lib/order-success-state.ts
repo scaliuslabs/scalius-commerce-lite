@@ -390,8 +390,27 @@ const DELIVERY_ESTIMATE =
  * Shopify's "what happens next" for a just-placed order. The delivery estimate
  * comes only from the chosen delivery method's own description.
  */
+type ReceiptLineFacts = Pick<OrderItem, "quantity" | "fulfillmentType" | "fulfilledQuantity">;
+
+/**
+ * A downloadable line whose files and keys are still being prepared: the
+ * payment has settled and fulfilment runs in the background, so the receipt
+ * says so and checks back instead of looking finished.
+ */
+export function isDigitalLinePreparing(
+  line: ReceiptLineFacts,
+  order: Pick<OrderReceipt, "status" | "paymentStatus"> & { balanceDue?: number | null },
+): boolean {
+  if (line.fulfillmentType !== "digital") return false;
+  if ((line.fulfilledQuantity ?? 0) >= line.quantity) return false;
+  if (CLOSED_ORDER_STATUSES.has(normalize(order.status))) return false;
+  return normalize(order.paymentStatus) === "paid" || order.balanceDue === 0;
+}
+
 export function getOrderSuccessNextSteps(
-  order: Pick<OrderReceipt, "paymentMethod" | "shippingMethodDescription"> & OrderDeliveryFacts,
+  order: Pick<OrderReceipt, "paymentMethod" | "shippingMethodDescription"> & OrderDeliveryFacts & {
+    items?: readonly ReceiptLineFacts[];
+  },
   kind: OrderSuccessStateKind,
   copy: CheckoutLanguageData,
 ): string[] {
@@ -401,6 +420,10 @@ export function getOrderSuccessNextSteps(
   const mode = orderDeliveryMode(order);
   if (mode === "pickup") {
     return [paid ? copy.orderReceiptNextStepsPickupPaidText : copy.orderReceiptNextStepsPickupCodText];
+  }
+  // Downloads arrive on the receipt and by email; nobody calls to arrange them.
+  if (mode === "none" && order.items?.length && order.items.every((line) => line.fulfillmentType === "digital")) {
+    return [paid ? copy.orderReceiptNextStepsDigitalPaidText : copy.orderReceiptNextStepsDigitalText];
   }
   if (mode === "none") {
     return [paid ? copy.orderReceiptNextStepsServicePaidText : copy.orderReceiptNextStepsServiceCodText];

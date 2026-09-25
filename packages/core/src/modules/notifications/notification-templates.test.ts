@@ -30,6 +30,18 @@ describe("notification templates", () => {
     expect(bn.sms.order_shipped.body).toContain("\nট্র্যাকিং: {{tracking_id}}");
   });
 
+  it.each(["en", "bn"] as const)("says a %s delivered order's download is still coming, and only then", (language) => {
+    const defaults = defaultNotificationTemplates(language);
+    const body = defaults.email.order_delivered.body;
+    const values = { customer_name: "Rahim", order_number: "#1001" };
+    const withPending = renderTemplate(body, { ...values, pending_downloads: "Recipe book" });
+    expect(withPending).toContain("Recipe book");
+    if (language === "en") expect(withPending).toContain("Your download will arrive by email when it's ready.");
+    expect(renderTemplate(body, values)).not.toContain("{{");
+    expect(renderTemplate(body, values).split("\n")).toHaveLength(body.split("\n").length - 1);
+    expect(renderSmsTemplate("order_delivered", language, defaults.sms.order_delivered.body, values)).not.toMatch(/download|ডাউনলোড/i);
+  });
+
   it("offers tracking only where the sender knows it", () => {
     expect(variablesForEvent("order_shipped")).toContain("tracking_id");
     expect(variablesForEvent("order_confirmed")).not.toContain("tracking_id");

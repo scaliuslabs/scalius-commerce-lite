@@ -181,7 +181,8 @@ a.product-reviews-bar:hover .product-reviews-bar-track,
 
 .product-reviews-filter[hidden],
 .product-reviews-status[hidden],
-.product-reviews-more-button[hidden] {
+.product-reviews-more-button[hidden],
+.product-reviews-all[hidden] {
   display: none;
 }
 

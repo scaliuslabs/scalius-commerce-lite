@@ -2,7 +2,7 @@
 // src/pages/cart.astro
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
-import CheckoutLocationFields from "@/components/checkout/CheckoutLocationFields.astro";
+import LocationFields from "@/components/checkout/LocationFields.astro";
 import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMethods.astro";
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
@@ -603,19 +603,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </div>
 
               <div>
-                <CheckoutLocationFields
+                <LocationFields
                   cities={cities}
-                  cityLabel={copy.cityLabel}
-                  zoneLabel={copy.zoneLabel}
-                  areaLabel={copy.areaLabel}
-                  cityPlaceholder={copy.selectCityPlaceholder}
-                  zonePlaceholder={copy.selectZonePlaceholder}
-                  areaPlaceholder={copy.selectAreaPlaceholder}
-                  zoneSearchPlaceholder={copy.zoneSearchPlaceholder}
-                  loadingText={copy.loadingText}
-                  zonesLoadFailedText={copy.zonesLoadFailedText}
-                  areasLoadFailedText={copy.areasLoadFailedText}
+                  copy={copy}
                   showAreaField={lang.fieldVisibility.showAreaField}
+                  errorId="shippingLocationError"
                 />
                 <p id="shippingLocationError" class={errorClass} role="alert"></p>
               </div>

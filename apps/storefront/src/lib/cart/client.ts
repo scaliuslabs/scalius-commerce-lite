@@ -848,6 +848,10 @@ export async function validateCartSnapshot(): Promise<boolean> {
       return !hasBlockingCartIssues();
     }
 
+    // What the lines show: a check that changes none of it re-renders (and
+    // re-prices) nothing, so choosing a delivery option quotes once.
+    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
+    const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     const issues = Array.isArray(rawIssues) ? rawIssues : [];
     const summaryMessage =
@@ -886,7 +890,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
-    await renderCartItems();
+    if (shown() !== shownBefore) await renderCartItems();
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
