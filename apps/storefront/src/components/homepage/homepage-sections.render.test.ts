@@ -390,9 +390,10 @@ describe("homepage section library", () => {
     const rows = page.querySelectorAll("section");
     expect(rows).toHaveLength(2);
     expect(rows[0]!.querySelectorAll('[data-home-section="banner"]')).toHaveLength(2);
-    const scrim = rows[0]!.querySelector("h2")!.parentElement!;
-    expect(scrim.className).toContain("from-black/80");
-    expect(scrim.className).toContain("text-white");
+    // Words over a photo sit on a 70% black band, white on it: AA over any photo.
+    const band = rows[0]!.querySelector("h2")!.parentElement!;
+    expect(band.className).toContain("bg-black/70");
+    expect(band.parentElement!.className).toContain("text-white");
     // A banner without a photo is a colour banner in theme colours.
     expect(rows[1]!.querySelector("[data-home-section='banner']")!.className).toContain("bg-secondary");
   });

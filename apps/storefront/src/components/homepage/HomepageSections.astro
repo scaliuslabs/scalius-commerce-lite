@@ -49,6 +49,7 @@ const money = { currencySymbol, currencyCode };
           layout={unit.layout}
           banners={unit.sections.map((section) => ({ section, photo: homepageMedia(content, section.settings.mediaId) }))}
           aboveFold={unit.sections.some((section) => section.id === leadSectionId)}
+          grouped
         />
       );
     }

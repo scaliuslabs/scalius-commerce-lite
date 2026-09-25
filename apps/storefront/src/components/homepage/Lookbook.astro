@@ -44,8 +44,11 @@ const shown = products.slice(0, viewMore ? 7 : 8);
             decoding="async"
             class="aspect-square h-full w-full object-cover lg:aspect-auto"
           />
-          <figcaption class="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/75 via-black/40 to-transparent p-4 pt-16 md:p-6 md:pt-20">
-            <h2 id={headingId} class="section-heading text-white [overflow-wrap:anywhere]">{title}</h2>
+          <figcaption class="absolute inset-x-0 bottom-0">
+            <div class="h-10 bg-linear-to-t from-black/70 to-transparent md:h-14" aria-hidden="true" />
+            <div class="bg-black/70 px-4 pb-4 md:px-6 md:pb-6">
+              <h2 id={headingId} class="section-heading text-white [overflow-wrap:anywhere]">{title}</h2>
+            </div>
           </figcaption>
         </figure>
       )}

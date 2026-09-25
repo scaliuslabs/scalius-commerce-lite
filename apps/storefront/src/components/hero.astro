@@ -98,6 +98,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
           layout={layout}
           frameHeight={frame.desktop}
           rounded={false}
+          overlay="band"
         />
       </div>
     )}
@@ -111,6 +112,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
           layout={layout}
           frameHeight={frame.mobile}
           rounded={false}
+          overlay="band"
         />
       </div>
     )}
@@ -156,6 +158,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
                 height={HERO_SLIDE_PRESENTATION.desktop.height}
                 type="desktop"
                 priority={priority}
+                overlay="band"
               />
             </div>
           )}
@@ -166,6 +169,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
                 height={HERO_SLIDE_PRESENTATION.mobile.height}
                 type="mobile"
                 priority={priority}
+                overlay="band"
               />
             </div>
           )}

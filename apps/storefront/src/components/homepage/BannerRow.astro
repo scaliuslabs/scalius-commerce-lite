@@ -4,7 +4,9 @@
 // promo tiles). A banner with a photo shows its words on a dark scrim, so
 // white text keeps AA contrast over any photo; one without a photo is a
 // colour banner on the theme's secondary colour (eBay). Photos have a fixed
-// ratio, so nothing shifts while they load.
+// ratio, so nothing shifts while they load. Words over a photo sit on a
+// 70% black band (with a short gradient lead-in), so white text keeps AA
+// contrast over any photo however many lines it wraps to.
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
@@ -15,9 +17,11 @@ interface Props {
   banners: Array<{ section: StorefrontSectionOf<"banner">; photo: HomepageMediaAsset | null }>;
   /** The row leads the page: its photos load eagerly. */
   aboveFold: boolean;
+  /** A row of grouped banners: each banner carries its own section marker. */
+  grouped?: boolean;
 }
 
-const { layout, banners, aboveFold } = Astro.props;
+const { layout, banners, aboveFold, grouped = false } = Astro.props;
 const RATIO = {
   full: "aspect-[4/3] sm:aspect-[16/7] lg:aspect-[18/5]",
   "two-up": "aspect-[4/3] sm:aspect-[16/9]",
@@ -53,8 +57,8 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
             ]}
             aria-labelledby={title ? headingId : undefined}
             aria-label={!title && cta ? cta.label : undefined}
-            data-home-section="banner"
-            data-section-id={section.id}
+            data-home-section={grouped ? "banner" : undefined}
+            data-section-id={grouped ? section.id : undefined}
           >
             {photo && (
               <img
@@ -70,10 +74,9 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
               />
             )}
             {(title || body || cta) && (
-              <div class:list={[
-                photo && "absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/55 to-transparent p-4 pt-16 text-white md:p-8 md:pt-24",
-                "[overflow-wrap:anywhere]",
-              ]}>
+              <div class:list={[photo && "absolute inset-x-0 bottom-0 text-white", "[overflow-wrap:anywhere]"]}>
+                {photo && <div class="h-10 bg-linear-to-t from-black/70 to-transparent md:h-16" aria-hidden="true" />}
+                <div class:list={[photo && "bg-black/70 px-4 pb-4 md:px-8 md:pb-8"]}>
                 {title && <h2 id={headingId} class:list={["max-w-2xl font-bold leading-tight", layout === "four-up" ? "text-lg md:text-xl" : "text-xl md:text-3xl"]}>{title}</h2>}
                 {body && <p class:list={["mt-2 max-w-xl text-sm leading-relaxed md:text-base", !photo && "text-secondary-foreground"]}>{body}</p>}
                 {cta && (
@@ -84,6 +87,7 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
                     {cta.label}
                   </span>
                 )}
+                </div>
               </div>
             )}
           </Frame>
