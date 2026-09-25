@@ -50,8 +50,8 @@ interface Props {
   maxColumns?: number;
   /**
    * The filter column beside a `beside-filters` grid, in px; by default the
-   * listing's own filter style's column (`listingFilterColumnPx`), 0 for a
-   * bar or drawer.
+   * listing's own (`listingFilterColumnPx(resolved filters)`: the template's
+   * column, else its style's), 0 for a bar or drawer.
    */
   filterColumnPx?: number;
 }
@@ -86,9 +86,10 @@ const loading = productCardImageLoading(
   productGridFirstRow(grid, containerWidth, maxColumns),
   { index, aboveFold },
 );
-const filterColumnPx = context === "beside-filters"
-  ? filterColumnOverride ?? listingFilterColumnPx(resolved.blocks.listing.filters.style)
-  : 0;
+// The listing's own column when it passes one (a category's listing template
+// can override the theme's filters), else the theme's for a grid beside them.
+const filterColumnPx = filterColumnOverride
+  ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
 const sizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
 const model = productCardModel(product, {
   currencySymbol,
