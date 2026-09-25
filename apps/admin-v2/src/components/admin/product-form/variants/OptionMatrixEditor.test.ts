@@ -15,6 +15,12 @@ import {
   type DraftOption,
   type DraftVariant,
 } from "./option-matrix-editor-model";
+import {
+  fulfilmentModeOf,
+  matrixSaveVariants as saveRows,
+  withFulfilmentMode,
+  type DraftVariant as FulfilmentRow,
+} from "./option-matrix-editor-model";
 
 const option = (
   id: string,
@@ -304,5 +310,28 @@ describe("option matrix editor model", () => {
     expect(followed[0]).toMatchObject({ sku: "POLO-S", price: 500 });
     expect(followed[1]).toMatchObject({ sku: "MY-OWN", price: 99 });
     expect(followed[2]).toBe(saved);
+  });
+});
+
+describe("product fulfilment mode", () => {
+  const row = (id: string, fulfillmentKind?: "physical" | "service") => ({
+    id, selectedOptionValueIds: [], imageId: null, sku: id.toUpperCase(), price: 100, stock: 0, trackInventory: false,
+    weight: null, barcode: null, barcodeType: null, discountType: "percentage", discountPercentage: null, discountAmount: null,
+    ...(fulfillmentKind ? { fulfillmentKind } : {}),
+  }) as FulfilmentRow;
+
+  it("reads the saved SKUs as one kind or per variant", () => {
+    expect(fulfilmentModeOf([])).toBe("physical");
+    expect(fulfilmentModeOf([{ fulfillmentKind: "service", deletedAt: null }])).toBe("service");
+    expect(fulfilmentModeOf([{ fulfillmentKind: "service", deletedAt: null }, { fulfillmentKind: "physical", deletedAt: null }])).toBe("mixed");
+    // A retired SKU doesn't count.
+    expect(fulfilmentModeOf([{ fulfillmentKind: "service", deletedAt: null }, { fulfillmentKind: "physical", deletedAt: "2026-09-01" }])).toBe("service");
+  });
+
+  it("sends one kind on every row, new ones included, so a variant save never puts an old kind back", () => {
+    const rows = [row("var_a", "physical"), row("draft_b")];
+    expect(withFulfilmentMode(rows, "service").map((variant) => variant.fulfillmentKind)).toEqual(["service", "service"]);
+    expect(withFulfilmentMode(rows, "mixed")).toBe(rows);
+    expect(saveRows(rows, [], "service").map((variant) => variant.fulfillmentKind)).toEqual(["service", "service"]);
   });
 });
