@@ -299,6 +299,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 83,
+        name: "0083_on_sale_indexes",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -430,6 +436,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 80, name: "0080_whole_taka_amounts" },
           { version: 81, name: "0081_theme_document_v3" },
           { version: 82, name: "0082_theme_document_v4" },
+          { version: 83, name: "0083_on_sale_indexes" },
         ],
       });
     } finally {

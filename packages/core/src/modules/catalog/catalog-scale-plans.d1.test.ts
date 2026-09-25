@@ -228,6 +228,53 @@ describe("catalogue-scale query plans", () => {
         expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(90);
     });
 
+    it("finds a rare sale from the discounted-row indexes, never walking the catalogue", async () => {
+        const { db, queries, plans } = setup();
+        const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, is_active, created_at, discount_type, discount_bps) VALUES (?, ?, 10000, ?, 1, ?, 'percentage', ?)");
+        const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory, discount_type, discount_bps, created_at) VALUES (?, ?, ?, 10000, 1, 1, 1, 'percentage', ?, ?)");
+        // 300 newer products at full price; the only sales are the oldest two,
+        // one discounted on the product and one on its SKU.
+        for (let index = 0; index < 300; index += 1) {
+            insertProduct.run(`prod_full_${index}`, `Full ${index}`, `full-${index}`, 1_800_000_000 + index, 0);
+            insertSku.run(`var_full_${index}`, `prod_full_${index}`, `FULL-${index}`, 0, 1_800_000_000 + index);
+        }
+        insertProduct.run("prod_sale_product", "Sale on product", "sale-product", 1_600_000_001, 1500);
+        insertSku.run("var_sale_product", "prod_sale_product", "SALE-P", 0, 1_600_000_001);
+        insertProduct.run("prod_sale_sku", "Sale on SKU", "sale-sku", 1_600_000_000, 0);
+        insertSku.run("var_sale_sku", "prod_sale_sku", "SALE-S", 2000, 1_600_000_000);
+        queries.length = 0;
+
+        const home = await getHomepageData(db, {
+            requests: { lists: [{ key: "on-sale", source: { kind: "on-sale" }, limit: 4 }], mediaIds: [] },
+            sectionsOnly: true,
+        });
+
+        expect(home.sections.lists[0]?.products.map((product) => product.id)).toEqual(["prod_sale_product", "prod_sale_sku"]);
+        const onSalePlans = plans((sql) => sql.includes("sale_sku_product"));
+        expect(onSalePlans.length).toBe(2); // the cards and their media
+        for (const plan of onSalePlans) {
+            expect(plan).toContain("products_on_sale_newest_idx");
+            expect(plan).toContain("product_variants_on_sale_newest_idx");
+            // Only the partial index is walked (in order, to its window);
+            // products are reached by id, never scanned.
+            expect(plan).not.toMatch(/SCAN (products|product_variants)$/m);
+            expect(plan).not.toMatch(/SEARCH \w+ USING INDEX products_active_idx/);
+            expect(plan).not.toContain("products_public_newest_idx");
+            expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
+        }
+    });
+
+    it("keeps the catalogue's own reads off the on-sale indexes", async () => {
+        const { db, plans } = setup();
+        await getStorefrontProducts(db, { page: 1, limit: 20, sort: "discount" });
+        await getStorefrontProducts(db, { page: 1, limit: 20, hasDiscount: "true" });
+        await getStorefrontFeedProducts(db, { limit: 10 });
+        await listProducts(db, { page: 1, limit: 2, sort: "name", order: "asc" });
+        const all = plans(() => true).join("\n");
+        expect(all).not.toContain("products_on_sale_newest_idx");
+        expect(all).not.toContain("product_variants_on_sale_newest_idx");
+    });
+
     it("looks SKUs up by their identity index", async () => {
         const { db, plans } = setup();
         const result = await getStorefrontFeedProducts(db, { ids: "sku-b", limit: 10 });

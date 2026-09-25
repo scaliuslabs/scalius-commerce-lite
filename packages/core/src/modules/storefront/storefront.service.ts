@@ -187,9 +187,17 @@ type BatchItem = Parameters<typeof safeBatch>[1][number];
  *    sources), each with the card media of exactly its rows, the section
  *    images and the hero rendition lookup.
  *
- * `requests` (a preview's draft sections) replaces the published theme's.
+ * `requests` (a preview's draft sections) replaces the published theme's;
+ * with `sectionsOnly` the second batch holds the section reads alone.
  */
-export async function getHomepageData(db: Database, options: { requests?: HomeSectionRequests } = {}) {
+export async function getHomepageData(db: Database, options: {
+  requests?: HomeSectionRequests;
+  /**
+   * Only the section lists and images (a theme preview's draft): the
+   * published homepage collections and banner renditions are not read.
+   */
+  sectionsOnly?: boolean;
+} = {}) {
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO + homepage presentation documents
@@ -300,7 +308,7 @@ export async function getHomepageData(db: Database, options: { requests?: HomeSe
   };
   const desktopHero = formatSlider(desktopSlider);
   const mobileHero = formatSlider(mobileSlider);
-  const heroRenditions = planHeroRenditions(db, [
+  const heroRenditions = planHeroRenditions(db, options.sectionsOnly ? [] : [
     ...(desktopHero?.images ?? []),
     ...(mobileHero?.images ?? []),
   ]);
@@ -316,7 +324,9 @@ export async function getHomepageData(db: Database, options: { requests?: HomeSe
     isActive: col.isActive as boolean,
     parsedConfig: normalizeCollectionConfig(col.config),
   }));
-  const parsedCollections = activeCollections.filter((collection) => collection.parsedConfig.showOnHomepage);
+  const parsedCollections = options.sectionsOnly
+    ? []
+    : activeCollections.filter((collection) => collection.parsedConfig.showOnHomepage);
   const collectionById = new Map(activeCollections.map((collection) => [collection.id, collection]));
   const collectionLists = requests.lists.flatMap((list) => {
     const collection = list.source.kind === "collection" ? collectionById.get(list.source.collectionId) : undefined;

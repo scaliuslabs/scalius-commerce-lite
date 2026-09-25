@@ -144,6 +144,7 @@ describe("storefront private cache policy", () => {
     // The reads come from the stored draft, never from the caller.
     const [, options] = vi.mocked(getHomepageData).mock.calls[0]!;
     expect(options?.requests?.lists.map((list) => list.key)).toEqual(["on-sale", "newest"]);
+    expect(options?.sectionsOnly).toBe(true);
 
     mocks.resolveThemePreviewSession.mockResolvedValue(null);
     const expired = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {

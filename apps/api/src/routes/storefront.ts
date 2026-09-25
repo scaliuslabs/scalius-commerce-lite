@@ -522,7 +522,7 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
   const requests = homeSectionRequests(preview.theme.pages.home);
   const data = requests.lists.length > 0 || requests.mediaIds.length > 0
-    ? (await getHomepageData(db, { requests })).sections
+    ? (await getHomepageData(db, { requests, sectionsOnly: true })).sections
     : { lists: [], media: [] };
   return ok(c, data as unknown as HomepageData["sections"]);
 });
