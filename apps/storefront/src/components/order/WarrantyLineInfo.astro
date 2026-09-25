@@ -1,9 +1,53 @@
 ---
-// Owned by B5 (warranty): the line's warranty and "Make a claim"; renders nothing until B5 ships it.
+// Owned by B5 (warranty): the line's warranty on the receipt (track order opens
+// it too): what was bought, the dates, the claim and its thread, and for a
+// claimable record the claim form in place, so a guest claims with the
+// receipt proof and no account. Server-rendered; works without JavaScript.
 import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
+import { getActiveCheckoutLanguage } from "@/lib/api";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+import { currentReturnPath } from "@/lib/account-inbox";
+import {
+  canClaimWarranty,
+  lineWarrantyMarkup,
+  pickWarrantyCopy,
+  readLineWarranties,
+  readWarrantyClaimNotice,
+  type WarrantyAccess,
+} from "@/lib/account-warranties";
+import WarrantyClaimForm from "@/components/warranty/WarrantyClaimForm.astro";
 
 export interface Props {
   line: OrderLine;
   context: LineExtrasContext;
 }
+
+const { line, context } = Astro.props;
+const records = readLineWarranties(line.extras?.warranty);
+const access: WarrantyAccess = context.access === "account" ? { kind: "account" } : { kind: "receipt", orderId: context.orderId };
+const language = records.length > 0 ? await getActiveCheckoutLanguage().catch(() => null) : null;
+const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
+const now = Date.now();
+const notice = readWarrantyClaimNotice(Astro.url);
+const returnTo = (() => {
+  const url = new URL(currentReturnPath(Astro.url), "https://storefront.invalid");
+  url.searchParams.delete("claim");
+  url.searchParams.delete("claimStatus");
+  return `${url.pathname}${url.search}`;
+})();
 ---
+{records.map((record) => (
+  <div>
+    <Fragment set:html={lineWarrantyMarkup(record, { copy, access, now })} />
+    {canClaimWarranty(record, now) && (
+      <WarrantyClaimForm
+        warrantyId={record.warrantyId}
+        access={access}
+        copy={copy}
+        returnTo={returnTo}
+        open={notice?.warrantyId === record.warrantyId}
+        flag={notice?.warrantyId === record.warrantyId ? notice.flag : null}
+      />
+    )}
+  </div>
+))}
