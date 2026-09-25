@@ -24,6 +24,7 @@ import {
   openRequestLabel,
   orderPaymentLine,
 } from "@/lib/account-format";
+import { CONVERSATION_COPY, fetchInboxUnread, inboxBadgeText } from "@/lib/account-inbox";
 
 /** Fields the account list reads beyond the generated order type. */
 export type AccountOrder = CustomerOrder;
@@ -279,6 +280,28 @@ function renderProfile(customer: CustomerInfo): void {
   }
 }
 
+/** The account tabs (this page and the Inbox) with the unread-replies badge. */
+function renderAccountTabs(runId: number): void {
+  const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium";
+  if (!document.getElementById("accountTabs")) {
+    const nav = document.createElement("nav");
+    nav.id = "accountTabs";
+    nav.setAttribute("aria-label", "Account");
+    nav.className = "mb-6 flex gap-1 border-b border-border";
+    nav.innerHTML = `
+      <a href="/account" aria-current="page" data-astro-prefetch="false" class="${tab} border-primary text-foreground">${escapeHtml(CONVERSATION_COPY.accountTab)}</a>
+      <a href="/account/inbox" data-astro-prefetch="false" class="${tab} gap-2 border-transparent text-muted-foreground hover:text-foreground">${escapeHtml(CONVERSATION_COPY.inboxTitle)}<span id="accountInboxBadge" hidden class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"></span></a>`;
+    byId("authState").prepend(nav);
+  }
+  void fetchInboxUnread().then((unread) => {
+    const badge = document.getElementById("accountInboxBadge");
+    if (!badge || accountWindow.__scaliusAccountInitRun !== runId) return;
+    const text = inboxBadgeText(unread);
+    badge.innerHTML = text ? `${escapeHtml(text)}<span class="sr-only"> unread</span>` : "";
+    badge.hidden = !text;
+  });
+}
+
 export async function initializeAccountPage(): Promise<void> {
   if (!document.querySelector("[data-account-page]")) return;
 
@@ -317,6 +340,7 @@ export async function initializeAccountPage(): Promise<void> {
   if (phoneVerificationStatus) phoneVerificationStatus.textContent = "";
   loadingState.classList.add("hidden");
   authState.classList.remove("hidden");
+  renderAccountTabs(runId);
 
   const ordersRead = loadAccountOrders(runId);
 
