@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -42,7 +43,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
-type FieldKey = "showEmailField" | "showOrderNotesField" | "showAreaField";
+type FieldKey = "showOrderNotesField" | "showAreaField";
 
 const TEXT_FIELDS = [
   "pageTitle",
@@ -101,8 +102,7 @@ export function termsTextKeepsLinks(copy: Record<string, string>): boolean {
   return names.every((name) => name !== "" && text.includes(name));
 }
 
-const FORM_FIELDS: Array<[FieldKey, "askEmail" | "orderNotes" | "area"]> = [
-  ["showEmailField", "askEmail"],
+const FORM_FIELDS: Array<[FieldKey, "orderNotes" | "area"]> = [
   ["showOrderNotesField", "orderNotes"],
   ["showAreaField", "area"],
 ];
@@ -208,7 +208,9 @@ export function CustomerContactCard() {
       {!values.guestCheckoutEnabled && !signInReady ? (
         <p role="alert" className="text-body text-destructive">{t("signInNotReady")}</p>
       ) : null}
-      <p className="text-body text-muted-foreground">{t("phoneAlways")}</p>
+      <p className="text-body text-muted-foreground">
+        <Link to="/admin/settings/customer-accounts" className="underline underline-offset-2">{t("contactFieldsPointer")}</Link>
+      </p>
       <div className="border-t border-border pt-2">
         <FormFields
           key={language?.id ?? "none"}

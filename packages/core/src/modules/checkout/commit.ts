@@ -400,6 +400,7 @@ function buildOrderWriteBatch(
             customerName: od.customerName,
             customerPhone: od.customerPhone,
             customerEmail: od.customerEmail,
+            customerWhatsapp: od.customerWhatsapp ?? null,
             shippingAddress: od.shippingAddress,
             city: od.city,
             zone: od.zone,

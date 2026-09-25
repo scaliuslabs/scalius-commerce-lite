@@ -2,6 +2,7 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
+import { resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import {
@@ -99,6 +100,8 @@ export interface StorefrontDeliveryPreflightResult {
 
 export interface StorefrontCheckoutPolicySnapshot {
     partialPaymentEnabled: boolean;
+    /** Customer accounts contact fields from the checkout authority read. */
+    contactFields?: CheckoutContactFieldSettings;
     authorityRevision?: number;
     orderCreatedNotificationEnabled?: boolean;
     metaPurchaseEnabled?: boolean;
@@ -444,6 +447,9 @@ export async function createStorefrontOrder(
         );
     }
 
+    // Customer accounts decides which contacts checkout keeps (phone always).
+    const contact = resolveCheckoutContact(checkoutPolicySnapshot?.contactFields, data);
+
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
     }
@@ -683,7 +689,7 @@ export async function createStorefrontOrder(
             id: orderId,
             customerName: data.customerName,
             customerPhone: data.customerPhone,
-            customerEmail: data.customerEmail,
+            ...contact,
             shippingAddress,
             city: shippingDestination?.city ?? null,
             zone: shippingDestination?.zone ?? null,

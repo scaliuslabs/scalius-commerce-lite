@@ -30,7 +30,6 @@ import type {
   EmailStore,
   NotificationTemplates,
 } from "@scalius/core/modules/notifications/browser";
-import { normalizeCustomerAuthPolicy } from "@scalius/shared/customer-auth-policy";
 import type { getCountries } from "@scalius/shared/customer-utils";
 import { parseMerchantCspSources } from "@scalius/shared/security-csp";
 import { countClearableAgentConnections, listAgentConnections } from "~/components/admin/agent-access/api";
@@ -233,7 +232,7 @@ export const signInPolicyQuery = {
   queryFn: async () => {
     const auth = await authQuery.queryFn();
     return {
-      policy: normalizeCustomerAuthPolicy(auth.customerAuthPolicy, auth.authVerificationMethod),
+      identity: auth.customerIdentity,
       revision: auth.revision,
     };
   },

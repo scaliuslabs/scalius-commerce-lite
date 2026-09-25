@@ -32,6 +32,7 @@ export interface QuickCheckoutForm {
   customerName: string;
   customerPhone: string;
   customerEmail: string;
+  customerWhatsapp: string;
   /** What the buyer chose; `none` is decided from the lines, never posted. */
   deliveryMode: "delivery" | "pickup";
   shippingAddress: string;
@@ -83,6 +84,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     customerName: text(form, "customerName", 100),
     customerPhone: text(form, "customerPhone", 20),
     customerEmail: text(form, "customerEmail", 254),
+    customerWhatsapp: text(form, "customerWhatsapp", 20),
     deliveryMode: form.get("deliveryMode") === "pickup" ? "pickup" : "delivery",
     shippingAddress: text(form, "shippingAddress", 500),
     city: id(form, "city"),
@@ -158,6 +160,8 @@ export type QuickCheckoutFieldError =
   | "customerName"
   | "customerPhone"
   | "customerEmail"
+  | "customerEmailRequired"
+  | "customerWhatsapp"
   | "shippingAddress"
   | "city"
   | "zone";
@@ -169,6 +173,8 @@ export function quickCheckoutFieldErrors(
   form: QuickCheckoutForm,
   mode: QuickCheckoutMode,
   minAddressLength: number,
+  /** Customer accounts' email field (phone is always required). */
+  emailNeed: "required" | "optional" | "hidden" = "optional",
 ): QuickCheckoutFieldError[] {
   const errors: QuickCheckoutFieldError[] = [];
   if (form.customerName.length < 3) errors.push("customerName");
@@ -177,7 +183,10 @@ export function quickCheckoutFieldErrors(
   } catch {
     errors.push("customerPhone");
   }
-  if (form.customerEmail && !EMAIL_PATTERN.test(form.customerEmail)) errors.push("customerEmail");
+  if (emailNeed === "required" && !form.customerEmail) errors.push("customerEmailRequired");
+  else if (emailNeed !== "hidden" && form.customerEmail && !EMAIL_PATTERN.test(form.customerEmail)) errors.push("customerEmail");
+  const whatsappDigits = form.customerWhatsapp.replace(/\D/g, "");
+  if (whatsappDigits && (whatsappDigits.length < 10 || whatsappDigits.length > 15)) errors.push("customerWhatsapp");
   if (mode === "delivery") {
     if (form.shippingAddress.length < minAddressLength) errors.push("shippingAddress");
     if (!form.city) errors.push("city");
@@ -250,6 +259,7 @@ export function quickCheckoutOrderForm(
     customerName: form.customerName,
     customerPhone: form.customerPhone,
     customerEmail: form.customerEmail,
+    customerWhatsapp: form.customerWhatsapp,
     notes: form.notes,
     discountCodes: codes.length > 0 ? JSON.stringify(codes) : "",
     deliveryMode: mode === "pickup" ? "pickup" : "delivery",

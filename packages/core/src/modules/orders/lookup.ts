@@ -1,23 +1,23 @@
-// Public "Track your order": order number + the phone on the order, proven by
-// a one-time code sent to the contact SAVED on the order (never to what the
-// visitor types). A correct code issues a private receipt proof, so the buyer
-// lands on the normal receipt / order-status page from any device.
+// Public "Track your order". The order number alone opens a status-only view
+// (no personal data; the API route rate-limits it per IP). Anything more is
+// proven by a one-time code sent through a channel the merchant chose in
+// Customer accounts to a contact SAVED on the order (never to what the visitor
+// types). A correct code issues a private receipt proof, so the buyer lands on
+// the normal receipt from any device.
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
 import { createAuthOtpDeliveryKey } from "../customers/otp-delivery-receipts";
-import type { OtpQueuePayload } from "../customers/otp-transport";
+import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
+import { chooseOrderCodeChannel } from "../customers/customer-code-channels";
 import {
-    channelToAllowedMethod,
-    chooseOrderCodeChannel,
     consumeLatestOrderOtpChallenge,
     hmacSha256Hex,
     persistOrderOtpChallenge,
@@ -29,7 +29,8 @@ import { createOrderReceiptToken, recordOrderReceipt } from "./receipts";
 const ORDER_LOOKUP_PURPOSE = "order_lookup";
 const ORDER_LOOKUP_KEY_PREFIX = "order_lookup:";
 const WRONG_CODE_MESSAGE = "That code isn't right. Check it and try again.";
-const NOT_FOUND_MESSAGE = "We couldn't find an order with that number and phone number. Check both and try again.";
+/** One answer for every miss, so a number that doesn't exist looks like any other. */
+export const ORDER_LOOKUP_NOT_FOUND_MESSAGE = "We couldn't find an order with that number. Check it and try again.";
 
 /**
  * The order a buyer names: "#1001", "1001" or the internal id. Returns null
@@ -45,7 +46,8 @@ export function orderReferenceCondition(reference: string): SQL | null {
 
 export interface SendOrderLookupOtpInput {
     reference: string;
-    phone: string;
+    /** The merchant-chosen channel the buyer picked; the first available one otherwise. */
+    channel?: CustomerAuthOtpChannel;
     ip: string;
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
@@ -69,28 +71,26 @@ export interface VerifyOrderLookupOtpResult {
     expiresAt: number;
 }
 
-function parseLookupInput(reference: string, phone: string): { condition: SQL; phone: string; referenceKey: string } {
+function parseLookupReference(reference: string): { condition: SQL; referenceKey: string } {
     const condition = orderReferenceCondition(reference);
     if (!condition) throw new ValidationError("Enter your order number, for example #1001.");
-    let normalizedPhone: string;
-    try {
-        normalizedPhone = validateAndFormatPhone(phone ?? "");
-    } catch {
-        throw new ValidationError("Enter the phone number used for the order.");
-    }
     const referenceKey = toLatinDigits(reference).trim().replace(/^#\s*/, "").toUpperCase();
-    return { condition, phone: normalizedPhone, referenceKey };
+    return { condition, referenceKey };
 }
 
-async function findLookupOrder(db: Database, condition: SQL, phone: string) {
+/** The order a reference names, with the contacts codes may go to. Null when none. */
+export async function findOrderByReference(db: Database, reference: string) {
+    const condition = orderReferenceCondition(reference);
+    if (!condition) return null;
     return await db
         .select({
             id: orders.id,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
+            customerWhatsapp: orders.customerWhatsapp,
         })
         .from(orders)
-        .where(and(condition, eq(orders.customerPhone, phone), isNull(orders.deletedAt)))
+        .where(and(condition, isNull(orders.deletedAt)))
         .get() ?? null;
 }
 
@@ -105,19 +105,18 @@ export async function sendOrderLookupOtp(
     db: Database,
     input: SendOrderLookupOtpInput,
 ): Promise<SendOrderLookupOtpResult> {
-    const lookup = parseLookupInput(input.reference, input.phone);
+    const lookup = parseLookupReference(input.reference);
     const deliveryEncryptionKey = requireRecoveryDeliveryEncryptionKey(input.credentialEncryptionKey);
     const allowance = await enforceOtpSendRateLimits(db, {
         ip: input.ip,
-        identifiers: [`lookup-order:${lookup.referenceKey}`, `lookup-phone:${lookup.phone}`],
+        identifiers: [`lookup-order:${lookup.referenceKey}`],
         hashKey: input.encryptionKey,
     });
 
-    // The buyer holds both the order number and its phone, so say plainly
-    // whether it matched and where the code went (never a code that can't
-    // arrive). Limits per order number and per phone keep guessing useless.
-    const order = await findLookupOrder(db, lookup.condition, lookup.phone);
-    if (!order) throw new NotFoundError(NOT_FOUND_MESSAGE);
+    // The status view already said the order exists; the code goes to the
+    // contact saved on it, never to anything the visitor typed.
+    const order = await findOrderByReference(db, input.reference);
+    if (!order) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
     const { channel, method, target, destination } = await chooseOrderCodeChannel(db, order, input);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -144,16 +143,13 @@ export async function sendOrderLookupOtp(
         destination,
         channel,
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
-        queuePayload: {
-            type: "auth.send_otp",
+        queuePayload: buildOtpQueuePayload({
+            channel,
+            purpose: ORDER_LOOKUP_PURPOSE,
             challengeKey,
             deliveryKey,
-            purpose: ORDER_LOOKUP_PURPOSE,
             otpExpiresAt: challenge.expiresAt,
-            method,
-            allowedMethod: channelToAllowedMethod(channel),
-            channel,
-        },
+        }),
         challengeKey,
         deliveryKey,
     };
@@ -161,13 +157,13 @@ export async function sendOrderLookupOtp(
 
 export async function verifyOrderLookupOtp(
     db: Database,
-    input: { reference: string; phone: string; code: string; encryptionKey?: string },
+    input: { reference: string; code: string; encryptionKey?: string },
 ): Promise<VerifyOrderLookupOtpResult> {
-    const lookup = parseLookupInput(input.reference, input.phone);
+    parseLookupReference(input.reference);
     const code = input.code?.trim() ?? "";
     if (!/^\d{4,12}$/.test(code)) throw new ValidationError("Enter the 6-digit code.");
 
-    const order = await findLookupOrder(db, lookup.condition, lookup.phone);
+    const order = await findOrderByReference(db, input.reference);
     if (!order) throw new ValidationError(WRONG_CODE_MESSAGE);
 
     const nowSeconds = Math.floor(Date.now() / 1000);

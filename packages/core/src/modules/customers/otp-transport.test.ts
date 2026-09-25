@@ -1,77 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { EmailOtpTransport, SmsOtpTransport, WhatsAppOtpTransport } from "./otp-transport";
+import { buildOtpQueuePayload } from "./otp-transport";
 
-const baseSettings = { authVerificationMethod: "email" };
-
-describe("OTP transports", () => {
-  it("includes durable delivery metadata in email payloads", () => {
-    const payload = new EmailOtpTransport().buildQueuePayload(
-      baseSettings,
-      "email",
-      "otp_delivery_1",
-      4_102_444_800,
-      "cust_otp:email:challenge_hash_1",
-    );
-
-    expect(payload).toMatchObject({
+describe("OTP queue payload", () => {
+  it.each([
+    ["email", "email", "email"],
+    ["sms", "phone", "sms_otp"],
+    ["whatsapp", "phone", "whatsapp_otp"],
+  ] as const)("a %s code carries references only", (channel, method, allowedMethod) => {
+    const payload = buildOtpQueuePayload({
+      channel,
+      purpose: "customer_login",
+      challengeKey: "cust_otp:challenge_hash_1",
+      deliveryKey: "otp_delivery_1",
+      otpExpiresAt: 4_102_444_800,
+    });
+    expect(payload).toEqual({
       type: "auth.send_otp",
-      challengeKey: "cust_otp:email:challenge_hash_1",
+      challengeKey: "cust_otp:challenge_hash_1",
       deliveryKey: "otp_delivery_1",
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
-      method: "email",
+      method,
+      allowedMethod,
+      channel,
     });
-    expect(payload).not.toHaveProperty("code");
-    expect(payload).not.toHaveProperty("identifier");
-    expect(payload).not.toHaveProperty("name");
-  });
-
-  it("includes durable delivery metadata in SMS payloads", () => {
-    const payload = new SmsOtpTransport().buildQueuePayload(
-      { ...baseSettings, authVerificationMethod: "sms_otp" },
-      "sms",
-      "otp_delivery_sms_1",
-      4_102_444_800,
-      "cust_otp:sms:challenge_hash_1",
-    );
-
-    expect(payload).toMatchObject({
-      type: "auth.send_otp",
-      challengeKey: "cust_otp:sms:challenge_hash_1",
-      deliveryKey: "otp_delivery_sms_1",
-      purpose: "customer_login",
-      otpExpiresAt: 4_102_444_800,
-      method: "phone",
-      allowedMethod: "sms_otp",
-    });
-    expect(payload).not.toHaveProperty("code");
-    expect(payload).not.toHaveProperty("identifier");
-    expect(payload).not.toHaveProperty("name");
-  });
-
-  it("includes durable metadata without WhatsApp credentials in WhatsApp payloads", () => {
-    const payload = new WhatsAppOtpTransport().buildQueuePayload(
-      { ...baseSettings, authVerificationMethod: "whatsapp_otp" },
-      "whatsapp",
-      "otp_delivery_wa_1",
-      4_102_444_800,
-      "cust_otp:whatsapp:challenge_hash_1",
-    );
-
-    expect(payload).toMatchObject({
-      type: "auth.send_otp",
-      challengeKey: "cust_otp:whatsapp:challenge_hash_1",
-      deliveryKey: "otp_delivery_wa_1",
-      purpose: "customer_login",
-      otpExpiresAt: 4_102_444_800,
-      method: "phone",
-      allowedMethod: "whatsapp_otp",
-    });
-    expect(payload).not.toHaveProperty("waToken");
-    expect(payload).not.toHaveProperty("waPhoneId");
-    expect(payload).not.toHaveProperty("waTemplate");
-    expect(payload).not.toHaveProperty("code");
-    expect(payload).not.toHaveProperty("identifier");
-    expect(payload).not.toHaveProperty("name");
   });
 });

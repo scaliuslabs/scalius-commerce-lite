@@ -110,7 +110,7 @@ const LANGUAGE = {
   name: "English",
   code: "en",
   languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  fieldVisibility: { showEmailField: true, showOrderNotesField: true, showAreaField: true },
+  fieldVisibility: { showOrderNotesField: true, showAreaField: true },
   isActive: true,
   isDefault: true,
 };
@@ -119,7 +119,6 @@ const SHIPPING = { shippingMethods: [{ id: "ship_std", name: "Standard", fee: 60
 const COD_CONFIG = {
   gateways: [{ id: "cod", name: "Cash on delivery", flow: "cod" }],
   guestCheckoutEnabled: true,
-  authVerificationMethod: "email",
   checkoutMode: "all",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,
