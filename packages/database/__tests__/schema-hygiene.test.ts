@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(129);
+      expect(d1Tables).toHaveLength(131);
+      expect(d1Tables).toContain("cache_clock");
+      expect(d1Tables).toContain("cache_dep");
       expect(d1Tables).toContain("scalius_schema_migrations");
       expect(d1Tables).toContain("cache_generation");
       expect(d1Tables).toContain("agent_grants");
