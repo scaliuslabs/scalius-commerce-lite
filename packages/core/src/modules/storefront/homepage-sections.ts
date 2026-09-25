@@ -7,6 +7,7 @@ import { brands, media, productBuyerState, promotions } from "@scalius/database/
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { homeSectionRequests, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import {
     brandLogoColumns,
@@ -169,4 +170,15 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
             });
         },
     };
+}
+
+/**
+ * The images a theme's homepage sections name, for the dashboard's section
+ * editor previews (the same capped id set and rules the storefront reads).
+ */
+export async function readHomeSectionMedia(db: Database, sections: readonly StorefrontSection[]): Promise<HomeMediaAsset[]> {
+    const plan = planHomeMedia(db, homeSectionRequests(sections).mediaIds);
+    const [statement] = plan.statements;
+    if (!statement) return [];
+    return plan.resolve([await statement], 0);
 }
