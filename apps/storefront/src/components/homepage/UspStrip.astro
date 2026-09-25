@@ -1,0 +1,124 @@
+---
+// A strip of short promises (Apple Gadgets' "36 months EMI · fastest
+// delivery", Star Tech's notice ticker).
+// - icons: 3-4 items in one bordered row. The live delivery facts render as
+//   the classic store's trust strip (DeliveryFacts); the merchant's own
+//   items take the same shape with a check mark.
+// - ticker: one 40px pill whose text scrolls (CSS only: it pauses while
+//   hovered or with its pause toggle, and stands still under reduced motion).
+import { BadgeCheck, Pause, Play } from "lucide-react";
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+import DeliveryFacts from "@/components/DeliveryFacts.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"usp-strip">;
+  deliveryFacts: DeliveryFact[];
+}
+
+const { section, deliveryFacts } = Astro.props;
+const { style, source } = section.settings;
+const items = source.kind === "delivery-facts"
+  ? deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail }))
+  : source.items;
+const columns = ["", "sm:grid-cols-1", "sm:grid-cols-2 sm:divide-x sm:divide-y-0", "sm:grid-cols-3 sm:divide-x sm:divide-y-0"][items.length]
+  ?? "lg:grid-cols-4 lg:divide-x lg:divide-y-0";
+const tickerText = items.map((item) => [item.title, item.detail].filter(Boolean).join(": "));
+// About 3 characters a second, never faster than one loop in 12 s.
+const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
+---
+
+{style === "icons" && source.kind === "delivery-facts" && <DeliveryFacts facts={deliveryFacts} />}
+
+{style === "icons" && source.kind === "custom" && items.length > 0 && (
+  <section class="w-full py-4 md:py-8" aria-label="Why shop with us">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <ul class={`grid divide-y divide-border rounded-xl border border-border bg-card ${columns}`}>
+        {items.map((item) => (
+          <li class="flex min-h-20 items-center gap-3 px-4 py-3 md:px-5">
+            <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+              <BadgeCheck className="size-4" aria-hidden="true" />
+            </span>
+            <span class="min-w-0 [overflow-wrap:anywhere]">
+              <span class="block text-sm font-semibold text-foreground">{item.title}</span>
+              {item.detail && <span class="block text-sm leading-relaxed text-muted-foreground">{item.detail}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}
+
+{style === "ticker" && tickerText.length > 0 && (
+  <section class="w-full py-2 md:py-3" aria-label="Store notices">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="usp-ticker flex h-10 items-center overflow-hidden rounded-full border border-border bg-card text-sm text-foreground" style={`--usp-ticker-duration: ${duration}s;`}>
+        {/* A pause control with no script (WCAG 2.2.2): the checkbox stops the scroll. */}
+        <input type="checkbox" id={`${section.id}-ticker-pause`} class="usp-ticker-toggle sr-only" aria-label="Pause notices" />
+        <div class="usp-ticker-window flex min-w-0 flex-1 overflow-hidden">
+          <ul class="usp-ticker-track flex shrink-0 items-center gap-10 whitespace-nowrap px-5">
+            {tickerText.map((text) => <li>{text}</li>)}
+          </ul>
+          {/* A second copy makes the loop seamless; screen readers read the first only. */}
+          <ul class="usp-ticker-track usp-ticker-copy flex shrink-0 items-center gap-10 whitespace-nowrap px-5" aria-hidden="true">
+            {tickerText.map((text) => <li>{text}</li>)}
+          </ul>
+        </div>
+        <label for={`${section.id}-ticker-pause`} class="usp-ticker-pause grid h-10 w-10 shrink-0 cursor-pointer place-items-center border-l border-border text-muted-foreground" aria-hidden="true">
+          <span class="usp-ticker-pause-icon"><Pause className="size-3.5" /></span>
+          <span class="usp-ticker-play-icon"><Play className="size-3.5" /></span>
+        </label>
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+  .usp-ticker-track {
+    list-style: none;
+    animation: usp-ticker var(--usp-ticker-duration, 20s) linear infinite;
+  }
+
+  .usp-ticker:hover .usp-ticker-track,
+  .usp-ticker-toggle:checked ~ .usp-ticker-window .usp-ticker-track {
+    animation-play-state: paused;
+  }
+
+  .usp-ticker-play-icon,
+  .usp-ticker-toggle:checked ~ .usp-ticker-pause .usp-ticker-pause-icon {
+    display: none;
+  }
+
+  .usp-ticker-toggle:checked ~ .usp-ticker-pause .usp-ticker-play-icon {
+    display: block;
+  }
+
+  .usp-ticker-toggle:focus-visible ~ .usp-ticker-pause {
+    outline: 2px solid var(--foreground);
+    outline-offset: -4px;
+  }
+
+  @keyframes usp-ticker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-100%); }
+  }
+
+  /* Still under reduced motion: the notices scroll by hand instead. */
+  @media (prefers-reduced-motion: reduce) {
+    .usp-ticker-window {
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .usp-ticker-track {
+      animation: none;
+    }
+
+    .usp-ticker-copy,
+    .usp-ticker-pause,
+    .usp-ticker-toggle {
+      display: none;
+    }
+  }
+</style>

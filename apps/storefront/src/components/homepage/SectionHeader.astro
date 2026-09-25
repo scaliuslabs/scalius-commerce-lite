@@ -1,0 +1,27 @@
+---
+// A homepage section's title row: the h2 and, when the list lives on a
+// listing, its "View all" link (44px tall on phones). The `aside` slot sits
+// between them (a deal's countdown).
+interface Props {
+  id?: string;
+  title: string;
+  href?: string | null;
+  hrefLabel?: string;
+  /** The classic store's newest-products title row, class for class. */
+  classic?: boolean;
+}
+
+const { id, title, href, hrefLabel = "View all", classic = false } = Astro.props;
+---
+
+<div class="mb-3 flex items-baseline justify-between gap-2 md:mb-5">
+  <h2 id={id} class={classic ? "section-heading text-foreground" : "section-heading min-w-0 text-foreground [overflow-wrap:anywhere]"}>
+    {title}
+  </h2>
+  <slot name="aside" />
+  {href && (
+    <a href={href} class={classic ? "-my-3 py-3 text-sm font-semibold text-primary hover:underline" : "-my-3 shrink-0 py-3 text-sm font-semibold text-primary hover:underline"}>
+      {hrefLabel}
+    </a>
+  )}
+</div>

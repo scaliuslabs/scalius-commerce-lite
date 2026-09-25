@@ -153,6 +153,25 @@ describe("productCardImageSizes", () => {
     }
   });
 
+  it.each(DENSITIES)("%s: a grid capped at N columns asks for its wider cards", (_density, grid) => {
+    for (const containerWidth of CONTAINER_WIDTHS) {
+      for (const maxColumns of [2, 3, 4, 5]) {
+        const sizes = productCardImageSizes(grid, containerWidth, "grid", "grid", maxColumns);
+        for (let viewport = 360; viewport <= 1920; viewport += 7) {
+          const width = productGridWidth(viewport, px(containerWidth), "grid");
+          const columns = productGridColumnCount(grid, width, maxColumns);
+          expect(columns).toBeLessThanOrEqual(maxColumns);
+          const card = (width - productGridGap(grid, width) * (columns - 1)) / columns;
+          const declared = evaluateSizes(sizes, viewport);
+          expect(declared, `${viewport}px ${containerWidth} max ${maxColumns}`).toBeGreaterThanOrEqual(card - 0.5);
+          expect(declared, `${viewport}px ${containerWidth} max ${maxColumns}`).toBeLessThanOrEqual(card * 1.35 + 1);
+        }
+      }
+    }
+    // Uncapped grids keep their sizes.
+    expect(productCardImageSizes(grid, "90rem", "grid", "grid", 12)).toBe(productCardImageSizes(grid, "90rem"));
+  });
+
   it.each(DENSITIES)("%s: list rows ask for the row photo on phones and the grid card above", (_density, grid) => {
     for (const containerWidth of CONTAINER_WIDTHS) {
       const sizes = productCardImageSizes(grid, containerWidth, "beside-filters", "list-row");

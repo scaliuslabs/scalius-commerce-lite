@@ -1,0 +1,103 @@
+---
+// The merchant's homepage categories (Banners -> category rail) as tiles.
+// - photo: the classic store's photo tiles with captions (HomepageCategoryRail).
+// - icons: Star Tech's icon grid, 8 across on computers and 4 on phones.
+// - round: Apple Gadgets' and Target's round images, 8 / 3 across.
+// - quad: Amazon's cards of four labelled images in a 2x2 grid.
+// A category without a photo shows its first letter on the muted colour,
+// in the same box, so tiles never change size.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageData } from "@/lib/api/storefront";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import HomepageCategoryRail from "./HomepageCategoryRail.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"category-tiles">;
+  rail: HomepageData["presentation"]["categoryRail"];
+}
+
+const { section, rail } = Astro.props;
+const style = section.settings.style;
+const categories = rail.enabled ? rail.categories : [];
+const headingId = `home-${section.id}-title`;
+const hrefOf = (category: (typeof categories)[number]) =>
+  category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`;
+const letter = (name: string) => {
+  const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next().value;
+  return (first?.segment ?? "").toLocaleUpperCase();
+};
+const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
+---
+
+{style === "photo" && <HomepageCategoryRail rail={rail} />}
+
+{style !== "photo" && categories.length >= 2 && (
+  <section class="home-section w-full" aria-labelledby={headingId}>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{rail.title}</h2>
+
+      {style === "icons" && (
+        <ul class="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 md:gap-3">
+          {categories.map((category) => (
+            <li>
+              <a href={hrefOf(category)} class="flex h-full min-h-24 flex-col items-center gap-2 rounded-lg border border-border bg-card p-2 text-center transition-colors hover:border-primary md:p-3">
+                <span class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-muted md:size-14" aria-hidden="true">
+                  {category.imageUrl ? (
+                    <img src={mediaImageUrl(category.imageUrl, 160)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="56px" alt="" width="56" height="56" loading="lazy" decoding="async" class="h-full w-full object-contain" />
+                  ) : (
+                    <span class="text-lg font-semibold text-muted-foreground">{letter(category.name)}</span>
+                  )}
+                </span>
+                <span class="line-clamp-2 text-xs font-medium leading-snug text-foreground [overflow-wrap:anywhere] md:text-sm">{category.name}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {style === "round" && (
+        <ul class="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+          {categories.map((category) => (
+            <li>
+              <a href={hrefOf(category)} class="group flex flex-col items-center gap-2 text-center">
+                <span class="grid aspect-square w-full max-w-28 place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-shadow group-hover:ring-2 group-hover:ring-primary" aria-hidden="true">
+                  {category.imageUrl ? (
+                    <img src={mediaImageUrl(category.imageUrl, 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="(max-width: 639px) 30vw, 112px" alt="" width="112" height="112" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+                  ) : (
+                    <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
+                  )}
+                </span>
+                <span class="line-clamp-2 text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">{category.name}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {style === "quad" && (
+        <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 md:gap-4">
+          {quads.map((group) => (
+            <li class="rounded-lg border border-border bg-card p-3 md:p-4">
+              <ul class="grid grid-cols-2 gap-3">
+                {group.map((category) => (
+                  <li>
+                    <a href={hrefOf(category)} class="group block">
+                      <span class="grid aspect-square place-items-center overflow-hidden rounded-md bg-muted" aria-hidden="true">
+                        {category.imageUrl ? (
+                          <img src={mediaImageUrl(category.imageUrl, 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="(max-width: 639px) 45vw, (max-width: 1023px) 23vw, 150px" alt="" width="150" height="150" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
+                        ) : (
+                          <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
+                        )}
+                      </span>
+                      <span class="mt-1.5 block min-h-11 text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere] group-hover:underline">{category.name}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </section>
+)}

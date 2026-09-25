@@ -125,7 +125,9 @@ the local stack):
 - 150-270 ms for the batch in a cold API isolate (parse, config family
   initialisation, first D1 connection), against 21-35 ms warm;
 - one extra 46-64 ms hop for fallback products, only because the local store
-  has no active collections (production home does not make it);
+  had no active collections. That hop is gone: the newest products a store
+  without homepage collections shows now come in the homepage batch part
+  with every other section list;
 - about 40 ms of render.
 
 ### What is left, and why it stays
@@ -237,9 +239,16 @@ Bumping the cache generation (any buyer-visible save) also clears it at once.
 | Guardrail | Where | Budget |
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` | 1 for home, product, category and search (the pages' own read functions, started as the pages start them) |
-| D1 round trips / dependent waves per page (cache miss, seeded store) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 9 / 3, search 9 / 2 |
+| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 9 / 3, search 9 / 2 |
 | Batch safety (public parts only, per-part status, generation-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
+
+The homepage part reads in two waves whatever its sections are: the
+settings, banners, collections, category rail and published theme first,
+then one batch with every product list the sections name (each scoped to
+the products it returns, with the media statement of exactly those rows),
+the section images and the banner rendition lookup
+(`packages/core/src/modules/storefront/README.md`).
 
 A "wave" is a round of D1 calls that must wait for the previous one. Each wave
 costs a full database round trip, so a new sequential `await` in a storefront
