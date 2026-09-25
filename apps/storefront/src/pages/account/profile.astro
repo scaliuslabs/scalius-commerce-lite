@@ -1,0 +1,319 @@
+---
+// Account → Profile, after Shopify's customer accounts: the name, email and
+// phone in one section with an inline edit dialog for the name, and the
+// saved delivery address as a card marked Default with Edit and Remove.
+// Every edit is a plain POST handled here (Post/Redirect/Get), so it works
+// without JavaScript; with it, the thana and area lists follow the city.
+// Only an outcome flag enters a URL.
+import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
+import AccountDialog from "@/components/account/AccountDialog.astro";
+import { getLayoutData } from "@/lib/api";
+import { getAreas, getCities, getZones } from "@/lib/api/shipping";
+import type { LocationData } from "@/lib/api/types";
+import {
+  readAccountCustomer,
+  readAccountSummaryForRequest,
+  saveAccountProfile,
+  type ProfileSaveResult,
+} from "@/lib/account-server";
+import {
+  addressErrors,
+  nameError,
+  profileSavedText,
+  readProfileForm,
+  readProfileSavedFlag,
+  type AddressDraft,
+  type ProfileForm,
+} from "@/lib/account-profile";
+import { ACCOUNT_OFFLINE_MESSAGE, formatDeliveryArea } from "@/lib/account-format";
+import { accountPill, accountUi as ui } from "@/lib/account-ui";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { formatBdMobile } from "@scalius/shared/phone-input";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+export const prerender = false;
+
+const MAX_FORM_BYTES = 16 * 1024;
+const noStore = { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL };
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+
+let posted: ProfileForm | null = null;
+let fieldErrors: Partial<Record<keyof AddressDraft | "name", string>> = {};
+let formMessage: string | null = null;
+
+const locationsFor = async (draft: Pick<AddressDraft, "city" | "zone">) => {
+  const [cities, zones, areas] = await Promise.all([
+    getCities(),
+    draft.city ? getZones(draft.city) : Promise.resolve([] as LocationData[]),
+    draft.zone ? getAreas(draft.zone) : Promise.resolve([] as LocationData[]),
+  ]);
+  return { cities, zones, areas };
+};
+
+if (Astro.request.method === "POST") {
+  if (shouldRejectCrossOriginCookieRequest(Astro.request)) return new Response(null, { status: 403, headers: noStore });
+  const declared = Number(Astro.request.headers.get("content-length") ?? "0");
+  const form = declared > MAX_FORM_BYTES ? null : await Astro.request.formData().catch(() => null);
+  posted = form ? readProfileForm(form) : null;
+  let saved: ProfileSaveResult | null = null;
+  if (posted?.intent === "name") {
+    const error = nameError(posted.name);
+    if (error) fieldErrors = { name: error };
+    else saved = await saveAccountProfile(Astro.request, { name: posted.name });
+  } else if (posted?.intent === "address") {
+    const locations = await locationsFor(posted.draft);
+    if (!locations.cities || !locations.zones || !locations.areas) {
+      formMessage = ACCOUNT_OFFLINE_MESSAGE;
+    } else {
+      fieldErrors = addressErrors(posted.draft, { cities: locations.cities, zones: locations.zones, areas: locations.areas });
+      if (Object.keys(fieldErrors).length === 0) saved = await saveAccountProfile(Astro.request, posted.draft);
+    }
+  } else if (posted?.intent === "remove-address") {
+    saved = await saveAccountProfile(Astro.request, { address: "", city: "", zone: "", area: "" });
+  } else {
+    formMessage = "Something went wrong. Try again.";
+  }
+  if (saved?.ok) {
+    const flag = posted!.intent === "remove-address" ? "removed" : posted!.intent!;
+    return new Response(null, { status: 303, headers: { Location: `/account/profile?saved=${flag}`, ...noStore } });
+  }
+  if (saved && !saved.ok) {
+    if (saved.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
+    formMessage = saved.reason === "invalid" && saved.message ? saved.message : ACCOUNT_OFFLINE_MESSAGE;
+  }
+  Astro.response.status = formMessage === ACCOUNT_OFFLINE_MESSAGE ? 503 : 422;
+}
+
+const [layoutData, read, summary] = await Promise.all([
+  getLayoutData(),
+  readAccountCustomer(Astro.request),
+  readAccountSummaryForRequest(Astro.request),
+]);
+if (!read.ok && read.reason === "unavailable") Astro.response.status = 503;
+const customer = read.ok ? read.data : null;
+const savedFlag = posted ? null : readProfileSavedFlag(Astro.url.searchParams);
+const hasAddress = Boolean(customer?.address?.trim() && customer?.city && customer?.zone);
+
+// The address form: what was posted after a failed save, else the saved address.
+const draft: AddressDraft = posted?.intent === "address"
+  ? posted.draft
+  : { address: customer?.address ?? "", city: customer?.city ?? "", zone: customer?.zone ?? "", area: customer?.area ?? "" };
+const locations = customer ? await locationsFor(draft) : { cities: [], zones: [], areas: [] };
+const nameFailed = posted?.intent === "name";
+const addressFailed = posted?.intent === "address";
+const removeFailed = posted?.intent === "remove-address";
+const nameValue = nameFailed ? posted!.name : customer?.name ?? "";
+// After a failed save without JavaScript, the first field to fix takes focus (and scrolls into view).
+const firstError = (["name", "address", "city", "zone", "area"] as const).find((key) => fieldErrors[key]) ?? null;
+const errorId = (key: string) => (fieldErrors[key as keyof typeof fieldErrors] ? `${key}Error` : undefined);
+const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
+---
+
+<Layout title="Profile" layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <AccountShell
+    current="profile"
+    summary={summary}
+    state={read.ok ? "ok" : read.reason}
+    title="Profile"
+    signedOut={{ title: "Sign in to see your profile", body: "Save your delivery details for faster checkout." }}
+    unavailable={{ text: ACCOUNT_OFFLINE_MESSAGE, retryHref: "/account/profile" }}
+  >
+    {customer && (
+      <div class="grid gap-6">
+        {savedFlag && <p role="status" class={ui.notice}>{profileSavedText(savedFlag)}</p>}
+
+        <section class={ui.card} aria-labelledby="profileDetailsHeading">
+          <h2 id="profileDetailsHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>Your details</h2>
+          <div class={`${ui.cardBody} divide-y divide-border`}>
+            <div class={row}>
+              <div class="min-w-0">
+                <p class={ui.muted}>Name</p>
+                <p class="mt-0.5 break-words font-medium text-foreground">{customer.name}</p>
+              </div>
+              {!nameFailed && <button type="button" popovertarget="editName" class={ui.textButton}>Edit</button>}
+            </div>
+            {nameFailed && (
+              <AccountDialog id="editName" title="Edit name" inline>
+                  <form method="post" action="/account/profile" class="space-y-4" novalidate>
+                    <input type="hidden" name="intent" value="name" />
+                    <div>
+                      <label for="fieldName" class={ui.label}>Full name</label>
+                      <input id="fieldName" name="name" type="text" autocomplete="name" required maxlength="120" value={nameValue} aria-invalid={fieldErrors.name ? "true" : undefined} aria-describedby={errorId("name")} class={ui.field} autofocus />
+                      {fieldErrors.name && <p id="nameError" class={ui.fieldError}>{fieldErrors.name}</p>}
+                    </div>
+                    {formMessage && <p role="alert" class="text-sm text-destructive">{formMessage}</p>}
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>Cancel</a>
+                      <button type="submit" class={ui.primaryButton}>Save</button>
+                    </div>
+                  </form>
+              </AccountDialog>
+            )}
+            <div class={row}>
+              <div class="min-w-0">
+                <p class={ui.muted}>Email</p>
+                <p class="mt-0.5 break-all text-foreground">{customer.email || "Not added"}</p>
+              </div>
+            </div>
+            <div class={row}>
+              <div class="min-w-0">
+                <p class={ui.muted}>Phone</p>
+                <p class="mt-0.5 text-foreground tabular-nums">{customer.phone ? formatBdMobile(customer.phone) : "Not added"}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class={ui.card} aria-labelledby="addressesHeading">
+          <div class="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 sm:px-5">
+            <h2 id="addressesHeading" class={ui.cardTitle}>Addresses</h2>
+          </div>
+          <div class={ui.cardBody}>
+            {removeFailed && formMessage && <p role="alert" class={`${ui.errorNotice} mb-4`}>{formMessage}</p>}
+            {hasAddress ? (
+              <article class="max-w-sm rounded-lg border border-border p-4" aria-label="Default address">
+                <span class={accountPill("neutral")}>Default</span>
+                <div class="mt-3 space-y-0.5 break-words text-sm text-foreground">
+                  <p class="font-medium">{customer.name}</p>
+                  <p>{customer.address}</p>
+                  <p>{formatDeliveryArea(customer)}</p>
+                  {customer.phone && <p class="tabular-nums text-muted-foreground">{formatBdMobile(customer.phone)}</p>}
+                </div>
+                {!addressFailed && (
+                  <div class="mt-3 flex gap-4">
+                    <button type="button" popovertarget="editAddress" class={ui.textButton}>Edit</button>
+                    <button type="button" popovertarget="removeAddress" class="inline-flex min-h-11 items-center text-sm font-medium text-destructive hover:underline">Remove</button>
+                  </div>
+                )}
+              </article>
+            ) : !addressFailed && (
+              <div class="py-4 text-center">
+                <p class="font-medium text-foreground">No saved address</p>
+                <p class="mt-1 text-sm text-muted-foreground">Add one and checkout fills it in for you.</p>
+                <button type="button" popovertarget="editAddress" class={`${ui.secondaryButton} mt-4`}>Add address</button>
+              </div>
+            )}
+
+            <AccountDialog id="editAddress" title={hasAddress ? "Edit address" : "Add address"} inline={addressFailed}>
+              <form method="post" action="/account/profile" class="space-y-4" novalidate data-address-form>
+                <input type="hidden" name="intent" value="address" />
+                <div>
+                  <label for="fieldAddress" class={ui.label}>Address</label>
+                  <input id="fieldAddress" name="address" type="text" autocomplete="street-address" required maxlength="300" placeholder="House, road, area" value={draft.address} aria-invalid={fieldErrors.address ? "true" : undefined} aria-describedby={errorId("address")} class={ui.field} autofocus={firstError === "address"} />
+                  {fieldErrors.address && <p id="addressError" class={ui.fieldError}>{fieldErrors.address}</p>}
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label for="fieldCity" class={ui.label}>City</label>
+                    <select id="fieldCity" name="city" required aria-invalid={fieldErrors.city ? "true" : undefined} aria-describedby={errorId("city")} class={ui.field} data-location="city" autofocus={firstError === "city"}>
+                      <option value="">Select a city</option>
+                      {(locations.cities ?? []).map((city) => <option value={city.id} selected={city.id === draft.city}>{city.name}</option>)}
+                    </select>
+                    {fieldErrors.city && <p id="cityError" class={ui.fieldError}>{fieldErrors.city}</p>}
+                  </div>
+                  <div>
+                    <label for="fieldZone" class={ui.label}>{copy.zoneLabel}</label>
+                    <select id="fieldZone" name="zone" required aria-invalid={fieldErrors.zone ? "true" : undefined} aria-describedby={errorId("zone")} class={ui.field} data-location="zone" autofocus={firstError === "zone"}>
+                      <option value="">{copy.selectZonePlaceholder}</option>
+                      {(locations.zones ?? []).map((zone) => <option value={zone.id} selected={zone.id === draft.zone}>{zone.name}</option>)}
+                    </select>
+                    {fieldErrors.zone && <p id="zoneError" class={ui.fieldError}>{fieldErrors.zone}</p>}
+                  </div>
+                </div>
+                <div hidden={(locations.areas ?? []).length === 0 && !fieldErrors.area} data-area-field>
+                  <label for="fieldArea" class={ui.label}>Area (optional)</label>
+                  <select id="fieldArea" name="area" aria-invalid={fieldErrors.area ? "true" : undefined} aria-describedby={errorId("area")} class={ui.field} data-location="area" autofocus={firstError === "area"}>
+                    <option value="">Select an area (optional)</option>
+                    {(locations.areas ?? []).map((area) => <option value={area.id} selected={area.id === draft.area}>{area.name}</option>)}
+                  </select>
+                  {fieldErrors.area && <p id="areaError" class={ui.fieldError}>{fieldErrors.area}</p>}
+                </div>
+                <p class="text-sm text-muted-foreground" data-location-status role="status" aria-live="polite"></p>
+                {addressFailed && formMessage && <p role="alert" class="text-sm text-destructive">{formMessage}</p>}
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {addressFailed
+                    ? <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>Cancel</a>
+                    : <button type="button" popovertarget="editAddress" popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>}
+                  <button type="submit" class={ui.primaryButton} data-address-save>Save address</button>
+                </div>
+              </form>
+            </AccountDialog>
+
+            {hasAddress && (
+              <AccountDialog id="removeAddress" title="Remove this address?">
+                <p class="text-sm text-muted-foreground">Checkout will ask for your delivery address again next time.</p>
+                <form method="post" action="/account/profile" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <input type="hidden" name="intent" value="remove-address" />
+                  <button type="button" popovertarget="removeAddress" popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>
+                  <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-destructive px-5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90">Remove address</button>
+                </form>
+              </AccountDialog>
+            )}
+          </div>
+        </section>
+
+        {!nameFailed && (
+          <AccountDialog id="editName" title="Edit name">
+            <form method="post" action="/account/profile" class="space-y-4" novalidate>
+              <input type="hidden" name="intent" value="name" />
+              <div>
+                <label for="fieldName" class={ui.label}>Full name</label>
+                <input id="fieldName" name="name" type="text" autocomplete="name" required maxlength="120" value={nameValue} class={ui.field} />
+              </div>
+              <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" popovertarget="editName" popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>
+                <button type="submit" class={ui.primaryButton}>Save</button>
+              </div>
+            </form>
+          </AccountDialog>
+        )}
+      </div>
+    )}
+  </AccountShell>
+</Layout>
+
+<script>
+  import { getAreas, getZones } from "@/lib/api/shipping";
+
+  // With JavaScript the thana and area lists follow the city and thana at
+  // once; without it the server answers "choose a thana" with the new list.
+  const form = document.querySelector<HTMLFormElement>("form[data-address-form]");
+  const city = form?.querySelector<HTMLSelectElement>("[data-location=city]");
+  const zone = form?.querySelector<HTMLSelectElement>("[data-location=zone]");
+  const area = form?.querySelector<HTMLSelectElement>("[data-location=area]");
+  const areaField = form?.querySelector<HTMLElement>("[data-area-field]");
+  const status = form?.querySelector<HTMLElement>("[data-location-status]");
+  const save = form?.querySelector<HTMLButtonElement>("[data-address-save]");
+
+  if (form && city && zone && area && areaField && status && save) {
+    let read = 0;
+    const fill = (select: HTMLSelectElement, options: Array<{ id: string; name: string }>) => {
+      const placeholder = select.options[0]!;
+      select.replaceChildren(placeholder, ...options.map((option) => new Option(option.name, option.id)));
+      select.value = "";
+    };
+    const load = async (target: "zone" | "area") => {
+      const request = ++read;
+      if (target === "zone") fill(zone, []);
+      fill(area, []);
+      areaField.hidden = true;
+      const parent = target === "zone" ? city.value : zone.value;
+      if (!parent) return;
+      save.disabled = true;
+      status.textContent = "Loading…";
+      const options = await (target === "zone" ? getZones(parent) : getAreas(parent));
+      if (request !== read) return;
+      save.disabled = false;
+      status.textContent = options ? "" : "The list could not be loaded. Choose again or save to try.";
+      if (!options) return;
+      fill(target === "zone" ? zone : area, options);
+      if (target === "area") areaField.hidden = options.length === 0;
+      else if (options.length === 0) status.textContent = "No thanas are available for this city. Choose another city.";
+    };
+    city.addEventListener("change", () => void load("zone"));
+    zone.addEventListener("change", () => void load("area"));
+  }
+</script>

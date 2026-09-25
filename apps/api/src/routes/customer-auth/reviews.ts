@@ -3,10 +3,11 @@
 // Only lines of orders the account owns; every write passes both limiters.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import type { ReviewBuyer } from "@scalius/core/modules/reviews";
+import { readBuyerProductReviewState, type ReviewBuyer } from "@scalius/core/modules/reviews";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
+  buyerProductReviewStateSchema,
   buyerReviewsResponseSchema,
   editReviewBodySchema,
   reviewWriteResponseSchema,
@@ -39,6 +40,22 @@ app.openapi(createRoute({
 }), async (c) => {
   setPrivateNoStoreHeaders(c);
   return ok(c, await readBuyerReviewsResponse(c, await customerBuyer(c)));
+});
+
+app.openapi(createRoute({
+  method: "get",
+  path: "/reviews/products/{productId}",
+  tags: ["Customer Auth"],
+  summary: "Whether the account can review this product, and its review when it has one (product page call to action)",
+  request: { params: z.object({ productId: z.string().trim().min(1).max(128) }) },
+  responses: {
+    200: { description: "Review state", content: { "application/json": { schema: successEnvelope(buyerProductReviewStateSchema) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const buyer = await customerBuyer(c);
+  return ok(c, await readBuyerProductReviewState(c.get("db"), buyer, c.req.valid("param").productId));
 });
 
 app.openapi(createRoute({

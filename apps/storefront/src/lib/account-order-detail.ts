@@ -26,6 +26,7 @@ import {
   orderPaymentLine,
 } from "@/lib/account-format";
 import { addOrderToCart } from "@/lib/account-buy-again";
+import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
@@ -535,10 +536,9 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const name = escapeHtml(item.productName || "Product");
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
-      // Downloads, gift cards and the review form take a full-width row under
-      // the line (under its text from sm up), never the narrow column beside the total.
+      // Files, keys, card codes and the review form get the line's full width.
       const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account" });
-      return `<li class="flex flex-wrap gap-x-3 py-4 first:pt-0 last:pb-0">
+      return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
         <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
         <div class="min-w-0 flex-1 text-sm">
           ${item.productSlug ? `<a href="/products/${encodeURIComponent(item.productSlug)}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
@@ -548,8 +548,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
-        ${extras ? `<div class="basis-full text-sm sm:pl-[4.75rem]">${extras}</div>` : ""}
-      </li>`;
+      </div>${extras ? `<div class="text-sm sm:pl-[4.75rem]">${extras}</div>` : ""}</li>`;
     };
     const groups = groupOrderLines(detail.items, order, copy);
     items.innerHTML = showsOrderLineGroupHeadings(groups)
@@ -717,6 +716,7 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
+    status.className = accountPill(orderStatusTone(order.status));
     status.textContent = orderCompletionWording(order, copy)?.statusLabel
       ?? order.statusLabel ?? detail.progress?.outcome?.label ?? order.status;
   }

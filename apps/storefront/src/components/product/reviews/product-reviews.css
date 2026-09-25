@@ -349,3 +349,56 @@ a.product-reviews-bar:hover .product-reviews-bar-track,
 .product-reviews[aria-busy="true"] .product-reviews-list {
   opacity: 0.55;
 }
+
+/* The review call to action beside the heading, and the buyer's own review or
+   form beneath it (review-cta.ts fills both after hydration). */
+.product-reviews-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.product-reviews-head .product-reviews-heading {
+  margin-bottom: 0;
+}
+
+.product-reviews-write {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--theme-button-radius, var(--radius));
+  background: var(--background);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.product-reviews-write:hover {
+  background: var(--muted);
+}
+
+.product-reviews-write[hidden],
+.product-reviews-cta-note[hidden],
+.product-reviews-own[hidden] {
+  display: none;
+}
+
+.product-reviews-cta-note {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.product-reviews-own {
+  max-width: 42rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1rem 1.25rem;
+}
