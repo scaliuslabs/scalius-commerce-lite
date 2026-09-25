@@ -90,6 +90,12 @@ export interface CatalogFeedProductInput {
     slug: string;
     name: string;
   } | null;
+  /**
+   * The product's published brand record (`products.brand_id`). It is the
+   * only brand source: a free-text "Brand" attribute never becomes
+   * `<g:brand>`, and a missing brand is omitted, never a placeholder.
+   */
+  brand?: { name: string } | null;
   attributes?: readonly CatalogFeedAttributeInput[];
   variants?: readonly CatalogFeedVariantInput[];
 }
@@ -510,11 +516,7 @@ function buildRow(
   const pricing = pricingForRow(product, variant, input.currencyCode);
   if (!pricing) return "non_positive_price";
 
-  const brand = normalizedText(
-    product.attributes?.find(
-      (attribute) => attribute.name.toLowerCase() === "brand",
-    )?.value,
-  );
+  const brand = normalizedText(product.brand?.name);
   const gtin = gtinForRow(product, variant);
   const taxonomy = taxonomyForCategory(product.category?.slug);
   const itemGroupId = variant || product.hasVariants ? product.id : null;

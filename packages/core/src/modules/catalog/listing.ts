@@ -20,6 +20,7 @@ import {
     storeDecimalPlacesFromCode,
 } from "../products/money";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { publicCategorySubtreeCondition } from "../categories/categories.tree";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
 import {
     isOptionFilter,
@@ -289,13 +290,13 @@ async function readStorefrontCatalogResults(
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
 
     const productIds = productsList.map((product) => product.id);
-    const categoryIds = scope.fixedCategory
-        ? []
-        : [...new Set(
-            productsList
-                .map((product) => product.categoryId)
-                .filter((id): id is string => Boolean(id)),
-        )];
+    // A fixed category names every row in it; a subtree listing still reads
+    // the sub-categories its other rows sit in (none on a flat store).
+    const categoryIds = [...new Set(
+        productsList
+            .map((product) => product.categoryId)
+            .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
+    )];
     const [mediaMap, categoriesData] = await Promise.all([
         loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
@@ -317,9 +318,9 @@ async function readStorefrontCatalogResults(
         availableForSale,
         ...product
     }: StorefrontProductListRowWithVariants) => {
-        const category = scope.fixedCategory ?? (
-            product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
-        );
+        const category = scope.fixedCategory && product.categoryId === scope.fixedCategory.id
+            ? scope.fixedCategory
+            : product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         return {
             ...presentBuyerPricing(product, decimalPlaces),
             categoryId: category?.id ?? null,
@@ -363,12 +364,40 @@ export async function getStorefrontCategoryProducts(
     db: Database,
     category: StorefrontCategoryProductCategory,
     params: StorefrontProductFilterInput,
+    options: StorefrontCategoryListingOptions = {},
 ) {
     return readStorefrontCatalogPage(db, params, {
-        condition: eq(products.categoryId, category.id),
+        condition: options.includeDescendants
+            ? publicCategorySubtreeCondition(products.categoryId, category.id)
+            : eq(products.categoryId, category.id),
         fixedCategory: category,
     });
 }
+
+// ── Catalogue 1a: category subtrees and brand listings ────────────────────
+// Kept as one block so the projection rewrite of the reads above can rebase
+// onto it: both are scopes of readStorefrontCatalogPage and nothing else.
+
+export interface StorefrontCategoryListingOptions {
+    /**
+     * List the category's published sub-categories too (closure read; a
+     * draft or internal descendant's products stay out of the parent).
+     */
+    includeDescendants?: boolean;
+}
+
+/** A brand page's products: the storefront catalogue scoped to one brand. */
+export async function getStorefrontBrandProducts(
+    db: Database,
+    brand: { id: string },
+    params: StorefrontProductFilterInput,
+) {
+    return readStorefrontCatalogPage(db, params, {
+        condition: eq(products.brandId, brand.id),
+    });
+}
+
+// ── End of the catalogue 1a block ─────────────────────────────────────────
 
 interface StorefrontCollectionMembership {
     productIds?: string[];

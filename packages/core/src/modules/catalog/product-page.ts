@@ -7,6 +7,7 @@ import {
     productRichContent,
     productAttributeValues,
     productAttributes,
+    brands,
 } from "@scalius/database/schema";
 import { and, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
@@ -27,6 +28,7 @@ import {
 } from "../products/money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { publicBrandJoinCondition } from "../brands/brands.storefront";
 import {
     loadProductMediaProjections,
     resolveProductImageRepresentation,
@@ -97,12 +99,20 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 noIndex: categories.noIndex,
                 excludeFromSitemap: categories.excludeFromSitemap,
             },
+            // The published brand record only (never a "Brand" attribute).
+            brand: {
+                id: brands.id,
+                name: brands.name,
+                slug: brands.slug,
+                canonicalPath: brands.canonicalPath,
+            },
         })
         .from(products)
         .leftJoin(categories, and(
             eq(products.categoryId, categories.id),
             ...publicCategoryConditions(),
         ))
+        .leftJoin(brands, publicBrandJoinCondition(products.brandId))
         .where(and(
             eq(products.slug, slug),
             eq(products.isActive, true),
@@ -112,7 +122,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .get();
 
     if (!productRow) return null;
-    const { category, storeCurrencyCode, customizationSchema: storedCustomization, ...product } = productRow;
+    const { category, brand, storeCurrencyCode, customizationSchema: storedCustomization, ...product } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const customization = readStoredCustomization(storedCustomization, decimalPlaces);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
@@ -272,6 +282,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             attributes,
             additionalInfo,
             offers,
+            brand: brand?.id ? brand : null,
         },
         category,
         media: publicMedia,

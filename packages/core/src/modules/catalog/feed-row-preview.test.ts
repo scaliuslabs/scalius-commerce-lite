@@ -49,8 +49,9 @@ function product(
       name: "Electronics",
       slug: "electronics",
     },
+    brand: { id: "brd_scalius01", name: "Scalius", slug: "scalius" },
     attributes: [
-      { name: "Brand", slug: "brand", value: "Scalius" },
+      { name: "Brand", slug: "brand", value: "Ignored free text" },
       { name: "Material", slug: "material", value: "Cotton" },
     ],
     variants: [
