@@ -38,6 +38,7 @@ const SITEMAP_SECTION_ENDPOINTS = [
   { endpoint: "/sitemap-static.xml", label: "static pages sitemap", requireLoc: true },
   { endpoint: "/sitemap-products.xml?page=1", label: "products sitemap", requireLoc: false },
   { endpoint: "/sitemap-categories.xml", label: "categories sitemap", requireLoc: false },
+  { endpoint: "/sitemap-brands.xml", label: "brands sitemap", requireLoc: false },
   { endpoint: "/sitemap-collections.xml", label: "collections sitemap", requireLoc: false },
   { endpoint: "/sitemap-pages.xml", label: "CMS pages sitemap", requireLoc: false },
   { endpoint: "/sitemap-articles.xml", label: "articles sitemap", requireLoc: false },
@@ -1202,6 +1203,23 @@ function validateProductSchemaImage(productNode, errors) {
   }
 }
 
+/**
+ * Brand identity comes only from the merchant's brand record: when present
+ * it is a Brand with a real name, never a placeholder such as "Generic".
+ */
+function validateProductSchemaBrand(productNode, errors) {
+  if (productNode.brand === undefined) return;
+  const brand = productNode.brand;
+  const name = brand && typeof brand === "object" && typeof brand.name === "string" ? brand.name.trim() : "";
+  if (!brand || typeof brand !== "object" || brand["@type"] !== "Brand" || !name) {
+    errors.push("Product JSON-LD brand must be a Brand with a non-empty name, or omitted.");
+    return;
+  }
+  if (/^(?:generic|unbranded|no brand|n\/a|store)$/i.test(name)) {
+    errors.push(`Product JSON-LD brand must not be a placeholder: ${name}`);
+  }
+}
+
 function validateOfferShippingDetails(offer, errors) {
   for (const detail of asArray(offer.shippingDetails)) {
     if (!detail || typeof detail !== "object") {
@@ -1277,6 +1295,7 @@ export function evaluateProductJsonLdHtml(html, {
   let shippingDetailsCount = 0;
   for (const productNode of productNodes) {
     validateProductSchemaImage(productNode, errors);
+    validateProductSchemaBrand(productNode, errors);
     const offers = collectProductOffers(productNode);
     if (offers.length === 0) {
       errors.push("Product JSON-LD must include at least one Offer.");

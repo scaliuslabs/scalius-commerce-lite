@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
+    brands,
     categories,
     media,
     productAttributes,
@@ -35,6 +36,7 @@ import { updateProductMediaSection } from "./admin/write";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 import { MAX_PRODUCT_PRICE } from "./types";
 import {
+    productBrandIdSchema,
     productMediaAssociationIdSchema,
     productMediaInputSchema,
 } from "./validation";
@@ -79,6 +81,7 @@ const productBasePatchSchema = z.object({
     name: z.string().min(3).max(100).optional(),
     price: z.number().min(0).max(MAX_PRODUCT_PRICE).optional(),
     categoryId: z.string().min(1).nullable().optional(),
+    brandId: productBrandIdSchema.optional(),
     isActive: z.boolean().optional(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
@@ -260,6 +263,7 @@ export async function getProductSemanticSection(
             priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             categoryName: categories.name,
+            brandId: products.brandId,
             slug: products.slug,
             canonicalPath: products.canonicalPath,
             noIndex: products.noIndex,
@@ -301,6 +305,7 @@ export async function getProductSemanticSection(
                 price: price.price,
                 categoryId: row.categoryId,
                 categoryName: row.categoryName ?? null,
+                brandId: row.brandId,
                 slug: row.slug,
                 canonicalPath: row.canonicalPath,
                 noIndex: row.noIndex,
@@ -556,6 +561,7 @@ async function updateBaseSection(
         name: products.name,
         priceMinor: products.priceMinor,
         categoryId: products.categoryId,
+        brandId: products.brandId,
         isActive: products.isActive,
         discountType: products.discountType,
         discountBps: products.discountBps,
@@ -579,6 +585,11 @@ async function updateBaseSection(
     if (next.canonicalPath !== null && next.canonicalPath !== `/products/${next.slug}`) {
         throw new ValidationError("Canonical path must use this product's current slug until URL aliases are supported.");
     }
+    if (next.brandId !== current.brandId && next.brandId !== null) {
+        const brand = await db.select({ id: brands.id }).from(brands)
+            .where(and(eq(brands.id, next.brandId), isNull(brands.deletedAt))).get();
+        if (!brand) throw new ValidationError("That brand is unavailable or in trash. Choose another brand.", { field: "brandId" });
+    }
     if (next.slug !== current.slug) {
         const collision = await db.select({ id: products.id }).from(products).where(and(
             eq(products.slug, next.slug),
@@ -592,6 +603,7 @@ async function updateBaseSection(
         name: next.name,
         priceMinor: next.priceMinor,
         categoryId: next.categoryId,
+        brandId: next.brandId,
         isActive: next.isActive,
         discountType: next.discountType ?? "percentage",
         discountBps: (next.discountType ?? "percentage") === "percentage" ? next.discountBps : 0,

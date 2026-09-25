@@ -100,8 +100,8 @@ describe("dashboard order lifecycle on D1 storage", () => {
             INSERT INTO order_items (
               id, order_id, product_id, variant_id, quantity, product_name, inventory_tracked,
               unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor,
-              tax_amount_minor, fulfillment_status
-            ) VALUES ('${id}_item', '${id}', 'product_1', 'variant_1', 2, 'Kurta', 1, 75000, 150000, 0, 0, 0, 'pending');
+              tax_amount_minor
+            ) VALUES ('${id}_item', '${id}', 'product_1', 'variant_1', 2, 'Kurta', 1, 75000, 150000, 0, 0, 0);
             INSERT INTO order_tax_snapshots (
               order_id, currency_code, decimal_places, display_label, prices_include_tax,
               shipping_taxed, settings_version, calculation_version, destination_snapshot, rate_snapshot

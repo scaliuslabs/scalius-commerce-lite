@@ -13,6 +13,7 @@ import type {
 } from "../agent-operation-manifest";
 import { DASHBOARD_ORDER_OPERATIONS } from "./dashboard-orders";
 import { DASHBOARD_CATALOG_OPERATIONS } from "./dashboard-catalog";
+import { DASHBOARD_BRAND_OPERATIONS } from "./dashboard-brands";
 import { DASHBOARD_INVENTORY_OPERATIONS } from "./dashboard-inventory";
 import { DASHBOARD_CUSTOMER_OPERATIONS } from "./dashboard-customers";
 import { DASHBOARD_CONVERSATION_OPERATIONS } from "./dashboard-conversations";
@@ -24,10 +25,12 @@ import { DASHBOARD_STAFF_OPERATIONS } from "./dashboard-staff";
 import { STOREFRONT_ORDER_OPERATIONS } from "./storefront-orders";
 import { STOREFRONT_CONVERSATION_OPERATIONS } from "./storefront-conversations";
 import { STOREFRONT_CATALOG_OPERATIONS } from "./storefront-catalog";
+import { STOREFRONT_BRAND_OPERATIONS } from "./storefront-brands";
 import { STOREFRONT_CONTENT_OPERATIONS } from "./storefront-content";
 import { STOREFRONT_CUSTOMER_OPERATIONS } from "./storefront-customers";
 import { STOREFRONT_AGENT_OPERATIONS } from "./storefront-agent";
 import { SYSTEM_OPERATIONS } from "./system";
+import { DASHBOARD_CATALOG_PROJECTION_OPERATIONS } from "./dashboard-catalog-projections";
 import type { OperationRegistryEntry } from "./entry";
 
 export type { OperationRegistryEntry } from "./entry";
@@ -50,6 +53,7 @@ const DEFAULT_PRINCIPALS: Readonly<
 export const OPERATIONS = {
   ...DASHBOARD_ORDER_OPERATIONS,
   ...DASHBOARD_CATALOG_OPERATIONS,
+  ...DASHBOARD_BRAND_OPERATIONS,
   ...DASHBOARD_INVENTORY_OPERATIONS,
   ...DASHBOARD_CUSTOMER_OPERATIONS,
   ...DASHBOARD_CONVERSATION_OPERATIONS,
@@ -61,16 +65,19 @@ export const OPERATIONS = {
   ...STOREFRONT_ORDER_OPERATIONS,
   ...STOREFRONT_CONVERSATION_OPERATIONS,
   ...STOREFRONT_CATALOG_OPERATIONS,
+  ...STOREFRONT_BRAND_OPERATIONS,
   ...STOREFRONT_CONTENT_OPERATIONS,
   ...STOREFRONT_CUSTOMER_OPERATIONS,
   ...STOREFRONT_AGENT_OPERATIONS,
   ...SYSTEM_OPERATIONS,
+  ...DASHBOARD_CATALOG_PROJECTION_OPERATIONS,
 } satisfies Record<string, OperationRegistryEntry>;
 
 /** The per-domain groups, for the one-group-per-operation check. */
 export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistryEntry>>[] = [
   DASHBOARD_ORDER_OPERATIONS,
   DASHBOARD_CATALOG_OPERATIONS,
+  DASHBOARD_BRAND_OPERATIONS,
   DASHBOARD_INVENTORY_OPERATIONS,
   DASHBOARD_CUSTOMER_OPERATIONS,
   DASHBOARD_CONVERSATION_OPERATIONS,
@@ -82,10 +89,12 @@ export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistr
   STOREFRONT_ORDER_OPERATIONS,
   STOREFRONT_CONVERSATION_OPERATIONS,
   STOREFRONT_CATALOG_OPERATIONS,
+  STOREFRONT_BRAND_OPERATIONS,
   STOREFRONT_CONTENT_OPERATIONS,
   STOREFRONT_CUSTOMER_OPERATIONS,
   STOREFRONT_AGENT_OPERATIONS,
   SYSTEM_OPERATIONS,
+  DASHBOARD_CATALOG_PROJECTION_OPERATIONS,
 ];
 
 export type OperationId = keyof typeof OPERATIONS;

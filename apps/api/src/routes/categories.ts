@@ -1,9 +1,14 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+  CATEGORY_CHILDREN_LIMIT,
+  CATEGORY_TREE_LINK_LIMIT,
   getPublicCategories,
   getPublicCategorySummaries,
   getPublicCategoryBySlug,
+  getPublicCategoryBreadcrumb,
+  getPublicCategoryChildren,
   getPublicCategorySection,
+  getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { getStorefrontCategoryProducts } from "@scalius/core/modules/catalog";
@@ -18,6 +23,16 @@ import {
 } from "../utils/public-search-query";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/** Whether a category listing includes its published sub-categories' products. */
+const includeSubcategoriesSchema = z
+  .enum(["true", "false"])
+  .optional()
+  .default("true")
+  .openapi({
+    description:
+      "List products of the category's published sub-categories too (default). \"false\" lists the category's own products only.",
+  });
 
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
@@ -39,7 +54,8 @@ const categoryProductFilterSchema = z.object({
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
-  hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" })
+  hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
+  includeSubcategories: includeSubcategoriesSchema,
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&
@@ -67,10 +83,32 @@ const storefrontCategorySchema = z.object({
   canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
+  parentId: z.string().nullable(),
+  depth: z.number().int().min(0).max(3),
+});
+
+const categoryLinkSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  canonicalPath: z.string().nullable(),
+});
+
+const categoryChildSchema = categoryLinkSchema.extend({
+  imageUrl: z.string().nullable(),
+});
+
+const categoryBreadcrumbItemSchema = categoryLinkSchema.extend({
+  depth: z.number().int().min(0).max(3),
 });
 
 const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
   content: z.string().nullable(),
+  listingTemplate: z.string().nullable(),
+  children: z.array(categoryChildSchema).max(CATEGORY_CHILDREN_LIMIT)
+    .openapi({ description: "Published sub-categories, name order (sub-category pills and shelves)." }),
+  breadcrumb: z.array(categoryBreadcrumbItemSchema).max(4)
+    .openapi({ description: "Published ancestors, root first, ending with this category." }),
 });
 
 const productFacetSchema = z.object({
@@ -119,6 +157,7 @@ const appliedCategoryFiltersSchema = z.object({
 });
 
 const agentCategoryProductFilterSchema = z.object({
+  includeSubcategories: includeSubcategoriesSchema,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(20).optional().default(20),
   sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
@@ -205,6 +244,34 @@ app.openapi(listCategorySummariesRoute, async (c) => {
   return ok(c, await getPublicCategorySummaries(c.get("db"), query));
 });
 
+// GET /categories/tree — the published tree for automatic menus
+const getCategoryTreeRoute = createRoute({
+  method: "get",
+  path: "/tree",
+  operationId: "storefront.categories.tree",
+  tags: ["Categories"],
+  summary: "Get the published category tree",
+  description:
+    `Published categories whose every ancestor is published, flat with parentId, top levels first; at most ${CATEGORY_TREE_LINK_LIMIT} nodes, so a node's parent is always included. Deeper levels live on category pages.`,
+  responses: {
+    200: {
+      description: "Category tree",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        nodes: z.array(categoryChildSchema.extend({
+          parentId: z.string().nullable(),
+          depth: z.number().int().min(0).max(3),
+        })).max(CATEGORY_TREE_LINK_LIMIT),
+        truncated: z.boolean(),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategoryTreeRoute, async (c) => {
+  return ok(c, await getPublicCategoryTree(c.get("db")));
+});
+
 // GET /categories/:slug — get category by slug
 const getCategoryBySlugRoute = createRoute({
   method: "get",
@@ -235,6 +302,68 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
   const category = await getPublicCategoryBySlug(db, slug);
   if (!category) throw new NotFoundError("Category not found");
   return ok(c, { category });
+});
+
+const getCategoryChildrenRoute = createRoute({
+  method: "get",
+  path: "/{slug}/children",
+  operationId: "storefront.categories.list_children",
+  tags: ["Categories"],
+  summary: "List a category's published sub-categories",
+  request: {
+    params: z.object({ slug: publicCategorySlugSchema }),
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(CATEGORY_CHILDREN_LIMIT).optional().default(CATEGORY_CHILDREN_LIMIT),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Published sub-categories in name order",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        children: z.array(categoryChildSchema).max(CATEGORY_CHILDREN_LIMIT),
+      })) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategoryChildrenRoute, async (c) => {
+  const { slug } = c.req.valid("param");
+  const { limit } = c.req.valid("query");
+  const db = c.get("db");
+  const [breadcrumb, children] = await Promise.all([
+    getPublicCategoryBreadcrumb(db, slug),
+    getPublicCategoryChildren(db, slug, { limit }),
+  ]);
+  if (breadcrumb.length === 0) throw new NotFoundError("Category not found");
+  return ok(c, { children });
+});
+
+const getCategoryBreadcrumbRoute = createRoute({
+  method: "get",
+  path: "/{slug}/breadcrumb",
+  operationId: "storefront.categories.get_breadcrumb",
+  tags: ["Categories"],
+  summary: "Get a category's breadcrumb",
+  request: { params: z.object({ slug: publicCategorySlugSchema }) },
+  responses: {
+    200: {
+      description: "Published ancestors, root first, ending with the category",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        breadcrumb: z.array(categoryBreadcrumbItemSchema).min(1).max(4),
+      })) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategoryBreadcrumbRoute, async (c) => {
+  const { slug } = c.req.valid("param");
+  const breadcrumb = await getPublicCategoryBreadcrumb(c.get("db"), slug);
+  if (breadcrumb.length === 0) throw new NotFoundError("Category not found");
+  return ok(c, { breadcrumb });
 });
 
 const getCategorySectionRoute = createRoute({
@@ -361,14 +490,23 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     canonicalPath: category.canonicalPath,
     noIndex: category.noIndex,
     excludeFromSitemap: category.excludeFromSitemap,
+    parentId: category.parentId,
+    depth: category.depth,
+    listingTemplate: category.listingTemplate,
+    children: category.children,
+    breadcrumb: category.breadcrumb,
     createdAt: category.createdAt,
     updatedAt: category.updatedAt,
   };
 
+  const { includeSubcategories, ...filters } = params;
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
-    ...params,
+    ...filters,
     search,
     attributeFilters,
+  }, {
+    // Only a category with published children has a subtree to list.
+    includeDescendants: includeSubcategories === "true" && category.children.length > 0,
   });
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
@@ -437,6 +575,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   const category = summary.category;
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const attributeFilters = await resolvePublicAttributeFilters(c.get("db"), queryParams, Object.keys(params));
+  const { includeSubcategories, ...filters } = params;
   const result = await getStorefrontCategoryProducts(c.get("db"), {
     id: category.id,
     name: category.name,
@@ -451,9 +590,11 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     createdAt: category.createdAt,
     updatedAt: category.updatedAt,
   }, {
-    ...params,
+    ...filters,
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
+  }, {
+    includeDescendants: includeSubcategories === "true",
   });
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: attributeFilters,

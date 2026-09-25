@@ -12,6 +12,7 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { checkAndAlertLowStock } from "./alerts";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import type { ReservationEntry, StockOperationResult } from "./types";
@@ -198,6 +199,11 @@ export async function prepareReservedStockReleaseBatch(
       )`, INVENTORY_RELEASE_PLAN_CONFLICT),
     );
   }
+  // Buyer state reads the counters this batch just wrote.
+  statements.push(...catalogBuyerStateRefreshStatementsForSkus(
+    db,
+    entriesToRelease.map((entry) => entry.variantId),
+  ));
 
   return {
     success: true,
@@ -250,17 +256,20 @@ export async function releaseReservation(
     return { success: true, variantId, previousStock, newStock: previousStock };
   }
 
-  await db
-    .update(productVariants)
-    .set({
-      reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-      ...(pool === "preorder"
-        ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
-        : {}),
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(productVariants.id, variantId));
+  await safeBatch(db, [
+    db
+      .update(productVariants)
+      .set({
+        reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
+        ...(pool === "preorder"
+          ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
+          : {}),
+        stockVersion: sql`${productVariants.stockVersion} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(eq(productVariants.id, variantId)),
+    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+  ] as never);
 
   const newStock =
     pool === "preorder" ? variant.preorderStock + quantity : variant.stock;
@@ -458,7 +467,12 @@ export async function releaseReservedStockBatch(
 
     let batchResults: { id: string }[][];
     try {
-      batchResults = await safeBatch(db, [...movementQueries, ...updateQueries] as SQLiteBatchItem[]) as { id: string }[][];
+      batchResults = await safeBatch(db, [
+        ...movementQueries,
+        ...updateQueries,
+        // Buyer state reads the counters this batch just wrote.
+        ...catalogBuyerStateRefreshStatementsForSkus(db, entriesToRelease.map((entry) => entry.variantId)),
+      ] as SQLiteBatchItem[]) as { id: string }[][];
     } catch (err: unknown) {
       const duplicateResolved = await resolveDuplicateReleaseBatch(db, orderId, claims, entriesToRelease, err);
       if (duplicateResolved) {
@@ -865,8 +879,11 @@ async function rollbackStrictReleaseBatch(
   if (rollbackQueries.length === 0) return true;
 
   try {
-    const results = await safeBatch(db, rollbackQueries) as { id: string }[][];
-    return results.every((result) => Boolean(result?.length));
+    const results = await safeBatch(db, [
+      ...rollbackQueries,
+      ...catalogBuyerStateRefreshStatementsForSkus(db, entriesToRelease.map((entry) => entry.variantId)),
+    ]) as { id: string }[][];
+    return results.slice(0, rollbackQueries.length).every((result) => Boolean(result?.length));
   } catch (err: unknown) {
     console.error("[inventory/release] Strict release rollback failed:", err);
     return false;

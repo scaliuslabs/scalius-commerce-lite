@@ -9,7 +9,8 @@ import { getProductsByIds, listProducts } from "./read";
 import { saveProductOptionMatrix } from "../option-matrix";
 import { updateVariantSchema } from "../types";
 import { createProductSchema, updateProductSchema } from "../validation";
-import { SkuTakenError, updateVariant } from "../variants";
+import { deleteVariant, SkuTakenError, updateVariant } from "../variants";
+import { ValidationError } from "../../../errors";
 
 vi.mock("../../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
@@ -155,6 +156,33 @@ describe("catalog actions on D1 storage", () => {
       ]);
     expect(sqlite.prepare("SELECT sku FROM product_variants WHERE product_id = ? ORDER BY sku").all(again.id))
       .toEqual([{ sku: "PANJABI-L-COPY-2" }, { sku: "PANJABI-M-COPY-2" }]);
+  });
+
+  it("copies only the option values a live SKU sells, and refuses an uncopyable product with a 400", async () => {
+    const source = await create({
+      name: "Panjabi", slug: "panjabi", isActive: true,
+      optionMatrix: {
+        options: [{ id: "o", name: "Size", standardMapping: "size", values: [{ id: "m", value: "M" }, { id: "l", value: "L" }] }],
+        variants: [variant("s1", "m", "PANJABI-M"), variant("s2", "l", "PANJABI-L", 300)],
+      },
+    });
+    // Removing the L SKU leaves the L value on the product, sold by nothing.
+    const large = sqlite.prepare("SELECT id FROM product_variants WHERE sku = 'PANJABI-L'").get() as { id: string };
+    await deleteVariant(db, source.id, large.id, 1);
+
+    const copy = await duplicateProduct(db, source.id, "Copy of Panjabi");
+    expect(sqlite.prepare(`
+      SELECT value.value FROM product_option_values value
+      JOIN product_option_definitions axis ON axis.id = value.option_definition_id
+      WHERE axis.product_id = ? AND value.deleted_at IS NULL
+    `).all(copy.id)).toEqual([{ value: "M" }]);
+    expect(sqlite.prepare("SELECT sku FROM product_variants WHERE product_id = ? AND deleted_at IS NULL").all(copy.id))
+      .toEqual([{ sku: "PANJABI-M-COPY" }]);
+
+    // A copy the product form could not save is a 400, not a 500.
+    const refused = await duplicateProduct(db, source.id, "ab").catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(ValidationError);
+    expect(refused).toMatchObject({ status: 400, details: { field: "name" } });
   });
 
   it("keeps an optioned product's price at its lowest live variant price, whatever writes", async () => {

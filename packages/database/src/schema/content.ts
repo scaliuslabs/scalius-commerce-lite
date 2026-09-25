@@ -1,5 +1,5 @@
 // src/db/schema/content.ts
-// Site content tables: pages, heroSections, heroSliders, pageTemplates.
+// Site content tables: pages, heroSections, heroSliders.
 
 import {
   sqliteTable,
@@ -143,21 +143,6 @@ export const heroSliders = sqliteTable(
   ],
 );
 
-export const pageTemplates = sqliteTable("page_templates", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  type: text("type").notNull(),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  config: text("config").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(UNIX_NOW),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(UNIX_NOW),
-});
-
 export type Page = InferSelectModel<typeof pages>;
 export type HeroSection = InferSelectModel<typeof heroSections>;
 export type HeroSlider = InferSelectModel<typeof heroSliders>;
-export type PageTemplate = InferSelectModel<typeof pageTemplates>;

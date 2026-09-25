@@ -11,6 +11,8 @@ import { DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, STORE_SHAPE_COUNT_CAP, sto
 import { saveHomepagePresentationSettings } from "../settings/site-settings.service";
 import { getHomepageData, getLayoutData } from "./storefront.service";
 import { readStoreShape } from "./store-shape";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { refreshProductSalesStats } from "../catalog/recommendation-refresh";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER_KEY = Buffer.alloc(32, 9).toString("base64");
@@ -184,6 +186,9 @@ describe("storefront homepage data", () => {
       INSERT INTO order_items (id, order_id, product_id, quantity) VALUES
         ('oi_1', 'o_1', 'p_old', 1), ('oi_2', 'o_2', 'p_old', 1), ('oi_3', 'o_3', 'p_mid', 1);
     `);
+    // Seeded with raw SQL: fill the projections and sales stats as the release and nightly run do.
+    await rebuildCatalogProjections(db);
+    await refreshProductSalesStats(db);
 
     batches = 0;
     const homepage = await getHomepageData(db);

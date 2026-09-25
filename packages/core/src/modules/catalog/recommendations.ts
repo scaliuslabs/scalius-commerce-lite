@@ -14,31 +14,45 @@
 // Ties break by newest then id, so the order is deterministic. Card images
 // come from one bounded media read, so a call is two statements.
 //
+// Candidates are the stored buyer state's public, buyable products
+// (buyer-state.ts), so the statement never evaluates eligibility or ranks
+// SKUs per product.
+//
+// Precomputed (Design B): a single product's list (the product page) is read
+// from its stored `product_recommendations` rows (up to 24, written off the
+// request path by recommendation-refresh.ts), filtered to products still
+// public and buyable. The live ranking runs on the request path only for a
+// product never computed and for multi-product sources (cart, order
+// confirmation) or none (404, search dead ends).
+//
 // Freshness: responses ride the public API cache keyed by the store cache
 // generation. Placing an order does not bump the generation by itself, so
 // also-bought and popularity rankings refresh with the next buyer-visible
 // write (stock band change, catalog edit) or the one-day cache ceiling.
-import { products } from "@scalius/database/schema";
+import { productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
-import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
-    buyerPricingSelection,
     effectivePriceMinorSql,
     presentBuyerPricing,
     storeCurrencyCodeSql,
     storeDecimalPlacesFromCode,
 } from "../products/money";
-import {
-    operationalSkuRowPredicate,
-    publicProductBaseConditions,
-} from "../products/public-eligibility";
+import { operationalSkuRowPredicate } from "../products/public-eligibility";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
+import {
+    buyerState,
+    buyerStateCardSku,
+    buyerStatePricingSelection,
+    publicBuyerStateCondition,
+} from "./buyer-state";
 
 export const MAX_RECOMMENDATION_SOURCE_IDS = 20;
 export const MAX_RECOMMENDATION_LIMIT = 12;
 export const DEFAULT_RECOMMENDATION_LIMIT = 8;
+/** Rows stored per product (`product_recommendations` positions 0-23). */
+export const STORED_RECOMMENDATION_LIMIT = 24;
 
 /** Distinct buyers who bought a product with the source before "Customers also bought" is claimed. */
 export const MIN_ALSO_BOUGHT_BUYERS = 2;
@@ -180,7 +194,7 @@ function sourceCollectionIdsSql(sourceSet: SQL): SQL {
     )`;
 }
 
-type RankedRecommendationRow = {
+type RecommendationCardRow = {
     id: string;
     name: string;
     slug: string;
@@ -192,14 +206,19 @@ type RankedRecommendationRow = {
     maxBuyerPriceMinor: number;
     freeDelivery: boolean;
     categoryId: string | null;
-    hasCustomerOptions: number;
-    availableForSale: number;
+    hasCustomerOptions: number | boolean;
+    availableForSale: number | boolean;
     createdAt: number;
+    storeCurrencyCode: string | null;
+};
+
+/** One ranked product: its id and the signals that placed it (no card columns). */
+type RankedRecommendationRow = {
+    id: string;
     alsoBoughtBuyers: number;
     relatedScore: number;
     popularBuyers: number;
     popularOrdering: number;
-    storeCurrencyCode: string | null;
 };
 
 export interface RankedRecommendations {
@@ -216,10 +235,24 @@ export async function rankProductRecommendations(
     input: ProductRecommendationInput,
 ): Promise<RankedRecommendations> {
     const sourceIds = normalizeRecommendationSourceIds(input.productIds);
-    const limit = normalizeLimit(input.limit);
+    const rows = await rankRecommendationRows(db, sourceIds, normalizeLimit(input.limit));
+    return { reason: recommendationReason(rows, sourceIds.length > 0), rows };
+}
+
+/**
+ * The ranking statement for up to `limit` rows (the request path caps it at
+ * 12; the refresh job stores 24). It reads only the buyer state and the
+ * signal sets: every public product is scored, so card columns (names,
+ * prices, the card SKU) are read afterwards for the few rows kept
+ * (`loadRecommendationCards`). Internal to the catalog domain.
+ */
+export async function rankRecommendationRows(
+    db: Database,
+    sourceIds: readonly string[],
+    limit: number,
+): Promise<RankedRecommendationRow[]> {
     const sourceJson = JSON.stringify(sourceIds);
     const sourceSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${sourceJson}))`;
-    const pricing = buildBuyerCatalogPricingProjection(db);
 
     const coPurchase = sql`(
         SELECT rec_peer_line.product_id AS product_id,
@@ -288,7 +321,7 @@ export async function rankProductRecommendations(
 
     // CROSS JOIN keeps the source products as the driver; the planner
     // otherwise walked every product of every published category.
-    const sameCategory = sql`CASE WHEN ${products.categoryId} IN (
+    const sameCategory = sql`CASE WHEN ${buyerState.categoryId} IN (
         SELECT rec_source_product.category_id
         FROM products AS rec_source_product
         CROSS JOIN categories AS rec_source_category
@@ -310,8 +343,8 @@ export async function rankProductRecommendations(
     )`;
     const inPriceBand = sql`CASE
         WHEN rec_source_band.min_price IS NOT NULL
-         AND ${pricing.effectivePriceMinor} * 100 >= rec_source_band.min_price * 60
-         AND ${pricing.effectivePriceMinor} * 100 <= rec_source_band.max_price * 140
+         AND ${buyerState.fromMinor} * 100 >= rec_source_band.min_price * 60
+         AND ${buyerState.fromMinor} * 100 <= rec_source_band.max_price * 140
         THEN 1 ELSE 0
     END`;
     const alsoBoughtTier = sql`CASE WHEN ${alsoBoughtBuyers} >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))} THEN ${alsoBoughtBuyers} ELSE 0 END`;
@@ -324,48 +357,74 @@ export async function rankProductRecommendations(
          AND ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
         THEN ${popularBuyers} ELSE 0
     END`;
-    const createdAt = sql<number>`CAST(${products.createdAt} AS INTEGER)`;
-
-    const rows = await db
+    return await db
         .select({
-            id: products.id,
-            name: products.name,
-            slug: products.slug,
-            ...buyerPricingSelection(pricing),
-            freeDelivery: products.freeDelivery,
-            categoryId: products.categoryId,
-            hasCustomerOptions: pricing.hasCustomerOptions,
-            availableForSale: pricing.availableForSale,
-            createdAt: createdAt.as("rec_created_at"),
+            id: buyerState.productId,
             alsoBoughtBuyers: alsoBoughtBuyers.as("rec_also_bought_buyers"),
             relatedScore: relatedScore.as("rec_related_score"),
             popularBuyers: popularBuyers.as("rec_popular_buyers"),
             popularOrdering: popularOrdering.as("rec_popular_ordering"),
-            storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
         })
-        .from(products)
-        .innerJoin(pricing, eq(products.id, pricing.productId))
-        .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${products.id}`)
-        .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${products.id}`)
-        .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${products.id}`)
-        .leftJoin(popular, sql`rec_popular.product_id = ${products.id}`)
+        .from(buyerState)
+        .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
+        .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
+        .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
+        .leftJoin(popular, sql`rec_popular.product_id = ${buyerState.productId}`)
         .crossJoin(sourceBand)
         .where(and(
-            ...publicProductBaseConditions(),
-            eq(pricing.availableForSale, 1),
-            sql`${products.id} NOT IN ${sourceSet}`,
+            publicBuyerStateCondition(),
+            sql`${buyerState.availableForSale} = 1`,
+            sql`${buyerState.productId} NOT IN ${sourceSet}`,
         ))
         .orderBy(
             desc(alsoBoughtTier),
             desc(sql`${relatedScore} + 15 * ${inPriceBand}`),
             desc(popularOrdering),
-            desc(createdAt),
-            products.id,
+            desc(buyerState.productCreatedAt),
+            buyerState.productId,
         )
         .limit(limit)
         .all() as RankedRecommendationRow[];
+}
 
-    return { reason: recommendationReason(rows, sourceIds.length > 0), rows };
+/** Card columns of the given public products (at most 24 ids, one JSON parameter). */
+async function loadRecommendationCards(
+    db: Database,
+    ids: readonly string[],
+): Promise<Map<string, RecommendationCardRow>> {
+    if (ids.length === 0) return new Map();
+    const cardSku = buyerStateCardSku();
+    const rows = await db
+        .select({
+            id: products.id,
+            name: products.name,
+            slug: products.slug,
+            ...buyerStatePricingSelection(cardSku),
+            freeDelivery: products.freeDelivery,
+            categoryId: products.categoryId,
+            hasCustomerOptions: buyerState.hasCustomerOptions,
+            availableForSale: buyerState.availableForSale,
+            createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
+            storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
+        })
+        .from(buyerState)
+        .innerJoin(products, eq(products.id, buyerState.productId))
+        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .where(sql`${buyerState.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`)
+        .all() as RecommendationCardRow[];
+    return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** Why one ranked row is on the list, as stored in `product_recommendations.reason`. */
+export function recommendationRowReason(row: {
+    alsoBoughtBuyers: number;
+    relatedScore: number;
+    popularOrdering: number;
+}): ProductRecommendationReason {
+    if (Number(row.alsoBoughtBuyers) >= MIN_ALSO_BOUGHT_BUYERS) return "also_bought";
+    if (Number(row.relatedScore) > 0) return "similar";
+    if (Number(row.popularOrdering) > 0) return "popular";
+    return "new_arrivals";
 }
 
 function recommendationReason(
@@ -383,25 +442,106 @@ function recommendationReason(
     return hasSources ? "similar" : "new_arrivals";
 }
 
-/** Ranked recommendations as product cards (two statements). */
+/**
+ * The list reason from stored per-row reasons, by the same "at least half"
+ * rules as a live ranking (a stored list always has its source product).
+ */
+function storedRecommendationReason(reasons: readonly ProductRecommendationReason[]): ProductRecommendationReason {
+    const atLeastHalf = (count: number) => count > 0 && count * 2 >= reasons.length;
+    const alsoBought = reasons.filter((reason) => reason === "also_bought").length;
+    if (atLeastHalf(alsoBought)) return "also_bought";
+    return "similar";
+}
+
+type StoredRecommendationRow = RecommendationCardRow & {
+    reason: ProductRecommendationReason;
+    isPublic: number | boolean | null;
+};
+
+/**
+ * One product's stored rows (at most 24, by primary key), with each
+ * recommended product's current buyer state; null when never computed.
+ */
+async function readStoredRecommendations(
+    db: Database,
+    productId: string,
+    limit: number,
+): Promise<{ reason: ProductRecommendationReason; rows: RecommendationCardRow[] } | null> {
+    const cardSku = buyerStateCardSku();
+    const stored = await db
+        .select({
+            id: products.id,
+            name: products.name,
+            slug: products.slug,
+            ...buyerStatePricingSelection(cardSku),
+            freeDelivery: products.freeDelivery,
+            categoryId: products.categoryId,
+            hasCustomerOptions: buyerState.hasCustomerOptions,
+            availableForSale: buyerState.availableForSale,
+            isPublic: buyerState.isPublic,
+            createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
+            reason: productRecommendations.reason,
+            storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
+        })
+        .from(productRecommendations)
+        .leftJoin(buyerState, eq(buyerState.productId, productRecommendations.recommendedProductId))
+        .leftJoin(products, eq(products.id, productRecommendations.recommendedProductId))
+        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .where(eq(productRecommendations.productId, productId))
+        .orderBy(asc(productRecommendations.position))
+        .all() as StoredRecommendationRow[];
+    if (stored.length === 0) return null;
+    const shown = stored
+        .filter((row) => Boolean(row.isPublic) && Boolean(row.availableForSale) && row.id !== null)
+        .slice(0, limit);
+    return {
+        reason: storedRecommendationReason(shown.map((row) => row.reason)),
+        rows: shown.map(({ reason: _reason, isPublic: _isPublic, ...row }) => row),
+    };
+}
+
+/**
+ * Recommendations as product cards. One source product reads its stored
+ * list and then its card media (two statements, two waves); anything else,
+ * or a product never computed, runs the live ranking and then reads the
+ * kept rows' cards and media together (three statements, two waves).
+ */
 export async function getStorefrontProductRecommendations(
     db: Database,
     input: ProductRecommendationInput,
 ): Promise<ProductRecommendations> {
-    const { reason, rows } = await rankProductRecommendations(db, input);
+    const sourceIds = normalizeRecommendationSourceIds(input.productIds);
+    const limit = normalizeLimit(input.limit);
+    const stored = sourceIds.length === 1
+        ? await readStoredRecommendations(db, sourceIds[0]!, limit)
+        : null;
+    let reason: ProductRecommendationReason;
+    let rows: RecommendationCardRow[];
+    let mediaMap: Awaited<ReturnType<typeof loadProductMediaProjections>>;
+    if (stored) {
+        ({ reason, rows } = stored);
+        if (rows.length === 0) return { reason, products: [] };
+        mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    } else {
+        const ranked = await rankProductRecommendations(db, { productIds: sourceIds, limit });
+        reason = ranked.reason;
+        if (ranked.rows.length === 0) return { reason, products: [] };
+        const ids = ranked.rows.map((row) => row.id);
+        const [cards, media] = await Promise.all([
+            loadRecommendationCards(db, ids),
+            loadProductMediaProjections(db, ids),
+        ]);
+        rows = ids.flatMap((id) => cards.get(id) ?? []);
+        mediaMap = media;
+    }
     if (rows.length === 0) return { reason, products: [] };
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
-    const mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
     return {
         reason,
         products: rows.map(({
             hasCustomerOptions,
             availableForSale,
             createdAt,
-            alsoBoughtBuyers: _alsoBoughtBuyers,
-            relatedScore: _relatedScore,
-            popularBuyers: _popularBuyers,
-            popularOrdering: _popularOrdering,
             storeCurrencyCode: _storeCurrencyCode,
             ...row
         }) => ({

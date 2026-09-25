@@ -250,6 +250,7 @@ function toCatalogFeedProduct(
     category: product.category
       ? { slug: product.category.slug, name: product.category.name }
       : null,
+    brand: product.brand ? { name: product.brand.name } : null,
     attributes: product.attributes.map((attribute) => ({
       name: attribute.name,
       value: attribute.value,

@@ -47,8 +47,8 @@ describe("catalog feed row projector", () => {
         imageUrl: "https://cdn.example.test/shirt-primary.jpg",
         productCondition: "used",
         category: { slug: "electronics", name: "Wearable Electronics" },
+        brand: { name: " Harbor " },
         attributes: [
-          { name: "Brand", value: "Harbor" },
           { name: "Material", value: "Cotton" },
           { name: "Gender", value: "unisex" },
           { name: "Age Group", value: "adult" },
@@ -246,6 +246,29 @@ describe("catalog feed row projector", () => {
       itemGroupId: null,
       condition: null,
     });
+  });
+
+  it("takes the brand from the brand record only and never from a free-text attribute", () => {
+    const base: CatalogFeedProductInput = {
+      id: "prod_fan",
+      name: "Ceiling Fan",
+      slug: "ceiling-fan",
+      price: 4500,
+      hasVariants: false,
+      imageUrl: "https://cdn.example.test/fan.jpg",
+      variants: [{ id: "var_fan", sku: "FAN-1", price: 4500, stock: 3, isDefault: true }],
+    };
+    const [entity, attributeOnly, blank, none] = project([
+      { ...base, brand: { name: "Walton" }, attributes: [{ name: "Brand", value: "Other" }] },
+      { ...base, id: "prod_attr", attributes: [{ name: "Brand", value: "Walton" }] },
+      { ...base, id: "prod_blank", brand: { name: "   " } },
+      { ...base, id: "prod_none", brand: null },
+    ]).rows;
+
+    expect(entity).toMatchObject({ brand: "Walton", identifierExists: null });
+    for (const row of [attributeOnly, blank, none]) {
+      expect(row).toMatchObject({ brand: null, identifierExists: "no" });
+    }
   });
 
   it("uses a simple product's default SKU as the feed id, matching its Product JSON-LD sku", () => {

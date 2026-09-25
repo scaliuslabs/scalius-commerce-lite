@@ -8,6 +8,7 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
+import { catalogProjectionRefreshStatements } from "./catalog-projections";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
     "PRODUCT_AGGREGATE_REVISION_CONFLICT";
@@ -175,10 +176,12 @@ export async function executeProductAggregateMutationBatch(
             ),
             ...mutationStatements,
             buildProductAggregateRevisionBump(db, productId),
+            // The catalogue projections read this batch's own writes.
+            ...catalogProjectionRefreshStatements(db, [productId]),
         ] as never) as unknown[];
-        const revision = readProductAggregateRevisionResult(results.at(-1));
+        const revision = readProductAggregateRevisionResult(results[1 + mutationStatements.length]);
         return {
-            mutationResults: results.slice(1, -1),
+            mutationResults: results.slice(1, 1 + mutationStatements.length),
             aggregateRevision: revision.aggregateRevision,
         };
     } catch (error) {

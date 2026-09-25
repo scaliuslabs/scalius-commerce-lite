@@ -28,6 +28,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
+import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
 import { bumpCacheGeneration, type CacheWriteContext } from "../../utils/cache-generation";
 import {
     findStockMutationAvailabilityTransitions,
@@ -693,8 +694,13 @@ const defaultAlertLevelRoute = createRoute({
 app.openapi(defaultAlertLevelRoute, async (c) => {
     const { defaultLowStockThreshold } = c.req.valid("json");
     const result = await setDefaultLowStockThreshold(c.get("db"), defaultLowStockThreshold);
-    // The level shapes buyer availability bands for every SKU that uses it.
+    // The level shapes buyer availability bands for every SKU that uses it,
+    // including each product's stored card band: rebuild those off the
+    // request path (the rebuild bumps the generation again when it ends).
     await bumpCacheGeneration(c);
+    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
+        console.warn("[inventory] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
+    });
     return ok(c, result);
 });
 

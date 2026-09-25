@@ -1,6 +1,6 @@
 /**
  * Master Sitemap Index
- * Links to all sub-sitemaps (products, categories, pages, static)
+ * Links to all sub-sitemaps (static, categories, brands, collections, pages, articles, products)
  */
 
 import type { APIRoute } from "astro";
@@ -24,6 +24,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const sitemaps = [
       "sitemap-static.xml",
       "sitemap-categories.xml",
+      "sitemap-brands.xml",
       "sitemap-collections.xml",
       "sitemap-pages.xml",
       "sitemap-articles.xml",

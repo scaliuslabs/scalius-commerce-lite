@@ -1,4 +1,4 @@
-// PostgreSQL sidecar parity for the Wave A migrations (0083-0088): an 0082
+// PostgreSQL sidecar parity for the Wave A migrations (0083-0089): an 0082
 // schema upgraded by the sidecars must equal the fresh schema compiled from
 // the canonical SQLite chain (columns, constraints, indexes, triggers and
 // trigger functions), and the upgrade must backfill the fulfilment ledger and
@@ -22,6 +22,7 @@ const WAVE_A_SIDECARS = [
   "0086_notification_outbox",
   "0087_on_sale_indexes",
   "0088_wave_a_contract",
+  "0089_wave_a_contract_columns",
 ] as const;
 
 const openClients: Array<() => Promise<void>> = [];
@@ -116,7 +117,8 @@ async function rejects(client: Client, sql: string, pattern: RegExp): Promise<vo
 describe.runIf(postgresUrl)("Wave A PostgreSQL sidecars", () => {
   it("upgrade an 0082 schema to exactly the fresh schema", async () => {
     const [fresh, before] = await Promise.all([
-      compileCanonicalPostgresSchema(),
+      // The fresh 0086 schema: later migrations have sidecar tests of their own.
+      compileCanonicalPostgresSchema({ beforeMigration: "0087_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0083_" }),
     ]);
     const freshDatabase = await database(fresh.sql);
@@ -211,7 +213,7 @@ describe.runIf(postgresUrl)("Wave A PostgreSQL sidecars", () => {
     await client.query("ROLLBACK");
   }, 120_000);
 
-  it("0088: record the previous API's unrecorded sends, bound returns by the ledger and drop the replaced tables", async () => {
+  it("0088-0089: record the previous API's unrecorded sends, bound returns by the ledger, drop the replaced tables and columns", async () => {
     const before = await compileCanonicalPostgresSchema({ beforeMigration: "0088_" });
     const client = await database(before.sql);
     await client.query("SET session_replication_role = replica"); // seed without parents
@@ -232,6 +234,7 @@ describe.runIf(postgresUrl)("Wave A PostgreSQL sidecars", () => {
       UPDATE order_fulfillments SET status = 'voided', voided_at = 1 WHERE id = 'ful_mig_ord_1';
     `);
     await applySidecars(client, ["0088_wave_a_contract"]);
+    // (The item_back status and counts below are what the previous API left; 0089 drops them.)
 
     expect((await client.query(
       "SELECT id, fulfillment_id, order_item_id, quantity FROM order_fulfillment_lines WHERE id LIKE 'fln_mig2_%'",
@@ -263,5 +266,18 @@ describe.runIf(postgresUrl)("Wave A PostgreSQL sidecars", () => {
       VALUES ('rl_ok', 'ret_1', 'ord_1', 'item_gap', 2, 0)
     `);
     await client.query("ROLLBACK");
+
+    await applySidecars(client, ["0089_wave_a_contract_columns"]);
+    expect((await client.query(`
+      SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND (table_name, column_name) IN (
+        ('order_items', 'shipped_quantity'), ('order_items', 'fulfillment_status'),
+        ('delivery_shipments', 'shipment_items'), ('order_support_requests', 'message')
+      )
+    `)).rows).toEqual([]);
+    expect((await client.query("SELECT id, quantity, fulfilled_quantity FROM order_items ORDER BY id")).rows).toEqual([
+      { id: "item_back", quantity: 2, fulfilled_quantity: 0 },
+      { id: "item_gap", quantity: 3, fulfilled_quantity: 2 },
+    ]);
   }, 120_000);
 });

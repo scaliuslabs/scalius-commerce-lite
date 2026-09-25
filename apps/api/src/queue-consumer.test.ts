@@ -105,7 +105,10 @@ vi.mock("@scalius/core/integrations/whatsapp", () => ({
   sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
 }));
 
-vi.mock("@scalius/shared/currency", () => ({
+vi.mock("@scalius/shared/currency", async (importOriginal) => ({
+  // Inventory now loads the catalogue projections, whose money helpers read
+  // the real currency table at module load.
+  ...await importOriginal<typeof import("@scalius/shared/currency")>(),
   getDecimalPlaces: mocks.getDecimalPlaces,
 }));
 

@@ -3,7 +3,7 @@
  *
  * A seed bundle is the catalog a fresh deployment needs in order to look like
  * the demo store, and nothing else. The allow-list below is the whole contract:
- * the exporter reads these fifteen tables in this exact order and never opens
+ * the exporter reads these sixteen tables in this exact order and never opens
  * any other table for export. Orders, customers, users, sessions, accounts,
  * settings, discounts, promotions, inventory ledgers, checkout state and the
  * FTS shadow tables are therefore unreachable by construction rather than by a
@@ -11,9 +11,14 @@
  *
  * The order is a dependency order: every foreign key an exported row carries
  * points at a table that appears earlier in the list (or at the same table, in
- * the case of `media.poster_media_id`). `seed.sql` emits its inserts in this
- * order so that a loader without deferred foreign keys still sees parents
- * before children.
+ * the case of `media.poster_media_id` and `categories.parent_id`). `seed.sql`
+ * emits its inserts in this order so that a loader without deferred foreign
+ * keys still sees parents before children.
+ *
+ * `category_closure` is deliberately absent: the category tree triggers
+ * rebuild it (with `depth` and `path`) from `categories.parent_id` as the rows
+ * load, which is why categories are exported parents first (see
+ * EXPORT_ROW_ORDER).
  */
 
 /** Bundle format identity, the sibling of `scalius-d1-migration-plan/v1`. */
@@ -45,6 +50,7 @@ export const EXPORTED_TABLES = Object.freeze([
   "media",
   "categories",
   "collections",
+  "brands",
   "product_attributes",
   "products",
   "product_media",
@@ -66,6 +72,15 @@ export const EXPORTED_TABLES = Object.freeze([
  */
 export const EXPORT_ROW_FILTERS = Object.freeze({
   media: "\"status\" = 'ready'",
+});
+
+/**
+ * Row orders other than the primary key. A category is inserted only under a
+ * live parent (the tree's insert guard), so categories load by depth, roots
+ * first; ties keep the deterministic primary-key order.
+ */
+export const EXPORT_ROW_ORDER = Object.freeze({
+  categories: "\"depth\"",
 });
 
 /**

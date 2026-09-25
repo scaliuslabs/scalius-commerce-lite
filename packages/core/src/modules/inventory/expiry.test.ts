@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
 import { releaseExpiredReservations } from "./expiry";
+
+// The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
 
 type ExpiredReservation = {
   variantId: string;
