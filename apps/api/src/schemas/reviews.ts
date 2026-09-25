@@ -100,6 +100,14 @@ export const reviewableLineSchema = z.object({
   fulfilledAt: iso.nullable(),
 }).openapi("ReviewableLine");
 
+/** The product page's review call to action for the signed-in buyer (the line is resolved server-side). */
+export const buyerProductReviewStateSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("eligible"), orderItemId: z.string(), displayName: z.string() }),
+  z.object({ state: z.literal("reviewed"), review: buyerReviewSchema }),
+  z.object({ state: z.literal("ineligible") }),
+  z.object({ state: z.literal("disabled") }),
+]).openapi("BuyerProductReviewState");
+
 export const buyerReviewsResponseSchema = z.object({
   /** Lines waiting for a review (one per product). */
   toReview: z.array(reviewableLineSchema),
