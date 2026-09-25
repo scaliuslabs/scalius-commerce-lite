@@ -38,4 +38,14 @@ describe("product buy form", () => {
       /const buyForm =\s*state\.buyerInputs\?\.form \?\?\s*document\.querySelector<HTMLFormElement>\("form\[data-product-buy-form\]"\);\s*buyForm\?\.addEventListener\("submit", \(event\) => \{\s*event\.preventDefault\(\);/,
     );
   });
+
+describe("product page metadata price", () => {
+  // Regression: og:price and the Product offer used the cheapest SKU while the
+  // buy box opened on another one at a different price.
+  it("reads the buy box's own opening choice", () => {
+    const page = read("../../pages/products/[slug].astro");
+    expect(page).toMatch(/const buyerPricingVariants = initialVariantPresentation\(/);
+    expect(summary).toMatch(/\} = initialVariantPresentation\(options, variants, initialVariant, initialUnavailableVariant\);/);
+  });
+});
 });
