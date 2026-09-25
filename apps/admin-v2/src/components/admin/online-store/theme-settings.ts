@@ -1,6 +1,9 @@
 import {
+  STOREFRONT_BANGLA_FONTS,
+  STOREFRONT_FONTS,
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
+  STOREFRONT_TYPE_PAIRING_SPECS,
   isStorefrontThemeHexColor,
   listStorefrontThemeDocumentContrastProblems,
   resolveStorefrontTheme,
@@ -13,6 +16,8 @@ import {
   type StorefrontThemeColorKey,
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
+  type StorefrontThemeTokens,
+  type StorefrontTypePairing,
 } from "@scalius/shared/storefront-theme";
 
 /**
@@ -238,4 +243,66 @@ export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemp
 /** A template's complete document: blocks, tokens, colours and homepage sections. */
 export function applyTemplate(id: StorefrontTemplateId): StorefrontThemeDocument {
   return storefrontTemplateTheme(id);
+}
+
+// ─── Typography ───────────────────────────────────────────────────────────
+
+/** The type tokens the Typography card sets together. */
+export const TYPE_TOKEN_KEYS = ["typography", "typeScale", "headingCase"] as const;
+export type TypeTokenKey = (typeof TYPE_TOKEN_KEYS)[number];
+export type TypeTokens = Pick<StorefrontThemeTokens, TypeTokenKey>;
+
+/** The type tokens of the template the theme is based on. */
+export function templateTypeTokens(theme: StorefrontThemeDocument): TypeTokens {
+  const { tokens } = storefrontTemplateTheme(theme.template);
+  return { typography: tokens.typography, typeScale: tokens.typeScale, headingCase: tokens.headingCase };
+}
+
+/** True while the theme's type tokens are its template's. */
+export function typeTokensAreTemplateDefault(theme: StorefrontThemeDocument): boolean {
+  const defaults = templateTypeTokens(theme);
+  return TYPE_TOKEN_KEYS.every((key) => theme.tokens[key] === defaults[key]);
+}
+
+/** The document with some type tokens set. */
+export function setTypeTokens(theme: StorefrontThemeDocument, next: Partial<TypeTokens>): StorefrontThemeDocument {
+  return { ...theme, tokens: { ...theme.tokens, ...next } };
+}
+
+/** The document with its template's type tokens back. */
+export function resetTypeTokens(theme: StorefrontThemeDocument): StorefrontThemeDocument {
+  return setTypeTokens(theme, templateTypeTokens(theme));
+}
+
+/**
+ * The name a storefront family is registered under in the dashboard, so the
+ * previews never replace the dashboard's own Inter or Noto Sans Bengali.
+ */
+export function previewFamily(family: string): string {
+  return `Preview ${family}`;
+}
+
+export interface TypePairingPreview {
+  heading: { family: string; stack: string; weight: number };
+  body: { family: string; stack: string };
+  /** The Bengali family Bangla text falls through to. */
+  bangla: string;
+}
+
+/**
+ * What a pairing draws with, as the storefront's token CSS stacks it (Latin
+ * face, then the pairing's Bengali face, then the fallbacks), under the
+ * preview names. Until the picker registers the faces, the stacks fall back
+ * to the fallbacks without downloading anything.
+ */
+export function typePairingPreview(pairing: StorefrontTypePairing): TypePairingPreview {
+  const spec = STOREFRONT_TYPE_PAIRING_SPECS[pairing];
+  const bangla = STOREFRONT_BANGLA_FONTS[spec.bangla];
+  const stack = (font: keyof typeof STOREFRONT_FONTS) =>
+    `"${previewFamily(STOREFRONT_FONTS[font].family)}", "${previewFamily(bangla.family)}", ${STOREFRONT_FONTS[font].fallback}, ${bangla.fallback}`;
+  return {
+    heading: { family: STOREFRONT_FONTS[spec.heading].family, stack: stack(spec.heading), weight: spec.headingWeight },
+    body: { family: STOREFRONT_FONTS[spec.body].family, stack: stack(spec.body) },
+    bangla: bangla.family,
+  };
 }

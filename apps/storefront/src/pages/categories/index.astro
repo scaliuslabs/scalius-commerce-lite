@@ -1,0 +1,302 @@
+---
+// src/pages/categories/index.astro
+// Every category a buyer can reach, as one directory (Amazon's "All
+// departments"): each department with its sub-categories and their own,
+// top levels first. The header's surfaces show part of the tree and end in
+// "All categories" here, so any category is at most two clicks from any
+// page. The same reachable tree as the header (published, every ancestor
+// published, leading to a public product), bounded by the API.
+import Layout from "@/layouts/Layout.astro";
+import { getCategoryNavigation } from "@/lib/api";
+import { loadPageWithLayout } from "@/lib/page-data";
+import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { navigationFromCategoryTree } from "@/components/header/nav-tree";
+import { navigationChildren } from "@/components/header/navigation-state";
+
+
+const { layoutData, pageData: tree } = await loadPageWithLayout(() => getCategoryNavigation());
+if (!layoutData || !tree) {
+  const response = storefrontDataUnavailableResponse("We could not load the categories. Please try again shortly.");
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+
+const departments = navigationFromCategoryTree(tree.nodes);
+const total = tree.nodes.length;
+const title = "All categories";
+const description = departments.length > 0
+  ? `Shop ${departments.slice(0, 6).map((item) => item.title).join(", ")}${departments.length > 6 ? " and more" : ""}.`
+  : "Browse every category in the store.";
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/categories");
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const breadcrumbJsonLd = canonicalUrl && storefrontUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${storefrontUrl}/` },
+        { "@type": "ListItem", position: 2, name: title, item: canonicalUrl },
+      ],
+    })
+  : null;
+// A short jump list once the directory is long enough to scroll through.
+const jumpList = departments.length > 8;
+const anchor = (index: number) => `department-${index + 1}`;
+---
+
+<Layout title={title} description={description} layoutData={layoutData} canonicalUrl={canonicalUrl ?? undefined}>
+  <Fragment slot="head">
+    {breadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />}
+  </Fragment>
+
+  <div class="cat-index">
+    <nav class="cat-index-crumbs" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/">Home</a></li>
+        <li aria-current="page">{title}</li>
+      </ol>
+    </nav>
+    <header class="cat-index-head">
+      <h1>{title}</h1>
+      {total > 0 && <p>{departments.length} departments · {total} categories</p>}
+    </header>
+
+    {
+      departments.length === 0 ? (
+        <p class="cat-index-empty">
+          No categories yet. <a href="/search">Browse all products</a>
+        </p>
+      ) : (
+        <>
+          {jumpList && (
+            <nav class="cat-index-jump" aria-label="Departments">
+              <ul>
+                {departments.map((department, index) => (
+                  <li>
+                    <a href={`#${anchor(index)}`}>{department.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+          <div class="cat-index-grid">
+            {departments.map((department, index) => {
+              const groups = navigationChildren(department);
+              return (
+                <section class="cat-index-department" id={anchor(index)} aria-labelledby={`${anchor(index)}-title`}>
+                  <h2 id={`${anchor(index)}-title`}>
+                    <a href={department.href}>{department.title}</a>
+                  </h2>
+                  {groups.length > 0 && (
+                    <ul class="cat-index-groups">
+                      {groups.map((group) => {
+                        const leaves = navigationChildren(group);
+                        return (
+                          <li>
+                            <a class="cat-index-group" href={group.href}>
+                              {group.title}
+                            </a>
+                            {leaves.length > 0 && (
+                              <ul class="cat-index-leaves">
+                                {leaves.map((leaf) => (
+                                  <li>
+                                    <a href={leaf.href}>{leaf.title}</a>
+                                    {navigationChildren(leaf).length > 0 && (
+                                      <ul class="cat-index-leaves">
+                                        {navigationChildren(leaf).map((deepest) => (
+                                          <li>
+                                            <a href={deepest.href}>{deepest.title}</a>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+          {tree.truncated && (
+            <p class="cat-index-note">Deeper categories are listed on each department's page.</p>
+          )}
+        </>
+      )
+    }
+  </div>
+</Layout>
+
+<style>
+  .cat-index {
+    width: 100%;
+    max-width: var(--theme-container-width, 80rem);
+    margin-inline: auto;
+    padding: 1rem 1rem 3rem;
+  }
+
+  @media (min-width: 40rem) {
+    .cat-index {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-index {
+      padding-inline: 2rem;
+    }
+  }
+
+  .cat-index-crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+  }
+
+  .cat-index-crumbs li + li::before {
+    content: "/";
+    margin-right: 0.375rem;
+  }
+
+  .cat-index-crumbs a:hover {
+    color: var(--foreground);
+    text-decoration: underline;
+  }
+
+  .cat-index-head {
+    margin: 0.75rem 0 1.25rem;
+  }
+
+  .cat-index-head h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .cat-index-head p {
+    margin-top: 0.25rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  .cat-index-jump ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .cat-index-jump a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0.25rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+  }
+
+  .cat-index-jump a:hover {
+    border-color: var(--foreground);
+  }
+
+  /* Departments flow in columns (Amazon's directory), each kept whole. */
+  .cat-index-grid {
+    columns: 1;
+    column-gap: 2rem;
+  }
+
+  @media (min-width: 40rem) {
+    .cat-index-grid {
+      columns: 2;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-index-grid {
+      columns: 4;
+    }
+  }
+
+  .cat-index-department {
+    break-inside: avoid;
+    margin-bottom: 1.75rem;
+    scroll-margin-top: calc(var(--header-height, 4rem) + 1rem);
+  }
+
+  .cat-index-department h2 {
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .cat-index-groups {
+    margin-top: 0.5rem;
+  }
+
+  .cat-index-groups a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .cat-index-group {
+    font-weight: 600;
+  }
+
+  .cat-index-leaves {
+    margin: 0 0 0.25rem 0.75rem;
+    padding-left: 0.625rem;
+    border-left: 1px solid var(--border);
+  }
+
+  .cat-index-leaves a {
+    color: var(--muted-foreground);
+  }
+
+  .cat-index-department a:hover,
+  .cat-index-leaves a:hover {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .cat-index-department a:focus-visible,
+  .cat-index-jump a:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+  }
+
+  @media (pointer: coarse) {
+    .cat-index-groups a {
+      min-height: 2.75rem;
+    }
+  }
+
+  .cat-index-note,
+  .cat-index-empty {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  .cat-index-empty a {
+    color: var(--foreground);
+    text-decoration: underline;
+  }
+</style>

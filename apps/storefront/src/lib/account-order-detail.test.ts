@@ -323,7 +323,8 @@ describe("account order detail", () => {
     api.getCustomerOrderDetail.mockResolvedValueOnce({ success: false, status: 404, error: "Order not found" });
     await loadOrderDetail();
     expect(text("orderErrorTitle")).toBe("Order not found");
-    expect(document.getElementById("orderRetry")?.classList.contains("hidden")).toBe(true);
+    // The attribute, not the class: `inline-flex` on the button outranks `.hidden`.
+    expect(document.getElementById("orderRetry")?.hidden).toBe(true);
   });
 
   it("puts the lines that are still for sale back in the cart at today's price", async () => {
@@ -372,6 +373,7 @@ describe("account order detail", () => {
     await loadOrderDetail();
     expect(document.getElementById("orderError")?.classList.contains("hidden")).toBe(false);
     expect(text("orderErrorMessage")).toBe("We couldn't reach the store. Check your connection and try again.");
+    expect(document.getElementById("orderRetry")?.hidden).toBe(false);
     api.getCustomerOrderDetail.mockResolvedValueOnce({ success: true, detail: detail() });
     document.getElementById("orderRetry")!.click();
     await vi.waitFor(() => expect(document.getElementById("orderContent")?.classList.contains("hidden")).toBe(false));

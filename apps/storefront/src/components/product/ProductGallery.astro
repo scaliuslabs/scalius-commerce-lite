@@ -524,9 +524,9 @@ const initialImageAlt =
 </div>
 
 <style>
-  #product-gallery {
-    contain: layout style;
-  }
+  /* No `contain` on #product-gallery: layout/paint containment makes it the
+     containing block and stacking context of the fixed zoom dialog below,
+     which then opened inside the photo box under the header on phones. */
   .thumbnail-btn {
     contain: layout style paint;
   }

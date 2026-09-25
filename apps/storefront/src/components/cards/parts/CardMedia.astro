@@ -1,26 +1,43 @@
 ---
-// The card photo box every card variant shares. Its ratio and fit are the
-// theme's image tokens (theme-foundation.css), so the box has its final size
-// before any photo loads (CLS 0). A product without a photo shows its
-// initial on the muted surface in the same box, never a collapsed tile.
-import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+// The card photo box every card variant shares. Its size is fixed before
+// any photo loads (CLS 0): the standard card follows the theme's ratio and
+// fit tokens, every other card its own look (theme-cards.css). A product
+// without a photo shows its initial on the muted surface in the same box,
+// never a collapsed tile.
+//
+// The hover photo is not in the HTML: the box names it (`data-hover-src`),
+// and a small script fetches it at the card's own width when the pointer
+// reaches the card (or on idle for cards already on screen), decodes it and
+// only then fades it in. No hover bytes before intent below the fold, and
+// never a fade over an empty image.
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, type ProductCardModel } from "../card-model";
+import type { ProductCardModel } from "../card-model";
 
 interface Props {
   model: ProductCardModel;
-  ratio: StorefrontImageRatio;
   sizes: string;
   loading: ProductCardImageLoading;
+  /** Intrinsic width and height (the box's ratio). */
+  dimensions: { width: number; height: number };
   /** The discount pill on the photo, when the card puts it there. */
   badge: string | null;
+  /** Extra classes for the box (the standard card keeps its own). */
+  class?: string;
 }
 
-const { model, ratio, sizes, loading, badge } = Astro.props;
-const { width, height } = CARD_IMAGE_DIMENSIONS[ratio];
+const { model, sizes, loading, dimensions, badge, class: className } = Astro.props;
+const { width, height } = dimensions;
+const hover = model.image ? model.hoverImage : null;
+// Hooks for the variants' own badge drawing (the standard card's markup stays as it was).
+const own = className !== undefined;
 ---
 
-<div class="product-card-media relative overflow-hidden bg-muted">
+<div
+  class:list={["product-card-media relative overflow-hidden", className ?? "bg-muted"]}
+  data-hover-src={hover?.src}
+  data-hover-srcset={hover?.srcset}
+  data-hover-sizes={hover ? sizes : undefined}
+>
   {
     model.image ? (
       <img
@@ -41,34 +58,18 @@ const { width, height } = CARD_IMAGE_DIMENSIONS[ratio];
       </div>
     )
   }
-  {
-    model.hoverImage && (
-      <img
-        src={model.hoverImage.src}
-        srcset={model.hoverImage.srcset}
-        sizes={sizes}
-        alt=""
-        aria-hidden="true"
-        width={width}
-        height={height}
-        loading="lazy"
-        decoding="async"
-        class="product-card-photo product-card-hover-image absolute inset-0 hidden h-full w-full object-center opacity-0 group-hover:opacity-100"
-      />
-    )
-  }
 
-  <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+  <div class:list={[own && "product-card-badges", "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"]}>
     {
       badge && (
-        <span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">
+        <span data-card-discount class:list={[own && "product-card-badge", "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"]}>
           {badge}
         </span>
       )
     }
     {
       model.soldOut && (
-        <span class="px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border">
+        <span data-card-sold-out={own ? "" : undefined} class:list={[own && "product-card-badge", "px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border"]}>
           Sold out
         </span>
       )
@@ -76,3 +77,63 @@ const { width, height } = CARD_IMAGE_DIMENSIONS[ratio];
   </div>
   <slot />
 </div>
+
+<script>
+  // One listener for every card on the page (Astro bundles this once).
+  const BOX = "[data-hover-src]";
+  const started = new WeakSet<HTMLElement>();
+
+  function reveal(box: HTMLElement) {
+    if (started.has(box)) return;
+    started.add(box);
+    const src = box.dataset.hoverSrc;
+    if (!src) return;
+    const photo = box.querySelector<HTMLImageElement>("img.product-card-photo");
+    const image = document.createElement("img");
+    image.className = "product-card-photo product-card-hover-image";
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+    image.decoding = "async";
+    if (photo) {
+      image.width = photo.width;
+      image.height = photo.height;
+    }
+    if (box.dataset.hoverSrcset) {
+      image.sizes = box.dataset.hoverSizes ?? "";
+      image.srcset = box.dataset.hoverSrcset;
+    }
+    image.src = src;
+    image.decode().then(
+      () => {
+        box.append(image);
+        box.dataset.hoverReady = "";
+      },
+      () => undefined,
+    );
+  }
+
+  const canHover = window.matchMedia("(hover: hover) and (pointer: fine)");
+  document.addEventListener(
+    "pointerover",
+    (event) => {
+      if (event.pointerType !== "mouse" || !(event.target instanceof Element)) return;
+      const box = event.target.closest('[data-theme-component="product-card"]')?.querySelector<HTMLElement>(BOX);
+      if (box) reveal(box);
+    },
+    { passive: true },
+  );
+
+  // Cards already on screen get theirs when the page is idle, so the first
+  // hover is instant; cards below the fold wait for the pointer.
+  function warmVisible() {
+    if (!canHover.matches) return;
+    for (const box of document.querySelectorAll<HTMLElement>(BOX)) {
+      const { top, bottom } = box.getBoundingClientRect();
+      if (bottom > 0 && top < window.innerHeight) reveal(box);
+    }
+  }
+  const whenIdle = (task: () => void) =>
+    "requestIdleCallback" in window ? window.requestIdleCallback(task, { timeout: 3000 }) : window.setTimeout(task, 1500);
+  if (document.readyState === "complete") whenIdle(warmVisible);
+  else window.addEventListener("load", () => whenIdle(warmVisible), { once: true });
+</script>

@@ -1,0 +1,442 @@
+---
+// Checkout without JavaScript. `/buy/<slug>` posts its quick-buy line here
+// when scripts are off; every step is a POST that answers with the next thing
+// the order needs, then the API's reviewed total, then a cash-on-delivery
+// order (lib/checkout/quick-checkout.ts). Private and never cached.
+import Layout from "@/layouts/Layout.astro";
+import CheckoutHeader from "@/components/CheckoutHeader.astro";
+import CheckoutProgress from "@/components/CheckoutProgress.astro";
+import {
+  getActiveCheckoutLanguage,
+  getCheckoutConfig,
+  getCities,
+  getLayoutData,
+  getShippingMethods,
+  getZones,
+  type CheckoutLanguageData,
+  type LocationData,
+  type ShippingMethod,
+} from "@/lib/api";
+import { processOrder } from "@/lib/cart/server";
+import { describeRejectedCode } from "@/lib/cart/discount-panel";
+import { formatMoney } from "@/lib/currency";
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
+import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
+import {
+  chooseQuickCheckoutRate,
+  QUICK_CHECKOUT_MAX_BODY_BYTES,
+  quickCheckoutFieldErrors,
+  quickCheckoutMode,
+  quickCheckoutOrderForm,
+  quickCheckoutQuoteInput,
+  readQuickCheckoutForm,
+  readQuickCheckoutLines,
+  type QuickCheckoutFieldError,
+} from "@/lib/checkout/quick-checkout";
+import {
+  fetchQuickCheckoutQuote,
+  fetchQuickCheckoutRates,
+} from "@/lib/checkout/quick-checkout-server";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+} from "@scalius/shared/checkout-language";
+import {
+  formatCheckoutLanguageText,
+  formatDiscountLineLabel,
+} from "@scalius/shared/checkout-language-format";
+
+export const prerender = false;
+
+Astro.response.headers.set("Cache-Control", "private, no-store");
+if (Astro.request.method !== "POST") {
+  return Astro.redirect("/cart", 303);
+}
+if (shouldRejectCrossOriginCookieRequest(Astro.request)) {
+  return new Response(null, { status: 403 });
+}
+const contentType = Astro.request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase();
+if (contentType !== "application/x-www-form-urlencoded" && contentType !== "multipart/form-data") {
+  return new Response(null, { status: 415 });
+}
+const contentLength = Number(Astro.request.headers.get("Content-Length") ?? "0");
+if (Number.isFinite(contentLength) && contentLength > QUICK_CHECKOUT_MAX_BODY_BYTES) {
+  return new Response(null, { status: 413 });
+}
+let posted: FormData;
+try {
+  posted = await Astro.request.formData();
+} catch {
+  return new Response(null, { status: 400 });
+}
+const form = readQuickCheckoutForm(posted);
+const lines = readQuickCheckoutLines(form.cartItems);
+if (!lines) {
+  return Astro.redirect("/cart", 303);
+}
+
+const [layoutData, checkoutConfig, languageResponse, allRatesResponse, citiesResponse] = await Promise.all([
+  getLayoutData(),
+  getCheckoutConfig(),
+  getActiveCheckoutLanguage(),
+  getShippingMethods(),
+  getCities(),
+]);
+const lang: CheckoutLanguageData = languageResponse ?? {
+  id: "fallback",
+  name: "English (Fallback)",
+  code: "en",
+  languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
+  fieldVisibility: { showEmailField: true, showOrderNotesField: true, showAreaField: true },
+  isActive: true,
+  isDefault: true,
+};
+const copy = lang.languageData;
+const allRates: ShippingMethod[] = allRatesResponse ?? [];
+const cities: LocationData[] = citiesResponse ?? [];
+const codAvailable =
+  checkoutConfig.unavailable !== true &&
+  checkoutConfig.gateways.some((gateway) => gateway.flow === "cod" || gateway.id === "cod");
+const offersPickup = allRates.some((rate) => rate.kind === "pickup");
+const offersDelivery = allRates.some((rate) => rate.kind !== "pickup") && cities.length > 0;
+const mode = quickCheckoutMode(lines, form, offersPickup, offersDelivery);
+
+// The address as far as it is still valid: a city that is gone clears it, a
+// thana from another city (the buyer changed city) is asked for again.
+if (!cities.some((city) => city.id === form.city)) form.city = "";
+const zones: LocationData[] = mode === "delivery" && form.city ? (await getZones(form.city)) ?? [] : [];
+if (!zones.some((zone) => zone.id === form.zone)) form.zone = "";
+
+let rates: ShippingMethod[] = [];
+let ratesFailed = false;
+if (mode === "pickup") {
+  rates = allRates.filter((rate) => rate.kind === "pickup");
+} else if (mode === "delivery" && form.city && form.zone) {
+  const addressRates = await fetchQuickCheckoutRates(form.city, form.zone);
+  ratesFailed = addressRates === null;
+  rates = (addressRates ?? []).filter((rate) => rate.kind !== "pickup");
+}
+const rateId = mode === "none" ? "" : chooseQuickCheckoutRate(rates, form.shippingLocation);
+
+const customerSessionToken = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie"));
+const quoteInput = quickCheckoutQuoteInput(form, mode, rateId);
+const quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
+const quote = quoteResult?.ok ? quoteResult.quote : null;
+
+let errorMessage = "";
+let fieldErrors: QuickCheckoutFieldError[] = [];
+if (quoteResult && !quoteResult.ok) {
+  errorMessage = quoteResult.reason === "items"
+    ? quoteResult.message || copy.cartItemChangedText
+    : quoteResult.reason === "rate"
+      ? copy.deliveryRequiredText
+      : quoteResult.reason === "location"
+        ? copy.cityZoneRequiredText
+        : copy.taxVerificationFailedText;
+}
+if (!codAvailable) {
+  errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
+} else if (form.intent === "place" && !errorMessage) {
+  fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH);
+  if (checkoutConfig.guestCheckoutEnabled === false && !customerSessionToken) {
+    errorMessage = copy.signInToCheckoutText;
+  } else if (fieldErrors.length > 0) {
+    errorMessage = "";
+  } else if (!quote) {
+    errorMessage = mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
+  } else if (quote.quoteFingerprint !== form.expectedQuoteFingerprint) {
+    // The buyer places only the total they were shown.
+    errorMessage = copy.totalChangedReviewText;
+  } else {
+    const result = await processOrder(
+      quickCheckoutOrderForm(form, mode, rateId, quote),
+      {
+        customerSessionToken,
+        waitUntil: (promise) => Astro.locals.cfContext.waitUntil(promise),
+      },
+    );
+    if (result.success && "orderId" in result && result.orderId && "receiptToken" in result && result.receiptToken) {
+      const headers = new Headers({
+        Location: `/order-success?orderId=${encodeURIComponent(result.orderId)}`,
+        "Cache-Control": "private, no-store",
+      });
+      const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
+      if (receiptCookie) headers.append("Set-Cookie", receiptCookie);
+      return new Response(null, { status: 303, headers });
+    }
+    const resultError = "error" in result ? result.error : undefined;
+    errorMessage =
+      ("errorCode" in result && result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
+        ? copy.totalChangedReviewText
+        : typeof resultError === "string"
+          ? resultError
+          : resultError?.message) || copy.orderProcessingFailedText;
+  }
+}
+
+const fieldMessage: Record<QuickCheckoutFieldError, string> = {
+  customerName: copy.nameTooShortText,
+  customerPhone: copy.phoneInvalidText,
+  customerEmail: copy.emailInvalidText,
+  shippingAddress: formatCheckoutLanguageText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH }),
+  city: copy.cityZoneRequiredText,
+  zone: copy.zoneRequiredText,
+};
+const errorFor = (field: QuickCheckoutFieldError) => (fieldErrors.includes(field) ? fieldMessage[field] : "");
+
+const codeRejection = quote?.rejectedCodes.find((rejection) => rejection.code === form.discountCode);
+const codeApplied = Boolean(form.discountCode && quote?.discounts.some((line) => line.code === form.discountCode));
+const codeMessage = !form.discountCode || !quote
+  ? ""
+  : codeRejection
+    ? `${form.discountCode}: ${describeRejectedCode(codeRejection, copy)}`
+    : codeApplied
+      ? formatCheckoutLanguageText(copy.discountAppliedText, { code: form.discountCode })
+      : "";
+const deliveryDiscounts = quote?.discounts.filter((line) => line.shippingAmount > 0) ?? [];
+const deliveryCharged = quote
+  ? Math.max(0, quote.shippingAmount - deliveryDiscounts.reduce((sum, line) => sum + line.shippingAmount, 0))
+  : 0;
+const dueText = mode === "pickup" ? copy.dueAtPickupText : mode === "none" ? copy.dueAtServiceText : copy.dueOnDeliveryText;
+const rateLabel = (rate: ShippingMethod) =>
+  rate.fee === 0 ? copy.freeText : formatMoney(rate.fee);
+
+const labelClass = "mb-1 block text-sm font-medium text-foreground";
+const fieldClass =
+  "block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive";
+const errorClass = "mt-1 text-sm font-medium text-destructive";
+const secondaryButtonClass =
+  "inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+---
+
+<Layout
+  title={copy.pageTitle}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(lang.code)}
+  noindex
+  hideHeader
+  hideFooter
+>
+  <CheckoutHeader layoutData={layoutData} copy={copy} />
+  <div class="container mx-auto max-w-6xl px-4 pb-8 pt-5 sm:px-6 sm:pt-7">
+    <CheckoutProgress current="information" paymentRequired={false} copy={copy} />
+    <h1 class="sr-only">{copy.pageTitle}</h1>
+
+    {errorMessage && (
+      <div class="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">
+        {errorMessage}
+      </div>
+    )}
+
+    <form method="post" action="/checkout/quick" class="grid content-start gap-4 lg:grid-cols-12 lg:gap-8" novalidate>
+      {/* Enter in a text field only refreshes the page; placing is always a deliberate tap. */}
+      <button type="submit" name="intent" value="review" class="sr-only" tabindex="-1" aria-hidden="true">{copy.continueText}</button>
+      <input type="hidden" name="cartItems" value={form.cartItems} />
+      <input type="hidden" name="checkoutId" value={form.checkoutId} />
+      {quote && <input type="hidden" name="expectedQuoteFingerprint" value={quote.quoteFingerprint} />}
+
+      <div class="order-2 min-w-0 space-y-6 rounded-xl border border-border bg-card p-4 sm:p-5 lg:order-1 lg:col-span-7">
+        <section aria-labelledby="quickContactHeading" class="space-y-3">
+          <h2 id="quickContactHeading" class="text-base font-semibold text-foreground">{copy.contactHeadingText}</h2>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label for="customerName" class={labelClass}>{copy.customerNameLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+              <input id="customerName" name="customerName" type="text" autocomplete="name" maxlength="100" required value={form.customerName} placeholder={copy.customerNamePlaceholder} aria-invalid={errorFor("customerName") ? "true" : undefined} aria-describedby="customerName-error" class={fieldClass} />
+              {errorFor("customerName") && <p id="customerName-error" class={errorClass}>{errorFor("customerName")}</p>}
+            </div>
+            <div>
+              <label for="customerPhone" class={labelClass}>{copy.customerPhoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+              <input id="customerPhone" name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value={form.customerPhone} placeholder={copy.customerPhonePlaceholder} aria-invalid={errorFor("customerPhone") ? "true" : undefined} aria-describedby="customerPhone-help customerPhone-error" class={fieldClass} />
+              <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{copy.customerPhoneHelp}</p>
+              {errorFor("customerPhone") && <p id="customerPhone-error" class={errorClass}>{errorFor("customerPhone")}</p>}
+            </div>
+            {lang.fieldVisibility.showEmailField && (
+              <div class="sm:col-span-2">
+                <label for="customerEmail" class={labelClass}>{copy.customerEmailLabel}</label>
+                <input id="customerEmail" name="customerEmail" type="email" autocomplete="email" maxlength="254" value={form.customerEmail} placeholder={copy.customerEmailPlaceholder} aria-invalid={errorFor("customerEmail") ? "true" : undefined} class={fieldClass} />
+                {errorFor("customerEmail") && <p class={errorClass}>{errorFor("customerEmail")}</p>}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {mode === "none" ? (
+          <p class="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground" role="status">{copy.noDeliveryNeededText}</p>
+        ) : (
+          <section aria-labelledby="quickDeliveryHeading" class="space-y-3">
+            <h2 id="quickDeliveryHeading" class="text-base font-semibold text-foreground">{copy.deliveryHeadingText}</h2>
+            {offersPickup && offersDelivery && (
+              <fieldset class="space-y-2">
+                <legend class="sr-only">{copy.deliveryMethodLegendText}</legend>
+                <div class="grid grid-cols-2 gap-2">
+                  {([["delivery", copy.deliveryModeShipText], ["pickup", copy.deliveryModePickupText]] as const).map(([value, label]) => (
+                    <label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                      <input type="radio" name="deliveryMode" value={value} checked={mode === value} class="h-4 w-4 shrink-0 accent-primary" />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button>
+              </fieldset>
+            )}
+
+            {mode === "delivery" && (
+              <div class="space-y-3">
+                <div>
+                  <label for="shippingAddress" class={labelClass}>{copy.shippingAddressLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+                  <textarea id="shippingAddress" name="shippingAddress" rows={2} maxlength="500" autocomplete="street-address" required placeholder={copy.shippingAddressPlaceholder} aria-invalid={errorFor("shippingAddress") ? "true" : undefined} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.shippingAddress}</textarea>
+                  {errorFor("shippingAddress") && <p class={errorClass}>{errorFor("shippingAddress")}</p>}
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="quickCity" class={labelClass}>{copy.cityLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+                    <select id="quickCity" name="city" required autocomplete="address-level2" aria-invalid={errorFor("city") ? "true" : undefined} class={fieldClass}>
+                      <option value="">{copy.selectCityPlaceholder}</option>
+                      {cities.map((city) => <option value={city.id} selected={city.id === form.city}>{city.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label for="quickZone" class={labelClass}>{copy.zoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+                    <select id="quickZone" name="zone" required autocomplete="address-level3" disabled={zones.length === 0} aria-invalid={errorFor("zone") ? "true" : undefined} class={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-50`}>
+                      <option value="">{copy.selectZonePlaceholder}</option>
+                      {zones.map((zone) => <option value={zone.id} selected={zone.id === form.zone}>{zone.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {(errorFor("city") || errorFor("zone")) && <p class={errorClass}>{errorFor("city") || errorFor("zone")}</p>}
+                {!(form.city && form.zone) && (
+                  <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button>
+                    <p class="text-sm text-muted-foreground">{form.city ? copy.zoneRequiredText : copy.chooseAddressForDeliveryText}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(mode === "pickup" || (form.city && form.zone)) && (
+              <fieldset class="space-y-2">
+                <legend class="mb-2 block text-sm font-medium text-foreground">
+                  {mode === "pickup" ? copy.pickupLocationLabel : copy.shippingMethodLabel}
+                </legend>
+                {ratesFailed ? (
+                  <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsFailedText}</p>
+                ) : rates.length === 0 ? (
+                  <p class="text-sm text-muted-foreground" role="status">{copy.noDeliveryToAddressText}</p>
+                ) : (
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {rates.map((rate) => (
+                      <label class="flex cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 text-sm has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                        <input type="radio" name="shippingLocation" value={rate.id} checked={rate.id === rateId} class="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+                        <span class="min-w-0 flex-1">
+                          <span class="flex justify-between gap-2 font-medium text-foreground">
+                            <span>{rate.name}</span>
+                            <span class="shrink-0 tabular-nums">{rateLabel(rate)}</span>
+                          </span>
+                          {rate.kind === "pickup" && rate.pickupAddress && (
+                            <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress })}</span>
+                          )}
+                          {rate.kind === "pickup" && rate.pickupHours && (
+                            <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.pickupHoursText, { hours: rate.pickupHours })}</span>
+                          )}
+                          {rate.description && <span class="block text-muted-foreground">{rate.description}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </fieldset>
+            )}
+          </section>
+        )}
+
+        {lang.fieldVisibility.showOrderNotesField && (
+          <div>
+            <label for="notes" class={labelClass}>{copy.orderNotesLabel}</label>
+            <textarea id="notes" name="notes" rows={2} maxlength="500" placeholder={copy.orderNotesPlaceholder} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.notes}</textarea>
+          </div>
+        )}
+
+        {quote && codAvailable ? (
+          <div class="space-y-2">
+            <button type="submit" name="intent" value="place" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              {copy.placeOrderText} · {formatMoney(quote.totalAmount)}
+            </button>
+            <p class="text-center text-sm text-muted-foreground">{dueText}</p>
+          </div>
+        ) : (
+          <button type="submit" name="intent" value="review" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            {copy.continueText}
+          </button>
+        )}
+      </div>
+
+      <aside class="order-1 min-w-0 lg:order-2 lg:col-span-5" aria-labelledby="quickSummaryHeading">
+        <div class="overflow-hidden rounded-xl border border-border bg-card">
+          <div class="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <h2 id="quickSummaryHeading" class="text-lg font-semibold text-foreground">{copy.orderSummaryText}</h2>
+            <a href="/" class="text-sm font-medium text-foreground underline-offset-2 hover:underline">{copy.continueShoppingText}</a>
+          </div>
+          <ul class="divide-y divide-border px-4" role="list">
+            {(quote?.items ?? []).map((item) => (
+              <li class="flex justify-between gap-3 py-3 text-sm">
+                <div class="min-w-0">
+                  <p class="font-medium text-foreground">{item.productName}</p>
+                  {item.variantLabel && <p class="text-muted-foreground">{item.variantLabel}</p>}
+                  {item.properties.map((property) => (
+                    <p class="text-muted-foreground">{property.label}: {property.displayValue}</p>
+                  ))}
+                  <p class="text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: item.quantity })} × {formatMoney(item.unitPrice)}</p>
+                </div>
+                <p class="shrink-0 font-medium tabular-nums text-foreground">{formatMoney(item.unitPrice * item.quantity)}</p>
+              </li>
+            ))}
+            {!quote && lines.map((line) => (
+              <li class="flex justify-between gap-3 py-3 text-sm">
+                <p class="min-w-0 font-medium text-foreground">{line.name}</p>
+                <p class="shrink-0 text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: line.quantity })}</p>
+              </li>
+            ))}
+          </ul>
+          <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
+            {quote ? (
+              <>
+                <div class="flex justify-between text-muted-foreground"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{formatMoney(quote.subtotalAmount)}</span></div>
+                {quote.shippingMethod && (
+                  <div class="flex justify-between gap-3 text-muted-foreground">
+                    <span>{copy.shippingText}</span>
+                    <span class="text-right font-medium tabular-nums text-foreground">
+                      {deliveryCharged === 0 ? copy.freeText : formatMoney(deliveryCharged)}
+                      {deliveryDiscounts.length > 0 && ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})`}
+                    </span>
+                  </div>
+                )}
+                {quote.discounts.filter((line) => line.amount > 0).map((line) => (
+                  <div class="flex justify-between gap-3 text-primary"><span>{formatDiscountLineLabel(copy.discountText, line)}</span><span class="shrink-0 font-medium tabular-nums">-{formatMoney(line.amount)}</span></div>
+                ))}
+                {quote.taxMinor > 0 && (
+                  <div class="flex justify-between text-muted-foreground"><span>{quote.displayLabel}{quote.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span><span class="tabular-nums text-foreground">{formatMoney(quote.taxAmount)}</span></div>
+                )}
+                <div class="flex items-baseline justify-between border-t border-border pt-2">
+                  <span class="font-semibold text-foreground">{copy.totalText}</span>
+                  <span class="text-xl font-semibold tabular-nums text-foreground">{formatMoney(quote.totalAmount)}</span>
+                </div>
+              </>
+            ) : (
+              <p class="text-muted-foreground">{mode === "none" ? copy.calculatingText : copy.chooseAddressForDeliveryText}</p>
+            )}
+            <div class="pt-2">
+              <label for="discountCode" class="sr-only">{copy.discountCodePlaceholder}</label>
+              <div class="flex gap-2">
+                <input id="discountCode" name="discountCode" type="text" maxlength="50" autocomplete="off" autocapitalize="characters" value={form.discountCode} placeholder={copy.discountCodePlaceholder} class={`${fieldClass} min-w-0 flex-1`} />
+                <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.applyDiscountText}</button>
+              </div>
+              {codeMessage && <p class="mt-1.5 text-sm text-muted-foreground" role="status">{codeMessage}</p>}
+            </div>
+          </div>
+        </div>
+      </aside>
+    </form>
+  </div>
+</Layout>

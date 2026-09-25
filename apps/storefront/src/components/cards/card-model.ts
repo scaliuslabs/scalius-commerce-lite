@@ -1,68 +1,90 @@
 /**
  * What a product card shows, computed once for every card variant: prices,
  * the discount in each wording, the photo or its placeholder, the buy action
- * and the optional facts. Facts that later phases add to listing products
- * (brand, key specs, reviews, sold counts, pack size, EMI) are optional here
- * and render nothing until the data exists: a card never shows "0 sold" or
- * "(0) reviews".
+ * and the facts. Facts come from the listing's `cardFacts` (core
+ * catalog/card-facts.ts: brand, key specs, options, sales, pack size,
+ * delivery) and render nothing when the data is missing: a card never shows
+ * "0 sold", "(0) reviews" or a guessed colour.
  */
-import type { Product } from "@/lib/api";
+import type { Product, ProductCardFacts } from "@/lib/api";
 import { formatMoney, getDecimalPlaces } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import type {
   StorefrontCardRenderer,
   StorefrontCardSlot,
   StorefrontImageRatio,
 } from "@scalius/shared/storefront-theme";
+import { cssNamedColour } from "./css-colours";
 
-/** Card facts from later phases (brand entity, key-spec attributes, reviews, sales, EMI plans). */
-export interface ProductCardFacts {
-  brand?: { name: string } | null;
-  keySpecs?: readonly string[] | null;
+/** Facts no reader sends yet (reviews, EMI plans on cards); kept so the slots stay honest. */
+export interface ProductCardPendingFacts {
   rating?: { average: number; count: number } | null;
-  /** Units sold; shown only at SOLD_COUNT_MIN or more (owner decision, 2026-09-25). */
-  soldCount?: number | null;
-  packSize?: string | null;
   /** The lowest monthly EMI amount in major units, from the merchant's EMI plans. */
   emiMonthlyFrom?: number | null;
 }
 
-export type ProductCardProduct = Product & { secondaryImageUrl?: string | null } & ProductCardFacts;
+export type ProductCardProduct = Product & { secondaryImageUrl?: string | null } & ProductCardPendingFacts;
 
+/** Units sold in 30 days below which a card says nothing (owner decision, 2026-09-25; the API applies it too). */
 export const SOLD_COUNT_MIN = 10;
 export const KEY_SPECS_MAX = 4;
+export const SWATCHES_MAX = 5;
 
-/** Intrinsic `width`/`height` per image ratio token (the box's CSS ratio is the token). */
+/** Intrinsic `width`/`height` per image ratio token (the box's CSS ratio is the card's look). */
 export const CARD_IMAGE_DIMENSIONS = {
   square: { width: 400, height: 400 },
   portrait: { width: 400, height: 533 },
   landscape: { width: 400, height: 300 },
 } as const satisfies Record<StorefrontImageRatio, { width: number; height: number }>;
 
+/**
+ * The margin around a contained photo, as a share of its box width on each
+ * side (Star Tech 204px of 254, Daraz 200 of 250, Chaldal's small photo on a
+ * 194px tile, Amazon's grey well). Cover photos fill their box (0). The card
+ * CSS draws it (`--pc-inset`) and the image `sizes` shrink by it, so the
+ * rendition matches the width actually drawn.
+ */
+export const CARD_PHOTO_INSET: Readonly<Record<string, number>> = {
+  spec: 0.1,
+  "tech-rounded": 0.07,
+  marketplace: 0.1,
+  "quick-add": 0.13,
+  detailed: 0.05,
+};
+
 export interface ProductCardFactValues {
   brand: string | null;
   keySpecs: string[];
   rating: { average: string; count: number } | null;
+  /** Units sold in the last 30 days (10 or more). */
   sold: number | null;
   savings: string | null;
   packSize: string | null;
-  delivery: "free" | null;
+  /** "Free delivery", or the cheapest rate ("৳60"). */
+  delivery: { free: true } | { free: false; fee: string } | null;
   emi: string | null;
+  /** The first colour axis's values with a known colour (swatch attribute or CSS named colour). */
+  swatches: Array<{ label: string; colour: string }>;
+  /** "Options: 4 sizes": the size axis first, else the first axis; null without an axis of two or more. */
+  options: { label: string; count: number; noun: string } | null;
 }
 
 export interface ProductCardModel {
   name: string;
   href: string;
   soldOut: boolean;
-  /** Null when the product has no photo: the card shows the placeholder. */
+  /** Null when the product has no photo we may show on a card: the card shows the placeholder. */
   image: { src: string; srcset: string | undefined; alt: string } | null;
   /** The placeholder's letter: the name's first character. */
   monogram: string;
   hoverImage: { src: string; srcset: string | undefined } | null;
   price: {
     current: string;
+    /** The current price split for superscript layouts: symbol, whole units, fraction (may be ""). */
+    parts: { symbol: string; whole: string; fraction: string };
     /** The struck regular price, when discounted. */
     regular: string | null;
     prefix: "From " | "";
@@ -87,7 +109,7 @@ function firstCharacter(name: string): string {
 }
 
 function nonEmpty(value: string | null | undefined): string | null {
-  const text = typeof value === "string" ? value.trim() : "";
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
   return text || null;
 }
 
@@ -99,6 +121,76 @@ function amountOff(product: Product, money: (amount: number) => string, currency
   return saved > 0 ? money(fromMinor(saved, decimals)) : null;
 }
 
+/** "৳1,36,950.50" as symbol, whole units and fraction for a superscript price. */
+export function splitMoney(formatted: string, symbol: string): { symbol: string; whole: string; fraction: string } {
+  const negative = formatted.startsWith("-");
+  const unsigned = negative ? formatted.slice(1) : formatted;
+  const hasSymbol = symbol !== "" && unsigned.startsWith(symbol);
+  const digits = hasSymbol ? unsigned.slice(symbol.length) : unsigned;
+  const point = digits.lastIndexOf(".");
+  return {
+    symbol: hasSymbol ? symbol.trim() : "",
+    whole: `${negative ? "-" : ""}${point < 0 ? digits : digits.slice(0, point)}`,
+    fraction: point < 0 ? "" : digits.slice(point + 1),
+  };
+}
+
+/** A card photo: never one of our originals (up to 2400px, ~1MB) on a card. */
+function cardPhoto(url: string | null | undefined): string | null {
+  return hasProductImage(url) && !isUnrenderedMediaOriginal(url) ? url!.trim() : null;
+}
+
+/**
+ * "Options: 4 sizes", "Options: 3 colours"; any other axis keeps the
+ * merchant's name rather than a guessed plural ("Storage: 3 options").
+ */
+function optionNoun(option: ProductCardFacts["options"][number]): { label: string; count: number; noun: string } {
+  if (option.kind === "size") return { label: "Options:", count: option.count, noun: "sizes" };
+  if (option.kind === "color") return { label: "Options:", count: option.count, noun: "colours" };
+  return { label: `${option.name.trim()}:`, count: option.count, noun: "options" };
+}
+
+function cardFactValues(
+  facts: ProductCardFacts | undefined,
+  product: ProductCardProduct,
+  money: (amount: number) => string,
+  saved: string | null,
+): ProductCardFactValues {
+  const rating = product.rating;
+  const emi = product.emiMonthlyFrom ?? 0;
+  const sold = facts?.soldLast30Days ?? 0;
+  const options = facts?.options ?? [];
+  const colourAxis = options.find((option) => option.kind === "color");
+  const countedAxis = options.find((option) => option.kind === "size") ?? options[0];
+  const stored = facts?.delivery ?? null;
+  const delivery = product.freeDelivery || stored?.free === true
+    ? { free: true as const }
+    : stored && stored.free === false && stored.feeFrom > 0
+      ? { free: false as const, fee: money(stored.feeFrom) }
+      : null;
+  return {
+    brand: nonEmpty(facts?.brand?.name),
+    keySpecs: (facts?.keySpecs ?? [])
+      .map((spec) => spec.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, KEY_SPECS_MAX),
+    rating: rating && rating.count > 0 && rating.average > 0
+      ? { average: (Math.round(Math.min(rating.average, 5) * 10) / 10).toFixed(1), count: rating.count }
+      : null,
+    sold: sold >= SOLD_COUNT_MIN ? Math.floor(sold) : null,
+    savings: saved ? `Save ${saved}` : null,
+    packSize: nonEmpty(facts?.packSize),
+    delivery,
+    emi: emi > 0 ? `EMI from ${money(emi)}/month` : null,
+    swatches: (colourAxis?.swatches ?? []).flatMap((swatch) => {
+      const label = nonEmpty(swatch.label);
+      const colour = swatch.hex && /^#[0-9a-f]{6}$/i.test(swatch.hex) ? swatch.hex : cssNamedColour(label);
+      return label && colour ? [{ label, colour }] : [];
+    }).slice(0, SWATCHES_MAX),
+    options: countedAxis && countedAxis.count >= 2 ? optionNoun(countedAxis) : null,
+  };
+}
+
 export function productCardModel(
   product: ProductCardProduct,
   options: { currencySymbol: string; currencyCode: string; hoverImage: boolean; quickBuy: boolean },
@@ -106,31 +198,31 @@ export function productCardModel(
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode });
   const hasDiscount = product.discountedPrice < product.price;
   const soldOut = product.availableForSale === false;
-  const hasImage = hasProductImage(product.imageUrl);
+  const photo = cardPhoto(product.imageUrl);
+  const hoverPhoto = photo ? cardPhoto(product.secondaryImageUrl) : null;
   const saved = amountOff(product, money, options.currencyCode);
-  const rating = product.rating;
-  const soldCount = product.soldCount ?? 0;
-  const emi = product.emiMonthlyFrom ?? 0;
+  const current = money(product.discountedPrice);
   return {
     name: product.name,
     href: `/products/${product.slug}`,
     soldOut,
-    image: hasImage
+    image: photo
       ? {
-          src: getProductImageUrl(product.imageUrl, 480),
-          srcset: getProductImageSrcSet(product.imageUrl),
+          src: getProductImageUrl(photo, 480),
+          srcset: getProductImageSrcSet(photo),
           alt: product.imageAlt || product.name,
         }
       : null,
     monogram: firstCharacter(product.name),
-    hoverImage: options.hoverImage && hasImage && hasProductImage(product.secondaryImageUrl)
+    hoverImage: options.hoverImage && hoverPhoto
       ? {
-          src: getProductImageUrl(product.secondaryImageUrl, 480),
-          srcset: getProductImageSrcSet(product.secondaryImageUrl),
+          src: getProductImageUrl(hoverPhoto, 480),
+          srcset: getProductImageSrcSet(hoverPhoto),
         }
       : null,
     price: {
-      current: money(product.discountedPrice),
+      current,
+      parts: splitMoney(current, options.currencySymbol),
       regular: hasDiscount ? money(product.price) : null,
       prefix: product.priceVaries ? "From " : "",
     },
@@ -141,21 +233,7 @@ export function productCardModel(
       ? `/buy/${encodeURIComponent(product.slug)}`
       : null,
     needsOptions: !soldOut && product.hasVariants,
-    facts: {
-      brand: nonEmpty(product.brand?.name),
-      keySpecs: (product.keySpecs ?? [])
-        .map((spec) => spec.trim())
-        .filter(Boolean)
-        .slice(0, KEY_SPECS_MAX),
-      rating: rating && rating.count > 0 && rating.average > 0
-        ? { average: (Math.round(Math.min(rating.average, 5) * 10) / 10).toFixed(1), count: rating.count }
-        : null,
-      sold: soldCount >= SOLD_COUNT_MIN ? Math.floor(soldCount) : null,
-      savings: saved ? `Save ${saved}` : null,
-      packSize: nonEmpty(product.packSize),
-      delivery: product.freeDelivery ? "free" : null,
-      emi: emi > 0 ? `EMI from ${money(emi)}/month` : null,
-    },
+    facts: cardFactValues(product.cardFacts, product, money, saved),
   };
 }
 
@@ -182,5 +260,15 @@ export function cardFactPresent(facts: ProductCardFactValues, slot: StorefrontCa
     case "pack-size": return facts.packSize !== null;
     case "delivery": return facts.delivery !== null;
     case "emi": return facts.emi !== null;
+    case "swatches": return facts.swatches.length > 0;
+    case "options": return facts.options !== null;
   }
+}
+
+/** Amazon's "1K+ bought in past month": rounded down, never above the real count. */
+export function boughtInPastMonth(sold: number): string {
+  if (sold >= 1000) return `${Math.floor(sold / 1000)}K+`;
+  if (sold >= 100) return `${Math.floor(sold / 100) * 100}+`;
+  if (sold >= 50) return "50+";
+  return `${Math.floor(sold / 10) * 10}+`;
 }

@@ -144,6 +144,8 @@ const categorySchemaDescription = category
     `Browse products in ${category.name}`
   : null;
 
+// Published ancestors, root first (the category itself is the last entry).
+const ancestors = (category.breadcrumb ?? []).filter((crumb) => crumb.id !== category.id);
 const categoryBreadcrumbJsonLd =
   category &&
   !category.noIndex &&
@@ -153,19 +155,16 @@ const categoryBreadcrumbJsonLd =
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: `${storefrontUrl}/`,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: category.name,
-            item: categoryUrl,
-          },
-        ],
+          { name: "Home", item: `${storefrontUrl}/` },
+          ...ancestors.map((crumb) => ({
+            name: crumb.name,
+            item: buildResourceCanonicalSeoUrl("category", `/categories/${crumb.slug}`, crumb.canonicalPath),
+          })),
+          { name: category.name, item: categoryUrl },
+        ]
+          // Never a relative or missing URL in discovery JSON-LD.
+          .filter((entry): entry is { name: string; item: string } => Boolean(entry.item))
+          .map((entry, index) => ({ "@type": "ListItem", position: index + 1, ...entry })),
       })
     : null;
 
@@ -226,6 +225,7 @@ const collectionJsonLd =
     }}
     hero={{
       title: category.name,
+      breadcrumb: ancestors.map((crumb) => ({ label: crumb.name, href: `/categories/${encodeURIComponent(crumb.slug)}` })),
       description: pagination.page === 1 ? categoryDescription : null,
       count: pagination.total,
       banner: category.imageUrl
@@ -246,6 +246,7 @@ const collectionJsonLd =
       currencyCode,
       listingName: category.name,
       subListings: catalogChildLinks(category),
+      listingTemplate: category.listingTemplate ?? null,
     }}
     content={!hasListingQuery && categoryContent ? { html: categoryContent, label: `${category.name} guide` } : null}
   >

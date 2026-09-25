@@ -200,7 +200,8 @@ describe("catalogue-scale query plans", () => {
         `);
         await project(db, queries);
         const small = await getStorefrontProducts(db, { page: 1, limit: 2 });
-        expect(small.facets.map((facet) => facet.slug)).toEqual(["maker"]);
+        // The shop-all categories the products sit in come first (the category-tree facet).
+        expect(small.facets.map((facet) => facet.slug)).toEqual(["category", "maker"]);
         expect(queries.filter((query) => query.sql.includes("product_facet_values")).length).toBe(1);
 
         // 2,001 public products: the unscoped count stops at the limit and the
@@ -258,7 +259,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(home.sections.lists[0]?.products.map((product) => product.id)).toEqual(["prod_b"]);
         const popularPlans = plans((sql) => sql.includes("product_sales_stats"));
-        expect(popularPlans.length).toBe(2); // the cards and their media
+        expect(popularPlans.length).toBe(3); // the cards, their media and their card facts
         for (const plan of popularPlans) {
             expect(plan).toContain("product_sales_stats_popular_idx");
             expect(plan).not.toMatch(/SCAN (orders|order_items|products|product_sales_stats)\b/);
@@ -555,7 +556,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(home.sections.lists[0]?.products.map((product) => product.id)).toEqual(["prod_sale_product", "prod_sale_sku"]);
         const onSalePlans = plans((sql) => sql.includes("sale_sku_product"));
-        expect(onSalePlans.length).toBe(2); // the cards and their media
+        expect(onSalePlans.length).toBe(3); // the cards, their media and their card facts
         for (const plan of onSalePlans) {
             expect(plan).toContain("products_on_sale_newest_idx");
             expect(plan).toContain("product_variants_on_sale_newest_idx");

@@ -22,6 +22,7 @@ import {
   storefrontSectionRenderer,
   storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
+  type StoreShape,
   type StorefrontBlockSlot,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
@@ -32,7 +33,8 @@ import {
   productGridFluidCss,
   productGridSpec,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS } from "@/components/cards/card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET } from "@/components/cards/card-model";
+import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
@@ -40,7 +42,7 @@ import {
   productGalleryThumbnailSlot,
 } from "@/components/product/lib/gallery-images";
 import { HEADER_SPECS, headerCondense, headerSpec } from "@/components/header/header-variants";
-import { buildNavMoreEntries } from "@/components/header/nav-disclosure";
+import { fitNavOverflow } from "@/components/header/nav-disclosure";
 import { HEADER_LINK_BUDGET } from "@/components/header/nav-tree";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
@@ -110,8 +112,9 @@ async function render(
   props: object,
   slots?: Record<string, string>,
   url = "https://shop.test/",
+  shape: StoreShape = STORE_SHAPE,
 ): Promise<string> {
-  const requestTheme = requestThemeFor(theme, STORE_SHAPE);
+  const requestTheme = requestThemeFor(theme, shape);
   return container.renderToString(await component(path), {
     props,
     slots,
@@ -585,7 +588,7 @@ describe("storefront theme render matrix", () => {
     expect(header.querySelector("[data-header-action-group] #account-link")).not.toBeNull();
     expect(header.querySelector("[data-header-action-group] #cart-button #cart-total-display")).not.toBeNull();
     expect(header.querySelector(".header-full-nav-row #desktop-nav[data-nav-style='menu']")).not.toBeNull();
-    // The condensed copy is made in the browser from the row (one set of links in the HTML).
+    // On scroll the row's menu itself moves into the bar (one set of links in the HTML).
     expect(header.hasAttribute("data-header-condense")).toBe(true);
     expect(header.querySelector("[data-nav-compact-from='desktop-nav']")!.children).toHaveLength(0);
     // The announcement bar precedes the header, as before.
@@ -719,35 +722,48 @@ function assertFooter(page: Document, variant: string, options: { business: bool
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
   const { layout, resolved } = requestThemeFor(theme, STORE_SHAPE);
   const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
-  const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
-  const firstRow = productGridFirstRow(grid, containerWidth);
   const card = layout.productCard;
+  // The standard card takes the theme's photo token; every other card its own look.
+  const grid = productGridSpec(layout.grid, card.imageRatio);
+  const firstRow = productGridFirstRow(grid, containerWidth);
+  const photoHeight = resolved.blocks.card.variant === "standard"
+    ? CARD_IMAGE_DIMENSIONS[card.imageRatio].height
+    : Math.round(400 / card.look.image.ratio);
   const cards = Array.from(document.querySelectorAll('[data-theme-component="product-card"]'));
   expect(cards).toHaveLength(Object.keys(CARD_PRODUCTS).length);
   const [onSale, withOptions, soldOut, plain] = cards as [Element, Element, Element, Element];
 
   cards.forEach((element, index) => {
-    // The resolved card variant, in the theme's photo ratio (a token).
+    // The resolved card variant, in its photo ratio (nearest token).
     expect(element.getAttribute("data-card-variant")).toBe(resolved.blocks.card.variant);
-    expect(element.getAttribute("data-card-ratio")).toBe(theme.tokens.imageRatio);
+    expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
     const media = element.querySelector(".product-card-media")!;
     const photo = media.querySelector("img")!;
-    // `sizes` follows the density's fluid grid within the container cap.
-    expect(photo.getAttribute("sizes")).toBe(productCardImageSizes(grid, containerWidth));
-    expect(photo.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
-    expect(photo.getAttribute("height")).toBe(String(CARD_IMAGE_DIMENSIONS[theme.tokens.imageRatio].height));
+    // `sizes` follows the density's fluid grid within the container cap; every
+    // card but standard asks for its photo's own width inside its margin, and
+    // DPR 3 phones for about 2x pixels.
+    const slot = productCardImageSizes(grid, containerWidth);
+    expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
+    const variant = resolved.blocks.card.variant;
+    expect(photo.getAttribute("sizes")).toBe(variant === "standard"
+      ? slot
+      : capSizesDensity(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0))));
+    expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
     expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : "auto");
-    // One link per card (the stretched title link) plus at most Buy now.
+    // One link per card (the stretched title link) plus at most Buy now (and Compare).
     const links = element.querySelectorAll("a");
-    expect(links.length).toBeLessThanOrEqual(2);
+    expect(links.length).toBeLessThanOrEqual(card.compare ? 3 : 2);
   });
 
-  // Hover photo only where the card shows one (and only with a second photo).
-  expect(Boolean(onSale.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
-  expect(Boolean(withOptions.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
-  expect(plain.querySelector(".product-card-hover-image")).toBeNull();
+  // Hover photo only where the card shows one (and only with a second
+  // photo): named on the photo box, fetched on intent, never in the HTML.
+  const hover = (element: Element) => element.querySelector(".product-card-media")!.hasAttribute("data-hover-src");
+  expect(hover(onSale)).toBe(card.hoverImage);
+  expect(hover(withOptions)).toBe(card.hoverImage);
+  expect(hover(plain)).toBe(false);
+  expect(onSale.querySelector(".product-card-hover-image")).toBeNull();
 
   // A buy action only on cards with one, only in stock without options; it
   // sits above the stretched card link. The card matrix
@@ -926,7 +942,7 @@ describe("navigation", () => {
     const railAlways = desktop === "departments-rail" && entry.desktop.settings.open === "always";
 
     // Dropdown and mega panels (the version 3 menus): one row, split link and
-    // button, "More" built in the browser from the row itself.
+    // button; row items that don't fit move into "More" in the browser.
     const v3 = desktop === "dropdown" || desktop === "mega-panel";
     expect(Boolean(page.querySelector("#desktop-nav"))).toBe(v3);
     const condensed = classic && desktop === "dropdown";
@@ -943,12 +959,10 @@ describe("navigation", () => {
       expect(popups.filter((button) => nav.contains(button))).toHaveLength(3);
       expect(nav.querySelector('a[href="/categories/women"]')!.getAttribute("aria-current")).toBe("true");
       expect(nav.querySelector('a[href="/sale"]')!.hasAttribute("aria-current")).toBe(false);
-      // The server sends no "More" copies; the browser builds them from the row.
+      // The server sends no "More" copies of row items: the browser moves them there.
       const list = nav.querySelector<HTMLElement>("[data-nav-overflow]")!;
-      expect(list.querySelector("[data-nav-more-index]")).toBeNull();
-      buildNavMoreEntries(list);
-      expect(nav.querySelector("#desktop-nav-more [data-nav-more-index='0'] a[href='/categories/sarees']")).not.toBeNull();
-      expect(nav.querySelector("#desktop-nav-more [data-nav-more-index='1']")!.textContent).toContain("Panjabi");
+      expect(list.querySelectorAll("#desktop-nav-more a")).toHaveLength(0);
+      assertOverflowMoves(list);
     }
     if (desktop === "dropdown") {
       // Third level nested under its parent inside the dropdown.
@@ -961,27 +975,28 @@ describe("navigation", () => {
       const women = page.querySelector("#desktop-nav-panel-0")!;
       const men = page.querySelector("#desktop-nav-panel-1")!;
       expect(women.classList.contains("mega-panel")).toBe(true);
-      // One column per second-level item, headed by its link, then its links.
+      // A second-level item with links is a column headed by its link;
+      // second-level items without links share plain columns.
       const columns = Array.from(women.querySelectorAll(".mega-column"));
-      expect(columns.map((column) => column.querySelector(".mega-column-title")!.textContent)).toEqual(["Sarees", "Kurtis"]);
+      expect(columns.map((column) => column.querySelector(".mega-column-title")?.textContent ?? null)).toEqual(["Sarees", null]);
+      expect(columns[1]!.querySelector('.mega-links a[href="/categories/kurtis"]')).not.toBeNull();
       const promo = entry.desktop.settings.promoImages === true;
-      const silk = columns[0]!.querySelector('a[href="/categories/silk-sarees"]')!;
-      // Promo tiles replace the text link of an item with a photo (same link count).
+      const silk = women.querySelector('a[href="/categories/silk-sarees"]')!;
+      // Promo tiles take a linked item with a photo out of its column (same link count).
       expect(silk.classList.contains("mega-promo-tile")).toBe(promo);
-      expect(columns[0]!.querySelectorAll('a[href="/categories/silk-sarees"]')).toHaveLength(1);
+      expect(women.querySelectorAll('a[href="/categories/silk-sarees"]')).toHaveLength(1);
       expect(columns[0]!.querySelector('.mega-links a[href="/categories/cotton-sarees"]')).not.toBeNull();
-      // Photos only where the category has one: small, lazy, decorative, fixed size.
-      expect(columns[0]!.querySelector(".mega-column-photo img")!.getAttribute("src")).toBe(image("sarees"));
-      expect(columns[1]!.querySelector("img")).toBeNull();
+      // Photos only in tiles: small, lazy, decorative, fixed size.
+      expect(women.querySelectorAll(".mega-panel img, img").length).toBe(promo ? 1 : 0);
       for (const photo of Array.from(page.querySelectorAll(".mega-panel img"))) {
         expect(photo.getAttribute("alt")).toBe("");
         expect(photo.getAttribute("loading")).toBe("lazy");
         expect(photo.getAttribute("width")).toBeTruthy();
         expect(photo.getAttribute("height")).toBeTruthy();
       }
-      // "Shop all" for a parent with a link (on its photo when it has one).
-      expect(women.querySelector(".mega-feature")!.getAttribute("href")).toBe("/categories/women");
-      expect(women.querySelector(".mega-feature")!.textContent).toContain("Shop all Women");
+      // "View all" closes a panel whose parent has a link.
+      expect(women.querySelector(".mega-foot .mega-shop-all")!.getAttribute("href")).toBe("/categories/women");
+      expect(women.querySelector(".mega-foot")!.textContent).toContain("View all Women");
       expect(men.querySelector(".mega-shop-all")).toBeNull();
     }
 
@@ -1009,11 +1024,10 @@ describe("navigation", () => {
       }
       // A parent without a link opens from its name.
       expect(nav.querySelector('[data-nav-index="1"] > details > summary')!.textContent).toContain("Men");
-      // "More" is built in the browser from the row.
+      // Row items that don't fit move into "More" in the browser.
       const list = nav.querySelector<HTMLElement>("[data-nav-overflow]")!;
-      buildNavMoreEntries(list);
-      expect(list.querySelector("[data-nav-more-index='0'] a[href='/categories/sarees']")).not.toBeNull();
-      expect(list.querySelector("[data-nav-more-index='1'] a[href='/categories/panjabi']")).not.toBeNull();
+      expect(list.querySelector("[data-nav-more-list] a")).toBeNull();
+      assertOverflowMoves(list);
     }
     // The category bar is the sticky row of a composed header.
     if (desktop === "sticky-category-bar" && !classic) {
@@ -1132,6 +1146,70 @@ describe("navigation", () => {
     }
   }, 120_000);
 
+  it("renders the category tree as departments at scale: each target once, every surface capped, within the budget", async () => {
+    // 25 departments x 5 x 1 x 1 (the 30k seed's tree), top levels first, as the layout serves it.
+    const nodes: Array<{ id: string; name: string; slug: string; parentId: string | null; canonicalPath: null; imageUrl: null }> = [];
+    const node = (id: string, name: string, parentId: string | null) =>
+      nodes.push({ id, name, slug: id, parentId, canonicalPath: null, imageUrl: null });
+    for (let root = 0; root < 25; root += 1) node(`r${root}`, root === 3 ? "Desk & Mobile Tech Accessories" : `Department ${root}`, null);
+    for (let root = 0; root < 25; root += 1) for (let group = 0; group < 5; group += 1) node(`r${root}-${group}`, `Group ${root}.${group}`, `r${root}`);
+    for (let root = 0; root < 25; root += 1) for (let group = 0; group < 5; group += 1) node(`r${root}-${group}-l`, `Leaf ${root}.${group}`, `r${root}-${group}`);
+    // The live store's flat menu: a repeated department and its own "Track your order".
+    const menu = [
+      { title: "Shop", href: "/search" },
+      { title: "Footwear", href: "/categories/r0" },
+      { title: "Footwear", href: "/categories/r0" },
+      { title: "Track your order", href: "/track-order" },
+    ];
+    const shape = storeShapeFromFacts({
+      productCount: 1000,
+      skuCount: 1000,
+      topCategoryCount: 25,
+      categoryDepth: 3,
+      menu: menu.map(() => ({ subMenu: null })),
+      hasCollections: true,
+      hasDeliveryMethods: true,
+    });
+    for (const template of ["marketplace", "mass-retail", "spec-catalogue", "fashion-value", "heritage-editorial", "department-mall", "daily-essentials", "rounded-tech"] as const) {
+      const theme = storefrontTemplateTheme(template);
+      const { resolved } = requestThemeFor(theme, shape);
+      const html = await render(
+        "/src/layouts/Layout.astro",
+        theme,
+        { title: "Home", layoutData: { ...layoutData({ business: true }), navigation: menu, categoryTree: { nodes, truncated: false } } },
+        undefined,
+        "https://shop.test/",
+        shape,
+      );
+      const page = parse(html);
+      const site = page.querySelector("#site-header")!;
+      expect(site.getAttribute("data-nav-source"), template).toBe(resolved.blocks.navigation.source);
+      expect(headerLinks(page), template).toBeLessThanOrEqual(resolved.blocks.navigation.linkBudget);
+      expect(duplicateIds(page), template).toEqual([]);
+      // The phone drawer: at most maxTopItems departments, each once, then "All categories".
+      const drawer = page.querySelector("#mobile-menu-panel")!;
+      expect(drawer.querySelector("h2")!.textContent, template).toBe("Shop by department");
+      const roots = Array.from(
+        drawer.querySelectorAll(":scope nav .drill > .drill-list > .drill-row, :scope nav .nav-tree:not(.nav-tree--nested) > li"),
+      ).map((row) => (row.querySelector("a, summary")!.textContent ?? "").replace(/\s+/g, " ").trim());
+      expect(roots.at(-1), template).toBe("All categories");
+      expect(roots.length - 1, template).toBe(Math.min(resolved.blocks.navigation.maxTopItems, 27));
+      expect(new Set(roots).size, template).toBe(roots.length);
+      expect(drawer.querySelectorAll('a[href="/track-order"]').length, template).toBeLessThanOrEqual(1);
+      // The desktop row: at most maxTopItems items, the rest named in "More", never a department twice.
+      const row = page.querySelector("#site-header [data-nav-overflow]:not(#drill-row-nav [data-nav-overflow])");
+      if (row && !row.closest("#drill-row-nav")) {
+        expect(row.querySelectorAll(":scope > [data-nav-index]").length, template).toBeLessThanOrEqual(resolved.blocks.navigation.maxTopItems);
+        const more = Array.from(row.querySelectorAll("[data-nav-more-list] > li > a")).map((link) => link.textContent!.trim());
+        expect(more.at(-1), template).toBe("All categories");
+        const rowLabels = Array.from(row.querySelectorAll(":scope > [data-nav-index] > a")).map((link) => link.textContent!.trim());
+        expect(new Set([...rowLabels, ...more]).size, template).toBe(rowLabels.length + more.length);
+      }
+      // The long name is whole in the HTML (the browser fits it or moves it into "More").
+      expect(page.querySelector('#site-header a[href="/categories/r3"]')!.textContent!.trim()).toBe("Desk & Mobile Tech Accessories");
+    }
+  }, 120_000);
+
   it("opens the departments rail over the hero on the home page only", async () => {
     const theme = navigationTheme({
       desktop: choice("desktopNav", "departments-rail", { open: "home" }),
@@ -1169,6 +1247,23 @@ describe("navigation", () => {
     expect(expanded(home, "sidebar-nav-0-panel")).toBe("false");
   });
 });
+
+/** A row that is too narrow moves its last items, whole, into "More" and back. */
+function assertOverflowMoves(list: HTMLElement) {
+  const items = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index]"));
+  const width = (element: Element, value: number) => Object.defineProperty(element, "offsetWidth", { configurable: true, value });
+  items.forEach((item) => width(item, 100));
+  width(list.querySelector("[data-nav-more]")!, 60);
+  const links = list.querySelectorAll("a").length;
+  Object.defineProperty(list, "clientWidth", { configurable: true, value: 170 });
+  fitNavOverflow(list);
+  expect(list.querySelectorAll(":scope > [data-nav-index]")).toHaveLength(1);
+  expect(list.querySelectorAll("[data-nav-more-list] > [data-nav-index]")).toHaveLength(items.length - 1);
+  expect(list.querySelectorAll("a")).toHaveLength(links);
+  Object.defineProperty(list, "clientWidth", { configurable: true, value: 1000 });
+  fitNavOverflow(list);
+  expect(list.querySelectorAll(":scope > [data-nav-index]")).toHaveLength(items.length);
+}
 
 /** A drill-in drawer: levels as <details>, each opening on "All <parent>". */
 function assertDrill(drawer: Element) {

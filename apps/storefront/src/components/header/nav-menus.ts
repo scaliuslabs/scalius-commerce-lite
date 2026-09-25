@@ -179,6 +179,28 @@ export function handleMenuKey(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * The hover menu a pointer is over: the <details> it is inside, or the one
+ * beside the link it is on (a row's link and its fly-out are one target, as
+ * on Star Tech, where the category name opens its column). A row moved into
+ * "More" opens nothing on hover.
+ */
+function hoverMenu(target: Element | null): HTMLDetailsElement | null {
+  if (!target || target.closest("[data-nav-more-list] > li > a")) return null;
+  const inside = target.closest<HTMLDetailsElement>("details[data-menu-hover]");
+  const row = target.closest("li");
+  const beside = row && !(inside && row.contains(inside))
+    ? row.querySelector<HTMLDetailsElement>(":scope > details[data-menu-hover]")
+    : null;
+  return beside ?? inside;
+}
+
+/** Where the pointer may go without the hover menu closing: its row (link and panel). */
+function hoverZone(menu: HTMLDetailsElement): Element {
+  const row = menu.parentElement;
+  return row?.tagName === "LI" ? row : menu;
+}
+
 export function installNavMenus(doc: Document = document): void {
   const view = doc.defaultView as MenuWindow | null;
   if (!view || view.__scaliusNavMenus) return;
@@ -242,7 +264,7 @@ export function installNavMenus(doc: Document = document): void {
 
   doc.addEventListener("pointerover", (event) => {
     if ((event as PointerEvent).pointerType !== "mouse") return;
-    const menu = (event.target as Element | null)?.closest<HTMLDetailsElement>("details[data-menu-hover]");
+    const menu = hoverMenu(event.target as Element | null);
     if (!menu) return;
     clearTimer(menu);
     if (menu.open) return;
@@ -256,9 +278,10 @@ export function installNavMenus(doc: Document = document): void {
 
   doc.addEventListener("pointerout", (event) => {
     if ((event as PointerEvent).pointerType !== "mouse") return;
-    const menu = (event.target as Element | null)?.closest<HTMLDetailsElement>("details[data-menu-hover]");
+    const menu = hoverMenu(event.target as Element | null);
     const next = event.relatedTarget as Node | null;
-    if (!menu || (next && menu.contains(next))) return;
+    const zone = menu ? hoverZone(menu) : null;
+    if (!menu || !zone || (next && zone.contains(next))) return;
     if (!menu.open) clearTimer(menu);
     else if (menu.dataset.hoverOpen !== undefined) later(menu, HOVER_CLOSE_MS, () => closeMenu(menu));
   });
