@@ -88,6 +88,14 @@ export function issueRequestBody(draft: IssueDraft, requestKey: string): IssueGi
   };
 }
 
+/** The dialog field an API field error belongs to (`details.field`, e.g. `recipient.phone`), or null. */
+export function issueFieldForServerPath(path: string): IssueField | null {
+  if (path === "recipient" || path.startsWith("recipient.")) return "contact";
+  if (path === "amount") return "amount";
+  if (path === "expiresAt") return "expiry";
+  return null;
+}
+
 export type AdjustDirection = "increase" | "decrease";
 export type AdjustErrors = Partial<Record<"amount" | "reason", GiftCardMessageKey>>;
 

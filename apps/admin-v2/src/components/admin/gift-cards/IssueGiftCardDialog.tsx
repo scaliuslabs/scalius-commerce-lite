@@ -20,11 +20,29 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { giftCardsMessages } from "~/i18n/gift-cards";
 import { getServerFnError } from "~/lib/api-helpers";
+import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { GiftCardCustomerPicker } from "./GiftCardCustomerPicker";
 import { fieldDescribedBy, GiftCardCheckRow, GiftCardField } from "./gift-card-fields";
-import { EMPTY_ISSUE_DRAFT, issueRequestBody, validateIssueDraft, type IssueDraft, type IssueErrors } from "./gift-card-drafts";
+import {
+  EMPTY_ISSUE_DRAFT,
+  issueFieldForServerPath,
+  issueRequestBody,
+  validateIssueDraft,
+  type IssueDraft,
+  type IssueErrors,
+  type IssueField,
+} from "./gift-card-drafts";
 import { maskedGiftCard, todayStoreDay } from "./gift-card-format";
 import { useIssueGiftCard } from "./use-gift-card-mutations";
+
+/** The first API field error the dialog can place on a field (`recipient.phone` → the contact field). */
+function serverFieldIssue(error: unknown): { field: IssueField; message: string } | null {
+  for (const issue of readApiFieldIssues(error) ?? []) {
+    const field = issueFieldForServerPath(issue.path);
+    if (field) return { field, message: issue.message };
+  }
+  return null;
+}
 
 /**
  * Shopify's "Issue gift card". One request key per opening makes a double
@@ -45,6 +63,12 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
   const mutation = useIssueGiftCard();
   const issued = mutation.data;
   const reset = mutation.reset;
+  // A field the API refused shows at that field, in the API's words.
+  const serverIssue = mutation.isError ? serverFieldIssue(mutation.error) : null;
+  const serverField = serverIssue?.field;
+  useEffect(() => {
+    if (serverField) document.getElementById(`gift-card-${serverField}`)?.focus();
+  }, [serverField, mutation.error]);
 
   useEffect(() => {
     if (open) {
@@ -60,6 +84,8 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
 
   const update = (patch: Partial<IssueDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
+    // A refused save's message goes as soon as the merchant changes something.
+    if (mutation.isError) reset();
     setErrors((current) => {
       const next = { ...current };
       if ("amount" in patch) delete next.amount;
@@ -94,7 +120,8 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
 
   const error = (field: keyof IssueErrors) => {
     const key = errors[field];
-    return key ? t(key) : undefined;
+    if (key) return t(key);
+    return serverIssue?.field === field ? serverIssue.message : undefined;
   };
   const busy = mutation.isPending;
 
@@ -146,7 +173,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
               <DialogDescription>{t("issueHelp")}</DialogDescription>
             </DialogHeader>
             <form id="issue-gift-card" method="post" noValidate className="space-y-4" onSubmit={submit}>
-              {mutation.isError ? (
+              {mutation.isError && !serverIssue ? (
                 <Alert variant="destructive"><AlertDescription>{getServerFnError(mutation.error, t("issueFailed"))}</AlertDescription></Alert>
               ) : null}
               <GiftCardField id="gift-card-amount" label={t("amount")} error={error("amount")}>
@@ -155,7 +182,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                   currencyCode={currencyCode}
                   value={draft.amount}
                   disabled={busy}
-                  aria-invalid={errors.amount ? true : undefined}
+                  aria-invalid={error("amount") ? true : undefined}
                   aria-describedby={fieldDescribedBy("gift-card-amount", error("amount"), false)}
                   onValueChange={(amount) => update({ amount })}
                 />
@@ -177,7 +204,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                       min={todayStoreDay()}
                       value={draft.expiryDay}
                       disabled={busy}
-                      aria-invalid={errors.expiry ? true : undefined}
+                      aria-invalid={error("expiry") ? true : undefined}
                       aria-describedby={fieldDescribedBy("gift-card-expiry", error("expiry"), true)}
                       onChange={(event) => update({ expiryDay: event.target.value })}
                     />
@@ -238,7 +265,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                         maxLength={draft.deliverBy === "email" ? 254 : 40}
                         autoComplete="off"
                         disabled={busy}
-                        aria-invalid={errors.contact ? true : undefined}
+                        aria-invalid={error("contact") ? true : undefined}
                         aria-describedby={fieldDescribedBy("gift-card-contact", error("contact"), false)}
                         onChange={(event) => update({ contact: event.target.value })}
                       />

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocale } from "~/i18n";
-import { adjustmentFor, EMPTY_ISSUE_DRAFT, issueRequestBody, validateIssueDraft } from "./gift-card-drafts";
+import { adjustmentFor, EMPTY_ISSUE_DRAFT, issueFieldForServerPath, issueRequestBody, validateIssueDraft } from "./gift-card-drafts";
 import {
   formatGiftCardMoney,
   giftCardDisplayStatus,
@@ -100,6 +100,16 @@ describe("issue request", () => {
       message: "Eid Mubarak",
       notify: true,
     });
+  });
+});
+
+describe("API field errors", () => {
+  it("places recipient, amount and expiry errors on their dialog fields", () => {
+    expect(issueFieldForServerPath("recipient.phone")).toBe("contact");
+    expect(issueFieldForServerPath("recipient.email")).toBe("contact");
+    expect(issueFieldForServerPath("amount")).toBe("amount");
+    expect(issueFieldForServerPath("expiresAt")).toBe("expiry");
+    expect(issueFieldForServerPath("requestKey")).toBeNull();
   });
 });
 

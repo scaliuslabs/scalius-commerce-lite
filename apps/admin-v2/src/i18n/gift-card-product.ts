@@ -14,6 +14,7 @@ export const giftCardProductMessages = defineMessages({
     productRuleNoTracking: "Quantity isn't tracked, and discounts and promotions don't apply.",
     productRuleNoGiftCardTender: "A gift card can't pay for another gift card.",
     productSwitchedOn: "Fulfilment is now digital, and the product discount is removed.",
+    fulfilmentForced: "A gift card is always digital: its code is sent by email or SMS.",
   },
   bn: {
     productSwitch: "এই পণ্যটি একটি গিফট কার্ড",
@@ -23,5 +24,6 @@ export const giftCardProductMessages = defineMessages({
     productRuleNoTracking: "পরিমাণ ট্র্যাক হয় না, আর ডিসকাউন্ট ও প্রোমোশন খাটে না।",
     productRuleNoGiftCardTender: "গিফট কার্ড দিয়ে অন্য গিফট কার্ড কেনা যায় না।",
     productSwitchedOn: "ফুলফিলমেন্ট এখন ডিজিটাল, আর পণ্যের ডিসকাউন্ট সরানো হয়েছে।",
+    fulfilmentForced: "গিফট কার্ড সবসময় ডিজিটাল: এর কোড ইমেইল বা এসএমএসে পাঠানো হয়।",
   },
 });
