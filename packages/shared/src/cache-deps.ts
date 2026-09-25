@@ -33,7 +33,7 @@
 export const CACHE_DEP_KINDS = [
   /** `p:<productId>`: any buyer-visible fact of one product (page, card, JSON-LD, feed row). */
   "p",
-  /** `lm:<scope>`: membership (and newest order) of a public product set; `lm:seo` the sitemap/feed flags. */
+  /** `lm:<scope>`: membership (and newest order) of a public product set; `lm:seo` the sitemap/feed flags and lastmods; `lm:shape` the store-shape counts. */
   "lm",
   /** `lo:<facet>:<scope>`: an ordering/filter fact of a member (price, band, discount, name). */
   "lo",
@@ -100,8 +100,10 @@ export const CACHE_DEP_SOFT_MAX_AGE_SECONDS = 600;
 export const cacheDep = {
   product: (productId: string) => `p:${productId}`,
   listMembership: (scope: CacheDepScope) => `lm:${scope}`,
-  /** Sitemap / product-feed / noindex flags of any product. */
+  /** Sitemap and product-feed facts: noindex/exclusion flags and every sitemap lastmod. */
   discoveryMembership: () => "lm:seo",
+  /** The layout's store-shape counts: active products and their live SKUs. */
+  storeShape: () => "lm:shape",
   listOrder: (facet: CacheDepListOrderFacet, scope: CacheDepScope) => `lo:${facet}:${scope}`,
   listFacets: (scope: CacheDepScope) => `lf:${scope}`,
   search: () => "srch",
@@ -252,20 +254,39 @@ const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_creat
 const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
 
 /**
+ * A sitemap `<lastmod>` (and the product feed's `updatedAt`): the one public
+ * output of `updated_at`. List and detail payloads do not output it, so it is
+ * noise for the entity's generic rule, and this rule advances the discovery
+ * key and the entity's own keys when it moves. Writes that change nothing do
+ * not touch `updated_at`, so the lastmod stays truthful.
+ */
+function lastmod(keys: readonly CacheDepKeyTemplate[]): CacheDepRule {
+  return { name: "lastmod", event: "update", image: "new", changed: ["updated_at"], keys: [{ dep: "lm:seo" }, ...keys] };
+}
+
+/** Products and SKUs whose existence or activity the layout's store-shape counts read. */
+const SHAPE = { dep: "lm:shape" } as const;
+
+/**
  * Every buyer-visible table. Columns in `noise` are never buyer-visible; any
  * other column is (a new column is visible until someone lists it as noise).
+ * A column is noise only when no public payload outputs it (the opt-in audit
+ * apps/api/src/cache-deps-noise-audit.test.ts renders every cached route while
+ * changing each noise column) and it churns on writes a buyer cannot see.
  */
 export const CACHE_DEP_TABLES = {
   // --- Catalogue: products and their parts ---------------------------------
   products: {
     kinds: ["p", "lo", "lm", "srch"],
     noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
-    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch.",
+    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch. `lm:shape`: the layout's count of active products and their SKUs.",
     rules: [
-      ...everyChange([p("id")]),
+      { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
+      { name: "del", event: "delete", image: "old", keys: [p("id"), { dep: "srch" }, SHAPE] },
+      { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("id")] },
       { name: "srch", event: "update", image: "new", changed: ["name", "description"], keys: [{ dep: "srch" }] },
-      { name: "srch_ins", event: "insert", image: "new", keys: [{ dep: "srch" }] },
-      { name: "srch_del", event: "delete", image: "old", keys: [{ dep: "srch" }] },
+      { name: "shape", event: "update", image: "new", changed: ["is_active", "deleted_at"], keys: [SHAPE] },
+      lastmod([p("id")]),
       {
         name: "name_order", event: "update", image: "new", changed: ["name"],
         keys: [{ scopes: "lo:name", from: { product: "id" } }],
@@ -317,11 +338,14 @@ export const CACHE_DEP_TABLES = {
     rules: everyChange([{ scopes: "lf", from: { product: "product_id" } }], true),
   },
   product_variants: {
-    kinds: ["p"],
+    kinds: ["p", "lm"],
     noise: ["stock", "reserved_stock", "stock_version", "version", "updated_at", "tax_classification_version"],
-    note: "Raw stock is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not.",
+    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. `lm:shape`: SKU existence for the layout's store-shape counts.",
     rules: [
-      ...everyChange([p("product_id")]),
+      { name: "ins", event: "insert", image: "new", keys: [p("product_id"), SHAPE] },
+      { name: "del", event: "delete", image: "old", keys: [p("product_id"), SHAPE] },
+      { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("product_id")] },
+      { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id"], keys: [SHAPE] },
       { name: "band", event: "update", image: "new", bandChanged: true, keys: [p("product_id")] },
     ],
   },
@@ -350,11 +374,12 @@ export const CACHE_DEP_TABLES = {
 
   // --- Catalogue structure ------------------------------------------------------
   categories: {
-    kinds: ["c", "srch"],
+    kinds: ["c", "srch", "lm"],
     noise: ["revision", "updated_at"],
     rules: [
       ...everyChange(own("c")),
       { name: "srch", event: "update", image: "new", changed: ["name", "description"], keys: [{ dep: "srch" }] },
+      lastmod(own("c")),
     ],
   },
   category_closure: {
@@ -373,8 +398,8 @@ export const CACHE_DEP_TABLES = {
     noise: [],
     rules: everyChange([{ prefix: "c:", columns: ["category_id"] }], true),
   },
-  brands: { kinds: ["b"], noise: ["revision", "updated_at"], rules: everyChange(own("b")) },
-  collections: { kinds: ["col"], noise: ["version", "updated_at"], rules: everyChange(own("col")) },
+  brands: { kinds: ["b", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("b")), lastmod(own("b"))] },
+  collections: { kinds: ["col", "lm"], noise: ["version", "updated_at"], rules: [...everyChange(own("col")), lastmod(own("col"))] },
   product_attributes: { kinds: ["attr"], noise: [...TIMESTAMPS], rules: everyChange(own("attr")) },
   attribute_values: {
     kinds: ["attr"],
@@ -389,7 +414,7 @@ export const CACHE_DEP_TABLES = {
   },
 
   // --- Content, layout and settings ---------------------------------------------
-  pages: { kinds: ["pg"], noise: ["revision", "updated_at"], rules: everyChange(own("pg")) },
+  pages: { kinds: ["pg", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("pg")), lastmod(own("pg"))] },
   hero_sliders: { kinds: ["hero"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "hero" }]) },
   settings: {
     kinds: ["set"],

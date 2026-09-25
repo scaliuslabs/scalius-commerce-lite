@@ -24,6 +24,7 @@ import {
     type UpdateBrandStatusInput,
 } from "./brands.validation";
 import { brandLogoColumns, brandLogoJoinCondition, presentBrandLogo } from "./brands.storefront";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -379,7 +380,7 @@ export async function updateBrand(
     try {
         const updated = await db
             .update(brands)
-            .set({
+            .set(truthfulUpdatedAt(brands, {
                 name: data.name,
                 slug: data.slug,
                 description: data.description,
@@ -394,7 +395,7 @@ export async function updateBrand(
                 ...(data.listingTemplate !== undefined ? { listingTemplate: data.listingTemplate } : {}),
                 revision: sql`${brands.revision} + 1`,
                 updatedAt: sql`unixepoch()`,
-            })
+            }))
             .where(and(
                 eq(brands.id, id),
                 eq(brands.revision, data.expectedRevision),
@@ -424,7 +425,7 @@ export async function updateBrandStatus(
 ): Promise<{ revision: number; status: BrandStatus }> {
     const updated = await db
         .update(brands)
-        .set({ status: data.status, revision: sql`${brands.revision} + 1`, updatedAt: sql`unixepoch()` })
+        .set(truthfulUpdatedAt(brands, { status: data.status, revision: sql`${brands.revision} + 1`, updatedAt: sql`unixepoch()` }))
         .where(and(eq(brands.id, id), eq(brands.revision, data.expectedRevision), isNull(brands.deletedAt)))
         .returning({ revision: brands.revision })
         .get();
@@ -444,12 +445,12 @@ export async function trashBrands(db: Database, revisionClaims: readonly BrandRe
     const claimsJson = JSON.stringify(claims);
     const updated = await db
         .update(brands)
-        .set({
+        .set(truthfulUpdatedAt(brands, {
             status: "draft",
             revision: sql`${brands.revision} + 1`,
             deletedAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
-        })
+        }))
         .where(and(
             sql`${brands.id} IN ${claimIds(claimsJson)}`,
             isNull(brands.deletedAt),
@@ -469,12 +470,12 @@ export async function restoreBrands(db: Database, revisionClaims: readonly Brand
     const claimsJson = JSON.stringify(claims);
     const updated = await db
         .update(brands)
-        .set({
+        .set(truthfulUpdatedAt(brands, {
             status: "draft",
             revision: sql`${brands.revision} + 1`,
             deletedAt: null,
             updatedAt: sql`unixepoch()`,
-        })
+        }))
         .where(and(
             sql`${brands.id} IN ${claimIds(claimsJson)}`,
             isNotNull(brands.deletedAt),

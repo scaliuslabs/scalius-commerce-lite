@@ -54,6 +54,7 @@ import {
   noDeletingMediaReferences,
 } from "../media/media-reference-guard";
 import { deps } from "../../cache-deps";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 export {
   createPageSchema,
@@ -377,6 +378,16 @@ function toPublicPage<T extends { revision: number; updatedAt: unknown }>(
 }
 
 /**
+ * An article as buyers get it: no `revision`, which changes on saves that
+ * change nothing a buyer sees. `updatedAt` stays (the blog's dateModified);
+ * its own trigger rule advances the article's key.
+ */
+function toPublicArticle<T extends { revision: number }>(row: T): Omit<T, "revision"> {
+  const { revision: _revision, ...article } = row;
+  return article;
+}
+
+/**
  * Public visibility switches on at `published_at` without a row change
  * (publicPageVisibilityCondition). Inside a dependency scope the next such
  * switch among the rows `where` selects bounds the entry (`deps.validUntil`).
@@ -430,7 +441,7 @@ export async function getPublicArticleBySlug(db: Database, slug: string) {
     deps.anyPage();
     await declareNextPagePublication(db, and(eq(pages.slug, slug), eq(pages.contentType, "article")));
   }
-  return sanitizePageContent(article);
+  return article ? toPublicArticle(sanitizePageRecord(article)) : null;
 }
 
 export async function getPublicArticles(
@@ -473,7 +484,7 @@ export async function getPublicArticles(
   deps.anyPage();
   await declareNextPagePublication(db, and(eq(pages.contentType, "article"), tagCondition));
   return {
-    articles: results.map(sanitizePageRecord),
+    articles: results.map((row) => toPublicArticle(sanitizePageRecord(row))),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 }
@@ -694,12 +705,12 @@ export async function updatePage(
   try {
     updated = await db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         ...updateData,
         publishedAt: nextPublishedAt,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(
         and(
           eq(pages.id, id),
@@ -794,13 +805,13 @@ export async function bulkDeletePages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         deletedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -816,12 +827,12 @@ export async function bulkPublishPages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: true,
         publishedAt: sql`unixepoch()`,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -837,12 +848,12 @@ export async function bulkUnpublishPages(
     "active",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNull(pages.deletedAt))),
   );
 }
@@ -858,21 +869,15 @@ export async function restorePages(
     "trashed",
     db
       .update(pages)
-      .set({
+      .set(truthfulUpdatedAt(pages, {
         isPublished: false,
         publishedAt: null,
         revision: sql`${pages.revision} + 1`,
         deletedAt: null,
         updatedAt: sql`unixepoch()`,
-      })
+      }))
       .where(and(pageClaimIdsCondition(claims), isNotNull(pages.deletedAt))),
   );
-}
-
-function sanitizePageContent<T extends { content: string }>(
-  page: T | null,
-): T | null {
-  return page ? sanitizePageRecord(page) : null;
 }
 
 function sanitizePageRecord<T extends { content: string }>(page: T): T {
