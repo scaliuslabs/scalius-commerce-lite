@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrderForm } from "./OrderFormContext";
+import { orderNeedsAddress } from "./order-line-properties";
 import { LocationPicker } from "@/components/admin/location/LocationPicker";
 import { deliveryLocationByIdQueryOptions } from "@/lib/api-query-options/delivery";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
@@ -93,10 +94,15 @@ function useReturningCustomer() {
 export function CustomerInfoSection() {
   const { form, refs, handleKeyDown } = useOrderForm();
   const t = useMessages(orderFormMessages);
-  const [city, zone, area, cityName, zoneName, areaName] = useWatch({
+  const [city, zone, area, cityName, zoneName, areaName, items, shippingMethodKind] = useWatch({
     control: form.control,
-    name: ["city", "zone", "area", "cityName", "zoneName", "areaName"],
+    name: ["city", "zone", "area", "cityName", "zoneName", "areaName", "items", "shippingMethodKind"],
   });
+  // Pickup orders and orders of services have no delivery address (the phone stays required).
+  const needsAddress = orderNeedsAddress({ items: items ?? [], shippingMethodKind });
+  const noAddressReason = needsAddress
+    ? null
+    : shippingMethodKind === "pickup" ? t("pickupNoAddress") : t("noDeliveryNoAddress");
   const returning = useReturningCustomer();
   const errors = form.formState.errors;
   // A picked location is an edit: mark it dirty so Save turns on.
@@ -199,6 +205,11 @@ export function CustomerInfoSection() {
         <CardHeader>
           <CardTitle>{t("deliveryAddress")}</CardTitle>
         </CardHeader>
+        {noAddressReason ? (
+          <CardContent>
+            <p className="text-body text-muted-foreground">{noAddressReason}</p>
+          </CardContent>
+        ) : (
         <CardContent className="space-y-4">
           <FormField
             control={form.control}
@@ -241,6 +252,7 @@ export function CustomerInfoSection() {
             }}
           />
         </CardContent>
+        )}
       </Card>
 
       <Card>

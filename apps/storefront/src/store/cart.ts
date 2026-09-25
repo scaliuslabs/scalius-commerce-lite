@@ -1,15 +1,47 @@
 import { map } from "nanostores";
 import {
+  lineCartKey,
+  linePropertiesHash,
+  LINE_PROPERTY_INPUT_LIMITS,
+  NO_PROPERTIES_HASH,
+} from "@scalius/shared/line-properties";
+import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
+import {
   normalizeCartItemOptions,
   type CartItemOption,
 } from "@/lib/cart/item-options";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
 
+/**
+ * The browser cart lives here. v3 keys lines by product, SKU and the hash of
+ * the buyer inputs (`line:v3:<product>:variant:<variant>:p:<hash>`); carts
+ * saved under the v2 `cart` key are dropped, never read (Wave A §3.2).
+ */
+export const CART_STORAGE_KEY = "cart:v3";
+const RETIRED_CART_STORAGE_KEYS = ["cart"] as const;
+
+/**
+ * One buyer input on a cart line, in the product's schema order. `key` and
+ * `value` are the line's identity (hashed into the key and sent to checkout);
+ * the rest is display only, and the server re-prices every input.
+ * Buyer content: never put it in URLs, analytics or logs.
+ */
+export type CartLineProperty = {
+  key: string;
+  value: string;
+  label: string;
+  /** The choice label for selects, "Yes" for ticked boxes, the text otherwise. */
+  displayValue: string;
+  /** Surcharge per unit, in minor units (display only). */
+  priceMinor: number;
+};
+
 export type CartItem = {
   id: string;
   slug?: string;
   name: string;
+  /** One unit as the buyer saw it: base price plus the surcharges of its inputs. */
   price: number;
   quantity: number;
   image?: string;
@@ -18,6 +50,12 @@ export type CartItem = {
   variantId?: string;
   options?: CartItemOption[];
   freeDelivery?: boolean;
+  /** Buyer inputs (engraving, gift wrap…), canonical: schema keys, schema order, no empties. */
+  properties?: CartLineProperty[];
+  /** `linePropertiesHash` of `properties`; "none" without inputs. Part of the line key. */
+  propertiesHash?: string;
+  /** What the SKU is. Unknown (older lines) is treated as physical: it needs delivery. */
+  fulfillmentKind?: FulfillmentKind;
 };
 
 export type VariantCartItem = CartItem & { variantId: string };
@@ -65,11 +103,20 @@ type CartLinePatchSuccess = {
 
 type CartLinePatchResult = CartLinePatchFailure | CartLinePatchSuccess;
 
+/** Fields a server answer may refresh on an existing line; never its identity. */
+export type CartLineRefresh = Partial<
+  Pick<
+    CartItem,
+    "name" | "price" | "quantity" | "image" | "imageMediaId" | "freeDelivery" | "fulfillmentKind"
+  >
+> & {
+  /** Display labels and surcharges of the same inputs (keys and values must not change). */
+  properties?: CartLineProperty[];
+};
+
 export type CartLineItemUpdate = {
   lineKey: string;
-  updates: Partial<
-    Pick<CartItem, "name" | "price" | "quantity" | "image" | "imageMediaId" | "freeDelivery">
-  >;
+  updates: CartLineRefresh;
 };
 
 export const MAX_CART_QUANTITY = 99;
@@ -80,6 +127,10 @@ const MAX_CART_LINE_PATCHES = 100;
 
 const MAX_CART_ID_LENGTH = 160;
 const MAX_CART_LINE_KEY_LENGTH = 512;
+const PROPERTY_KEY_PATTERN = /^[a-z0-9_]{1,40}$/;
+const PROPERTIES_HASH_PATTERN = /^[0-9a-f]{16}$/;
+const MAX_PROPERTY_LABEL_LENGTH = 60;
+const MAX_PROPERTY_DISPLAY_LENGTH = LINE_PROPERTY_INPUT_LIMITS.valueLength;
 
 const EMPTY_CART_STATE: CartStore = {
   items: {},
@@ -128,12 +179,27 @@ export function getEffectiveCartShippingFee(
   return normalizedMethodFee;
 }
 
+/**
+ * Whether the cart needs a delivery method (and so, for delivery, an
+ * address): some line is physical. A line whose kind is not known yet
+ * counts as physical, so the address is never skipped by mistake.
+ */
+export function cartNeedsDeliveryMethod(
+  items: Record<string, Pick<CartItem, "fulfillmentKind">>,
+): boolean {
+  return Object.values(items).some(
+    (item) => item.fulfillmentKind === undefined || item.fulfillmentKind === "physical",
+  );
+}
+
 if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
     if (!canPersistToStorage) return;
     try {
       const json = JSON.stringify(state);
-      if (localStorage.getItem("cart") !== json) localStorage.setItem("cart", json);
+      if (localStorage.getItem(CART_STORAGE_KEY) !== json) {
+        localStorage.setItem(CART_STORAGE_KEY, json);
+      }
     } catch (error) {
       console.warn("Could not persist cart state.", error);
     }
@@ -141,7 +207,7 @@ if (typeof window !== "undefined") {
   // Another tab changed the cart (an order, an add, a removal): follow it, so
   // this tab never writes its older copy back over the newer one.
   window.addEventListener?.("storage", (event) => {
-    if (event.key === "cart" && hasHydratedFromStorage) readCartFromStorage(true);
+    if (event.key === CART_STORAGE_KEY && hasHydratedFromStorage) readCartFromStorage(true);
   });
 }
 
@@ -151,6 +217,69 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function boundedText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.normalize("NFC").trim();
+  if (!text) return null;
+  return Array.from(text).slice(0, maxLength).join("");
+}
+
+/**
+ * Buyer inputs from an untrusted snapshot. Identity fields (`key`, `value`)
+ * must be well formed or the whole list is refused (null), because a line
+ * key that no longer matches its inputs would merge different lines.
+ */
+export function normalizeCartLineProperties(
+  value: unknown,
+): CartLineProperty[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > LINE_PROPERTY_INPUT_LIMITS.entries) return null;
+  const properties: CartLineProperty[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry)) return null;
+    const key = typeof entry.key === "string" ? entry.key : "";
+    const propertyValue = typeof entry.value === "string" ? entry.value : "";
+    if (
+      !PROPERTY_KEY_PATTERN.test(key) ||
+      seen.has(key) ||
+      !propertyValue ||
+      propertyValue !== propertyValue.normalize("NFC").trim() ||
+      Array.from(propertyValue).length > LINE_PROPERTY_INPUT_LIMITS.valueLength
+    ) {
+      return null;
+    }
+    seen.add(key);
+    const priceMinor = toNumber(entry.priceMinor);
+    properties.push({
+      key,
+      value: propertyValue,
+      label: boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH) ?? key,
+      displayValue: boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH) ?? propertyValue,
+      priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0,
+    });
+  }
+  return properties;
+}
+
+/** The identity part of a line's inputs, as checkout sends them. */
+export function cartLinePropertyInputs(
+  item: Pick<CartItem, "properties">,
+): Array<{ key: string; value: string }> {
+  return (item.properties ?? []).map(({ key, value }) => ({ key, value }));
+}
+
+/** The shared WebCrypto hash of a line's inputs ("none" without inputs). */
+export function cartLinePropertiesHash(
+  properties: readonly Pick<CartLineProperty, "key" | "value">[] | undefined,
+): Promise<string> {
+  return linePropertiesHash((properties ?? []).map(({ key, value }) => ({ key, value })));
+}
+
+function isPropertiesHash(value: unknown): value is string {
+  return value === NO_PROPERTIES_HASH || (typeof value === "string" && PROPERTIES_HASH_PATTERN.test(value));
 }
 
 function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
@@ -171,6 +300,16 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
   ) {
     return null;
   }
+  const properties = normalizeCartLineProperties(value.properties);
+  if (properties === null) return null;
+  // The stored hash is the line's identity; inputs without one (or "none"
+  // with inputs) cannot be keyed, so the line is dropped.
+  const propertiesHash = properties.length === 0
+    ? NO_PROPERTIES_HASH
+    : isPropertiesHash(value.propertiesHash) && value.propertiesHash !== NO_PROPERTIES_HASH
+      ? value.propertiesHash
+      : null;
+  if (!propertiesHash) return null;
 
   return {
     id,
@@ -190,6 +329,9 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
     options: normalizeCartItemOptions(value.options),
     freeDelivery:
       typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
+    ...(properties.length > 0 ? { properties } : {}),
+    propertiesHash,
+    ...(isFulfillmentKind(value.fulfillmentKind) ? { fulfillmentKind: value.fulfillmentKind } : {}),
   };
 }
 
@@ -282,14 +424,22 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
 
   hasHydratedFromStorage = true;
   try {
-    const storedCart = localStorage.getItem("cart");
+    // A v2 cart is dropped at the v3 deploy (no legacy reader).
+    for (const retired of RETIRED_CART_STORAGE_KEYS) {
+      if (localStorage.getItem(retired) !== null) localStorage.removeItem?.(retired);
+    }
+  } catch {
+    // Storage that refuses a removal still reads the v3 cart below.
+  }
+  try {
+    const storedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (storedCart) {
       const normalized = normalizeStoredCart(JSON.parse(storedCart));
       if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
       const normalizedJson = JSON.stringify(normalized);
       if (normalizedJson !== storedCart) {
         try {
-          localStorage.setItem("cart", normalizedJson);
+          localStorage.setItem(CART_STORAGE_KEY, normalizedJson);
         } catch (error) {
           console.warn("Could not persist migrated cart state.", error);
         }
@@ -324,18 +474,31 @@ function emitCartUpdated(): void {
 }
 
 /**
- * Produces the stable exact key used by the v2 local cart contract. Hydration
- * canonicalizes pre-v2 browser snapshots into this key space once.
+ * The v3 line key for a line whose inputs hash is already known (hydration,
+ * repairs). Same SKU + same canonical inputs = one line (Wave A P2).
  */
 export function createCartItemKey(
-  item: { id: string; variantId: string },
+  item: { id: string; variantId: string; propertiesHash?: string },
 ): string {
-  const productPart = encodeURIComponent(item.id.trim());
+  const productId = item.id.trim();
   const variantId = item.variantId.trim();
-  if (!productPart || !variantId || variantId === "default") {
+  if (!productId || !variantId || variantId === "default") {
     throw new TypeError("Cart lines require persisted product and variant IDs.");
   }
-  return `line:v2:${productPart}:variant:${encodeURIComponent(variantId)}`;
+  const hash = item.propertiesHash ?? NO_PROPERTIES_HASH;
+  if (!isPropertiesHash(hash)) throw new TypeError("Cart line inputs hash is malformed.");
+  return lineCartKey(productId, variantId, hash);
+}
+
+/** The v3 line key from the line's inputs, hashed with the shared WebCrypto function. */
+export async function cartLineKeyFor(
+  item: { id: string; variantId: string; properties?: readonly Pick<CartLineProperty, "key" | "value">[] },
+): Promise<string> {
+  return createCartItemKey({
+    id: item.id,
+    variantId: item.variantId,
+    propertiesHash: await cartLinePropertiesHash(item.properties),
+  });
 }
 
 function commitNonLineCartState(state: CartStore): CartStore {
@@ -355,42 +518,135 @@ function applyLocalLinePatch(
   return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements);
 }
 
-export function addToCart(
-  item: Omit<CartItem, "quantity"> & { quantity?: number },
-): boolean {
-  ensureCartHydrated();
+type NewCartLine = Omit<CartItem, "quantity" | "propertiesHash"> & { quantity?: number };
+
+/** Normalizes a line to add and computes its inputs hash; null when it can't be a line. */
+async function prepareNewLine(
+  item: NewCartLine,
+): Promise<{ key: string; line: Omit<CartItem, "quantity">; quantity: number } | null> {
   const variantId = item.variantId;
   if (
     !isValidIdentity(item.id) ||
     !isValidIdentity(variantId) ||
     variantId === "default"
   ) {
-    return false;
+    return null;
   }
-  const current = cartStore.get();
-  const itemKey = createCartItemKey({ id: item.id, variantId });
-  const existingItem = current.items[itemKey];
-  const requestedQuantity = Math.min(
-    MAX_CART_QUANTITY,
-    Math.max(1, Math.floor(toNumber(item.quantity, 1))),
-  );
-  const quantity = existingItem
-    ? Math.min(MAX_CART_QUANTITY, existingItem.quantity + requestedQuantity)
-    : requestedQuantity;
+  const properties = normalizeCartLineProperties(item.properties);
+  if (properties === null) return null;
+  const propertiesHash = await cartLinePropertiesHash(properties);
   const options = normalizeCartItemOptions(item.options);
-  const normalizedItem: Omit<CartItem, "quantity"> = {
-    ...item,
+  const { properties: _ignored, quantity: requested, ...rest } = item;
+  const line: Omit<CartItem, "quantity"> = {
+    ...rest,
     variantId,
     ...(options ? { options } : { options: undefined }),
+    ...(properties.length > 0 ? { properties } : {}),
+    propertiesHash,
+    ...(isFulfillmentKind(item.fulfillmentKind) ? { fulfillmentKind: item.fulfillmentKind } : { fulfillmentKind: undefined }),
   };
+  return {
+    key: createCartItemKey({ id: item.id, variantId, propertiesHash }),
+    line,
+    quantity: Math.min(MAX_CART_QUANTITY, Math.max(1, Math.floor(toNumber(requested, 1)))),
+  };
+}
+
+/**
+ * Adds a line, or adds to the line with the same SKU and the same inputs.
+ * The key uses the shared WebCrypto inputs hash, so this is async.
+ */
+export async function addToCart(item: NewCartLine): Promise<boolean> {
+  ensureCartHydrated();
+  const prepared = await prepareNewLine(item);
+  if (!prepared) return false;
+  const existingItem = cartStore.get().items[prepared.key];
+  const quantity = existingItem
+    ? Math.min(MAX_CART_QUANTITY, existingItem.quantity + prepared.quantity)
+    : prepared.quantity;
 
   return applyLocalLinePatch([
     {
-      lineKey: itemKey,
+      lineKey: prepared.key,
       productId: item.id,
-      variantId,
+      variantId: prepared.line.variantId!,
       quantity,
-      ...(!existingItem ? { item: normalizedItem } : {}),
+      ...(!existingItem ? { item: prepared.line } : {}),
+    },
+  ]).ok;
+}
+
+/**
+ * Editing a line's inputs: the old line goes and the edited one is added
+ * under its new key in one update (merging into a line that already has
+ * those inputs). The quantity given is the edited line's own.
+ */
+export async function replaceCartLine(
+  oldLineKey: string,
+  item: NewCartLine,
+): Promise<boolean> {
+  ensureCartHydrated();
+  const prepared = await prepareNewLine(item);
+  if (!prepared) return false;
+  const current = cartStore.get();
+  const old = current.items[oldLineKey];
+  if (!old) return addToCart(item);
+  if (prepared.key === oldLineKey) {
+    return applyLocalLinePatch(
+      [{ lineKey: oldLineKey, productId: old.id, variantId: old.variantId, quantity: prepared.quantity }],
+      new Map([[oldLineKey, prepared.line]]),
+    ).ok;
+  }
+  const target = current.items[prepared.key];
+  return applyLocalLinePatch([
+    { lineKey: oldLineKey, productId: old.id, variantId: old.variantId, quantity: 0 },
+    {
+      lineKey: prepared.key,
+      productId: item.id,
+      variantId: prepared.line.variantId!,
+      quantity: target
+        ? Math.min(MAX_CART_QUANTITY, target.quantity + prepared.quantity)
+        : prepared.quantity,
+      ...(!target ? { item: prepared.line } : {}),
+    },
+  ]).ok;
+}
+
+/**
+ * The server resolved a line's inputs to a different canonical hash (its
+ * word is final): move the line to the key of that hash, merging with a
+ * line already there.
+ */
+export function rekeyCartLine(
+  lineKey: string,
+  propertiesHash: string,
+  properties: CartLineProperty[],
+): boolean {
+  ensureCartHydrated();
+  const current = cartStore.get();
+  const existing = current.items[lineKey];
+  const normalized = normalizeCartLineProperties(properties);
+  if (!existing || normalized === null || !isPropertiesHash(propertiesHash)) return false;
+  if ((normalized.length === 0) !== (propertiesHash === NO_PROPERTIES_HASH)) return false;
+  const nextKey = createCartItemKey({ id: existing.id, variantId: existing.variantId, propertiesHash });
+  if (nextKey === lineKey) return false;
+  const target = current.items[nextKey];
+  const { properties: _old, ...rest } = existing;
+  const moved: Omit<CartItem, "quantity"> = {
+    ...rest,
+    ...(normalized.length > 0 ? { properties: normalized } : {}),
+    propertiesHash,
+  };
+  return applyLocalLinePatch([
+    { lineKey, productId: existing.id, variantId: existing.variantId, quantity: 0 },
+    {
+      lineKey: nextKey,
+      productId: existing.id,
+      variantId: existing.variantId,
+      quantity: target
+        ? Math.min(MAX_CART_QUANTITY, target.quantity + existing.quantity)
+        : existing.quantity,
+      ...(!target ? { item: moved } : {}),
     },
   ]).ok;
 }
@@ -419,9 +675,7 @@ export function removeCartItemByKey(itemKey: string): boolean {
 
 export function updateCartItemByKey(
   itemKey: string,
-  updates: Partial<
-    Pick<CartItem, "name" | "price" | "quantity" | "image" | "imageMediaId" | "freeDelivery">
-  >,
+  updates: CartLineRefresh,
 ): boolean {
   return updateCartItemsByKeyAtomically([{ lineKey: itemKey, updates }]);
 }
@@ -459,7 +713,20 @@ export function updateCartItemsByKeyAtomically(
       return false;
     }
     const quantity = updates.quantity ?? existingItem.quantity;
-    const refreshed = { ...existingItem, ...updates, quantity };
+    // New display labels for the same inputs only: keys and values are the
+    // line's identity and never change here.
+    let properties = existingItem.properties;
+    if (updates.properties !== undefined) {
+      const next = normalizeCartLineProperties(updates.properties);
+      const sameIdentity = next !== null &&
+        next.length === (existingItem.properties?.length ?? 0) &&
+        next.every((property, index) =>
+          property.key === existingItem.properties?.[index]?.key &&
+          property.value === existingItem.properties?.[index]?.value);
+      if (!sameIdentity) return false;
+      properties = next.length > 0 ? next : undefined;
+    }
+    const refreshed = { ...existingItem, ...updates, properties, quantity };
     const refreshedItem: Omit<CartItem, "quantity"> = {
       id: refreshed.id,
       ...(refreshed.slug ? { slug: refreshed.slug } : {}),
@@ -471,6 +738,11 @@ export function updateCartItemsByKeyAtomically(
       ...(refreshed.options ? { options: refreshed.options } : {}),
       ...(refreshed.freeDelivery !== undefined
         ? { freeDelivery: refreshed.freeDelivery }
+        : {}),
+      ...(properties ? { properties } : {}),
+      propertiesHash: existingItem.propertiesHash ?? NO_PROPERTIES_HASH,
+      ...(isFulfillmentKind(refreshed.fulfillmentKind)
+        ? { fulfillmentKind: refreshed.fulfillmentKind }
         : {}),
     };
     patches.push({
@@ -567,6 +839,22 @@ function patchFailure(
   };
 }
 
+/** The key a stored line must live under; null when it can't be keyed. */
+function storedLineKey(item: Omit<CartItem, "quantity">): string | null {
+  if (!item.variantId) return null;
+  const hasInputs = (item.properties?.length ?? 0) > 0;
+  if (hasInputs === ((item.propertiesHash ?? NO_PROPERTIES_HASH) === NO_PROPERTIES_HASH)) return null;
+  try {
+    return createCartItemKey({
+      id: item.id,
+      variantId: item.variantId,
+      propertiesHash: item.propertiesHash ?? NO_PROPERTIES_HASH,
+    });
+  } catch {
+    return null;
+  }
+}
+
 function isValidIdentity(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -600,7 +888,7 @@ function validateNewPatchItem(
   ) {
     return "invalid_product";
   }
-  if (createCartItemKey({ id: item.id, variantId }) !== patch.lineKey) {
+  if (storedLineKey(item) !== patch.lineKey) {
     return "invalid_line_key";
   }
   return null;
@@ -630,7 +918,7 @@ function validateExistingItemReplacement(
   ) {
     return "invalid_product";
   }
-  if (createCartItemKey({ id: item.id, variantId }) !== lineKey) {
+  if (storedLineKey(item) !== lineKey) {
     return "invalid_line_key";
   }
   return null;

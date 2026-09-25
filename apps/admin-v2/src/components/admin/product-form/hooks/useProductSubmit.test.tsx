@@ -21,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   onAggregateRevisionChange: vi.fn(),
   onRevisionConflict: vi.fn(),
   onVariantIssue: vi.fn(),
+  formatted: vi.fn(),
 }));
+/** The fields the merchant changed in the form under test. */
+const dirty = vi.hoisted(() => ({ fields: {} as Record<string, unknown> }));
 
 vi.mock("@tanstack/react-query", () => ({
   useMutation: (options: {
@@ -43,7 +46,10 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("../utils", () => ({
-  formatFormValuesForSubmission: (values: unknown) => values,
+  formatFormValuesForSubmission: (values: unknown, changed: unknown) => {
+    mocks.formatted(values, changed);
+    return values;
+  },
 }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
@@ -73,6 +79,7 @@ describe("useProductSubmit", () => {
 
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
+    dirty.fields = {};
     result = null;
     host = document.createElement("div");
     document.body.append(host);
@@ -125,6 +132,24 @@ describe("useProductSubmit", () => {
 
     expect(mocks.serverMutation.mock.calls[0]?.[0]?.body?.slug).toBeUndefined();
     expect(mocks.serverMutation.mock.calls[1]?.[0]?.body?.slug).toBe("tea-green");
+  });
+
+  it("tells the payload which of buyer inputs and fulfilment the merchant changed", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    mocks.serverMutation.mockResolvedValue({ aggregateRevision: 5 });
+    await requireResult(result).submit(productValues());
+    expect(mocks.formatted.mock.calls[0]![1]).toEqual({ customizationSchema: false, fulfillmentKind: false });
+
+    dirty.fields = { customizationSchema: [{ label: true }], fulfillmentKind: true };
+    await requireResult(result).submit(productValues());
+    expect(mocks.formatted.mock.calls[1]![1]).toEqual({ customizationSchema: true, fulfillmentKind: true });
+  });
+
+  it("sends a new product's buyer inputs and fulfilment as they are", async () => {
+    renderHarness({ isEdit: false });
+    mocks.serverMutation.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });
+    await requireResult(result).submit(productValues());
+    expect(mocks.formatted.mock.calls[0]![1]).toBeUndefined();
   });
 
   it("sends and advances the shared aggregate revision", async () => {
@@ -243,6 +268,9 @@ function HookHarness({ isEdit, aggregateRevision, onResult }: {
     getValues: vi.fn(() => productValues()),
     reset: mocks.formReset,
     setError: mocks.formSetError,
+    get formState() {
+      return { dirtyFields: dirty.fields };
+    },
   } as unknown as UseFormReturn<ProductFormValues>;
   onResult(useProductSubmit({
     isEdit,
@@ -285,5 +313,7 @@ function productValues(): ProductFormValues {
     media: [],
     attributes: [],
     additionalInfo: [],
+    fulfillmentKind: "physical",
+    customizationSchema: [],
   };
 }

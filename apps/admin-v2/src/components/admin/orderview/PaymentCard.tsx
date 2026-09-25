@@ -173,7 +173,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     && Number(order.balanceDue ?? 0) > 0;
   const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery;
   const cashCollectionAmount = Number(order.balanceDue ?? 0) > 0 ? Number(order.balanceDue) : order.totalAmount;
-  const sentUnits = order.items.reduce((sum, item) => sum + (item.shippedQuantity ?? item.quantity), 0);
+  const sentUnits = order.items.reduce((sum, item) => sum + (item.fulfilledQuantity ?? item.shippedQuantity ?? item.quantity), 0);
 
   const recovery = order.paymentRecovery ?? null;
   const canShowRecoveryLink = canIssueRecoveryLink
@@ -183,7 +183,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       : inferRecoveryLinkEligibility(order, sessionAttempts, payments));
 
   // Cash changes hands at the door: collection opens once the order is out.
-  const canRecordCodCollection = canUpdateCod && canProcessOrderCodAction(order.status, "collected");
+  // Pickup and service orders take their cash at the counter or the visit, from confirmed on.
+  const canRecordCodCollection = canUpdateCod
+    && canProcessOrderCodAction(order.status, "collected", { requiresShipping: order.requiresShipping });
   // A rider can also fail to deliver the first parcel of a part-sent order (R3-ORD-04).
   const canRecordCodFailure = canUpdateCod && (canProcessOrderCodAction(order.status, "failed") || isPartSent(order));
   const canRecordCodReturn = canUpdateCod && canProcessOrderCodAction(order.status, "returned");

@@ -84,16 +84,30 @@ export const policies = [
     sample: "const productJsonLd = JSON.stringify(schema);",
   },
   {
-    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery) submit with method=post",
-    why: "phone, OTP, cart, discount, and payment values must not enter URLs before hydration or without JavaScript",
+    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery, product buyer inputs) submit with method=post",
+    why: "phone, OTP, cart, discount, payment and buyer-input values must not enter URLs before hydration or without JavaScript",
     paths: [
       `${storefront}/components/AuthModal.tsx`,
       `${storefront}/pages/cart.astro`,
       `${storefront}/pages/payment-recovery.astro`,
+      `${storefront}/components/product/ProductBuyerInputs.astro`,
+      `${storefront}/components/conversation/ConversationReplyForm.astro`,
+      `${storefront}/pages/account/inbox/index.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
     sample: '<form action="/cart" class="x">',
+  },
+  {
+    rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
+    why: "engraving text, notes and gift messages are buyer content; they must never reach pixels, tag managers or the Conversions API (Wave A P6)",
+    paths: [
+      `${storefront}/lib/analytics.ts`,
+      `${storefront}/lib/tracking/meta-capi.ts`,
+      `${storefront}/components/product/lib/product-analytics.ts`,
+    ],
+    forbid: [/\bproperties\b/],
+    sample: "contents: items.map((item) => ({ id: item.id, properties: item.properties })),",
   },
   {
     rule: "the agent continuation page renders without the storefront Layout",
@@ -123,15 +137,35 @@ export const policies = [
     sample: "await updateOrderStatusFromShipment(db, shipment);",
   },
   {
-    rule: "customer support requests never mutate payments, stock, delivery, or order status",
-    why: "a buyer-submitted request is a record for staff review, never an automatic refund/cancel/restock",
-    paths: ["packages/core/src/modules/orders/order-support-requests.ts"],
+    rule: "customer support requests and conversations never mutate payments, stock, delivery, or order status",
+    why: "a buyer-submitted request or message is a record for staff review, never an automatic refund/cancel/restock (Wave A C5)",
+    paths: [
+      "packages/core/src/modules/orders/order-support-requests.ts",
+      "packages/core/src/modules/conversations",
+    ],
     forbid: [
-      /from\s+["']\.\.\/(?:inventory|delivery|fulfillment)(?:\/|["'])/,
+      /from\s+["']\.\.\/(?:inventory|delivery|fulfillment|fulfilment|checkout)(?:\/|["'])/,
       /from\s+["']\.\.\/payments\/(?!refund-attempt-visibility["'])/,
       /\b(?:processRefund|createRefund|initiateSSLCommerzRefund|updateOrderStatus\w*|deductStock|reserveStock\w*|releaseReservedStock\w*|restoreDeductedStock|adjustStock|setStock)\s*\(/,
     ],
     sample: 'import { restoreDeductedStock } from "../inventory/restore";',
+  },
+  {
+    rule: "order_items.fulfilled_quantity moves only through the fulfilment ledger",
+    why: "fulfilled_quantity is a trigger projection of active order_fulfillment_lines (Wave A F1); a direct update desynchronises it from the ledger",
+    paths: ["apps/api/src", "packages/core/src"],
+    forbid: [
+      /\.set\(\s*\{[^}]*\bfulfilledQuantity\s*:/,
+      /\bSET\s+[^;`]*\bfulfilled_quantity\s*=/i,
+    ],
+    sample: "await db.update(orderItems).set({ fulfilledQuantity: 3 }).where(eq(orderItems.id, id));",
+  },
+  {
+    rule: "conversations never write customers or orders",
+    why: "posting or starting a thread must not create or change a customer or an order contact; unverified contacts never change identity (Wave A C2)",
+    paths: ["packages/core/src/modules/conversations"],
+    forbid: [/\.(?:insert|update|delete)\(\s*(?:customers|orders|customerHistory)\s*\)/],
+    sample: "await db.update(customers).set({ email });",
   },
   {
     rule: "production code never calls the legacy multi-SKU stock helpers",

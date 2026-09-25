@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CheckoutConfig } from "./api/checkout";
 import type { ShippingMethod } from "./api/types";
-import { buildDeliveryFacts } from "./delivery-facts";
+import { buildDeliveryFacts, productFulfilment } from "./delivery-facts";
 
 const formatMoney = (amount: number) => `৳${amount}`;
 
@@ -135,6 +135,14 @@ describe("buildDeliveryFacts", () => {
       returnPolicy: null,
       formatMoney,
     })).toEqual([{ kind: "pickup", title: "Pickup available · from ৳30", detail: "2 pickup points" }]);
+    // The store's own wording from its checkout language.
+    expect(buildDeliveryFacts({
+      shippingMethods: [collectionPoint],
+      checkoutConfig: null,
+      returnPolicy: null,
+      formatMoney,
+      pickupAvailableText: "দোকান থেকে সংগ্রহ করা যাবে",
+    })).toEqual([{ kind: "pickup", title: "দোকান থেকে সংগ্রহ করা যাবে · ৳50", detail: "Gulshan 1 kiosk" }]);
   });
 
   it("claims nothing it cannot prove", () => {
@@ -150,5 +158,39 @@ describe("buildDeliveryFacts", () => {
       returnPolicy: null,
       formatMoney,
     })).toEqual([]);
+  });
+});
+
+describe("delivery facts by what the product is", () => {
+  const settings = {
+    shippingMethods: [method("Inside Dhaka", 60, 1), pickupRate],
+    checkoutConfig: codConfig,
+    returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" },
+    formatMoney,
+  };
+
+  it("tells physical, service and digital products apart", () => {
+    expect(productFulfilment({}, [{ fulfillmentKind: "physical" }])).toBe("physical");
+    expect(productFulfilment({}, [{}])).toBe("physical");
+    expect(productFulfilment({}, [])).toBe("physical");
+    expect(productFulfilment({}, [{ fulfillmentKind: "service" }, { fulfillmentKind: "service" }])).toBe("service");
+    expect(productFulfilment({}, [{ fulfillmentKind: "service" }, { fulfillmentKind: "physical" }])).toBe("physical");
+    expect(productFulfilment({}, [{ fulfillmentKind: "digital" }])).toBe("digital");
+    expect(productFulfilment({ isGiftCard: true }, [{ fulfillmentKind: "physical" }])).toBe("digital");
+  });
+
+  it("keeps today's facts for physical products", () => {
+    expect(buildDeliveryFacts({ ...settings, fulfilment: "physical" })).toEqual(buildDeliveryFacts(settings));
+    expect(buildDeliveryFacts(settings).map((fact) => fact.kind)).toEqual(["delivery", "pickup", "cod", "returns"]);
+  });
+
+  it("claims no delivery rates for a service and says when it is paid", () => {
+    const facts = buildDeliveryFacts({ ...settings, fulfilment: "service", payAtServiceText: "Pay when the service is done" });
+    expect(facts.map((fact) => fact.kind)).toEqual(["cod", "returns"]);
+    expect(facts[0]).toEqual({ kind: "cod", title: "Cash on delivery", detail: "Pay when the service is done" });
+  });
+
+  it("claims no delivery and no cash on delivery for a digital item", () => {
+    expect(buildDeliveryFacts({ ...settings, fulfilment: "digital" }).map((fact) => fact.kind)).toEqual(["returns"]);
   });
 });

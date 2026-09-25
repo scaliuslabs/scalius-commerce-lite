@@ -82,7 +82,7 @@ export function orderEditEvidenceSelection() {
         hasNonPendingItem: exists(
             sql`${orderItems}`,
             sql`${orderItems.orderId}`,
-            sql`${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}`,
+            sql`(${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING} OR ${orderItems.fulfilledQuantity} > 0)`,
         ),
         hasCleanCodTracking: exists(
             sql`${codTracking}`,
@@ -425,6 +425,9 @@ export interface OrderListFactsRow {
     codDeliveryAttempts: number | null;
     returnedValueMinor: number;
     refundedMinor: number;
+    requiresShipping: boolean;
+    shippingMethodKind: "delivery" | "pickup" | null;
+    pickupReadyAt: Date | null;
 }
 
 /**
@@ -437,6 +440,9 @@ export function orderListFactsSelection() {
     return {
         orderNumber: orders.orderNumber,
         archivedAt: orders.archivedAt,
+        requiresShipping: orders.requiresShipping,
+        shippingMethodKind: orders.shippingMethodKind,
+        pickupReadyAt: orders.pickupReadyAt,
         openRequestType: sql<string | null>`(
             SELECT ${orderSupportRequests.type} FROM ${orderSupportRequests}
             WHERE ${orderSupportRequests.orderId} = ${outerOrderId}
@@ -487,6 +493,9 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
             : null,
         refundDue: fromMinor(refundDueMinor, order.currencyDecimalPlaces),
         refundedAmount: fromMinor(refundedMinor, order.currencyDecimalPlaces),
+        requiresShipping: order.requiresShipping !== false,
+        shippingMethodKind: order.shippingMethodKind ?? null,
+        pickupReadyAt: order.pickupReadyAt ?? null,
     };
 }
 

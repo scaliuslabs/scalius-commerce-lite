@@ -37,6 +37,10 @@ export const orderMessages = defineMessages({
     archived: "Archived",
     orders: "Orders",
     order: "Order {number}",
+    "delivery.delivery": "Delivery",
+    "delivery.pickup": "Pickup",
+    "delivery.none": "No delivery",
+    "delivery.readyForPickup": "Ready for pickup",
   },
   bn: {
     "status.pending": "পেন্ডিং",
@@ -69,6 +73,10 @@ export const orderMessages = defineMessages({
     archived: "আর্কাইভ করা",
     orders: "অর্ডার",
     order: "অর্ডার {number}",
+    "delivery.delivery": "ডেলিভারি",
+    "delivery.pickup": "পিকআপ",
+    "delivery.none": "ডেলিভারি নেই",
+    "delivery.readyForPickup": "পিকআপের জন্য তৈরি",
   },
 });
 
@@ -89,3 +97,6 @@ export const fulfillmentStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `fulfillment.${status.toLowerCase()}`, status);
 export const paymentMethodLabel = (t: Translate, method: string) =>
   labelOrRaw(t, `method.${method.toLowerCase()}`, method);
+/** "Delivery", "Pickup", or "No delivery" (nothing physical: a service). */
+export const deliveryMethodLabel = (t: Translate, method: "delivery" | "pickup" | "none") =>
+  t(`delivery.${method}`);

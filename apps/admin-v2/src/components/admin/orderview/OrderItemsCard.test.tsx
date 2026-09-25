@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
-import { OrderItemsCard } from "./OrderItemsCard";
+import { OrderSummaryCard } from "./OrderItemsCard";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, className }: { children: ReactNode; className?: string }) => <a className={className} href="#link">{children}</a>,
@@ -49,7 +49,7 @@ const withDeliveryCode = {
 /** Reads "৳2,400.00" / "−৳285.00" as a number. */
 const amountIn = (text: string) => Number(/−?৳[\d,]+\.\d{2}$/.exec(text)?.[0].replace(/[৳,]/g, "").replace("−", "-") ?? Number.NaN);
 
-describe("OrderItemsCard", () => {
+describe("OrderSummaryCard", () => {
   let host: HTMLDivElement;
   let root: Root;
   let client: QueryClient;
@@ -71,7 +71,7 @@ describe("OrderItemsCard", () => {
     client.setQueryData(["returns", "ord_1"], { returns });
     await act(async () => root.render(
       <QueryClientProvider client={client}>
-        <OrderItemsCard order={shown} />
+        <OrderSummaryCard order={shown} />
       </QueryClientProvider>,
     ));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
@@ -122,13 +122,5 @@ describe("OrderItemsCard", () => {
     } as unknown as Order);
     const delivery = rows().find((row) => row.startsWith("Delivery"))!;
     expect(delivery).toMatch(/৳80\.00 ৳40\.00 \(Half-price delivery\)$/);
-  });
-
-  it("says how many of a line came back", async () => {
-    await render([
-      { lines: [{ orderItemId: "i1", receivedQuantity: 1 }] },
-      { lines: [{ orderItemId: "i1", receivedQuantity: 1 }] },
-    ]);
-    expect(host.textContent).toContain(en["items.returned"].replace("{count}", "2"));
   });
 });

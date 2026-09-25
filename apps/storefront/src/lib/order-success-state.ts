@@ -8,6 +8,7 @@ import {
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
 
 export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
 
@@ -151,8 +152,19 @@ export function getPaymentStatusBadgeClass(value: string | null | undefined): st
   return "bg-slate-100 text-slate-800";
 }
 
+type OrderDeliveryFacts = Partial<Pick<OrderFulfilmentView, "requiresShipping" | "shippingMethodKind">>;
+
+/**
+ * What a cash-on-delivery balance is due on: the delivery, the pickup at the
+ * counter, or the service (Wave A checkout rules).
+ */
+export function codDueText(order: OrderDeliveryFacts, copy: CheckoutLanguageData): string {
+  const mode = orderDeliveryMode(order);
+  return mode === "pickup" ? copy.dueAtPickupText : mode === "none" ? copy.dueAtServiceText : copy.dueOnDeliveryText;
+}
+
 export function getOrderPaymentPresentation(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">,
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"> & OrderDeliveryFacts,
   copy: CheckoutLanguageData,
 ) {
   const isCod = normalize(order.paymentMethod) === "cod";
@@ -165,14 +177,14 @@ export function getOrderPaymentPresentation(
     statusLabel: codCollection && isClosed
       ? copy.orderReceiptPaymentStatusNoPaymentDueText
       : isCod && paymentStatus === "unpaid"
-        ? copy.dueOnDeliveryText
+        ? codDueText(order, copy)
         : formatOrderSuccessLabel(order.paymentStatus, copy),
     badgeClass: codCollection
       ? "bg-slate-100 text-slate-800"
       : getPaymentStatusBadgeClass(order.paymentStatus),
     methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy),
     balanceDue: getOrderSuccessVisibleBalanceDue(order),
-    balanceLabel: isCod ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText,
+    balanceLabel: isCod ? codDueText(order, copy) : copy.orderReceiptBalanceDueText,
   };
 }
 
@@ -310,16 +322,23 @@ const DELIVERY_ESTIMATE =
  * comes only from the chosen delivery method's own description.
  */
 export function getOrderSuccessNextSteps(
-  order: Pick<OrderReceipt, "paymentMethod" | "shippingMethodDescription">,
+  order: Pick<OrderReceipt, "paymentMethod" | "shippingMethodDescription"> & OrderDeliveryFacts,
   kind: OrderSuccessStateKind,
   copy: CheckoutLanguageData,
 ): string[] {
   if (kind !== "order_placed") return [];
+  const paid = isOnlinePaymentMethod(order.paymentMethod);
+  // Nothing goes to a courier for a pickup or a service.
+  const mode = orderDeliveryMode(order);
+  if (mode === "pickup") {
+    return [paid ? copy.orderReceiptNextStepsPickupPaidText : copy.orderReceiptNextStepsPickupCodText];
+  }
+  if (mode === "none") {
+    return [paid ? copy.orderReceiptNextStepsServicePaidText : copy.orderReceiptNextStepsServiceCodText];
+  }
   const estimate = DELIVERY_ESTIMATE.exec(order.shippingMethodDescription ?? "")?.[0];
   return [
-    isOnlinePaymentMethod(order.paymentMethod)
-      ? copy.orderReceiptNextStepsPaidText
-      : copy.orderReceiptNextStepsCodText,
+    paid ? copy.orderReceiptNextStepsPaidText : copy.orderReceiptNextStepsCodText,
     ...(estimate ? [formatCheckoutLanguageText(copy.orderReceiptDeliveryEstimateText, { estimate })] : []),
   ];
 }

@@ -1,0 +1,95 @@
+---
+// "Questions about this order? Message us": the order's conversation thread
+// for the receipt (order success), track order and account order pages.
+//
+// Usage (the page needs nothing else; the panel reads the request itself):
+//   import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
+//   <OrderConversationPanel orderId={order.id} access="receipt" />   // guest, receipt cookie
+//   <OrderConversationPanel orderId={order.id} access="account" />   // signed-in owner
+//
+// It server-renders the current thread (works without JavaScript), marks it
+// read, and renders nothing when this browser cannot reach the order's thread
+// (no receipt cookie, not signed in, not the owner). Mount it once per page;
+// it uses the id "conversation" as its anchor. The receipt proof is read from
+// its httpOnly cookie on the server and never reaches the markup.
+import ConversationReplyForm from "./ConversationReplyForm.astro";
+import {
+  CONVERSATION_COPY as copy,
+  currentReturnPath,
+  isOrderId,
+  readConversationStatusFlag,
+  renderConversationMessages,
+  type ConversationAccess,
+} from "@/lib/account-inbox";
+import {
+  attachmentUrlFor,
+  markConversationRead,
+  readConversation,
+  type ConversationTarget,
+} from "@/lib/account-inbox-server";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+interface Props {
+  /** The order's id (not its number). */
+  orderId: string;
+  /** "receipt": a guest holding this order's receipt cookie. "account": the signed-in owner. */
+  access: ConversationAccess;
+  /** Classes for the panel's section (defaults to the order pages' card). */
+  class?: string;
+}
+
+const {
+  orderId,
+  access,
+  class: className = "rounded-xl border border-border bg-card p-5",
+} = Astro.props;
+
+const target: ConversationTarget | null = isOrderId(orderId)
+  ? { kind: "order", orderId, access: access === "account" ? "account" : "receipt" }
+  : null;
+const read = target ? await readConversation(Astro.request, target) : null;
+const unavailable = read?.ok === false && read.reason === "unavailable";
+const visible = Boolean(target && read && (read.ok || unavailable));
+const thread = read?.ok ? read.data : null;
+if (target && thread) await markConversationRead(Astro.request, target, thread);
+
+const messagesHtml = target && thread
+  ? renderConversationMessages(thread.messages, { attachmentUrl: attachmentUrlFor(target, thread), readSeq: thread.readSeq })
+  : "";
+const action = `/api/conversations/orders/${encodeURIComponent(orderId)}/messages${access === "account" ? "?access=account" : ""}`;
+const inboxHref = thread ? `/account/inbox/${encodeURIComponent(thread.id)}` : "";
+---
+
+{visible && (
+  <section id="conversation" class={className} aria-labelledby="conversationHeading">
+    <h2 id="conversationHeading" class="text-base font-semibold text-foreground">{copy.orderPanelTitle}</h2>
+    <p class="mt-1 text-sm text-muted-foreground">{copy.orderPanelIntro}</p>
+    {unavailable && <p class="mt-3 text-sm text-destructive" role="alert">{copy.unavailable}</p>}
+    {thread?.hasMore && (
+      <p class="mt-3 text-sm text-muted-foreground">
+        {copy.orderPanelTruncated}
+        {access === "account" && <> <a href={inboxHref} data-astro-prefetch={getStorefrontPrefetchAttribute(inboxHref)} class="font-medium text-primary hover:underline">{copy.orderPanelOpenInbox}</a></>}
+      </p>
+    )}
+    <ol
+      id="orderConversationMessages"
+      class="mt-4 space-y-4"
+      aria-label="Messages"
+      hidden={!thread || thread.messages.length === 0}
+      set:html={messagesHtml}
+    />
+    <ConversationReplyForm
+      action={action}
+      returnTo={currentReturnPath(Astro.url)}
+      messagesTargetId="orderConversationMessages"
+      idPrefix="orderConversation"
+      status={readConversationStatusFlag(Astro.url)}
+      note={thread?.status === "closed" ? copy.closedNote : null}
+    />
+    {access === "account" && thread && !thread.hasMore && (
+      <p class="mt-3 text-sm">
+        <a href={inboxHref} data-astro-prefetch={getStorefrontPrefetchAttribute(inboxHref)} class="inline-flex min-h-11 items-center font-medium text-primary hover:underline">{copy.orderPanelOpenInbox}</a>
+      </p>
+    )}
+  </section>
+)}

@@ -12,6 +12,7 @@ import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator"
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import {
+  deliveryMethodLabel,
   fulfillmentStatusLabel,
   orderMessages,
   paymentMethodLabel,
@@ -75,13 +76,34 @@ export function PaymentBadge({ order }: { order: Pick<OrderListItem, "status" | 
   );
 }
 
-export function FulfillmentBadge({ order }: { order: Pick<OrderListItem, "status" | "fulfillmentStatus"> }) {
+type FulfillmentBadgeOrder = Pick<OrderListItem, "status" | "fulfillmentStatus">
+  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping" | "pickupReadyAt">>;
+
+/**
+ * Fulfilment status, plus how the order reaches the buyer when it isn't
+ * shipped: "Pickup" (or "Ready for pickup" once staff said so) and "No
+ * delivery" for services, so a counter or visit order is never mistaken for
+ * one to pack.
+ */
+export function FulfillmentBadge({ order }: { order: FulfillmentBadgeOrder }) {
   const t = useMessages(orderMessages);
   if (!orderBadgeVisibility(order).fulfillment) return null;
+  const done = order.fulfillmentStatus === "complete";
+  const pickup = order.shippingMethodKind === "pickup";
+  const readyForPickup = pickup && !done && Boolean(order.pickupReadyAt);
+  const noDelivery = order.requiresShipping === false && !order.shippingMethodKind;
   return (
-    <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>
-      {fulfillmentStatusLabel(t, order.fulfillmentStatus)}
-    </Badge>
+    <span className="inline-flex flex-wrap gap-1">
+      {readyForPickup ? (
+        <Badge variant="info">{t("delivery.readyForPickup")}</Badge>
+      ) : (
+        <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>
+          {fulfillmentStatusLabel(t, order.fulfillmentStatus)}
+        </Badge>
+      )}
+      {pickup && !readyForPickup ? <Badge variant="secondary">{deliveryMethodLabel(t, "pickup")}</Badge> : null}
+      {noDelivery ? <Badge variant="secondary">{deliveryMethodLabel(t, "none")}</Badge> : null}
+    </span>
   );
 }
 

@@ -6,6 +6,8 @@ export const shellMessages = defineMessages({
     loadingNextPage: "Loading next page",
     home: "Home",
     orders: "Orders",
+    inbox: "Inbox",
+    inboxUnread: "{count} unread",
     products: "Products",
     collections: "Collections",
     categories: "Categories",
@@ -71,6 +73,8 @@ export const shellMessages = defineMessages({
     loadingNextPage: "পরের পেজ লোড হচ্ছে",
     home: "হোম",
     orders: "অর্ডার",
+    inbox: "ইনবক্স",
+    inboxUnread: "{count}টি না-পড়া",
     products: "পণ্য",
     collections: "কালেকশন",
     categories: "ক্যাটাগরি",
@@ -139,6 +143,7 @@ export const navKeywordMessages = defineMessages({
   en: {
     home: "dashboard overview sales today",
     orders: "sales",
+    inbox: "messages conversations chat customer questions support requests",
     products: "items catalog catalogue variants sku",
     inventory: "stock quantity",
     lowStock: "inventory alerts reorder out",
@@ -157,6 +162,7 @@ export const navKeywordMessages = defineMessages({
   bn: {
     home: "ড্যাশবোর্ড বিক্রি আজকের",
     orders: "বিক্রি",
+    inbox: "মেসেজ কথোপকথন চ্যাট প্রশ্ন অনুরোধ",
     products: "প্রোডাক্ট ভ্যারিয়েন্ট এসকেইউ",
     inventory: "স্টক পরিমাণ",
     lowStock: "স্টক শেষ অ্যালার্ট",

@@ -5,7 +5,7 @@ import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers/customer-identity";
 import { nanoid } from "nanoid";
 import type { UpdateOrderDetailsInput } from "../validation";
-import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { validateCustomerPhoneCountry } from "../../settings/phone-country-policy";
 import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
@@ -42,21 +42,31 @@ export async function updateOrderDetails(
     if (!readiness?.details.allowed) {
         throw new ConflictError(orderEditLockMessage(readiness?.details.reason ?? null));
     }
+    // Only an order that ships carries an address (Wave A §2.7).
+    const ships = order.requiresShipping !== false;
+    const shippingAddress = ships ? data.shippingAddress?.trim() ?? "" : null;
+    const city = ships ? data.city?.trim() ?? "" : null;
+    const zone = ships ? data.zone?.trim() ?? "" : null;
+    if (ships && (!shippingAddress || !city || !zone)) {
+        throw new ValidationError("Enter the delivery address, city and thana.");
+    }
     const next = {
         customerName: data.customerName.trim(),
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail?.trim().toLowerCase() || null,
-        shippingAddress: data.shippingAddress.trim(),
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
+        shippingAddress,
+        city,
+        zone,
+        area: ships ? data.area?.trim() || null : null,
     };
     const changedFields = ORDER_DETAIL_FIELDS.filter((field) => (order[field] ?? null) !== next[field]);
     if (changedFields.length === 0) return { id: orderId, version: order.version, changedFields: [] };
     if (next.customerPhone !== order.customerPhone) {
         await validateCustomerPhoneCountry(db, next.customerPhone);
     }
-    const locationNames = await resolveActiveDeliveryLocationNames(db, next);
+    const locationNames = ships && next.city && next.zone
+        ? await resolveActiveDeliveryLocationNames(db, { city: next.city, zone: next.zone, area: next.area })
+        : { cityName: null, zoneName: null, areaName: null };
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;

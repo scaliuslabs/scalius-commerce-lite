@@ -6,6 +6,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SendEmailOptions } from "../../integrations/email/provider";
 import { sendOrderNotificationEmail, sendStaffOrderEmails } from "./notifications.service";
 import type { OrderNotificationType } from "./notification-types";
+import { composeOrderSms, readOrderMessageContext } from "./order-email";
 
 const transport = vi.hoisted(() => ({ sendEmail: vi.fn() }));
 vi.mock("../../integrations/email", () => ({ sendEmail: transport.sendEmail }));
@@ -45,8 +46,8 @@ describe("customer order email composition and delivery", () => {
         'Inside Dhaka', 'Arrives in 1-2 days', 'BDT', 2, 20000, 6000, 2000, 1800, 25800, 'VAT', 0, 'confirmed', 'cod', 'unpaid', 0, 25800);
       INSERT INTO order_items (id, order_id, product_id, quantity, product_name, variant_label, unit_price_minor, line_subtotal_minor)
       VALUES ('item', 'order_email', 'product', 2, 'Saved cotton shirt', 'Indigo / M', 10000, 20000);
-      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload)
-      VALUES ('outbox_email', 'email-test', 'order_email', 'order_confirmed', 'test', '{}');`);
+      INSERT INTO notification_outbox (id, dedupe_key, subject_type, subject_id, order_id, audience, notification_type, source, payload)
+      VALUES ('outbox_email', 'email-test', 'order', 'order_email', 'order_email', 'customer', 'order_confirmed', 'test', '{}');`);
   });
 
   afterEach(() => sqlite.close());
@@ -106,7 +107,7 @@ describe("customer order email composition and delivery", () => {
     expect(email.links.some((link) => link.startsWith("mailto:"))).toBe(true);
     expect(email.links.some((link) => link.startsWith("tel:"))).toBe(true);
     expect(result.hasRetryableFailure).toBe(false);
-    expect(sqlite.prepare("SELECT status, attempts FROM order_notification_delivery_receipts").get()).toMatchObject({ status: "accepted", attempts: 1 });
+    expect(sqlite.prepare("SELECT status, attempts FROM notification_delivery_receipts").get()).toMatchObject({ status: "accepted", attempts: 1 });
     expect(transport.sendEmail.mock.calls[0]![0].idempotencyKey).toMatch(/^outbox_email:email:/);
     expect(reads.some((query) => query.includes('from "products"'))).toBe(false);
   });
@@ -154,7 +155,7 @@ describe("customer order email composition and delivery", () => {
     expect(message().html).toMatch(/<img src="https:\/\/cdn\.example\.test\/media\/logo\.png" alt="River &amp; Loom"/);
 
     transport.sendEmail.mockClear();
-    sqlite.exec("DELETE FROM order_notification_delivery_receipts");
+    sqlite.exec("DELETE FROM notification_delivery_receipts");
     setDocument("header", { logo: { src: "/media/logo.png" } });
     setDocument("business", { companyName: "", legalName: "River and Loom Ltd" });
     await send();
@@ -175,7 +176,7 @@ describe("customer order email composition and delivery", () => {
     expect(email.visible).toContain("The store will review it and let you know.");
 
     transport.sendEmail.mockClear();
-    sqlite.exec("DELETE FROM order_notification_delivery_receipts");
+    sqlite.exec("DELETE FROM notification_delivery_receipts");
     activateLanguage("bn");
     await send("support_request_status_updated", { data: { supportRequestType: "return", supportRequestStatus: "under_review" } });
     expect(message().subject).toBe("অর্ডার #order_email-এর রিটার্নের অনুরোধ নিয়ে আপডেট");
@@ -189,7 +190,7 @@ describe("customer order email composition and delivery", () => {
     await send();
     expect(transport.sendEmail).toHaveBeenCalledTimes(1);
     expect(reads.some((query) => query.includes('"order_items"') || query.includes('"business"'))).toBe(false);
-    expect(sqlite.prepare("SELECT attempts FROM order_notification_delivery_receipts").get()).toMatchObject({ attempts: 1 });
+    expect(sqlite.prepare("SELECT attempts FROM notification_delivery_receipts").get()).toMatchObject({ attempts: 1 });
   });
 
   it("keeps item facts and money in the same snapshot when an amendment follows the order read", async () => {
@@ -208,12 +209,12 @@ describe("customer order email composition and delivery", () => {
     failItemRead = true;
     expect((await send()).hasRetryableFailure).toBe(true);
     expect(transport.sendEmail).not.toHaveBeenCalled();
-    expect(sqlite.prepare("SELECT status FROM order_notification_delivery_receipts").get()).toMatchObject({ status: "failed" });
+    expect(sqlite.prepare("SELECT status FROM notification_delivery_receipts").get()).toMatchObject({ status: "failed" });
     failItemRead = false;
-    sqlite.exec("UPDATE order_notification_delivery_receipts SET next_attempt_at = 0");
+    sqlite.exec("UPDATE notification_delivery_receipts SET next_attempt_at = 0");
     await send();
     expect(message().visible).toContain("Saved cotton shirt");
-    expect(sqlite.prepare("SELECT status, attempts FROM order_notification_delivery_receipts").get()).toMatchObject({ status: "accepted", attempts: 2 });
+    expect(sqlite.prepare("SELECT status, attempts FROM notification_delivery_receipts").get()).toMatchObject({ status: "accepted", attempts: 2 });
   });
 
   it.each(["missing recipient", "disabled email"])("avoids item and business reads for %s", async (scenario) => {
@@ -353,8 +354,8 @@ describe("customer order email composition and delivery", () => {
 
   it("emails each staff recipient once per new order, even when the outbox row is retried", async () => {
     setDocument("notifications", { staffEmailRecipients: ["owner@shop.test", "buyer@example.test"] });
-    sqlite.exec(`INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload)
-      VALUES ('outbox_new', 'order_created:order_email', 'order_email', 'order_created', 'test', '{}')`);
+    sqlite.exec(`INSERT INTO notification_outbox (id, dedupe_key, subject_type, subject_id, order_id, audience, notification_type, source, payload)
+      VALUES ('outbox_new', 'order_created:order_email', 'order', 'order_email', 'order_email', 'customer', 'order_created', 'test', '{}')`);
     const env = { BETTER_AUTH_URL: "https://admin.shop.test", STOREFRONT_URL: "https://shop.example.test" };
     const order = { id: "order_email", customerName: "Email Buyer", notificationType: "order_created" as const };
 
@@ -445,7 +446,7 @@ describe("customer order email composition and delivery", () => {
     expect(message().text).not.toContain("Thanks");
 
     transport.sendEmail.mockClear();
-    sqlite.exec("DELETE FROM order_notification_delivery_receipts; DELETE FROM settings WHERE category = 'notification_templates'");
+    sqlite.exec("DELETE FROM notification_delivery_receipts; DELETE FROM settings WHERE category = 'notification_templates'");
     setTemplates({ email: { order_confirmed: { subject: "{{store_name}}", body: "Hi" } } });
     await send();
     expect(message().subject).toBe("Order #order_email confirmed");
@@ -470,7 +471,7 @@ describe("customer order email composition and delivery", () => {
 
     expect(transport.sendEmail).not.toHaveBeenCalled();
     expect(result).toEqual({ hasRetryableFailure: false, outcomes: [expect.objectContaining({ channel: "email", status: "skipped", providerStatus: "notification_turned_off" })] });
-    expect(sqlite.prepare("SELECT channel, status, last_error, recipient_masked FROM order_notification_delivery_receipts").all())
+    expect(sqlite.prepare("SELECT channel, status, last_error, recipient_masked FROM notification_delivery_receipts").all())
       .toEqual([{ channel: "email", status: "skipped", last_error: "notification_turned_off", recipient_masked: "b***@example.test" }]);
     expect(reads.some((query) => query.includes('"order_items"') || query.includes('"business"'))).toBe(false);
   });
@@ -495,6 +496,28 @@ describe("customer order email composition and delivery", () => {
     sqlite.exec("UPDATE orders SET status = 'partially_refunded', payment_status = 'partially_refunded'");
     await send("order_partially_refunded", { data: { amount: 120 } });
     expect(message().text).toContain("A partial refund for this order has been processed.\nRefund: ৳120");
+  });
+
+  it("carries each line's frozen buyer inputs in the email facts and never in SMS variables", async () => {
+    // The snapshot is immutable: the line is written with its properties.
+    sqlite.exec("DELETE FROM order_items");
+    sqlite.prepare(`INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor,
+      line_subtotal_minor, properties) VALUES ('item', 'order_email', 'product', 2, 'Saved cotton shirt', 10000, 20000, ?)`).run(JSON.stringify([
+      { key: "engraving", type: "text", label: "Engraving", value: "<b>Anika</b>", displayValue: "<b>Anika</b>", priceMinor: 20000 },
+      { key: "fit", type: "select", label: "Fit", value: "slim", displayValue: "Slim", priceMinor: 0 },
+      { broken: true },
+    ]));
+    const context = await readOrderMessageContext({ orderId: "order_email", type: "order_confirmed" }, db);
+    const [item] = context.facts.items as Array<(typeof context.facts.items)[number] & { properties: string[] }>;
+    // Plain text: the template escapes it where it renders.
+    expect(item?.properties).toEqual(["Engraving: <b>Anika</b> (+৳200)", "Fit: Slim"]);
+    expect(JSON.stringify(context.variables)).not.toMatch(/Anika|Engraving/);
+    expect(composeOrderSms(context, "{{order_number}} {{order_total}}")).not.toMatch(/Anika|Engraving/);
+  });
+
+  it("gives lines without buyer inputs an empty list", async () => {
+    const context = await readOrderMessageContext({ orderId: "order_email", type: "order_confirmed" }, db);
+    expect((context.facts.items[0] as { properties?: string[] }).properties).toEqual([]);
   });
 
   it("sends no staff email for other events or when nobody is listed", async () => {

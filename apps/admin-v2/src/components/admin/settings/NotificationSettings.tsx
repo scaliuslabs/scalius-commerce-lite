@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
+import { isOrderNotificationType, type NotificationType } from "@scalius/core/modules/notifications/browser";
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,
@@ -37,12 +37,16 @@ import { settingsMessages } from "~/i18n/settings";
 import { notificationEventMessages } from "~/i18n/notification-events";
 import { notificationsMessages } from "~/i18n/settings-notifications";
 import {
+  CUSTOMER_EVENT_GROUPS,
   CUSTOMER_NOTIFICATION_CHANNELS,
-  NOTIFICATION_EVENT_GROUPS,
+  STAFF_EVENT_GROUPS,
+  adminChannelAllowed,
   buildAdminNotificationConfig,
+  customerChannelAllowed,
   buildCustomerNotificationConfig,
   serializeAdminNotificationConfig,
   serializeCustomerNotificationConfig,
+  type NotificationEventGroup,
 } from "./notification-channel-policy";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
@@ -73,17 +77,22 @@ function toggled<T extends string>(list: readonly T[] | undefined, item: T): T[]
  * rules already on stay visible so they can be switched off.
  */
 function RulesTable({
+  groups,
   columns,
   isOn,
+  allowed,
   onToggle,
   disabled,
   linkEvents = false,
 }: {
+  groups: readonly NotificationEventGroup[];
   columns: ReadonlyArray<{ key: string; label: string; ready: boolean }>;
-  isOn: (event: OrderNotificationType, column: string) => boolean;
-  onToggle: (event: OrderNotificationType, column: string) => void;
+  isOn: (event: NotificationType, column: string) => boolean;
+  /** Channels an event can't use show no checkbox. */
+  allowed: (event: NotificationType, column: string) => boolean;
+  onToggle: (event: NotificationType, column: string) => void;
   disabled: boolean;
-  /** Event names open that message's editor. */
+  /** Order event names open that message's editor. */
   linkEvents?: boolean;
 }) {
   const events = useMessages(notificationEventMessages);
@@ -98,7 +107,7 @@ function RulesTable({
           ))}
         </tr>
       </thead>
-      {NOTIFICATION_EVENT_GROUPS.map((group) => (
+      {groups.map((group) => (
         <tbody key={group.key}>
           <tr>
             <th colSpan={columns.length + 1} className="pb-1 pt-4 text-left font-semibold">
@@ -108,7 +117,7 @@ function RulesTable({
           {group.events.map((event) => (
             <tr key={event} className="border-t border-border">
               <td className="py-1.5 pr-2">
-                {linkEvents ? (
+                {linkEvents && isOrderNotificationType(event) ? (
                   <Link
                     to="/admin/settings/notifications/$event"
                     params={{ event }}
@@ -123,14 +132,18 @@ function RulesTable({
               </td>
               {columns.map((column) => (
                 <td key={column.key} className="text-center">
-                  <label className="inline-grid size-11 place-items-center">
-                    <Checkbox
-                      checked={isOn(event, column.key)}
-                      disabled={disabled || (!column.ready && !isOn(event, column.key))}
-                      aria-label={`${events(event)}: ${column.label}`}
-                      onCheckedChange={() => onToggle(event, column.key)}
-                    />
-                  </label>
+                  {allowed(event, column.key) ? (
+                    <label className="inline-grid size-11 place-items-center">
+                      <Checkbox
+                        checked={isOn(event, column.key)}
+                        disabled={disabled || (!column.ready && !isOn(event, column.key))}
+                        aria-label={`${events(event)}: ${column.label}`}
+                        onCheckedChange={() => onToggle(event, column.key)}
+                      />
+                    </label>
+                  ) : (
+                    <span className="text-muted-foreground" aria-label={`${events(event)}: ${column.label} ${t("notAvailable")}`}>–</span>
+                  )}
                 </td>
               ))}
             </tr>
@@ -169,9 +182,11 @@ export function CustomerNotificationsCard() {
   return (
     <SettingsCard id="customerNotifications" title={t("customerTitle")} description={t("customerDescription")}>
       <RulesTable
+        groups={CUSTOMER_EVENT_GROUPS}
         columns={columns}
         disabled={!canEdit}
         linkEvents
+        allowed={customerChannelAllowed}
         isOn={(event, channel) => config[event][channel as keyof (typeof config)[typeof event]]}
         onToggle={(event, channel) =>
           setValues((draft) => ({
@@ -227,13 +242,18 @@ export function StaffNotificationsCard() {
   return (
     <SettingsCard id="staffNotifications" title={t("staffTitle")} description={t("staffDescription")}>
       <RulesTable
-        columns={[{ key: "push", label: t("push"), ready: pushReady }]}
+        groups={STAFF_EVENT_GROUPS}
+        columns={[
+          { key: "push", label: t("push"), ready: pushReady },
+          { key: "email", label: t("email"), ready: isReady(values.email) },
+        ]}
         disabled={!canEdit}
-        isOn={(event) => config[event].push}
-        onToggle={(event) =>
+        allowed={adminChannelAllowed}
+        isOn={(event, channel) => config[event][channel as "push" | "email"]}
+        onToggle={(event, channel) =>
           setValues((draft) => ({
             ...draft,
-            adminChannels: { ...draft.adminChannels, [event]: toggled(draft.adminChannels[event], "push") },
+            adminChannels: { ...draft.adminChannels, [event]: toggled(draft.adminChannels[event], channel) },
           }))}
       />
       {!pushReady ? (

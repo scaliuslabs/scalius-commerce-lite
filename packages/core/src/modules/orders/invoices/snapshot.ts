@@ -9,6 +9,14 @@ import {
 
 export const INVOICE_RENDER_VERSION = "invoice-v1" as const;
 
+/** A buyer input frozen on the order line, as the invoice prints it. */
+export interface InvoiceLinePropertySnapshot {
+  label: string;
+  displayValue: string;
+  /** Surcharge per unit, in minor units; 0 when free. */
+  priceMinor: number;
+}
+
 export interface InvoiceOrderItemSnapshot {
   id: string;
   productId: string;
@@ -25,6 +33,11 @@ export interface InvoiceOrderItemSnapshot {
   taxAmountMinor: number | null;
   /** Units the customer sent back and the store received. */
   returnedQuantity?: number;
+  /**
+   * Buyer inputs (engraving, fit…), from schema version 2. Absent on lines
+   * without inputs and on invoices issued before Wave A.
+   */
+  properties?: InvoiceLinePropertySnapshot[];
 }
 
 export interface InvoiceOrderSnapshot {
@@ -79,8 +92,14 @@ export interface InvoiceOrderSnapshot {
   items: InvoiceOrderItemSnapshot[];
 }
 
+/**
+ * 1: the original shape. 2: item lines may carry `properties`. Both read the
+ * same way; a version-1 snapshot simply has no buyer inputs.
+ */
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 2 as const;
+
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1;
+  schemaVersion: 1 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -209,6 +228,15 @@ export function snapshotInvoiceOrder(
       taxableAmountMinor: item.taxableAmountMinor ?? null,
       taxAmountMinor: item.taxAmountMinor ?? null,
       returnedQuantity: item.returnedQuantity ?? 0,
+      ...(item.properties?.length
+        ? {
+          properties: item.properties.map((property) => ({
+            label: property.label,
+            displayValue: property.displayValue,
+            priceMinor: property.priceMinor,
+          })),
+        }
+        : {}),
     })),
   };
 }

@@ -25,6 +25,11 @@ vi.mock("./api/customer-auth", () => ({
 }));
 vi.mock("./api/shipping", () => ({ getCities: api.getCities, getZones: api.getZones, getAreas: api.getAreas }));
 vi.mock("./product-media", () => ({ getProductImageUrl: () => "/placeholder-product.svg" }));
+const inbox = vi.hoisted(() => ({ unread: 0 }));
+vi.mock("./account-inbox", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./account-inbox")>()),
+  fetchInboxUnread: async () => inbox.unread,
+}));
 
 const { bindSignOut, initializeAccountPage } = await import("./account-page");
 const { getCustomerSession, getCustomerOrders, updateCustomerProfile, getCities, getZones, getAreas } = api;
@@ -251,6 +256,22 @@ describe("account order history", () => {
     expect(api.logoutCustomer).toHaveBeenCalledOnce();
     expect(loggedOut).toHaveBeenCalledOnce();
     window.removeEventListener("customer-logout", loggedOut);
+  });
+});
+
+describe("account inbox tab", () => {
+  it("links the Inbox with the unread count and hides the badge when nothing is new", async () => {
+    inbox.unread = 3;
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(element("accountInboxBadge").hidden).toBe(false));
+    const link = document.querySelector<HTMLAnchorElement>('#accountTabs a[href="/account/inbox"]')!;
+    expect(link.textContent).toContain("Inbox");
+    expect(element("accountInboxBadge").textContent).toBe("3 unread");
+
+    inbox.unread = 0;
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(element("accountInboxBadge").hidden).toBe(true));
+    expect(document.querySelectorAll("#accountTabs")).toHaveLength(1);
   });
 });
 

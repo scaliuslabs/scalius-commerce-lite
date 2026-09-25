@@ -9,7 +9,9 @@ import {
   type ProductCondition,
 } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
+import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import { formatNumber, translate } from "~/i18n";
+import type { BuyerInputDraft } from "./buyer-inputs";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 
 /** Validation messages are read when validation runs, in the current language. */
@@ -106,6 +108,12 @@ export const productFormSchema = z.object({
   slugEdited: z.boolean().optional(),
   /** The product has options: its variants carry the prices (and their own checks). */
   variantPriced: z.boolean().optional(),
+  /** What the SKUs are: all physical, all services, or set per variant. */
+  fulfillmentKind: z.enum(["physical", "service", "mixed"]),
+  /** Buyer inputs the product page asks for, in order (each checked in its dialog). */
+  customizationSchema: z.array(z.custom<BuyerInputDraft>()).max(CUSTOMIZATION_LIMITS.fields, {
+    error: () => translate(productMessages, "buyerInputsFull", { max: CUSTOMIZATION_LIMITS.fields }),
+  }),
 }).superRefine((data, ctx) => {
   // A saved product keeps its web address: clearing it is a mistake, not "make one up".
   if (data.id && !data.slug) {

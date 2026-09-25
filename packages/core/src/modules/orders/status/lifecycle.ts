@@ -115,9 +115,19 @@ const COD_ACTION_REFUSALS: Record<OrderCodAction, string> = {
     returned: "Only an order that was sent can be marked returned.",
 };
 
-export function assertOrderCodActionAllowed(status: string, action: OrderCodAction): void {
-    if (canProcessOrderCodAction(status, action)) return;
-    throw new ValidationError(COD_ACTION_REFUSALS[action]);
+/**
+ * `requiresShipping: false` (pickup or service): cash is taken at the
+ * counter or at the service, so a confirmed order can record it.
+ */
+export function assertOrderCodActionAllowed(
+    status: string,
+    action: OrderCodAction,
+    context: { requiresShipping?: boolean } = {},
+): void {
+    if (canProcessOrderCodAction(status, action, context)) return;
+    throw new ValidationError(action === "collected" && context.requiresShipping === false
+        ? "Confirm the order before recording the cash."
+        : COD_ACTION_REFUSALS[action]);
 }
 
 /**
@@ -247,6 +257,7 @@ export async function applyOrderStatusChange(
 
     const existingOrder = await db.select({
         status: orders.status,
+        requiresShipping: orders.requiresShipping,
         inventoryAction: orders.inventoryAction,
         version: orders.version,
         customerName: orders.customerName,
@@ -273,6 +284,11 @@ export async function applyOrderStatusChange(
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
+    if (nextStatus === OrderStatus.DELIVERED && currentStatus !== nextStatus) {
+        // Delivered only once every line that is handed over by a real
+        // action was (F7); digital and gift-card lines never block.
+        await assertOrderLinesHandedOver(db, orderId, existingOrder.requiresShipping);
+    }
     if (isDeliveredOrCompleted) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
         // A partly refunded order was paid in full: its net paid amount is
@@ -318,7 +334,7 @@ export async function applyOrderStatusChange(
     validateTransition("order", currentStatus, nextStatus);
 
     if (nextStatus === OrderStatus.CANCELLED) {
-        await assertNothingWithTheCourier(db, orderId);
+        await assertNothingHandedOver(db, orderId);
         await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
     }
 
@@ -400,24 +416,67 @@ export async function applyOrderStatusChange(
 }
 
 /**
- * Units already handed to a courier are out of the building: cancelling would
- * put them back into sellable stock while a rider still holds them (R2-ORD-02).
- * They must come back as a return, or be delivered, first.
+ * Units handed over are out of the building (with a courier, collected at the
+ * counter, or a service performed): cancelling would put them back into
+ * sellable stock (R2-ORD-02, Wave A F8). They must come back as a return, or
+ * the fulfilment be voided, first. Lines the previous API sent count until
+ * the contract migration drops `shipped_quantity`.
  */
-async function assertNothingWithTheCourier(db: Database, orderId: string): Promise<void> {
-    const row = await db.select({
-        sent: sql<number>`coalesce(sum(${orderItems.shippedQuantity}), 0)`,
-    }).from(orderItems).where(eq(orderItems.orderId, orderId)).get();
-    const sent = Number(row?.sent ?? 0);
-    if (sent > 0) {
-        throw new ValidationError(sent === 1
-            ? "1 item is with the courier. Mark it returned or delivered first."
-            : `${sent} items are with the courier. Mark them returned or delivered first.`);
+async function assertNothingHandedOver(db: Database, orderId: string): Promise<void> {
+    const rows = await db.select({
+        type: orderItems.fulfillmentType,
+        handedOver: sql<number>`coalesce(sum(CASE WHEN ${orderItems.fulfilledQuantity} > ${orderItems.shippedQuantity} THEN ${orderItems.fulfilledQuantity} ELSE ${orderItems.shippedQuantity} END), 0)`,
+    }).from(orderItems).where(eq(orderItems.orderId, orderId)).groupBy(orderItems.fulfillmentType).all();
+    const byType = new Map<string, number>(rows.map((row) => [row.type, Number(row.handedOver) || 0]));
+    const count = (type: string) => byType.get(type) ?? 0;
+    const units = (quantity: number) => (quantity === 1 ? "1 item is" : `${quantity} items are`);
+    if (count("ship") > 0) {
+        throw new ValidationError(`${units(count("ship"))} with the courier. Mark ${count("ship") === 1 ? "it" : "them"} returned or delivered first.`);
+    }
+    if (count("pickup") > 0) {
+        throw new ValidationError(`${count("pickup") === 1 ? "1 item was" : `${count("pickup")} items were`} picked up. Take ${count("pickup") === 1 ? "it" : "them"} back as a return first.`);
+    }
+    const delivered = [...byType.values()].reduce((sum, quantity) => sum + quantity, 0);
+    if (delivered > 0) {
+        throw new ValidationError(`${delivered === 1 ? "1 item was" : `${delivered} items were`} already delivered to the buyer.`);
     }
 }
 
 function nothingSentCondition(orderId: string) {
-    return sql`NOT EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId} AND ${orderItems.shippedQuantity} > 0)`;
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${orderItems}
+        WHERE ${orderItems.orderId} = ${orderId}
+          AND (${orderItems.fulfilledQuantity} > 0 OR ${orderItems.shippedQuantity} > 0)
+    )`;
+}
+
+/**
+ * A line is handed over once the ledger covers its quantity (or the previous
+ * API marked it shipped). `ship` and `pickup` lines always gate delivered;
+ * `service` lines gate it when nothing ships (a courier's delivered is not
+ * held back by an installation still to do); digital and gift-card lines
+ * fulfil themselves after payment and never gate it.
+ */
+export async function assertOrderLinesHandedOver(
+    db: Database,
+    orderId: string,
+    requiresShipping: boolean,
+): Promise<void> {
+    const gatingTypes = requiresShipping ? ["ship", "pickup"] : ["ship", "pickup", "service"];
+    const row = await db.select({
+        missing: sql<number>`coalesce(sum(${orderItems.quantity} - ${orderItems.fulfilledQuantity}), 0)`,
+    }).from(orderItems).where(and(
+        eq(orderItems.orderId, orderId),
+        inArray(orderItems.fulfillmentType, gatingTypes as ["ship", "pickup", "service"]),
+        sql`${orderItems.fulfilledQuantity} < ${orderItems.quantity}`,
+        sql`${orderItems.fulfillmentStatus} NOT IN (${ItemFulfillmentStatus.SHIPPED}, ${ItemFulfillmentStatus.DELIVERED})`,
+    )).get();
+    const missing = Number(row?.missing ?? 0);
+    if (missing > 0) {
+        throw new ValidationError(missing === 1
+            ? "1 item hasn't been handed over yet."
+            : `${missing} items haven't been handed over yet.`);
+    }
 }
 
 export interface BulkOrderActionResult {

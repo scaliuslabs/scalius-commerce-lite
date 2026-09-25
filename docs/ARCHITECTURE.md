@@ -90,7 +90,7 @@ two public entries:
 |--------|------|---------|
 | `orders` | The order record: dashboard list/detail, manual orders and COD amendments, detail edits, archive, the status lifecycle kernel (`status/`), returns, invoices, receipts, lookup, payment recovery | index, browser |
 | `checkout` | Storefront cart validation, the checkout authority and policy, delivery preflight and pricing, idempotent attempts, the single commit and post-commit side effects, quote fingerprint, abandoned checkouts | index, browser |
-| `fulfilment` | The actions that hand units over: own-courier parcels, courier booking reconciliation, bulk shipping, delivery outcomes (delivered, COD collected/failed/returned) | index |
+| `fulfilment` | The actions that hand units over, all written to the fulfilment ledger (`ledger.ts`, the only writer of `order_fulfillments`; `fulfilled_quantity` is its trigger projection): own-rider parcels, courier bookings and their reconciliation, pickup (ready / picked up with cash at the counter), service done, void, delivery outcomes (delivered, COD collected/failed/returned), and the fulfiller registry plus the automatic-fulfilment seam (Wave B fulfillers) | index |
 | `products` | The merchant-edited product aggregate (products, SKUs, options, media, validation, aggregate revision) and the product rules others read through (public eligibility, buyer pricing, money) | index |
 | `catalog` | Buyer-facing catalogue reads: listings, facets, product page, search, feeds, sitemaps, recommendations, storefront sections, feed diagnostics | index |
 | `categories`, `collections`, `attributes` | Their records, publication rules and admin writes; typed attributes, category trees and brands extend these beside `catalog` | index, browser |
@@ -140,7 +140,7 @@ defined. The public-file rule keeps the same boundary without that hazard.
 
 ### The dependency graph
 
-The allowlist has 86 directed edges. Fifteen domains form one cycle group
+The allowlist has 88 directed edges. Fifteen domains form one cycle group
 (catalog, categories, collections, customers, delivery, inventory, media,
 notifications, orders, pages, payments, products, promotions, settings, tax);
 the reciprocal pairs are the debt to pay down first:

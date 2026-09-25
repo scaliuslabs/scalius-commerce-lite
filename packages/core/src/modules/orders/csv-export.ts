@@ -1,6 +1,9 @@
 import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatMoney } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
+import { formatOrderLinePropertiesText, parseOrderLineProperties } from "./line-presentation";
 
 export const ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
 
@@ -178,6 +181,20 @@ export interface OrderCsvLine {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  /** Buyer inputs as "Engraving: Anika (+৳200)", from `formatOrderCsvLineProperties`. */
+  properties?: string[];
+}
+
+/** The frozen `order_items.properties` snapshot as export text (never SMS). */
+export function formatOrderCsvLineProperties(
+  stored: string | null,
+  currencyCode: string,
+  decimalPlaces: number,
+): string[] {
+  return formatOrderLinePropertiesText(
+    parseOrderLineProperties(stored),
+    (priceMinor) => formatMoney(fromMinor(priceMinor, decimalPlaces), { code: currencyCode }),
+  );
 }
 
 /** One order in the export: the list row plus its address, lines and delivery facts. */
@@ -188,7 +205,12 @@ export interface OrderCsvRow {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
-  shippingAddress: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: string | null;
+  /** False for pickup and orders with nothing physical; absent on older rows (ships). */
+  requiresShipping?: boolean;
+  /** The one delivery method's kind; null when the order needs none. */
+  shippingMethodKind?: string | null;
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
@@ -214,20 +236,31 @@ export type OrderCsvFormat = "summary" | "items";
 
 function describeLine(line: OrderCsvLine): string {
   const name = [line.productName, line.variantLabel].filter(Boolean).join(" (") + (line.variantLabel ? ")" : "");
-  return `${line.quantity} × ${name || "Item"}`;
+  const properties = line.properties?.length ? ` — ${line.properties.join(", ")}` : "";
+  return `${line.quantity} × ${name || "Item"}${properties}`;
+}
+
+/** "Delivery", "Pickup", or "No delivery" for a cart with nothing physical. */
+function deliveryMethodLabel(order: OrderCsvRow): string {
+  if (order.shippingMethodKind === "pickup") return "Pickup";
+  if (order.requiresShipping === false && !order.shippingMethodKind) return "No delivery";
+  return "Delivery";
 }
 
 function orderColumns(order: OrderCsvRow): unknown[] {
+  // Pickup and no-ship orders have no address; never print a stale one.
+  const ships = order.requiresShipping !== false;
   return [
     formatOrderNumber(order.orderNumber, order.id),
     formatCommerceDateTime(order.createdAt),
     order.customerName,
     formatPhoneForProvider(order.customerPhone),
     order.customerEmail,
-    order.shippingAddress,
-    order.areaName,
-    order.zoneName,
-    order.cityName,
+    ships ? order.shippingAddress : "",
+    ships ? order.areaName : "",
+    ships ? order.zoneName : "",
+    ships ? order.cityName : "",
+    deliveryMethodLabel(order),
     label(ORDER_STATUS_LABELS, order.status),
     paymentLabel(order),
     label(PAYMENT_METHOD_LABELS, order.paymentMethod),
@@ -255,7 +288,7 @@ function amountReceived(order: OrderCsvRow): number {
 
 const ORDER_HEADERS = [
   "Order", "Date", "Customer", "Phone", "Email", "Address", "Area", "Thana", "City",
-  "Status", "Payment", "Payment method", "Delivery", "Courier", "Tracking",
+  "Delivery method", "Status", "Payment", "Payment method", "Delivery", "Courier", "Tracking",
 ];
 
 /**
@@ -269,12 +302,13 @@ export function createOrdersCsvArtifactBuilder(
 ) {
   if (format === "items") {
     return createCsvArtifactBuilder<OrderCsvRow>([
-      ...ORDER_HEADERS, "Product", "Variant", "Quantity", "Unit price", "Line total",
+      ...ORDER_HEADERS, "Product", "Variant", "Customisation", "Quantity", "Unit price", "Line total",
       "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
       ...orderColumns(order),
       line?.productName ?? "",
       line?.variantLabel ?? "",
+      line?.properties?.join("; ") ?? "",
       line?.quantity ?? "",
       line?.unitPrice ?? "",
       line?.lineTotal ?? "",

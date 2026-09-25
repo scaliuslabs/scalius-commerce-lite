@@ -3,14 +3,15 @@
 // pages use. The store's cart check decides what is still sellable.
 import type { AddToCartEventDetail } from "@/components/CartFlyout";
 import type { CustomerOrderItem } from "@/lib/api/customer-auth";
+import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["PRODUCT_UNAVAILABLE", "VARIANT_REQUIRED", "VARIANT_UNAVAILABLE", "VARIANT_MISMATCH"]);
 
 /** How many lines went back in the cart, or null when the store couldn't be reached. */
-export async function addOrderToCart(items: CustomerOrderItem[]): Promise<{ added: number; missing: number } | null> {
-  const lines = items.filter((item): item is CustomerOrderItem & { variantId: string } => Boolean(item.productId && item.variantId));
+export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineFulfilmentFacts>): Promise<{ added: number; missing: number } | null> {
+  const lines = items.filter((item): item is CustomerOrderItem & OrderLineFulfilmentFacts & { variantId: string } => Boolean(item.productId && item.variantId));
   if (lines.length === 0) return { added: 0, missing: items.length };
   let result: CartValidationResult | null;
   try {
@@ -26,6 +27,10 @@ export async function addOrderToCart(items: CustomerOrderItem[]): Promise<{ adde
           price: item.price,
           productName: item.productName,
           variantLabel: item.variantLabel,
+          // The same buyer inputs again; the store re-checks and re-prices them.
+          ...(item.properties?.length
+            ? { properties: item.properties.map(({ key, value }) => ({ key, value })) }
+            : {}),
         })),
       }),
     });
@@ -52,6 +57,14 @@ export async function addOrderToCart(items: CustomerOrderItem[]): Promise<{ adde
       imageMediaId: line.productImageMediaId ?? undefined,
       options: line.variantLabel ? [{ name: "Variant", label: line.variantLabel }] : undefined,
       freeDelivery: line.freeDelivery,
+      ...(line.fulfillmentKind ? { fulfillmentKind: line.fulfillmentKind } : {}),
+      ...(line.properties?.length
+        ? {
+            properties: line.properties.map(({ key, value, label, displayValue, priceMinor }) => ({
+              key, value, label, displayValue, priceMinor,
+            })),
+          }
+        : {}),
     };
     document.dispatchEvent(new CustomEvent("add-to-cart", { detail }));
     added += 1;

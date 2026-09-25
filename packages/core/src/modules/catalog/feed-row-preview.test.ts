@@ -16,6 +16,7 @@ function product(
   overrides: Partial<StorefrontFeedProduct> = {},
 ): StorefrontFeedProduct {
   return {
+    requiresCustomization: false,
     id: "prod_feed_1",
     name: "Cotton Shirt",
     slug: "cotton-shirt",
@@ -146,6 +147,7 @@ describe("product feed row preview", () => {
           isActive: true,
           isDeleted: false,
           excludeFromProductFeed: true,
+          sellsPhysicalGoods: true,
           hasBuyerResolvableSku: true,
           hasPrimaryDiscoveryImage: true,
           matchingSkuCount: 0,
@@ -245,6 +247,7 @@ describe("product feed row preview", () => {
         isActive: true,
         isDeleted: false,
         excludeFromProductFeed: true,
+        sellsPhysicalGoods: true,
         hasBuyerResolvableSku: true,
         hasPrimaryDiscoveryImage: true,
       },
@@ -255,8 +258,20 @@ describe("product feed row preview", () => {
         isActive: true,
         isDeleted: false,
         excludeFromProductFeed: false,
+        sellsPhysicalGoods: true,
         hasBuyerResolvableSku: true,
         hasPrimaryDiscoveryImage: false,
+      },
+    ],
+    [
+      "non_physical_product",
+      {
+        isActive: true,
+        isDeleted: false,
+        excludeFromProductFeed: false,
+        sellsPhysicalGoods: false,
+        hasBuyerResolvableSku: true,
+        hasPrimaryDiscoveryImage: true,
       },
     ],
     [
@@ -265,6 +280,7 @@ describe("product feed row preview", () => {
         isActive: true,
         isDeleted: false,
         excludeFromProductFeed: false,
+        sellsPhysicalGoods: true,
         hasBuyerResolvableSku: false,
         hasPrimaryDiscoveryImage: true,
       },

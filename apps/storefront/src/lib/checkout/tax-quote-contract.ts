@@ -1,3 +1,11 @@
+import {
+  isDeliveryMethodKind,
+  isFulfillmentType,
+  type DeliveryMethodKind,
+  type FulfillmentType,
+} from "@scalius/shared/fulfilment";
+import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
+
 export const TAX_QUOTE_MAX_ITEMS = 99;
 export const TAX_QUOTE_MAX_REQUEST_BYTES = 256 * 1024;
 export const TAX_QUOTE_MAX_RESPONSE_BYTES = 256 * 1024;
@@ -28,17 +36,30 @@ export interface TaxQuoteRequestItem {
   quantity: number;
   productName?: string;
   variantLabel?: string;
+  /** Buyer inputs (body only, never a URL). */
+  properties?: Array<{ key: string; value: string }>;
 }
 
 export interface TaxQuoteRequest {
   items: TaxQuoteRequestItem[];
   inventoryPool?: TaxQuoteInventoryPool;
-  city: string;
-  zone: string;
+  /** Delivery only; pickup and carts with nothing physical send no address. */
+  city?: string;
+  zone?: string;
   area?: string;
-  shippingMethodId: string;
+  /** A delivery or pickup rate; absent when nothing is physical. */
+  shippingMethodId?: string;
   discountCodes: string[];
   customerPhone?: string;
+}
+
+/** A buyer input as the order will keep it. */
+export interface TaxQuoteItemProperty {
+  key: string;
+  label: string;
+  value: string;
+  displayValue: string;
+  priceMinor: number;
 }
 
 export interface TaxQuoteItem {
@@ -46,9 +67,19 @@ export interface TaxQuoteItem {
   productId: string;
   variantId: string;
   quantity: number;
+  /** One unit including the surcharges of its buyer inputs. */
   unitPrice: number;
   productName: string;
   variantLabel: string | null;
+  fulfillmentType: FulfillmentType | null;
+  properties: TaxQuoteItemProperty[];
+  propertiesPriceMinor: number;
+  propertiesHash: string | null;
+}
+
+export interface TaxQuotePickup {
+  address: string | null;
+  hours: string | null;
 }
 
 export interface TaxQuoteShippingMethod {
@@ -144,7 +175,15 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts {
   taxAmount: number;
   totalMinor: number;
   totalAmount: number;
-  shippingMethod: TaxQuoteShippingMethod;
+  /** Null when the cart has nothing physical (no delivery method, no fee). */
+  shippingMethod: TaxQuoteShippingMethod | null;
+  deliveryMethodKind: DeliveryMethodKind | null;
+  /** Some line ships: the order needs the delivery address. */
+  requiresShipping: boolean;
+  /** Where and when to collect, for a pickup method. */
+  pickup: TaxQuotePickup | null;
+  /** Payment methods this cart may use (no cash on delivery when nothing is handed over). */
+  allowedPaymentMethods: string[];
   items: TaxQuoteItem[];
 }
 
@@ -243,6 +282,27 @@ function nonNegativeAmount(value: unknown): number {
   return value;
 }
 
+const PROPERTY_KEY_PATTERN = /^[a-z0-9_]{1,40}$/;
+
+/** Buyer inputs as the API accepts them: at most 10, text keys and values, bounded. */
+export function parseRequestProperties(value: unknown): Array<{ key: string; value: string }> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length > LINE_PROPERTY_INPUT_LIMITS.entries) fail();
+  const properties = value.map((entry) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry.key !== "string" ||
+      !PROPERTY_KEY_PATTERN.test(entry.key) ||
+      typeof entry.value !== "string" ||
+      entry.value.length > LINE_PROPERTY_INPUT_LIMITS.valueLength
+    ) {
+      fail();
+    }
+    return { key: entry.key, value: entry.value };
+  });
+  return properties.length > 0 ? properties : undefined;
+}
+
 function parseRequestItem(value: unknown): TaxQuoteRequestItem {
   if (!isRecord(value)) fail();
   const cartKey = optionalString(value.cartKey, MAX_CART_KEY_LENGTH);
@@ -250,6 +310,7 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
   const variantLabel = optionalString(value.variantLabel, MAX_LABEL_LENGTH);
   const variantId = requiredString(value.variantId, MAX_ID_LENGTH);
   if (variantId === "default") fail();
+  const properties = parseRequestProperties(value.properties);
 
   return {
     ...(cartKey ? { cartKey } : {}),
@@ -258,6 +319,7 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
     quantity: positiveQuantity(value.quantity),
     ...(productName ? { productName } : {}),
     ...(variantLabel ? { variantLabel } : {}),
+    ...(properties ? { properties } : {}),
   };
 }
 
@@ -275,7 +337,13 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     fail();
   }
 
-  const area = optionalString(value.area, MAX_LOCATION_LENGTH);
+  const city = optionalString(value.city, MAX_LOCATION_LENGTH);
+  const zone = optionalString(value.zone, MAX_LOCATION_LENGTH);
+  // A delivery quote names both; pickup and service quotes name neither.
+  if (Boolean(city) !== Boolean(zone)) fail();
+  const area = city ? optionalString(value.area, MAX_LOCATION_LENGTH) : undefined;
+  const shippingMethodId = optionalString(value.shippingMethodId, MAX_ID_LENGTH);
+  if (city && !shippingMethodId) fail();
   const codes = value.discountCodes ?? [];
   if (!Array.isArray(codes) || codes.length > MAX_DISCOUNT_CODES) fail();
   const discountCodes = codes.map((code) => requiredString(code, MAX_CODE_LENGTH).toUpperCase());
@@ -285,10 +353,9 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   return {
     items: value.items.map(parseRequestItem),
     ...(inventoryPool ? { inventoryPool } : {}),
-    city: requiredString(value.city, MAX_LOCATION_LENGTH),
-    zone: requiredString(value.zone, MAX_LOCATION_LENGTH),
+    ...(city && zone ? { city, zone } : {}),
     ...(area ? { area } : {}),
-    shippingMethodId: requiredString(value.shippingMethodId, MAX_ID_LENGTH),
+    ...(shippingMethodId ? { shippingMethodId } : {}),
     discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),
   };
@@ -299,6 +366,9 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
   const variantId = requiredString(value.variantId, MAX_ID_LENGTH);
   if (variantId === "default") fail();
 
+  const properties = value.properties === undefined ? [] : value.properties;
+  if (!Array.isArray(properties) || properties.length > LINE_PROPERTY_INPUT_LIMITS.entries) fail();
+
   return {
     cartKey: requiredString(value.cartKey, MAX_CART_KEY_LENGTH),
     productId: requiredString(value.productId, MAX_ID_LENGTH),
@@ -307,6 +377,21 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
     unitPrice: nonNegativeAmount(value.unitPrice),
     productName: requiredString(value.productName, MAX_NAME_LENGTH),
     variantLabel: nullableString(value.variantLabel, MAX_LABEL_LENGTH),
+    fulfillmentType: isFulfillmentType(value.fulfillmentType) ? value.fulfillmentType : null,
+    properties: properties.map((property) => {
+      if (!isRecord(property)) fail();
+      return {
+        key: requiredString(property.key, 40),
+        label: requiredString(property.label, 120),
+        value: nullableDescription(property.value, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
+        displayValue: nullableDescription(property.displayValue, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
+        priceMinor: nonNegativeSafeInteger(property.priceMinor),
+      };
+    }),
+    propertiesPriceMinor: value.propertiesPriceMinor === undefined
+      ? 0
+      : nonNegativeSafeInteger(value.propertiesPriceMinor),
+    propertiesHash: typeof value.propertiesHash === "string" ? value.propertiesHash : null,
   };
 }
 
@@ -355,23 +440,44 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
   const totalMinor = nonNegativeSafeInteger(data.totalMinor);
   const totalAmount = nonNegativeAmount(data.totalAmount);
 
-  if (!isRecord(data.shippingMethod)) fail();
-  if (typeof data.shippingMethod.feeWaived !== "boolean") fail();
-  const shippingMethod: TaxQuoteShippingMethod = {
-    id: requiredString(data.shippingMethod.id, MAX_ID_LENGTH),
-    name: requiredString(
-      data.shippingMethod.name,
-      MAX_SHIPPING_METHOD_NAME_LENGTH,
-    ),
-    description: nullableDescription(
-      data.shippingMethod.description,
-      MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH,
-    ),
-    baseAmountMinor: nonNegativeSafeInteger(
-      data.shippingMethod.baseAmountMinor,
-    ),
-    feeWaived: data.shippingMethod.feeWaived,
-  };
+  // Null when nothing in the cart is physical: no method and no fee.
+  let shippingMethod: TaxQuoteShippingMethod | null = null;
+  if (data.shippingMethod !== null) {
+    if (!isRecord(data.shippingMethod)) fail();
+    if (typeof data.shippingMethod.feeWaived !== "boolean") fail();
+    shippingMethod = {
+      id: requiredString(data.shippingMethod.id, MAX_ID_LENGTH),
+      name: requiredString(
+        data.shippingMethod.name,
+        MAX_SHIPPING_METHOD_NAME_LENGTH,
+      ),
+      description: nullableDescription(
+        data.shippingMethod.description,
+        MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH,
+      ),
+      baseAmountMinor: nonNegativeSafeInteger(
+        data.shippingMethod.baseAmountMinor,
+      ),
+      feeWaived: data.shippingMethod.feeWaived,
+    };
+  }
+  const deliveryMethodKind = data.deliveryMethodKind === undefined || data.deliveryMethodKind === null
+    ? null
+    : isDeliveryMethodKind(data.deliveryMethodKind) ? data.deliveryMethodKind : fail();
+  const requiresShipping = data.requiresShipping === undefined
+    ? deliveryMethodKind === "delivery"
+    : typeof data.requiresShipping === "boolean" ? data.requiresShipping : fail();
+  let pickup: TaxQuotePickup | null = null;
+  if (data.pickup !== undefined && data.pickup !== null) {
+    if (!isRecord(data.pickup)) fail();
+    pickup = {
+      address: data.pickup.address === null ? null : nullableDescription(data.pickup.address, 500),
+      hours: data.pickup.hours === null ? null : nullableDescription(data.pickup.hours, 200),
+    };
+  }
+  // Required: payment eligibility fails closed.
+  if (!Array.isArray(data.allowedPaymentMethods) || data.allowedPaymentMethods.length > 32) fail();
+  const allowedPaymentMethods = data.allowedPaymentMethods.map((method) => requiredString(method, 64));
 
   assertAmountMatchesMinor(subtotalAmount, subtotalMinor, decimalPlaces);
   assertAmountMatchesMinor(shippingAmount, shippingMinor, decimalPlaces);
@@ -385,7 +491,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     discountMinor +
     (data.pricesIncludeTax ? 0 : taxMinor);
   if (!Number.isSafeInteger(expectedTotalMinor) || expectedTotalMinor !== totalMinor) fail();
-  if (shippingMethod.feeWaived) {
+  if (!shippingMethod || shippingMethod.feeWaived) {
     if (shippingMinor !== 0) fail();
   } else if (shippingMethod.baseAmountMinor !== shippingMinor) {
     fail();
@@ -427,6 +533,10 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     totalMinor,
     totalAmount,
     shippingMethod,
+    deliveryMethodKind,
+    requiresShipping,
+    pickup,
+    allowedPaymentMethods,
     ...discountFacts,
     items,
   };

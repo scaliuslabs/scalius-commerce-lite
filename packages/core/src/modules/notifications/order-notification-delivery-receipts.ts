@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
-import { orderNotificationDeliveryReceipts } from "@scalius/database/schema";
+import { notificationDeliveryReceipts } from "@scalius/database/schema";
 import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
-import type { OrderNotificationType } from "./notification-types";
+import type { NotificationSubjectType, NotificationType } from "./notification-types";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -13,10 +13,16 @@ export type OrderNotificationDeliveryReceiptStatus =
   | "failed"
   | "skipped";
 
+/**
+ * One logical delivery (a channel to one recipient) of one outbox row. Order
+ * notifications pass `orderId`; other subjects pass `subjectType`/`subjectId`.
+ */
 export interface OrderNotificationDeliveryTargetInput {
   outboxId: string;
-  orderId: string;
-  notificationType: OrderNotificationType;
+  orderId?: string | null;
+  subjectType?: NotificationSubjectType;
+  subjectId?: string;
+  notificationType: NotificationType;
   channel: OrderNotificationDeliveryChannel;
   provider: string;
   recipient: string;
@@ -43,8 +49,8 @@ export interface OrderNotificationDeliveryReceiptResult {
   rawResponse?: string | null;
 }
 
-type DeliveryReceiptRow = typeof orderNotificationDeliveryReceipts.$inferSelect;
-type DeliveryReceiptInsert = typeof orderNotificationDeliveryReceipts.$inferInsert;
+type DeliveryReceiptRow = typeof notificationDeliveryReceipts.$inferSelect;
+type DeliveryReceiptInsert = typeof notificationDeliveryReceipts.$inferInsert;
 
 const PROCESSING_LEASE_SECONDS = 15 * 60;
 const MAX_ERROR_LENGTH = 500;
@@ -96,38 +102,38 @@ export async function claimOrderNotificationDeliveryReceipt(
 
   const claimId = createDeliveryReceiptClaimId();
   const rows = await db
-    .update(orderNotificationDeliveryReceipts)
+    .update(notificationDeliveryReceipts)
     .set({
       status: "processing",
       provider: target.provider,
       recipientMasked: target.recipientMasked,
       claimId,
       claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-      attempts: sql`${orderNotificationDeliveryReceipts.attempts} + 1`,
+      attempts: sql`${notificationDeliveryReceipts.attempts} + 1`,
       lastError: null,
       lastAttemptAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     })
     .where(
       and(
-        eq(orderNotificationDeliveryReceipts.receiptKey, target.receiptKey),
+        eq(notificationDeliveryReceipts.receiptKey, target.receiptKey),
         or(
           and(
-            inArray(orderNotificationDeliveryReceipts.status, ["pending", "failed"]),
-            lte(orderNotificationDeliveryReceipts.nextAttemptAt, sql`unixepoch()`),
+            inArray(notificationDeliveryReceipts.status, ["pending", "failed"]),
+            lte(notificationDeliveryReceipts.nextAttemptAt, sql`unixepoch()`),
           ),
           and(
-            eq(orderNotificationDeliveryReceipts.status, "processing"),
-            lte(orderNotificationDeliveryReceipts.claimExpiresAt, sql`unixepoch()`),
+            eq(notificationDeliveryReceipts.status, "processing"),
+            lte(notificationDeliveryReceipts.claimExpiresAt, sql`unixepoch()`),
           ),
         ),
       ),
     )
     .returning({
-      id: orderNotificationDeliveryReceipts.id,
-      receiptKey: orderNotificationDeliveryReceipts.receiptKey,
-      claimId: orderNotificationDeliveryReceipts.claimId,
-      attempts: orderNotificationDeliveryReceipts.attempts,
+      id: notificationDeliveryReceipts.id,
+      receiptKey: notificationDeliveryReceipts.receiptKey,
+      claimId: notificationDeliveryReceipts.claimId,
+      attempts: notificationDeliveryReceipts.attempts,
     });
 
   const row = rows[0];
@@ -160,7 +166,7 @@ export async function markOrderNotificationDeliveryReceiptAccepted(
   result: OrderNotificationDeliveryReceiptResult = {},
 ): Promise<void> {
   await db
-    .update(orderNotificationDeliveryReceipts)
+    .update(notificationDeliveryReceipts)
     .set({
       status: "accepted",
       provider: result.provider ?? undefined,
@@ -174,8 +180,8 @@ export async function markOrderNotificationDeliveryReceiptAccepted(
       updatedAt: sql`unixepoch()`,
     })
     .where(and(
-      eq(orderNotificationDeliveryReceipts.id, receipt.id),
-      eq(orderNotificationDeliveryReceipts.claimId, receipt.claimId),
+      eq(notificationDeliveryReceipts.id, receipt.id),
+      eq(notificationDeliveryReceipts.claimId, receipt.claimId),
     ));
 }
 
@@ -186,7 +192,7 @@ export async function markOrderNotificationDeliveryReceiptSkipped(
   result: OrderNotificationDeliveryReceiptResult = {},
 ): Promise<void> {
   await db
-    .update(orderNotificationDeliveryReceipts)
+    .update(notificationDeliveryReceipts)
     .set({
       status: "skipped",
       provider: result.provider ?? undefined,
@@ -200,8 +206,8 @@ export async function markOrderNotificationDeliveryReceiptSkipped(
       updatedAt: sql`unixepoch()`,
     })
     .where(and(
-      eq(orderNotificationDeliveryReceipts.id, receipt.id),
-      eq(orderNotificationDeliveryReceipts.claimId, receipt.claimId),
+      eq(notificationDeliveryReceipts.id, receipt.id),
+      eq(notificationDeliveryReceipts.claimId, receipt.claimId),
     ));
 }
 
@@ -212,7 +218,7 @@ export async function markOrderNotificationDeliveryReceiptFailed(
   result: OrderNotificationDeliveryReceiptResult = {},
 ): Promise<void> {
   await db
-    .update(orderNotificationDeliveryReceipts)
+    .update(notificationDeliveryReceipts)
     .set({
       status: "failed",
       provider: result.provider ?? undefined,
@@ -227,8 +233,8 @@ export async function markOrderNotificationDeliveryReceiptFailed(
       updatedAt: sql`unixepoch()`,
     })
     .where(and(
-      eq(orderNotificationDeliveryReceipts.id, receipt.id),
-      eq(orderNotificationDeliveryReceipts.claimId, receipt.claimId),
+      eq(notificationDeliveryReceipts.id, receipt.id),
+      eq(notificationDeliveryReceipts.claimId, receipt.claimId),
     ));
 }
 
@@ -242,7 +248,7 @@ async function ensureOrderNotificationDeliveryReceipt(
     id: createDeliveryReceiptId(),
     receiptKey: target.receiptKey,
     outboxId: target.outboxId,
-    orderId: target.orderId,
+    ...receiptSubject(target),
     notificationType: target.notificationType,
     channel: target.channel,
     provider: target.provider,
@@ -256,11 +262,26 @@ async function ensureOrderNotificationDeliveryReceipt(
   };
 
   try {
-    await db.insert(orderNotificationDeliveryReceipts).values(values);
+    await db.insert(notificationDeliveryReceipts).values(values);
   } catch (error) {
     const existing = await selectDeliveryReceiptByKey(db, target.receiptKey);
     if (!existing) throw error;
   }
+}
+
+function receiptSubject(target: OrderNotificationDeliveryTarget): {
+  subjectType: NotificationSubjectType;
+  subjectId: string;
+  orderId: string | null;
+} {
+  const subjectType = target.subjectType ?? "order";
+  const subjectId = target.subjectId ?? target.orderId ?? "";
+  if (!subjectId) throw new Error("Notification delivery receipts need a subject");
+  return {
+    subjectType,
+    subjectId,
+    orderId: subjectType === "order" ? subjectId : target.orderId ?? null,
+  };
 }
 
 async function selectDeliveryReceiptByKey(
@@ -269,8 +290,8 @@ async function selectDeliveryReceiptByKey(
 ): Promise<DeliveryReceiptRow | undefined> {
   return await db
     .select()
-    .from(orderNotificationDeliveryReceipts)
-    .where(eq(orderNotificationDeliveryReceipts.receiptKey, receiptKey))
+    .from(notificationDeliveryReceipts)
+    .where(eq(notificationDeliveryReceipts.receiptKey, receiptKey))
     .get();
 }
 

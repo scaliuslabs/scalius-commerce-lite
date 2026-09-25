@@ -225,6 +225,8 @@ export const permissionMessages = defineMessages<PermissionName>({
     "orders.manage_shipments": "Manage deliveries",
     "orders.refund": "Refund orders",
     "orders.issue_invoice": "Issue invoices",
+    "conversations.view": "Read the inbox",
+    "conversations.reply": "Reply to customers",
 
     "products.view": "View products",
     "products.create": "Add products",
@@ -316,6 +318,8 @@ export const permissionMessages = defineMessages<PermissionName>({
     "orders.manage_shipments": "ডেলিভারি সামলানো",
     "orders.refund": "অর্ডার রিফান্ড করা",
     "orders.issue_invoice": "ইনভয়েস দেওয়া",
+    "conversations.view": "ইনবক্স দেখা",
+    "conversations.reply": "ক্রেতাকে উত্তর দেওয়া",
 
     "products.view": "প্রোডাক্ট দেখা",
     "products.create": "প্রোডাক্ট যোগ করা",

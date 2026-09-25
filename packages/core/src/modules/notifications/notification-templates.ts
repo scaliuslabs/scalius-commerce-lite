@@ -22,6 +22,8 @@ export const NOTIFICATION_VARIABLES = [
   "refund_amount",
   "support_request",
   "support_status",
+  "pickup_address",
+  "pickup_hours",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -38,6 +40,7 @@ const ORDER_VARIABLES: readonly NotificationVariable[] = [
 /** Only what the sender knows for this event. */
 export function variablesForEvent(event: OrderNotificationType): readonly NotificationVariable[] {
   if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
+  if (event === "order_ready_for_pickup") return [...ORDER_VARIABLES, "pickup_address", "pickup_hours"];
   if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
     return [...ORDER_VARIABLES, "refund_amount"];
   }
@@ -95,6 +98,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "Order {{order_number}} is on its way",
         message: "Your order is on its way.\nCourier: {{courier_name}}\nTracking ID: {{tracking_id}}\nTrack your parcel: {{tracking_url}}",
         sms: "your order {{order_number}} is on its way!\nTracking: {{tracking_id}} ({{courier_name}})",
+      },
+      order_ready_for_pickup: {
+        subject: "Order {{order_number}} is ready for pickup",
+        message: "Your order is ready for pickup.\nPickup at: {{pickup_address}}\nHours: {{pickup_hours}}",
+        sms: "your order {{order_number}} is ready for pickup.\nPickup at: {{pickup_address}}\nHours: {{pickup_hours}}",
       },
       order_delivered: {
         subject: "Order {{order_number}} delivered",
@@ -175,6 +183,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "অর্ডার {{order_number}} পাঠানো হয়েছে",
         message: "আপনার অর্ডার পাঠানো হয়েছে।\nকুরিয়ার: {{courier_name}}\nট্র্যাকিং আইডি: {{tracking_id}}\nপার্সেল ট্র্যাক করুন: {{tracking_url}}",
         sms: "আপনার অর্ডার {{order_number}} পাঠানো হয়েছে!\nট্র্যাকিং: {{tracking_id}} ({{courier_name}})",
+      },
+      order_ready_for_pickup: {
+        subject: "অর্ডার {{order_number}} পিকআপের জন্য প্রস্তুত",
+        message: "আপনার অর্ডার পিকআপের জন্য প্রস্তুত।\nপিকআপের ঠিকানা: {{pickup_address}}\nসময়: {{pickup_hours}}",
+        sms: "আপনার অর্ডার {{order_number}} পিকআপের জন্য প্রস্তুত।\nঠিকানা: {{pickup_address}}\nসময়: {{pickup_hours}}",
       },
       order_delivered: {
         subject: "অর্ডার {{order_number}} ডেলিভারি হয়েছে",
@@ -380,7 +393,18 @@ export type EmailPayment =
 export interface OrderEmailFacts {
   store: EmailStore;
   /** `unitPrice`/`subtotal` are null when the saved currency can't be shown. */
-  items: Array<{ name: string | null; variant: string | null; quantity: number; unitPrice: string | null; subtotal: string | null }>;
+  /**
+   * `properties` are the buyer's line inputs as display lines ("Engraving: Rahim"),
+   * shown in the email only (never SMS); absent on lines without inputs.
+   */
+  items: Array<{
+    name: string | null;
+    variant: string | null;
+    quantity: number;
+    unitPrice: string | null;
+    subtotal: string | null;
+    properties?: readonly string[];
+  }>;
   /** Null when the saved currency can't be shown truthfully. */
   amounts: {
     subtotal: string;
@@ -480,6 +504,7 @@ export function renderOrderEmail(input: {
   const lines = facts.items.map((item) => ({
     name: item.name || copy.itemUnavailable,
     variant: item.variant,
+    properties: (item.properties ?? []).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean),
     quantity: item.unitPrice ? `${item.quantity} × ${item.unitPrice}` : copy.quantity(item.quantity),
     subtotal: item.subtotal ?? "",
   }));
@@ -492,7 +517,7 @@ export function renderOrderEmail(input: {
     facts.store.name, subject, body,
     cta ? `${cta.label}: ${cta.href}` : "",
     lines.length || summary.length ? copy.orderSummary : "",
-    ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
+    ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}${item.properties.map((line) => `\n${line}`).join("")}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
     summary.map(({ label, value, was }) => `${label}: ${value}${was ? ` ${copy.was(was)}` : ""}`).join("\n"),
     amounts ? "" : copy.amountsUnavailable,
     `${copy.payment}: ${payment}`,
@@ -510,7 +535,7 @@ ${storeHeaderHtml(facts.store)}
 <div style="margin:0 0 8px;">${bodyHtml(body)}</div>
 ${cta ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(cta.href)}" style="${BUTTON}">${escapeHtml(cta.label)}</a></p>` : ""}${origin ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(`${origin}/`)}" style="${LINK}">${escapeHtml(copy.visitStore)}</a></p>` : ""}
 <h2 style="${SECTION}">${escapeHtml(copy.orderSummary)}</h2>
-${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
+${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}${item.properties.map((line) => `<div style="font-size:14px;${MUTED}">${escapeHtml(line)}</div>`).join("")}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
 ${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(({ label, value, was }, index) => {
     const weight = index === summary.length - 1 ? "700" : "400";
     const before = was ? `<s style="${MUTED}">${escapeHtml(was)}</s> ` : "";

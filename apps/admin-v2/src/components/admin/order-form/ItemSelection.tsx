@@ -9,6 +9,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
+import { LinePropertyFields } from "./LinePropertyFields";
 import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
 import {
   exceededStockMessage,
@@ -24,6 +25,8 @@ interface ItemSelectionProps {
   quantity: number;
   setQuantity: (quantity: number) => void;
   handleAddItem: () => void;
+  /** The product's buyer inputs, asked before the line is added; null when it asks none. */
+  buyerInputs?: React.ComponentProps<typeof LinePropertyFields> | null;
 }
 
 /**
@@ -37,6 +40,7 @@ export function ItemSelection({
   quantity,
   setQuantity,
   handleAddItem,
+  buyerInputs = null,
 }: ItemSelectionProps) {
   const { refs, form, isEdit } = useOrderForm();
   const { fmt } = useCurrency();
@@ -51,6 +55,7 @@ export function ItemSelection({
   const variantTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   return (
+    <div className="space-y-4">
     <div className="grid items-start gap-4 sm:grid-cols-3">
       <div
         className="space-y-2"
@@ -135,6 +140,8 @@ export function ItemSelection({
           {t("add")}
         </Button>
       </div>
+    </div>
+    {buyerInputs ? <LinePropertyFields {...buyerInputs} /> : null}
     </div>
   );
 }

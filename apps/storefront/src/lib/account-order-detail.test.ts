@@ -94,6 +94,7 @@ beforeEach(() => {
       <div id="orderProgress"></div><p id="orderExpectedDelivery" class="hidden"></p><ol id="orderTimeline"></ol>
       <button id="orderBuyAgain">Buy again</button><p id="orderBuyAgainMessage"></p>
       <ul id="orderItems"></ul><dl id="orderSummary"></dl>
+      <h2 id="deliveryHeading">Shipping address</h2>
       <div id="orderAddress"></div><div id="orderNote" class="hidden"></div><div id="orderShipments"></div>
       <div id="orderPayment"></div>
       <div id="orderPaymentRecovery" class="hidden"><h3 id="orderPaymentRecoveryTitle"></h3><p id="orderPaymentRecoveryDescription"></p>
@@ -169,6 +170,98 @@ describe("account order detail", () => {
     expect(text("orderAddress")).toBe("Recipient Name 01711-111111 House 1, Road 2 Mirpur, Dhaka Delivery method: Inside Dhaka");
     expect(text("orderPayment")).toBe("Cash on delivery ৳1,080 due on delivery");
     expect(document.getElementById("orderPaymentRecovery")?.classList.contains("hidden")).toBe(true);
+  });
+
+  it("shows each line's buyer inputs, escaped, with the surcharge only when it costs extra", () => {
+    const order = detail();
+    order.items = [{
+      ...order.items[0]!,
+      fulfillmentType: "ship",
+      fulfilledQuantity: 0,
+      properties: [
+        { key: "engraving", type: "text", label: "Engraving", value: "<b>Anika</b>", displayValue: "<b>Anika</b>", price: 200, priceMinor: 20_000 },
+        { key: "gift_wrap", type: "checkbox", label: "Gift wrap", value: "true", displayValue: "Yes", price: 0, priceMinor: 0 },
+      ],
+    }];
+    renderOrderDetail(order, null);
+    // One shipping group keeps today's look: no group heading.
+    expect(document.querySelector("#orderItems [data-order-line-group]")).toBeNull();
+    expect(document.getElementById("orderItems")?.textContent?.replace(/\s+/g, " ").trim())
+      .toBe("BB Tee Engraving: <b>Anika</b> (+৳200)Gift wrap: Yes Qty 2 × ৳500 ৳1,000");
+    expect([...document.querySelectorAll("#orderItems li li")].map((row) => row.textContent))
+      .toEqual(["Engraving: <b>Anika</b> (+৳200)", "Gift wrap: Yes"]);
+    expect(document.querySelector("#orderItems b")).toBeNull();
+    expect(document.querySelector("#orderItems a")?.getAttribute("href")).toBe("/products/bb-tee");
+    expect(document.getElementById("orderItems")?.innerHTML).not.toMatch(/data-[a-z-]*="[^"]*Anika/);
+  });
+
+  it("groups a mixed order by how each line reaches the buyer, with where each group is", () => {
+    const order = detail();
+    const base = order.items[0]!;
+    order.items = [
+      { ...base, id: "svc", productName: "Fitting", productSlug: null, quantity: 1, fulfillmentType: "service", fulfilledQuantity: 1 },
+      { ...base, id: "tee", fulfillmentType: "ship", quantity: 3, fulfilledQuantity: 1 },
+      { ...base, id: "ebook", productName: "E-book", productSlug: null, quantity: 1, fulfillmentType: "digital", fulfilledQuantity: 0 },
+    ];
+    renderOrderDetail(order, null);
+    const groups = [...document.querySelectorAll<HTMLElement>("#orderItems [data-order-line-group]")];
+    expect(groups.map((group) => group.dataset.orderLineGroup)).toEqual(["ship", "service", "digital"]);
+    expect(groups.map((group) => group.querySelector("h3")?.textContent)).toEqual(["Delivery", "Services", "Digital items"]);
+    expect(groups.map((group) => group.querySelector("h3 + p")?.textContent ?? "")).toEqual(["Preparing · 1 of 3", "Service done", ""]);
+  });
+
+  it("shows a pickup order's pickup facts instead of an address, and says Picked up once collected", () => {
+    const pickup = { address: "Gulshan store, Road 11", hours: "10am–8pm", readyAt: null };
+    const order = detail({
+      shippingAddress: null, city: null, zone: null, cityName: null, zoneName: null, areaName: null,
+      shippingMethodName: "Gulshan store", expectedDelivery: null,
+      requiresShipping: false, shippingMethodKind: "pickup", pickup,
+    });
+    order.items = [{ ...order.items[0]!, fulfillmentType: "pickup", fulfilledQuantity: 0 }];
+    renderOrderDetail(order, null);
+    expect(text("deliveryHeading")).toBe("Pickup");
+    expect(text("orderAddress")).toBe(
+      "Recipient Name 01711-111111 Gulshan store Pick up at Gulshan store, Road 11 Hours: 10am–8pm We'll let you know when your order is ready to collect.",
+    );
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Pickup (Gulshan store) ৳80 Total ৳1,080");
+    expect(text("orderItems")).toContain("Pickup Preparing");
+    expect([...document.querySelectorAll("#orderProgress li")].map((step) => step.textContent?.replace(/\s+/g, " ").trim()))
+      .toEqual(["Order placed (done)", "Confirmed", "Ready for pickup", "Picked up"]);
+    expect(document.body.textContent).not.toMatch(/null|undefined|Delivery method/);
+    // Nothing ships: the cancellation deadline is collection.
+    expect(text("orderSupportActions")).toContain("Ask the store to review this order before it's collected.");
+    expect(document.body.textContent).not.toContain("before it ships");
+
+    const collected = detail({
+      ...order.order, status: "delivered", statusLabel: "Delivered",
+      pickup: { ...pickup, readyAt: "2026-09-24T05:00:00.000Z" },
+    }, {
+      timeline: [{ id: "t3", type: "order", status: "delivered", label: "Delivered", happenedAt: "2026-09-24T06:00:00.000Z", details: null }],
+    });
+    collected.items = [{ ...order.items[0]!, fulfilledQuantity: 2 }];
+    renderOrderDetail(collected, null);
+    expect(text("orderStatus")).toBe("Picked up");
+    expect(text("orderTimeline")).toBe("Picked up 24 Sep 2026, 12:00 PM");
+    expect(text("orderAddress")).not.toContain("We'll let you know");
+    expect(document.body.textContent).not.toMatch(/Delivered/);
+  });
+
+  it("says no delivery is needed for a service-only order and completes it without Delivered", () => {
+    const order = detail({
+      status: "delivered", statusLabel: "Delivered",
+      shippingAddress: null, city: null, zone: null, cityName: null, zoneName: null, areaName: null,
+      shippingMethodId: null, shippingMethodName: null, shippingMethodBaseAmountMinor: null,
+      shippingCharge: 0, shippingAmountMinor: 0, totalAmountMinor: 100_000,
+      requiresShipping: false, shippingMethodKind: null, pickup: null,
+    });
+    order.items = [{ ...order.items[0]!, productName: "Fitting", fulfillmentType: "service", fulfilledQuantity: 2 }];
+    renderOrderDetail(order, null);
+    expect(text("deliveryHeading")).toBe("Delivery");
+    expect(text("orderAddress")).toBe("Recipient Name 01711-111111 No delivery needed");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Total ৳1,000");
+    expect(text("orderStatus")).toBe("Completed");
+    expect(text("orderItems")).toContain("Services Service done");
+    expect(document.body.textContent).not.toMatch(/null|undefined|Delivered|Shipping address/);
   });
 
   it("replaces the tracker with the outcome of a cancelled order", () => {

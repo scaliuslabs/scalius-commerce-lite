@@ -1,4 +1,5 @@
 ---
+import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -22,6 +23,7 @@ import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/che
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
+  codDueText,
   getOrderSuccessNextSteps,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
@@ -72,6 +74,16 @@ import {
   safeTrackingUrl,
   type OrderTrackingText,
 } from "@/lib/order-tracking-markup";
+import {
+  groupOrderLines,
+  orderLineGroupStatusText,
+  orderLinePropertyRows,
+  relabelOrderProgress,
+  relabelOrderTimeline,
+  resolveOrderDeliveryBlock,
+  showsOrderLineGroupHeadings,
+  withOrderCompletionWording,
+} from "@/lib/order-line-groups";
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
 if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
@@ -206,7 +218,13 @@ if (recoveryState) {
 }
 
 const orderItemsFromApi: OrderItem[] = order?.items || [];
-const orderSuccessView = order ? getOrderSuccessViewState(order, copy, paymentResult) : null;
+// A finished pickup order reads "Picked up"; a service/digital-only one "complete", never "Delivered".
+const orderSuccessView = order
+  ? withOrderCompletionWording(getOrderSuccessViewState(order, copy, paymentResult), order, copy)
+  : null;
+const orderLineGroups = order ? groupOrderLines(orderItemsFromApi, order, copy) : [];
+const showOrderLineGroupHeadings = showsOrderLineGroupHeadings(orderLineGroups);
+const deliveryBlock = order ? resolveOrderDeliveryBlock(order, copy) : null;
 const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
 const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
 const configuredCurrencyCode = checkoutConfig.currency?.code
@@ -308,9 +326,19 @@ const receiptDiscounts = receiptMoney
     })
   : null;
 const receiptDeliveryLabel = order?.shippingMethodName
-  ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
-  : copy.orderReceiptDeliveryText;
-const receiptDeliveryDetails = order?.shippingMethodName
+  ? deliveryBlock?.mode === "pickup"
+    ? `${copy.orderPickupHeadingText} · ${order.shippingMethodName}`
+    : formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
+  : deliveryBlock?.mode === "pickup"
+    ? copy.orderPickupHeadingText
+    : copy.orderReceiptDeliveryText;
+// Nothing to deliver and nothing charged: no delivery row and no "method not recorded" note.
+const showsReceiptDeliveryRow = !(deliveryBlock?.mode === "none"
+  && !order?.shippingMethodName
+  && (receiptMoney?.shipping ?? 0) === 0);
+const receiptDeliveryDetails = !showsReceiptDeliveryRow
+  ? ""
+  : order?.shippingMethodName
   ? [
       order.shippingMethodDescription,
       order.shippingFeeWaived && savedMoneySummary && order.shippingMethodBaseAmountMinor != null
@@ -320,7 +348,7 @@ const receiptDeliveryDetails = order?.shippingMethodName
         : null,
     ].filter(Boolean).join(" · ")
   : copy.orderReceiptDeliveryNotRecordedText;
-const deliveryLocality = order
+const deliveryLocality = order && deliveryBlock?.mode === "ship"
   ? [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
       .filter((value): value is string => Boolean(value))
       .join(", ")
@@ -340,7 +368,15 @@ const statusView = orderSuccessView
   : false;
 const paymentNeedsBuyer = orderSuccessView?.kind === "payment_pending" || orderSuccessView?.kind === "payment_issue";
 const statusTitle = formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber });
-const tracking = statusView ? order?.tracking ?? null : null;
+const receiptTracking = statusView ? order?.tracking ?? null : null;
+// Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
+const tracking = order && receiptTracking
+  ? {
+      ...receiptTracking,
+      progress: relabelOrderProgress(receiptTracking.progress, order, copy),
+      timeline: relabelOrderTimeline(receiptTracking.timeline, order, copy),
+    }
+  : null;
 const trackingText: OrderTrackingText = {
   done: copy.orderTrackingStepDoneText,
   trackingId: copy.orderTrackingIdText,
@@ -572,7 +608,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 <span class="text-muted-foreground">{copy.subtotalText}</span>
                 <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
               </div>
-              <div class="flex justify-between gap-4">
+              {showsReceiptDeliveryRow && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
                 <span class="text-right font-medium">
                   {receiptDiscounts.delivery.charged < receiptDiscounts.delivery.fee && <s class="mr-1.5 font-normal text-muted-foreground">{formatReceiptAmount(receiptDiscounts.delivery.fee)}</s>}
@@ -581,7 +617,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                     <span class="ml-1 font-normal text-muted-foreground">({receiptDiscounts.delivery.codes})</span>
                   )}
                 </span>
-              </div>
+              </div>}
               {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
               {receiptDiscounts.lines.map((line) => (
                 <div class="flex justify-between gap-4">
@@ -612,7 +648,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           {
             visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText}</span>
+                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? codDueText(order, copy) : copy.orderReceiptBalanceDueText}</span>
                 <span class="font-medium">
                   {formatReceiptAmount(visibleBalanceDue)}
                 </span>
@@ -644,12 +680,20 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               stroke-width="2"
               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>
-          {copy.orderReceiptDeliveryDetailsText}
+          {deliveryBlock?.mode === "pickup" ? deliveryBlock.heading : copy.orderReceiptDeliveryDetailsText}
         </h2>
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">{order.customerName}</p>
-          <p class="text-muted-foreground">{order.shippingAddress}</p>
+          {deliveryBlock?.mode === "ship" && deliveryBlock.address && <p class="text-muted-foreground">{deliveryBlock.address}</p>}
           {deliveryLocality && <p class="text-muted-foreground">{deliveryLocality}</p>}
+          {deliveryBlock?.mode === "pickup" && (
+            <>
+              {deliveryBlock.location && <p class="text-foreground">{deliveryBlock.location}</p>}
+              {deliveryBlock.hours && <p class="text-muted-foreground">{deliveryBlock.hoursLabel}: {deliveryBlock.hours}</p>}
+              {deliveryBlock.notReady && <p class="text-muted-foreground">{deliveryBlock.notReady}</p>}
+            </>
+          )}
+          {deliveryBlock?.mode === "none" && <p class="text-muted-foreground">{deliveryBlock.text}</p>}
           {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
           {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
         </div>
@@ -679,10 +723,24 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </svg>
           {copy.orderReceiptItemsText}
         </h2>
+        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined}>
+        {orderLineGroups.map((group) => (
+        <div data-order-line-group={group.type}>
+          {showOrderLineGroupHeadings && (
+            <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border pb-2">
+              <h3 class="text-sm font-semibold text-foreground">{group.heading}</h3>
+              {orderLineGroupStatusText(group) && <p class="text-sm text-muted-foreground">{orderLineGroupStatusText(group)}</p>}
+            </div>
+          )}
         <div class="space-y-4">
           {
-            orderItemsFromApi.map((item) => {
+            group.items.map((item) => {
               const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
+              const propertyRows = orderLinePropertyRows(
+                item.properties,
+                (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
+                copy,
+              );
               return (
                 <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
                   <div class="flex min-w-0 items-center gap-3">
@@ -704,6 +762,15 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                       <p class="text-xs text-muted-foreground mt-1">
                         {item.variantLabel}
                       </p>
+                    )}
+                    {propertyRows.length > 0 && (
+                      <ul class="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                        {propertyRows.map((row) => (
+                          <li class="break-words">
+                            <span class="text-foreground">{row.label}:</span> {row.value}{row.surcharge && ` (${row.surcharge})`}
+                          </li>
+                        ))}
+                      </ul>
                     )}
                     <p class="text-sm text-muted-foreground mt-1">
                       {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })} × {savedLine
@@ -745,6 +812,9 @@ const orderRecommendations = order && showsSuccessHero && !statusView
             })
           }
         </div>
+        </div>
+        ))}
+        </div>
       </div>
     </div>
 
@@ -763,6 +833,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       copy={copy}
       client:load
     />
+    {/* The order's conversation with the store, through this browser's receipt proof. */}
+    <OrderConversationPanel orderId={orderId} access="receipt" class="mt-6 rounded-xl border border-border bg-card p-5 print:hidden" />
     {orderRecommendations && orderRecommendations.products.length > 0 && (
       <section aria-labelledby="order-recommendations" class="mt-10 print:hidden">
         <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">

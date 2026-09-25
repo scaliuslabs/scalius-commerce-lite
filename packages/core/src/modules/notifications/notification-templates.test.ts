@@ -4,6 +4,7 @@ import {
   defaultNotificationTemplates,
   findUnknownVariables,
   renderEmailTemplate,
+  renderOrderEmail,
   renderSmsTemplate,
   renderSubject,
   renderTemplate,
@@ -113,6 +114,51 @@ describe("notification templates", () => {
     expect(variablesForEvent("order_confirmed")).not.toContain("refund_amount");
     expect(renderTemplate(defaultNotificationTemplates("en").sms.order_shipped.body, { customer_name: "Rahim", order_number: "#1001", tracking_id: "SF1" }))
       .toBe("Hi Rahim, your order #1001 is on its way!\nTracking: SF1");
+  });
+});
+
+describe("line-item properties in the order email", () => {
+  const facts = {
+    store: { name: "River & Loom", logoUrl: null },
+    items: [{
+      name: "Brass keyring",
+      variant: "Gold",
+      quantity: 1,
+      unitPrice: "৳650",
+      subtotal: "৳650",
+      properties: ["Engraving: <b>Rahim</b> & Co", "Gift wrap: Yes"],
+    }],
+    amounts: null,
+    payment: { state: "paid" as const },
+    address: [],
+    method: [],
+    origin: null,
+    orderLink: null,
+    support: [],
+  };
+
+  it.each(["en", "bn"] as const)("lists each property under its line, HTML-escaped (%s)", (language) => {
+    const template = defaultNotificationTemplates(language).email.order_confirmed;
+    const email = renderOrderEmail({ language, facts, ...renderEmailTemplate("order_confirmed", language, template, { order_number: "#1001" }) });
+    expect(email.html).toContain("Engraving: &lt;b&gt;Rahim&lt;/b&gt; &amp; Co");
+    expect(email.html).not.toContain("<b>Rahim</b>");
+    expect(email.html).toContain("Gift wrap: Yes");
+    expect(email.text).toContain("Brass keyring (Gold)\nEngraving: <b>Rahim</b> & Co\nGift wrap: Yes\n1 × ৳650");
+  });
+
+  it("never puts properties in the SMS", () => {
+    const sms = renderSmsTemplate("order_confirmed", "en", defaultNotificationTemplates("en").sms.order_confirmed.body, { order_number: "#1001" });
+    expect(sms).not.toContain("Engraving");
+  });
+
+  it("renders lines without properties as before", () => {
+    const email = renderOrderEmail({
+      language: "en",
+      facts: { ...facts, items: [{ ...facts.items[0]!, properties: undefined }] },
+      subject: "S",
+      body: "B",
+    });
+    expect(email.text).toContain("Brass keyring (Gold)\n1 × ৳650");
   });
 });
 

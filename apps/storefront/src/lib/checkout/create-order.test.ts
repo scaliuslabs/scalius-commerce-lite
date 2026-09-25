@@ -69,6 +69,48 @@ describe("createOrder", () => {
     ]);
   });
 
+  it.each([
+    ["pickup", "pickup_1", 60],
+    ["none", null, 0],
+  ] as const)("sends no address on the %s path and the line's buyer inputs by key and value", async (deliveryMode, method, charge) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      success: true,
+      data: { id: "ord_1" },
+    }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createOrder({
+      ...checkoutData,
+      deliveryMode,
+      shippingMethodId: "pickup_1",
+      cartItems: JSON.stringify({
+        "line:v3:prod_1:variant:var_1:p:0123456789abcdef": {
+          id: "prod_1",
+          variantId: "var_1",
+          quantity: 1,
+          price: 350,
+          name: "Engraved pen",
+          properties: [{ key: "engraving", value: "Anika", label: "Engraving", displayValue: "Anika", priceMinor: 20_000 }],
+        },
+      }),
+    }, "cod");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown> & {
+      items: Array<Record<string, unknown>>;
+    };
+    expect(body).toMatchObject({
+      shippingAddress: null,
+      city: null,
+      zone: null,
+      area: null,
+      shippingMethodId: method,
+      shippingCharge: charge,
+      customerPhone: "+8801700000000",
+    });
+    expect(body.items[0]).toMatchObject({ price: 350, properties: [{ key: "engraving", value: "Anika" }] });
+    expect(JSON.stringify(body.items)).not.toContain("displayValue");
+  });
+
   it.each([undefined, "", "default"])(
     "rejects a non-persisted checkout variant (%s) before the order proxy",
     async (variantId) => {

@@ -132,13 +132,13 @@ describe("finalizeCheckoutReceipt", () => {
   });
 
   it("takes only the ordered lines out when another tab added items meanwhile", async () => {
-    addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
     const submitted = JSON.stringify(cartStore.get().items);
     rememberSubmittedCart(submitted);
     sessionStorage.setItem("checkoutId", "chk_session_a");
     writeCheckoutFormDraft({ customerName: "Buyer", notes: "Call first" });
     // The second tab adds a cap after this tab submitted the tee.
-    addToCart({ id: "cap", variantId: "cap_1", name: "Cap", price: 200 });
+    await addToCart({ id: "cap", variantId: "cap_1", name: "Cap", price: 200 });
 
     await finalizeCheckoutReceipt(receipt("ORDER1", "chk_session_a", (await hashCheckoutCartFingerprint(submitted))!));
 
@@ -148,7 +148,7 @@ describe("finalizeCheckoutReceipt", () => {
   });
 
   it("leaves the cart alone when this tab did not submit the order", async () => {
-    addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
     await finalizeCheckoutReceipt(receipt("ORDER2", "chk_session_other", "cartfp_x"));
     expect(cartStore.get().totalItems).toBe(1);
     expect(readLastPlacedOrderId()).toBeNull();

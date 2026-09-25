@@ -50,6 +50,11 @@ import { buildStockMovementClaim } from "../../inventory/stock-movement-claims";
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
+import {
+    toStoredCustomizationSchema,
+    type CustomizationSchemaInput,
+    type CustomizationView,
+} from "../customization";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -423,11 +428,13 @@ export async function createProduct(
         sku: data.optionMatrix ? baseDefaultVariant.sku : data.defaultSku?.sku ?? await readableDefaultSku(db, data.name),
         trackInventory: data.defaultSku?.trackInventory ?? false,
         weight: data.defaultSku?.weight ?? null,
+        fulfillmentKind: data.defaultSku?.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
         ...(data.defaultSku?.barcode
             ? resolveNewVariantBarcode(baseDefaultVariant.id, data.defaultSku.barcode, data.defaultSku.barcodeType)
             : {}),
     };
     const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
+    const customizationSchema = toStoredCustomizationSchema(data.customizationSchema ?? null, currency);
 
     const productInsert = (slug: string) => db.insert(products).values({
             id: productId,
@@ -448,6 +455,7 @@ export async function createProduct(
             discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
             discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
             freeDelivery: data.freeDelivery,
+            customizationSchema,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
             deletedAt: null,
@@ -539,6 +547,7 @@ export async function createProduct(
                 preorderStock: 0,
                 isDefault: false,
                 trackInventory: matrixVariant.trackInventory,
+                fulfillmentKind: matrixVariant.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
                 barcode: barcode.barcode,
                 barcodeType: barcode.barcodeType,
                 discountType: matrixVariant.discountType,
@@ -681,6 +690,10 @@ export async function updateProduct(
     const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
     const productPrice = catalogPriceColumns(data, currency);
     const priceMinor = toStoreMinor(data.price, currency);
+    // Omitted keeps the stored buyer inputs; null removes them.
+    const customizationSchema = data.customizationSchema === undefined
+        ? undefined
+        : toStoredCustomizationSchema(data.customizationSchema, currency);
 
     const attributeValuesToInsert = (data.attributes ?? [])
         .filter((attr) => attr.attributeId && attr.value.trim())
@@ -743,6 +756,7 @@ export async function updateProduct(
                 discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
                 discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
                 freeDelivery: data.freeDelivery,
+                ...(customizationSchema !== undefined ? { customizationSchema } : {}),
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
@@ -770,7 +784,10 @@ export async function updateProduct(
     }
 
     if (data.isActive && activeVariants.length === 0) {
-        batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, priceMinor)));
+        batchOps.push(db.insert(productVariants).values({
+            ...defaultVariantValues(id, priceMinor),
+            fulfillmentKind: data.fulfillmentKind ?? "physical",
+        }));
     } else if (hasInvalidSkuTopology(activeVariants)) {
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
@@ -788,6 +805,18 @@ export async function updateProduct(
                 })
                 .where(eq(productVariants.id, activeVariants[0]!.id)),
         );
+    }
+
+    // The Shipping card's kind applies to every live SKU. The editor offers
+    // physical and service only; digital waits for its Wave B fulfiller.
+    if (data.fulfillmentKind !== undefined) {
+        batchOps.push(db.update(productVariants)
+            .set({ fulfillmentKind: data.fulfillmentKind, updatedAt: sql`unixepoch()` })
+            .where(and(
+                eq(productVariants.productId, id),
+                isNull(productVariants.deletedAt),
+                sql`${productVariants.fulfillmentKind} <> ${data.fulfillmentKind}`,
+            )));
     }
 
     try {
@@ -864,9 +893,32 @@ async function freeCopySkus(db: Database, skus: string[]): Promise<string[]> {
     });
 }
 
+/** The stored buyer inputs back in the decimal editor contract, for a copy. */
+function customizationInputFromView(view: CustomizationView | null): CustomizationSchemaInput | null {
+    if (!view) return null;
+    return {
+        fields: view.fields.map((field) => ({
+            key: field.key,
+            label: field.label,
+            type: field.type,
+            required: field.required,
+            help: field.help,
+            ...(field.maxLength !== null ? { maxLength: field.maxLength } : {}),
+            ...(field.type === "select"
+                ? { options: field.options.map((option) => ({ value: option.value, label: option.label, price: option.price })) }
+                : { price: field.price }),
+        })),
+    };
+}
+
+/** A copy keeps service SKUs as services; anything else starts physical. */
+function copiedFulfillmentKind(kind: string): "physical" | "service" {
+    return kind === "service" ? "service" : "physical";
+}
+
 /**
  * Copies a product as a new draft: text, pricing, media, attributes, extra
- * sections and its options with every live variant. Copies start with no
+ * sections, buyer inputs and its options with every live variant. Copies start with no
  * stock, new SKUs (…-COPY) and fresh generated barcodes, because stock,
  * SKU and barcode identities belong to one sellable item only.
  */
@@ -920,6 +972,7 @@ export async function duplicateProduct(
         media,
         attributes: source.attributes,
         additionalInfo: source.additionalInfo.map((item) => ({ ...item, id: `prc_${nanoid()}` })),
+        customizationSchema: customizationInputFromView(source.customizationSchema),
         ...(source.options.length > 0 && optionVariants.length > 0
             ? {
                 optionMatrix: {
@@ -945,6 +998,7 @@ export async function duplicateProduct(
                         discountType: variant.discountType === "flat" ? "flat" : "percentage",
                         discountPercentage: variant.discountType === "flat" ? null : variant.discountPercentage,
                         discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
+                        fulfillmentKind: copiedFulfillmentKind(variant.fulfillmentKind),
                     })),
                 },
             }
@@ -954,6 +1008,7 @@ export async function duplicateProduct(
                     trackInventory: liveVariants[0]?.trackInventory ?? false,
                     stock: 0,
                     weight: liveVariants[0]?.weight ?? null,
+                    fulfillmentKind: copiedFulfillmentKind(liveVariants[0]?.fulfillmentKind ?? "physical"),
                 },
             }),
     });

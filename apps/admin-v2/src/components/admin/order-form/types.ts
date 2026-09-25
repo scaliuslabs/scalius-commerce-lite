@@ -3,6 +3,9 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
 import type { BuyerPriceRange } from "~/lib/format-utils";
+import type { FulfillmentKind } from "@scalius/shared/fulfilment";
+import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { orderNeedsAddress } from "./order-line-properties";
 
 export interface Product {
   id: string;
@@ -16,6 +19,8 @@ export interface Product {
   primaryImage?: string | null;
   priceRange?: BuyerPriceRange | null;
   availableStock?: number | null;
+  /** Buyer inputs the product asks for (engraving, gift wrap, a fit); null or absent without any. */
+  customization?: CustomizationSchema | null;
   variants: {
     id: string;
     optionCombinationKey: string | null;
@@ -30,6 +35,8 @@ export interface Product {
     discountType?: string | null;
     discountPercentage?: number | null;
     discountAmount?: number | null;
+    /** physical ships or is picked up; a service needs no delivery. */
+    fulfillmentKind?: FulfillmentKind;
   }[];
 }
 
@@ -44,6 +51,12 @@ export interface OrderItem {
   variantLabel?: string | null;
   /** New orders: the SKU's sellable stock when the line was added (null = not tracked). */
   available?: number | null;
+  /** Display and delivery rules only: what the SKU is. Never sent. */
+  fulfillmentKind?: FulfillmentKind;
+  /** Buyer inputs sent with the line (same SKU, different inputs = another line). */
+  properties?: LinePropertyInput[];
+  /** Display only: the inputs as the order will print them, with their surcharges. */
+  propertiesDisplay?: ResolvedLineProperty[];
 }
 
 /**
@@ -59,8 +72,10 @@ export interface OrderFormProps {
   /** Amend only: "#1001" and the cash still to collect before the change. */
   orderLabel?: string;
   cashToCollect?: number | null;
+  /** Amend only: the order was placed without a delivery method (it ships nothing). */
+  amendShipsNothing?: boolean;
   /** Amend only: the order's saved delivery method. */
-  savedShippingMethod?: { id: string; name: string } | null;
+  savedShippingMethod?: { id: string; name: string; kind?: "delivery" | "pickup" | null } | null;
 }
 
 /** Validation messages are read when validation runs, so they follow the dashboard language. */
@@ -94,14 +109,13 @@ export const orderFormSchema = z.object({
     return z.NEVER;
   }),
   customerEmail: z.email(msg("emailInvalid")).nullable(),
+  /** Asked only when something ships (see `orderNeedsAddress`); checked below. */
   shippingAddress: z
     .string()
     .trim()
-    .min(1, msg("addressRequired"))
-    .min(10, msg("addressTooShort"))
     .max(500, msg("addressTooLong")),
-  city: z.string().min(1, msg("cityRequired")),
-  zone: z.string().min(1, msg("zoneRequired")),
+  city: z.string(),
+  zone: z.string(),
   area: z.string().nullable(),
   /** Labels of the chosen places (the server stores the names it validates). */
   cityName: z.string().nullable().optional(),
@@ -123,6 +137,9 @@ export const orderFormSchema = z.object({
         name: z.string().optional(),
         variantLabel: z.string().nullable().optional(),
         available: z.number().nullable().optional(),
+        fulfillmentKind: z.enum(["physical", "digital", "service"]).optional(),
+        properties: z.array(z.object({ key: z.string(), value: z.string() })).max(10).optional(),
+        propertiesDisplay: z.array(z.custom<ResolvedLineProperty>()).optional(),
       }),
     )
     .min(1, msg("itemsRequired"))
@@ -148,6 +165,21 @@ export const orderFormSchema = z.object({
   shippingCharge: z.number(msg("amountNotNumber")).min(0, msg("deliveryChargeNegative")),
   /** The delivery method picked for the charge; null for a custom charge. */
   shippingMethodId: z.string().nullable().optional(),
+  /** The picked method's kind: a pickup needs no address. Null for a custom charge (delivery). */
+  shippingMethodKind: z.enum(["delivery", "pickup"]).nullable().optional(),
+}).superRefine((values, context) => {
+  // A pickup order or one with nothing physical has no delivery address (Wave A §2.7).
+  if (!orderNeedsAddress(values)) return;
+  const address = values.shippingAddress.trim();
+  if (address.length < 10) {
+    context.addIssue({
+      code: "custom",
+      path: ["shippingAddress"],
+      message: translate(orderFormMessages, address ? "addressTooShort" : "addressRequired"),
+    });
+  }
+  if (!values.city) context.addIssue({ code: "custom", path: ["city"], message: translate(orderFormMessages, "cityRequired") });
+  if (!values.zone) context.addIssue({ code: "custom", path: ["zone"], message: translate(orderFormMessages, "zoneRequired") });
 });
 
 export type OrderFormInput = z.input<typeof orderFormSchema>;

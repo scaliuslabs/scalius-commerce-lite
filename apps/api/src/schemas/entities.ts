@@ -14,6 +14,14 @@ import {
   optionalTimestampSchema,
   timestampSchema,
 } from "./timestamps";
+import {
+  adminOrderFulfilmentSchema,
+  customizationViewSchema,
+  fulfillmentKindSchema,
+  orderFulfilmentListShape,
+  orderLineFulfilmentShape,
+  orderPickupSchema,
+} from "./order-lines";
 
 // ─────────────────────────────────────────
 // Products
@@ -122,6 +130,8 @@ export const productVariantSchema = z.object({
   discountAmount: z.number().nullable().optional(),
   barcode: z.string().nullable().optional(),
   barcodeType: z.string().nullable().optional(),
+  /** physical (shipped or picked up), digital, or service (performed, no delivery). */
+  fulfillmentKind: fulfillmentKindSchema.optional(),
   createdAt: optionalTimestampSchema,
   updatedAt: optionalTimestampSchema,
   deletedAt: optionalNullableTimestampSchema,
@@ -170,6 +180,12 @@ export const productDetailSchema = z.object({
   discountType: z.enum(["percentage", "flat"]).nullable(),
   discountAmount: z.number().nullable(),
   freeDelivery: z.boolean(),
+  /** Gift-card product: every SKU is a denomination (Wave B). */
+  isGiftCard: z.boolean(),
+  /** Buyer inputs asked on the product page; null when none. */
+  customizationSchema: customizationViewSchema.nullable(),
+  /** The saved buyer-input schema does not validate; checkout refuses the product until it is fixed. */
+  customizationSchemaInvalid: z.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   deletedAt: nullableTimestampSchema,
@@ -283,6 +299,7 @@ const orderListFactsShape = {
   cod: z.object({ status: z.string(), deliveryAttempts: z.number().int() }).nullable(),
   refundDue: z.number().openapi({ description: "Value of received returns not refunded yet." }),
   refundedAmount: z.number(),
+  ...orderFulfilmentListShape,
 };
 
 /** Order summary — returned by listOrders (admin). */
@@ -320,6 +337,7 @@ export const orderSummarySchema = z.object({
 
 /** Order item — returned inside order detail. */
 export const orderItemSchema = z.object({
+  ...orderLineFulfilmentShape,
   id: z.string(),
   productId: z.string(),
   variantId: z.string().nullable(),
@@ -480,6 +498,11 @@ export const orderDetailSchema = z.object({
   ...orderListFactsShape,
   editReadiness: orderEditReadinessSchema,
   supportRequests: z.array(orderSupportRequestSchema),
+  pickup: orderPickupSchema.nullable(),
+  /** Every fulfilment in the ledger (sent, picked up, performed), voided ones included. */
+  fulfillments: z.array(adminOrderFulfilmentSchema),
+  /** The order thread, once the buyer or staff started one; `unread` when the buyer wrote last. */
+  conversation: z.object({ id: z.string(), unread: z.boolean() }).nullable(),
 });
 
 // ─────────────────────────────────────────

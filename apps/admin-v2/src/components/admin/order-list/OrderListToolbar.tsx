@@ -10,6 +10,7 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { formatDateTime, useMessages } from "~/i18n";
 import {
+  deliveryMethodLabel,
   fulfillmentStatusLabel,
   orderMessages,
   orderStatusLabel,
@@ -21,6 +22,7 @@ import type { OrderRefreshPause } from "./order-bulk-actions";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
+  DELIVERY_METHODS,
   FULFILLMENT_STATUSES,
   PAYMENT_METHODS,
   PAYMENT_RECOVERY_STATES,
@@ -225,6 +227,18 @@ export function OrderListToolbar({
               {FULFILLMENT_STATUSES.map((status) => (
                 <option key={status} value={status}>
                   {fulfillmentStatusLabel(to, status)}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label={t("deliveryMethod")}
+              value={search.deliveryMethod}
+              onChange={(value) =>
+                filter({ deliveryMethod: value as OrderListSearch["deliveryMethod"] })}
+            >
+              {DELIVERY_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {deliveryMethodLabel(to, method)}
                 </option>
               ))}
             </FilterSelect>

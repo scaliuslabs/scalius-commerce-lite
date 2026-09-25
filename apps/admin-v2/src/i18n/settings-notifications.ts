@@ -3,6 +3,7 @@ import { defineMessages } from "./index";
 export const notificationsMessages = defineMessages({
   en: {
     email: "Email",
+    notAvailable: "not available",
     sms: "SMS",
     whatsapp: "WhatsApp",
     push: "Push",
@@ -11,9 +12,9 @@ export const notificationsMessages = defineMessages({
     customerDescription: "Messages customers get when their order changes. Select a message to edit it.",
     editMessage: "Edit the {event} message",
     staffTitle: "Staff notifications",
-    staffDescription: "Push alerts on your phone or computer, and an email for every new order.",
+    staffDescription: "Push alerts on your phone or computer, an email for every new order, and, if you choose, an email for new customer messages.",
     staffEmails: "Email every new order to",
-    staffEmailsHelp: "Up to 10 people. Each gets the order, the customer and the total, with a link to the order.",
+    staffEmailsHelp: "Up to 10 people. Each gets the order, the customer and the total, with a link to the order; new customer messages link to the inbox.",
     staffEmail: "Email address {number}",
     addStaffEmail: "Add email",
     removeStaffEmail: "Remove {email}",
@@ -89,6 +90,7 @@ export const notificationsMessages = defineMessages({
   },
   bn: {
     email: "ইমেইল",
+    notAvailable: "প্রযোজ্য নয়",
     sms: "এসএমএস",
     whatsapp: "হোয়াটসঅ্যাপ",
     push: "পুশ",
@@ -97,9 +99,9 @@ export const notificationsMessages = defineMessages({
     customerDescription: "অর্ডারের অবস্থা বদলালে কাস্টমার যে মেসেজ পায়। বদলাতে কোনো মেসেজে ক্লিক করুন।",
     editMessage: "{event} মেসেজ এডিট করুন",
     staffTitle: "স্টাফ নোটিফিকেশন",
-    staffDescription: "আপনার ফোন বা কম্পিউটারে পুশ অ্যালার্ট, আর প্রতিটি নতুন অর্ডারে একটি ইমেইল।",
+    staffDescription: "আপনার ফোন বা কম্পিউটারে পুশ অ্যালার্ট, প্রতিটি নতুন অর্ডারে একটি ইমেইল, আর চাইলে কাস্টমারের নতুন মেসেজে ইমেইল।",
     staffEmails: "প্রতিটি নতুন অর্ডার ইমেইলে পাঠান",
-    staffEmailsHelp: "সর্বোচ্চ ১০ জন। প্রত্যেকে অর্ডার, কাস্টমার আর মোট টাকা পাবেন, সাথে অর্ডারের লিংক।",
+    staffEmailsHelp: "সর্বোচ্চ ১০ জন। প্রত্যেকে অর্ডার, কাস্টমার আর মোট টাকা পাবেন, সাথে অর্ডারের লিংক; কাস্টমারের নতুন মেসেজে ইনবক্সের লিংক।",
     staffEmail: "ইমেইল ঠিকানা {number}",
     addStaffEmail: "ইমেইল যোগ করুন",
     removeStaffEmail: "{email} সরান",
@@ -224,6 +226,8 @@ export const notificationTemplateMessages = defineMessages({
     refund_amount: "Refund amount",
     support_request: "Request type",
     support_status: "Request status",
+    pickup_address: "Pickup address",
+    pickup_hours: "Pickup hours",
   },
   bn: {
     notFound: "এই মেসেজটি নেই।",
@@ -272,5 +276,7 @@ export const notificationTemplateMessages = defineMessages({
     refund_amount: "রিফান্ডের পরিমাণ",
     support_request: "রিকোয়েস্টের ধরন",
     support_status: "রিকোয়েস্টের অবস্থা",
+    pickup_address: "পিকআপের ঠিকানা",
+    pickup_hours: "পিকআপের সময়",
   },
 });

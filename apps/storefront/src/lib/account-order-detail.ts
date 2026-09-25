@@ -43,6 +43,17 @@ import {
   safeTrackingUrl,
   type OrderTrackingText,
 } from "@/lib/order-tracking-markup";
+import {
+  groupOrderLines,
+  orderCompletionWording,
+  orderLineGroupStatusText,
+  orderLinePropertyRows,
+  relabelOrderProgress,
+  relabelOrderTimeline,
+  resolveOrderDeliveryBlock,
+  showsOrderLineGroupHeadings,
+  supportActionDescription,
+} from "@/lib/order-line-groups";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -412,7 +423,7 @@ function renderSupport(detail: AccountOrderDetail): void {
     actions.innerHTML = detail.supportRequestActions.map((action) => `
       <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
         <span class="font-medium">${escapeHtml(action.label)}</span>
-        <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? action.description : action.disabledReason ?? action.description)}</span>
+        <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? supportActionDescription(action, detail.order, copy) : action.disabledReason ?? supportActionDescription(action, detail.order, copy))}</span>
       </button>`).join("");
   }
   const selected = detail.supportRequestActions.find((action) => action.type === selectedSupportType);
@@ -471,15 +482,19 @@ async function buyAgain(): Promise<void> {
 
 function renderProgress(detail: AccountOrderDetail): void {
   const progress = byId("orderProgress");
-  if (progress && detail.progress) progress.innerHTML = orderProgressMarkup(detail.progress, trackingText);
+  // Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
+  if (progress && detail.progress) progress.innerHTML = orderProgressMarkup(relabelOrderProgress(detail.progress, detail.order, copy), trackingText);
   const expected = byId("orderExpectedDelivery");
   if (expected) {
-    const show = Boolean(detail.order.expectedDelivery) && !detail.progress?.outcome && !detail.progress?.steps[3]?.done;
+    const show = Boolean(detail.order.expectedDelivery)
+      && resolveOrderDeliveryBlock(detail.order, copy).mode === "ship"
+      && !detail.progress?.outcome
+      && !detail.progress?.steps[3]?.done;
     expected.textContent = show ? `Expected delivery: ${detail.order.expectedDelivery}` : "";
     expected.classList.toggle("hidden", !show);
   }
   const timeline = byId("orderTimeline");
-  if (timeline) timeline.innerHTML = orderTimelineMarkup(detail.timeline, trackingText);
+  if (timeline) timeline.innerHTML = orderTimelineMarkup(relabelOrderTimeline(detail.timeline, detail.order, copy), trackingText);
 }
 
 function renderItemsAndSummary(detail: AccountOrderDetail): void {
@@ -488,24 +503,40 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const minor = (value: number) => accountMoney(fromMinor(value, places), order.currencyCode);
   const items = byId("orderItems");
   if (items) {
-    items.innerHTML = detail.items.map((item) => {
+    const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
       const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
       const lineTotal = hasMinor
         ? minor(item.lineSubtotalMinor! - (item.discountAmountMinor ?? 0) + (order.pricesIncludeTax ? 0 : item.taxAmountMinor ?? 0))
         : accountMoney(item.lineTotal, order.currencyCode);
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || "Product");
+      // Buyer inputs: display only, escaped, never in links or data attributes.
+      const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
       return `<li class="flex gap-3 py-4 first:pt-0 last:pb-0">
         <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
         <div class="min-w-0 flex-1 text-sm">
           ${item.productSlug ? `<a href="/products/${encodeURIComponent(item.productSlug)}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
+          ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
           ${(item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
       </li>`;
-    }).join("");
+    };
+    const groups = groupOrderLines(detail.items, order, copy);
+    items.innerHTML = showsOrderLineGroupHeadings(groups)
+      ? groups.map((group) => {
+          const status = orderLineGroupStatusText(group);
+          return `<li class="py-4 first:pt-0 last:pb-0" data-order-line-group="${escapeHtml(group.type)}">
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h3 class="text-sm font-semibold text-foreground">${escapeHtml(group.heading)}</h3>
+          ${status ? `<p class="text-sm text-muted-foreground">${escapeHtml(status)}</p>` : ""}
+        </div>
+        <ul class="divide-y divide-border">${group.items.map(lineMarkup).join("")}</ul>
+      </li>`;
+        }).join("")
+      : detail.items.map(lineMarkup).join("");
   }
 
   const summary = byId("orderSummary");
@@ -524,10 +555,14 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       decimalPlaces: places,
       discountText: copy.discountText,
     });
+    const deliveryMode = resolveOrderDeliveryBlock(order, copy).mode;
+    const deliveryWord = deliveryMode === "pickup" ? copy.orderPickupHeadingText : copy.orderReceiptDeliveryText;
+    // Nothing to deliver and nothing charged: no delivery row.
+    const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     summary.innerHTML = [
       row("Subtotal", cell(minor(order.subtotalAmountMinor ?? 0))),
-      row(
-        order.shippingMethodName ? `Delivery (${order.shippingMethodName})` : "Delivery",
+      !showsDeliveryRow ? "" : row(
+        order.shippingMethodName ? `${deliveryWord} (${order.shippingMethodName})` : deliveryWord,
         [
           delivery.charged < delivery.fee ? `<s class="mr-1.5">${escapeHtml(money(delivery.fee))}</s>` : "",
           cell(delivery.charged === 0 ? copy.freeText : money(delivery.charged), "text-foreground"),
@@ -543,14 +578,31 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
 
 function renderDelivery(detail: AccountOrderDetail): void {
   const { order } = detail;
+  const block = resolveOrderDeliveryBlock(order, copy);
+  const heading = byId("deliveryHeading");
+  if (heading) {
+    heading.textContent = block.mode === "pickup" ? block.heading : block.mode === "none" ? copy.orderReceiptDeliveryText : "Shipping address";
+  }
   const address = byId("orderAddress");
   if (address) {
+    const lines = block.mode === "pickup"
+      ? [
+          order.shippingMethodName,
+          block.location,
+          block.hours ? `${block.hoursLabel}: ${block.hours}` : null,
+          block.notReady,
+        ]
+      : block.mode === "none"
+        ? [block.text]
+        : [
+            block.address,
+            formatDeliveryArea(order),
+            order.shippingMethodName ? `Delivery method: ${order.shippingMethodName}` : null,
+          ];
     address.innerHTML = [
       order.customerName,
       order.customerPhone ? formatBdMobile(order.customerPhone) : null,
-      order.shippingAddress,
-      formatDeliveryArea(order),
-      order.shippingMethodName ? `Delivery method: ${order.shippingMethodName}` : null,
+      ...lines,
     ].filter(Boolean).map((line) => `<p>${escapeHtml(String(line))}</p>`).join("");
   }
   const note = byId("orderNote");
@@ -625,7 +677,11 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const subtitle = byId("orderSubtitle");
   if (subtitle) subtitle.textContent = `Placed ${formatAccountDate(order.createdAt)}`;
   const status = byId("orderStatus");
-  if (status) status.textContent = order.statusLabel ?? detail.progress?.outcome?.label ?? order.status;
+  // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
+  if (status) {
+    status.textContent = orderCompletionWording(order, copy)?.statusLabel
+      ?? order.statusLabel ?? detail.progress?.outcome?.label ?? order.status;
+  }
   renderReturnNotice();
   renderProgress(detail);
   renderItemsAndSummary(detail);
