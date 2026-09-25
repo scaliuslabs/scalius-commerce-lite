@@ -26,8 +26,8 @@ const order = {
   id: "ord_1001", orderNumber: 1001, version: 1, status: "pending", paymentStatus: "unpaid", paidAmount: 0,
   customerEmail: null,
   items: [
-    { id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 0 },
-    { id: "i2", quantity: 5, inventoryTracked: false, shippedQuantity: 0 },
+    { id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 0 },
+    { id: "i2", quantity: 5, inventoryTracked: false, fulfilledQuantity: 0 },
   ],
 } as unknown as Order;
 
@@ -102,8 +102,8 @@ describe("OrderStatusCard", () => {
       ...order,
       status: "confirmed",
       items: [
-        { id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 },
-        { id: "i2", quantity: 3, inventoryTracked: true, shippedQuantity: 2 },
+        { id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 1 },
+        { id: "i2", quantity: 3, inventoryTracked: true, fulfilledQuantity: 2 },
       ],
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={partlySent} />));
@@ -116,14 +116,14 @@ describe("OrderStatusCard", () => {
   });
 
   it("words one unit with the courier in the singular", async () => {
-    const oneSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    const oneSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={oneSent} />));
     expect((await openOption(o["status.cancelled"]))?.textContent)
       .toContain("1 item is with the courier. Cancel after it comes back.");
   });
 
   it("links a part-sent order's blocked cancel to the parcel action it names", async () => {
-    const partSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    const partSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={partSent} />));
     const link = host.querySelector<HTMLAnchorElement>('a[href="#order-fulfilment"]');
     expect(link?.textContent).toBe(t["shipments.cameBack"]);
@@ -132,7 +132,7 @@ describe("OrderStatusCard", () => {
 
   it("points a shipped cash order's blocked cancel at Mark returned", async () => {
     const shipped = {
-      ...order, status: "shipped", paymentMethod: "cod", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
+      ...order, status: "shipped", paymentMethod: "cod", items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 2 }],
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={shipped} />));
     expect(host.querySelector('a[href="#order-payment"]')?.textContent).toBe(t["cod.markReturned"]);
@@ -165,7 +165,7 @@ describe("OrderStatusCard", () => {
   it("says to collect the cash before a delivered cash order can be Completed", async () => {
     const delivered = {
       ...order, status: "delivered", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
-      items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
+      items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 2 }],
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={delivered} />));
     const completed = await openOption(o["status.completed"]);

@@ -1,7 +1,8 @@
-// Wave A schema guards (0083-0086) exercised with raw SQL against the real
+// Wave A schema guards (0083-0088) exercised with raw SQL against the real
 // migration chain: the fulfilment ledger (F1-F5), the address rule, the
-// return-trigger rewrite, the line-properties snapshot (P4), conversation
-// sequences (C3), attachments, the generic outbox, and the 0083 backfill.
+// return triggers (bounded by the ledger alone since 0088), the
+// line-properties snapshot (P4), conversation sequences (C3), attachments,
+// the generic outbox, the 0083 backfill and the 0088 contract backfill.
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
@@ -221,10 +222,11 @@ describe("order-line fulfilment ledger (0083)", () => {
     expect(() => line("rl_again", "ret_2", "item_pickup", 1)).toThrow(/exceeds fulfilled item quantity/);
   });
 
-  it("keeps lines the previous API marked shipped returnable up to their quantity until the contract migration", () => {
-    const { insert } = store();
+  it("F12 (0088): returns are bounded by the ledger alone; a legacy shipped status grants nothing", () => {
+    const { sqlite, insert, fulfil } = store();
+    // The previous API's per-line status, which the return triggers honoured until 0088.
     insert("order_items", {
-      id: "item_legacy", order_id: "ord_1", product_id: "prod_1", variant_id: "var_legacy", quantity: 2,
+      id: "item_legacy", order_id: "ord_1", product_id: "prod_1", variant_id: "var_legacy", quantity: 3,
       unit_price_minor: 10_000, fulfillment_status: "shipped",
     });
     insert("order_returns", { id: "ret_1", order_id: "ord_1", reason: "damaged", actor_type: "admin" });
@@ -232,8 +234,30 @@ describe("order-line fulfilment ledger (0083)", () => {
       id, return_id: "ret_1", order_id: "ord_1", order_item_id: "item_legacy", variant_id: "var_legacy",
       requested_quantity: quantity,
     });
+    expect(() => line("rl_unsent", 1)).toThrow(/shipped item|exceeds fulfilled item quantity/);
+
+    fulfil("ful_two", "ship", [["item_legacy", 2]]);
     expect(() => line("rl_over", 3)).toThrow(/exceeds fulfilled item quantity/);
     line("rl_ok", 2);
+
+    // Voiding the fulfilment takes the entitlement away again: approving the
+    // requested return is refused by the status trigger.
+    sqlite.exec("UPDATE order_fulfillments SET status = 'voided', voided_at = unixepoch() WHERE id = 'ful_two'");
+    sqlite.exec("UPDATE order_return_lines SET approved_quantity = requested_quantity WHERE return_id = 'ret_1'");
+    expect(() => sqlite.exec("UPDATE order_returns SET status = 'approved' WHERE id = 'ret_1'"))
+      .toThrow(/exceeds fulfilled item quantity/);
+
+    // No return trigger reads the legacy line columns any more.
+    const triggers = sqlite.prepare(
+      "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('order_return_lines', 'order_returns')",
+    ).all() as Array<{ name: string; sql: string }>;
+    expect(triggers.map((trigger) => trigger.name)).toEqual(expect.arrayContaining([
+      "order_return_lines_validate_insert",
+      "order_return_lines_entitlement_insert",
+      "order_returns_entitlement_status_update",
+    ]));
+    expect(triggers.filter((trigger) => /fulfillment_status|shipped_quantity/.test(trigger.sql)).map((trigger) => trigger.name))
+      .toEqual([]);
   });
 
   it("fences in-flight checkouts when a variant's kind or a product's gift-card flag changes", () => {
@@ -402,7 +426,7 @@ describe("generic notification outbox (0086)", () => {
   });
 });
 
-describe("0083-0086 upgrade from an 0082 store", () => {
+describe("0083-0087 upgrade from an 0082 store", () => {
   it("backfills the ledger from sent units, keeps addresses, resets support cases and records the release", () => {
     const sqlite = createMigratedSqlite({ beforeMigration: "0083_" });
     sqlite.exec("PRAGMA foreign_keys = OFF");
@@ -425,7 +449,7 @@ describe("0083-0086 upgrade from an 0082 store", () => {
     insert("order_support_requests", { id: "osr_1", order_id: "ord_sent", type: "return", reason: "damaged", message: "Box was crushed" });
     insert("order_support_request_events", { id: "osre_1", request_id: "osr_1", order_id: "ord_sent", actor_type: "customer", event_type: "submitted" });
 
-    sqlite.exec(compiledMigrationSql("d1", undefined, "0083_"));
+    sqlite.exec(compiledMigrationSql("d1", "0088_", "0083_"));
 
     expect(sqlite.prepare("SELECT id, order_id, kind, status, request_key, actor_type, created_at FROM order_fulfillments ORDER BY id").all())
       .toEqual([
@@ -460,7 +484,7 @@ describe("0083-0086 upgrade from an 0082 store", () => {
     expect(scalar(sqlite, "SELECT count(*) FROM order_support_requests")).toBe(0);
     expect(scalar(sqlite, "SELECT count(*) FROM order_support_request_events")).toBe(0);
     expect(sqlite.prepare("SELECT version, name, source_sha256 AS sourceSha256 FROM scalius_schema_migrations WHERE version >= 83 ORDER BY version").all())
-      .toEqual(CURRENT_DATABASE_SCHEMA_MIGRATIONS.filter((migration) => migration.version >= 83)
+      .toEqual(CURRENT_DATABASE_SCHEMA_MIGRATIONS.filter((migration) => migration.version >= 83 && migration.version <= 87)
         .map(({ version, name, sourceSha256 }) => ({ version, name, sourceSha256 })));
 
     // The backfilled ledger is live: the partial order can send its rest, and
@@ -476,5 +500,106 @@ describe("0083-0086 upgrade from an 0082 store", () => {
         { id: "item_sent_a", fulfilled_quantity: 0 },
         { id: "item_sent_b", fulfilled_quantity: 0 },
       ]);
+  });
+});
+
+describe("0088 contract upgrade from an 0087 store", () => {
+  it("records the units the previous API sent without the ledger, then drops the replaced tables", () => {
+    const sqlite = createMigratedSqlite({ beforeMigration: "0088_" });
+    sqlite.exec("PRAGMA foreign_keys = OFF");
+    const insert = inserter(sqlite);
+    for (const id of ["ord_gap", "ord_top_up", "ord_back", "ord_capped", "ord_wave_a", "ord_pickup"]) {
+      insert("orders", {
+        id, customer_name: "Buyer", customer_phone: "01700000000", shipping_address: `Address of ${id}`,
+        city: "c", zone: "z", total_amount_minor: 30_000, updated_at: 1_790_100_000,
+      });
+    }
+    const item = (id: string, orderId: string, quantity: number, shipped: number, type = "ship") => insert("order_items", {
+      id, order_id: orderId, product_id: "prod_1", quantity, shipped_quantity: shipped, unit_price_minor: 10_000,
+      fulfillment_status: shipped >= quantity ? "shipped" : "pending", fulfillment_type: type,
+    });
+    const fulfil = (id: string, orderId: string, lines: Array<[string, string, number]>, kind = "ship") => {
+      insert("order_fulfillments", { id, order_id: orderId, kind, request_key: `key_${id}`, actor_type: "system" });
+      for (const [lineId, itemId, quantity] of lines) {
+        insert("order_fulfillment_lines", { id: lineId, fulfillment_id: id, order_id: orderId, order_item_id: itemId, quantity });
+      }
+    };
+    // Sent 2 of 3 by the previous API after 0083 ran: nothing in the ledger.
+    item("item_gap", "ord_gap", 3, 2);
+    item("item_gap_open", "ord_gap", 1, 0);
+    // 0083 migrated 1 sent unit; the previous API then sent 1 more.
+    item("item_top_up", "ord_top_up", 3, 2);
+    fulfil("ful_mig_ord_top_up", "ord_top_up", [["fln_mig_item_top_up", "item_top_up", 1]]);
+    // 0083 migrated both units; the parcel came back and Wave A voided it.
+    item("item_back", "ord_back", 2, 2);
+    fulfil("ful_mig_ord_back", "ord_back", [["fln_mig_item_back", "item_back", 2]]);
+    sqlite.exec("UPDATE order_fulfillments SET status = 'voided', voided_at = 1 WHERE id = 'ful_mig_ord_back'");
+    // The previous API sent 2 of 2 and Wave A sent 1 on top: only 1 is left to record.
+    item("item_capped", "ord_capped", 2, 2);
+    fulfil("ful_wave_a", "ord_capped", [["fln_wave_a", "item_capped", 1]]);
+    // Wave A lines never touch the legacy counter.
+    item("item_wave_a", "ord_wave_a", 2, 0);
+    fulfil("ful_wave_a_only", "ord_wave_a", [["fln_wave_a_only", "item_wave_a", 1]]);
+    item("item_pickup", "ord_pickup", 1, 0, "pickup");
+    insert("order_support_requests", { id: "osr_1", order_id: "ord_gap", type: "return", reason: "damaged" });
+    insert("order_support_request_events", { id: "osre_1", request_id: "osr_1", order_id: "ord_gap", actor_type: "customer", event_type: "submitted" });
+    insert("order_notification_outbox", { id: "onb_1", dedupe_key: "k1", order_id: "ord_gap", notification_type: "order_placed", source: "test", payload: "{}" });
+    insert("order_notification_delivery_receipts", {
+      id: "onr_1", receipt_key: "r1", outbox_id: "onb_1", order_id: "ord_gap", notification_type: "order_placed",
+      channel: "email", provider: "test", recipient_hash: "h",
+    });
+
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0088_"));
+
+    expect(sqlite.prepare("SELECT id, order_id, kind, status, request_key, actor_type, created_at FROM order_fulfillments WHERE id LIKE 'ful_mig2_%' ORDER BY id").all())
+      .toEqual([
+        { id: "ful_mig2_ord_capped", order_id: "ord_capped", kind: "ship", status: "active", request_key: "migration:0088", actor_type: "system", created_at: 1_790_100_000 },
+        { id: "ful_mig2_ord_gap", order_id: "ord_gap", kind: "ship", status: "active", request_key: "migration:0088", actor_type: "system", created_at: 1_790_100_000 },
+        { id: "ful_mig2_ord_top_up", order_id: "ord_top_up", kind: "ship", status: "active", request_key: "migration:0088", actor_type: "system", created_at: 1_790_100_000 },
+      ]);
+    expect(sqlite.prepare("SELECT id, fulfillment_id, order_item_id, quantity FROM order_fulfillment_lines WHERE id LIKE 'fln_mig2_%' ORDER BY id").all())
+      .toEqual([
+        { id: "fln_mig2_item_capped", fulfillment_id: "ful_mig2_ord_capped", order_item_id: "item_capped", quantity: 1 },
+        { id: "fln_mig2_item_gap", fulfillment_id: "ful_mig2_ord_gap", order_item_id: "item_gap", quantity: 2 },
+        { id: "fln_mig2_item_top_up", fulfillment_id: "ful_mig2_ord_top_up", order_item_id: "item_top_up", quantity: 1 },
+      ]);
+    // The triggers projected the backfill; fulfilled_quantity is the ledger sum everywhere.
+    expect(sqlite.prepare("SELECT id, fulfilled_quantity FROM order_items ORDER BY id").all()).toEqual([
+      { id: "item_back", fulfilled_quantity: 0 },
+      { id: "item_capped", fulfilled_quantity: 2 },
+      { id: "item_gap", fulfilled_quantity: 2 },
+      { id: "item_gap_open", fulfilled_quantity: 0 },
+      { id: "item_pickup", fulfilled_quantity: 0 },
+      { id: "item_top_up", fulfilled_quantity: 2 },
+      { id: "item_wave_a", fulfilled_quantity: 1 },
+    ]);
+    expect(scalar(sqlite, `
+      SELECT count(*) FROM order_items oi
+      WHERE oi.fulfilled_quantity <> (
+        SELECT coalesce(sum(l.quantity), 0) FROM order_fulfillment_lines l
+        JOIN order_fulfillments f ON f.id = l.fulfillment_id
+        WHERE l.order_item_id = oi.id AND f.status = 'active'
+      )
+    `)).toBe(0);
+
+    const objects = (type: string) => (sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = ? ORDER BY name").all(type) as Array<{ name: string }>)
+      .map((row) => row.name);
+    for (const dropped of ["order_notification_delivery_receipts", "order_notification_outbox", "order_support_request_events", "_wave_a_contract_gap"]) {
+      expect(objects("table")).not.toContain(dropped);
+    }
+    expect(objects("index").filter((name) => /^order_(notification|support_request_events)_/.test(name))).toEqual([]);
+    expect(scalar(sqlite, "SELECT count(*) FROM order_support_requests")).toBe(1);
+    expect(sqlite.prepare("SELECT version, name, source_sha256 AS sourceSha256 FROM scalius_schema_migrations WHERE version >= 88 ORDER BY version").all())
+      .toEqual(CURRENT_DATABASE_SCHEMA_MIGRATIONS.filter((migration) => migration.version >= 88)
+        .map(({ version, name, sourceSha256 }) => ({ version, name, sourceSha256 })));
+
+    // The backfilled units are returnable; nothing beyond the ledger is.
+    insert("order_returns", { id: "ret_gap", order_id: "ord_gap", reason: "damaged", actor_type: "admin" });
+    const returnLine = (id: string, quantity: number) => insert("order_return_lines", {
+      id, return_id: "ret_gap", order_id: "ord_gap", order_item_id: "item_gap", requested_quantity: quantity,
+      inventory_tracked: 0,
+    });
+    expect(() => returnLine("rl_over", 3)).toThrow(/exceeds fulfilled item quantity/);
+    returnLine("rl_ok", 2);
   });
 });

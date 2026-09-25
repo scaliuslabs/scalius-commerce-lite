@@ -82,11 +82,15 @@ complete --> pending
 
 3 states: `pending`, `partial`, `complete`.
 
-### Item Fulfillment Status
+### Line fulfilment
 
-Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `packed`, `shipped`, `delivered`. These are NOT governed by the state machine -- they are set directly by `createFulfillmentShipment()`.
-
-Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so the dashboard can disable already shipped/delivered items before posting manual fulfillment. Own-courier shipments are stored in `deliveryShipments` without a provider id; API/admin history can render `courierName`, `trackingUrl`, `note`, `shipmentItems`, `shipmentAmount`, and `isFinalShipment`, but provider status refresh must remain disabled for those manual rows.
+What was handed over is the fulfilment ledger (`order_fulfillments` and
+their lines, see [fulfilment](../fulfilment/README.md)); `order_items.fulfilled_quantity`
+is its trigger projection and the only per-line count. Admin detail and
+`GET /api/v1/admin/orders/:id/items` expose `fulfillmentType` and
+`fulfilledQuantity`; a parcel's contents are the lines of the fulfilment
+recorded with it. Own-courier shipments are stored in `deliveryShipments`
+without a provider id; provider status refresh stays disabled for them.
 
 ## Data Flow
 
@@ -120,7 +124,7 @@ See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idemp
 5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
 6. Persists/reconfirms the resulting `inventoryAction`; if inventory throws before `inventoryAction` changes, `rollbackOrderStatusIfInventoryUnchanged()` reverts the visible status behind the claimed version/status/action guard
 7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
-8. API route records the notification in `order_notification_outbox`, then relays it to `JOBS_QUEUE` when available
+8. API route records the notification in `notification_outbox`, then relays it to `JOBS_QUEUE` when available
 
 **Notification Status Mapping** (`NOTIFICATION_STATUSES` in `status/lifecycle.ts`):
 
@@ -136,7 +140,7 @@ See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idemp
 | `returned` | `order_returned` |
 | `refunded` | `order_refunded` |
 
-All 9 buyer-visible order statuses that trigger status notifications are covered; a partial refund sends `order_partially_refunded` from the refund path. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
+All 9 buyer-visible order statuses that trigger status notifications are covered; a partial refund sends `order_partially_refunded` from the refund path. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
 
 ### Fulfilment, COD and bulk shipping
 
@@ -164,7 +168,7 @@ Storefront order creation is not queue-backed. Checkout commits the order synchr
 |-------|-------------|---------|
 | `JOBS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
-The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent` only if enabled receipt targets are accepted or skipped. Retryable customer-channel or admin-push failures mark the parent row failed with D1 `nextAttemptAt` backoff and ack the Queue message, so scheduled outbox flushing owns durable retries. Legacy messages without an `outboxId` still use Cloudflare Queue retry. Merchant-actionable provider failures such as invalid SMS credentials, missing Meta WhatsApp credentials, or missing recipients become skipped receipts instead of hot retry loops.
+The `order.notification` handler in `queue-consumer.ts` claims `notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent` only if enabled receipt targets are accepted or skipped. Retryable customer-channel or admin-push failures mark the parent row failed with D1 `nextAttemptAt` backoff and ack the Queue message, so scheduled outbox flushing owns durable retries. Legacy messages without an `outboxId` still use Cloudflare Queue retry. Merchant-actionable provider failures such as invalid SMS credentials, missing Meta WhatsApp credentials, or missing recipients become skipped receipts instead of hot retry loops.
 
 Payment events (one `payment.event` message type for every gateway) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module. Confirmed `paymentType = "balance"` messages enqueue `payment_balance_paid` instead of replaying `order_created`, so customers receive a distinct remaining-payment receipt.
 
@@ -172,8 +176,8 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 
 - **Optimistic locking on orders**: `version` column, CAS update in `updateOrderDetails()`, amendments and `updateOrderStatus()`
 - **Request keys on every dashboard write**: a repeated request (double click, retry) returns the first result. Refunds key their attempt rows (`refund_request:<order>:<key>:<n>`, same key + different amount is a 409); own-courier sends store the key on the shipment (bulk runs use `bulk:<key>` per order); bulk confirm and timeline lines derive the `order_events` id from the key, so a repeat can't add a line; return commands keep their `commandKey`.
-- **Fulfilment states come only from parcels**: the generic status change (`updateOrderStatus`, dashboard and agents alike) makes only side-effect-free moves (incomplete→pending, pending/processing→confirmed, →cancelled, delivered→completed). Shipped comes from Mark as sent / Book courier, delivered from cash collected (COD) or `markOrderDelivered` (paid, fully sent), returned from Mark returned or a return. A Shipped order with nothing actually sent can still be cancelled, which restores its stock. On a part-sent order an own-courier parcel that came back is taken off the sent list (`markParcelReturned`); part-sent stock is still reserved, so no stock moves.
-- **Nothing with the courier is cancelled**: `updateOrderStatus(..., "cancelled")` refuses while any item has `shipped_quantity > 0` (also in the CAS), so units with a rider never go back into sellable stock. Own-courier parcels follow the order: a failed attempt marks open parcels `delivery_failed`, return to sender marks them `returned`, cash collected marks them `delivered`.
+- **Fulfilment states come only from parcels**: the generic status change (`updateOrderStatus`, dashboard and agents alike) makes only side-effect-free moves (incomplete→pending, pending/processing→confirmed, →cancelled, delivered→completed). Shipped comes from Mark as sent / Book courier, delivered from cash collected (COD) or `markOrderDelivered` (paid, fully sent), returned from Mark returned or a return. A Shipped order with nothing actually sent can still be cancelled, which restores its stock. On a part-sent order an own-courier parcel that came back is voided (`voidOrderFulfilment`), which takes its units off the sent list; part-sent stock is still reserved, so no stock moves.
+- **Nothing with the courier is cancelled**: `updateOrderStatus(..., "cancelled")` refuses while any item has `fulfilled_quantity > 0` (also in the CAS), so units with a rider never go back into sellable stock. Own-courier parcels follow the order: a failed attempt marks open parcels `delivery_failed`, return to sender marks them `returned`, cash collected marks them `delivered`.
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
 - **Checkout reservation rollback**: `commitStorefrontOrderPayload()` commits inventory CAS and ledger edges in the same guarded batch as the order. A failed authority, inventory, or order guard rolls back the whole batch; no compensating stock release is needed. Late reservation failures surface buyer-safe cart issues.
 - **Checkout idempotency**: `checkout_attempts` owns same-key replay, in-flight `202`, reserved order ids, and stale-claim recovery. `commitStorefrontOrderPayload()` also treats an already-committed order id as success so a crash after commit can converge without a duplicate order.
@@ -201,8 +205,8 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 | POST | `/:id/payment-recovery-link` | `previewOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz buyer verification URL without provider calls or receipt proof minting |
 | GET | `/:id/cod` | direct query | COD tracking record |
 | POST | `/:id/cod` | `processCodAction()` | COD collected/failed/returned |
-| GET | `/:id/fulfill` | `getOrderShipments()` | Fulfillment shipments |
-| POST | `/:id/fulfill` | `createFulfillmentShipment()` | Create fulfillment with item tracking |
+| POST | `/:id/fulfillments` | `recordOrderFulfilment()` | Hand lines over: own-rider parcel, picked up, service done |
+| POST | `/:id/fulfillments/:fulfillmentId/void` | `voidOrderFulfilment()` | A parcel came back: its units are unsent again |
 | GET | `/:id/shipments` | `DeliveryService.getShipments()` | Delivery shipments with provider names |
 | POST | `/:id/shipments` | `DeliveryService.createShipment()` | Create delivery shipment |
 | GET | `/:id/shipments/:shipmentId` | `DeliveryService.getShipment()` | Single shipment detail |
@@ -249,7 +253,7 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `orderDiscountAllocations`, `promotionRedemptions`, `codTracking`
+- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `orderDiscountAllocations`, `promotionRedemptions`, `codTracking`
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`

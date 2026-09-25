@@ -99,7 +99,6 @@ All enums follow the pattern: `const` object with `as const`, plus a derived uni
 | `PaymentStatus` | `unpaid`, `partial`, `paid`, `refunded`, `failed` | `orders.paymentStatus` |
 | `FulfillmentStatus` | `pending`, `partial`, `complete` | `orders.fulfillmentStatus` |
 | `InventoryPool` | `regular`, `preorder`, `backorder` | `orders.inventoryPool` |
-| `ItemFulfillmentStatus` | `pending`, `picked`, `packed`, `shipped`, `delivered` | `orderItems.fulfillmentStatus` |
 | `DeliveryProvider` | `pathao`, `steadfast` | Referenced by delivery logic |
 | `DiscountType` | `amount_off_products`, `amount_off_order`, `free_shipping` | `discounts.type` |
 | `DiscountValueType` | `percentage`, `fixed_amount`, `free` | `discounts.valueType` |
@@ -246,7 +245,6 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 | `deliveryProviders.credentials` | Pathao: `{ baseUrl, clientId, clientSecret, username, password }`. Steadfast: `{ baseUrl, apiKey, secretKey }`. May be AES-GCM encrypted. |
 | `deliveryProviders.config` | Pathao: `{ storeId, defaultDeliveryType, defaultItemType, defaultItemWeight }`. Steadfast: `{ defaultCodAmount }` |
 | `deliveryShipments.metadata` | `Record<string, unknown>` (provider-specific response data) |
-| `deliveryShipments.shipmentItems` | `string` (JSON array of item references) |
 | `orderPayments.metadata` | `Record<string, unknown>` (currency, card type, etc.) |
 | `abandonedCheckouts.checkoutData` | `string` (JSON, full checkout form state) |
 | `checkoutLanguages.languageData` | `{ pageTitle, cartSectionTitle, placeOrderText, continueShoppingText, subtotalText, shippingText, ... }` (i18n strings) |

@@ -7,9 +7,23 @@ import { processRefund } from "../payments/refund-service";
 import { createOrder } from "./admin/create";
 import { bulkConfirmOrders, updateOrderStatus } from "./status/lifecycle";
 import { bulkFulfillOrders } from "../fulfilment/bulk";
-import { createFulfillmentShipment } from "../fulfilment/shipments";
+import { recordOrderFulfilment } from "../fulfilment/ledger";
 import { processCodAction } from "../fulfilment/delivery-outcomes";
 import { addOrderComment, listOrderTimeline, recordOrderEvent } from "./timeline";
+
+/** Own-rider "Mark as sent": a `ship` fulfilment, as POST /{id}/fulfillments records it. */
+function sendParcel(
+    db: Database,
+    orderId: string,
+    input: { requestKey?: string; items?: Array<{ itemId: string; quantity: number }>; courierName?: string; trackingId?: string } = {},
+) {
+    return recordOrderFulfilment(db, orderId, {
+        requestKey: input.requestKey ?? crypto.randomUUID(),
+        kind: "ship",
+        lines: input.items,
+        parcel: { courierName: input.courierName, trackingId: input.trackingId },
+    }, { type: "admin", id: null });
+}
 
 /**
  * Black-box round 2: a double click, a retry or a stale tab must never record
@@ -57,7 +71,7 @@ describe("order writes repeated by a double click", () => {
 
     async function collectedOrder() {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 });
         return id;
     }
@@ -90,7 +104,7 @@ describe("order writes repeated by a double click", () => {
         const id = await manualOrder(2);
         const stockBefore = one("SELECT stock, reserved_stock FROM product_variants WHERE id = 'variant_1'");
         const itemId = one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id).id;
-        await createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 1 }] });
+        await sendParcel(db, id, { items: [{ itemId, quantity: 1 }] });
 
         await expect(updateOrderStatus(db, id, "cancelled"))
             .rejects.toThrow("1 item is with the courier. Mark it returned or delivered first.");

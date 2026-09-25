@@ -26,7 +26,6 @@ const orderItemSchema = z.object({
   price: z.number(),
   productName: z.string().nullable(),
   variantLabel: z.string().nullable(),
-  fulfillmentStatus: z.string().nullable(),
   unitPriceMinor: nullableMoneySchema,
   lineSubtotalMinor: nullableMoneySchema,
   discountAmountMinor: nullableMoneySchema,

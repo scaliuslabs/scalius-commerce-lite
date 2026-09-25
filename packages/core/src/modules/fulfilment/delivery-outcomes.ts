@@ -191,20 +191,15 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     && candidate.sourceReferenceId === sourceReferenceId,
             );
             if (!returnRecord) {
-                // What was handed over and can come back: the ledger, or the
-                // previous API's sent count until the contract migration.
-                const sentItems = (await db.select({
+                // What was handed over, by the ledger, is what can come back.
+                const sentItems = await db.select({
                     id: orderItems.id,
                     fulfilledQuantity: orderItems.fulfilledQuantity,
-                    legacyShippedQuantity: orderItems.shippedQuantity,
                 }).from(orderItems).where(and(
                     eq(orderItems.orderId, orderId),
                     inArray(orderItems.fulfillmentType, ["ship", "pickup"]),
-                    sql`(${orderItems.fulfilledQuantity} > 0 OR ${orderItems.shippedQuantity} > 0)`,
-                )).all()).map((item) => ({
-                    id: item.id,
-                    shippedQuantity: Math.max(item.fulfilledQuantity, item.legacyShippedQuantity),
-                }));
+                    sql`${orderItems.fulfilledQuantity} > 0`,
+                )).all();
                 if (sentItems.length === 0) {
                     throw new ValidationError("Nothing from this order was sent, so nothing can come back.");
                 }
@@ -215,7 +210,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     notes: typeof body.notes === "string" ? body.notes : null,
                     lines: sentItems.map((item) => ({
                         orderItemId: item.id,
-                        quantity: item.shippedQuantity,
+                        quantity: item.fulfilledQuantity,
                         reason: COURIER_RETURN_REASON,
                     })),
                 }, { type: "system", id: "cod" }, {
@@ -316,7 +311,6 @@ export async function markOrderDelivered(db: Database, orderId: string): Promise
     }).from(orderItems).where(and(
         eq(orderItems.orderId, orderId),
         eq(orderItems.fulfillmentType, "ship"),
-        sql`${orderItems.fulfillmentStatus} NOT IN ('shipped', 'delivered')`,
     )).get();
     const unsent = Number(left?.unsent ?? 0);
     if (order.status !== OrderStatus.SHIPPED || unsent > 0) {

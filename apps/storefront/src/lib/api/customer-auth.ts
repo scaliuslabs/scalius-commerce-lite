@@ -564,7 +564,6 @@ export interface CustomerOrderSupportRequest {
   label: string;
   actionLabel: string;
   reason: string;
-  message: string | null;
   submittedAt: string | null;
   resolvedAt: string | null;
   createdAt: string | null;
@@ -654,7 +653,6 @@ export interface CustomerOrderDetail {
     productSlug: string | null;
     unitPrice: number;
     lineTotal: number;
-    fulfillmentStatus: string;
     createdAt: string | null;
   }>;
   shipments: Array<CustomerOrderShipment & {

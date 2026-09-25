@@ -59,7 +59,7 @@ describe("invoice order projection", () => {
 function baseItem() {
   return {
     id: "item_1", productId: "product_1", variantId: "variant_1", quantity: 1, price: 100,
-    productName: "Pen", variantLabel: null, fulfillmentStatus: null, unitPriceMinor: 10_000,
+    productName: "Pen", variantLabel: null, unitPriceMinor: 10_000,
     lineSubtotalMinor: 10_000, discountAmountMinor: 0, taxableAmountMinor: 0, taxAmountMinor: 0,
   };
 }

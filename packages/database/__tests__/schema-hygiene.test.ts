@@ -17,7 +17,7 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(122);
+      expect(d1Tables).toHaveLength(119);
       expect(d1Tables).toContain("scalius_schema_migrations");
       expect(d1Tables).toContain("cache_generation");
       expect(d1Tables).toContain("agent_grants");
@@ -34,6 +34,10 @@ describe("canonical schema hygiene", () => {
       expect(d1Tables).toContain("conversation_attachments");
       expect(d1Tables).toContain("notification_outbox");
       expect(d1Tables).toContain("notification_delivery_receipts");
+      // Replaced in Wave A and dropped by its contract migration (0088).
+      for (const dropped of ["order_notification_outbox", "order_notification_delivery_receipts", "order_support_request_events"]) {
+        expect(d1Tables).not.toContain(dropped);
+      }
       expect(retired).toEqual([]);
     } finally {
       d1.close();

@@ -548,7 +548,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     surface: "dashboard",
     kind: "write",
     prompt: "Manually fulfill this paid order with the supplied tracking facts and verify shipment state.",
-    expectedOperationIds: ["dashboard.orders.get", "dashboard.orders.fulfill", "dashboard.orders.fulfillment_get"],
+    expectedOperationIds: ["dashboard.orders.get", "dashboard.orders.fulfillment_create"],
     requiresFacts: true,
     requiresConfirmation: true,
     requiresVerification: true,
@@ -1277,7 +1277,7 @@ export const AGENT_INTENT_OPERATION_CASES: readonly AgentIntentOperationCase[] =
     id: "cancel-order",
     prompt: "Cancel an order",
     expectedDisposition: "ask",
-    forbiddenOperationIds: ["dashboard.orders.return_cancel", "dashboard.orders.fulfill"],
+    forbiddenOperationIds: ["dashboard.orders.return_cancel", "dashboard.orders.fulfillment_create"],
   },
   {
     id: "fulfill-order",
@@ -1285,8 +1285,7 @@ export const AGENT_INTENT_OPERATION_CASES: readonly AgentIntentOperationCase[] =
     expectedDisposition: "execute",
     expectedOperationIds: [
       "dashboard.orders.get",
-      "dashboard.orders.fulfill",
-      "dashboard.orders.fulfillment_get",
+      "dashboard.orders.fulfillment_create",
     ],
   },
   {

@@ -95,7 +95,6 @@ export interface SupportRequestRow {
   type: string;
   status: string;
   reason: string;
-  message: string | null;
   activeKey: string | null;
   returnId: string | null;
   submittedAt: number | null;
@@ -151,7 +150,6 @@ export const supportRequestSelectFields = {
   type: orderSupportRequests.type,
   status: orderSupportRequests.status,
   reason: orderSupportRequests.reason,
-  message: orderSupportRequests.message,
   activeKey: orderSupportRequests.activeKey,
   returnId: orderSupportRequests.returnId,
   submittedAt: sql<number | null>`CAST(${orderSupportRequests.submittedAt} AS INTEGER)`,
@@ -265,7 +263,6 @@ export function formatOrderSupportRequest(row: SupportRequestRow): OrderSupportR
     label: `${CUSTOMER_REQUEST_ACTION_COPY[type].label} ${status.label.toLowerCase()}`,
     actionLabel: CUSTOMER_REQUEST_ACTION_COPY[type].requestLabel,
     reason: row.reason,
-    message: row.message,
     returnId: row.returnId,
     submittedAt: timestampToIso(row.submittedAt),
     resolvedAt: timestampToIso(row.resolvedAt),

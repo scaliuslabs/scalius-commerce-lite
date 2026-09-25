@@ -24,7 +24,6 @@ export interface OrderSupportRequestView {
     label: string;
     actionLabel: string;
     reason: string;
-    message: string | null;
     returnId: string | null;
     submittedAt: string | null;
     resolvedAt: string | null;
@@ -248,9 +247,6 @@ export interface OrderDetails extends OrderListItem {
         productName: string | null;
         productImage: string | null;
         variantLabel: string | null;
-        fulfillmentStatus: string;
-        /** Legacy sent-unit counter; read `fulfilledQuantity`. Dropped by the contract migration. */
-        shippedQuantity: number;
         /** Stock is tracked for this line (cancel/return restock counts only these). */
         inventoryTracked: boolean;
         unitPriceMinor: number | null;

@@ -56,7 +56,7 @@ function detail(overrides: Partial<AccountOrderDetail["order"]> = {}, extra: Par
       id: "item_1", productId: "prod_1", variantId: "sku_default", quantity: 2, price: 500, productName: "BB Tee",
       productSlug: "bb-tee", productImage: null, variantLabel: null, unitPrice: 500, lineTotal: 1000,
       unitPriceMinor: 50_000, lineSubtotalMinor: 100_000, discountAmountMinor: 0, taxableAmountMinor: 100_000,
-      taxAmountMinor: 0, fulfillmentStatus: "pending", createdAt: null,
+      taxAmountMinor: 0, createdAt: null,
     }],
     shipments: [], payments: [], refundAttempts: [], activeRefundOperation: null,
     supportRequests: [],

@@ -12,13 +12,27 @@ import { createOrder } from "../admin/create";
 import { getOrderDetails } from "../admin/detail";
 import { listOrders, loadOrderExportDetails } from "../admin/list";
 import { updateOrderDetails } from "../admin/edit";
-import { createFulfillmentShipment } from "../../fulfilment/shipments";
+import { recordOrderFulfilment } from "../../fulfilment/ledger";
 import { processCodAction } from "../../fulfilment/delivery-outcomes";
 import { approveOrderReturn, createOrderReturn, getOrderReturn, receiveOrderReturn } from "../returns/returns";
 import { addOrderComment, listOrderTimeline, recordOrderEvent } from "../timeline";
 import { createOrdersCsvArtifactBuilder, formatCommerceDateTime } from "../csv-export";
 import { readInvoiceOrderSource } from "../invoices/order-reader";
 import { createReceiptOrderSupportRequest } from "../../conversations";
+
+/** Own-rider "Mark as sent": a `ship` fulfilment, as POST /{id}/fulfillments records it. */
+function sendParcel(
+    db: Database,
+    orderId: string,
+    input: { requestKey?: string; items?: Array<{ itemId: string; quantity: number }>; courierName?: string; trackingId?: string } = {},
+) {
+    return recordOrderFulfilment(db, orderId, {
+        requestKey: input.requestKey ?? crypto.randomUUID(),
+        kind: "ship",
+        lines: input.items,
+        parcel: { courierName: input.courierName, trackingId: input.trackingId },
+    }, { type: "admin", id: null });
+}
 
 /**
  * Real-SQLite behaviour of the dashboard order lifecycle: sequential order
@@ -123,7 +137,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(one("SELECT status, payment_status FROM orders WHERE id = ?", id))
             .toEqual({ status: "confirmed", payment_status: "unpaid" });
 
-        await createFulfillmentShipment(db, id, { courierName: "Own rider" });
+        await sendParcel(db, id, { courierName: "Own rider" });
         await expect(processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 2000 }))
             .rejects.toThrow("Record the full cash balance of ৳2,480.");
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 2480 });
@@ -136,8 +150,8 @@ describe("dashboard order lifecycle on D1 storage", () => {
         const itemId = (one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id)).id;
         const requestKey = crypto.randomUUID();
 
-        const first = await createFulfillmentShipment(db, id, { requestKey, items: [{ itemId, quantity: 2 }] });
-        const again = await createFulfillmentShipment(db, id, { requestKey, items: [{ itemId, quantity: 2 }] });
+        const first = await sendParcel(db, id, { requestKey, items: [{ itemId, quantity: 2 }] });
+        const again = await sendParcel(db, id, { requestKey, items: [{ itemId, quantity: 2 }] });
         expect(again).toMatchObject({ shipmentId: first.shipmentId, replayed: true });
         expect(one("SELECT count(*) AS n FROM delivery_shipments WHERE order_id = ?", id)).toEqual({ n: 1 });
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id))
@@ -148,9 +162,9 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(one("SELECT count(*) AS n FROM order_fulfillments WHERE order_id = ? AND kind = 'ship'", id))
             .toEqual({ n: 1 });
 
-        await expect(createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 2 }] }))
+        await expect(sendParcel(db, id, { items: [{ itemId, quantity: 2 }] }))
             .rejects.toThrow("Only 1 of that item is left.");
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id))
             .toEqual({ status: "shipped", fulfillment_status: "complete" });
         expect(one("SELECT fulfilled_quantity FROM order_items WHERE id = ?", itemId))
@@ -159,7 +173,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
 
     it("closes a return to sender at once and restocks only what is received", async () => {
         const { id } = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         const stockAfterShipping = one("SELECT stock, reserved_stock FROM product_variants");
         expect(stockAfterShipping).toEqual({ stock: 7, reserved_stock: 0 });
 
@@ -192,7 +206,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
 
     it("keeps a partly refunded order delivered with nothing due, and owes back only what came back", async () => {
         const { id } = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 2480 });
 
         const created = await createOrderReturn(db, id, {
@@ -268,7 +282,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
             fulfillmentStatus: "pending", inventoryAction: "reserved", shipmentClaimId: null, archivedAt: null,
             hasTaxSnapshot: 1, hasPaymentHistory: 0, hasPaymentSessionHistory: 0, hasShipmentHistory: 0,
             hasRefundHistory: 0, hasReturnHistory: 0, hasInvoiceHistory: 0, hasPaymentPlan: 0,
-            hasPromotionAllocation: 1, hasNonPendingItem: 0, hasCleanCodTracking: 1,
+            hasPromotionAllocation: 1, hasHandedOverItem: 0, hasCleanCodTracking: 1,
         };
         expect(buildOrderEditReadiness(base)).toEqual({
             items: { allowed: false, reason: "discount" },
@@ -292,7 +306,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
             .toEqual({ phone: "+8801912345603" });
 
         await confirm("store_1");
-        await createFulfillmentShipment(db, "store_1", {});
+        await sendParcel(db, "store_1", {});
         expect(await getOrderEditReadiness(db, "store_1")).toEqual({
             items: { allowed: false, reason: "shipped" },
             details: { allowed: false, reason: "shipped" },
@@ -360,8 +374,8 @@ describe("dashboard order lifecycle on D1 storage", () => {
     it("keeps every own-courier parcel in step with a failed delivery and a return (R2-ORD-05)", async () => {
         const { id } = await manualOrder();
         const itemId = one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id).id;
-        await createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 1 }], courierName: "Rider Jamal", trackingId: "TRK-1" });
-        await createFulfillmentShipment(db, id, { trackingId: "TRK-2" });
+        await sendParcel(db, id, { items: [{ itemId, quantity: 1 }], courierName: "Rider Jamal", trackingId: "TRK-1" });
+        await sendParcel(db, id, { trackingId: "TRK-2" });
         await processCodAction(db, id, { action: "failed", reason: "no_cash" });
         expect(sqlite.prepare("SELECT status FROM delivery_shipments WHERE order_id = ? ORDER BY created_at").all(id))
             .toEqual([{ status: "delivery_failed" }, { status: "delivery_failed" }]);

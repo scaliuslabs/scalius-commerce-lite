@@ -18,13 +18,10 @@ export interface OrderItem {
   productName: string | null;
   productImage: string | null;
   variantLabel: string | null;
-  fulfillmentStatus?: string | null;
-  /** Pre-ledger compatibility: units handed to a courier. Read `fulfilledQuantity`. */
-  shippedQuantity?: number;
   /** How the line reaches the buyer, frozen when the order was placed. */
-  fulfillmentType?: FulfillmentType;
+  fulfillmentType: FulfillmentType;
   /** Units handed over so far (sent, picked up, performed or delivered digitally). */
-  fulfilledQuantity?: number;
+  fulfilledQuantity: number;
   /** Buyer inputs frozen on the line ("Engraving: Rahim"). */
   properties?: OrderLineProperty[];
   propertiesPriceMinor?: number;
@@ -165,7 +162,6 @@ export interface OrderSupportRequest {
   label: string;
   actionLabel: string;
   reason: string;
-  message: string | null;
   submittedAt: OrderTimestamp | null;
   resolvedAt: OrderTimestamp | null;
   createdAt: OrderTimestamp | null;
@@ -291,7 +287,6 @@ export interface OrderShipment {
   rawStatus: string | null;
   note?: string | null;
   metadata?: ShipmentMetadata;
-  shipmentItems?: string | null;
   shipmentAmount?: number | null;
   isFinalShipment?: boolean | null;
   createdAt: OrderTimestamp;

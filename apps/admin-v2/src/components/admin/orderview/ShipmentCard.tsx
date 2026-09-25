@@ -48,7 +48,7 @@ import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
-import type { Order, OrderItem, OrderShipment } from "./types";
+import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
 import { canMarkDelivered, isPartSent } from "./primary-action";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
@@ -71,26 +71,22 @@ function trackingUrlFor(shipment: OrderShipment): string | null {
 }
 
 /**
- * What one parcel holds, e.g. "2 × Kurta". `shipmentItems` is JSON
- * `[{ itemId, quantity }]`; null (or unreadable) means the whole order.
+ * What one parcel holds, e.g. "2 × Kurta": the lines of the ledger
+ * fulfilment recorded with it. A parcel no fulfilment names lists nothing.
  */
 export function shipmentLines(
-  shipment: Pick<OrderShipment, "shipmentItems">,
+  shipmentId: string,
+  fulfillments: readonly OrderFulfillment[],
   items: readonly OrderItem[],
 ): Array<{ id: string; name: string; quantity: number }> {
-  let parsed: unknown;
-  try {
-    parsed = shipment.shipmentItems ? JSON.parse(shipment.shipmentItems) : null;
-  } catch {
-    parsed = null;
-  }
-  if (!Array.isArray(parsed)) return items.map((item) => ({ id: item.id, name: getOrderItemName(item), quantity: item.quantity }));
+  const fulfilment = fulfillments.find((candidate) => candidate.tracking?.shipmentId === shipmentId);
+  if (!fulfilment) return [];
   const byId = new Map(items.map((item) => [item.id, item]));
-  return parsed.flatMap((entry: { itemId?: unknown; quantity?: unknown }) => {
-    const quantity = typeof entry?.quantity === "number" ? entry.quantity : 0;
-    if (typeof entry?.itemId !== "string" || quantity <= 0) return [];
-    return [{ id: entry.itemId, name: getOrderItemName(byId.get(entry.itemId)), quantity }];
-  });
+  return fulfilment.lines.map((line) => ({
+    id: line.orderItemId,
+    name: getOrderItemName(byId.get(line.orderItemId)),
+    quantity: line.quantity,
+  }));
 }
 
 function toIsoTimestamp(value: OrderShipment["lastChecked"]): string | undefined {
@@ -294,6 +290,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
 
 function ShipmentRow({
   shipment,
+  fulfillments,
   items,
   canManage,
   refreshBlockedReason,
@@ -303,6 +300,7 @@ function ShipmentRow({
   onUpdated,
 }: {
   shipment: OrderShipment;
+  fulfillments: readonly OrderFulfillment[];
   items: readonly OrderItem[];
   canManage: boolean;
   refreshBlockedReason?: string;
@@ -340,7 +338,7 @@ function ShipmentRow({
         {shipment.providerType !== "manual" && shipment.courierName && shipment.courierName !== shipment.providerName ? ` · ${shipment.courierName}` : ""}
       </p>
       <ul className="text-muted-foreground">
-        {shipmentLines(shipment, items).map((line) => (
+        {shipmentLines(shipment.id, fulfillments, items).map((line) => (
           <li key={line.id} className="break-words tabular-nums">{formatNumber(line.quantity)} × {line.name}</li>
         ))}
       </ul>
@@ -540,6 +538,7 @@ export function ShipmentCard({ order }: { order: Order }) {
                 <ShipmentRow
                   key={shipment.id}
                   shipment={shipment}
+                  fulfillments={order.fulfillments ?? []}
                   items={order.items}
                   canManage={canManage}
                   refreshBlockedReason={refreshBlockedReason}

@@ -19,8 +19,12 @@ function createReturnDatabase() {
       id, customer_name, customer_phone, shipping_address, city, zone,
       total_amount_minor, shipping_amount_minor, status, version, inventory_pool
     ) VALUES ('order_1', 'Buyer', '+8801700000000', 'Address', 'city', 'zone', 10000, 0, 'shipped', 5, 'regular');
-    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, shipped_quantity, unit_price_minor, fulfillment_status)
-      VALUES ('item_1', 'order_1', 'product_1', 'variant_1', 1, 1, 10000, 'shipped');
+    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor)
+      VALUES ('item_1', 'order_1', 'product_1', 'variant_1', 1, 10000);
+    INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type)
+      VALUES ('ful_1', 'order_1', 'ship', 'sent', 'admin');
+    INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity)
+      VALUES ('fln_1', 'ful_1', 'order_1', 'item_1', 1);
     INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id, version)
       VALUES ('return_1', 'order_1', 'requested', 'Changed mind', 'admin', 'admin_1', 1);
     INSERT INTO order_return_lines (id, return_id, order_id, order_item_id, variant_id, requested_quantity)
