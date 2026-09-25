@@ -634,26 +634,51 @@ function resolveCartBundleSavings(
     bundleRows: readonly ProductBundleRow[],
     currencyCode: string,
 ): StorefrontCartBundleSaving[] {
-    for (const item of items) item.bundleDiscountMinor = 0;
-    if (bundleRows.length === 0) return [];
+    const { lineSavings, bundles } = bundleLineSavings(
+        items.filter((item) => !item.isGiftCard),
+        bundleRows,
+        currencyCode,
+    );
+    for (const item of items) item.bundleDiscountMinor = lineSavings.get(item) ?? 0;
+    return bundles;
+}
+
+/** A cart line as quantity bundles price it: catalog unit price before buyer-input surcharges. */
+export interface BundlePricedLine {
+    productId: string;
+    baseUnitPriceMinor: number;
+    quantity: number;
+}
+
+/**
+ * The one bundle pricing rule (`bundleGroupPricing` over every line of a
+ * product) for the order, the tax quote and the cart's discount preview.
+ */
+export function bundleLineSavings<TLine extends BundlePricedLine>(
+    lines: readonly TLine[],
+    bundleRows: readonly ProductBundleRow[],
+    currencyCode: string,
+): { lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] } {
+    const lineSavings = new Map<TLine, number>();
+    if (bundleRows.length === 0) return { lineSavings, bundles: [] };
     const tiersByProduct = productBundleTiersByProduct(bundleRows);
-    const linesByProduct = new Map<string, StorefrontCartValidatedItem[]>();
-    for (const item of items) {
-        if (item.isGiftCard || !tiersByProduct.has(item.productId)) continue;
-        const lines = linesByProduct.get(item.productId) ?? [];
-        lines.push(item);
-        linesByProduct.set(item.productId, lines);
+    const linesByProduct = new Map<string, TLine[]>();
+    for (const item of lines) {
+        if (!tiersByProduct.has(item.productId)) continue;
+        const group = linesByProduct.get(item.productId) ?? [];
+        group.push(item);
+        linesByProduct.set(item.productId, group);
     }
     const savings: StorefrontCartBundleSaving[] = [];
-    for (const [productId, lines] of linesByProduct) {
+    for (const [productId, group] of linesByProduct) {
         const pricing = bundleGroupPricing(
-            lines.map((line) => ({ key: String(line.index), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
+            group.map((line, position) => ({ key: String(position), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
             tiersByProduct.get(productId)!,
             currencyCode,
         );
         if (!pricing.tier || pricing.savingMinor === 0) continue;
         pricing.lineSavings.forEach((saving, position) => {
-            lines[position]!.bundleDiscountMinor = saving.savingMinor;
+            lineSavings.set(group[position]!, saving.savingMinor);
         });
         savings.push({
             productId,
@@ -663,7 +688,22 @@ function resolveCartBundleSavings(
             savingMinor: pricing.savingMinor,
         });
     }
-    return savings;
+    return { lineSavings, bundles: savings };
+}
+
+/**
+ * Bundle savings for the cart's discount preview (before delivery is known),
+ * from the products' active tiers. Lines are priced as the buyer's cart sends
+ * them; the authoritative tax quote re-prices from the catalog.
+ */
+export async function previewStorefrontBundleSavings<TLine extends BundlePricedLine>(
+    db: Database,
+    lines: readonly TLine[],
+    currencyCode: string,
+): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
+    const productIds = [...new Set(lines.map((line) => line.productId))];
+    const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
+    return bundleLineSavings(lines, (bundleRows ?? []) as ProductBundleRow[], currencyCode);
 }
 
 export async function validateStorefrontCartItems(

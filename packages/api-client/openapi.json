@@ -14211,6 +14211,12 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 100
+                        },
+                        "basePrice": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 99999999,
+                          "description": "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`."
                         }
                       },
                       "required": [
@@ -14258,6 +14264,41 @@
                       "properties": {
                         "totalDiscount": {
                           "type": "number"
+                        },
+                        "bundleDiscountAmount": {
+                          "type": "number",
+                          "description": "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)."
+                        },
+                        "bundles": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "integer"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "enum": [
+                                  "percentage",
+                                  "fixed_price"
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "productId",
+                              "quantity",
+                              "discountType",
+                              "label"
+                            ]
+                          }
                         },
                         "discounts": {
                           "type": "array",
@@ -14489,6 +14530,13 @@
                               },
                               "requiresCustomerPhone": {
                                 "type": "boolean"
+                              },
+                              "bundleSavesMore": {
+                                "type": "boolean",
+                                "enum": [
+                                  true
+                                ],
+                                "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
                               }
                             },
                             "required": [
@@ -14501,6 +14549,8 @@
                       },
                       "required": [
                         "totalDiscount",
+                        "bundleDiscountAmount",
+                        "bundles",
                         "discounts",
                         "offers",
                         "rejectedCodes"
@@ -60492,6 +60542,13 @@
                               },
                               "requiresCustomerPhone": {
                                 "type": "boolean"
+                              },
+                              "bundleSavesMore": {
+                                "type": "boolean",
+                                "enum": [
+                                  true
+                                ],
+                                "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
                               }
                             },
                             "required": [

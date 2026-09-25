@@ -6,6 +6,12 @@ import { errorResponseFromError } from "../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
   quoteStorefrontDiscount: vi.fn(),
+  previewStorefrontBundleSavings: vi.fn(),
+}));
+
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
+  previewStorefrontBundleSavings: mocks.previewStorefrontBundleSavings,
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -45,6 +51,7 @@ describe("public discount validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", decimalPlaces: 2 });
+    mocks.previewStorefrontBundleSavings.mockResolvedValue({ lineSavings: new Map(), bundles: [] });
   });
 
   it("previews every applied code with the cart in minor units, one line per discount", async () => {
@@ -71,6 +78,8 @@ describe("public discount validation", () => {
       success: true,
       data: {
         totalDiscount: 360,
+        bundleDiscountAmount: 0,
+        bundles: [],
         discounts: [
           { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amount: 300, shippingAmount: 0 },
           { promotionId: "promo_auto", title: "Free delivery", code: null, amount: 0, shippingAmount: 60 },
@@ -89,6 +98,52 @@ describe("public discount validation", () => {
         shippingAmountMinor: 6_000,
       },
     });
+  });
+
+  it("applies the bundle saving when it beats a typed code, and names the code it beat", async () => {
+    const { app } = createTestApp();
+    mocks.quoteStorefrontDiscount.mockResolvedValue({
+      applied: {
+        totalDiscountMinor: 10_000,
+        discounts: [{ promotionId: "promo_code", promotionCode: "SAVE5", promotionName: "Save 5" }],
+        allocations: [],
+      },
+      snapshot: { id: "snap" },
+      taxAllocation: { lines: [], shippingMinor: 0 },
+      discounts: [{ promotionId: "promo_code", title: "Save 5", code: "SAVE5", amountMinor: 10_000, shippingAmountMinor: 0 }],
+      offers: [],
+      rejectedCodes: [],
+    });
+    mocks.previewStorefrontBundleSavings.mockImplementation(async (_db, lines: Array<{ baseUnitPriceMinor: number }>) => ({
+      lineSavings: new Map(lines.map((line) => [line, 15_000])),
+      bundles: [{ productId: "prod_1", quantity: 2, discountType: "percentage", label: "Pair", savingMinor: 15_000 }],
+    }));
+    const response = await post(app, {
+      codes: ["SAVE5"],
+      items: [{ id: "prod_1", variantId: "var_1", price: 1600, basePrice: 1500, quantity: 2 }],
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: {
+        totalDiscount: 150,
+        bundleDiscountAmount: 150,
+        bundles: [{ productId: "prod_1", quantity: 2, discountType: "percentage", label: "Pair" }],
+        discounts: [],
+        offers: [],
+        rejectedCodes: [{
+          code: "SAVE5",
+          reason: "lower_savings",
+          conflictsWith: "Bundle saving",
+          bundleSavesMore: true,
+          message: "Bundle saving applied: better than SAVE5.",
+        }],
+      },
+    });
+    // Bundles price from the unit price before buyer-input surcharges.
+    expect(mocks.previewStorefrontBundleSavings.mock.calls[0]![1]).toEqual([
+      expect.objectContaining({ productId: "prod_1", unitPriceMinor: 160_000, baseUnitPriceMinor: 150_000, quantity: 2 }),
+    ]);
   });
 
   it("keeps delivery discounts waiting while the buyer has no delivery option", async () => {

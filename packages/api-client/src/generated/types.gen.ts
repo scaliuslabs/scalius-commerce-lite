@@ -3659,6 +3659,10 @@ export type PostApiV1DiscountsValidateData = {
             price: number;
             quantity: number;
             variantId?: string;
+            /**
+             * Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.
+             */
+            basePrice?: number;
         }>;
         /**
          * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
@@ -3709,6 +3713,16 @@ export type PostApiV1DiscountsValidateResponses = {
         success: true;
         data: {
             totalDiscount: number;
+            /**
+             * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
+             */
+            bundleDiscountAmount: number;
+            bundles: Array<{
+                productId: string;
+                quantity: number;
+                discountType: 'percentage' | 'fixed_price';
+                label: string | null;
+            }>;
             discounts: Array<{
                 promotionId: string;
                 title: string;
@@ -3778,6 +3792,10 @@ export type PostApiV1DiscountsValidateResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
         };
     };
@@ -16463,6 +16481,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
             /**
              * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).

@@ -86,6 +86,9 @@ export const rejectedDiscountCodeSchema = z.object({
   conflictsWith: z.string().optional(),
   offer: discountOfferSchema.optional(),
   requiresCustomerPhone: z.boolean().optional(),
+  bundleSavesMore: z.literal(true).optional().openapi({
+    description: "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).",
+  }),
 });
 
 function presentOffer(offer: StorefrontDiscountOffer, decimalPlaces: number) {
