@@ -13,6 +13,7 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { useCurrency } from "~/hooks/use-currency";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
+import { emiSettingsQuery } from "~/lib/api-query-options/emi";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { emiMessages } from "~/i18n/settings-emi";
@@ -23,10 +24,6 @@ type EmiDocument = ApiResult<typeof getApiV1AdminSettingsEmi>;
 type EmiValues = Omit<EmiDocument, "revision">;
 type Plan = EmiValues["plans"][number];
 
-export const emiSettingsQuery = {
-  queryKey: ["settings", "emi"] as const,
-  queryFn: () => apiData(getApiV1AdminSettingsEmi()),
-};
 
 /** Why each plan can't be saved yet, one line per problem. */
 export function emiPlanProblems(values: EmiValues, t: (key: "planProvider" | "planMonths" | "planFee" | "planMin", vars: { row: number }) => string): string[] {

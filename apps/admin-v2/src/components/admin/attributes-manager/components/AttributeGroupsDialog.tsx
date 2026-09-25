@@ -89,6 +89,7 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
                 <li key={group.id} className="flex items-center gap-2 px-3 py-2">
                   {renaming?.id === group.id ? (
                     <form
+                      method="post"
                       className="flex min-w-0 flex-1 gap-2"
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -135,6 +136,7 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
           )}
           {canEdit ? (
             <form
+              method="post"
               className="space-y-2"
               onSubmit={(event) => {
                 event.preventDefault();
