@@ -17,6 +17,8 @@ import {
   type ProductFormValues,
   type Category,
 } from "~/components/admin/product-form/types";
+import { draftsFromView, viewFromDrafts } from "~/components/admin/product-form/buyer-inputs";
+import { fulfilmentModeOf } from "~/components/admin/product-form/variants/option-matrix-editor-model";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound, type ProductRevisionConflict } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -93,6 +95,8 @@ function toFormValues(product: ProductDetail): ProductFormValues {
       })),
     attributes: product.attributes || [],
     additionalInfo: (product.additionalInfo || []).map((item) => ({ ...item })),
+    fulfillmentKind: fulfilmentModeOf(product.variants),
+    customizationSchema: draftsFromView(product.customizationSchema),
   } as ProductFormValues;
 }
 
@@ -179,6 +183,11 @@ function ProductEditor({ productId, initialProduct, categories }: {
         altText: altText.trim() || effectiveAltText,
         contextualAltText: altText.trim() || null,
       })),
+      customizationSchema: viewFromDrafts(values.customizationSchema) as ProductDetail["customizationSchema"],
+      // One kind for the product: every live SKU now has it (a later conflict compares against this).
+      variants: values.fulfillmentKind === "mixed"
+        ? current.variants
+        : current.variants.map((variant) => (variant.deletedAt ? variant : { ...variant, fulfillmentKind: values.fulfillmentKind as "physical" | "service" })),
       aggregateRevision: revision,
     }));
     setAggregateRevision(revision);
@@ -254,6 +263,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixSaving={matrixSaving}
         matrixRef={matrixRef}
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
+        customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         onDiscard={() => {
           if (revisionConflict) {
             void reloadLatest();
@@ -264,7 +274,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
-        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange }) => (
+        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               requirePositivePrice={isActive}
@@ -288,6 +298,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
                 setIsConflictOpen(true);
               }}
               onSaved={() => void refreshMatrix()}
+              fulfilmentMode={fulfilmentMode}
             />
           </Suspense>
         )}

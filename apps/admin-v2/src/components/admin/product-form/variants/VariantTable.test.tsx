@@ -34,10 +34,11 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
 const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 let latest: DraftVariant[] = [];
-function Harness({ initial, missing = [], reveal = null }: {
+function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = false }: {
   initial: DraftVariant[];
   missing?: string[][];
   reveal?: { variantId: string; nonce: number } | null;
+  fulfilmentColumn?: boolean;
 }) {
   const [variants, setVariants] = React.useState(initial);
   latest = variants;
@@ -63,6 +64,7 @@ function Harness({ initial, missing = [], reveal = null }: {
       onRestoreAll={() => {}}
       committedByVariantId={new Map()}
       printingDisabled={false}
+      fulfilmentColumn={fulfilmentColumn}
     />
   );
 }
@@ -232,5 +234,49 @@ describe("VariantTable", () => {
     expect(host.querySelector('[data-variant-row="v3"]')).not.toBeNull();
     expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
   });
+
+describe("VariantTable fulfilment column", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  async function render(initial: DraftVariant[], fulfilmentColumn: boolean) {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(<Harness initial={initial} fulfilmentColumn={fulfilmentColumn} />));
+  }
+  const select = (ariaLabel: string) => host.querySelector<HTMLSelectElement>(`select[aria-label="${ariaLabel}"]`);
+  const choose = (element: HTMLSelectElement, value: string) => act(async () => {
+    element.value = value;
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const rows = () => [variant("sw", "s", "w", 1000), variant("sb", "s", "b", 1000, { fulfillmentKind: "service" })];
+
+  it("shows no Fulfilment column while every variant is the same kind", async () => {
+    await render(rows(), false);
+    expect(select(label("fulfilmentFor", { name: "S / White" }))).toBeNull();
+  });
+
+  it("sets a variant's kind from its row, and a group's from its group row", async () => {
+    await render(rows(), true);
+    expect(host.textContent).toContain(label("fulfilment"));
+    const white = select(label("fulfilmentFor", { name: "S / White" }))!;
+    expect(white.value).toBe("physical");
+    expect(select(label("fulfilmentFor", { name: "S / কালো" }))!.value).toBe("service");
+    // The S group mixes both kinds until one is chosen for all.
+    const group = select(label("fulfilmentForGroup", { name: "S" }))!;
+    expect(group.value).toBe("");
+
+    await choose(white, "service");
+    expect(latest.find((row) => row.id === "sw")?.fulfillmentKind).toBe("service");
+    await choose(select(label("fulfilmentForGroup", { name: "S" }))!, "physical");
+    expect(latest.map((row) => row.fulfillmentKind)).toEqual(["physical", "physical"]);
+  });
+});
 });
 

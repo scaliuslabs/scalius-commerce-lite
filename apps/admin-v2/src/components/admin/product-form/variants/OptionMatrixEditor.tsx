@@ -52,8 +52,10 @@ import {
   type DraftVariant,
   type OptionMatrixEditorHandle,
   type ProductCreateComposition,
+  type ProductFulfilmentMode,
   type SimpleSkuDraft,
   type VariantPriceRange,
+  withFulfilmentMode,
 } from "./option-matrix-editor-model";
 import { barcodePatch, Field, InventoryQuantityInput, type IssueFor } from "./variant-fields";
 import { VariantTable } from "./VariantTable";
@@ -97,6 +99,8 @@ type OptionMatrixEditorProps = {
   onPricesChange?: (range: VariantPriceRange | null) => void;
   onSavingChange?: (saving: boolean) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  /** The product's Fulfilment select: one kind for every SKU, or per variant (a column). */
+  fulfilmentMode?: ProductFulfilmentMode;
 };
 
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
@@ -116,6 +120,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   onPricesChange,
   onSavingChange,
   onRevisionConflict,
+  fulfilmentMode = "physical",
 }, ref) {
   const t = useMessages(productMessages);
   const queryClient = useQueryClient();
@@ -207,8 +212,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               ...(simpleSku.weight !== null ? { weight: simpleSku.weight } : {}),
             },
           }
-        : options.length > 0 ? { optionMatrix: { options, variants } } : null);
-  }, [draftIssue, onDraftChange, options, simpleMode, simpleSku, variants]);
+        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(variants, fulfilmentMode) } } : null);
+  }, [draftIssue, fulfilmentMode, onDraftChange, options, simpleMode, simpleSku, variants]);
 
   React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
@@ -381,7 +386,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           path: { id: productId! },
           body: {
             options,
-            variants: matrixSaveVariants(variants, savedVariants),
+            variants: matrixSaveVariants(variants, savedVariants, fulfilmentMode),
             expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
           },
         })),
@@ -507,15 +512,18 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 />
               )}
             </Field>
-            <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
-              {(invalid) => (
-                <NumberInput
-                  value={simpleSku.weight}
-                  aria-invalid={invalid}
-                  onValueChange={(weight) => updateSimple({ weight })}
-                />
-              )}
-            </Field>
+            {/* A service is never packed or weighed. */}
+            {fulfilmentMode === "service" ? null : (
+              <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
+                {(invalid) => (
+                  <NumberInput
+                    value={simpleSku.weight}
+                    aria-invalid={invalid}
+                    onValueChange={(weight) => updateSimple({ weight })}
+                  />
+                )}
+              </Field>
+            )}
           </div>
         </div>
       ) : null}
@@ -607,6 +615,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           onRestoreAll={restoreAllCombinations}
           committedByVariantId={committedByVariantId}
           printingDisabled={!productId || dirty}
+          fulfilmentColumn={fulfilmentMode === "mixed"}
         />
       ) : options.length > 0 && !combinationsPending ? (
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>
