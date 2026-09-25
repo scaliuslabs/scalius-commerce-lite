@@ -426,6 +426,20 @@ the local wrangler explorer):
 pnpm perf:storefront --base http://localhost:4391 --kv-explorer http://localhost:8811
 ```
 
+Wrangler's dev registry is shared by every local stack on the machine, so a
+built storefront's `BACKEND_API` binding resolves by Worker name.
+`scripts/dev-ports.mjs` gives the API on a non-default port its own name,
+`scalius-api-local-<api port>`: apps/api `pnpm dev` passes it as `--name`,
+and `node scripts/dev-ports.mjs storefront-config` writes
+`apps/storefront/dist/server/wrangler.local.json`, which binds the built
+storefront to it. The default stack keeps `scalius-api-local`. Against a local
+base the script first checks that the storefront's home page carries its own
+canonical origin: another stack's API would render that stack's origins, and
+the run stops. `--media-url <origin>` also checks the media origin, and
+`--no-binding-check` skips the check. `node scripts/dev-ports.mjs
+verify-binding` runs the same check for a `pnpm dev` stack. (`astro dev`
+calls the API over HTTP on the API port and never uses the binding.)
+
 Live, read-only. A miss cannot be forced there, so the first request is
 judged as a miss only when the edge reports `X-Cache-Status: MISS`:
 
@@ -468,8 +482,11 @@ What one run does, sequentially:
 3. Starts the API and the built storefront under `wrangler dev` on that state
    (ports 9001/4601, Chrome on 9601; override with `--api-port`,
    `--storefront-port`, `--admin-port`, `--media-port`, `--chrome-port`). The
-   two Workers use a private dev registry, so another local
-   `scalius-api-local` cannot answer the service binding. Secrets are fresh
+   API runs as `scalius-api-local-<api port>` (`scripts/dev-ports.mjs
+   api-worker-name`), the storefront's BACKEND_API binding targets that name,
+   both use a private dev registry, and the run stops at once unless the
+   storefront's home page carries this stack's canonical and media origins
+   (another stack's API would render its own). Secrets are fresh
    random values in a temp env file: no `.dev.vars` is read. It refuses a
    state inside any repo `.wrangler` directory and any hosted database
    (`DATABASE_PROVIDER`, `TURSO_*`, `POSTGRES_*`). The Platform `mediaUrl`
