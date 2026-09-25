@@ -1,4 +1,5 @@
 ---
+import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // src/pages/brands/[slug].astro
 // A brand's page: the published brand record and its products, laid out by
 // the same listing as category and collection pages (CatalogListingPage).
@@ -27,6 +28,9 @@ import {
 } from "@/lib/product-list-query";
 
 const { slug } = Astro.params;
+// Handles are lowercase: a mis-cased link redirects to the one real URL.
+const lowercaseRedirect = lowercaseHandleRedirect(Astro.url);
+if (lowercaseRedirect) return lowercaseRedirect;
 if (!slug) return new Response(null, { status: 404 });
 
 let queryState = resolveProductListQueryState({ url: Astro.url, allowUnknownAttributes: true });
@@ -117,7 +121,7 @@ const collectionJsonLd =
   </Fragment>
 
   <CatalogListingPage
-    kind="category"
+    kind="brand"
     data={{ "data-brand-name": brand.name }}
     hero={{
       title: brand.name,
@@ -129,6 +133,7 @@ const collectionJsonLd =
       pagination,
       facets,
       priceRange: brandResult.priceRange,
+      ratingFacet: brandResult.ratingFacet,
       queryState,
       pathname: Astro.url.pathname,
       resetPath: brandPath,
@@ -137,6 +142,7 @@ const collectionJsonLd =
       currencySymbol,
       currencyCode,
       listingName: brand.name,
+      listingTemplate: brand.listingTemplate,
     }}
   >
     <CatalogEmptyState

@@ -1,9 +1,11 @@
 ---
 // The `bottom-tabs` phone navigation: a bottom tab bar below `lg` with the
 // tabs the theme chose (4-5 of Home, Categories, Offers, Search, Compare,
-// Cart, Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). A tab
-// without a destination yet (Compare, until the compare page lands) is left
-// out rather than linking nowhere. The tabs reuse the header's openers
+// Cart, Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare
+// shows only where the store's card offers "Add to Compare" (the spec card):
+// elsewhere nothing fills the comparison, so the tab is left out rather than
+// opening an empty page. It links to /compare (the empty state explains
+// it); the compare script points it at the buyer's list. The tabs reuse the header's openers
 // (header.astro binds `[data-mobile-menu-open]` and `[data-cart-open]`,
 // HeaderLayout binds `[data-search-open]` and `[data-account-link]`), and
 // each is a real link first (the menu drawer's :target, /search, /cart), so
@@ -17,6 +19,8 @@ type Tab = (typeof STOREFRONT_MOBILE_TABS)[number];
 
 interface Props {
   tabs?: readonly Tab[];
+  /** The theme's card offers Compare (`layout.productCard.compare`). */
+  compare?: boolean;
 }
 
 const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "search", "cart", "account"];
@@ -24,8 +28,8 @@ const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "search", "cart", "a
 const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "search", "cart", "account"]);
 const OFFERS_HREF = "/search?hasDiscount=true";
 
-const { tabs = DEFAULT_TABS } = Astro.props;
-const shown = tabs.filter((tab) => AVAILABLE.has(tab));
+const { tabs = DEFAULT_TABS, compare = false } = Astro.props;
+const shown = tabs.filter((tab) => AVAILABLE.has(tab) || (tab === "compare" && compare));
 const path = Astro.url.pathname;
 const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") === "true";
 const active = {
@@ -33,6 +37,7 @@ const active = {
   categories: /^\/(categories|collections)\//.test(path),
   search: !offers && (path === "/search" || path.startsWith("/search/")),
   offers,
+  compare: path === "/compare",
   account: path === "/account" || path.startsWith("/account/"),
 };
 ---
@@ -78,6 +83,14 @@ const active = {
                 <circle cx="7.5" cy="7.5" r="1.5" />
               </svg>
               <span>Offers</span>
+            </a>
+          )}
+          {tab === "compare" && (
+            <a href="/compare" rel="nofollow" class="mobile-tab" aria-current={active.compare ? "page" : undefined} data-compare-tab data-astro-prefetch="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 6h10M4 12h16M4 18h10M18 4v4M16 6h4" />
+              </svg>
+              <span>Compare</span>
             </a>
           )}
           {tab === "search" && (
@@ -129,6 +142,27 @@ const active = {
     }
   </ul>
 </nav>
+
+<script>
+  // The Compare tab opens the buyer's list (CompareTray keeps it in this
+  // browser); without JavaScript or a list it opens the empty comparison.
+  const tab = document.querySelector<HTMLAnchorElement>("[data-compare-tab]");
+  if (tab) {
+    const point = () => {
+      let ids: string[] = [];
+      try {
+        const value = JSON.parse(localStorage.getItem("scalius:compare") ?? "[]");
+        if (Array.isArray(value)) ids = value.filter((id) => typeof id === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(id)).slice(-4);
+      } catch {
+        // Private mode: the tab keeps /compare.
+      }
+      tab.href = ids.length > 0 ? `/compare?ids=${ids.map(encodeURIComponent).join(",")}` : "/compare";
+    };
+    point();
+    addEventListener("storage", point);
+    document.addEventListener("click", () => setTimeout(point, 0), { passive: true });
+  }
+</script>
 
 <style is:global>
   :root {

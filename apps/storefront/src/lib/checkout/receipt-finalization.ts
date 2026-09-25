@@ -1,4 +1,4 @@
-import { cartStore, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
+import { cartStore, endBuyNow, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
 import {
   clearCheckoutAttemptSession,
   clearCheckoutSession,
@@ -116,6 +116,8 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
     } catch {
       // A malformed snapshot leaves the cart as it is.
     }
+    // A Buy now order: the buyer's own cart comes back as it was.
+    endBuyNow();
   }
   if (cleanup.clearCheckoutSession) {
     clearCheckoutSession();

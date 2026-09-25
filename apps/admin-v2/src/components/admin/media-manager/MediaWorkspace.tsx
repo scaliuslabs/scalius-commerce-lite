@@ -11,6 +11,7 @@ import { canDeletePermanently, capabilityAccept, mediaLimitKey, type LibraryMedi
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
+import { matchesShortcut } from "../layout/shortcuts";
 
 interface MediaWorkspaceProps {
   manager: ReturnType<typeof useMediaManager>;
@@ -80,7 +81,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
   useEffect(() => {
     if (picker || !selectionMode || showPreview || confirm) return;
     const cancelWithEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!matchesShortcut("cancel", event) || event.defaultPrevented) return;
       const active = document.activeElement;
       if (active instanceof HTMLElement && active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
       event.preventDefault();

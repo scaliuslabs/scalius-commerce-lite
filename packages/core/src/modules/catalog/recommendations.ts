@@ -41,7 +41,7 @@ import {
 } from "../products/money";
 import { operationalSkuRowPredicate } from "../products/public-eligibility";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
-import { presentCardRating, reviewStats, type CardRating } from "./shared";
+import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import {
     buyerState,
     buyerStateCardSku,
@@ -417,7 +417,7 @@ async function loadRecommendationCards(
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
-        .leftJoin(reviewStats, eq(reviewStats.productId, products.id))
+        .leftJoin(reviewStats, reviewStatsJoin(products.id))
         .where(sql`${buyerState.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`)
         .all() as RecommendationCardRow[];
     return new Map(rows.map((row) => [row.id, row]));
@@ -497,7 +497,7 @@ async function readStoredRecommendations(
         .leftJoin(buyerState, eq(buyerState.productId, productRecommendations.recommendedProductId))
         .leftJoin(products, eq(products.id, productRecommendations.recommendedProductId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
-        .leftJoin(reviewStats, eq(reviewStats.productId, productRecommendations.recommendedProductId))
+        .leftJoin(reviewStats, reviewStatsJoin(productRecommendations.recommendedProductId))
         .where(eq(productRecommendations.productId, productId))
         .orderBy(asc(productRecommendations.position))
         .all() as StoredRecommendationRow[];

@@ -31,7 +31,6 @@ import {
   isLayoutBatchedPagePath,
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
-import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
 import {
   isBrowserContinuationRelayPathname,
 } from "@/lib/browser-continuation-relay";
@@ -110,7 +109,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   }
 
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
-  const securedResponse = withPageCsp(url.pathname, response, {
+  return withPageCsp(url.pathname, response, {
     privateRelay: isBrowserContinuationRelayPathname(url.pathname),
     setPageCsp: (page) => setPageCspHeader(
       page,
@@ -123,7 +122,6 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       getRuntimeCspAllowedDomains(),
     ),
   });
-  return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
 // Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET, then

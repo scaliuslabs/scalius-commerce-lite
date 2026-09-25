@@ -314,7 +314,7 @@ describe("checkout language route boundaries", () => {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fieldVisibility: { showEmailField: true },
+          fieldVisibility: { showOrderNotesField: true },
           expectedRevision: 0,
         }),
       },

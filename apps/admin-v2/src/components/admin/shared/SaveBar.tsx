@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, CircleAlert, Loader2 } from "lucide-react";
+import { CircleAlert, Loader2, MessageCircleWarning } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -24,6 +24,9 @@ import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { translate, useMessages } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { resourceMessages } from "~/i18n/resource";
+import { matchesShortcut } from "../layout/shortcuts";
+import { ADMIN_SESSION_LOST_EVENT } from "~/lib/admin-session-lost";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 /**
  * A save that failed after the editor already showed the merchant why.
@@ -33,6 +36,18 @@ export class SaveNotCompleted extends Error {
   constructor(message = translate(resourceMessages, "saveFailed"), readonly lines: string[] = [message]) {
     super(message);
     this.name = "SaveNotCompleted";
+  }
+}
+
+/**
+ * The save lost to a newer saved version (someone else, or another tab, saved
+ * first). With a `reload` on the entry the banner offers to load the latest
+ * and keep the merchant's edits, as for a settings revision conflict.
+ */
+export class SaveConflict extends SaveNotCompleted {
+  constructor(message = translate(saveBarMessages, "conflict"), lines?: string[]) {
+    super(message, lines);
+    this.name = "SaveConflict";
   }
 }
 
@@ -259,7 +274,7 @@ export function SaveScope({
             failed = true;
             const lines = readFailure(entry, error, fieldErrors);
             errors.push(...lines);
-            if (entry.reload && readSettingsRevisionConflict(error)) {
+            if (entry.reload && (error instanceof SaveConflict || readSettingsRevisionConflict(error))) {
               conflicts.push({ line: lines[0]!, reload: entry.reload });
             } else if (kind !== "validation") {
               // Something to fix outranks "try again": a retry can't fix it.
@@ -436,11 +451,16 @@ export function SaveBarProvider({
   );
 }
 
-/** The bar sits on the near-black top bar, so its two buttons use the frame's tokens. */
+/**
+ * Shopify's save bar is the search pill itself (12px corners, 1px lighter
+ * edge on the frame), so its buttons sit 4px inside its outer edge (1px
+ * border + 3px) with 8px corners, concentric: 36px on phones, 28px from md.
+ * Discard is dark, Save white, in both themes.
+ */
 const DISCARD_BUTTON =
-  "relative inline-flex h-11 items-center rounded-lg bg-topbar-subdued px-4 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-8 sm:px-3";
+  "relative inline-flex h-9 items-center rounded-lg bg-topbar-hover px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
 const SAVE_BUTTON =
-  "relative inline-flex h-11 items-center rounded-lg bg-topbar-foreground px-4 text-body font-medium text-topbar hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-8 sm:px-3";
+  "relative inline-flex h-9 items-center rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
 
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
@@ -454,17 +474,40 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const saveRef = useRef(state.saveAll);
   saveRef.current = state.saveAll;
-  // Ctrl/⌘+S saves the page from any field while the bar shows.
+  // ⌘S / Ctrl+S saves the page from any field while the bar shows. Esc never discards.
   useEffect(() => {
     if (!dirty) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (!matchesShortcut("save", event)) return;
       event.preventDefault();
       if (!busy) void saveRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dirty, busy]);
+  // Signed out mid-edit: keep the page and its edits; sign in again in a new tab, then Save.
+  useEffect(() => {
+    if (!dirty) return;
+    const onSessionLost = () =>
+      toast.error(t("sessionLost"), {
+        id: ADMIN_SESSION_LOST_EVENT,
+        duration: Infinity,
+        action: { label: t("signInNewTab"), onClick: () => window.open(withDashboardBasePath("/auth/login"), "_blank", "noopener") },
+      });
+    window.addEventListener(ADMIN_SESSION_LOST_EVENT, onSessionLost);
+    return () => window.removeEventListener(ADMIN_SESSION_LOST_EVENT, onSessionLost);
+  }, [dirty, t]);
+  // The bar takes the top bar's search pill (the page itself when there is none, as in tests).
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById("admin-top-bar-pill") ?? document.body), []);
+  // Saved or discarded: focus goes back to the page, never to nowhere.
+  useEffect(() => {
+    if (dirty) return;
+    const frame = requestAnimationFrame(() => {
+      if (document.activeElement === document.body) document.getElementById("admin-main-scroll")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [dirty]);
   return (
     <>
       <UnsavedChangesGuard isDirty={dirty} isSubmitting={busy} />
@@ -480,16 +523,20 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
           setConfirmDiscard(false);
         }}
       />
-      {dirty && typeof document !== "undefined"
+      {dirty && slot
         ? createPortal(
+            // Shopify's contextual save bar: the search pill turns into it, same
+            // place, size and shape (on phones the pill's row between Menu and
+            // the store), snapping in with a flash so it can't be missed
+            // (global.css `[data-save-bar]`).
             <div
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between gap-2 border-b border-topbar-hover bg-topbar px-3 text-topbar-foreground sm:inset-x-auto sm:left-1/2 sm:top-1.5 sm:h-11 sm:min-w-lg sm:-translate-x-1/2 sm:gap-6 sm:rounded-full sm:border sm:pl-4 sm:pr-1"
+              className="absolute inset-x-2 top-1.5 z-30 flex h-11 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 pl-3 text-topbar-foreground md:inset-0 md:h-9"
             >
-              <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
-                <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+              <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
+                <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">{message}</span>
               </p>
               <div className="flex shrink-0 gap-1.5">
@@ -517,7 +564,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                 </button>
               </div>
             </div>,
-            document.body,
+            slot,
           )
         : null}
     </>

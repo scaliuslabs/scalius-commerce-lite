@@ -5,7 +5,16 @@ import {
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
 
-const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit"] as const;
+const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit", "showAll"] as const;
+
+/**
+ * `showAll=<facet slug>`: the filter form lists every value of that facet
+ * (the "See more" link without JavaScript; with it the values are fetched in
+ * place). A view of the listing, never a filter, so it is `noindex,follow`
+ * and the canonical stays the plain listing. camelCase, so no attribute slug
+ * (lowercase) can collide with it.
+ */
+export const PRODUCT_LIST_SHOW_ALL_PARAM = "showAll";
 
 /**
  * Products per page. The default stays out of URLs; any other size is a
@@ -16,7 +25,7 @@ export const PRODUCT_LIST_PAGE_SIZES = [20, 40, 60] as const;
 export type ProductListPageSize = (typeof PRODUCT_LIST_PAGE_SIZES)[number];
 export const DEFAULT_PRODUCT_LIST_PAGE_SIZE: ProductListPageSize = 20;
 /** Keys of the listing URL that choose a view (page, sort, page size), not a filter. */
-const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit"]);
+const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit", PRODUCT_LIST_SHOW_ALL_PARAM]);
 
 const PRODUCT_LIST_SORT_VALUES = [
   "relevance",
@@ -26,10 +35,17 @@ const PRODUCT_LIST_SORT_VALUES = [
   "name-asc",
   "name-desc",
   "discount",
+  "rating",
 ] as const satisfies NonNullable<ProductListOptions["sort"]>[];
 
-const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount"] as const;
+const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount", "inStock"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;
+/**
+ * "N★ & up" (`minRating=1..4`): a filter like any facet value, so a rated
+ * view is `noindex,follow` and its canonical is the plain listing.
+ */
+export const PRODUCT_LIST_MIN_RATING_PARAM = "minRating";
+const MIN_RATING_VALUE = /^[1-4]$/;
 
 const NAVIGATION_PARAM_SET = new Set<string>(PRODUCT_LIST_NAVIGATION_PARAMS);
 const SORT_VALUE_SET = new Set<string>(PRODUCT_LIST_SORT_VALUES);
@@ -234,7 +250,8 @@ function hasRepeatedSingletonParams(params: URLSearchParams): boolean {
     if (
       !NAVIGATION_PARAM_SET.has(key) &&
       !BOOLEAN_FILTER_SET.has(key) &&
-      !PRICE_FILTER_SET.has(key)
+      !PRICE_FILTER_SET.has(key) &&
+      key !== PRODUCT_LIST_MIN_RATING_PARAM
     )
       continue;
     if (seen.has(key)) return true;
@@ -248,7 +265,8 @@ function buildAttributeValueMap(
 ): Map<string, Set<string>> {
   return new Map(
     facets
-      .filter((facet) => facet.display !== "range")
+      // Category-tree values are links to sub-listings, never a filter.
+      .filter((facet) => facet.display !== "range" && facet.kind !== "category")
       .map((facet) => [
         facet.slug,
         new Set(facet.values.map(({ value }) => value).filter(Boolean)),
@@ -322,6 +340,12 @@ export function resolveProductListQueryState({
   if (limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE) {
     currentFilters.limit = String(limit);
   }
+  const showAll = getLastParam(params, PRODUCT_LIST_SHOW_ALL_PARAM)?.trim() ?? "";
+  if (showAll && (FACET_KEY_PATTERN.test(showAll) || showAll === "category")) {
+    currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] = showAll;
+  } else if (params.has(PRODUCT_LIST_SHOW_ALL_PARAM)) {
+    shouldRedirect = true;
+  }
 
   const minPriceParam = latinDigits(getLastParam(params, "minPrice"));
   const maxPriceParam = latinDigits(getLastParam(params, "maxPrice"));
@@ -359,6 +383,21 @@ export function resolveProductListQueryState({
     options.minPrice = minPrice;
     currentFilters.minPrice = String(minPrice);
   }
+
+  // "N★ & up": one whole star from 1 to 4 (Bangla digits read as Latin);
+  // anything else, including the empty "Any rating" choice, redirects to the
+  // URL without it.
+  if (params.has(PRODUCT_LIST_MIN_RATING_PARAM)) {
+    const raw = getLastParam(params, PRODUCT_LIST_MIN_RATING_PARAM)!.trim();
+    const latin = latinDigits(raw)!;
+    if (MIN_RATING_VALUE.test(latin)) {
+      options.minRating = Number(latin);
+      currentFilters[PRODUCT_LIST_MIN_RATING_PARAM] = latin;
+      if (latin !== raw) shouldRedirect = true;
+    } else {
+      shouldRedirect = true;
+    }
+  }
   if (maxPrice !== undefined) {
     options.maxPrice = maxPrice;
     currentFilters.maxPrice = String(maxPrice);
@@ -385,7 +424,7 @@ export function resolveProductListQueryState({
     );
     const value = values.at(-1);
     if (!value) continue;
-    if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key)) continue;
+    if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key) || key === PRODUCT_LIST_MIN_RATING_PARAM) continue;
 
     if (BOOLEAN_FILTER_SET.has(key)) {
       if (value === "true") {

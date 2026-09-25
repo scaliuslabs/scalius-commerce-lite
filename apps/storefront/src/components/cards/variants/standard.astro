@@ -5,7 +5,8 @@
 import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
 import CardMedia from "../parts/CardMedia.astro";
-import type { ProductCardModel } from "../card-model";
+import { reviewStarFill } from "@/components/product/reviews/review-format";
+import { CARD_IMAGE_DIMENSIONS, type ProductCardModel } from "../card-model";
 
 interface Props {
   model: ProductCardModel;
@@ -28,7 +29,7 @@ const TitleTag = headingLevel;
   data-card-badge="image"
   class="group relative flex flex-col h-full bg-card overflow-hidden"
 >
-  <CardMedia model={model} ratio={ratio} sizes={sizes} loading={loading} badge={model.percentOff} />
+  <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[ratio]} sizes={sizes} loading={loading} badge={model.percentOff} />
 
   <div class="product-card-body p-3 sm:p-4 flex flex-col flex-1">
     <TitleTag
@@ -42,6 +43,17 @@ const TitleTag = headingLevel;
       </a>
     </TitleTag>
 
+    {
+      /* The rating once the product has a published review (stars and a
+         quiet "(128)", as a department store lists it); nothing at zero. */
+      model.facts.rating && (
+        <p class="mb-1.5 flex items-center gap-1 text-xs leading-none text-muted-foreground" data-card-fact="rating">
+          <span class="sc-stars" style={`--sc-fill:${reviewStarFill(Number(model.facts.rating.average))};--sc-star:0.8125rem`} aria-hidden="true"></span>
+          <span aria-hidden="true" class="tabular-nums">({model.facts.rating.count.toLocaleString("en-IN")})</span>
+          <span class="sr-only">Rated {model.facts.rating.average} out of 5 from {model.facts.rating.count.toLocaleString("en-IN")} {model.facts.rating.count === 1 ? "review" : "reviews"}</span>
+        </p>
+      )
+    }
     <p class="mt-auto flex flex-col">
       {
         model.price.regular && (

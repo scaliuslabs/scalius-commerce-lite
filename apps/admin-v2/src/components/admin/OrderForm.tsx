@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
-import type { FieldErrors, SubmitHandler } from "react-hook-form";
+import type { FieldErrors } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Form } from "@/components/ui/form";
@@ -17,9 +17,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
-import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
+import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
+import {
+  SaveBarProvider,
+  SaveErrorBanner,
+  SaveNotCompleted,
+  useSaveBar,
+  useSaveScope,
+} from "./shared/SaveBar";
 import {
   orderErrorMessage,
   useConfirmManualOrderAmendment,
@@ -71,7 +77,9 @@ import {
 } from "./order-form/manual-order-discount";
 import { translate, useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
+import { orderDetailMessages } from "@/i18n/order-detail";
 import { resourceMessages } from "@/i18n/resource";
+import { matchesShortcut } from "./layout/shortcuts";
 
 type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
 type ManualOrderAmendmentInput = { id: string } &
@@ -159,7 +167,25 @@ function toManualOrderAmendmentInput(values: OrderFormValues, id: string): Manua
   };
 }
 
-export function OrderForm({
+/**
+ * The manual order editor on the page's contextual save bar ("Unsaved order /
+ * Discard / Save"), like Shopify's draft order page.
+ */
+export function OrderForm(props: OrderFormProps) {
+  const t = useMessages(orderFormMessages);
+  const d = useMessages(orderDetailMessages);
+  const isEdit = props.mode === "amend";
+  return (
+    <SaveBarProvider
+      unsavedLabel={isEdit ? undefined : t("unsavedOrder")}
+      savedMessage={d(isEdit ? "toast.orderUpdated" : "toast.orderCreated")}
+    >
+      <OrderEditor {...props} />
+    </SaveBarProvider>
+  );
+}
+
+function OrderEditor({
   mode,
   products = [],
   defaultValues,
@@ -172,6 +198,7 @@ export function OrderForm({
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
+  const scope = useSaveScope();
   const { code: currencyCode, fmt } = useCurrency();
   const orderActions = useOrderActionPermissions();
   const canSave = isEdit ? orderActions.canEditOrders : orderActions.canCreateOrders;
@@ -182,8 +209,8 @@ export function OrderForm({
   const submitLock = React.useRef(false);
   // After a successful save the form only navigates away; nothing refetches.
   const [completed, setCompleted] = React.useState(false);
-  const [pageError, setPageError] = React.useState<string | null>(null);
-  const pageErrorRef = React.useRef<HTMLDivElement>(null);
+  // The save bar's Save waits here until the review dialog is confirmed or cancelled.
+  const confirmation = React.useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
   // The dialog stays mounted; the last amendment is kept while it animates closed.
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [pendingAmendment, setPendingAmendment] = React.useState<{
@@ -386,13 +413,18 @@ export function OrderForm({
     else if (first) form.setFocus(first);
   };
 
-  const handleSubmit: SubmitHandler<OrderFormValues> = async (values) => {
+  /** Resolves once the order is saved; rejects (keeping the edits) when it isn't. */
+  const saveValues = async (values: OrderFormValues): Promise<void> => {
     if (!manualQuote.isCurrent) {
-      if (manualQuote.discountLimit?.exceeded) form.setFocus("discountAmount");
-      return;
+      if (manualQuote.discountLimit?.exceeded) {
+        form.setFocus("discountAmount");
+        throw new SaveNotCompleted(t("fixDiscount"));
+      }
+      throw new SaveNotCompleted(manualQuote.isLoading
+        ? t("waitForTotal")
+        : manualQuote.errorMessage ?? t("totalFailed"));
     }
-    if (submitLock.current) return;
-    setPageError(null);
+    if (submitLock.current) throw new SaveNotCompleted(undefined, []);
     // The server stores the names of the places it validates; these only label the review.
     const enrichedValues: OrderFormValues = {
       ...values,
@@ -405,8 +437,7 @@ export function OrderForm({
       const id = enrichedValues.id || orderId;
       const quote = manualQuote.data;
       if (!id || !values.version || !quote || !("quoteFingerprint" in quote) || !quote.quoteFingerprint) {
-        setPageError(t("reloadToSave"));
-        return;
+        throw new SaveNotCompleted(t("reloadToSave"));
       }
       const input = toManualOrderAmendmentInput(enrichedValues, id);
       const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
@@ -422,7 +453,9 @@ export function OrderForm({
         changes: describeAmendment(defaultValues ?? {}, enrichedValues, lineName, fmt),
       });
       setConfirmOpen(true);
-      return;
+      return new Promise<void>((resolve, reject) => {
+        confirmation.current = { resolve, reject };
+      });
     }
 
     submitLock.current = true;
@@ -455,7 +488,7 @@ export function OrderForm({
         });
         return;
       }
-      setPageError(result.outcome === "wait"
+      throw new SaveNotCompleted(result.outcome === "wait"
         ? t("stillCreating")
         : getServerFnError(result.error, t("createFailed")));
     } finally {
@@ -463,7 +496,26 @@ export function OrderForm({
     }
   };
 
-  const submit = () => form.handleSubmit(handleSubmit, focusFirstError)();
+  /** The save bar's Save (and ⌘S, ⌘/Ctrl+Enter, Enter in a field): validate, then save. */
+  const save = () =>
+    new Promise<void>((resolve, reject) => {
+      void form.handleSubmit(
+        (values) => saveValues(values).then(resolve, reject),
+        (errors) => {
+          focusFirstError(errors);
+          reject(new SaveNotCompleted(r("fixFields")));
+        },
+      )();
+    });
+
+  /** Cancelling the review keeps the bar as it was: nothing was saved, nothing failed. */
+  const closeConfirm = (saved: boolean) => {
+    setConfirmOpen(false);
+    const pending = confirmation.current;
+    confirmation.current = null;
+    if (saved) pending?.resolve();
+    else pending?.reject(new SaveNotCompleted(undefined, []));
+  };
 
   const handleConfirmAmendment = async () => {
     const pending = pendingAmendment;
@@ -476,7 +528,7 @@ export function OrderForm({
         quoteFingerprint: pending.quoteFingerprint,
       });
       setCompleted(true);
-      setConfirmOpen(false);
+      closeConfirm(true);
       void navigate({
         to: "/admin/orders/$orderId",
         params: { orderId: pending.input.id },
@@ -488,20 +540,33 @@ export function OrderForm({
     }
   };
 
-  // A save that failed on the server is explained at the top of the page.
-  useEffect(() => {
-    if (pageError) pageErrorRef.current?.scrollIntoView({ block: "center" });
-  }, [pageError]);
+  useSaveBar({
+    // react-hook-form compares every value with the loaded order (or the empty draft).
+    dirty: form.formState.isDirty,
+    saving: isSubmitting,
+    invalid: !canSave || Object.keys(form.formState.errors).length > 0,
+    save,
+    discard: () => {
+      form.reset();
+      amendmentRequest.current = null;
+      // A new draft never reuses the discarded one's create request.
+      if (createRequestKey.current) {
+        clearAdminOrderRequestKey(createRequestKey.current);
+        createRequestKey.current = getOrCreateAdminOrderRequestKey();
+      }
+    },
+  });
 
-  const quoteBusy = manualQuote.isLoading;
-  const canSubmit = canSave && !isInteractionLocked && !quoteBusy;
+  const saveFromPage = () => {
+    if (scope?.dirty && !scope.busy && !isInteractionLocked) void scope.saveAll();
+  };
 
-  // Ctrl/Cmd+Enter saves.
+  // Ctrl/Cmd+Enter saves through the save bar, like ⌘S.
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && canSubmit && form.formState.isDirty) {
+      if (matchesShortcut("submit", e) && scope?.dirty) {
         e.preventDefault();
-        void submit();
+        saveFromPage();
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -512,25 +577,20 @@ export function OrderForm({
 
   return (
     <>
-      <UnsavedChangesGuard
-        isDirty={form.formState.isDirty}
-        isSubmitting={isSubmitting}
-      />
       <PageHeader title={pageTitle} backTo={backTo} />
-      {pageError ? (
-        <Alert ref={pageErrorRef} variant="destructive" className="mb-4">
-          <AlertDescription>{pageError}</AlertDescription>
-        </Alert>
-      ) : null}
+      {canSave ? null : <ReadOnlyNotice />}
       <Form {...form}>
         <form
           method="post"
           onSubmit={(event) => {
             event.preventDefault();
-            if (canSubmit && form.formState.isDirty) void submit();
+            // React bubbles submits from portalled dialogs; only this form saves the page.
+            if (event.target === event.currentTarget) saveFromPage();
           }}
           noValidate
+          className="flex flex-col gap-4"
         >
+          <SaveErrorBanner />
           <OrderFormProvider
             form={form}
             products={products}
@@ -555,7 +615,7 @@ export function OrderForm({
       <AlertDialog
         open={confirmOpen}
         onOpenChange={(open) => {
-          if (!open && !amendMutation.isPending) setConfirmOpen(false);
+          if (!open && !amendMutation.isPending) closeConfirm(false);
         }}
       >
         <AlertDialogContent>
@@ -593,24 +653,6 @@ export function OrderForm({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <FormActionBar
-        title={pageTitle}
-        isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
-        cancelUrl={backTo}
-        canSave={canSubmit}
-        saveLabel={isEdit ? t("reviewChanges") : t("createOrder")}
-        saveDisabledReason={canSave ? t("calculating") : r("readOnly")}
-        onDiscard={isEdit
-          ? undefined
-          : () => {
-              if (createRequestKey.current) {
-                clearAdminOrderRequestKey(createRequestKey.current);
-              }
-            }}
-        onSave={() => void submit()}
-      />
     </>
   );
 }

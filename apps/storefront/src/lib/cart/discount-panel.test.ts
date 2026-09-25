@@ -38,4 +38,16 @@ describe("discount panel: which discount applies", () => {
     const notes = [...root.querySelectorAll("#appliedCodes li.basis-full")].map((note) => note.textContent);
     expect(notes).toEqual(["TEN: Eid 20% gives an equal or bigger discount, so Eid 20% is applied."]);
   });
+
+  it("names the bundle saving that beat a code, and keeps the code", () => {
+    const root = panel();
+    const facts = parseDiscountFacts({
+      discounts: [],
+      rejectedCodes: [{ code: "SAVE5", reason: "lower_savings", message: "…", conflictsWith: "Bundle saving", bundleSavesMore: true }],
+    });
+    expect(facts.rejectedCodes[0]).toMatchObject({ bundleSavesMore: true });
+    renderDiscountPanel(root, { codes: ["SAVE5"], facts }, ENGLISH_CHECKOUT_LANGUAGE_DATA, actions);
+    const notes = [...root.querySelectorAll("#appliedCodes li.basis-full")].map((note) => note.textContent);
+    expect(notes).toEqual(["SAVE5: Bundle saving applied: better than SAVE5."]);
+  });
 });

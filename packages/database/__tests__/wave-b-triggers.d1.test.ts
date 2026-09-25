@@ -9,7 +9,7 @@ import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlit
 
 type Row = Record<string, SQLInputValue>;
 const PROVIDERS = ["d1", "turso"] as const;
-const FIRST_WAVE_B_MIGRATION = "0093_";
+const FIRST_WAVE_B_MIGRATION = "0095_";
 
 function scalar(sqlite: DatabaseSync, sql: string, ...params: SQLInputValue[]): unknown {
   const row = sqlite.prepare(sql).get(...params) as Record<string, unknown> | undefined;
@@ -52,7 +52,7 @@ function store(provider: (typeof PROVIDERS)[number] = "d1") {
   return { sqlite, insert, order, item, fulfil, setStatus };
 }
 
-describe.each(PROVIDERS)("reviews (0093, %s)", (provider) => {
+describe.each(PROVIDERS)("reviews (0095, %s)", (provider) => {
   function reviewStore() {
     const s = store(provider);
     s.order("ord_1");
@@ -188,7 +188,7 @@ describe.each(PROVIDERS)("reviews (0093, %s)", (provider) => {
   });
 });
 
-describe.each(PROVIDERS)("digital goods (0094, %s)", (provider) => {
+describe.each(PROVIDERS)("digital goods (0096, %s)", (provider) => {
   function digitalStore() {
     const s = store(provider);
     s.insert("digital_assets", { id: "dga_keys_000001", product_id: "prod_1", variant_id: "var_1", kind: "licence_keys", display_name: "Licence", status: "ready" });
@@ -268,7 +268,7 @@ describe.each(PROVIDERS)("digital goods (0094, %s)", (provider) => {
   });
 });
 
-describe.each(PROVIDERS)("gift cards (0095, %s)", (provider) => {
+describe.each(PROVIDERS)("gift cards (0097, %s)", (provider) => {
   function cardStore() {
     const s = store(provider);
     let transactions = 0;
@@ -348,7 +348,7 @@ describe.each(PROVIDERS)("gift cards (0095, %s)", (provider) => {
   });
 });
 
-describe.each(PROVIDERS)("warranty (0096, %s)", (provider) => {
+describe.each(PROVIDERS)("warranty (0098, %s)", (provider) => {
   const JAN_31_2026 = Date.UTC(2026, 0, 31, 10, 30) / 1000;
   function warrantyStore() {
     const s = store(provider);
@@ -422,7 +422,7 @@ describe.each(PROVIDERS)("warranty (0096, %s)", (provider) => {
   });
 });
 
-describe.each(PROVIDERS)("expand-only upgrade from 0092 (%s)", (provider) => {
+describe.each(PROVIDERS)("expand-only upgrade from 0094 (%s)", (provider) => {
   it("keeps every row, lets the previous API's writes through and records the release", () => {
     const sqlite = createMigratedSqlite({ provider, beforeMigration: FIRST_WAVE_B_MIGRATION });
     sqlite.exec("PRAGMA foreign_keys = OFF");
@@ -445,10 +445,13 @@ describe.each(PROVIDERS)("expand-only upgrade from 0092 (%s)", (provider) => {
     expect(scalar(sqlite, "SELECT count(*) FROM order_review_requests")).toBe(1);
     expect(sqlite.prepare("SELECT version, name FROM scalius_schema_migrations WHERE version >= 93 ORDER BY version").all())
       .toEqual([
-        { version: 93, name: "0093_reviews" },
-        { version: 94, name: "0094_digital_goods" },
-        { version: 95, name: "0095_gift_cards" },
-        { version: 96, name: "0096_warranty" },
+        { version: 93, name: "0093_theme_document_v5" },
+        { version: 94, name: "0094_media_rendition_ladder" },
+        { version: 95, name: "0095_reviews" },
+        { version: 96, name: "0096_digital_goods" },
+        { version: 97, name: "0097_gift_cards" },
+        { version: 98, name: "0098_warranty" },
+        { version: 99, name: "0099_customer_whatsapp" },
       ]);
   });
 });

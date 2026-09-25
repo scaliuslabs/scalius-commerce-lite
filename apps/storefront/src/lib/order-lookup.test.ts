@@ -6,11 +6,11 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
 } from "@scalius/shared/checkout-language";
 import {
+  describeOrderCodeSendRefusal,
   formatCountdown,
   getOrderCodeFailureText,
   getOrderLookupFieldErrors,
   normalizeOrderReference,
-  readOrderLookupInput,
 } from "./order-lookup";
 
 const en = ENGLISH_CHECKOUT_LANGUAGE_DATA;
@@ -31,30 +31,12 @@ describe("order lookup input", () => {
     expect(normalizeOrderReference("1001; drop")).toBeNull();
   });
 
-  it("accepts Bangladeshi phone formats, including Bangla digits", () => {
-    expect(readOrderLookupInput("#1001", "০১৭১২-৩৪৫৬৭৮")).toEqual({
-      ok: true,
-      reference: "1001",
-      phone: "+8801712345678",
+  it("asks only for the order number, in the buyer's language", () => {
+    expect(getOrderLookupFieldErrors(en, "")).toEqual({ reference: en.trackOrderNumberInvalidText });
+    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1")).toEqual({
+      reference: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderNumberInvalidText,
     });
-    expect(readOrderLookupInput("1001", "1712 345678")).toMatchObject({ ok: true, phone: "+8801712345678" });
-  });
-
-  it("names the field to fix, order number first", () => {
-    expect(readOrderLookupInput("", "")).toEqual({ ok: false, field: "reference" });
-    expect(readOrderLookupInput("1001", "0171234")).toEqual({ ok: false, field: "phone" });
-    expect(readOrderLookupInput("1001", "01212345678")).toEqual({ ok: false, field: "phone" });
-  });
-
-  it("gives every field its own message at once", () => {
-    expect(getOrderLookupFieldErrors(en, "", "")).toEqual({
-      reference: en.trackOrderNumberInvalidText,
-      phone: en.trackOrderPhoneInvalidText,
-    });
-    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1001", "0171234")).toEqual({
-      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneInvalidText,
-    });
-    expect(getOrderLookupFieldErrors(en, "১০০১", "০১৭১২-৩৪৫৬৭৮")).toEqual({});
+    expect(getOrderLookupFieldErrors(en, "১০০১")).toEqual({});
   });
 });
 
@@ -85,7 +67,7 @@ describe("order code messages", () => {
   });
 
   it("shows the API's reason when a send is refused for this order", () => {
-    const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
+    const notFound = "We couldn't find an order with that number. Check it and try again.";
     expect(getOrderCodeFailureText(en, { status: 404, message: notFound }, "send", unavailable)).toBe(notFound);
     expect(getOrderCodeFailureText(en, { status: 409, message: "No way to reach you." }, "send", unavailable)).toBe("No way to reach you.");
     expect(getOrderCodeFailureText(en, { status: 400, message: "Backend detail" }, "send", unavailable)).toBe(en.paymentRecoverySendFailedText);
@@ -102,5 +84,19 @@ describe("order code messages", () => {
       .toBe("কোডটি সঠিক নয়। আর 2 বার চেষ্টা করতে পারবেন।");
     expect(getOrderCodeFailureText(BANGLA_CHECKOUT_LANGUAGE_DATA, { status: 429, retryAfterSeconds: 45 }, "send", unavailable))
       .toBe("0:45 পরে আবার চেষ্টা করুন");
+  });
+});
+
+describe("refused order-code send", () => {
+  it("keeps the code field open on a rate limit, with the wait on the resend button", () => {
+    expect(describeOrderCodeSendRefusal(en, { status: 429, message: "A code was just sent. Please wait before asking for another.", retryAfterSeconds: 49 }, unavailable))
+      .toEqual({ message: "A code was just sent. Please wait before asking for another.", codeSent: true, resendAfterSeconds: 49, needsStoreContact: false });
+  });
+
+  it("shows no code field when nothing could be sent", () => {
+    expect(describeOrderCodeSendRefusal(en, { status: 503 }, unavailable))
+      .toEqual({ message: unavailable, codeSent: false, resendAfterSeconds: 0, needsStoreContact: true });
+    expect(describeOrderCodeSendRefusal(en, { status: 404, message: "No such order." }, unavailable))
+      .toEqual({ message: "No such order.", codeSent: false, resendAfterSeconds: 0, needsStoreContact: false });
   });
 });

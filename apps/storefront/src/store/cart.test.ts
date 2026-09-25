@@ -434,4 +434,38 @@ describe("cart v3 line keys (buyer inputs)", () => {
     // An older line without a known kind still asks for delivery.
     expect(cartNeedsDeliveryMethod({ a: {} })).toBe(true);
   });
+
+  it("Buy now checks out only its line and gives the buyer's own cart back untouched", async () => {
+    const {
+      addDiscountCode, addToCart, cartStore, clearCart, endBuyNow, hydrateCartFromStorage,
+      isBuyNowCheckoutPath, startBuyNow, BUY_NOW_STASH_KEY,
+    } = await importFreshCartModule();
+    hydrateCartFromStorage();
+    await addToCart({ id: "rice", variantId: "variant_rice", name: "Rice", price: 100, quantity: 2 });
+    addDiscountCode("SAVE10");
+    const own = structuredClone(cartStore.get());
+
+    expect(await startBuyNow({ id: "tee", variantId: "variant_tee", name: "Tee", price: 500 })).toBe(true);
+    expect(Object.values(cartStore.get().items).map((item) => [item.id, item.quantity])).toEqual([["tee", 1]]);
+    expect(cartStore.get()).toMatchObject({ totalItems: 1, totalAmount: 500, discountCodes: [] });
+    // A second Buy now replaces the first; the own cart stays set aside.
+    expect(await startBuyNow({ id: "mug", variantId: "variant_mug", name: "Mug", price: 300 })).toBe(true);
+    expect(Object.values(cartStore.get().items).map((item) => item.id)).toEqual(["mug"]);
+
+    endBuyNow();
+    expect(cartStore.get()).toEqual(own);
+    expect(localStorage.getItem(BUY_NOW_STASH_KEY)).toBeNull();
+    endBuyNow();
+    expect(cartStore.get()).toEqual(own);
+
+    // Signing out (clearCart) also drops a cart set aside by Buy now.
+    await startBuyNow({ id: "tee", variantId: "variant_tee", name: "Tee", price: 500 });
+    clearCart();
+    expect(localStorage.getItem(BUY_NOW_STASH_KEY)).toBeNull();
+    endBuyNow();
+    expect(cartStore.get().items).toEqual({});
+
+    expect(["/cart", "/checkout", "/checkout/quick", "/buy/tee", "/order-success", "/payment-recovery"].every(isBuyNowCheckoutPath)).toBe(true);
+    expect(["/", "/products/tee", "/account", "/cartoon", "/search"].some(isBuyNowCheckoutPath)).toBe(false);
+  });
 });

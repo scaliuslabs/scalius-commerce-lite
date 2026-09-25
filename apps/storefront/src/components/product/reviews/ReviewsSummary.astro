@@ -1,8 +1,68 @@
 ---
-// Owned by B2 (reviews storefront): the star summary under the product title; renders nothing until B2 ships it.
+// The star line under the product title (Amazon's "4.6 ★★★★½ 1,234 ratings",
+// Daraz's stars and "128 Ratings"): one link to the reviews module below.
+// Nothing when reviews are off or the product has no published review, so a
+// new product never says "0 reviews". It reads the same `product.reviews` as
+// the module and the JSON-LD.
 import type { Product } from "@/lib/api";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import {
+  formatReviewAverage,
+  readProductReviews,
+  reviewStarFill,
+  type ReviewCopy,
+} from "./review-format";
 
 export interface Props {
   product: Product;
+  copy: ReviewCopy;
 }
+
+const { product, copy } = Astro.props;
+const reviews = readProductReviews(product.reviews);
+const summary = reviews && reviews.summary.count > 0 ? reviews.summary : null;
+const average = summary ? formatReviewAverage(summary.average) : "";
+const ratings = summary
+  ? summary.count === 1
+    ? copy.reviewsRatingsCountOneText
+    : formatCheckoutLanguageText(copy.reviewsRatingsCountText, { count: summary.count.toLocaleString("en-IN") })
+  : "";
 ---
+
+{summary && (
+  <a href="#reviews" class="review-summary-line" data-review-summary>
+    <span class="review-summary-average" aria-hidden="true">{average}</span>
+    <span class="sc-stars review-summary-stars" style={`--sc-fill:${reviewStarFill(summary.average)}`} aria-hidden="true"></span>
+    <span class="sr-only">{formatCheckoutLanguageText(copy.reviewsRatedText, { average })}, </span>
+    <span class="review-summary-count">{ratings}</span>
+  </a>
+)}
+
+<style>
+  .review-summary-line {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1.25;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .review-summary-average {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .review-summary-stars {
+    --sc-star: 1rem;
+  }
+  .review-summary-count {
+    color: var(--primary);
+  }
+  .review-summary-line:hover .review-summary-count,
+  .review-summary-line:focus-visible .review-summary-count {
+    text-decoration: underline;
+  }
+</style>

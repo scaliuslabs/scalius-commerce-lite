@@ -12,10 +12,15 @@
  */
 
 /**
- * 480 sits between the usual 320/640 steps so two-column phone grids and the
- * mobile product image (~160–270 CSS px at DPR 2–3) do not jump to 640.
+ * A 1.2x geometric ladder: every step is at most 1.2x the one below it, so
+ * any slot from 120 to 960 device pixels (a card 120-480 CSS px wide at DPR
+ * 1 and 2, and at DPR 3 with the phone cap of about 2x) fetches at most 1.2x
+ * the pixels it draws (the storefront's responsive-image test holds every
+ * width). 1600 is the product page's zoom photo. Changing the ladder needs a
+ * migration that re-renders stored images (0094 set this one): the ladder is
+ * read from the published URL alone.
  */
-export const MEDIA_VARIANT_WIDTHS = [160, 320, 480, 640, 960, 1600] as const;
+export const MEDIA_VARIANT_WIDTHS = [144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600] as const;
 /** The largest (master) rendition; wider sources are scaled down to it. */
 export const MEDIA_VARIANT_MAX_WIDTH = 2400;
 /** Social, JSON-LD and catalog feed images: Google/Meta want ≥ 1200 px. */
@@ -89,4 +94,22 @@ export function mediaImageSrcSet(url: string | null | undefined): string {
 export function mediaOriginalUrl(url: string | null | undefined): string {
   const parsed = url ? parseVariantUrl(url) : null;
   return parsed ? `${parsed.base}${parsed.suffix}` : url ?? "";
+}
+
+/** A raster file anywhere under a `media/` path segment (`media/<id>.<ext>`, older nested keys too). */
+const MEDIA_RASTER_ORIGINAL = /(?:^|\/)media\/(?:[^?#]*\/)?[^/?#]+\.(?:avif|bmp|gif|jpe?g|png|tiff?|webp)$/i;
+
+/**
+ * A raster upload of our own media store served as uploaded (a legacy or
+ * failed-rendition image, up to 2400px and ~1MB): a `media/` object with no
+ * rendition suffix. Small slots (cards) show their placeholder instead while
+ * the public read queues its render job. External URLs and vector files
+ * (SVG) are not ours to resize and return false.
+ */
+export function isUnrenderedMediaOriginal(url: string | null | undefined): boolean {
+  if (!url || parseVariantUrl(url)) return false;
+  const suffixIndex = url.search(/[?#]/);
+  const path = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  // A rendition-shaped path outside the ladder is not an original either.
+  return MEDIA_RASTER_ORIGINAL.test(path) && !/\.[A-Za-z0-9]{1,10}\/\d+\.webp$/.test(path);
 }

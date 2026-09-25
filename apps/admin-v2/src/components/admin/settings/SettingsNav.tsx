@@ -1,16 +1,9 @@
-import { useState } from "react";
-import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Search, Store } from "lucide-react";
-import { getApiV1AdminSettingsBusiness } from "@scalius/api-client/sdk";
+import { useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { Link, useLocation, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { ChevronRight, Search } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Input } from "~/components/ui/input";
-import { usePermissions } from "~/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { canAccessAdminPath } from "~/lib/admin-access";
-import { apiData } from "~/lib/api";
-import { queryKeys } from "~/lib/query-keys";
-import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { useMessages } from "~/i18n";
 import {
   settingsGroupMessages,
@@ -20,66 +13,73 @@ import {
 } from "~/i18n/settings";
 import { settingsSearchMessages } from "~/i18n/settings-search";
 import { storeSettingsMessages } from "~/i18n/settings-store";
+import { StoreBadge, useStoreIdentity } from "../layout/store-identity";
+import { NAV_ROW } from "../layout/nav-button";
+import { matchesPath } from "../layout/AdminNav";
 import { SETTINGS_GROUPS, SETTINGS_NAV } from "./settings-nav";
 import { searchSettings } from "./settings-search";
 
-/** The store's name and address; an unnamed store is asked for its name, never shown as "Scalius". */
-function StoreIdentity() {
+/**
+ * The store's name and address, Shopify's store block: an unnamed store is
+ * asked for its name, never shown as "Scalius". On the dark navigation panel
+ * the badge sits on the right; on the phone list it leads.
+ */
+function StoreIdentity({ variant }: { variant: "sidebar" | "rows" }) {
   const t = useMessages(storeSettingsMessages);
-  const { hasPermission } = usePermissions();
-  const enabled = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
-  const canEdit = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
-  const business = useQuery({
-    queryKey: queryKeys.settings.business(),
-    queryFn: () => apiData(getApiV1AdminSettingsBusiness()),
-    enabled,
-  });
-  const storefront = useQuery({ ...storefrontUrlQueryOptions(), enabled });
-  if (!enabled) return null;
-  const name = business.data?.companyName?.trim() ?? "";
-  const url = (storefront.data as { storefrontUrl?: string } | undefined)?.storefrontUrl ?? "";
-  return (
-    <div className="flex min-h-9 min-w-0 items-center gap-3 px-2">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-heading-sm text-primary-foreground">
-        {/* The first character, whole (an emoji or conjunct is never split). */}
-        {name ? Array.from(name)[0]!.toUpperCase() : <Store className="size-4" aria-hidden="true" />}
+  const store = useStoreIdentity();
+  if (!store.canView) return null;
+  const sidebar = variant === "sidebar";
+  const name = store.name ? (
+    <span className={cn("block truncate", sidebar ? "text-nav font-medium text-sidebar-foreground" : "text-heading-sm")}>{store.name}</span>
+  ) : !store.loaded ? null : (
+    <Link
+      to="/admin/settings/store"
+      hash="business"
+      className={cn("block truncate hover:underline", sidebar ? "text-nav font-medium text-sidebar-foreground underline" : "text-heading-sm text-link")}
+    >
+      {t("addStoreName")}
+    </Link>
+  );
+  const host = store.host ? (
+    <span className={cn("block truncate", sidebar ? "text-caption text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{store.host}</span>
+  ) : null;
+  return sidebar ? (
+    <div className="flex min-h-11 min-w-0 items-center gap-3 px-2">
+      <span className="min-w-0 flex-1">
+        {name}
+        {host}
       </span>
+      <StoreBadge name={store.name} className="size-7 rounded-lg text-nav" />
+    </div>
+  ) : (
+    <div className="flex min-h-9 min-w-0 items-center gap-3 px-2">
+      <StoreBadge name={store.name} className="size-9 rounded-lg text-heading-sm" />
       <span className="min-w-0">
-        {name ? (
-          <span className="block truncate text-heading-sm">{name}</span>
-        ) : !business.data ? null : canEdit ? (
-          <Link to="/admin/settings/store" hash="business" className="block truncate text-heading-sm text-link hover:underline">
-            {t("addStoreName")}
-          </Link>
-        ) : (
-          <span className="block truncate text-heading-sm text-muted-foreground">{t("noName")}</span>
-        )}
-        {url ? (
-          <span className="block truncate text-body text-muted-foreground">{url.replace(/^https?:\/\//, "")}</span>
-        ) : null}
+        {name}
+        {host}
       </span>
     </div>
   );
 }
 
-const SIDEBAR_LINK =
-  "flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 text-body font-medium text-muted-foreground hover:bg-muted hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground";
-
 /**
- * The settings list: store identity, a search box and the pages in themed
- * groups. Search matches page names and the settings inside them ("COD",
- * "courier", "VAT") and links straight to the card. `variant="rows"` is the
- * phone list with summaries; `"sidebar"` is the persistent desktop column.
+ * The settings list: search, store identity and the pages. Search matches
+ * page names and the settings inside them ("COD", "courier", "VAT") and links
+ * straight to the card. `variant="sidebar"` is the navigation panel that
+ * replaces the main menu while settings are open (Shopify's order, flat);
+ * `"rows"` is the phone list with summaries, in themed groups.
  */
-export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
+export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "rows"; onNavigate?: () => void }) {
   const context = useRouteContext({ from: "/admin" });
   const navigate = useNavigate();
+  const path = useLocation({ select: (location) => location.pathname });
   const t = useMessages(settingsNavMessages);
   const common = useMessages(settingsMessages);
   const groups = useMessages(settingsGroupMessages);
   const summary = useMessages(settingsSummaryMessages);
   const search = useMessages(settingsSearchMessages);
   const [query, setQuery] = useState("");
+  const sidebar = variant === "sidebar";
   const searching = query.trim() !== "";
   const found = searchSettings(query);
   const allowed = SETTINGS_NAV.filter((item) => canAccessAdminPath(item.to, context));
@@ -95,53 +95,77 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
     : cards[0]
       ? { to: cards[0].to, hash: cards[0].card }
       : shortcuts.flatMap((entry) => ("to" in entry ? [{ to: entry.to, hash: "hash" in entry ? entry.hash : undefined }] : []))[0];
-  const sections = searching
-    ? [{ key: "pages", label: null, items: pages }]
+  const sections = searching || sidebar
+    ? [{ key: "pages", label: null, items: searching ? pages : allowed }]
     : SETTINGS_GROUPS.map((group) => ({
         key: group,
         label: groups(group),
         items: allowed.filter((item) => item.group === group),
       }));
 
-  return (
-    <nav aria-label={t("settings")} className="space-y-3">
-      <StoreIdentity />
-      <div className="relative px-1">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+  const field = {
+    value: query,
+    onChange: (event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value),
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Enter" || !searching || !first) return;
+      event.preventDefault();
+      onNavigate?.();
+      void navigate(first);
+    },
+    placeholder: common("search"),
+    "aria-label": common("search"),
+  };
+  const searchField = (
+    <div className={cn("relative", !sidebar && "px-1")}>
+      <Search
+        className={cn(
+          "pointer-events-none absolute top-1/2 -translate-y-1/2",
+          sidebar ? "left-2.5 size-4 text-sidebar-muted-foreground" : "left-3.5 size-4 text-muted-foreground",
+        )}
+        aria-hidden="true"
+      />
+      {sidebar ? (
+        <input
+          type="search"
+          {...field}
+          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover pl-8 pr-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-8"
+        />
+      ) : (
         <Input
           type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !searching || !first) return;
-            event.preventDefault();
-            void navigate(first);
-          }}
-          placeholder={common("search")}
-          aria-label={common("search")}
+          {...field}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
           className="pl-9"
         />
-      </div>
+      )}
+    </div>
+  );
+  const resultRow = sidebar ? "block rounded-lg px-2 py-1 text-nav text-sidebar-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring" : "flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/50";
+  const detail = sidebar ? "block text-caption text-sidebar-muted-foreground" : "block text-body text-muted-foreground";
+
+  return (
+    <nav aria-label={t("settings")} className={sidebar ? "space-y-2" : "space-y-3"}>
+      {sidebar ? searchField : <StoreIdentity variant="rows" />}
+      {sidebar ? <StoreIdentity variant="sidebar" /> : searchField}
       {searching && pages.length === 0 && cards.length === 0 && shortcuts.length === 0 ? (
-        <p role="status" className="px-2.5 text-body text-muted-foreground">{search("noResults")}</p>
+        <p role="status" className={cn("px-2", sidebar ? "text-nav text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{search("noResults")}</p>
       ) : null}
       {sections.map((section) =>
-        section.items.length === 0 ? null : variant === "sidebar" ? (
-          <div key={section.key} className="space-y-1">
-            {section.label ? <h2 className="px-2.5 text-body text-muted-foreground">{section.label}</h2> : null}
-            <ul className="space-y-0.5">
-              {section.items.map(({ key, to, icon: Icon }) => (
+        section.items.length === 0 ? null : sidebar ? (
+          <ul key={section.key} className="flex flex-col gap-0.5">
+            {section.items.map(({ key, to, icon: Icon }) => {
+              // Prefix match: a page's own sub-routes (a message editor, a staff member) keep it highlighted.
+              const current = matchesPath(path, to);
+              return (
                 <li key={key}>
-                  {/* Prefix match: a page's own sub-routes (a message editor, a staff member) keep it highlighted. */}
-                  <Link to={to} className={SIDEBAR_LINK} activeOptions={{ exact: false, includeSearch: false }} activeProps={{ "aria-current": "page" }}>
-                    <Icon className="size-4 shrink-0" aria-hidden="true" />
-                    {t(key)}
+                  <Link to={to} className={NAV_ROW} aria-current={current ? "page" : undefined} onClick={onNavigate}>
+                    <Icon aria-hidden="true" />
+                    <span className="truncate">{t(key)}</span>
                   </Link>
                 </li>
-              ))}
-            </ul>
-          </div>
+              );
+            })}
+          </ul>
         ) : (
           <div key={section.key} className="space-y-1.5">
             {section.label ? <h2 className="px-1 text-body text-muted-foreground">{section.label}</h2> : null}
@@ -164,46 +188,36 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
       )}
       {cards.length > 0 || shortcuts.length > 0 ? (
         <div className="space-y-1">
-          <h2 className="px-2.5 text-body text-muted-foreground">{search("results")}</h2>
-          <ul className={variant === "sidebar" ? "space-y-0.5" : "divide-y divide-border overflow-hidden rounded-xl bg-card shadow-card"}>
+          <h2 className={cn("px-2", sidebar ? "text-caption font-medium text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{search("results")}</h2>
+          <ul className={sidebar ? "space-y-0.5" : "divide-y divide-border overflow-hidden rounded-xl bg-card shadow-card"}>
             {cards.map(({ card, page, to }) => (
               <li key={card}>
-                <Link
-                  to={to}
-                  hash={card}
-                  className={
-                    variant === "sidebar"
-                      ? "block rounded-lg px-2.5 py-1.5 hover:bg-muted"
-                      : "flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/50"
-                  }
-                >
+                <Link to={to} hash={card} className={resultRow} onClick={onNavigate}>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-body font-medium">{search(card)}</span>
-                    <span className="block text-body text-muted-foreground">{t(page)}</span>
+                    <span className={cn("block font-medium", sidebar ? "text-nav" : "text-body")}>{search(card)}</span>
+                    <span className={detail}>{t(page)}</span>
                   </span>
-                  {variant === "rows" ? <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+                  {sidebar ? null : <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
                 </Link>
               </li>
             ))}
             {shortcuts.map((entry) => {
               const label = (
                 <span className="min-w-0 flex-1">
-                  <span className="block text-body font-medium">{search(entry.card)}</span>
-                  <span className="block text-body text-muted-foreground">{search(entry.section)}</span>
+                  <span className={cn("block font-medium", sidebar ? "text-nav" : "text-body")}>{search(entry.card)}</span>
+                  <span className={detail}>{search(entry.section)}</span>
                 </span>
               );
-              const row = variant === "sidebar" ? "block rounded-lg px-2.5 py-1.5" : "flex min-h-14 items-center gap-3 px-4 py-3";
-              const hover = variant === "sidebar" ? "hover:bg-muted" : "hover:bg-muted/50";
               return (
                 <li key={entry.card}>
                   {"to" in entry ? (
-                    <Link to={entry.to} hash={"hash" in entry ? entry.hash : undefined} className={cn(row, hover)}>
+                    <Link to={entry.to} hash={"hash" in entry ? entry.hash : undefined} className={resultRow} onClick={onNavigate}>
                       {label}
-                      {variant === "rows" ? <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+                      {sidebar ? null : <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
                     </Link>
                   ) : (
                     // Language and light/dark mode live in the account menu; say where.
-                    <div className={row}>{label}</div>
+                    <div className={sidebar ? "block px-2 py-1 text-nav text-sidebar-foreground" : "flex min-h-14 items-center gap-3 px-4 py-3"}>{label}</div>
                   )}
                 </li>
               );

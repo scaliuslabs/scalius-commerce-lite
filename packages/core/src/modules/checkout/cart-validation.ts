@@ -1,4 +1,5 @@
 import type { Database } from "@scalius/database/client";
+import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
@@ -18,6 +19,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { variantOptionLabelSql } from "../products/option-model";
 import { hasFulfiller } from "../fulfilment/registry";
+import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital/deliverable";
 import {
     loadProductMediaProjections,
@@ -30,6 +32,12 @@ import {
     type ProductBundleRow,
 } from "../products/bundles";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
+import {
+    GIFT_CARD_MAX_QUANTITY_PER_LINE,
+    GIFT_CARD_MAX_UNITS_PER_ORDER,
+    isGiftCardLineQuantityAllowed,
+    isGiftCardOrderUnitsAllowed,
+} from "@scalius/shared/gift-card-tender";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -432,6 +440,8 @@ export function resolveStorefrontCartValidationFromRows(
     for (const item of items) {
         requestedByVariant.set(item.variantId, (requestedByVariant.get(item.variantId) ?? 0) + item.quantity);
     }
+    // Gift-card units requested by the lines before this one (the per-order cap).
+    let giftCardUnitsBefore = 0;
 
     items.forEach((item, index) => {
         const product = productMap.get(item.productId);
@@ -524,6 +534,28 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
+        if (isGiftCard) {
+            // One card per unit is issued in one batch: 20 a line, 50 an order (§11.3).
+            const unitsBefore = giftCardUnitsBefore;
+            giftCardUnitsBefore += item.quantity;
+            const orderRoom = Math.max(0, GIFT_CARD_MAX_UNITS_PER_ORDER - unitsBefore);
+            const lineAllowed = isGiftCardLineQuantityAllowed(item.quantity);
+            if (!lineAllowed || !isGiftCardOrderUnitsAllowed(unitsBefore + item.quantity)) {
+                const allowed = Math.min(GIFT_CARD_MAX_QUANTITY_PER_LINE, orderRoom);
+                addIssue(issues, item, index, {
+                    code: "QUANTITY_UNAVAILABLE",
+                    action: allowed > 0 ? "reduce_quantity" : "remove",
+                    message: lineAllowed
+                        ? `One order can hold at most ${GIFT_CARD_MAX_UNITS_PER_ORDER} gift cards.`
+                        : `You can buy at most ${GIFT_CARD_MAX_QUANTITY_PER_LINE} of ${displayName} at a time.`,
+                    productName: product.name,
+                    variantLabel: requestedVariantLabel,
+                    availableQuantity: allowed,
+                });
+                return;
+            }
+        }
+
         const availableQuantity = availableForVariant(variant, pool);
         const requestedForVariant = requestedByVariant.get(variant.id) ?? item.quantity;
         if (availableQuantity < requestedForVariant) {
@@ -541,7 +573,11 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
-        const schemaRead = parseStoredCustomizationSchema(product.customizationSchema);
+        const storedSchemaRead = parseStoredCustomizationSchema(product.customizationSchema);
+        // A gift card also takes the recipient inputs the product page shows.
+        const schemaRead = storedSchemaRead.ok && isGiftCard
+            ? { ok: true as const, schema: withGiftCardRecipientFields(storedSchemaRead.schema) }
+            : storedSchemaRead;
         if (!schemaRead.ok) {
             // A malformed stored schema is a product error, never "no inputs".
             addIssue(issues, item, index, {
@@ -567,6 +603,23 @@ export function resolveStorefrontCartValidationFromRows(
                 propertyKey: resolvedProperties.key,
             });
             return;
+        }
+
+        if (isGiftCard) {
+            // The recipient is where the card is sent: refuse a bad one now,
+            // never drop it silently at issue.
+            const recipientIssue = giftCardLineRecipientIssue(resolvedProperties.properties);
+            if (recipientIssue) {
+                addIssue(issues, item, index, {
+                    code: "PROPERTIES_INVALID",
+                    action: "edit_properties",
+                    message: `${displayName}: ${recipientIssue.message}`,
+                    productName: product.name,
+                    variantLabel: requestedVariantLabel,
+                    propertyKey: recipientIssue.propertyKey,
+                });
+                return;
+            }
         }
 
         const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);
@@ -642,26 +695,51 @@ function resolveCartBundleSavings(
     bundleRows: readonly ProductBundleRow[],
     currencyCode: string,
 ): StorefrontCartBundleSaving[] {
-    for (const item of items) item.bundleDiscountMinor = 0;
-    if (bundleRows.length === 0) return [];
+    const { lineSavings, bundles } = bundleLineSavings(
+        items.filter((item) => !item.isGiftCard),
+        bundleRows,
+        currencyCode,
+    );
+    for (const item of items) item.bundleDiscountMinor = lineSavings.get(item) ?? 0;
+    return bundles;
+}
+
+/** A cart line as quantity bundles price it: catalog unit price before buyer-input surcharges. */
+export interface BundlePricedLine {
+    productId: string;
+    baseUnitPriceMinor: number;
+    quantity: number;
+}
+
+/**
+ * The one bundle pricing rule (`bundleGroupPricing` over every line of a
+ * product) for the order, the tax quote and the cart's discount preview.
+ */
+export function bundleLineSavings<TLine extends BundlePricedLine>(
+    lines: readonly TLine[],
+    bundleRows: readonly ProductBundleRow[],
+    currencyCode: string,
+): { lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] } {
+    const lineSavings = new Map<TLine, number>();
+    if (bundleRows.length === 0) return { lineSavings, bundles: [] };
     const tiersByProduct = productBundleTiersByProduct(bundleRows);
-    const linesByProduct = new Map<string, StorefrontCartValidatedItem[]>();
-    for (const item of items) {
-        if (item.isGiftCard || !tiersByProduct.has(item.productId)) continue;
-        const lines = linesByProduct.get(item.productId) ?? [];
-        lines.push(item);
-        linesByProduct.set(item.productId, lines);
+    const linesByProduct = new Map<string, TLine[]>();
+    for (const item of lines) {
+        if (!tiersByProduct.has(item.productId)) continue;
+        const group = linesByProduct.get(item.productId) ?? [];
+        group.push(item);
+        linesByProduct.set(item.productId, group);
     }
     const savings: StorefrontCartBundleSaving[] = [];
-    for (const [productId, lines] of linesByProduct) {
+    for (const [productId, group] of linesByProduct) {
         const pricing = bundleGroupPricing(
-            lines.map((line) => ({ key: String(line.index), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
+            group.map((line, position) => ({ key: String(position), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
             tiersByProduct.get(productId)!,
             currencyCode,
         );
         if (!pricing.tier || pricing.savingMinor === 0) continue;
         pricing.lineSavings.forEach((saving, position) => {
-            lines[position]!.bundleDiscountMinor = saving.savingMinor;
+            lineSavings.set(group[position]!, saving.savingMinor);
         });
         savings.push({
             productId,
@@ -671,7 +749,22 @@ function resolveCartBundleSavings(
             savingMinor: pricing.savingMinor,
         });
     }
-    return savings;
+    return { lineSavings, bundles: savings };
+}
+
+/**
+ * Bundle savings for the cart's discount preview (before delivery is known),
+ * from the products' active tiers. Lines are priced as the buyer's cart sends
+ * them; the authoritative tax quote re-prices from the catalog.
+ */
+export async function previewStorefrontBundleSavings<TLine extends BundlePricedLine>(
+    db: Database,
+    lines: readonly TLine[],
+    currencyCode: string,
+): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
+    const productIds = [...new Set(lines.map((line) => line.productId))];
+    const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
+    return bundleLineSavings(lines, (bundleRows ?? []) as ProductBundleRow[], currencyCode);
 }
 
 export async function validateStorefrontCartItems(

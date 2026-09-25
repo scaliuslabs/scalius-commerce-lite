@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
@@ -13,6 +14,10 @@ import { RichContent } from "../ui/rich-content";
 import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
+import { SaveConflict } from "@/components/admin/shared/SaveBar";
+import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
+import { pageQueryOptions } from "@/lib/api-query-options/pages";
+import { toPageFormValues } from "@/lib/page-form-values";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
@@ -68,6 +73,7 @@ function ArticleTagsInput({ value, onChange }: { value: string[]; onChange: (val
 
 export function PageForm({ defaultValues, isEdit = false, contentType = "page", backUrl }: PageFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const t = useMessages(pageFormMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { hasPermission } = usePermissions();
@@ -122,12 +128,6 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     onSuccess: (result) => {
       const mutation = result as ApiResult<typeof putApiV1AdminPagesById> &
         Partial<ApiResult<typeof postApiV1AdminPages>>;
-      const id = mutation.id || defaultValues?.id;
-      form.reset({
-        ...form.getValues(),
-        ...(id ? { id } : {}),
-        revision: mutation.revision,
-      });
       if (!isEdit && mutation.id) {
         if (isArticle) {
           void navigate({
@@ -145,7 +145,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       }
     },
     onError: (error, message) => {
-      if (error instanceof AdminApiResponseError && error.code === "PAGE_REVISION_CONFLICT") return t("conflict");
+      if (error instanceof AdminApiResponseError && error.code === "PAGE_REVISION_CONFLICT") throw new SaveConflict(t("conflict"));
       if (!message.includes("slug already exists")) return undefined;
       form.setError("slug", { type: "server", message: t("addressTaken") });
       return t("addressTaken");
@@ -188,6 +188,15 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       canSave={canSave}
       form={form}
       onSave={submitEntity}
+      savedValues={(result) => {
+        const saved = result as ApiResult<typeof putApiV1AdminPagesById> &
+          Partial<ApiResult<typeof postApiV1AdminPages>>;
+        return { ...(saved.id ? { id: saved.id } : {}), revision: saved.revision };
+      }}
+      reload={isEdit && defaultValues?.id ? async () => {
+        const latest = await queryClient.fetchQuery({ ...pageQueryOptions(defaultValues.id!), staleTime: 0 });
+        rebaseForm(form, copyValues(form.formState.defaultValues as PageFormInput), toPageFormValues(latest) as PageFormInput);
+      } : undefined}
     >
       {/* FormContainer shows the read-only notice and disables the fields when saving isn't allowed. */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">

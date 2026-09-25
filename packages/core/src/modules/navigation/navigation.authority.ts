@@ -321,6 +321,57 @@ export function buildNavigationHierarchy<T extends NavigationHierarchyRow>(
     return roots;
 }
 
+/**
+ * A published hierarchy cut to at most `maxItems` enabled items for a
+ * placement that renders fewer than the menu holds (a menu re-published past
+ * its placement's budget). Level by level, round-robin across parents, so
+ * every top item stays and each keeps its first children; a disabled item
+ * and its subtree are dropped, as the public projection drops them.
+ */
+export function trimNavigationHierarchy<T extends NavigationHierarchyRow & { isEnabled: boolean }>(
+    roots: readonly NavigationHierarchyNode<T>[],
+    maxItems: number,
+): NavigationHierarchyNode<T>[] {
+    const copies = new Map<NavigationHierarchyNode<T>, NavigationHierarchyNode<T>>();
+    const copy = (node: NavigationHierarchyNode<T>) => {
+        const next = { ...node, children: [] };
+        copies.set(node, next);
+        return next;
+    };
+    const kept: NavigationHierarchyNode<T>[] = [];
+    let used = 0;
+    let level: Array<{ node: NavigationHierarchyNode<T>; parent: NavigationHierarchyNode<T> | null }> =
+        roots.map((node) => ({ node, parent: null }));
+    while (level.length > 0 && used < maxItems) {
+        const queues = new Map<NavigationHierarchyNode<T> | null, NavigationHierarchyNode<T>[]>();
+        for (const entry of level) {
+            if (!entry.node.item.isEnabled) continue;
+            queues.set(entry.parent, [...(queues.get(entry.parent) ?? []), entry.node]);
+        }
+        const next: typeof level = [];
+        const lists = [...queues.entries()];
+        for (let rank = 0; used < maxItems && lists.some(([, list]) => rank < list.length); rank += 1) {
+            for (const [parent, list] of lists) {
+                const node = list[rank];
+                if (!node || used >= maxItems) continue;
+                used += 1;
+                const clone = copy(node);
+                if (parent) copies.get(parent)!.children.push(clone);
+                else kept.push(clone);
+                for (const child of node.children) next.push({ node: child, parent: node });
+            }
+        }
+        level = next;
+    }
+    // Siblings keep their menu order whatever the round-robin order.
+    const order = (list: NavigationHierarchyNode<T>[]) => {
+        list.sort(compareNavigationHierarchyRows);
+        for (const node of list) order(node.children);
+        return list;
+    };
+    return order(kept);
+}
+
 function compareNavigationHierarchyRows<T extends NavigationHierarchyRow>(
     left: NavigationHierarchyNode<T>,
     right: NavigationHierarchyNode<T>,

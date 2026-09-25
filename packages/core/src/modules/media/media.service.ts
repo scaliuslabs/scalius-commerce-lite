@@ -972,11 +972,17 @@ export async function enqueueMediaVariantsJob(
     queue: MediaVariantsQueue | undefined,
     images: ImagesBinding | undefined,
     file: { id: string; kind: string; mimeType: string; variantWidth?: number | null },
+    /**
+     * After an upload the job waits for the dashboard's own renditions; a
+     * public read that already shows the original (a placeholder on cards)
+     * queues it at once (`delaySeconds: 0`).
+     */
+    { delaySeconds = MEDIA_VARIANTS_JOB_DELAY_SECONDS }: { delaySeconds?: number } = {},
 ): Promise<boolean> {
     if (!queue || !images || !needsMediaVariants(file)) return false;
     const message: MediaVariantsQueueMessage = { type: "media.render_variants", mediaId: file.id };
     try {
-        await queue.send(message, { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS });
+        await queue.send(message, { delaySeconds });
         return true;
     } catch (error) {
         console.warn("[media] rendition job enqueue failed", {
@@ -1066,6 +1072,47 @@ export async function backfillMissingMediaVariants(
         }
     }
     return { scanned: attempted.size, generated, failed, hasMore };
+}
+
+/** Queue messages per `sendBatch` call (Cloudflare Queues: at most 100 per call). */
+const VARIANT_FANOUT_BATCH = 100;
+
+export interface MediaVariantsBatchQueue {
+    sendBatch(messages: Array<{ body: MediaVariantsQueueMessage; delaySeconds?: number }>): Promise<unknown>;
+}
+
+/**
+ * The scheduled backfill's candidates (same filter and order), sent to the
+ * jobs queue with no delay so consumers render them in parallel: after the
+ * rendition ladder migration (0094) every image publishes its original
+ * again, and rendering inline two at a time would take one 240-image cron
+ * run per 15 minutes. `skip` leaves the first candidates to an inline run.
+ * A job for an image that is done by then skips it.
+ */
+export async function enqueueMediaVariantsBacklog(
+    db: Database,
+    queue: MediaVariantsBatchQueue,
+    { skip, limit, now = Date.now }: { skip: number; limit: number; now?: () => number },
+): Promise<{ queued: number; hasMore: boolean }> {
+    if (limit < 1) return { queued: 0, hasMore: false };
+    const rows = await db.select({ id: media.id }).from(media).where(and(
+        eq(media.kind, "image"),
+        inArray(media.status, ["ready", "trashed"]),
+        isNull(media.variantWidth),
+        inArray(media.mimeType, [...VARIANT_SOURCE_MIME_TYPES]),
+        lt(media.updatedAt, new Date(now() - VARIANT_BACKFILL_QUIET_MS)),
+    )).orderBy(asc(media.updatedAt), asc(media.id)).limit(limit + 1).offset(Math.max(0, skip));
+    const ids = rows.slice(0, limit).map(({ id }) => id);
+    let queued = 0;
+    for (let start = 0; start < ids.length; start += VARIANT_FANOUT_BATCH) {
+        const chunk = ids.slice(start, start + VARIANT_FANOUT_BATCH);
+        await queue.sendBatch(chunk.map((mediaId) => ({
+            body: { type: "media.render_variants" as const, mediaId },
+            delaySeconds: 0,
+        })));
+        queued += chunk.length;
+    }
+    return { queued, hasMore: rows.length > limit };
 }
 
 export async function moveMediaFiles(

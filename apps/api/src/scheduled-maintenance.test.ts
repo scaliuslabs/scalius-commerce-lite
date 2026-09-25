@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
+    enqueueMediaVariantsBacklog: vi.fn(),
   };
 });
 
@@ -100,6 +101,7 @@ vi.mock("@scalius/core/modules/payments", () => ({
 
 vi.mock("@scalius/core/modules/media", () => ({
   backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
+  enqueueMediaVariantsBacklog: mocks.enqueueMediaVariantsBacklog,
 }));
 
 vi.mock("./utils/cache-generation", () => ({
@@ -123,6 +125,7 @@ import {
   MEDIA_RENDITION_BACKFILL_CONCURRENCY,
   MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
   MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+  MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
@@ -270,6 +273,7 @@ describe("runScheduledMaintenance", () => {
       hasMore: false,
     });
     mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValue({ queued: 0, hasMore: false });
     mocks.sweepReviewRequests.mockResolvedValue({ queued: 0, skipped: 0 });
     mocks.reviewsChangedSince.mockResolvedValue(false);
     mocks.sweepDigitalUploads.mockResolvedValue({ aborted: 0 });
@@ -638,12 +642,31 @@ describe("runScheduledMaintenance", () => {
       },
     );
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    // The backlog goes to the jobs queue first; nothing queued, the run renders inline.
+    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, env.JOBS_QUEUE, {
+      skip: 0,
+      limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
+    });
 
     const executionCtx = createExecutionContext();
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });
     await runScheduledMaintenance(env, executionCtx);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
+  });
+
+  it("fans a rendition backlog out to the jobs queue instead of rendering it inline", async () => {
+    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 1_000, hasMore: true });
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
+    // Each queued job bumps the generation when it renders; the run does not.
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
+    // A queue that refuses the batch leaves the inline backfill to render.
+    mocks.enqueueMediaVariantsBacklog.mockRejectedValueOnce(new Error("queue down"));
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 
   it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {

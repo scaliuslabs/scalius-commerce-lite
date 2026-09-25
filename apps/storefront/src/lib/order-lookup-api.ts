@@ -3,6 +3,7 @@
 // proxies their scripts call. The receipt token only ever becomes an httpOnly
 // cookie; it is never returned to the browser or logged.
 import { getAccountOwnerReceiptProof } from "@/lib/api/orders";
+import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "@/lib/api/customer-auth";
 import { apiFetch } from "@/lib/api/transport";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
@@ -128,15 +129,89 @@ function trackedReceiptUrl(orderId: string): string {
   return `/order-success?${new URLSearchParams({ orderId, view: "status" })}`;
 }
 
-/** Track your order: the buyer holds the number and phone, so the API says where the code went. */
-export async function sendOrderLookupCode(input: { reference: string; phone: string }) {
-  return sentResult(await postOrderCodeApi("/orders/lookup/send-otp", input, {
-    auth: false,
-    fallbackCode: "ORDER_LOOKUP_SEND_FAILED",
-  }));
+/** The API's per-IP limit must see the buyer, not the storefront Worker. */
+function buyerIpHeaders(request: Request): Record<string, string> {
+  const ip = request.headers.get("cf-connecting-ip")?.trim();
+  return ip ? { "cf-connecting-ip": ip } : {};
 }
 
-export async function verifyOrderLookupCode(input: { reference: string; phone: string; code: string }) {
+export type OrderCodeChannel = "email" | "sms" | "whatsapp";
+
+/** Track your order, status only: no address, phone, email or surname. */
+export interface OrderLookupStatus {
+  orderNumber: number | null;
+  firstName: string | null;
+  status: string;
+  paymentStatus: string;
+  createdAt: string | null;
+  requiresShipping: boolean;
+  shippingMethodKind: "delivery" | "pickup" | null;
+  shippingMethodName: string | null;
+  currencyCode: string | null;
+  subtotal: number;
+  shipping: number;
+  discount: number;
+  tax: number;
+  total: number;
+  paid: number;
+  balanceDue: number;
+  items: Array<{ productName: string | null; variantLabel: string | null; quantity: number; productImage: string | null }>;
+  tracking: {
+    progress: CustomerOrderProgress;
+    timeline: CustomerOrderTimelineEvent[];
+    shipments: Array<{ statusLabel: string; courierName: string | null; trackingId: string | null; trackingUrl: string | null }>;
+  };
+  /** Where a code for the full order can go: the store's chosen channels, masked contacts. */
+  codeOptions: Array<{ channel: OrderCodeChannel; destination: string }>;
+}
+
+export async function getOrderLookupStatus(
+  request: Request,
+  reference: string,
+): Promise<OrderCodeResult<OrderLookupStatus>> {
+  try {
+    const response = await apiFetch(
+      "/orders/lookup/status",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...buyerIpHeaders(request) },
+        body: JSON.stringify({ reference }),
+        cache: "no-store",
+      },
+      { retries: 0, timeout: ORDER_CODE_TIMEOUT_MS, auth: true },
+    );
+    const json: unknown = await response.json().catch(() => null);
+    const order = isRecord(json) && isRecord(json.data) && isRecord(json.data.order) ? json.data.order : null;
+    if (response.ok && order) return { ok: true, data: order as unknown as OrderLookupStatus };
+    const error = isRecord(json) && isRecord(json.error) ? json.error : {};
+    const details = isRecord(error.details) ? error.details : {};
+    const message = trimmedString(error.message);
+    const retryAfterSeconds = positiveSeconds(details.retryAfterSeconds ?? response.headers.get("Retry-After"));
+    return {
+      ok: false,
+      failure: {
+        status: response.ok ? 502 : response.status,
+        errorCode: trimmedString(error.code) || "ORDER_LOOKUP_FAILED",
+        ...(message ? { message } : {}),
+        ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+      },
+    };
+  } catch (error) {
+    console.error("[order-lookup] status request failed:", error instanceof Error ? error.name : typeof error);
+    return { ok: false, failure: { status: 502, errorCode: "ORDER_LOOKUP_FAILED" } };
+  }
+}
+
+/** Track your order: a code to the contact saved on the order, through a channel the store chose. */
+export async function sendOrderLookupCode(input: { reference: string; channel?: OrderCodeChannel }) {
+  return sentResult(await postOrderCodeApi(
+    "/orders/lookup/send-otp",
+    { reference: input.reference, ...(input.channel ? { channel: input.channel } : {}) },
+    { auth: false, fallbackCode: "ORDER_LOOKUP_SEND_FAILED" },
+  ));
+}
+
+export async function verifyOrderLookupCode(input: { reference: string; code: string }) {
   return verifiedResult(
     await postOrderCodeApi("/orders/lookup/verify-otp", input, {
       auth: true,

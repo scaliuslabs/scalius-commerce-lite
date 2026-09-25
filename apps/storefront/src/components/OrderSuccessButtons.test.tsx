@@ -58,25 +58,29 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
 
   it("shows a signed-in buyer's own saved order as one line with a link to it", async () => {
     document.cookie = "cs_auth=1; Path=/";
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, owned: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await renderReceipt(true);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/customer-auth/orders/ord_1",
-      { credentials: "same-origin", cache: "no-store" },
+      "/api/customer-auth/orders/ord_1/owned",
+      { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } },
     );
     expect(host.textContent).toContain("Saved to your account · View order");
     expect(host.querySelector('a[href="/account/orders/ord_1"]')?.textContent).toBe("View order");
     expect(button("Save to my account")).toBeUndefined();
   });
 
-  it("hides the account line for an order saved to someone else's account", async () => {
+  it("hides the account line for an order saved to someone else's account, asked quietly (no 404)", async () => {
     document.cookie = "cs_auth=1; Path=/";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 404 })));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, owned: false }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
 
     await renderReceipt(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/customer-auth/orders/ord_1/owned");
 
     expect(host.textContent).not.toContain("Saved to your account");
     expect(button("Save to my account")).toBeUndefined();

@@ -4,10 +4,59 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type ProductCardFacts = {
+    /**
+     * The published brand entity.
+     */
+    brand: {
+        name: string;
+        slug: string;
+    } | null;
+    /**
+     * Up to four "Name: value" lines from key-spec attributes, in spec-table order.
+     */
+    keySpecs: Array<string>;
+    /**
+     * Option axes with two or more values, in position order.
+     */
+    options: Array<{
+        /**
+         * The merchant's option axis name.
+         */
+        name: string;
+        kind: 'color' | 'size' | 'other';
+        /**
+         * Values sold on at least one live SKU.
+         */
+        count: number;
+        swatches: Array<{
+            label: string;
+            /**
+             * `#rrggbb` when a swatch attribute value of the same name has one.
+             */
+            hex: string | null;
+        }>;
+    }>;
+    /**
+     * Units sold in the last 30 days from real orders; null below 10.
+     */
+    soldLast30Days: number | null;
+    packSize: string | null;
+    /**
+     * Free when the product ships free, else the cheapest active delivery rate; null without a rate.
+     */
+    delivery: {
+        free: true;
+    } | {
+        free: false;
+        feeFrom: number;
+    } | unknown;
+};
+
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 4;
+    version: 5;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -106,6 +155,11 @@ export type StorefrontThemeDocument = {
                 [key: string]: never;
             };
         };
+        navigation: {
+            source: 'menu' | 'category-tree' | 'tree+menu';
+            maxTopItems: number;
+            linkBudget: number;
+        };
         desktopNav: {
             variant: 'dropdown';
             settings: {
@@ -199,15 +253,15 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
+        } | {
+            variant: 'detailed';
+            settings: {
+                [key: string]: never;
+            };
         };
         listing: {
             layout: {
-                variant: 'sidebar-grid';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'bar-drawer';
+                variant: 'grid';
                 settings: {
                     [key: string]: never;
                 };
@@ -226,6 +280,13 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
+            };
+            filters: {
+                style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
+                openByDefault: boolean;
+                column?: number;
+                rowPitch?: number;
+                label?: number;
             };
             toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';
@@ -584,6 +645,7 @@ export type StorefrontStoreShape = {
     skuCount: number;
     topCategoryCount: number;
     categoryDepth: number;
+    categoryGroups: number;
     menuTopItems: number;
     menuDepth: number;
     menuGroups: number;
@@ -596,6 +658,28 @@ export type StorefrontStoreShape = {
     hasReviews: boolean;
     hasQuestions: boolean;
     hasContentBlocks: boolean;
+};
+
+export type AppliedGiftCard = {
+    /**
+     * Opaque, short-lived apply handle. Send it as `giftCards[].handle` with the tax quote and the order; never the code.
+     */
+    handle: string;
+    handleExpiresAt: string;
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+};
+
+export type GiftCardBalance = {
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+    status: 'active' | 'disabled' | 'expired';
 };
 
 export type OrderLineExtras = {
@@ -663,9 +747,16 @@ export type OrderLineWarrantyExtra = {
     } | null;
 };
 
+export type OrderGiftCardTender = {
+    last4: string;
+    amount: number;
+    amountMinor: number;
+};
+
 export type CustomerAccountSummary = {
     unreadInbox: number;
     reviewsToWrite: number;
+    reviewsWritten: number;
     downloads: number;
     giftCards: number;
     activeWarranties: number;
@@ -710,6 +801,19 @@ export type BuyerReview = {
     editedAt: string | null;
     version: number;
     canEdit: boolean;
+};
+
+export type BuyerProductReviewState = {
+    state: 'eligible';
+    orderItemId: string;
+    displayName: string;
+} | {
+    state: 'reviewed';
+    review: BuyerReview;
+} | {
+    state: 'ineligible';
+} | {
+    state: 'disabled';
 };
 
 export type ReviewWriteResult = {
@@ -790,6 +894,34 @@ export type RevealedLicenceKey = {
     keyId: string;
     key: string;
     last4: string;
+};
+
+export type BuyerGiftCard = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    createdAt: string;
+    transactions: Array<BuyerGiftCardTransaction>;
+};
+
+export type BuyerGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    createdAt: string;
 };
 
 export type BuyerWarranty = {
@@ -1282,6 +1414,58 @@ export type WarrantyPolicy = {
     productCount: number;
     createdAt: string;
     updatedAt: string;
+};
+
+export type AdminGiftCardSummary = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    customer: {
+        id: string;
+        name: string;
+    } | null;
+    recipientName: string | null;
+    recipientContactMasked: string | null;
+    createdAt: string;
+    version: number;
+};
+
+export type AdminGiftCardDetail = AdminGiftCardSummary & {
+    note: string | null;
+    message: string | null;
+    recipientEmail: string | null;
+    recipientPhone: string | null;
+    sourceOrder: {
+        id: string;
+        orderNumber: string;
+    } | null;
+    issuedBy: {
+        id: string;
+        name: string;
+    } | null;
+};
+
+export type AdminGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    actorType: 'system' | 'admin' | 'customer';
+    actorName: string | null;
+    reason: string | null;
+    createdAt: string;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -1927,15 +2111,15 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1944,6 +2128,9 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2018,15 +2205,15 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2035,6 +2222,9 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2105,15 +2295,15 @@ export type GetApiV1AttributesSearchFiltersResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2122,6 +2312,9 @@ export type GetApiV1AttributesSearchFiltersResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2204,6 +2397,50 @@ export type GetApiV1CollectionsResponses = {
 
 export type GetApiV1CollectionsResponse = GetApiV1CollectionsResponses[keyof GetApiV1CollectionsResponses];
 
+export type GetApiV1CollectionsDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/collections/directory';
+};
+
+export type GetApiV1CollectionsDirectoryErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryError = GetApiV1CollectionsDirectoryErrors[keyof GetApiV1CollectionsDirectoryErrors];
+
+export type GetApiV1CollectionsDirectoryResponses = {
+    /**
+     * Collection directory
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                name: string;
+                canonicalPath: string | null;
+                productCount: number;
+                imageUrl: string | null;
+                imageAlt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryResponse = GetApiV1CollectionsDirectoryResponses[keyof GetApiV1CollectionsDirectoryResponses];
+
 export type GetApiV1CollectionsByIdData = {
     body?: never;
     path: {
@@ -2222,6 +2459,7 @@ export type GetApiV1CollectionsByIdData = {
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/collections/{id}';
 };
@@ -2299,6 +2537,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -2331,6 +2570,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -2363,15 +2603,15 @@ export type GetApiV1CollectionsByIdResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2380,6 +2620,9 @@ export type GetApiV1CollectionsByIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2633,6 +2876,10 @@ export type GetApiV1BrandsBySlugProductsData = {
          * Has discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
     };
     url: '/api/v1/brands/{slug}/products';
 };
@@ -2721,6 +2968,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -2754,15 +3002,15 @@ export type GetApiV1BrandsBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2771,6 +3019,9 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2825,6 +3076,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -3274,6 +3526,51 @@ export type GetApiV1NavigationResponses = {
 };
 
 export type GetApiV1NavigationResponse = GetApiV1NavigationResponses[keyof GetApiV1NavigationResponses];
+
+export type GetApiV1NavigationCategoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/navigation/categories';
+};
+
+export type GetApiV1NavigationCategoriesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesError = GetApiV1NavigationCategoriesErrors[keyof GetApiV1NavigationCategoriesErrors];
+
+export type GetApiV1NavigationCategoriesResponses = {
+    /**
+     * Category tree
+     */
+    200: {
+        success: true;
+        data: {
+            nodes: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                parentId: string | null;
+                canonicalPath: string | null;
+                imageUrl: string | null;
+            }>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesResponse = GetApiV1NavigationCategoriesResponses[keyof GetApiV1NavigationCategoriesResponses];
 
 export type GetApiV1NavigationPlacementsData = {
     body?: never;
@@ -4115,6 +4412,10 @@ export type PostApiV1DiscountsValidateData = {
             price: number;
             quantity: number;
             variantId?: string;
+            /**
+             * Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.
+             */
+            basePrice?: number;
         }>;
         /**
          * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
@@ -4165,6 +4466,16 @@ export type PostApiV1DiscountsValidateResponses = {
         success: true;
         data: {
             totalDiscount: number;
+            /**
+             * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
+             */
+            bundleDiscountAmount: number;
+            bundles: Array<{
+                productId: string;
+                quantity: number;
+                discountType: 'percentage' | 'fixed_price';
+                label: string | null;
+            }>;
             discounts: Array<{
                 promotionId: string;
                 title: string;
@@ -4234,6 +4545,10 @@ export type PostApiV1DiscountsValidateResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
         };
     };
@@ -4500,6 +4815,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                         average: number;
                         count: number;
                     } | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -4526,6 +4842,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                         average: number;
                         count: number;
                     } | null;
+                    cardFacts?: ProductCardFacts;
                 } | null;
             }>;
             presentation: {
@@ -4581,6 +4898,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                             average: number;
                             count: number;
                         } | null;
+                        cardFacts?: ProductCardFacts;
                     }>;
                     category: {
                         id: string;
@@ -4779,6 +5097,17 @@ export type GetApiV1StorefrontLayoutResponses = {
                     }>;
                 }>;
             }>;
+            categoryTree: {
+                nodes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    parentId: string | null;
+                    canonicalPath: string | null;
+                    imageUrl: string | null;
+                }>;
+                truncated: boolean;
+            };
             footer: {
                 logo: {
                     src: string;
@@ -4913,6 +5242,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pickupAvailableText: string;
                 noDeliveryNeededBadgeText: string;
                 payAtServiceText: string;
+                productBundleTierText: string;
+                productBundleSetPriceText: string;
             };
         };
     };
@@ -5103,6 +5434,7 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                         average: number;
                         count: number;
                     } | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 category: {
                     id: string;
@@ -9607,12 +9939,10 @@ export type GetApiV1CheckoutConfigResponses = {
             }>;
             activeDefaultMethod?: string;
             guestCheckoutEnabled: boolean;
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields: Array<'email' | 'phone'>;
-                optionalContactFields: Array<'email' | 'phone'>;
-                defaultOtpChannel: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
@@ -9643,6 +9973,218 @@ export type GetApiV1CheckoutConfigResponses = {
 };
 
 export type GetApiV1CheckoutConfigResponse = GetApiV1CheckoutConfigResponses[keyof GetApiV1CheckoutConfigResponses];
+
+export type PostApiV1CheckoutGiftCardsApplyData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/apply';
+};
+
+export type PostApiV1CheckoutGiftCardsApplyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyError = PostApiV1CheckoutGiftCardsApplyErrors[keyof PostApiV1CheckoutGiftCardsApplyErrors];
+
+export type PostApiV1CheckoutGiftCardsApplyResponses = {
+    /**
+     * The card can pay
+     */
+    200: {
+        success: true;
+        data: AppliedGiftCard;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyResponse = PostApiV1CheckoutGiftCardsApplyResponses[keyof PostApiV1CheckoutGiftCardsApplyResponses];
+
+export type PostApiV1CheckoutGiftCardsBalanceData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/balance';
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceError = PostApiV1CheckoutGiftCardsBalanceErrors[keyof PostApiV1CheckoutGiftCardsBalanceErrors];
+
+export type PostApiV1CheckoutGiftCardsBalanceResponses = {
+    /**
+     * Gift card balance
+     */
+    200: {
+        success: true;
+        data: GiftCardBalance;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceResponse = PostApiV1CheckoutGiftCardsBalanceResponses[keyof PostApiV1CheckoutGiftCardsBalanceResponses];
 
 export type PostApiV1CustomerAuthSendOtpData = {
     body?: {
@@ -11097,6 +11639,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 requiresCardForm: boolean;
                 hostedRedirect: boolean;
             };
+            giftCardTenders: Array<OrderGiftCardTender>;
         };
     };
 };
@@ -12921,6 +13464,98 @@ export type PostApiV1CustomerAuthReviewsResponses = {
 
 export type PostApiV1CustomerAuthReviewsResponse = PostApiV1CustomerAuthReviewsResponses[keyof PostApiV1CustomerAuthReviewsResponses];
 
+export type GetApiV1CustomerAuthReviewsProductsByProductIdData = {
+    body?: never;
+    path: {
+        productId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/reviews/products/{productId}';
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdError = GetApiV1CustomerAuthReviewsProductsByProductIdErrors[keyof GetApiV1CustomerAuthReviewsProductsByProductIdErrors];
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponses = {
+    /**
+     * Review state
+     */
+    200: {
+        success: true;
+        data: BuyerProductReviewState;
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponse = GetApiV1CustomerAuthReviewsProductsByProductIdResponses[keyof GetApiV1CustomerAuthReviewsProductsByProductIdResponses];
+
 export type PatchApiV1CustomerAuthReviewsByIdData = {
     body: EditReviewBody;
     path: {
@@ -13343,6 +13978,308 @@ export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses = {
 };
 
 export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponse = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses];
+
+export type GetApiV1CustomerAuthGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards';
+};
+
+export type GetApiV1CustomerAuthGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsError = GetApiV1CustomerAuthGiftCardsErrors[keyof GetApiV1CustomerAuthGiftCardsErrors];
+
+export type GetApiV1CustomerAuthGiftCardsResponses = {
+    /**
+     * Gift cards saved to the account, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            giftCards: Array<BuyerGiftCard>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsResponse = GetApiV1CustomerAuthGiftCardsResponses[keyof GetApiV1CustomerAuthGiftCardsResponses];
+
+export type PostApiV1CustomerAuthGiftCardsSaveData = {
+    body: {
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/save';
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveError = PostApiV1CustomerAuthGiftCardsSaveErrors[keyof PostApiV1CustomerAuthGiftCardsSaveErrors];
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponses = {
+    /**
+     * The saved card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: BuyerGiftCard;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponse = PostApiV1CustomerAuthGiftCardsSaveResponses[keyof PostApiV1CustomerAuthGiftCardsSaveResponses];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/{giftCardId}/reveal';
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealError = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses = {
+    /**
+     * The formatted code (XXXX-XXXX-XXXX-XXXX)
+     */
+    200: {
+        success: true;
+        data: {
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponse = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses];
 
 export type GetApiV1CustomerAuthWarrantiesData = {
     body?: never;
@@ -13787,7 +14724,6 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -14559,6 +15495,10 @@ export type GetApiV1ProductsData = {
          */
         hasDiscount?: 'true' | 'false';
         /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
+        /**
          * Comma-separated product IDs
          */
         ids?: string;
@@ -14619,6 +15559,7 @@ export type GetApiV1ProductsResponses = {
                  * The next photo in gallery order, for a card's hover swap. Never a video.
                  */
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -14655,15 +15596,15 @@ export type GetApiV1ProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -14672,6 +15613,9 @@ export type GetApiV1ProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -16379,6 +17323,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         hasDiscount?: 'true' | 'false';
         /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
+        /**
          * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
          */
         includeSubcategories?: 'true' | 'false';
@@ -16487,11 +17435,16 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
                 updatedAt: string | null;
                 /**
@@ -16520,15 +17473,15 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -16537,6 +17490,9 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -16591,6 +17547,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -16620,6 +17577,7 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/categories/{slug}/product-summaries';
 };
@@ -16698,11 +17656,16 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
                 updatedAt: string | null;
                 /**
@@ -16731,15 +17694,15 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -16748,6 +17711,9 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -16802,6 +17768,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -17180,16 +18147,173 @@ export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponses = {
 
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponse = PostApiV1OrdersPaymentRecoveryVerifyOtpResponses[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpResponses];
 
+export type PostApiV1OrdersLookupStatusData = {
+    body: {
+        /**
+         * Order number ("#1001") or order id
+         */
+        reference: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/lookup/status';
+};
+
+export type PostApiV1OrdersLookupStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusError = PostApiV1OrdersLookupStatusErrors[keyof PostApiV1OrdersLookupStatusErrors];
+
+export type PostApiV1OrdersLookupStatusResponses = {
+    /**
+     * Where the order is
+     */
+    200: {
+        success: true;
+        data: {
+            order: {
+                orderNumber: number | null;
+                firstName: string | null;
+                status: string;
+                paymentStatus: string;
+                createdAt: string | null;
+                requiresShipping: boolean;
+                shippingMethodKind: string | null;
+                shippingMethodName: string | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotal: number;
+                shipping: number;
+                discount: number;
+                tax: number;
+                total: number;
+                paid: number;
+                balanceDue: number;
+                items: Array<{
+                    productName: string | null;
+                    variantLabel: string | null;
+                    quantity: number;
+                    productImage: string | null;
+                }>;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
+                codeOptions: Array<{
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    /**
+                     * Masked contact on the order ("01•••••678")
+                     */
+                    destination: string;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusResponse = PostApiV1OrdersLookupStatusResponses[keyof PostApiV1OrdersLookupStatusResponses];
+
 export type PostApiV1OrdersLookupSendOtpData = {
     body: {
         /**
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
+        channel?: 'email' | 'sms' | 'whatsapp';
     };
     path?: never;
     query?: never;
@@ -17312,10 +18436,6 @@ export type PostApiV1OrdersLookupVerifyOtpData = {
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
         code: string;
     };
     path?: never;
@@ -17561,6 +18681,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 paymentStatus: string;
                 paidAmount: number;
                 balanceDue: number;
+                giftCardTenders: Array<OrderGiftCardTender>;
                 createdAt: string | null;
                 updatedAt: string | null;
                 items: Array<{
@@ -17910,6 +19031,12 @@ export type PostApiV1OrdersCartValidationData = {
         zone?: string | null;
         area?: string | null;
         shippingMethodId?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -18014,6 +19141,11 @@ export type PostApiV1OrdersCartValidationResponses = {
              * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             delivery?: {
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -18068,6 +19200,12 @@ export type PostApiV1OrdersTaxQuoteData = {
          */
         discountCodes?: Array<string>;
         customerPhone?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -18126,6 +19264,27 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             taxAmount: number;
             totalMinor: number;
             totalAmount: number;
+            amountDueMinor: number;
+            amountDue: number;
+            /**
+             * The gift cards that pay part of this order, in the order they were added. A gift card never pays for gift-card lines; tender never changes taxes or discounts.
+             */
+            giftCardTenders: Array<{
+                handle: string;
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+                balance: number;
+                balanceMinor: number;
+            }>;
+            /**
+             * Gift cards that apply nothing, with the reason. An unusable card always reads "This gift card can't be used."
+             */
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             shippingMethod: {
                 id: string;
                 name: string;
@@ -18143,7 +19302,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 hours: string | null;
             } | null;
             /**
-             * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
+             * Payment methods for the amount due. Exactly ["gift_card"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
             /**
@@ -18224,6 +19383,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
             /**
              * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).
@@ -18282,6 +19445,7 @@ export type PostApiV1OrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        customerWhatsapp?: string | null;
         shippingAddress?: string | null;
         city?: string | null;
         zone?: string | null;
@@ -18312,8 +19476,18 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod' | 'gift_card';
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
+        /**
+         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
+         */
+        expectedAmountDueMinor?: number;
     };
     path?: never;
     query?: never;
@@ -18412,6 +19586,14 @@ export type PostApiV1OrdersResponses = {
             currencyCode: string;
             decimalPlaces: number;
             requiresShipping?: boolean;
+            amountDue?: number;
+            amountDueMinor?: number;
+            paidAmountMinor?: number;
+            giftCardTenders?: Array<{
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+            }>;
             message: string;
         };
     };
@@ -28199,6 +29381,7 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
                 unitPriceMinor: number;
                 quantity: number;
                 collectionIds?: Array<string>;
+                giftCard?: boolean;
             }>;
             shippingAmountMinor: number;
             submittedCodes: Array<string>;
@@ -42586,12 +43769,10 @@ export type GetApiV1AdminSettingsAuthResponses = {
                 customerAuth: number;
                 whatsapp: number;
             };
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields?: Array<'email' | 'phone'>;
-                optionalContactFields?: Array<'email' | 'phone'>;
-                defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
@@ -42608,12 +43789,10 @@ export type PostApiV1AdminSettingsAuthData = {
             customerAuth?: number;
             whatsapp?: number;
         };
-        authVerificationMethod?: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-        customerAuthPolicy?: {
-            otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-            requiredContactFields?: Array<'email' | 'phone'>;
-            optionalContactFields?: Array<'email' | 'phone'>;
-            defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+        customerIdentity?: {
+            email: 'required' | 'optional' | 'hidden';
+            whatsapp: 'off' | 'same_as_phone' | 'separate';
+            channels: Array<'email' | 'sms' | 'whatsapp'>;
         };
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;
@@ -46825,6 +48004,10 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    gift_card_sent: {
+                        subject: string;
+                        body: string;
+                    };
                     review_request: {
                         subject: string;
                         body: string;
@@ -46885,6 +48068,9 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     gift_card_issued: {
                         body: string;
                     };
+                    gift_card_sent: {
+                        body: string;
+                    };
                     review_request: {
                         body: string;
                     };
@@ -46906,7 +48092,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         email?: {
             subject: string;
             body: string;
@@ -47084,6 +48270,10 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    gift_card_sent: {
+                        subject: string;
+                        body: string;
+                    };
                     review_request: {
                         subject: string;
                         body: string;
@@ -47144,6 +48334,9 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     gift_card_issued: {
                         body: string;
                     };
+                    gift_card_sent: {
+                        body: string;
+                    };
                     review_request: {
                         body: string;
                     };
@@ -47160,12 +48353,12 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         subject: string;
         body: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         body: string;
         phone: string;
     };
@@ -47416,6 +48609,7 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             conversation_reply?: Array<'email' | 'sms'>;
             order_digital_delivered?: Array<'email' | 'sms'>;
             gift_card_issued?: Array<'email' | 'sms'>;
+            gift_card_sent?: Array<'email' | 'sms'>;
             review_request?: Array<'email' | 'sms'>;
         };
         whatsappTemplate?: {
@@ -49864,8 +51058,15 @@ export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         amount?: number;
         reason?: string;
-        gateway?: 'stripe' | 'sslcommerz' | 'cod';
+        /**
+         * Refund only payments taken by this method (gift_card: only the gift-card tenders).
+         */
+        gateway?: 'gift_card' | 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
+         */
+        settlement?: 'original' | 'store_credit';
         /**
          * One key per refund (per dialog opening). Repeating it returns the first refund.
          */
@@ -49963,6 +51164,16 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
+            settlement?: 'original' | 'store_credit';
+            /**
+             * The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).
+             */
+            storeCredit?: {
+                giftCardId: string;
+                last4: string;
+                amount: number;
+                amountMinor: number;
+            };
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -53638,6 +54849,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             customerName: string;
             customerPhone: string;
             customerEmail: string | null;
+            customerWhatsapp: string | null;
             customerId: string | null;
             customerRecord: {
                 id: string;
@@ -54163,6 +55375,14 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 codReceiptUrl: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
+                /**
+                 * The gift card this row moved money on (last 4 only): a tender, a refund to that card, or (storeCredit) the card a store-credit refund issued.
+                 */
+                giftCard: {
+                    id: string;
+                    last4: string;
+                    storeCredit: boolean;
+                } | null;
             }>;
             plan: {
                 id: string;
@@ -61039,6 +62259,212 @@ export type PostApiV1AdminAuthUpdateProfileResponses = {
 };
 
 export type PostApiV1AdminAuthUpdateProfileResponse = PostApiV1AdminAuthUpdateProfileResponses[keyof PostApiV1AdminAuthUpdateProfileResponses];
+
+export type GetApiV1AdminAuthShortcutsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type GetApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsError = GetApiV1AdminAuthShortcutsErrors[keyof GetApiV1AdminAuthShortcutsErrors];
+
+export type GetApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsResponse = GetApiV1AdminAuthShortcutsResponses[keyof GetApiV1AdminAuthShortcutsResponses];
+
+export type PutApiV1AdminAuthShortcutsData = {
+    body: {
+        expectedRevision: number;
+        shortcuts: {
+            [key: string]: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type PutApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsError = PutApiV1AdminAuthShortcutsErrors[keyof PutApiV1AdminAuthShortcutsErrors];
+
+export type PutApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts saved
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsResponse = PutApiV1AdminAuthShortcutsResponses[keyof PutApiV1AdminAuthShortcutsResponses];
 
 export type PostApiV1AdminAuthScannerLinkData = {
     body?: never;
@@ -70697,6 +72123,730 @@ export type PostApiV1AdminWarrantyPoliciesByIdRestoreResponses = {
 
 export type PostApiV1AdminWarrantyPoliciesByIdRestoreResponse = PostApiV1AdminWarrantyPoliciesByIdRestoreResponses[keyof PostApiV1AdminWarrantyPoliciesByIdRestoreResponses];
 
+export type GetApiV1AdminGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'active' | 'disabled' | 'expired' | 'empty';
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type GetApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsError = GetApiV1AdminGiftCardsErrors[keyof GetApiV1AdminGiftCardsErrors];
+
+export type GetApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift cards
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<AdminGiftCardSummary>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsResponse = GetApiV1AdminGiftCardsResponses[keyof GetApiV1AdminGiftCardsResponses];
+
+export type PostApiV1AdminGiftCardsData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        expiresAt?: string | null;
+        customerId?: string | null;
+        recipient?: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+        } | null;
+        message?: string | null;
+        note?: string | null;
+        notify?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type PostApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsError = PostApiV1AdminGiftCardsErrors[keyof PostApiV1AdminGiftCardsErrors];
+
+export type PostApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift card issued
+     */
+    201: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+            /**
+             * XXXX-XXXX-XXXX-XXXX, shown once.
+             */
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsResponse = PostApiV1AdminGiftCardsResponses[keyof PostApiV1AdminGiftCardsResponses];
+
+export type GetApiV1AdminGiftCardsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards/summary';
+};
+
+export type GetApiV1AdminGiftCardsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryError = GetApiV1AdminGiftCardsSummaryErrors[keyof GetApiV1AdminGiftCardsSummaryErrors];
+
+export type GetApiV1AdminGiftCardsSummaryResponses = {
+    /**
+     * Outstanding balance per currency
+     */
+    200: {
+        success: true;
+        data: {
+            outstanding: Array<{
+                currencyCode: string;
+                balance: number;
+                balanceMinor: number;
+                cards: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryResponse = GetApiV1AdminGiftCardsSummaryResponses[keyof GetApiV1AdminGiftCardsSummaryResponses];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdError = GetApiV1AdminGiftCardsByGiftCardIdErrors[keyof GetApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Gift card detail
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardDetail;
+            transactions: Array<AdminGiftCardTransaction>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponse = GetApiV1AdminGiftCardsByGiftCardIdResponses[keyof GetApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdData = {
+    body: {
+        version: number;
+        status?: 'active' | 'disabled';
+        expiresAt?: string | null;
+        customerId?: string | null;
+        note?: string | null;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdError = PatchApiV1AdminGiftCardsByGiftCardIdErrors[keyof PatchApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Updated gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponse = PatchApiV1AdminGiftCardsByGiftCardIdResponses[keyof PatchApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        reason: string;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/adjust';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustError = PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses = {
+    /**
+     * Adjusted gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponse = PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/resend';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendError = PostApiV1AdminGiftCardsByGiftCardIdResendErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdResendErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponses = {
+    /**
+     * Queued
+     */
+    200: {
+        success: true;
+        data: {
+            queued: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponse = PostApiV1AdminGiftCardsByGiftCardIdResendResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdResendResponses];
+
 export type GetApiV1AdminWarrantyClaimsData = {
     body?: never;
     path?: never;
@@ -72664,7 +74814,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -72801,7 +74950,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -72846,7 +74994,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -72942,7 +75089,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -73123,7 +75269,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 [key: string]: string;
             };
             fieldVisibility: {
-                showEmailField: boolean;
                 showOrderNotesField: boolean;
                 showAreaField: boolean;
             };
@@ -73231,7 +75376,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -73344,7 +75488,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };

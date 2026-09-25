@@ -4,6 +4,8 @@ import {
   getPublishedNavigationPlacements,
   getPublishedNavigationMenuTree,
   listPublishedNavigationMenuItems,
+  readCategoryNavigation,
+  CATEGORY_NAVIGATION_NODE_LIMIT,
 } from "@scalius/core/modules/navigation";
 import { NotFoundError } from "../utils/api-error";
 
@@ -71,6 +73,36 @@ app.openapi(getNavigationRoute, async (c) => {
 
   return ok(c, { navigation: navigationConfig });
 });
+
+// GET /navigation/categories — the reachable category tree (the /categories index)
+const getCategoryNavigationRoute = createRoute({
+  method: "get",
+  path: "/categories",
+  tags: ["Navigation"],
+  summary: "Get the reachable category tree",
+  operationId: "storefront.navigation.categories_get",
+  description:
+    `Published categories whose every ancestor is published and whose published subtree holds a public product, flat with parentId, top levels first; at most ${CATEGORY_NAVIGATION_NODE_LIMIT} nodes, so a node's parent is always included. The storefront's /categories index; the header gets a budget-sized cut of the same tree with the layout.`,
+  responses: {
+    200: {
+      description: "Category tree",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        nodes: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          slug: z.string(),
+          parentId: z.string().nullable(),
+          canonicalPath: z.string().nullable(),
+          imageUrl: z.string().nullable(),
+        })).max(CATEGORY_NAVIGATION_NODE_LIMIT),
+        truncated: z.boolean(),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategoryNavigationRoute, async (c) => ok(c, await readCategoryNavigation(c.get("db"))));
 
 const getPlacementManifestRoute = createRoute({
   method: "get",

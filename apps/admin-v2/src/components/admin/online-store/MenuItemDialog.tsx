@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -31,8 +31,10 @@ import type { NavigationMenuRecord } from "~/lib/api-query-options/online-store"
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { NavigationResourcePicker } from "./NavigationResourcePicker";
-import { actionErrorText, Field, isWebAddress, normalizeWebAddress } from "./shared";
+import { actionErrorText, Field, isWebAddress, normalizeWebAddress, rebaseDraft } from "./shared";
 
 type SystemKey = Extract<NavigationItemDraft["target"], { type: "system" }>["key"];
 const SYSTEM_PAGES: SystemKey[] = ["home", "catalog", "search", "account", "cart", "checkout", "order_lookup"];
@@ -101,17 +103,30 @@ function ItemForm({
   initial,
   onClose,
   onSaved,
+  onStateChange,
 }: {
   menu: NavigationMenuRecord;
   target: MenuItemTarget;
   initial: NavigationItemDraft;
   onClose: () => void;
   onSaved: () => void;
+  /** Tells the dialog whether closing would lose edits. */
+  onStateChange: (state: { dirty: boolean; busy: boolean }) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
   const editing = itemId !== "new";
-  const [draft, setDraft] = useState(initial);
+  // A refetched item (another tab, a move) is merged under the edits instead of wiping them.
+  const [state, setState] = useState({ saved: initial, draft: initial });
+  let draft = state.draft;
+  if (state.saved !== initial) {
+    draft = rebaseDraft(state.draft, state.saved, initial);
+    setState({ saved: initial, draft });
+  }
+  const setDraft = (update: (current: NavigationItemDraft) => NavigationItemDraft) =>
+    setState((value) => ({ ...value, draft: update(value.draft) }));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const [busy, setBusy] = useState(false);
+  useEffect(() => onStateChange({ dirty, busy }), [dirty, busy, onStateChange]);
   const [error, setError] = useState<string>();
   const target = draft.target;
   const linkType: LinkType = target.type === "resource" ? target.resourceType : target.type;
@@ -276,10 +291,13 @@ export function MenuItemDialog({
   // Keep the last item while the dialog animates closed.
   const [shown, setShown] = useState(target);
   const [opened, setOpened] = useState(0);
+  const [form, setForm] = useState({ dirty: false, busy: false });
   if (target && target !== shown) {
     setShown(target);
     setOpened((count) => count + 1);
+    setForm({ dirty: false, busy: false });
   }
+  const { requestClose, discardDialog } = useDirtyDialogClose({ ...form, onClose });
   const itemId = shown?.itemId ?? "new";
   const editing = itemId !== "new";
   const itemQuery = useQuery({
@@ -287,30 +305,35 @@ export function MenuItemDialog({
     queryFn: () => apiData(getApiV1AdminNavigationMenusByMenuIdItemsByItemId({ path: { menuId: menu.id, itemId } })),
     enabled: editing && target !== null,
   });
-  const initial = editing ? (itemQuery.data ? draftFromRow(itemQuery.data.item) : null) : EMPTY_DRAFT;
+  const loaded = itemQuery.data;
+  const initial = useMemo(() => (editing ? (loaded ? draftFromRow(loaded.item) : null) : EMPTY_DRAFT), [editing, loaded]);
 
   return (
-    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t(editing ? "editMenuItem" : "addMenuItem")}</DialogTitle>
-          <DialogDescription>{t("menuItemHelp")}</DialogDescription>
-        </DialogHeader>
-        {shown && initial ? (
-          <ItemForm
-            key={`${opened}:${itemQuery.dataUpdatedAt}`}
-            menu={menu}
-            target={shown}
-            initial={initial}
-            onClose={onClose}
-            onSaved={onSaved}
-          />
-        ) : itemQuery.isError ? (
-          <p role="alert" className="text-body text-destructive">{t("loadFailed")}</p>
-        ) : (
-          <p className="text-body text-muted-foreground">{t("loading")}</p>
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={target !== null} onOpenChange={(open) => !open && requestClose()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t(editing ? "editMenuItem" : "addMenuItem")}</DialogTitle>
+            <DialogDescription>{t("menuItemHelp")}</DialogDescription>
+          </DialogHeader>
+          {shown && initial ? (
+            <ItemForm
+              key={opened}
+              menu={menu}
+              target={shown}
+              initial={initial}
+              onClose={requestClose}
+              onSaved={onSaved}
+              onStateChange={setForm}
+            />
+          ) : itemQuery.isError ? (
+            <p role="alert" className="text-body text-destructive">{t("loadFailed")}</p>
+          ) : (
+            <p className="text-body text-muted-foreground">{t("loading")}</p>
+          )}
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog {...discardDialog} />
+    </>
   );
 }

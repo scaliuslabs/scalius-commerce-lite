@@ -4,23 +4,19 @@ import { checkContact, checkNewAccount, formatWait, resolveCustomerAuthUi } from
 
 describe("customer sign-in UI model", () => {
   it("offers Email and Phone when the store enables both, and asks new buyers only for missing contacts", () => {
-    const email = resolveCustomerAuthUi("both");
+    const both = { email: "optional", whatsapp: "off", channels: ["email", "sms"] } as const;
+    const email = resolveCustomerAuthUi({ ...both, channels: [...both.channels] });
     expect(email.showMethodSwitcher).toBe(true);
     expect(email.requestMethod).toBe("email");
     expect(email.newAccount).toEqual({ phone: "required", email: "hidden" });
 
-    const phone = resolveCustomerAuthUi("both", "sms");
+    const phone = resolveCustomerAuthUi({ ...both, channels: [...both.channels] }, "sms");
     expect(phone.requestMethod).toBe("phone");
     expect(phone.newAccount).toEqual({ phone: "hidden", email: "optional" });
   });
 
   it("follows a store that requires email for phone sign-ups", () => {
-    const ui = resolveCustomerAuthUi({
-      otpChannels: ["sms"],
-      requiredContactFields: ["email", "phone"],
-      optionalContactFields: [],
-      defaultOtpChannel: "sms",
-    });
+    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["sms"] });
     expect(ui.showMethodSwitcher).toBe(false);
     expect(ui.newAccount).toEqual({ phone: "hidden", email: "required" });
     expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toEqual({
@@ -39,7 +35,7 @@ describe("customer sign-in UI model", () => {
   });
 
   it("validates the new-account details for an email sign-up", () => {
-    const ui = resolveCustomerAuthUi("email");
+    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["email"] });
     expect(checkNewAccount(ui, { name: " ", phone: "", email: "" })).toEqual({
       ok: false,
       errors: [

@@ -15,7 +15,7 @@ import { checkoutDocument, currencyDocument } from "./documents";
 
 async function createDb(
     siteOverrides: Record<string, unknown> = {},
-    customerAuthPolicy?: Record<string, unknown>,
+    customerIdentity?: Record<string, unknown>,
     readiness: {
         activeShippingRows?: Array<{ id: string }>;
         activeHierarchyRows?: Array<{ id: string }>;
@@ -23,11 +23,11 @@ async function createDb(
     } = {},
 ) {
     const { db, sqlite } = createSqliteD1Database();
-    const { authVerificationMethod = "email", ...checkout } = siteOverrides;
-    await checkoutDocument.write(db, checkout);
-    // As migrated: the raw saved method, plus a policy only when one was saved.
-    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('auth', 'document', ?, 'json', 'customer_auth')")
-        .run(JSON.stringify({ authVerificationMethod, policy: customerAuthPolicy ?? null }));
+    await checkoutDocument.write(db, siteOverrides);
+    if (customerIdentity) {
+        sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('auth', 'document', ?, 'json', 'customer_auth')")
+            .run(JSON.stringify(customerIdentity));
+    }
     await currencyDocument.write(db, (readiness.currency ?? { currencyCode: "bdt", currencySymbol: "৳" }) as never);
     if ((readiness.activeShippingRows ?? [{ id: "sm_1" }]).length > 0) {
         sqlite.exec("INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_1', 'Standard', 6000, 1)");
@@ -178,40 +178,24 @@ describe("getCheckoutConfig", () => {
         expect(config.activeDefaultMethod).toBe("stripe");
     });
 
-    it("normalizes legacy public auth method values", async () => {
-        mockGatewaySnapshot({
-            enabledMethods: ["cod"],
-            defaultMethod: "cod",
-        });
-
-        const legacyPhone = await getCheckoutConfig(await createDb({ authVerificationMethod: "phone" }));
-        const unsupportedMandatory = await getCheckoutConfig(await createDb({ authVerificationMethod: "email_phone_mandatory" }));
-
-	    expect(legacyPhone.authVerificationMethod).toBe("sms_otp");
-	    expect(unsupportedMandatory.authVerificationMethod).toBe("email");
-        expect(legacyPhone.customerAuthPolicy.otpChannels).toEqual(["sms"]);
-	});
-
-    it("publishes advanced customer auth policy for the storefront", async () => {
-        mockGatewaySnapshot({
-            enabledMethods: ["cod"],
-            defaultMethod: "cod",
-        });
-
+    it("resets an older customer accounts document to the defaults", async () => {
+        mockGatewaySnapshot({ enabledMethods: ["cod"], defaultMethod: "cod" });
         const config = await getCheckoutConfig(await createDb({}, {
-            otpChannels: ["email", "whatsapp"],
-            requiredContactFields: ["email", "phone"],
-            optionalContactFields: [],
-            defaultOtpChannel: "whatsapp",
+            authVerificationMethod: "sms_otp",
+            policy: { otpChannels: ["sms"] },
         }));
+        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "off", channels: [] });
+    });
 
-        expect(config.customerAuthPolicy).toEqual({
-            otpChannels: ["email", "whatsapp"],
-            requiredContactFields: ["email", "phone"],
-            optionalContactFields: [],
-            defaultOtpChannel: "whatsapp",
-        });
-        expect(config.authVerificationMethod).toBe("whatsapp_otp");
+    it("publishes the merchant's fields and only chosen channels that can send", async () => {
+        mockGatewaySnapshot({ enabledMethods: ["cod"], defaultMethod: "cod" });
+        const config = await getCheckoutConfig(await createDb({}, {
+            email: "optional",
+            whatsapp: "separate",
+            channels: ["email", "whatsapp"],
+        }));
+        // No provider can send here (no credential key): nothing is offered, and nothing is added.
+        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "separate", channels: [] });
     });
 
     it("still requires the individual gateway settings to be enabled", async () => {

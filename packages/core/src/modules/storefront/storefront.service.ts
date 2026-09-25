@@ -68,6 +68,7 @@ import { getPublicPageBySlug } from "../pages/pages.service";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { categoryNavigationFromRows, selectCategoryNavigationRows, trimCategoryNavigation } from "../navigation/navigation.categories";
 import { publicCategoryConditions } from "../categories/categories.publication";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -489,7 +490,7 @@ const LAYOUT_DOCUMENTS = [
 
 /**
  * Fetch and shape all layout data in a single batched D1 round-trip.
- * Returns the final { analytics, header, navigation, footer, currency, theme, storeShape, ..., cspAllowedDomains } object.
+ * Returns the final { analytics, header, navigation, categoryTree, footer, currency, theme, storeShape, ..., cspAllowedDomains } object.
  */
 export async function getLayoutData(
   db: Database,
@@ -534,6 +535,9 @@ export async function getLayoutData(
 
     // 4. Store shape counts for the theme fit rules (bounded, one statement)
     selectStoreShapeCounts(db),
+
+    // 5. The reachable category tree: automatic departments and /categories (bounded)
+    selectCategoryNavigationRows(db),
   ]);
 
   const [
@@ -542,6 +546,7 @@ export async function getLayoutData(
     themeResults,
     checkoutLanguageResults,
     storeShapeResults,
+    categoryNavigationRows,
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
@@ -742,6 +747,9 @@ export async function getLayoutData(
     analytics: processedAnalytics,
     header: headerData,
     navigation: navigationData,
+    // The header menu is \`navigation\`; the theme's navigation source picks
+    // either or both (storefront header nav-tree.ts assembles them).
+    categoryTree: trimCategoryNavigation(categoryNavigationFromRows(categoryNavigationRows)),
     footer: footerData,
     currency: currencyData,
     theme: storefrontTheme,

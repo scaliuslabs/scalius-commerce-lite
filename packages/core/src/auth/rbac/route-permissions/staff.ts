@@ -70,6 +70,10 @@ export const STAFF_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/auth/update-profile": {
     POST: { allowAnyAdmin: true },
   },
+  "/api/v1/admin/auth/shortcuts": {
+    GET: { allowAnyAdmin: true },
+    PUT: { allowAnyAdmin: true },
+  },
   "/api/v1/admin/auth/scanner-link": {
     POST: {
       allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],

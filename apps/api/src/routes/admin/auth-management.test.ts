@@ -1061,7 +1061,8 @@ describe("admin auth management user permissions", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(db.__deleteWhere).toHaveBeenCalledOnce();
+    // The invited user's row and their keyboard-shortcuts settings row.
+    expect(db.__deleteWhere).toHaveBeenCalledTimes(2);
     expect(db.batch).toHaveBeenCalledOnce();
     expect(db.__principalWhereCalls).toHaveLength(2);
   });

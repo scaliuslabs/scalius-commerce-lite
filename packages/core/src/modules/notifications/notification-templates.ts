@@ -28,6 +28,7 @@ export const NOTIFICATION_VARIABLES = [
   "support_status",
   "pickup_address",
   "pickup_hours",
+  "pending_downloads",
   // Resolved at send time by the API layer (Wave B §10); never persisted.
   "download_names",
   "licence_keys",
@@ -41,6 +42,7 @@ export const NOTIFICATION_VARIABLES = [
   "gift_card_message",
   "gift_card_sender",
   "gift_card_link",
+  "gift_card_recipient",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -74,8 +76,12 @@ export function variablesForEvent(event: TemplatedNotificationType): readonly No
       "gift_card_link",
     ];
   }
+  if (event === "gift_card_sent") {
+    return ["customer_name", "store_name", "order_number", "gift_card_value", "gift_card_recipient"];
+  }
   if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
   if (event === "order_ready_for_pickup") return [...ORDER_VARIABLES, "pickup_address", "pickup_hours"];
+  if (event === "order_delivered") return [...ORDER_VARIABLES, "pending_downloads"];
   if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
     return [...ORDER_VARIABLES, "refund_amount"];
   }
@@ -141,8 +147,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_delivered: {
         subject: "Order {{order_number}} delivered",
-        message: "Your order has been delivered. Thank you for shopping with us.",
-        sms: "your order {{order_number}} has been delivered. Enjoy!",
+        message: "Your order has been delivered. Thank you for shopping with us.\nStill being prepared: {{pending_downloads}}. Your download will arrive by email when it's ready.",
+        sms: "your order {{order_number}} has been delivered. Enjoy!\nYour download arrives by email when it's ready: {{pending_downloads}}",
       },
       order_completed: {
         subject: "Order {{order_number}} completed",
@@ -204,6 +210,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         message: "You've received a gift card.\nFrom: {{gift_card_sender}}\n{{gift_card_message}}\nGift card code: {{gift_card_code}}\nValue: {{gift_card_value}}\nExpires: {{gift_card_expires}}\nUse it at checkout: {{gift_card_link}}",
         sms: "you've received a {{gift_card_value}} gift card from {{store_name}}.\nCode: {{gift_card_code}}\nExpires: {{gift_card_expires}}",
       },
+      gift_card_sent: {
+        subject: "Your gift card from order {{order_number}} was sent",
+        message: "The {{gift_card_value}} gift card you bought was sent to {{gift_card_recipient}}. They'll get the code by email or SMS.",
+        sms: "your {{gift_card_value}} gift card from order {{order_number}} was sent to {{gift_card_recipient}}.",
+      },
       review_request: {
         subject: "How was your order {{order_number}}?",
         message: "Thank you for shopping with us. We'd love to hear what you think of {{review_products}}.\nWrite a review: {{review_link}}",
@@ -241,8 +252,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_delivered: {
         subject: "অর্ডার {{order_number}} ডেলিভারি হয়েছে",
-        message: "আপনার অর্ডার ডেলিভারি হয়েছে। আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ।",
-        sms: "আপনার অর্ডার {{order_number}} ডেলিভারি হয়েছে। ধন্যবাদ!",
+        message: "আপনার অর্ডার ডেলিভারি হয়েছে। আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ।\nএখনও প্রস্তুত হচ্ছে: {{pending_downloads}}। ডাউনলোড প্রস্তুত হলে ইমেইলে পাঠানো হবে।",
+        sms: "আপনার অর্ডার {{order_number}} ডেলিভারি হয়েছে। ধন্যবাদ!\nডাউনলোড প্রস্তুত হলে ইমেইলে পাবেন: {{pending_downloads}}",
       },
       order_completed: {
         subject: "অর্ডার {{order_number}} সম্পন্ন হয়েছে",
@@ -303,6 +314,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "আপনার {{store_name}} গিফট কার্ড",
         message: "আপনি একটি গিফট কার্ড পেয়েছেন।\nপাঠিয়েছেন: {{gift_card_sender}}\n{{gift_card_message}}\nগিফট কার্ড কোড: {{gift_card_code}}\nমূল্য: {{gift_card_value}}\nমেয়াদ: {{gift_card_expires}}\nচেকআউটে ব্যবহার করুন: {{gift_card_link}}",
         sms: "{{store_name}} থেকে আপনি {{gift_card_value}}-এর একটি গিফট কার্ড পেয়েছেন।\nকোড: {{gift_card_code}}\nমেয়াদ: {{gift_card_expires}}",
+      },
+      gift_card_sent: {
+        subject: "অর্ডার {{order_number}}-এর গিফট কার্ড পাঠানো হয়েছে",
+        message: "আপনার কেনা {{gift_card_value}}-এর গিফট কার্ডটি {{gift_card_recipient}}-কে পাঠানো হয়েছে। তিনি ইমেইল বা এসএমএসে কোডটি পাবেন।",
+        sms: "অর্ডার {{order_number}}-এর {{gift_card_value}}-এর গিফট কার্ডটি {{gift_card_recipient}}-কে পাঠানো হয়েছে।",
       },
       review_request: {
         subject: "অর্ডার {{order_number}} কেমন লাগল?",

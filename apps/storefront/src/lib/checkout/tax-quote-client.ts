@@ -7,6 +7,7 @@ import {
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { isCheckoutDeliveryMode } from "./delivery-mode";
+import { giftCardRequestFields } from "./gift-cards";
 import type { CartValidationIssue } from "../api/orders";
 import {
   isDeliveryRateUnavailable,
@@ -147,6 +148,8 @@ export function buildTaxQuoteRequest(
       ...(mode === "none" ? {} : { shippingMethodId: data.shippingMethodId }),
       discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,
+      // Apply handles only (never a code); no cards sends the old request.
+      ...giftCardRequestFields(data.giftCards),
     });
   } catch {
     throw new TaxQuoteUnavailableError();
@@ -202,6 +205,11 @@ export async function fetchAuthoritativeTaxQuote(
       ) {
         throw new TaxQuoteUnavailableError();
       }
+    }
+    // A tender may only name a card this request sent.
+    const sentHandles = new Set(request.giftCards?.map(({ handle }) => handle));
+    if (quote.giftCardTenders?.some(({ handle }) => !sentHandles.has(handle))) {
+      throw new TaxQuoteUnavailableError();
     }
     return quote;
   } catch (error) {

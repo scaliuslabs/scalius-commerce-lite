@@ -31,6 +31,7 @@ import { getCheckoutStatusErrorMessage } from "./error-messages";
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteUnavailableError,
 } from "./tax-quote-client";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { isGatewayTestMode } from "./gateway-environment";
@@ -45,12 +46,31 @@ import {
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
 import { readLastPlacedOrderId, rememberSubmittedCart } from "./receipt-finalization";
-import { cashOnDeliveryDescription, type CheckoutDeliveryMode } from "./delivery-mode";
+import { cashOnDeliveryDescription, cashOnDeliveryLabel, type CheckoutDeliveryMode } from "./delivery-mode";
 import { cartLinePropertyText } from "../cart/line-properties-view";
+import { quoteAmountDue } from "./tax-quote-contract";
+import { GIFT_CARD_PAYMENT_METHOD, giftCardHandler } from "./handlers/gift-card";
+import {
+  addStoredGiftCard,
+  clearStoredGiftCards,
+  giftCardCheckoutCopy,
+  giftCardChipLabel,
+  giftCardQuoteRefusal,
+  giftCardRequestFields,
+  readStoredGiftCards,
+  removeStoredGiftCards,
+  requestGiftCardApply,
+  writeStoredGiftCards,
+  MAX_GIFT_CARDS_PER_ORDER,
+  type GiftCardCheckoutCopy,
+  type StoredGiftCard,
+} from "./gift-cards";
 
-// COD and the card flow have their own handlers; every hosted gateway shares one.
+// COD, the card flow and a fully gift-card-paid order have their own handlers;
+// every hosted gateway shares one.
 registerGateway(codHandler);
 registerGateway(stripeHandler);
+registerGateway(giftCardHandler);
 
 function isHostedMethod(methodId: string): boolean {
   return gateways.some((gateway) => gateway.id === methodId && gateway.flow === "hosted");
@@ -89,6 +109,10 @@ let samePageStripeRetry: {
 } | null = null;
 let initVersion = 0;
 let checkoutCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA };
+let giftCopy: GiftCardCheckoutCopy = giftCardCheckoutCopy();
+/** Applied gift cards (apply handles, never codes), in the order the buyer added them. */
+let appliedGiftCards: StoredGiftCard[] = [];
+let giftCardBusy = false;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -170,6 +194,7 @@ function clearCheckoutPresentation(): void {
   paymentMethods?.setAttribute("aria-busy", "false");
   document.getElementById("summaryDetails")?.replaceChildren();
   document.getElementById("orderSummary")?.classList.add("hidden");
+  document.getElementById("giftCardSection")?.classList.add("hidden");
   setPaymentControlsDisabled(true);
 }
 
@@ -227,6 +252,8 @@ function appendProviderIdentity(
   presentation: GatewayPresentation,
   gatewayId: string,
 ): void {
+  // A gift card is the tender itself, not a provider: no badge.
+  if (gatewayId === "gift_card" && !presentation.markSrc) return;
   const identity = document.createElement("span");
   identity.className =
     "flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2";
@@ -334,12 +361,28 @@ function localizedGatewayPresentation(
         buyerLabel: checkoutCopy.onlinePaymentText,
         description: checkoutCopy.onlinePaymentDescriptionText,
       };
-    case "cod":
+    case "cod": {
+      // Gift cards paid part: cash on delivery collects only what is left.
+      const due = authoritativeTaxQuote && hasGiftCardTender(authoritativeTaxQuote)
+        ? quoteAmountDue(authoritativeTaxQuote).amountDue
+        : null;
       return {
         ...presentation,
-        buyerLabel: checkoutCopy.cashOnDeliveryText,
         // At the door, at the pickup counter, or when the service is done.
-        description: cashOnDeliveryDescription(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
+        buyerLabel: cashOnDeliveryLabel(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
+        description: due !== null && authoritativeTaxQuote
+          ? formatCheckoutLanguageText(giftCopy.giftCardPayOnDeliveryText, {
+              amount: currencyFmt(due, authoritativeTaxQuote),
+            })
+          : cashOnDeliveryDescription(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
+      };
+    }
+    case GIFT_CARD_PAYMENT_METHOD:
+      return {
+        ...presentation,
+        buyerLabel: giftCopy.paidWithGiftCardText,
+        description: giftCopy.paidWithGiftCardDescriptionText,
+        hosted: false,
       };
     default:
       return presentation;
@@ -348,6 +391,29 @@ function localizedGatewayPresentation(
 
 function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
   return formatMoney(amount, { code: quote.currencyCode });
+}
+
+/** Gift cards pay part or all of this quote. */
+function hasGiftCardTender(quote: CheckoutTaxQuote): boolean {
+  return (quote.giftCardTenders?.length ?? 0) > 0;
+}
+
+/**
+ * What the buyer pays now and how. With gift cards there is no deposit plan
+ * (the API refuses the combination): the remainder is one balance payment.
+ */
+function checkoutPaymentRequestFor(
+  config: CheckoutConfig,
+  quote: CheckoutTaxQuote,
+): { request: ReturnType<typeof resolveCheckoutPaymentRequest>; payableAmount: number } {
+  if (hasGiftCardTender(quote)) {
+    return { request: { paymentType: "balance" }, payableAmount: quoteAmountDue(quote).amountDue };
+  }
+  const request = resolveCheckoutPaymentRequest(config, quote.totalAmount);
+  return {
+    request,
+    payableAmount: request.paymentType === "deposit" ? request.depositAmount : quote.totalAmount,
+  };
 }
 
 /** The path the quote priced: no rate means nothing physical to deliver. */
@@ -661,7 +727,8 @@ export function renderOrderSummaryDetails(
     const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
     appendSummaryRow(
       details,
-      checkoutCopy.shippingText,
+      // A pickup order has no shipping: the row names the pickup.
+      quoteDeliveryMode(quote) === "pickup" ? checkoutCopy.deliveryModePickupText : checkoutCopy.shippingText,
       [
         deliveryCharged === 0 ? checkoutCopy.freeText : currencyFmt(deliveryCharged, quote),
         deliveryDiscounts.length > 0 ? ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})` : "",
@@ -693,7 +760,23 @@ export function renderOrderSummaryDetails(
     "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
   );
 
-  if (isDepositPaymentRequired(config, quote.totalAmount)) {
+  // Gift cards are payment, not a discount: they follow the total, then what is left.
+  if (hasGiftCardTender(quote)) {
+    for (const tender of quote.giftCardTenders ?? []) {
+      appendSummaryRow(
+        details,
+        formatCheckoutLanguageText(giftCopy.giftCardLineText, { card: giftCardChipLabel(tender.last4) }),
+        `-${currencyFmt(tender.applied, quote)}`,
+        "flex justify-between gap-3 text-primary",
+      );
+    }
+    appendSummaryRow(
+      details,
+      giftCopy.amountDueText,
+      currencyFmt(quoteAmountDue(quote).amountDue, quote),
+      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary",
+    );
+  } else if (isDepositPaymentRequired(config, quote.totalAmount)) {
     const advance = config.partialPaymentAmount;
     const balance = quote.totalAmount - advance;
     appendSummaryRow(
@@ -728,8 +811,9 @@ function renderSummary(): void {
 
   const mobileTotal = document.getElementById("orderSummaryToggleTotal");
   if (mobileTotal) {
+    // With gift cards the collapsed summary shows what is left to pay.
     mobileTotal.textContent = currencyFmt(
-      authoritativeTaxQuote.totalAmount,
+      quoteAmountDue(authoritativeTaxQuote).amountDue,
       authoritativeTaxQuote,
     );
   }
@@ -757,19 +841,20 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
   if (!checkoutConfig || !authoritativeTaxQuote) return [];
   const currentConfig = checkoutConfig;
   const currentQuote = authoritativeTaxQuote;
-  const paymentRequest = resolveCheckoutPaymentRequest(
-    currentConfig,
-    currentQuote.totalAmount,
-  );
-  const payableAmount = paymentRequest.paymentType === "deposit"
-    ? paymentRequest.depositAmount
-    : currentQuote.totalAmount;
+  const { payableAmount } = checkoutPaymentRequestFor(currentConfig, currentQuote);
   // The server says which methods this cart may use (no cash on delivery
   // when nothing is shipped, collected or performed).
   const allowed = currentQuote.allowedPaymentMethods;
+  // Gift cards cover everything: the only method is placing the order.
+  if (hasGiftCardTender(currentQuote) && quoteAmountDue(currentQuote).amountDueMinor === 0) {
+    return allowed.includes(GIFT_CARD_PAYMENT_METHOD)
+      ? [{ id: GIFT_CARD_PAYMENT_METHOD, flow: "cod", name: giftCopy.paidWithGiftCardText }]
+      : [];
+  }
   return gateways.filter(
     (gateway) => (
-      !(currentConfig.partialPaymentEnabled && gateway.id === "cod")
+      gateway.id !== GIFT_CARD_PAYMENT_METHOD
+      && !(currentConfig.partialPaymentEnabled && gateway.id === "cod")
       && allowed.includes(gateway.id)
       && isGatewayEligibleForPaymentAmount(
         gateway,
@@ -782,21 +867,19 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
 
 function paymentActionLabel(methodId: string): string {
   if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
-  if (methodId === "cod") return checkoutCopy.placeOrderText;
+  if (methodId === "cod" || methodId === GIFT_CARD_PAYMENT_METHOD) return checkoutCopy.placeOrderText;
   if (isHostedMethod(methodId)) {
     return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
       provider: providerLabelFor(methodId),
     });
   }
 
-  const paymentRequest = resolveCheckoutPaymentRequest(
+  // The card charges the amount due (after gift cards), never the full total.
+  const { request: paymentRequest, payableAmount } = checkoutPaymentRequestFor(
     checkoutConfig,
-    authoritativeTaxQuote.totalAmount,
+    authoritativeTaxQuote,
   );
-  const amount = paymentRequest.paymentType === "deposit"
-    ? paymentRequest.depositAmount
-    : authoritativeTaxQuote.totalAmount;
-  const formatted = currencyFmt(amount, authoritativeTaxQuote);
+  const formatted = currencyFmt(payableAmount, authoritativeTaxQuote);
   return paymentRequest.paymentType === "deposit"
     ? formatCheckoutLanguageText(checkoutCopy.payAmountNowText, { amount: formatted })
     : formatCheckoutLanguageText(checkoutCopy.payAmountText, { amount: formatted });
@@ -1002,7 +1085,9 @@ async function processPayment(): Promise<void> {
     window.location.replace(existingRecovery!.href);
     return;
   }
+  if (giftCardBusy) return;
   isProcessing = true;
+  setGiftCardControlsDisabled(true);
   setPaymentControlsDisabled(true);
   hideError();
   setPayButton(checkoutCopy.processingText, true);
@@ -1010,7 +1095,7 @@ async function processPayment(): Promise<void> {
   trackAddPaymentInfoForSelection(processingMethod);
 
   showCheckoutLoadingOverlay(
-    processingMethod === "cod"
+    processingMethod === "cod" || processingMethod === GIFT_CARD_PAYMENT_METHOD
       ? {
           title: checkoutCopy.placingOrderTitle,
           message: checkoutCopy.placingOrderMessage,
@@ -1034,13 +1119,11 @@ async function processPayment(): Promise<void> {
   let navigationCommitted = false;
   try {
     const totalAmount = authoritativeTaxQuote.totalAmount;
-    const paymentRequest = resolveCheckoutPaymentRequest(
+    const { request: paymentRequest, payableAmount: advanceAmount } = checkoutPaymentRequestFor(
       checkoutConfig,
-      totalAmount,
+      authoritativeTaxQuote,
     );
-    const advanceAmount = paymentRequest.paymentType === "deposit"
-      ? paymentRequest.depositAmount
-      : totalAmount;
+    const giftCardsPaidPart = hasGiftCardTender(authoritativeTaxQuote);
 
     const ctx: PaymentContext = {
       checkoutData,
@@ -1048,13 +1131,16 @@ async function processPayment(): Promise<void> {
       orderId: stripeRetry?.orderId ?? "",
       totalAmount,
       advanceAmount,
-      paymentType: stripeRetry?.paymentRequest.paymentType,
+      // Gift cards paid part: the gateway collects the balance, never a deposit.
+      paymentType: stripeRetry?.paymentRequest.paymentType ?? (giftCardsPaidPart ? "balance" : undefined),
       depositAmount: stripeRetry?.paymentRequest.paymentType === "deposit"
         ? stripeRetry.paymentRequest.depositAmount
         : undefined,
       replaceExistingAttempt: stripeRetry ? false : undefined,
       currencySymbol: (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
       onOrderCreated: (orderId, gateway) => {
+        // The order holds the cards now; their handles are spent.
+        if (giftCardsPaidPart) forgetAppliedGiftCards();
         if (gateway === "stripe") samePageStripeRetry = { orderId, paymentRequest };
         writeHostedPaymentRecoverySession(
           checkoutRecoveryHref(orderId, gateway),
@@ -1109,8 +1195,9 @@ async function processPayment(): Promise<void> {
       }
       if (result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT") {
         hideCheckoutLoadingOverlay();
+        let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
         try {
-          authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData);
+          refreshed = await fetchQuoteForCheckout();
         } catch (error) {
           if (error instanceof TaxQuoteCartChangedError) {
             redirectToCartForRepair({
@@ -1123,14 +1210,20 @@ async function processPayment(): Promise<void> {
           showReturnToCartAction();
           throw error;
         }
-        checkoutData = {
-          ...checkoutData,
-          expectedQuoteFingerprint: authoritativeTaxQuote.quoteFingerprint,
-        };
+        adoptQuote(refreshed.quote);
+        showGiftCardMessage(refreshed.notice);
         renderSummary();
         isProcessing = false;
         await renderGateways();
         showError(checkoutCopy.totalChangedReviewText);
+        return;
+      }
+      if (result.errorCode === "GIFT_CARD_CHANGED") {
+        // A card's balance, status or expiry moved since the quote: price it again.
+        hideCheckoutLoadingOverlay();
+        isProcessing = false;
+        const requoted = await requoteForGiftCards();
+        if (requoted) showError(giftCopy.giftCardChangedText);
         return;
       }
       if (result.errorCode === "VALIDATION_ERROR") showReturnToCartAction();
@@ -1149,8 +1242,251 @@ async function processPayment(): Promise<void> {
     if (!navigationCommitted) {
       isProcessing = false;
       setPaymentControlsDisabled(false);
+      setGiftCardControlsDisabled(false);
     }
   }
+}
+
+// ── Gift cards (tender) ───────────────────────────────────────────────────────
+//
+// The code goes to the same-origin proxy once (POST body); from then on the
+// page holds only the apply handle, in sessionStorage. Every quote and the
+// order carry the handles; the quote says what each card pays.
+
+/** The applied handles ride along with every quote and the order. */
+function syncGiftCardsIntoCheckoutData(): void {
+  if (!checkoutData) return;
+  const next: Record<string, unknown> = { ...checkoutData };
+  const { giftCards } = giftCardRequestFields(appliedGiftCards);
+  if (giftCards) next.giftCards = giftCards;
+  else {
+    delete next.giftCards;
+    delete next.expectedAmountDueMinor;
+  }
+  checkoutData = next;
+}
+
+function forgetAppliedGiftCards(): void {
+  appliedGiftCards = [];
+  clearStoredGiftCards();
+  syncGiftCardsIntoCheckoutData();
+}
+
+function setGiftCardControlsDisabled(disabled: boolean): void {
+  const busy = disabled || giftCardBusy || isProcessing;
+  const input = document.getElementById("giftCardCode") as HTMLInputElement | null;
+  const button = document.getElementById("giftCardApply") as HTMLButtonElement | null;
+  if (input) input.disabled = busy;
+  if (button) button.disabled = busy;
+  document
+    .querySelectorAll<HTMLButtonElement>("[data-gift-card-remove]")
+    .forEach((remove) => {
+      remove.disabled = busy;
+    });
+}
+
+function showGiftCardMessage(text: string | null, tone: "error" | "status" = "error"): void {
+  const message = document.getElementById("giftCardMessage");
+  if (!message) return;
+  message.textContent = text ?? "";
+  message.classList.toggle("hidden", !text);
+  message.classList.toggle("text-destructive", tone === "error");
+  message.classList.toggle("text-muted-foreground", tone === "status");
+}
+
+function renderGiftCardChips(): void {
+  const list = document.getElementById("giftCardChips");
+  if (!list) return;
+  list.replaceChildren();
+  const quote = authoritativeTaxQuote;
+  const tenders = new Map((quote?.giftCardTenders ?? []).map((tender) => [tender.handle, tender]));
+  for (const card of appliedGiftCards) {
+    const chip = document.createElement("li");
+    chip.className =
+      "inline-flex min-h-9 items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-3 pr-0.5 text-sm";
+    const label = giftCardChipLabel(card.last4);
+    const tender = tenders.get(card.handle);
+    appendTextElement(
+      chip,
+      "span",
+      "font-medium tabular-nums text-foreground",
+      tender && quote ? `${label} −${currencyFmt(tender.applied, quote)}` : label,
+    );
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.dataset.giftCardRemove = "true";
+    remove.className =
+      "inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+    remove.setAttribute(
+      "aria-label",
+      formatCheckoutLanguageText(giftCopy.giftCardRemoveText, { card: label }),
+    );
+    remove.textContent = "×";
+    remove.addEventListener("click", () => void removeGiftCard(card.handle));
+    chip.appendChild(remove);
+    list.appendChild(chip);
+  }
+  setGiftCardControlsDisabled(false);
+}
+
+/** One quote with the current handles. */
+function quoteWithGiftCards(): Promise<CheckoutTaxQuote> {
+  syncGiftCardsIntoCheckoutData();
+  return fetchAuthoritativeTaxQuote(checkoutData!);
+}
+
+/**
+ * The authoritative quote for the page. A card the quote refused leaves the
+ * list and the page quotes once more without it, so the fingerprint the order
+ * carries matches the handles it sends. When gift cards cannot be priced at
+ * all, checkout goes on without them rather than dead-ending.
+ */
+async function fetchQuoteForCheckout(): Promise<{ quote: CheckoutTaxQuote; notice: string | null }> {
+  let quote: CheckoutTaxQuote;
+  try {
+    quote = await quoteWithGiftCards();
+  } catch (error) {
+    if (appliedGiftCards.length === 0 || !(error instanceof TaxQuoteUnavailableError)) throw error;
+    forgetAppliedGiftCards();
+    return { quote: await quoteWithGiftCards(), notice: giftCopy.giftCardUnavailableText };
+  }
+  const refusal = giftCardQuoteRefusal(appliedGiftCards, quote.giftCardIssues, giftCopy);
+  if (refusal.dropped.length > 0) {
+    appliedGiftCards = refusal.remaining;
+    writeStoredGiftCards(appliedGiftCards);
+    quote = await quoteWithGiftCards();
+  }
+  return { quote, notice: refusal.message };
+}
+
+/** Makes a quote the page's truth: the order carries its fingerprint and amount due. */
+function adoptQuote(quote: CheckoutTaxQuote): void {
+  authoritativeTaxQuote = quote;
+  const next: Record<string, unknown> = {
+    ...checkoutData!,
+    expectedQuoteFingerprint: quote.quoteFingerprint,
+  };
+  if (appliedGiftCards.length > 0) next.expectedAmountDueMinor = quoteAmountDue(quote).amountDueMinor;
+  else delete next.expectedAmountDueMinor;
+  checkoutData = next;
+  document.getElementById("giftCardSection")?.classList.remove("hidden");
+  renderGiftCardChips();
+}
+
+/** Prices the order again after the cards changed; false when checkout cannot go on. */
+async function requoteForGiftCards(): Promise<boolean> {
+  if (!checkoutData) return false;
+  const currentInitVersion = initVersion;
+  setPaymentControlsDisabled(true);
+  setPayButton(checkoutCopy.preparingPaymentText, true);
+  let result: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
+  try {
+    result = await fetchQuoteForCheckout();
+  } catch (error) {
+    if (currentInitVersion !== initVersion) return false;
+    if (error instanceof TaxQuoteCartChangedError) {
+      redirectToCartForRepair({
+        valid: false,
+        issues: error.issues,
+        message: checkoutFreshnessMessage(error.issues),
+      });
+      return false;
+    }
+    showReturnToCartAction();
+    showError(error instanceof Error ? error.message : checkoutCopy.totalVerificationFailedText);
+    setPayButton(checkoutCopy.totalUnavailableText, true);
+    renderGiftCardChips();
+    return false;
+  }
+  if (currentInitVersion !== initVersion) return false;
+  adoptQuote(result.quote);
+  showGiftCardMessage(result.notice);
+  renderSummary();
+  await renderGateways();
+  return true;
+}
+
+async function removeGiftCard(handle: string): Promise<void> {
+  if (giftCardBusy || isProcessing) return;
+  const removed = appliedGiftCards.find((card) => card.handle === handle);
+  if (!removed) return;
+  giftCardBusy = true;
+  setGiftCardControlsDisabled(true);
+  appliedGiftCards = removeStoredGiftCards(appliedGiftCards, [handle]);
+  try {
+    hideError();
+    const requoted = await requoteForGiftCards();
+    if (requoted) {
+      showGiftCardMessage(
+        formatCheckoutLanguageText(giftCopy.giftCardRemovedText, { card: giftCardChipLabel(removed.last4) }),
+        "status",
+      );
+    }
+  } finally {
+    giftCardBusy = false;
+    setGiftCardControlsDisabled(false);
+    document.getElementById("giftCardCode")?.focus();
+  }
+}
+
+const GIFT_CARD_FAILURE_COPY = {
+  invalid: "giftCardEnterCodeText",
+  unusable: "giftCardUnusableText",
+  rate_limited: "giftCardRateLimitedText",
+  unavailable: "giftCardUnavailableText",
+} as const satisfies Record<string, keyof GiftCardCheckoutCopy>;
+
+async function applyGiftCardFromForm(event: SubmitEvent): Promise<void> {
+  // The code never becomes a navigation: the form's own POST is the no-script path.
+  event.preventDefault();
+  if (giftCardBusy || isProcessing || !checkoutData || !authoritativeTaxQuote) return;
+  const input = document.getElementById("giftCardCode") as HTMLInputElement | null;
+  const button = document.getElementById("giftCardApply") as HTMLButtonElement | null;
+  if (!input) return;
+  if (appliedGiftCards.length >= MAX_GIFT_CARDS_PER_ORDER) {
+    showGiftCardMessage(giftCopy.giftCardLimitText);
+    return;
+  }
+
+  giftCardBusy = true;
+  setGiftCardControlsDisabled(true);
+  if (button) button.textContent = giftCopy.giftCardApplyingText;
+  showGiftCardMessage(null);
+  try {
+    const outcome = await requestGiftCardApply(input.value);
+    if (!outcome.ok) {
+      showGiftCardMessage(giftCopy[GIFT_CARD_FAILURE_COPY[outcome.reason]]);
+      input.setAttribute("aria-invalid", "true");
+      return;
+    }
+    input.value = "";
+    input.removeAttribute("aria-invalid");
+    const added = addStoredGiftCard(appliedGiftCards, outcome.card);
+    if (!added.ok) {
+      showGiftCardMessage(giftCopy.giftCardLimitText);
+      return;
+    }
+    appliedGiftCards = added.cards;
+    hideError();
+    const requoted = await requoteForGiftCards();
+    if (requoted && appliedGiftCards.some(({ handle }) => handle === outcome.card.handle)) {
+      showGiftCardMessage(
+        formatCheckoutLanguageText(giftCopy.giftCardAppliedText, { card: giftCardChipLabel(outcome.card.last4) }),
+        "status",
+      );
+    }
+  } finally {
+    giftCardBusy = false;
+    if (button) button.textContent = giftCopy.giftCardApplyText;
+    setGiftCardControlsDisabled(false);
+  }
+}
+
+function installGiftCardForm(): void {
+  const form = document.getElementById("giftCardForm") as HTMLFormElement | null;
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+  form.addEventListener("submit", (event) => void applyGiftCardFromForm(event as SubmitEvent));
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -1173,10 +1509,14 @@ export async function initCheckoutPage(): Promise<void> {
     ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
     ...(activeLanguage?.languageData ?? {}),
   };
+  giftCopy = giftCardCheckoutCopy(activeLanguage?.languageData);
+  appliedGiftCards = readStoredGiftCards();
+  giftCardBusy = false;
   if (!checkoutConfig) return;
 
   hideReturnToCartAction();
   installOrderSummaryToggle();
+  installGiftCardForm();
 
   if (!loadCheckoutData()) return;
 
@@ -1187,12 +1527,10 @@ export async function initCheckoutPage(): Promise<void> {
   }
 
   try {
-    authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData!);
+    const { quote, notice } = await fetchQuoteForCheckout();
     if (currentInitVersion !== initVersion) return;
-    checkoutData = {
-      ...checkoutData!,
-      expectedQuoteFingerprint: authoritativeTaxQuote.quoteFingerprint,
-    };
+    adoptQuote(quote);
+    showGiftCardMessage(notice);
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) {
       redirectToCartForRepair({

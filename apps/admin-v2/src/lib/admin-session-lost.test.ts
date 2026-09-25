@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const cleared = vi.hoisted(() => vi.fn());
 vi.mock("./admin-route-context", () => ({ clearAdminRouteContextCache: cleared }));
 
-import { noticeAdminUnauthorized } from "./admin-session-lost";
+import { ADMIN_SESSION_LOST_EVENT, noticeAdminUnauthorized } from "./admin-session-lost";
 
 function sessionResponse(session: unknown) {
   return new Response(JSON.stringify({ adminExists: true, signIn: {}, session }), { status: 200 });
@@ -38,6 +38,20 @@ describe("a 401 from an admin request", () => {
     vi.stubGlobal("fetch", vi.fn(async () => sessionResponse({ user: { id: "u1" }, twoFactorVerified: true, permissions: [] })));
     await noticeAdminUnauthorized();
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps a page with unsaved edits and tells its save bar instead of leaving", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sessionResponse(null)));
+    const bar = document.createElement("div");
+    bar.setAttribute("data-save-bar", "");
+    document.body.append(bar);
+    const heard = vi.fn();
+    window.addEventListener(ADMIN_SESSION_LOST_EVENT, heard);
+    await noticeAdminUnauthorized();
+    window.removeEventListener(ADMIN_SESSION_LOST_EVENT, heard);
+    bar.remove();
+    expect(replace).not.toHaveBeenCalled();
+    expect(heard).toHaveBeenCalledTimes(1);
   });
 
   it("stays put when the session can't be read (offline)", async () => {

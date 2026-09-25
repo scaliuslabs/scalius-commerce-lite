@@ -19,12 +19,14 @@ import {
 } from "../products/money";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
-import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
+import { resolveProductCardImages } from "../products/media";
+import { loadCatalogCardData } from "./card-facts";
 import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
     groupCatalogFacets,
     groupCatalogRatingFacet,
+    type CatalogFacetCountInput,
     type CatalogFacetCountRow,
 } from "./facets";
 import {
@@ -33,6 +35,7 @@ import {
     getPagination,
     normalizeMinRating,
     presentCardRating,
+    reviewStatsJoin,
     productMinRatingCondition,
     reviewStats,
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
@@ -142,6 +145,11 @@ type StorefrontCatalogScope = {
     fixedCategory?: StorefrontCategoryProductCategory;
     /** The brand's own page: no brand facet. */
     withoutBrandFacet?: boolean;
+    /**
+     * The category-tree facet: a category's children with subtree counts;
+     * by default the categories the listed products sit in.
+     */
+    categoryFacet?: CatalogFacetCountInput["categoryFacet"] | null;
 };
 
 /**
@@ -235,7 +243,7 @@ async function readStorefrontCatalogResults(
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
         // The card rating (and the `rating` order): the page's rows by primary key.
-        .leftJoin(reviewStats, eq(reviewStats.productId, buyerState.productId))
+        .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
         .where(and(...conditions))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search
@@ -282,6 +290,7 @@ async function readStorefrontCatalogResults(
         brandFacet: !scope.withoutBrandFacet,
         ratingFacet: true,
         minRating,
+        categoryFacet: scope.categoryFacet === undefined ? "product-categories" : scope.categoryFacet ?? undefined,
     });
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
@@ -297,7 +306,6 @@ async function readStorefrontCatalogResults(
     const shopAllFacetsLive = unscoped
         && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
 
-    const productIds = productsList.map((product) => product.id);
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
     const categoryIds = [...new Set(
@@ -305,11 +313,33 @@ async function readStorefrontCatalogResults(
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
-    const [mediaMap, categoriesData, facetRows] = await Promise.all([
-        loadProductMediaProjections(db, productIds),
+    // A subtree listing also names, for each row's category, the listing
+    // category's child whose subtree holds it (shelves group by it).
+    const subtreeParentId = scope.categoryFacet && typeof scope.categoryFacet === "object"
+        ? scope.categoryFacet.parentId
+        : null;
+    type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
+    // Card media and card facts share one batch (card-facts.ts).
+    const [cardData, categoriesData, facetRows] = await Promise.all([
+        loadCatalogCardData(db, productsList, decimalPlaces),
         categoryIds.length > 0
             ? db
-                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .select({
+                    id: categories.id,
+                    name: categories.name,
+                    slug: categories.slug,
+                    subcategoryId: subtreeParentId
+                        ? sql<string | null>`(
+                            SELECT child_link.ancestor_id FROM category_closure AS child_link
+                            INNER JOIN category_closure AS listing_child
+                                ON listing_child.descendant_id = child_link.ancestor_id
+                               AND listing_child.ancestor_id = ${subtreeParentId}
+                               AND listing_child.depth = 1
+                            WHERE child_link.descendant_id = ${categories.id}
+                            LIMIT 1
+                        )`
+                        : sql<string | null>`NULL`,
+                })
                 .from(categories)
                 .where(and(
                     // One JSON parameter: a 100-card page can name 100 categories,
@@ -317,11 +347,12 @@ async function readStorefrontCatalogResults(
                     sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
-                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
-            : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+                .all() as Promise<ListedCategory[]>
+            : Promise.resolve([] as ListedCategory[]),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
-    const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
+    const categoryMap = new Map(categoriesData.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
+    const subcategoryIds = new Map(categoriesData.map((category) => [category.id, category.subcategoryId]));
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
@@ -337,9 +368,13 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
+            ...resolveProductCardImages(cardData.media.get(product.id) ?? []),
             rating: presentCardRating(ratingAvgCenti, reviewCount),
+            cardFacts: cardData.facts(product.id),
             category,
+            ...(subtreeParentId
+                ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }
+                : {}),
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
         };
@@ -383,6 +418,8 @@ export async function getStorefrontCategoryProducts(
             : eq(buyerState.categoryId, category.id),
         sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
+        // Its sub-categories with their subtree counts; a leaf has none.
+        categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
     });
 }
 

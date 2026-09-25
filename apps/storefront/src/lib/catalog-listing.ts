@@ -1,62 +1,153 @@
-// The listing template (category, search and collection pages share it):
-// what the resolved theme's listing block means for one listing, as data the
-// catalog components render. Measured anatomy: SYNTHESIS.md section 2.4.
+// The listing template (category, search, collection and brand pages share
+// it): what the resolved theme's listing block, and a listing's own
+// `listing_template`, mean for one listing, as data the catalog components
+// render. Measured anatomy: SYNTHESIS.md section 2.4 and fidelity AUDIT.md
+// section 0 (listing density, facet column compactness).
 //
-// The adapters below read the catalogue data: the category tree (Phase 1a:
-// `children` on a category) fills sub-category links and shelves, and typed
-// attributes (Phase 1b) name each facet's display (checkboxes, a range,
-// swatches or a searchable list), which catalogFacetDisplay turns into what
-// the filter form renders.
-import type {
-  ResolvedStorefrontTheme,
-  StorefrontListingToolbarPiece,
+// The adapters below read the catalogue data: the category tree (`children`
+// on a category, and the category-tree facet) fills sub-category pills and
+// shelves, and typed attributes name each facet's display (checkboxes, a
+// range, swatches or a searchable list), which catalogFacetDisplay turns
+// into what the filter form renders.
+import {
+  STOREFRONT_LISTING_FILTER_SPECS,
+  STOREFRONT_LISTING_FILTER_STYLES,
+  STOREFRONT_LISTING_VARIANTS,
+  failedFitConditions,
+  storefrontListingFiltersShown,
+  type ResolvedStorefrontTheme,
+  type StorefrontListingFilterSpec,
+  type StorefrontListingFilterStyle,
+  type StorefrontListingToolbarPiece,
 } from "@scalius/shared/storefront-theme";
-import type { ProductFacet, ProductFacetValue } from "@/lib/api";
+import type { ProductFacet } from "@/lib/api";
 import type { ProductGridContext } from "@/lib/product-card-layout";
 import {
   buildProductListHref,
   type ProductListFilterState,
   type ProductListSort,
 } from "./product-list-query";
+import { catalogSwatchPaint, type FacetDisplayValue } from "./catalog-swatch";
+
+export { catalogSwatchPaint };
 
 type ResolvedListing = ResolvedStorefrontTheme["blocks"]["listing"];
 type ThemeGrid = ResolvedStorefrontTheme["layout"]["grid"];
 
-export type CatalogListingLayout = ResolvedListing["layout"]["variant"] & (
-  "sidebar-grid" | "bar-drawer" | "list" | "shelves" | "quick-grid"
-);
+export type CatalogListingLayout = keyof typeof STOREFRONT_LISTING_VARIANTS;
+
+/** Where the facets live on computers, with the style's measured numbers. */
+export interface CatalogFilterPresentation {
+  style: StorefrontListingFilterStyle;
+  /**
+   * `sidebar`: an open column beside the results (Amazon, Daraz, Star Tech);
+   * `bar`: a one-line bar of facet dropdowns over a full-width grid (Dawn,
+   * Aarong); `drawer`: a Filter button opening a drawer (Target, Chaldal).
+   * On phones every placement is a Filter button and a bottom sheet.
+   */
+  placement: StorefrontListingFilterSpec["placement"];
+  /** Facet groups start open (never for bar dropdowns). */
+  openByDefault: boolean;
+  /** Facet dropdowns in the bar before "More filters" (bar only). */
+  barFacets: number;
+  /** The measured numbers as CSS custom properties (column, row pitch, label size). */
+  styleVars: string;
+  /** The desktop column width in px beside the results (0 without a column): card image sizes subtract it. */
+  columnPx: number;
+}
 
 export interface CatalogListingPresentation {
   layout: CatalogListingLayout;
-  /**
-   * Where the facets live: a sticky column beside the results from 1024px
-   * (a bottom sheet on phones), or a drawer behind a Filter button at every
-   * width with a filter bar above the results (Target, Dawn, Aarong).
-   */
-  filters: "sidebar" | "drawer";
+  filters: CatalogFilterPresentation;
   /** One card per grid cell, one product per row (Amazon), or the dense quick-add grid (Chaldal). */
   results: "grid" | "list" | "quick";
   /** Sub-category shelves on the plain first page, when the listing has shelves. */
   shelves: boolean;
+  /** Shelves on one landing (the layout's own setting, 8 by default). */
+  maxShelves: number;
   toolbar: ReadonlySet<StorefrontListingToolbarPiece>;
   phoneLayout: ResolvedListing["phoneLayout"];
   paging: ResolvedListing["paging"];
 }
 
-const LAYOUTS: Record<CatalogListingLayout, Pick<CatalogListingPresentation, "filters" | "results" | "shelves">> = {
-  "sidebar-grid": { filters: "sidebar", results: "grid", shelves: false },
-  "bar-drawer": { filters: "drawer", results: "grid", shelves: false },
-  list: { filters: "sidebar", results: "list", shelves: false },
-  shelves: { filters: "drawer", results: "grid", shelves: true },
-  "quick-grid": { filters: "drawer", results: "quick", shelves: false },
+const LAYOUTS: Record<CatalogListingLayout, Pick<CatalogListingPresentation, "results" | "shelves">> = {
+  grid: { results: "grid", shelves: false },
+  list: { results: "list", shelves: false },
+  shelves: { results: "grid", shelves: true },
+  "quick-grid": { results: "quick", shelves: false },
 };
 
-/** The resolved listing block as the catalog components render it. */
-export function catalogListingPresentation(listing: ResolvedListing): CatalogListingPresentation {
-  const layout = (listing.layout.variant in LAYOUTS ? listing.layout.variant : "sidebar-grid") as CatalogListingLayout;
+const isLayout = (value: string): value is CatalogListingLayout => Object.hasOwn(LAYOUTS, value);
+const isFilterStyle = (value: string): value is StorefrontListingFilterStyle =>
+  (STOREFRONT_LISTING_FILTER_STYLES as readonly string[]).includes(value);
+
+/** The column width catalog-listing.css gives a sidebar whose spec names none. */
+const SIDEBAR_FALLBACK_COLUMN_PX = 270;
+
+/** The measured numbers of a filter style as CSS custom properties; a null keeps the density token. */
+function filterStyleVars(spec: StorefrontListingFilterSpec): string {
+  return [
+    spec.column !== null && `--catalog-filter-column:${spec.column}px`,
+    spec.rowPitch !== null && `--catalog-filter-row:${spec.rowPitch}px`,
+    spec.label !== null && `--catalog-filter-label:${spec.label}px`,
+  ].filter(Boolean).join(";");
+}
+
+function filterPresentation(
+  style: StorefrontListingFilterStyle,
+  openByDefault: boolean,
+  spec: StorefrontListingFilterSpec = STOREFRONT_LISTING_FILTER_SPECS[style],
+): CatalogFilterPresentation {
+  return {
+    style,
+    placement: spec.placement,
+    // Bar dropdowns open on demand (the document schema refuses otherwise).
+    openByDefault: spec.placement === "bar" ? false : openByDefault,
+    barFacets: spec.barFacets ?? 0,
+    styleVars: filterStyleVars(spec),
+    columnPx: spec.placement === "sidebar" ? spec.column ?? SIDEBAR_FALLBACK_COLUMN_PX : 0,
+  };
+}
+
+/**
+ * The resolved listing block as the catalog components render it, for one
+ * listing. `listingTemplate` is the category's, collection's or brand's own
+ * `listing_template`: a layout (grid, list, shelves, quick-grid) or a filter
+ * style (sidebar-dense, sidebar-comfortable, bar-dropdowns, drawer) that
+ * overrides the theme for that listing when the store fits it (shelves need
+ * a tree or collections, the quick grid the quick-add card). Anything else,
+ * or null, is the theme's own listing.
+ */
+export function catalogListingPresentation(
+  resolved: Pick<ResolvedStorefrontTheme, "facts"> & {
+    blocks: Pick<ResolvedStorefrontTheme["blocks"], "listing" | "card">;
+  },
+  listingTemplate?: string | null,
+): CatalogListingPresentation {
+  const listing = resolved.blocks.listing;
+  let layout: CatalogListingLayout = isLayout(listing.layout.variant) ? listing.layout.variant : "grid";
+  let settings = listing.layout.settings;
+  // The theme's style with the template's own numbers (Daraz's 190px column, 18px rows).
+  let filters = filterPresentation(listing.filters.style, listing.filters.openByDefault, listing.filters.spec);
+  const own = listingTemplate?.trim() ?? "";
+  if (isLayout(own) && own !== layout) {
+    const fits = failedFitConditions(STOREFRONT_LISTING_VARIANTS[own].requires, {
+      facts: resolved.facts,
+      blocks: { card: resolved.blocks.card.variant },
+    }).length === 0;
+    if (fits) {
+      layout = own;
+      settings = STOREFRONT_LISTING_VARIANTS[own].defaults;
+    }
+  } else if (isFilterStyle(own)) {
+    filters = filterPresentation(own, STOREFRONT_LISTING_FILTER_SPECS[own].placement === "sidebar" || listing.filters.openByDefault);
+  }
+  const maxShelves = Number((settings as { maxShelves?: unknown }).maxShelves ?? 8);
   return {
     layout,
     ...LAYOUTS[layout],
+    maxShelves: Number.isInteger(maxShelves) && maxShelves > 0 ? maxShelves : 8,
+    filters,
     toolbar: new Set(listing.toolbar),
     phoneLayout: listing.phoneLayout,
     paging: listing.paging,
@@ -64,33 +155,29 @@ export function catalogListingPresentation(listing: ResolvedListing): CatalogLis
 }
 
 /**
- * Filtering needs something to narrow: at least this many results (a store
- * with 2 or 3 products in a category shows them, not a sidebar), unless the
- * buyer already filtered and needs the controls to undo it.
- */
-export const CATALOG_FILTER_MIN_RESULTS = 4;
-
-/**
- * Which listing controls help. Sort needs two results; filters need
- * CATALOG_FILTER_MIN_RESULTS results and a facet or price range that
- * differs between them. Either shows while a refinement is applied.
+ * Which listing controls help. Sort needs two results (or a refinement to
+ * undo). Filters follow the small-catalogue rule
+ * (`storefrontListingFiltersShown`): at least 8 results and a facet or the
+ * price range with two values, unless the buyer already refined; and the
+ * store itself must reach the threshold (`storeShown`, the resolved
+ * listing's `filters.shown`).
  */
 export function catalogListingControls({
   total,
   refinementCount,
-  facetCount,
-  showsPrice,
+  facetValueCounts,
+  storeShown = true,
 }: {
   total: number;
   refinementCount: number;
-  /** Facets worth showing (visibleCatalogFacets). */
-  facetCount: number;
-  showsPrice: boolean;
+  /** One entry per facet worth showing (its values with products; a range or the price counts 2 when it spans). */
+  facetValueCounts: readonly number[];
+  storeShown?: boolean;
 }): { sort: boolean; filters: boolean } {
   const refined = refinementCount > 0;
   return {
     sort: total > 1 || refined,
-    filters: refined || (total >= CATALOG_FILTER_MIN_RESULTS && (facetCount > 0 || showsPrice)),
+    filters: refined || (storeShown && storefrontListingFiltersShown({ total, refinementCount, facetValueCounts })),
   };
 }
 
@@ -106,52 +193,6 @@ export type CatalogFacetDisplay = "checkbox" | "swatch" | "search-list" | "range
 /** Value lists longer than this get a search field (Apple Gadgets: brand lists). */
 export const CATALOG_FACET_SEARCH_MIN_VALUES = 12;
 
-/**
- * Colour words merchants use as values, with the swatch they paint. An
- * option axis shows swatches only when every value is one of them, so a
- * swatch never guesses: "Rose Gold" or a Bangla name keeps the checkbox list.
- * A typed swatch attribute paints from the merchant's colour and falls back
- * to this table only for a value without one.
- */
-const SWATCH_COLOURS: Record<string, string> = {
-  black: "#111111",
-  white: "#ffffff",
-  "off white": "#f4f1e8",
-  cream: "#f3e9d2",
-  ivory: "#fffff0",
-  beige: "#d9c7a7",
-  grey: "#8a8a8a",
-  gray: "#8a8a8a",
-  silver: "#c0c0c0",
-  gold: "#c9a227",
-  red: "#c62828",
-  maroon: "#6d1a1f",
-  pink: "#e88fb0",
-  orange: "#ef7d22",
-  yellow: "#f2c511",
-  green: "#2e7d32",
-  olive: "#6b6b2a",
-  teal: "#0f7c7c",
-  blue: "#1e5bc6",
-  "sky blue": "#79b8e8",
-  navy: "#1b2a4a",
-  purple: "#6a3fa0",
-  brown: "#6f4a2f",
-  multicolor: "conic-gradient(#c62828, #f2c511, #2e7d32, #1e5bc6, #6a3fa0, #c62828)",
-  multicolour: "conic-gradient(#c62828, #f2c511, #2e7d32, #1e5bc6, #6a3fa0, #c62828)",
-};
-
-const colourKey = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-
-/** A merchant swatch lands in a `style` attribute: only a plain hex colour paints. */
-const HEX_SWATCH = /^#[0-9a-f]{6}$/i;
-
-type FacetDisplayValue = Pick<ProductFacetValue, "value" | "label" | "swatch">;
-
-const valuePaint = ({ value, label, swatch }: FacetDisplayValue): string | undefined =>
-  (swatch && HEX_SWATCH.test(swatch) ? swatch : undefined) ??
-  SWATCH_COLOURS[colourKey(label)] ??
-  SWATCH_COLOURS[colourKey(value)];
 
 /**
  * The facet's display and, for swatches, each value's paint keyed by the
@@ -163,7 +204,7 @@ export function catalogFacetDisplay(
   const swatches = new Map<string, string>();
   const paint = () => {
     for (const value of facet.values) {
-      const colour = valuePaint(value);
+      const colour = catalogSwatchPaint(value);
       if (colour) swatches.set(value.value, colour);
     }
   };
@@ -250,8 +291,10 @@ export function catalogPopularFilters({
     const value = currentFilters[slug];
     return value === undefined ? [] : Array.isArray(value) ? value : [value];
   };
-  // A range facet has no values to link (its bounds are typed in the form).
+  // A range facet has no values to link (its bounds are typed in the form),
+  // and category values are sub-listings, not filters.
   return facets
+    .filter((facet) => facet.kind !== "category")
     .flatMap((facet) =>
       facet.values
         .filter(({ value, count }) => count > 0 && count < total && !selected(facet.slug).includes(value))
@@ -325,7 +368,7 @@ export const CATALOG_SHELF_MIN_ITEMS = 2;
  * stays on a shelf, since the next page starts after them. Fewer than two
  * shelves is no shelf layout at all.
  */
-export function catalogShelves<Item extends { categoryId?: string | null }>({
+export function catalogShelves<Item extends { categoryId?: string | null; subcategoryId?: string | null }>({
   groups,
   items,
   maxShelves,
@@ -339,7 +382,10 @@ export function catalogShelves<Item extends { categoryId?: string | null }>({
   const byGroup = new Map(groups.map((group) => [group.id, [] as Item[]]));
   const rest: Item[] = [];
   for (const item of items) {
-    const shelf = item.categoryId ? byGroup.get(item.categoryId) : undefined;
+    // A subtree listing names the child each product sits under (a
+    // grandchild's product joins its child's shelf); else its own category.
+    const groupId = item.subcategoryId ?? item.categoryId;
+    const shelf = groupId ? byGroup.get(groupId) : undefined;
     (shelf ?? rest).push(item);
   }
   const shelves: CatalogShelf<Item>[] = [];
@@ -366,11 +412,7 @@ export function catalogCategoryLinks(
   }));
 }
 
-/**
- * A category's sub-categories. Categories are flat today, so this reads
- * nothing; when the category tree lands (Phase 1a) the category payload's
- * `children` fill the sub-category pills and shelves with no page change.
- */
+/** A category's published sub-categories (the category payload's `children`): pills and shelves. */
 export function catalogChildLinks(category: unknown): CatalogListingLink[] {
   const children = category && typeof category === "object" ? (category as { children?: unknown }).children : undefined;
   if (!Array.isArray(children)) return [];
@@ -404,5 +446,36 @@ export const LIST_ROW_IMAGE_SIZES = "(max-width: 639px) 120px, 224px";
 
 /** The image context of a card beside a sidebar or across the page. */
 export function catalogCardContext(presentation: Pick<CatalogListingPresentation, "filters">, filtersShown: boolean): ProductGridContext {
-  return presentation.filters === "sidebar" && filtersShown ? "beside-filters" : "grid";
+  return presentation.filters.placement === "sidebar" && filtersShown ? "beside-filters" : "grid";
+}
+
+// ─── Category-tree facet ────────────────────────────────────────────────
+
+export interface CatalogCategoryLink {
+  label: string;
+  /** The sub-listing with the buyer's filters and search (not their page, sort or page size); empty when nothing is left. */
+  href: string;
+  count: number;
+}
+
+/**
+ * The category-tree facet's values as links (Daraz's category list, Star
+ * Tech's search pills): each opens the category page with the buyer's
+ * filters and search, so the count shown is what the link lists. A category
+ * with nothing left under the filters has no link.
+ */
+export function catalogCategoryFacetLinks(
+  facet: Pick<ProductFacet, "values">,
+  currentFilters: ProductListFilterState,
+): CatalogCategoryLink[] {
+  const carried = Object.fromEntries(
+    Object.entries(currentFilters).filter(([key]) => !["page", "sortBy", "limit", "showAll"].includes(key)),
+  );
+  return facet.values.map(({ value, label, count }) => ({
+    label,
+    count,
+    href: count > 0
+      ? buildProductListHref({ pathname: `/categories/${encodeURIComponent(value)}`, currentFilters: carried })
+      : "",
+  }));
 }

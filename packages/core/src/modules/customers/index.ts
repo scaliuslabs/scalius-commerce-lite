@@ -6,3 +6,4 @@ export * from "./customer-auth.service";
 export * from "./otp-delivery-receipts";
 export * from "./customer-auth-rate-limit";
 export * from "./customer-auth-otp-challenges";
+export * from "./customer-code-channels";

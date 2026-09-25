@@ -14,14 +14,18 @@
  * Default shape (override with --products, --customers, --orders, --seed):
  * ~30k products (60% simple with one hidden default SKU, 40% optioned with one
  * or two merchant axes, a handful with 60-100 SKUs), ~80k SKUs with globally
- * unique SKU/barcode identity, 400 flat categories, a Brand attribute with 300
- * values plus 20 spec attributes, 1-4 images per product as ready media rows,
- * ledger-v2 stock edges for every stocked SKU, 50 collections (manual and
- * dynamic), 20k customers and 50k orders.
+ * unique SKU/barcode identity, a 400-category tree (25 roots x 5 second
+ * levels x 1 x 1: four levels, trigger-maintained through `parent_id`), 300
+ * published brand entities (`products.brand_id`, mirrored by a Brand
+ * attribute) plus 30 spec attributes of which the headline ones are key specs,
+ * 1-4 images per product as ready media rows, ledger-v2 stock edges for every
+ * stocked SKU, 50 collections (manual and dynamic), 20k customers and 50k
+ * orders. It ends by filling the catalogue projections (migration 0091's
+ * idempotent statements), so the store's buyer state is complete.
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -185,10 +189,11 @@ const CITIES = ["Dhaka", "Chattogram", "Sylhet", "Rajshahi", "Khulna", "Barishal
 
 // ---------------------------------------------------------------- statements
 const insert = (sql) => db.prepare(sql);
-const insCategory = insert(`INSERT INTO categories (id, name, slug, description, meta_title, meta_description, status, revision, no_index, exclude_from_sitemap, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`);
-const insAttribute = insert(`INSERT INTO product_attributes (id, name, slug, filterable, options, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+const insCategory = insert(`INSERT INTO categories (id, name, slug, description, meta_title, meta_description, status, revision, no_index, exclude_from_sitemap, created_at, updated_at, deleted_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`);
+const insAttribute = insert(`INSERT INTO product_attributes (id, name, slug, filterable, options, created_at, updated_at, key_spec) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+const insBrand = insert(`INSERT INTO brands (id, name, slug, status, sort_order, created_at, updated_at) VALUES (?, ?, ?, 'published', ?, ?, ?)`);
 const insMedia = insert(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, width, height, variant_width, status, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 'image/webp', ?, 1600, 1600, 1600, 'ready', ?, ?)`);
-const insProduct = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description, no_index, exclude_from_sitemap, exclude_from_product_feed, product_condition, is_active, discount_bps, discount_type, discount_amount_minor, free_delivery, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?)`);
+const insProduct = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description, no_index, exclude_from_sitemap, exclude_from_product_feed, product_condition, is_active, discount_bps, discount_type, discount_amount_minor, free_delivery, created_at, updated_at, deleted_at, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?, ?)`);
 const insProductMedia = insert(`INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insOptionDef = insert(`INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insOptionValue = insert(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
@@ -204,24 +209,27 @@ const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, 
 // ---------------------------------------------------------------- categories
 const categories = [];
 tx(() => {
-  // Startech-style names encode the merchant's intended depth (the schema has
-  // no parent column): family > qualifier > brand.
+  // A Startech-style tree through `parent_id` (triggers keep depth, path and
+  // category_closure): family > qualifier > brand > brand, four levels.
   let index = 0;
   for (const family of FAMILIES) {
-    const push = (name, depth) => {
-      if (categories.length >= CATEGORIES) return;
+    const push = (name, depth, parentId = null) => {
+      if (categories.length >= CATEGORIES) return null;
       const id = `cat_scale_${pad(index, 4)}`;
       const status = index % 40 === 7 ? "draft" : index % 40 === 19 ? "internal" : "published";
       const createdAt = NOW - (800 - index) * DAY;
       insCategory.run(id, name, `${slugify(name)}-${index}`, `<p>Shop ${name} at the best price in Bangladesh. Genuine products with official warranty.</p>`,
-        `${name} Price in Bangladesh`, `Buy ${name} online in Bangladesh.`, status, index % 97 === 3 ? 1 : 0, index % 89 === 5 ? 1 : 0, createdAt, createdAt, null);
+        `${name} Price in Bangladesh`, `Buy ${name} online in Bangladesh.`, status, index % 97 === 3 ? 1 : 0, index % 89 === 5 ? 1 : 0, createdAt, createdAt, null, parentId);
       categories.push({ id, name, family, depth, status });
       index += 1;
+      return id;
     };
-    push(family.name, 1);
+    const root = push(family.name, 1);
     for (const qualifier of sample(QUALIFIERS, 5)) {
-      push(`${qualifier} ${family.name}`, 2);
-      for (const brand of sample(BRAND_ROOTS, 2)) push(`${brand} ${qualifier} ${family.name}`, 3);
+      let parent = push(`${qualifier} ${family.name}`, 2, root);
+      sample(BRAND_ROOTS, 2).forEach((brand, level) => {
+        parent = push(`${brand} ${qualifier} ${family.name}`, 3 + level, parent);
+      });
     }
   }
   while (categories.length < CATEGORIES) {
@@ -229,7 +237,7 @@ tx(() => {
     const id = `cat_scale_${pad(categories.length, 4)}`;
     const name = `${pick(BRAND_ROOTS)} ${pick(QUALIFIERS)} ${family.name} ${categories.length}`;
     const createdAt = NOW - (800 - categories.length) * DAY;
-    insCategory.run(id, name, `${slugify(name)}-${categories.length}`, null, null, null, "published", 0, 0, createdAt, createdAt, null);
+    insCategory.run(id, name, `${slugify(name)}-${categories.length}`, null, null, null, "published", 0, 0, createdAt, createdAt, null, null);
     categories.push({ id, name, family, depth: 4, status: "published" });
   }
 });
@@ -241,19 +249,31 @@ for (let i = 0; brands.length < BRANDS; i += 1) {
   const rootName = BRAND_ROOTS[i % BRAND_ROOTS.length];
   brands.push(i < BRAND_ROOTS.length ? rootName : `${rootName} ${["Pro", "Plus", "Max", "Lite", "Neo"][Math.floor(i / BRAND_ROOTS.length) - 1]}`);
 }
+// Headline specs shown on spec cards and in the buy box (Star Tech's card bullets).
+const KEY_SPECS = new Set(["Processor", "RAM", "Storage", "Display Size", "Graphics", "Chipset", "Battery", "Capacity Litres"]);
 const attributes = new Map();
+const brandIds = new Map();
 tx(() => {
+  const slugs = new Set();
+  brands.forEach((name, position) => {
+    const id = `brd_scale_${pad(position, 4)}`;
+    let slug = slugify(name);
+    if (slugs.has(slug)) slug = `${slug}-${position}`;
+    slugs.add(slug);
+    insBrand.run(id, name, slug, position, NOW - 900 * DAY, NOW - 900 * DAY);
+    brandIds.set(name, id);
+  });
   attributes.set("Brand", { id: "attr_scale_brand", values: brands });
-  insAttribute.run("attr_scale_brand", "Brand", "brand", 1, JSON.stringify(brands), NOW - 900 * DAY, NOW - 900 * DAY);
+  insAttribute.run("attr_scale_brand", "Brand", "brand", 1, JSON.stringify(brands), NOW - 900 * DAY, NOW - 900 * DAY, 0);
   let index = 0;
   for (const [name, values] of Object.entries(SPEC_VALUES)) {
     const id = `attr_scale_${pad(index, 3)}`;
     attributes.set(name, { id, values });
-    insAttribute.run(id, name, slugify(name), index % 6 === 5 ? 0 : 1, JSON.stringify(values), NOW - 900 * DAY, NOW - 900 * DAY);
+    insAttribute.run(id, name, slugify(name), index % 6 === 5 ? 0 : 1, JSON.stringify(values), NOW - 900 * DAY, NOW - 900 * DAY, KEY_SPECS.has(name) ? 1 : 0);
     index += 1;
   }
 });
-log(`attributes: ${attributes.size} (Brand has ${brands.length} values)`);
+log(`brands: ${brandIds.size}; attributes: ${attributes.size} (Brand has ${brands.length} values, ${KEY_SPECS.size} key specs)`);
 
 // ---------------------------------------------------------------- products
 const publishedCategories = categories.filter((category) => category.status === "published");
@@ -317,7 +337,7 @@ function seedProduct(index) {
   insProduct.run(id, name, description, priceMinor, category.id, `${slugify(name).slice(0, 80)}-${index}`,
     chance(0.3) ? `${name} Price in BD` : null, `Buy ${name} at the best price in Bangladesh.`,
     chance(0.01) ? 1 : 0, chance(0.01) ? 1 : 0, chance(0.02) ? 1 : 0, chance(0.9) ? "new" : chance(0.5) ? "refurbished" : null,
-    isActive, optioned ? 0 : discountBps, chance(0.05) ? 1 : 0, createdAt, updatedAt, deletedAt);
+    isActive, optioned ? 0 : discountBps, chance(0.05) ? 1 : 0, createdAt, updatedAt, deletedAt, brandIds.get(brand));
   productRows.push({ id, name, optioned, deletedAt, isActive });
 
   // Media: 1-4 ready images, first is primary.
@@ -465,9 +485,21 @@ for (let start = 0; start < ORDERS; start += 5000) {
 db.exec(`UPDATE customers SET total_orders = (SELECT count(*) FROM orders WHERE orders.customer_id = customers.id), last_order_at = (SELECT max(created_at) FROM orders WHERE orders.customer_id = customers.id)`);
 log(`orders: ${ORDERS} (items ${orderItems})`);
 
+// ---------------------------------------------------------------- projections
+// The buyer state and facet projections every write keeps in its batch,
+// filled for the whole seed by migration 0091's idempotent statements.
+const fill = readFileSync(join(root, "packages/database/migrations/0091_catalogue_projection_fill.sql"), "utf8")
+  .split("--> statement-breakpoint")
+  .map((statement) => statement.trim())
+  .filter((statement) => statement && !/^INSERT\s+INTO\s+[`"]?scalius_schema_migrations/i.test(statement));
+tx(() => {
+  for (const statement of fill) db.exec(statement);
+});
+log(`projections: ${db.prepare("SELECT count(*) AS n FROM product_buyer_state WHERE is_public = 1").get().n} public products`);
+
 // No ANALYZE: a migrated D1 has no sqlite_stat1, so plans here match production.
 db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
-const counts = Object.fromEntries(["products", "product_variants", "product_media", "media", "product_option_definitions", "product_option_values", "product_variant_option_values", "product_attribute_values", "inventory_movements", "categories", "collections", "customers", "orders", "order_items"].map((table) => [table, db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n]));
+const counts = Object.fromEntries(["products", "product_variants", "product_media", "media", "product_option_definitions", "product_option_values", "product_variant_option_values", "product_attribute_values", "inventory_movements", "categories", "category_closure", "brands", "product_buyer_state", "product_facet_values", "collections", "customers", "orders", "order_items"].map((table) => [table, db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n]));
 console.log(JSON.stringify(counts, null, 2));
 db.close();
 log("done");

@@ -41,7 +41,6 @@ const context: PaymentContext = {
   config: {
     gateways: [],
     guestCheckoutEnabled: true,
-    authVerificationMethod: "email",
     checkoutMode: "all",
     partialPaymentEnabled: false,
     partialPaymentAmount: 0,

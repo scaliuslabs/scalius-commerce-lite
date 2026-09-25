@@ -1,0 +1,101 @@
+---
+// Every collection a buyer can shop, as one grid of photo, name and product
+// count (Shopify's /collections). One batched read with the layout; the
+// cards take the template's own card colours, border and radius.
+import Layout from "@/layouts/Layout.astro";
+import { getCollectionDirectory } from "@/lib/api";
+import { loadPageWithLayout } from "@/lib/page-data";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+
+const { layoutData, pageData: collections } = await loadPageWithLayout(() => getCollectionDirectory());
+if (!layoutData || !collections) {
+  const response = storefrontDataUnavailableResponse("We could not load the collections. Please try again shortly.");
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+
+const title = "All collections";
+const description = collections.length > 0
+  ? `Shop ${collections.slice(0, 6).map((collection) => collection.name).join(", ")}${collections.length > 6 ? " and more" : ""}.`
+  : "Browse every collection in the store.";
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/collections");
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const breadcrumbJsonLd = canonicalUrl && storefrontUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${storefrontUrl}/` },
+        { "@type": "ListItem", position: 2, name: title, item: canonicalUrl },
+      ],
+    })
+  : null;
+const hrefOf = (collection: (typeof collections)[number]) =>
+  collection.canonicalPath || `/collections/${encodeURIComponent(collection.id)}`;
+const countText = (count: number) => `${count.toLocaleString("en-IN")} ${count === 1 ? "product" : "products"}`;
+const letter = (name: string) => {
+  const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next().value;
+  return (first?.segment ?? "").toLocaleUpperCase();
+};
+---
+
+<Layout title={title} description={description} layoutData={layoutData} canonicalUrl={canonicalUrl ?? undefined}>
+  <Fragment slot="head">
+    {breadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />}
+  </Fragment>
+
+  <div class="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+    <nav aria-label="Breadcrumb" class="text-[0.8125rem] text-muted-foreground">
+      <ol class="flex flex-wrap gap-1.5">
+        <li><a href="/" class="hover:text-foreground hover:underline">Home</a></li>
+        <li aria-hidden="true">/</li>
+        <li aria-current="page">{title}</li>
+      </ol>
+    </nav>
+    <header class="mb-5 mt-3">
+      <h1 class="text-2xl font-bold leading-tight text-foreground">{title}</h1>
+      {collections.length > 0 && (
+        <p class="mt-1 text-sm text-muted-foreground">{collections.length} {collections.length === 1 ? "collection" : "collections"}</p>
+      )}
+    </header>
+
+    {collections.length === 0 ? (
+      <p class="text-sm text-muted-foreground">
+        No collections yet. <a href="/search" class="text-foreground underline">Browse all products</a>
+      </p>
+    ) : (
+      <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
+        {collections.map((collection, index) => (
+          <li>
+            <a href={hrefOf(collection)} class="group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <span class="grid aspect-square w-full place-items-center overflow-hidden bg-muted" aria-hidden="true">
+                {collection.imageUrl ? (
+                  <img
+                    src={mediaImageUrl(collection.imageUrl, 480)}
+                    srcset={mediaImageSrcSet(collection.imageUrl)}
+                    sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 300px"
+                    alt=""
+                    width="300"
+                    height="300"
+                    loading={index < 4 ? "eager" : "lazy"}
+                    decoding="async"
+                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                  />
+                ) : (
+                  <span class="text-3xl font-semibold text-muted-foreground">{letter(collection.name)}</span>
+                )}
+              </span>
+              <span class="flex flex-1 flex-col gap-0.5 p-3">
+                <span class="line-clamp-2 text-sm font-semibold leading-snug text-foreground [overflow-wrap:anywhere] md:text-base">{collection.name}</span>
+                <span class="text-xs text-muted-foreground md:text-sm">{countText(collection.productCount)}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</Layout>

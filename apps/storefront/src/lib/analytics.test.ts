@@ -657,4 +657,44 @@ describe("storefront analytics", () => {
     expect(sent).not.toContain("SECRET-NOTE");
     expect(sent).not.toContain("engraving");
   });
+
+  it("never sends gift-card codes or tender details; the purchase value stays the order total (Wave B §11.1)", () => {
+    const tender = {
+      giftCards: [{ handle: "gch_SECRETHANDLE" }],
+      giftCardTenders: [{ last4: "7K2Q", applied: 400 }],
+      giftCardCode: "ABCD-EFGH-JKMN-7K2Q",
+      amountDue: 600,
+      expectedAmountDueMinor: 60_000,
+      paymentMethod: "gift_card",
+    };
+    const order = {
+      content_ids: ["sku_1"],
+      content_type: "product" as const,
+      contents: [{ id: "sku_1", quantity: 1, item_price: 1000 }],
+      currency: "BDT",
+      num_items: 1,
+      value: 1000,
+      ...tender,
+    };
+
+    trackFbAddPaymentInfo(order);
+    trackFbPurchase({ ...order, order_id: "order_gc" }, {});
+    trackStorefrontAddPaymentInfoOnce({ checkoutId: "chk_gc", ...order });
+
+    const sent = JSON.stringify([
+      vi.mocked(window.fbq!).mock.calls,
+      vi.mocked(window.ttq!.track!).mock.calls,
+      vi.mocked(window.zaraz!.ecommerce!).mock.calls,
+      window.dataLayer,
+      sendServerEventMock.mock.calls,
+    ]);
+    expect(sent).toContain("1000");
+    for (const secret of ["gch_", "SECRETHANDLE", "7K2Q", "ABCD", "gift_card", "giftCard", "amountDue", "600"]) {
+      expect(sent).not.toContain(secret);
+    }
+    expect(window.dataLayer).toContainEqual(expect.objectContaining({
+      event: "purchase",
+      ecommerce: expect.objectContaining({ value: 1000 }),
+    }));
+  });
 });

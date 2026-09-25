@@ -463,7 +463,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
           <DialogTitle>{t("editTitle", { name: asset?.displayName ?? "" })}</DialogTitle>
           <DialogDescription>{t("appliesToNew")}</DialogDescription>
         </DialogHeader>
-        <form
+        <form method="post"
           noValidate
           className="space-y-4"
           onSubmit={(event) => {

@@ -102,6 +102,10 @@ export const policies = [
       `${storefront}/components/conversation/ConversationReplyForm.astro`,
       `${storefront}/pages/account/inbox/index.astro`,
       `${storefront}/lib/account-downloads.ts`,
+      // Gift-card codes (Wave B §11.1): checkout apply, balance check, save and reveal.
+      `${storefront}/pages/checkout.astro`,
+      `${storefront}/pages/gift-card-balance.astro`,
+      `${storefront}/pages/account/gift-cards.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
@@ -116,6 +120,7 @@ export const policies = [
       `${storefront}/components/order/ReviewLineAction.astro`,
       `${storefront}/components/order/review-line-action.ts`,
       `${storefront}/pages/account/reviews.astro`,
+      `${storefront}/lib/account-reviews.ts`,
       `${storefront}/components/product/reviews`,
       // Digital goods (B3)
       `${storefront}/components/order/DigitalLineDelivery.astro`,

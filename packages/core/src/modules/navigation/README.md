@@ -115,6 +115,33 @@ Two endpoints:
 - `GET /navigation` -- returns navigation by type (`header`, `footer`, or `all`). Falls back to auto-generated nav from categories + pages if no config saved. Cached 1h.
 - `GET /navigation/{id}` -- returns a specific menu by id (`"header"`, `"footer"`, or a footer menu id/title match).
 
+## Navigation at scale (storefront header)
+
+The storefront header renders one tree, chosen by the theme's
+`blocks.navigation.source`: the header menu, the category tree, or the tree's
+departments followed by the menu's other items (`tree+menu`, merged and
+de-duplicated by target in `apps/storefront/src/components/header/nav-tree.ts`).
+
+- `navigation.categories.ts` reads the reachable tree in one bounded
+  statement: published categories whose every ancestor is published and
+  whose published subtree holds a public product (the store shape's
+  `topCategoryCount` rule), top levels first, at most
+  `CATEGORY_NAVIGATION_NODE_LIMIT` (1,000) rows.
+  - The layout batch (`getLayoutData` → `categoryTree`) carries a
+    round-robin cut of it, `CATEGORY_NAVIGATION_LAYOUT_NODES` (150, the
+    header's link budget), so every department and its first children arrive
+    whatever the tree's size.
+  - `GET /navigation/categories` serves the whole bounded tree for the
+    storefront's `/categories` index, which every header surface links as
+    "All categories".
+- A placed menu cannot grow past its placement's `maxItems` (150): publishing
+  or restoring a bigger revision of a placed menu is refused
+  (`assertPlacedMenuFits`), as assigning one already was.
+- A publication that is over budget anyway (written before the guard) still
+  renders: `getPublishedNavigationPlacements` trims it to its first
+  `maxItems` items, level by level and round-robin across parents
+  (`trimNavigationHierarchy`), instead of dropping the whole placement.
+
 ## Dependencies
 
 - `@scalius/database` -- `categories`, `pages`, `settings` (header/footer documents) schemas

@@ -27,6 +27,7 @@ export const STOREFRONT_REVIEW_OPERATIONS = {
   "storefront.customer_auth_reviews.get_reviews": customer(),
   "storefront.customer_auth_reviews.reviews": customer({ idempotency: "required" }),
   "storefront.customer_auth_reviews.update": customer({ revision: "required" }),
+  "storefront.customer_auth_reviews_products.get": customer(),
   "storefront.orders_receipt_reviews.get_reviews": receipt(),
   "storefront.orders_receipt_reviews.reviews": receipt({ idempotency: "required" }),
   "storefront.orders_receipt_reviews.update": receipt({ revision: "required" }),

@@ -4,14 +4,17 @@
 // column, then fly-outs; Apple Gadgets: one 200px column). Each level is a
 // native <details>, so the menu opens without JavaScript; nav-menus.ts adds
 // hover intent, arrow keys, Escape with focus return and flipping at the
-// viewport's end. Items that don't fit on one line move into "More"
-// (nav-disclosure.ts builds its entries from the row).
+// viewport's end. Items that don't fit on one line move, as they are, into
+// "More" (nav-disclosure.ts), which also names the roots past `maxTopItems`
+// and "All categories"; columns cut to the link budget fill up on intent
+// (nav-panels.ts).
 // - layout row: items side by side (a header row or inline in the bar).
 // - layout bar: the category bar, items spread across the full width.
 // - flyouts cascade: fly-outs beside the column; indent: nested lists inside it.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import FlyoutList from "./FlyoutList.astro";
+import { navigationPanelKey } from "./nav-tree";
 import {
   ariaCurrent,
   navigationChildren,
@@ -26,10 +29,17 @@ interface Props {
   layout: "row" | "bar";
   flyouts: "cascade" | "indent";
   label?: string;
+  /** Roots past `maxTopItems`: named in "More" only. */
+  extras?: NavigationItem[];
+  /** "More" ends with "All categories" (/categories). */
+  allCategories?: boolean;
+  /** The columns here are cut to the link budget; this URL serves them whole (filled on intent, nav-panels.ts). */
+  panelsSrc?: string;
 }
 
-const { navigation = [], id, layout, flyouts, label = "Main navigation" } = Astro.props;
+const { navigation = [], id, layout, flyouts, label = "Main navigation", extras = [], allCategories = false, panelsSrc } = Astro.props;
 const items = navigation.filter((item) => item?.title);
+const hasExtras = extras.length > 0 || allCategories;
 const link = (item: NavigationItem) => ({
   href: item.href,
   "aria-current": ariaCurrent(navigationCurrent(item, Astro.url)),
@@ -38,16 +48,16 @@ const link = (item: NavigationItem) => ({
 });
 ---
 
-<nav id={id} class="cnav" data-cnav-layout={layout} aria-label={label} data-menu-root>
+<nav id={id} class="cnav" data-cnav-layout={layout} aria-label={label} data-menu-root data-nav-panels={panelsSrc}>
   <ul class="cnav-bar" data-menu-bar data-nav-overflow data-nav-pending>
     {
       items.map((item, index) => {
         const children = navigationChildren(item);
         return (
-          <li class="cnav-item" data-nav-index={index}>
+          <li class="cnav-item" data-nav-index={index} data-nav-key={panelsSrc && children.length > 0 ? navigationPanelKey(item) : undefined}>
             {item.href ? (
-              <a class="cnav-link" data-menu-top-link {...link(item)}>
-                {item.title}
+              <a class="cnav-link" data-menu-top-link title={item.title.length > 24 ? item.title : undefined} {...link(item)}>
+                <span class="nav-label">{item.title}</span>
               </a>
             ) : (
               children.length === 0 && <span class="cnav-link">{item.title}</span>
@@ -56,9 +66,7 @@ const link = (item: NavigationItem) => ({
               <details class="cnav-menu" data-menu="popup" data-menu-hover>
                 <summary class:list={["cnav-toggle", !item.href && "cnav-link"]} data-menu-top-link={item.href ? undefined : ""}>
                   {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="m4 6 4 4 4-4" />
-                  </svg>
+                  <i class="nav-chevron" aria-hidden="true"></i>
                 </summary>
                 <div class="cnav-panel" data-menu-panel>
                   <FlyoutList items={children} mode={flyouts} parent={item} />
@@ -69,29 +77,33 @@ const link = (item: NavigationItem) => ({
         );
       })
     }
-    <li class="cnav-item cnav-more" data-nav-more hidden>
+    <li class="cnav-item cnav-more" data-nav-more hidden={!hasExtras}>
       <details class="cnav-menu" data-menu="popup">
         <summary class="cnav-toggle cnav-link">
           <span>More</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          <i class="nav-chevron" aria-hidden="true"></i>
         </summary>
         <div class="cnav-panel cnav-panel--end" data-menu-panel>
-          <ul class="cnav-more-list" data-menu-list data-nav-more-list></ul>
+          {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
+          <ul class="cnav-more-list" data-menu-list data-nav-more-list>
+            {extras.map((item) => (
+              <li class="cnav-more-entry">
+                <a class="cnav-more-link" {...link(item)}>{item.title}</a>
+              </li>
+            ))}
+            {allCategories && (
+              <li class="cnav-more-entry cnav-more-all">
+                <a class="cnav-more-link" href="/categories">All categories</a>
+              </li>
+            )}
+          </ul>
         </div>
       </details>
     </li>
   </ul>
-  <template data-nav-more-template>
-    <li class="cnav-more-entry" data-nav-more-index="" hidden>
-      <a class="cnav-more-link" data-more-parent href="#">More</a>
-      <ul class="cnav-more-sublist" data-more-sublist>
-        <li><a class="cnav-more-link" href="#">More</a></li>
-      </ul>
-    </li>
-  </template>
 </nav>
 
-<style>
+<style is:global>
   .cnav {
     display: none;
     width: 100%;
@@ -117,8 +129,9 @@ const link = (item: NavigationItem) => ({
     justify-content: space-between;
   }
 
-  /* Until the script has moved what doesn't fit into "More"; revealed anyway
-     after 1.2s so the menu never stays hidden without JavaScript. */
+  /* Until the script has moved what doesn't fit into "More" (revealed after
+     1.2s anyway should it fail). Without JavaScript a <noscript> rule
+     (header.astro) reveals the row at once and lets it wrap. */
   .cnav-bar[data-nav-pending] {
     opacity: 0;
     animation: cnav-reveal 0s linear 1.2s forwards;
@@ -156,9 +169,60 @@ const link = (item: NavigationItem) => ({
     cursor: pointer;
   }
 
+  /* Star Tech's category bar: 14px labels spread across the row, no
+     chevrons (hover or Down opens a department; its toggle shows on
+     keyboard focus), a dropdown column of 27-36px rows. */
   .cnav[data-cnav-layout="bar"] .cnav-link {
     padding-inline: 0.5rem;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] a.cnav-link:has(+ .cnav-menu) {
+    padding-right: 0.5rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) > .cnav-toggle {
+    position: absolute;
+    right: -0.5rem;
+    top: 50%;
+    width: 1.25rem;
+    height: 1.25rem;
+    translate: 0 -50%;
+    opacity: 0;
+    pointer-events: auto;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) > .cnav-toggle:focus-visible,
+  .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu[open]:not(:first-child) > .cnav-toggle {
+    opacity: 1;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) > .cnav-panel {
+    top: 100%;
+    pointer-events: auto;
+  }
+
+  .cnav[data-cnav-layout="bar"] .fly-link {
+    min-height: 2rem;
+    padding-block: 0.25rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] .fly-toggle {
+    height: 2rem;
+  }
+
+  @media (pointer: coarse) {
+    .cnav[data-cnav-layout="bar"] .fly-link,
+    .cnav[data-cnav-layout="bar"] .fly-toggle {
+      min-height: 2.75rem;
+      height: auto;
+    }
   }
 
   .cnav-link:hover,
@@ -199,7 +263,7 @@ const link = (item: NavigationItem) => ({
     display: none;
   }
 
-  .cnav-toggle svg {
+  .cnav-toggle .nav-chevron {
     width: 0.875rem;
     height: 0.875rem;
     fill: none;
@@ -210,7 +274,7 @@ const link = (item: NavigationItem) => ({
     transition: transform 200ms ease;
   }
 
-  .cnav-menu[open] > .cnav-toggle svg {
+  .cnav-menu[open] > .cnav-toggle .nav-chevron {
     transform: rotate(180deg);
   }
 
@@ -280,6 +344,63 @@ const link = (item: NavigationItem) => ({
     display: none;
   }
 
+  .cnav-more-all {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  /* A row item moved into "More" is a plain row there: its link; a parent
+     without a link opens its column in place. */
+  .cnav-more-list > .cnav-item {
+    display: block;
+  }
+
+  .cnav-more-list > .cnav-item > a.cnav-link {
+    display: flex;
+    height: auto;
+    min-height: 2.25rem;
+    padding: 0.375rem 0.75rem;
+    color: var(--popover-foreground);
+    font-size: 0.875rem;
+    font-weight: 500 !important;
+    white-space: normal;
+    text-decoration: none;
+    text-transform: none !important;
+    letter-spacing: normal;
+  }
+
+  .cnav-more-list > .cnav-item > a.cnav-link:hover,
+  .cnav-more-list > .cnav-item > a.cnav-link:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .cnav-more-list > .cnav-item:has(> a) > .cnav-menu {
+    display: none;
+  }
+
+  .cnav-more-list > .cnav-item > .cnav-menu {
+    position: static;
+    inset: auto;
+    pointer-events: auto;
+  }
+
+  .cnav-more-list > .cnav-item > .cnav-menu > .cnav-toggle {
+    width: 100%;
+    justify-content: space-between;
+    padding-inline: 0.75rem;
+    color: var(--popover-foreground);
+    text-transform: none !important;
+  }
+
+  .cnav-more-list > .cnav-item > .cnav-menu > .cnav-panel {
+    position: static;
+    border: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
   .cnav-more-link {
     display: flex;
     align-items: center;
@@ -306,7 +427,7 @@ const link = (item: NavigationItem) => ({
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cnav-toggle svg {
+    .cnav-toggle .nav-chevron {
       transition: none;
     }
 

@@ -117,6 +117,13 @@ export const STOREFRONT_ORDER_OPERATIONS = {
     reason:
       "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer; use the hosted storefront.payment_recovery continuation.",
   },
+  "storefront.orders_lookup_status.status": {
+    exposure: "excluded",
+    principals: ["internal"],
+    risk: "security",
+    reason:
+      "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit.",
+  },
   "storefront.orders_lookup_send_otp.send_otp": {
     exposure: "excluded",
     risk: "security",
