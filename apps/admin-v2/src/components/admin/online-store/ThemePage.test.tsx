@@ -21,6 +21,9 @@ import { ThemePage } from "./ThemePage";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const api = vi.hoisted(() => ({ theme: vi.fn(), header: vi.fn(), footer: vi.fn() }));
+const fonts = vi.hoisted(() => ({ register: vi.fn() }));
+
+vi.mock("./type-preview-fonts", () => ({ registerTypePreviewFonts: fonts.register }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -114,6 +117,7 @@ describe("theme page", () => {
       "Template",
       "Logo",
       "Colors",
+      "Typography",
       "Header",
       "Navigation",
       "Footer",
@@ -209,6 +213,119 @@ describe("theme page", () => {
     expect(buttonText.hasAttribute("aria-invalid")).toBe(false);
     await pressSave();
     expect(api.theme).toHaveBeenCalledTimes(1);
+  });
+
+  describe("typography", () => {
+    const card = () => {
+      let node = [...container.querySelectorAll("h2")].find((heading) => heading.textContent === "Typography")!.parentElement!;
+      while (!node.querySelector("[role=radiogroup]")) node = node.parentElement!;
+      return node;
+    };
+    const button = (root: ParentNode, name: string) =>
+      [...root.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === name);
+    const dialog = () => document.querySelector<HTMLElement>("[role=dialog]");
+    const pairings = () => [...dialog()!.querySelectorAll<HTMLButtonElement>("[role=radio]")];
+    const group = (label: string) => [...card().querySelectorAll<HTMLElement>("[role=radiogroup]")].find((each) =>
+      container.querySelector(`#${CSS.escape(each.getAttribute("aria-labelledby")!)}`)?.textContent === label)!;
+    // An option's accessible text: its sketch is decorative.
+    const name = (item: Element) => {
+      const copy = item.cloneNode(true) as Element;
+      copy.querySelectorAll("[aria-hidden=true]").forEach((hidden) => hidden.remove());
+      return copy.textContent;
+    };
+    const choose = (label: string, option: string) => act(() =>
+      [...group(label).querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => name(item) === option)!.click());
+    const checked = (label: string) => {
+      const item = [...group(label).querySelectorAll("[role=radio]")].find((each) => each.getAttribute("aria-checked") === "true");
+      return item ? name(item) : undefined;
+    };
+    const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    it("shows the template's fonts as its default and loads no preview font until the picker opens", async () => {
+      render(DEFAULT_STOREFRONT_THEME);
+      expect(card().textContent).toContain("CleanTemplate default");
+      expect(card().textContent).toContain("Inter · Bangla: Noto Sans Bengali");
+      expect(checked("Heading size")).toBe("Medium");
+      expect(checked("Heading letters")).toBe("Sentence case");
+      // Nothing to reset while the template's type is in place.
+      expect(button(card(), "Reset to template default")).toBeUndefined();
+      await flush();
+      expect(fonts.register).not.toHaveBeenCalled();
+      expect(dialog()).toBeNull();
+
+      act(() => button(card(), "Change")!.click());
+      await flush();
+      expect(fonts.register).toHaveBeenCalledTimes(1);
+      expect(dialog()!.textContent).toContain("Choose fonts");
+    });
+
+    it("lists every pairing drawn in its own fonts, in Latin and Bangla, with the template's preselected", async () => {
+      render(storefrontTemplateTheme("heritage-editorial"));
+      expect(card().textContent).toContain("HeritageTemplate default");
+      expect(card().textContent).toContain("Cormorant Garamond and Inter · Bangla: Noto Serif Bengali");
+      expect(checked("Heading letters")).toBe("All capitals");
+      act(() => button(card(), "Change")!.click());
+      await flush();
+
+      expect(pairings().map((item) => item.value)).toEqual(["retail", "market", "editorial", "fresh", "beauty", "heritage", "tech"]);
+      const heritage = pairings().find((item) => item.value === "heritage")!;
+      expect(heritage.getAttribute("aria-checked")).toBe("true");
+      expect(heritage.textContent).toContain("Template default");
+      expect(pairings().filter((item) => item.textContent?.includes("Template default"))).toHaveLength(1);
+      // The sample is decorative and draws with the storefront's stacks under preview names.
+      const sample = heritage.querySelector<HTMLElement>("[aria-hidden=true]")!;
+      expect(sample.style.getPropertyValue("--type-heading")).toMatch(/^"Preview Cormorant Garamond", "Preview Noto Serif Bengali"/);
+      expect(sample.style.getPropertyValue("--type-body")).toMatch(/^"Preview Inter", "Preview Noto Serif Bengali"/);
+      expect(sample.style.getPropertyValue("--type-heading-weight")).toBe("600");
+      expect(sample.querySelector("[lang=bn]")?.textContent).toMatch(/[ঀ-৿]/);
+    });
+
+    it("saves a new pairing through the theme save, and cancel keeps the current one", async () => {
+      render(DEFAULT_STOREFRONT_THEME);
+      act(() => button(card(), "Change")!.click());
+      await flush();
+      act(() => pairings().find((item) => item.value === "editorial")!.click());
+      act(() => button(dialog()!, "Cancel")!.click());
+      expect(card().textContent).toContain("Clean");
+      expect(saveBar()).toBeNull();
+
+      act(() => button(card(), "Change")!.click());
+      await flush();
+      // Reopening starts from the saved choice, not the cancelled one.
+      expect(pairings().find((item) => item.getAttribute("aria-checked") === "true")?.value).toBe("retail");
+      act(() => pairings().find((item) => item.value === "editorial")!.click());
+      act(() => button(dialog()!, "Select")!.click());
+      expect(card().textContent).toContain("Editorial");
+      expect(card().textContent).toContain("Instrument Serif and Inter · Bangla: Noto Serif Bengali");
+      expect(card().textContent).not.toContain("Template default");
+      expect(container.textContent).toContain("Changed (based on Department mall)");
+
+      await pressSave();
+      expect(api.theme).toHaveBeenCalledTimes(1);
+      expect(api.theme.mock.calls[0]![0].body).toEqual({
+        expectedRevision: 1,
+        theme: { ...DEFAULT_STOREFRONT_THEME, tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, typography: "editorial" } },
+      });
+    });
+
+    it("sets heading size and letters, and resets all three to the template", async () => {
+      render(DEFAULT_STOREFRONT_THEME);
+      choose("Heading size", "Large");
+      choose("Heading letters", "All capitals");
+      expect(checked("Heading size")).toBe("Large");
+      expect(checked("Heading letters")).toBe("All capitals");
+      expect(saveBar()).not.toBeNull();
+
+      act(() => button(card(), "Reset to template default")!.click());
+      expect(checked("Heading size")).toBe("Medium");
+      expect(checked("Heading letters")).toBe("Sentence case");
+      expect(button(card(), "Reset to template default")).toBeUndefined();
+      expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
+
+      choose("Heading size", "Small");
+      await pressSave();
+      expect(api.theme.mock.calls[0]![0].body.theme.tokens).toEqual({ ...DEFAULT_STOREFRONT_THEME.tokens, typeScale: "flat" });
+    });
   });
 
   it("the Navigation card shows both menu choices with the saved values and saves a new one", async () => {
