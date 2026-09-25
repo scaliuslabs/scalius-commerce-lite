@@ -12,7 +12,7 @@
 //
 // Handler locations:
 //   payment.event    → core payments process-payment.ts (one type for every gateway)
-//   order.notif      → src/modules/notifications/notifications.service.ts
+//   notification     → ./queue-notifications.ts (outbox id only; order.notification is the legacy shape)
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
 //   media.render_variants → core media renderMissingMediaVariants (delayed after upload)
 //
@@ -35,14 +35,8 @@ import {
   processExistingMetaPurchaseOutboxForOrder,
 } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
-  sendOrderNotificationEmail,
-  sendOrderNotification,
-  sendStaffOrderEmails,
+  type NotificationQueueMessage,
   type OrderNotificationQueueMessage,
-  claimOrderNotificationOutboxForProcessing,
-  markOrderNotificationOutboxDeadLettered,
-  markOrderNotificationOutboxProcessingFailed,
-  markOrderNotificationOutboxSent,
   composeAuthOtpMessage,
   readStoreIdentity,
   getNotificationProviderBlock,
@@ -70,6 +64,11 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers";
 import {
+  archiveNotificationDlqMessage,
+  processLegacyOrderNotificationMessage,
+  processNotificationMessage,
+} from "./queue-notifications";
+import {
   enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder,
 } from "./utils/order-notification-queue";
@@ -80,6 +79,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { bumpCacheGeneration } from "./utils/cache-generation";
+import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
   markWebhookEventFailed,
@@ -357,8 +357,8 @@ async function archiveJobsDlqMessage(
   if (isPaymentQueuePayload(payload)) {
     return archivePaymentEventsDlqMessage(msg as Message<PaymentOnlyQueueMessage>, db);
   }
-  if (isOrderNotificationQueuePayload(payload)) {
-    return (await archiveOrderNotificationDlqMessage(msg as Message<OrderNotificationQueueMessage>, db)).status;
+  if (isOrderNotificationQueuePayload(payload) || payload.type === "notification") {
+    return (await archiveNotificationDlqMessage(msg as Message<OrderNotificationQueueMessage | NotificationQueueMessage>, db)).status;
   }
   if (payload.type === "auth.send_otp") {
     return (await archiveAuthOtpDlqMessage(msg as Message<AuthOtpQueueMessage>, db, env)).status;
@@ -613,32 +613,6 @@ async function archivePaymentEventsDlqMessage(
   return `webhook ${result.id} status=${result.status}`;
 }
 
-async function archiveOrderNotificationDlqMessage(
-  msg: Message<OrderNotificationQueueMessage>,
-  db: ReturnType<typeof getDb>,
-): Promise<{ status: "outbox_failed" | "outbox_missing" | "legacy_ignored"; outboxId?: string }> {
-  const payload = msg.body;
-  if (!payload.outboxId) {
-    console.warn(
-      `[Queue] Ignoring legacy order notification DLQ message ${msg.id} for order ${payload.orderId}; no durable outbox id was present.`,
-    );
-    return { status: "legacy_ignored" };
-  }
-
-  const result = await markOrderNotificationOutboxDeadLettered({
-    db,
-    outboxId: payload.outboxId,
-    error: `order_notification_dlq_terminal: Cloudflare queue message ${msg.id} exhausted after ${msg.attempts} attempts`,
-  });
-
-  if (!result.marked) {
-    console.warn(`[Queue] Order notification DLQ message ${msg.id} referenced missing outbox ${payload.outboxId}`);
-    return { status: "outbox_missing", outboxId: payload.outboxId };
-  }
-
-  return { status: "outbox_failed", outboxId: payload.outboxId };
-}
-
 async function archiveAuthOtpDlqMessage(
   msg: Message<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
@@ -727,112 +701,21 @@ async function processQueueMessage(
     // ── Order notifications ────────────────────────────────────────────────
 
     case "order.notification": {
-      const outboxClaim = payload.outboxId
-        ? await claimOrderNotificationOutboxForProcessing(db, payload.outboxId)
-        : undefined;
+      await processLegacyOrderNotificationMessage(payload, db, env);
+      break;
+    }
 
-      if (outboxClaim && !outboxClaim.claimed) {
-        console.log(`[Queue] Skipped order notification outbox ${payload.outboxId}: ${outboxClaim.reason}`);
-        break;
-      }
+    case "notification": {
+      await processNotificationMessage(payload, db, env);
+      break;
+    }
 
-      try {
-        // Customer notifications (email, SMS, etc.)
-        const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-        const customerNotificationResult = await sendOrderNotificationEmail(
-          payload.customerEmail,
-          payload.customerName,
-          payload.orderId,
-          payload.notificationType,
-          payload.data,
-          db,
-          {
-            encryptionKey,
-            env: env as unknown as Record<string, unknown>,
-            outboxId: payload.outboxId,
-          },
-        );
-        const retryableFailures: string[] = customerNotificationResult?.hasRetryableFailure
-          ? [`customer channels: ${summarizeNotificationFailures(customerNotificationResult.outcomes)}`]
-          : [];
+    // ── Automatic fulfilment (Wave A §2.6) ─────────────────────────────────
+    // Idempotent: the ledger's unique request keys make redeliveries safe.
 
-        // Admin push notification — check admin channel settings before sending
-        try {
-          const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings");
-          const adminChannels = await getAdminNotificationChannels(db);
-          const enabledAdminChannels = adminChannels[payload.notificationType] || [];
-
-          if (enabledAdminChannels.includes("push")) {
-            // Push payloads deep-link into the dashboard through the public
-            // API origin. Queue invocations have no request URL, so the origin
-            // must come from Platform settings; never invent a domain.
-            const requestUrl = env.PUBLIC_API_BASE_URL;
-            if (!requestUrl) {
-              logOpsEvent("warn", "queue.order_notification.admin_push_skipped", {
-                orderId: payload.orderId,
-                notificationType: payload.notificationType,
-                outboxId: payload.outboxId,
-                reason: "platform apiUrl is not configured (Settings -> System -> Platform)",
-              });
-            } else {
-              const adminPushResult = await sendOrderNotification(db, {
-                id: payload.orderId,
-                customerName: payload.customerName,
-                notificationType: payload.notificationType,
-              }, env, requestUrl, {
-                outboxId: payload.outboxId,
-              });
-              if (adminPushResult?.hasRetryableFailure) {
-                retryableFailures.push(`admin push: ${summarizeNotificationFailures(adminPushResult.outcomes)}`);
-              }
-            }
-          }
-        } catch (fcmError) {
-          console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
-          retryableFailures.push(`admin push: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
-        }
-
-        // Staff order emails (new orders only); receipts keep retries from resending.
-        try {
-          const staffEmailResult = await sendStaffOrderEmails(db, {
-            id: payload.orderId,
-            customerName: payload.customerName,
-            notificationType: payload.notificationType,
-          }, {
-            encryptionKey,
-            env: env as unknown as Record<string, unknown>,
-            outboxId: payload.outboxId,
-          });
-          if (staffEmailResult.hasRetryableFailure) {
-            retryableFailures.push(`staff email: ${summarizeNotificationFailures(staffEmailResult.outcomes)}`);
-          }
-        } catch (staffEmailError) {
-          console.error(`[Queue] Staff order email failed for ${payload.orderId}:`, staffEmailError instanceof Error ? staffEmailError.message : "unknown error");
-          retryableFailures.push("staff email: settings or order read failed");
-        }
-
-        if (retryableFailures.length > 0) {
-          throw new Error(`Order notification delivery failed for ${payload.orderId}: ${retryableFailures.join("; ")}`);
-        }
-
-        if (outboxClaim?.claimed) {
-          await markOrderNotificationOutboxSent(db, outboxClaim.outboxId, outboxClaim.claimId);
-        }
-      } catch (error) {
-        if (outboxClaim?.claimed) {
-          await markOrderNotificationOutboxProcessingFailed(
-            db,
-            outboxClaim.outboxId,
-            outboxClaim.claimId,
-            outboxClaim.attempts,
-            error,
-          ).catch((markError: unknown) => {
-            console.error("[Queue] Failed to mark order notification outbox failure:", markError);
-          });
-          return;
-        }
-        throw error;
-      }
+    case "order.auto_fulfil": {
+      const outcome = await autoFulfilOrder(db, payload.orderId);
+      if (outcome.delivered) await bumpCacheGeneration({ env, executionCtx });
       break;
     }
 
@@ -861,7 +744,13 @@ async function processQueueMessage(
   }
 }
 
-export type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MediaVariantsQueueMessage;
+export type QueueBody =
+  | PaymentQueueMessage
+  | AuthOtpQueueMessage
+  | OrderNotificationQueueMessage
+  | NotificationQueueMessage
+  | MediaVariantsQueueMessage
+  | OrderAutoFulfilQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
@@ -1760,13 +1649,3 @@ const AUTH_OTP_PROVIDER_SETUP_PATTERNS = [
   /account\s+(?:expired|suspended|inactive|disabled)/i,
   /\bpaused\b/i,
 ];
-
-function summarizeNotificationFailures(
-  outcomes: Array<{ channel: string; provider: string; error?: string; providerStatus?: string | null; retryable: boolean }>,
-): string {
-  const failures = outcomes
-    .filter((outcome) => outcome.retryable)
-    .map((outcome) => `${outcome.channel}/${outcome.provider}:${outcome.error ?? outcome.providerStatus ?? "retryable"}`);
-
-  return failures.length > 0 ? failures.join(", ") : "retryable failure";
-}

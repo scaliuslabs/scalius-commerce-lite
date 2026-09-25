@@ -22,6 +22,7 @@ import {
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
+import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
 
 import { ok } from "../utils/api-response";
 import {
@@ -188,6 +189,8 @@ const storefrontFeedProductSchema = z.object({
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   excludeFromProductFeed: z.boolean(),
+  /** A buyer input is required: an agent (variant + quantity) cart can't buy it; send the buyer to the product page. */
+  requiresCustomization: z.boolean(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
@@ -320,6 +323,8 @@ const productDetailVariantSchema = z.object({
   discountType: z.string().nullable(),
   discountPercentage: z.number().nullable(),
   discountAmount: z.number().nullable(),
+  /** physical (shipped or picked up), digital, or service (performed, no delivery). */
+  fulfillmentKind: fulfillmentKindSchema,
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
@@ -382,6 +387,14 @@ const productDetailDataSchema = z.object({
     imageAlt: z.string().nullable(),
     options: z.array(productOptionSchema),
     features: z.array(z.string()),
+    /** Gift-card product: every SKU is a denomination (Wave B). */
+    isGiftCard: z.boolean(),
+    /** Buyer inputs asked above Add to cart; null when none. Posted in the cart line body, never a URL. */
+    customization: customizationViewSchema.nullable(),
+    /** Some buyer input is required: quick-buy links must send the buyer to this page. */
+    requiresCustomization: z.boolean(),
+    /** The saved buyer-input schema is unreadable: the product can't be bought until the store fixes it. */
+    customizationUnavailable: z.boolean(),
     attributes: z.array(productAttributeSchema),
     additionalInfo: z.array(productAdditionalInfoSchema),
     offers: z.array(z.object({

@@ -339,9 +339,9 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
-    shippingAddress: input.shippingAddress.trim(),
-    city: input.city,
-    zone: input.zone,
+    shippingAddress: input.shippingAddress?.trim() || null,
+    city: input.city ?? null,
+    zone: input.zone ?? null,
     area: input.area ?? null,
     cityName: input.cityName ?? null,
     zoneName: input.zoneName ?? null,
@@ -354,6 +354,10 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
       price: normalizeAmount(item.price),
       productName: item.productName ?? null,
       variantLabel: item.variantLabel ?? null,
+      // Absent for carts without buyer inputs, so pre-Wave A hashes are unchanged.
+      ...(item.properties && item.properties.length > 0
+        ? { properties: item.properties.map((property) => [property.key, property.value]) }
+        : {}),
     })),
     discountCodes: [...new Set(input.discountCodes.map((code) => code.trim().toUpperCase()))].sort(),
     shippingCharge: normalizeAmount(input.shippingCharge),

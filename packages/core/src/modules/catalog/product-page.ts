@@ -33,6 +33,7 @@ import {
     resolveSkuImageRepresentation,
     type ProductMediaProjection,
 } from "../products/media";
+import { readStoredCustomization } from "../products/customization";
 import {
     DEFAULT_RECOMMENDATION_LIMIT,
     getStorefrontProductRecommendations,
@@ -78,6 +79,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             isActive: products.isActive,
+            isGiftCard: products.isGiftCard,
+            customizationSchema: products.customizationSchema,
             storeCurrencyCode: storeCurrencyCodeSql(),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
@@ -109,8 +112,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .get();
 
     if (!productRow) return null;
-    const { category, storeCurrencyCode, ...product } = productRow;
+    const { category, storeCurrencyCode, customizationSchema: storedCustomization, ...product } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
+    const customization = readStoredCustomization(storedCustomization, decimalPlaces);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const variantRowsPromise = db.select({
@@ -131,6 +135,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         discountType: productVariants.discountType,
         discountBps: productVariants.discountBps,
         discountAmountMinor: productVariants.discountAmountMinor,
+        fulfillmentKind: productVariants.fulfillmentKind,
         createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
         updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
         deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
@@ -204,7 +209,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
@@ -258,6 +263,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             discountType: product.discountType || "percentage",
             freeDelivery: product.freeDelivery || false,
             features: extractFeatures(product.description),
+            isGiftCard: product.isGiftCard === true,
+            customization: customization.customization,
+            requiresCustomization: customization.requiresCustomization,
+            // A malformed schema is a product error: checkout refuses the product.
+            customizationUnavailable: customization.invalid,
             discountedPrice: catalogDiscountedPrice(product, storeCurrencyFromCode(storeCurrencyCode)),
             attributes,
             additionalInfo,

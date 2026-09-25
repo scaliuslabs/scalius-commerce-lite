@@ -34,6 +34,13 @@ import {
 } from "../products/money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
+
+/** A required (or unreadable) buyer-input schema: an agent cart can't buy the product. */
+function requiresBuyerInput(stored: string | null): boolean {
+    const parsed = parseStoredCustomizationSchema(stored);
+    return !parsed.ok || hasRequiredCustomization(parsed.schema);
+}
 import {
     loadProductMediaProjections,
     resolveSkuImageRepresentation,
@@ -67,6 +74,34 @@ type StorefrontFeedProductListRow = {
 };
 
 const STOREFRONT_FEED_CURSOR_PREFIX = "feed-v1.";
+
+/**
+ * Merchant catalogue feeds list physical goods only (Wave A §15 Q12):
+ * services and gift cards are left out, and digital SKUs wait for a Wave B
+ * feed policy. The UCP catalogue reads the same projection.
+ */
+export const FEED_FULFILLMENT_KIND = "physical" as const;
+
+/**
+ * `"products"."id"` spelled out. Drizzle renders a column inside a
+ * single-table select list unqualified, and an unqualified `"id"` inside a
+ * correlated subquery would bind to the subquery's own table.
+ */
+const PRODUCT_ID_REF = sql.raw(`"products"."id"`);
+
+/** The product is not a gift card and has at least one live physical SKU. */
+export function feedSellsPhysicalGoods(): SQL<boolean> {
+    return sql<boolean>`(
+        ${sql.raw(`"products"."is_gift_card"`)} = 0
+        AND EXISTS (
+            SELECT 1
+            FROM "product_variants" AS feed_physical_sku
+            WHERE feed_physical_sku.product_id = ${PRODUCT_ID_REF}
+              AND feed_physical_sku.deleted_at IS NULL
+              AND feed_physical_sku.fulfillment_kind = ${FEED_FULFILLMENT_KIND}
+        )
+    )`;
+}
 
 function encodeFeedCursor(position: { createdAt: number; id: string }): string {
     const bytes = new TextEncoder().encode(position.id);
@@ -109,7 +144,15 @@ type StorefrontFeedVariantRow = Omit<
     discountBps: number;
     discountAmountMinor: number;
     deletedAt: number | null;
+    fulfillmentKind: string;
 };
+
+interface StorefrontFeedVariantMap {
+    /** Physical SKUs only, per product. */
+    variants: Map<string, StorefrontFeedProductVariant[]>;
+    /** Products that also have live service or digital SKUs, left out of the feed. */
+    productsWithNonPhysicalSkus: Set<string>;
+}
 
 async function readStorefrontFeedAttributeMap(
     db: Database,
@@ -174,9 +217,9 @@ async function readStorefrontFeedVariantMap(
     decimalPlaces: number,
     mediaMapPromise: Promise<Map<string, ProductMediaProjection[]>> =
         loadProductMediaProjections(db, productIds),
-): Promise<Map<string, StorefrontFeedProductVariant[]>> {
+): Promise<StorefrontFeedVariantMap> {
     if (productIds.length === 0) {
-        return new Map();
+        return { variants: new Map(), productsWithNonPhysicalSkus: new Set() };
     }
 
     const rows: StorefrontFeedVariantRow[] = [];
@@ -209,6 +252,7 @@ async function readStorefrontFeedVariantMap(
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,
                 deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+                fulfillmentKind: productVariants.fulfillmentKind,
             })
             .from(productVariants)
             .where(and(
@@ -219,12 +263,18 @@ async function readStorefrontFeedVariantMap(
             .all() as StorefrontFeedVariantRow[]);
     }
 
+    const productsWithNonPhysicalSkus = new Set<string>();
+    const physicalRows = rows.filter((row) => {
+        if (row.fulfillmentKind === FEED_FULFILLMENT_KIND) return true;
+        productsWithNonPhysicalSkus.add(row.productId);
+        return false;
+    });
     const [selectedOptionMap, mediaMap] = await Promise.all([
-        loadVariantSelectedOptions(db, rows.map((row) => row.id)),
+        loadVariantSelectedOptions(db, physicalRows.map((row) => row.id)),
         mediaMapPromise,
     ]);
     const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
-    for (const row of rows) {
+    for (const { fulfillmentKind: _fulfillmentKind, ...row } of physicalRows) {
         const resolvedImage = resolveSkuImageRepresentation(
             mediaMap.get(row.productId) ?? [],
             row.imageId,
@@ -241,7 +291,7 @@ async function readStorefrontFeedVariantMap(
         variantMap.set(row.productId, variants);
     }
 
-    return variantMap;
+    return { variants: variantMap, productsWithNonPhysicalSkus };
 }
 
 /**
@@ -290,6 +340,7 @@ export async function getStorefrontFeedProducts(
         includeVariantLookups: true,
     }, buildBuyerCatalogPricingProjection(db)));
     conditions.push(eq(products.excludeFromProductFeed, false));
+    conditions.push(feedSellsPhysicalGoods());
     conditions.push(publicProductHasPrimaryDiscoveryImage());
 
     const query = db
@@ -307,6 +358,7 @@ export async function getStorefrontFeedProducts(
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            customizationSchema: products.customizationSchema,
             createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
@@ -331,7 +383,7 @@ export async function getStorefrontFeedProducts(
         productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)}))`,
     });
 
-    const [mediaMap, categoriesData, attributeMap, variantMap, optionMap, pricingRows] = await Promise.all([
+    const [mediaMap, categoriesData, attributeMap, feedVariants, optionMap, pricingRows] = await Promise.all([
         mediaMapPromise,
         categoryIds.length > 0
             ? db
@@ -360,12 +412,20 @@ export async function getStorefrontFeedProducts(
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
     const pricingByProduct = new Map(pricingRows.map((row) => [row.productId, row]));
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, ...productRow }) => {
+    const variantMap = feedVariants.variants;
+
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, customizationSchema, ...productRow }) => {
         const pricing = pricingByProduct.get(productRow.id);
+        // The buyer projection counts every SKU. When a product also sells a
+        // service, its feed availability comes from its physical SKUs only.
+        const availableForSale = Boolean(pricing?.availableForSale) && (
+            !feedVariants.productsWithNonPhysicalSkus.has(productRow.id)
+            || (variantMap.get(productRow.id) ?? []).some((variant) => variant.availabilityBand !== "out_of_stock")
+        );
         const product = {
             ...productRow,
             hasCustomerOptions: pricing?.hasCustomerOptions ?? 0,
-            availableForSale: pricing?.availableForSale ?? 0,
+            availableForSale: availableForSale ? 1 : 0,
         };
         const imgData = imageMap.get(product.id);
         const category = product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
@@ -385,6 +445,9 @@ export async function getStorefrontFeedProducts(
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            // Agents and the UCP catalogue can't send buyer inputs: they skip
+            // products that require one (an unreadable schema counts too).
+            requiresCustomization: requiresBuyerInput(customizationSchema),
             productCondition: product.productCondition,
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
@@ -432,6 +495,8 @@ export interface ProductFeedProjectionDiagnostic {
     isActive: boolean;
     isDeleted: boolean;
     excludeFromProductFeed: boolean;
+    /** False for gift cards and products with only service or digital SKUs. */
+    sellsPhysicalGoods: boolean;
     hasBuyerResolvableSku: boolean;
     hasPrimaryDiscoveryImage: boolean;
     matchingSkuCount: number;
@@ -454,12 +519,13 @@ export async function getFeedProjectionDiagnosticById(
             isActive: products.isActive,
             excludeFromProductFeed: products.excludeFromProductFeed,
             isDeleted: sql<boolean>`${products.deletedAt} IS NOT NULL`,
-            hasBuyerResolvableSku: publicProductHasBuyerResolvableSku(),
-            hasPrimaryDiscoveryImage: publicProductHasPrimaryDiscoveryImage(),
+            sellsPhysicalGoods: feedSellsPhysicalGoods(),
+            hasBuyerResolvableSku: publicProductHasBuyerResolvableSku(PRODUCT_ID_REF),
+            hasPrimaryDiscoveryImage: publicProductHasPrimaryDiscoveryImage(PRODUCT_ID_REF),
             matchingSkuCount: sql<number>`(
                 SELECT count(*)
                 FROM "product_variants" AS preview_sku
-                WHERE preview_sku.product_id = ${products.id}
+                WHERE preview_sku.product_id = ${PRODUCT_ID_REF}
                   AND preview_sku.deleted_at IS NULL
                   AND lower(trim(preview_sku.sku)) = ${normalizedSku}
             )`,
@@ -474,6 +540,7 @@ export async function getFeedProjectionDiagnosticById(
             isActive: Boolean(product.isActive),
             isDeleted: Boolean(product.isDeleted),
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            sellsPhysicalGoods: Boolean(product.sellsPhysicalGoods),
             hasBuyerResolvableSku: Boolean(product.hasBuyerResolvableSku),
             hasPrimaryDiscoveryImage: Boolean(product.hasPrimaryDiscoveryImage),
             matchingSkuCount: Number(product.matchingSkuCount) || 0,

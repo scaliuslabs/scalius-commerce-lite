@@ -23,6 +23,7 @@ import type { OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types"
 import { orderNumberSearchCondition } from "../number";
 import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
+import { formatOrderCsvLineProperties } from "../csv-export";
 import {
     resolveActiveRefundOperationsForOrders,
     selectActiveRefundAttemptRowsForOrders,
@@ -119,6 +120,7 @@ export const ORDER_LIST_VIEWS = [
     "cod_to_collect",
     "delivery_failed",
     "returned",
+    "ready_for_pickup",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -166,6 +168,27 @@ function orderListViewCondition(view: OrderListView): SQL {
                 AND ${codTrackingStatusExists([CodStatus.FAILED])}`;
         case "returned":
             return sql`${orders.status} = ${OrderStatus.RETURNED}`;
+        case "ready_for_pickup":
+            // Shopify's "Ready for pickup": marked ready, not collected yet.
+            return sql`${orders.shippingMethodKind} = 'pickup'
+                AND ${orders.pickupReadyAt} IS NOT NULL
+                AND ${orders.fulfillmentStatus} <> ${FulfillmentStatus.COMPLETE}
+                AND ${inArray(orders.status, [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED])}`;
+    }
+}
+
+/** How the order reaches the buyer: shipped, collected, or nothing physical. */
+export const ORDER_DELIVERY_METHOD_FILTERS = ["delivery", "pickup", "none"] as const;
+export type OrderDeliveryMethodFilter = (typeof ORDER_DELIVERY_METHOD_FILTERS)[number];
+
+function orderDeliveryMethodCondition(filter: OrderDeliveryMethodFilter): SQL {
+    switch (filter) {
+        case "delivery":
+            return sql`${orders.requiresShipping} = 1`;
+        case "pickup":
+            return sql`${orders.shippingMethodKind} = 'pickup'`;
+        case "none":
+            return sql`${orders.requiresShipping} = 0 AND ${orders.shippingMethodKind} IS NULL`;
     }
 }
 
@@ -211,6 +234,7 @@ export async function listOrders(db: Database, options: {
     fulfillmentStatus?: string;
     paymentRecovery?: OrderPaymentRecoveryFilter;
     view?: OrderListView;
+    deliveryMethod?: OrderDeliveryMethodFilter;
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
@@ -232,6 +256,7 @@ export async function listOrders(db: Database, options: {
         paymentMethod,
         fulfillmentStatus,
         paymentRecovery,
+        deliveryMethod,
         page: rawPage = 1,
         limit: rawLimit = 10,
         showArchived = false,
@@ -316,6 +341,10 @@ export async function listOrders(db: Database, options: {
 
     if (fulfillmentStatus) {
         whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`);
+    }
+
+    if (deliveryMethod) {
+        whereConditions.push(orderDeliveryMethodCondition(deliveryMethod));
     }
 
     if (paymentRecovery) {
@@ -600,7 +629,7 @@ export async function listOrders(db: Database, options: {
 /** Address, note and line items for an export page (at most 90 orders per read). */
 export async function loadOrderExportDetails(db: Database, orderIds: readonly string[]) {
     const details = new Map<string, {
-        shippingAddress: string;
+        shippingAddress: string | null;
         notes: string | null;
         /** Every parcel's courier and tracking, in the order they left. */
         courierName: string | null;
@@ -611,6 +640,8 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             quantity: number;
             unitPrice: number;
             lineTotal: number;
+            /** Buyer inputs as "Engraving: Anika (+৳200)". */
+            properties: string[];
         }>;
     }>();
     for (const chunk of chunkIds(orderIds)) {
@@ -619,6 +650,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 id: orders.id,
                 shippingAddress: orders.shippingAddress,
                 notes: orders.notes,
+                currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
             }).from(orders).where(inArray(orders.id, chunk)).all(),
             db.select({
@@ -628,6 +660,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 quantity: orderItems.quantity,
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
+                properties: orderItems.properties,
             }).from(orderItems).where(inArray(orderItems.orderId, chunk)).orderBy(orderItems.createdAt, orderItems.id).all(),
             db.select({
                 orderId: deliveryShipments.orderId,
@@ -642,7 +675,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 .orderBy(deliveryShipments.createdAt, deliveryShipments.id)
                 .all(),
         ]);
-        const places = new Map(orderRows.map((row) => [row.id, row.currencyDecimalPlaces]));
+        const currencies = new Map(orderRows.map((row) => [row.id, row]));
         const parcels = new Map<string, { couriers: Set<string>; tracking: Set<string> }>();
         for (const shipment of shipmentRows) {
             if (shipment.status === ShipmentStatus.CANCELLED || shipment.status === ShipmentStatus.FAILED) continue;
@@ -656,8 +689,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
         for (const row of orderRows) {
             const parcel = parcels.get(row.id);
             details.set(row.id, {
-                // Nullable from migration 0083; always present until Wave A S3.
-                shippingAddress: row.shippingAddress ?? "",
+                shippingAddress: row.shippingAddress,
                 notes: row.notes,
                 courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
                 trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,
@@ -665,13 +697,15 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             });
         }
         for (const item of itemRows) {
-            const decimals = places.get(item.orderId) ?? 2;
+            const currency = currencies.get(item.orderId);
+            const decimals = currency?.currencyDecimalPlaces ?? 2;
             details.get(item.orderId)?.lines.push({
                 productName: item.productName,
                 variantLabel: item.variantLabel,
                 quantity: item.quantity,
                 unitPrice: fromMinor(item.unitPriceMinor, decimals),
                 lineTotal: fromMinor(item.lineSubtotalMinor, decimals),
+                properties: formatOrderCsvLineProperties(item.properties, currency?.currencyCode ?? "BDT", decimals),
             });
         }
     }

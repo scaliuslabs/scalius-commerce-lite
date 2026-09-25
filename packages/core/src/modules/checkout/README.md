@@ -31,3 +31,23 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
    Every new commit requires the prepared `checkoutAuthorityRevision` and guards it inside the final batch, including online payments, discounts, agent checkout, and reservation-replay recovery. A changed catalog/delivery/tax/checkout policy rolls back the whole commit and asks the buyer to review again; an already-committed order remains replayable after authority changes.
 6. **Post-commit work** -- The durable notification/Meta claims and initial COD state are already part of the authoritative commit when applicable. Queue relay, Meta dispatch, semantic product-availability cache invalidation, and hashed checkout-status/receipt KV hints run after commit through `executionCtx.waitUntil()` when available. Their failure cannot turn a committed checkout into a false `500`; durable claims or database fallback remain available for retry and repair.
 7. **Recovery and guest support** -- `GET /orders/status/:token` accepts only derived `cst_` status tokens and receipt validation accepts only private `chk_` receipt tokens. Both use KV as the fast path, then fall back to `checkout_attempts` plus the committed `orders` row. Fallbacks that prove a completed checkout schedule hashed KV repair through `waitUntil()`, so repeated polling returns to the fast path without storing raw receipt proof in URL paths or KV keys. `GET /orders/receipt/:id` returns buyer-safe receipt facts plus eligible support-request actions and reuses its receipt order projection for support-action eligibility instead of rereading the order. `POST /orders/receipt/:id/support-requests` accepts the private receipt token and creates a cancellation, return, or refund request in the same support-request ledger used by customer accounts. Its support-request `customerId` comes only from `orders.accountOwnerCustomerId`, never from the broader CRM link. It never directly mutates payment, shipment, inventory, COD, or order status.
+
+## Order lines (Wave A)
+
+- **Line types.** Cart validation reads each SKU's `fulfillment_kind` and the
+  product's `is_gift_card`; the delivery preflight turns physical lines into
+  `ship` (a delivery rate) or `pickup` (a pickup rate). A cart with nothing
+  physical has no method, no fee and no address. A line whose type has no
+  fulfiller (`fulfilment/registry.ts`) fails closed with `FULFILMENT_UNAVAILABLE`.
+- **Address.** Required only when a line ships (`orders.requires_shipping`,
+  also a trigger). Without one the tax destination is null: only store-wide
+  rates apply. Cash on delivery needs a line handed over in person.
+- **Buyer inputs.** `items[].properties` are resolved against
+  `products.customization_schema` (`@scalius/shared/line-properties`) in cart
+  validation and again at commit. The unit price is base + surcharges; the
+  labelled snapshot, the surcharge and the base price are frozen on the line.
+  Stock is checked per SKU across lines. The quote fingerprint and the attempt
+  hash include properties only when a line has them, so older payloads hash as
+  before.
+- **Commit budget.** A 99-line commit is one batch of 39 statements, each
+  within D1's 100 bound values (`wave-a-checkout.d1.test.ts`).

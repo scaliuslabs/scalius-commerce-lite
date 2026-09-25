@@ -27,6 +27,8 @@ export const PRODUCT_FEED_DIAGNOSTIC_REASONS = [
     "storefront_url_unavailable",
     "product_feed_excluded",
     "inactive_deleted_unpublished",
+    // Services and gift cards (digital until Wave B) are not merchant-feed items.
+    "non_physical_excluded",
     "inconsistent_option_axes",
     "no_buyer_sku",
     "non_positive_price",
@@ -79,6 +81,8 @@ export interface ProductFeedDiagnosticScanProduct {
     isActive: boolean;
     excludeFromProductFeed: boolean;
     deletedAt: number | null;
+    /** Gift cards never enter the merchant feeds. Omitted means false. */
+    isGiftCard?: boolean;
     price: number;
     discountType: string | null;
     discountPercentage: number | null;
@@ -94,6 +98,8 @@ export interface ProductFeedDiagnosticScanVariant {
     isDefault: boolean;
     trackInventory: boolean;
     price: number;
+    /** Only physical SKUs enter the merchant feeds. Omitted means physical. */
+    fulfillmentKind?: string;
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
@@ -194,6 +200,10 @@ function getBuyerTopology(variants: ProductFeedDiagnosticScanVariant[]) {
         return { mode: "simple" as const, variant: simpleSku };
     }
     return { mode: "none" as const };
+}
+
+function isPhysicalSku(variant: ProductFeedDiagnosticScanVariant): boolean {
+    return (variant.fulfillmentKind ?? "physical") === "physical";
 }
 
 function isVariantAvailable(variant: ProductFeedDiagnosticScanVariant): boolean {
@@ -319,7 +329,24 @@ export function buildProductFeedDiagnosticsFromScan({
             continue;
         }
 
-        const topology = getBuyerTopology(variants.get(product.id) ?? []);
+        // The same physical-goods policy as the feed projection (catalog/feed.ts).
+        const productVariantsForProduct = variants.get(product.id) ?? [];
+        const physicalVariants = productVariantsForProduct.filter(isPhysicalSku);
+        if (product.isGiftCard || (productVariantsForProduct.length > 0 && physicalVariants.length === 0)) {
+            recordIssue(product, "non_physical_excluded", 0);
+            continue;
+        }
+
+        const topology = getBuyerTopology(physicalVariants);
+        const nonPhysicalOptionRows = productVariantsForProduct
+            .filter((variant) => !isPhysicalSku(variant) && isBuyerOptionSku(variant)).length;
+        if (topology.mode === "optioned" && nonPhysicalOptionRows > 0) {
+            recordIssue(
+                product,
+                "non_physical_excluded",
+                feedsPolicy.variantStrategy === "products" ? 0 : nonPhysicalOptionRows,
+            );
+        }
         if (topology.mode === "inconsistent") {
             recordIssue(
                 product,
@@ -444,6 +471,7 @@ export async function getProductFeedDiagnostics(
             slug: products.slug,
             isActive: products.isActive,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            isGiftCard: products.isGiftCard,
             priceMinor: products.priceMinor,
             discountType: products.discountType,
             discountBps: products.discountBps,
@@ -465,6 +493,7 @@ export async function getProductFeedDiagnostics(
             slug: row.slug,
             isActive: Boolean(row.isActive),
             excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
+            isGiftCard: Boolean(row.isGiftCard),
             price: price.price,
             discountType: row.discountType,
             discountPercentage: price.discountPercentage,
@@ -502,6 +531,7 @@ export async function getProductFeedDiagnostics(
         discountType: string | null;
         discountBps: number;
         discountAmountMinor: number;
+        fulfillmentKind: string;
     }> = [];
     for (const productIdChunk of chunkProductIds(productIds)) {
         variantRows.push(...await db
@@ -517,6 +547,7 @@ export async function getProductFeedDiagnostics(
                 discountType: productVariants.discountType,
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,
+                fulfillmentKind: productVariants.fulfillmentKind,
             })
             .from(productVariants)
             .where(and(
@@ -551,6 +582,7 @@ export async function getProductFeedDiagnostics(
             discountType: row.discountType,
             discountPercentage: price.discountPercentage,
             discountAmount: price.discountAmount,
+            fulfillmentKind: row.fulfillmentKind,
         });
         variantMap.set(row.productId, productVariantsForProduct);
     }

@@ -6,6 +6,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { deliveryShipments } from "@scalius/database/schema";
 import { mapProviderStatus, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 import {
     buildWebhookEventId,
@@ -300,7 +301,10 @@ app.post("/", async (c) => {
             })
             .where(eq(deliveryShipments.id, shipment.id));
 
+        // The ledger follows the parcel (F11); see the Pathao webhook.
+        await syncCourierFulfilmentFromShipment(db, shipment.id, normalizedStatus);
         const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+        await syncCourierFulfilmentFromShipment(db, shipment.id, normalizedStatus);
         await enqueueOrderStatusChangeNotification({
             db,
             queue: c.env.JOBS_QUEUE,

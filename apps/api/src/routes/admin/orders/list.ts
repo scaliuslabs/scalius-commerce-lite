@@ -1,9 +1,15 @@
 // Dashboard order list, export, payment-recovery lists, and the order form product picker.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { ORDER_LIST_VIEWS, listOrders, loadOrderExportDetails } from "@scalius/core/modules/orders";
-import { listProducts } from "@scalius/core/modules/products";
+import {
+    ORDER_DELIVERY_METHOD_FILTERS,
+    ORDER_LIST_VIEWS,
+    listOrders,
+    loadOrderExportDetails,
+} from "@scalius/core/modules/orders";
+import { listProducts, readStoreDecimalPlaces, readStoredCustomization } from "@scalius/core/modules/products";
+import { customizationViewSchema } from "../../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
-import { FulfillmentStatus, PaymentStatus, productVariants } from "@scalius/database/schema";
+import { FulfillmentStatus, PaymentStatus, productVariants, products } from "@scalius/database/schema";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
@@ -34,7 +40,7 @@ const paymentStatusQuerySchema = z.enum([
 ]);
 
 const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
-    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
 });
 
 const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;
@@ -46,6 +52,10 @@ const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PARTIAL,
     FulfillmentStatus.COMPLETE,
 ]);
+
+const deliveryMethodQuerySchema = z.enum(ORDER_DELIVERY_METHOD_FILTERS).openapi({
+    description: "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).",
+});
 
 const paymentRecoveryQuerySchema = z.enum([
     "recoverable",
@@ -99,6 +109,10 @@ const catalogProductsRoute = createRoute({
                         availableStock: z.number().int().nullable().openapi({
                             description: "Units buyers can still order across active SKUs; null when a SKU has no stock limit.",
                         }),
+                        /** A buyer input is required: collect it before adding the line. */
+                        requiresCustomization: z.boolean(),
+                        /** The product's buyer inputs, to render in the picker; null when none. */
+                        customization: customizationViewSchema.nullable(),
                     })),
                 },
             },
@@ -134,11 +148,25 @@ app.openapi(catalogProductsRoute, async (c) => {
         row.productId,
         Number(row.untracked) > 0 ? null : Number(row.available) || 0,
     ]));
+    // At most 20 ids per page, well under the 90-id chunk bound.
+    const [customizationRows, decimalPlaces] = productIds.length > 0
+        ? await Promise.all([
+            c.get("db").select({ id: products.id, customizationSchema: products.customizationSchema })
+                .from(products).where(inArray(products.id, productIds)).all(),
+            readStoreDecimalPlaces(c.get("db")),
+        ])
+        : [[], 0] as const;
+    const customizationByProduct = new Map(customizationRows.map((row) => [
+        row.id,
+        readStoredCustomization(row.customizationSchema, decimalPlaces),
+    ]));
     return ok(c, {
         ...result,
         products: result.products.map((product) => ({
             ...product,
             availableStock: stockByProduct.has(product.id) ? stockByProduct.get(product.id)! : 0,
+            requiresCustomization: customizationByProduct.get(product.id)?.requiresCustomization ?? false,
+            customization: customizationByProduct.get(product.id)?.customization ?? null,
         })),
     });
 });
@@ -163,6 +191,7 @@ const listOrdersRoute = createRoute({
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
+            deliveryMethod: deliveryMethodQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum(ORDER_LIST_SORTS).optional().openapi({
@@ -202,6 +231,7 @@ app.openapi(listOrdersRoute, async (c) => {
         paymentStatus: query.paymentStatus,
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
+        deliveryMethod: query.deliveryMethod,
         paymentRecovery: query.paymentRecovery,
         showArchived: query.archived === "true",
         sort: effectiveSort,

@@ -302,7 +302,7 @@ describe("storefront checkout authority at the atomic commit", () => {
     for (const table of [
       "orders", "order_items", "checkout_attempts", "order_receipts", "customers",
       "customer_history", "inventory_movements", "order_tax_snapshots",
-      "order_item_tax_snapshots", "order_notification_outbox", "meta_capi_purchase_outbox",
+      "order_item_tax_snapshots", "notification_outbox", "meta_capi_purchase_outbox",
       "order_discount_allocations", "promotion_redemptions",
     ]) {
       expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);

@@ -548,6 +548,7 @@ export async function createVariant(
         stockVersion: 1,
         isDefault: false,
         trackInventory: data.trackInventory ?? true,
+        fulfillmentKind: data.fulfillmentKind ?? "physical",
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: data.discountType || "percentage",
@@ -714,6 +715,8 @@ export async function updateVariant(
         sku,
         priceMinor: simpleProductPricing?.priceMinor ?? toStoreMinor(data.price, currency),
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
+        // Omitted keeps the SKU's kind.
+        ...(data.fulfillmentKind !== undefined ? { fulfillmentKind: data.fulfillmentKind } : {}),
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: existingIsSimpleSku ? "percentage" : data.discountType || "percentage",

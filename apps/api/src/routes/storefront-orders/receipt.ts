@@ -16,8 +16,21 @@ import {
   verifyOrderLookupOtp,
   deleteOrderPaymentRecoveryChallenge,
   getReceiptOrderSupportRequestStateForOrder,
+  findOrderConversationId,
+  listBuyerOrderFulfilments,
 } from "@scalius/core/modules/orders";
-import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/browser";
+import {
+  orderMoneyAmounts,
+  orderMoneySelection,
+  presentOrderLineFulfilment,
+  presentOrderPickup,
+  presentShippingMethodKind,
+} from "@scalius/core/modules/orders/browser";
+import {
+  buyerOrderFulfilmentSchema,
+  orderFulfilmentShape,
+  orderLineFulfilmentShape,
+} from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media";
@@ -65,7 +78,13 @@ const orderReceiptSchema = z.object({
   customerEmail: z.string().nullable(),
   /** True when the order is saved to a customer account. */
   accountLinked: z.boolean(),
-  shippingAddress: z.string(),
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: z.string().nullable(),
+  ...orderFulfilmentShape,
+  /** Each handed-over action: a parcel sent, a pickup, a performed service. */
+  fulfillments: z.array(buyerOrderFulfilmentSchema),
+  /** The order thread, once the buyer or the store has written on it. */
+  conversationId: z.string().nullable(),
   totalAmount: z.number(),
   shippingCharge: z.number(),
   discountAmount: z.number().nullable(),
@@ -89,8 +108,8 @@ const orderReceiptSchema = z.object({
   totalAmountMinor: z.number().int().nullable(),
   taxLabel: z.string().nullable(),
   pricesIncludeTax: z.boolean(),
-  city: z.string(),
-  zone: z.string(),
+  city: z.string().nullable(),
+  zone: z.string().nullable(),
   area: z.string().nullable(),
   cityName: z.string().nullable(),
   zoneName: z.string().nullable(),
@@ -116,6 +135,7 @@ const orderReceiptSchema = z.object({
     discountAmountMinor: z.number().int().nullable(),
     taxableAmountMinor: z.number().int().nullable(),
     taxAmountMinor: z.number().int(),
+    ...orderLineFulfilmentShape,
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -291,6 +311,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       shippingMethodDescription: orders.shippingMethodDescription,
       shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
       shippingFeeWaived: orders.shippingFeeWaived,
+      shippingMethodKind: orders.shippingMethodKind,
+      pickupAddress: orders.pickupAddress,
+      pickupHours: orders.pickupHours,
+      pickupReadyAt: orders.pickupReadyAt,
+      requiresShipping: orders.requiresShipping,
       notes: orders.notes,
       taxAmountMinor: orders.taxAmountMinor,
       taxLabel: orders.taxLabel,
@@ -332,6 +357,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         discountAmountMinor: orderItems.discountAmountMinor,
         taxableAmountMinor: orderItems.taxableAmountMinor,
         taxAmountMinor: orderItems.taxAmountMinor,
+        fulfillmentType: orderItems.fulfillmentType,
+        fulfilledQuantity: orderItems.fulfilledQuantity,
+        properties: orderItems.properties,
+        propertiesPriceMinor: orderItems.propertiesPriceMinor,
+        baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
       })
       .from(orderItems)
       .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
@@ -339,6 +369,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     getReceiptOrderSupportRequestStateForOrder(db, order),
     listOrderDiscountLines(db, id),
     getBuyerOrderTracking(db, order),
+  ]);
+  // Ledger and thread reads come after the first wave: at most six D1
+  // connections per invocation.
+  const [fulfillments, conversationId] = await Promise.all([
+    listBuyerOrderFulfilments(db, id),
+    findOrderConversationId(db, id),
   ]);
 
   const money = orderMoneyAmounts(order);
@@ -350,8 +386,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customerPhone: order.customerPhone,
       customerEmail: order.customerEmail,
       accountLinked: order.accountOwnerCustomerId !== null,
-      // Nullable from migration 0083; always present until the Wave A S3 contract.
-      shippingAddress: order.shippingAddress ?? "",
+      shippingAddress: order.shippingAddress,
+      requiresShipping: order.requiresShipping,
+      shippingMethodKind: presentShippingMethodKind(order.shippingMethodKind),
+      pickup: presentOrderPickup(order),
+      fulfillments,
+      conversationId,
       totalAmount: money.totalAmount,
       shippingCharge: money.shippingCharge,
       discountAmount: money.discountAmount,
@@ -372,8 +412,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       totalAmountMinor: order.totalAmountMinor,
       taxLabel: order.taxLabel,
       pricesIncludeTax: order.pricesIncludeTax,
-      city: order.city ?? "",
-      zone: order.zone ?? "",
+      city: order.city,
+      zone: order.zone,
       area: order.area,
       cityName: order.cityName,
       zoneName: order.zoneName,
@@ -385,8 +425,24 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-      items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
+      items: items.map(({
+        productImageObjectKey,
+        productImageStatus,
+        fulfillmentType,
+        fulfilledQuantity,
+        properties,
+        propertiesPriceMinor,
+        baseUnitPriceMinor,
+        ...item
+      }) => ({
         ...item,
+        ...presentOrderLineFulfilment({
+          fulfillmentType,
+          fulfilledQuantity,
+          properties,
+          propertiesPriceMinor,
+          baseUnitPriceMinor,
+        }, order.currencyDecimalPlaces),
         price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&

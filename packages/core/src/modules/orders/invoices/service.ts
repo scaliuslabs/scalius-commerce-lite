@@ -18,6 +18,7 @@ import { getBusinessSettings } from "../../settings/business-settings.service";
 import { readInvoiceOrderSource, readOrderRefundedAmount } from "./order-reader";
 import {
   INVOICE_RENDER_VERSION,
+  INVOICE_SNAPSHOT_SCHEMA_VERSION,
   formatInvoiceNumber,
   hashInvoiceContent,
   invoiceSnapshotToDocument,
@@ -213,7 +214,7 @@ async function attemptIssueInvoice(params: {
     invoiceNumber,
   );
   const invoiceSnapshot: StoredInvoiceSnapshot = {
-    schemaVersion: 1,
+    schemaVersion: INVOICE_SNAPSHOT_SCHEMA_VERSION,
     renderVersion: INVOICE_RENDER_VERSION,
     invoiceNumber,
     formattedNumber,

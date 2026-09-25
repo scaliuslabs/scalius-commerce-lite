@@ -2,8 +2,22 @@ import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import {
+    isFulfillmentKind,
+    resolveLineFulfillmentType,
+    type FulfillmentKind,
+    type FulfillmentType,
+} from "@scalius/shared/fulfilment";
+import {
+    parseStoredCustomizationSchema,
+    resolveLineProperties,
+    type CanonicalLineProperty,
+    type ResolvedLineProperty,
+} from "@scalius/shared/line-properties";
 import { variantOptionLabelSql } from "../products/option-model";
+import { hasFulfiller } from "../fulfilment/registry";
 import {
     loadProductMediaProjections,
     type ProductMediaProjection,
@@ -16,22 +30,33 @@ export type StorefrontCartIssueCode =
     | "VARIANT_UNAVAILABLE"
     | "VARIANT_MISMATCH"
     | "QUANTITY_UNAVAILABLE"
-    | "PRICE_CHANGED";
+    | "PRICE_CHANGED"
+    /** A required buyer input (engraving, fit…) is missing. */
+    | "PROPERTIES_REQUIRED"
+    /** A buyer input is unknown, too long, or not one of the choices. */
+    | "PROPERTIES_INVALID"
+    /** The store cannot hand this kind of item over yet (e.g. digital before Wave B). */
+    | "FULFILMENT_UNAVAILABLE";
 
 export type StorefrontCartIssueAction =
     | "remove"
     | "select_variant"
     | "reduce_quantity"
-    | "refresh_item";
+    | "refresh_item"
+    /** Open the product page to fill or fix its buyer inputs. */
+    | "edit_properties";
 
 export interface StorefrontCartValidationItem {
     cartKey?: string | null;
     productId: string;
     variantId: string;
     quantity: number;
+    /** The unit price the buyer saw: base plus surcharges. */
     price?: number;
     productName?: string | null;
     variantLabel?: string | null;
+    /** Buyer inputs `[{ key, value }]`; resolved against the product's schema. */
+    properties?: unknown;
 }
 
 export interface StorefrontCartItemIssue {
@@ -48,6 +73,8 @@ export interface StorefrontCartItemIssue {
     availableQuantity?: number;
     submittedPrice?: number;
     currentPrice?: number;
+    /** The buyer input a PROPERTIES_* issue is about, when it is one field. */
+    propertyKey?: string | null;
 }
 
 export interface StorefrontCartValidatedItem {
@@ -56,7 +83,17 @@ export interface StorefrontCartValidatedItem {
     productId: string;
     variantId: string;
     quantity: number;
+    /** base + surcharges: what one unit costs. */
     unitPriceMinor: number;
+    /** The product/variant price after its own sale; surcharges excluded. */
+    baseUnitPriceMinor: number;
+    propertiesPriceMinor: number;
+    /** Labelled snapshot entries frozen on the order line. */
+    properties: ResolvedLineProperty[];
+    /** Identity form for the cart line key and the quote fingerprint. */
+    canonicalProperties: CanonicalLineProperty[];
+    fulfillmentKind: FulfillmentKind;
+    isGiftCard: boolean;
     productName: string;
     variantLabel: string | null;
     freeDelivery: boolean;
@@ -107,6 +144,9 @@ export interface StorefrontCartProductRow {
     discountAmountMinor: number;
     freeDelivery: boolean;
     taxClassId: string | null;
+    isGiftCard: boolean;
+    /** Raw `products.customization_schema`; parsed and validated per line. */
+    customizationSchema: string | null;
 }
 
 export interface StorefrontCartVariantRow {
@@ -128,6 +168,7 @@ export interface StorefrontCartVariantRow {
     discountAmountMinor: number;
     taxClassId: string | null;
     imageId: string | null;
+    fulfillmentKind: string;
 }
 
 function variantLabel(variant: Pick<StorefrontCartVariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
@@ -226,6 +267,8 @@ export function selectStorefrontCartProductRows(
             discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             taxClassId: products.taxClassId,
+            isGiftCard: products.isGiftCard,
+            customizationSchema: products.customizationSchema,
         })
         .from(products)
         .where(
@@ -266,6 +309,7 @@ export function selectStorefrontCartVariantRows(
             discountAmountMinor: productVariants.discountAmountMinor,
             taxClassId: productVariants.taxClassId,
             imageId: productVariants.imageId,
+            fulfillmentKind: productVariants.fulfillmentKind,
         })
         .from(productVariants)
         .where(and(
@@ -348,6 +392,12 @@ export function resolveStorefrontCartValidationFromRows(
     const validatedItems: StorefrontCartValidatedItem[] = [];
     let subtotalMinor = 0;
     let hasFreeDeliveryProduct = false;
+    // Stock is per SKU, not per line: the same SKU with different buyer
+    // inputs is several lines drawing on one availability (P5).
+    const requestedByVariant = new Map<string, number>();
+    for (const item of items) {
+        requestedByVariant.set(item.variantId, (requestedByVariant.get(item.variantId) ?? 0) + item.quantity);
+    }
 
     items.forEach((item, index) => {
         const product = productMap.get(item.productId);
@@ -418,14 +468,36 @@ export function resolveStorefrontCartValidationFromRows(
         }
 
         const variant = requestedVariant;
+        const fulfillmentKind: FulfillmentKind = isFulfillmentKind(variant.fulfillmentKind)
+            ? variant.fulfillmentKind
+            : "physical";
+        const isGiftCard = product.isGiftCard === true;
+        const knownType: FulfillmentType | null = resolveLineFulfillmentType(
+            { fulfillmentKind, isGiftCard },
+            null,
+        );
+        const displayName = `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""}`;
+        if (knownType !== null && !hasFulfiller(knownType)) {
+            addIssue(issues, item, index, {
+                code: "FULFILMENT_UNAVAILABLE",
+                action: "remove",
+                message: `${displayName} can't be ordered online right now.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
+
         const availableQuantity = availableForVariant(variant, pool);
-        if (availableQuantity < item.quantity) {
+        const requestedForVariant = requestedByVariant.get(variant.id) ?? item.quantity;
+        if (availableQuantity < requestedForVariant) {
+            const inSeveralLines = requestedForVariant > item.quantity;
             addIssue(issues, item, index, {
                 code: "QUANTITY_UNAVAILABLE",
                 action: availableQuantity > 0 ? "reduce_quantity" : "remove",
                 message: availableQuantity > 0
-                    ? `Only ${availableQuantity} left for ${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""}.`
-                    : `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} is out of stock.`,
+                    ? `Only ${availableQuantity} left for ${displayName}${inSeveralLines ? " across your cart" : ""}.`
+                    : `${displayName} is out of stock.`,
                 productName: product.name,
                 variantLabel: requestedVariantLabel,
                 availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : undefined,
@@ -433,7 +505,37 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
-        const unitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);
+        const schemaRead = parseStoredCustomizationSchema(product.customizationSchema);
+        if (!schemaRead.ok) {
+            // A malformed stored schema is a product error, never "no inputs".
+            addIssue(issues, item, index, {
+                code: "PRODUCT_UNAVAILABLE",
+                action: "remove",
+                message: `${product.name} is not available for checkout right now.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
+        const resolvedProperties = resolveLineProperties(schemaRead.schema, item.properties);
+        if (!resolvedProperties.ok) {
+            const field = schemaRead.schema?.fields.find((candidate) => candidate.key === resolvedProperties.key);
+            addIssue(issues, item, index, {
+                code: resolvedProperties.code,
+                action: "edit_properties",
+                message: resolvedProperties.code === "PROPERTIES_REQUIRED"
+                    ? `${displayName} needs "${field?.label ?? "a required detail"}" before checkout.`
+                    : `Check the details you entered for ${displayName}${field ? ` ("${field.label}")` : ""}.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+                propertyKey: resolvedProperties.key,
+            });
+            return;
+        }
+
+        const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);
+        const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
+        const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor;
         const submittedPriceMinor = typeof item.price === "number"
             ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;
@@ -463,6 +565,12 @@ export function resolveStorefrontCartValidationFromRows(
             variantId: variant.id,
             quantity: item.quantity,
             unitPriceMinor,
+            baseUnitPriceMinor,
+            propertiesPriceMinor,
+            properties: resolvedProperties.properties,
+            canonicalProperties: resolvedProperties.canonical,
+            fulfillmentKind,
+            isGiftCard,
             productName: product.name,
             variantLabel: requestedVariantLabel,
             freeDelivery: product.freeDelivery,
@@ -511,18 +619,95 @@ export async function validateStorefrontCartItems(
     );
 }
 
-/** Cart validation in the decimal HTTP contract (prices in major units). */
+/**
+ * Cart validation in the decimal HTTP contract (prices in major units).
+ * `propertiesHashes` (from `storefrontLinePropertiesHashes`, async WebCrypto)
+ * are per validated item; lines without buyer inputs hash to "none".
+ */
 export function presentStorefrontCartValidation(
     result: StorefrontCartValidationResult,
     decimalPlaces: number,
+    fulfilment: StorefrontCartFulfilmentSummary = summarizeStorefrontCartFulfilment(result, null),
+    propertiesHashes: readonly string[] = [],
 ) {
     const { subtotalMinor, items, ...rest } = result;
     return {
         ...rest,
-        items: items.map(({ unitPriceMinor, ...item }) => ({
+        ...presentStorefrontCartFulfilmentSummary(fulfilment),
+        items: items.map(({
+            unitPriceMinor,
+            baseUnitPriceMinor,
+            canonicalProperties,
+            isGiftCard: _isGiftCard,
+            ...item
+        }, position) => ({
             ...item,
             unitPrice: fromMinor(unitPriceMinor, decimalPlaces),
+            baseUnitPrice: fromMinor(baseUnitPriceMinor, decimalPlaces),
+            propertiesPrice: fromMinor(item.propertiesPriceMinor, decimalPlaces),
+            properties: item.properties.map((property) => ({
+                ...property,
+                price: fromMinor(property.priceMinor, decimalPlaces),
+            })),
+            propertiesHash: propertiesHashes[position]
+                ?? (canonicalProperties.length === 0 ? NO_PROPERTIES_HASH : ""),
+            fulfillmentType: fulfilment.lineTypes[position] ?? null,
         })),
         subtotal: fromMinor(subtotalMinor, decimalPlaces),
     };
+}
+
+/**
+ * The order-level consequences of a cart's lines (Wave A §2.7), before or
+ * after the buyer picks a delivery method: whether a method is needed,
+ * whether the order ships to an address, and whether cash on delivery fits.
+ */
+export interface StorefrontCartFulfilmentSummary {
+    /** One type per validated item (same order); null for physical lines until a method is chosen. */
+    lineTypes: Array<FulfillmentType | null>;
+    requiresDeliveryMethod: boolean;
+    deliveryMethodKind: "delivery" | "pickup" | null;
+    requiresShipping: boolean;
+    allowsCashOnDelivery: boolean;
+}
+
+/** The line facts the order-level fulfilment rules read. */
+export type StorefrontCartFulfilmentLine = Pick<StorefrontCartValidatedItem, "fulfillmentKind" | "isGiftCard">;
+
+export function summarizeStorefrontCartFulfilment(
+    result: { items: readonly StorefrontCartFulfilmentLine[] },
+    chosenDeliveryMethodKind: "delivery" | "pickup" | null,
+): StorefrontCartFulfilmentSummary {
+    const requiresDeliveryMethod = result.items.some((item) =>
+        !item.isGiftCard && item.fulfillmentKind === "physical");
+    const deliveryMethodKind = requiresDeliveryMethod ? chosenDeliveryMethodKind : null;
+    const lineTypes = result.items.map((item) => resolveLineFulfillmentType(item, deliveryMethodKind));
+    return {
+        lineTypes,
+        requiresDeliveryMethod,
+        deliveryMethodKind,
+        requiresShipping: lineTypes.includes("ship"),
+        // Physical and service lines are handed over in person: cash fits.
+        allowsCashOnDelivery: result.items.some((item) =>
+            !item.isGiftCard && item.fulfillmentKind !== "digital"),
+    };
+}
+
+function presentStorefrontCartFulfilmentSummary(summary: StorefrontCartFulfilmentSummary) {
+    return {
+        requiresDeliveryMethod: summary.requiresDeliveryMethod,
+        deliveryMethodKind: summary.deliveryMethodKind,
+        requiresShipping: summary.requiresShipping,
+    };
+}
+
+/**
+ * The payment methods a cart may use: the store's enabled methods, without
+ * cash on delivery when nothing is shipped, collected or performed.
+ */
+export function resolveCartPaymentMethods(
+    enabledMethods: readonly string[],
+    summary: Pick<StorefrontCartFulfilmentSummary, "allowsCashOnDelivery">,
+): string[] {
+    return enabledMethods.filter((method) => method !== "cod" || summary.allowsCashOnDelivery);
 }

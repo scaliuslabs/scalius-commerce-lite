@@ -415,11 +415,11 @@ describe("customer account order reads (SQLite)", () => {
           58000, 58000, 'confirmed', 'account_1', 1780000000, 1780000600),
         ('order_quiet', 'Buyer', '+8801722222222', 'House 3', 'city_1', 'zone_1', 'Dhaka', 'Mirpur',
           50000, 50000, 'pending', 'account_1', 1780000100, 1780000100);
-      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload, created_at, updated_at)
-      VALUES ('outbox_1', 'dedupe_1', 'order_open', 'order_confirmed', 'test', '{}', 1780000600, 1780000600);
-      INSERT INTO order_notification_delivery_receipts (id, receipt_key, outbox_id, order_id, notification_type, channel,
+      INSERT INTO notification_outbox (id, dedupe_key, subject_type, subject_id, order_id, audience, notification_type, source, payload, created_at, updated_at)
+      VALUES ('outbox_1', 'dedupe_1', 'order', 'order_open', 'order_open', 'customer', 'order_confirmed', 'test', '{}', 1780000600, 1780000600);
+      INSERT INTO notification_delivery_receipts (id, receipt_key, outbox_id, subject_type, subject_id, order_id, notification_type, channel,
         provider, recipient_hash, status, accepted_at, created_at, updated_at)
-      VALUES ('receipt_1', 'receipt_key_1', 'outbox_1', 'order_open', 'order_confirmed', 'email', 'resend', 'hash',
+      VALUES ('receipt_1', 'receipt_key_1', 'outbox_1', 'order', 'order_open', 'order_open', 'order_confirmed', 'email', 'resend', 'hash',
         'accepted', 1780000610, 1780000610, 1780000610);
       INSERT INTO order_support_requests (id, order_id, customer_id, type, status, reason, active_key)
       VALUES ('req_open', 'order_open', 'account_1', 'cancel_pre_shipment', 'submitted', 'Ordered by mistake', 'order:order_open');

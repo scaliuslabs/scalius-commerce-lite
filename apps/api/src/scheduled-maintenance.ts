@@ -5,7 +5,8 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
-import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
+import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
+import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -240,7 +241,7 @@ async function runScheduledMaintenanceInner(
   }
 
   const notificationOutbox = await timed("notification_outbox_flush", () =>
-    flushPendingOrderNotificationOutbox({
+    flushPendingNotificationOutbox({
       db,
       queue: env.JOBS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
@@ -255,6 +256,17 @@ async function runScheduledMaintenanceInner(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
         `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
         `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
+    );
+  }
+
+  // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
+  // or gift-card lines were not handed over. A no-op until Wave B registers
+  // an automatic fulfiller.
+  const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db));
+  if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
+    console.log(
+      `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
+        `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
     );
   }
 
