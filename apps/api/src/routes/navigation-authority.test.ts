@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getNavigationPlacementManifest: vi.fn(),
   getPublishedNavigationMenuTree: vi.fn(),
   listPublishedNavigationMenuItems: vi.fn(),
+  readCategoryNavigation: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/navigation", () => ({
@@ -15,6 +16,8 @@ vi.mock("@scalius/core/modules/navigation", () => ({
   getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
   getPublishedNavigationMenuTree: mocks.getPublishedNavigationMenuTree,
   listPublishedNavigationMenuItems: mocks.listPublishedNavigationMenuItems,
+  readCategoryNavigation: mocks.readCategoryNavigation,
+  CATEGORY_NAVIGATION_NODE_LIMIT: 1000,
 }));
 
 import { navigationRoutes } from "./navigation";
@@ -36,6 +39,16 @@ function createTestApp() {
 
 describe("public normalized navigation routes", () => {
   afterEach(() => vi.clearAllMocks());
+
+  it("serves the reachable category tree for the /categories index", async () => {
+    const tree = { nodes: [{ id: "c1", name: "Laptop", slug: "laptop", parentId: null, canonicalPath: null, imageUrl: null }], truncated: false };
+    mocks.readCategoryNavigation.mockResolvedValue(tree);
+    const { app, db } = createTestApp();
+    const response = await app.request("/api/v1/navigation/categories");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: tree });
+    expect(mocks.readCategoryNavigation).toHaveBeenCalledWith(db);
+  });
 
   it("returns a no-store placement manifest with menu and dependency generations", async () => {
     mocks.getNavigationPlacementManifest.mockResolvedValue([{
