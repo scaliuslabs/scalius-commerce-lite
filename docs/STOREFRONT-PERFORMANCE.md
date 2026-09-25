@@ -463,6 +463,55 @@ Two opt-in harnesses read it (both skip unless their variable is set):
 
 Findings and measured timings: `audit/rewrite-2026-09-23/CATALOG-SCALE.md`.
 
+The seeder writes rows directly, so fill the catalogue projections before
+profiling listings: call `POST /api/v1/admin/catalog/projections/rebuild`
+until `done`, or `rebuildCatalogProjections` in-process (30k products: 34
+chunks of 900, about 14 s locally).
+
+### Catalogue projections
+
+Listings, counts, the product sitemap and recommendations read two stored
+projections instead of evaluating public eligibility and ranking every SKU per
+request (`packages/core/src/modules/products/catalog-projections.ts`):
+
+- `product_buyer_state`, one row per product: public or not, category, brand,
+  the card SKU and its from/to/base price, discount depth, availability and
+  the card SKU's band;
+- `product_facet_values`, one row per product attribute value and per SKU
+  option value.
+
+Every product, SKU, option-matrix, stock (reserve, release, deduct, restore,
+expiry, adjust, alert level, order transitions) and checkout batch appends the
+refresh statements after its ledger-v2 edge and `stockVersion` CAS, so the
+projection commits with the write. Stock writes refresh the buyer state only.
+They are projections like `availabilityBand`: cart validation and checkout stay
+authoritative. The rebuild route, the queued `catalog.projections.rebuild`
+chain and the nightly cron (first 15-minute tick after 20:00 UTC) heal drift;
+`catalog-projections.d1.test.ts` walks random product, SKU, stock and checkout
+writes and compares the projections with a fresh computation after every step.
+
+Precomputed recommendations: a product page reads its stored top 24
+(`product_recommendations`) filtered by the current buyer state; the live
+ranking (buyer state only, about 0.1 s at 30k products) runs for products never
+computed, carts and pages without a source. Product writes queue
+`catalog.recommendations.refresh` for the product, the products recommending it
+and its newest category peers; the nightly pass refreshes `product_sales_stats`
+(units sold in 30 days, the home "popular" list) and the 3,000 oldest or
+missing lists.
+
+Shop-all facet counts are computed live only while the public catalogue has at
+most 2,000 products (`SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT`). A live count on the
+unscoped set reads every attribute and option row (397k rows at 30k products);
+large stores filter inside a category, whose counts stay bounded by its own
+products. This cap replaced a per-category facet-count cache: no extra table,
+nothing to keep fresh.
+
+Measured on the 30k seed (in-process, p50 ms, D1 rows read, before → after):
+shop-all newest 3,219 → 35 (6.05M → 31k), shop-all price 3,696 → 35,
+Laptop (3.3k) newest 600 → 139 (1.02M → 180k), search "asus" 213 → 49, product
+page 1,090 → 54 (1.73M → 2.7k), recommendations 1,045 → 13, manual collection
+172 → 37, sitemap page 381 → 56.
+
 ## Images
 
 - Uploaded images get WebP renditions `media/<id>.<ext>/<w>.webp` on a fixed
