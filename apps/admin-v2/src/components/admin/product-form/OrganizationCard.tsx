@@ -1,4 +1,5 @@
-import { memo, useState } from "react";
+import { lazy, memo, Suspense, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
@@ -28,19 +29,25 @@ import type { Category, ProductFormValues } from "./types";
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
   categories: Category[];
+  /** The saved brand's name, for the picker's label. */
+  brandName?: string | null;
 }
 
-/** Side card: the product's category (new categories start as drafts). */
-export const OrganizationCard = memo(function OrganizationCard({ form, categories }: OrganizationCardProps) {
+// The brand search picker is loaded after the page, so it stays off the product page's first download.
+const BrandPicker = lazy(() => import("./BrandPicker"));
+
+/** Side card: the product's category (new categories start as drafts) and brand. */
+export const OrganizationCard = memo(function OrganizationCard({ form, categories, brandName = null }: OrganizationCardProps) {
   const t = useMessages(productMessages);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
+  const [brandLabel, setBrandLabel] = useState<string | null>(brandName);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t("organization")}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <FormField
           control={form.control}
           name="categoryId"
@@ -57,6 +64,27 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
                   form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
                 }}
               />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="brandId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel htmlFor="product-brand">{t("brand")}</FormLabel>
+              <Suspense fallback={<Skeleton className="h-11 w-full sm:h-9" />}>
+                <BrandPicker
+                  id="product-brand"
+                  value={field.value}
+                  label={brandLabel}
+                  onChange={(value, label) => {
+                    setBrandLabel(label);
+                    field.onChange(value);
+                  }}
+                />
+              </Suspense>
               <FormMessage />
             </FormItem>
           )}

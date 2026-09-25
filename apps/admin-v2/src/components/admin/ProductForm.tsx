@@ -112,6 +112,8 @@ interface ProductFormProps {
   onDiscard: () => void;
   /** The saved buyer inputs couldn't be read (a product error, never "no inputs"). */
   customizationSchemaInvalid?: boolean;
+  /** The saved brand's name, for the brand picker. */
+  brandName?: string | null;
 }
 
 /** Reads the unsaved product draft: its values and the fields the merchant changed. */
@@ -164,6 +166,7 @@ function ProductEditor({
   initialEdits,
   onDiscard,
   customizationSchemaInvalid = false,
+  brandName = null,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -205,6 +208,7 @@ function ProductEditor({
       fulfillmentKind: "physical",
       isGiftCard: false,
       warrantyPolicyId: null,
+      brandId: null,
       customizationSchema: [],
       ...defaultValues,
     },
@@ -416,7 +420,7 @@ function ProductEditor({
               <div className="max-lg:order-first">
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
-              <OrganizationCard form={form} categories={categories} />
+              <OrganizationCard form={form} categories={categories} brandName={brandName} />
               <WarrantyCard form={form} readOnly={readOnly} />
             </div>
           </fieldset>

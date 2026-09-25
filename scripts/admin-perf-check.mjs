@@ -37,9 +37,11 @@ export const BUNDLE_BUDGETS = {
     "admin/index.tsx": 206,
     "admin/orders/_list/index.tsx": 290,
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
-    "admin/orders/$orderId/index.tsx": 287,
+    // +1 (catalogue dashboard): the Brands link and its search words in the shell.
+    "admin/orders/$orderId/index.tsx": 288,
     "admin/products/index.tsx": 290,
-    "admin/products/$productId/edit.tsx": 364,
+    // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.
+    "admin/products/$productId/edit.tsx": 365,
     // The editor plus the navigation shell and the save system's real
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
     "admin/products/new.tsx": 363,

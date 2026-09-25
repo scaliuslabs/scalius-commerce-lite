@@ -23,7 +23,7 @@ import { formMessages } from "~/i18n/forms";
 type FormMessage = keyof (typeof formMessages)["en"];
 
 /** A field error in the merchant's language, resolved when validation runs. */
-const says = (key: FormMessage) => ({
+export const says = (key: FormMessage) => ({
   error: () => translate(formMessages, key),
 });
 
@@ -38,7 +38,7 @@ const addressSchema = z
   .refine((value) => value === "" || (value.length >= 3 && value.length <= 100), says("addressLength"))
   .refine((value) => value === "" || ADDRESS_PATTERN.test(value), says("addressFormat"));
 
-function requireSavedAddress(value: { id?: string; slug: string }, context: z.RefinementCtx): void {
+export function requireSavedAddress(value: { id?: string; slug: string }, context: z.RefinementCtx): void {
   if (value.id && value.slug === "") {
     context.addIssue({ code: "custom", path: ["slug"], message: translate(formMessages, "addressLength") });
   }
@@ -48,7 +48,7 @@ function requireSavedAddress(value: { id?: string; slug: string }, context: z.Re
  * Until address aliases exist, a canonical address may only repeat the
  * item's own public address; the object-level check enforces that.
  */
-const canonicalPathFormSchema = (kind: CanonicalResourceKind) =>
+export const canonicalPathFormSchema = (kind: CanonicalResourceKind) =>
   z
     .string()
     .nullable()
@@ -58,7 +58,7 @@ const canonicalPathFormSchema = (kind: CanonicalResourceKind) =>
       says("ownAddressOnly"),
     );
 
-const mediaFileFormSchema = z.object({
+export const mediaFileFormSchema = z.object({
   id: z.string(),
   url: z.string(),
   filename: z.string(),

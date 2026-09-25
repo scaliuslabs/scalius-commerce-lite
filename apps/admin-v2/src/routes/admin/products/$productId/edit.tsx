@@ -98,6 +98,7 @@ function toFormValues(product: ProductDetail): ProductFormValues {
     fulfillmentKind: fulfilmentModeOf(product.variants),
     isGiftCard: product.isGiftCard,
     warrantyPolicyId: product.warrantyPolicyId ?? null,
+    brandId: product.brandId ?? null,
     customizationSchema: draftsFromView(product.customizationSchema),
   } as ProductFormValues;
 }
@@ -179,6 +180,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
       description: values.description,
       price: values.price ?? 0,
       categoryId: values.categoryId,
+      brandId: values.brandId,
       isActive: values.isActive,
       media: values.media.map(({ effectiveAltText, altText, ...item }) => ({
         ...item,
@@ -266,6 +268,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         matrixRef={matrixRef}
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
+        brandName={formSnapshot.brandName}
         onDiscard={() => {
           if (revisionConflict) {
             void reloadLatest();

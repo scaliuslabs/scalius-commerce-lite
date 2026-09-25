@@ -39,6 +39,7 @@ const FIELD_LABELS: Partial<Record<keyof ProductFormValues, ProductMessageKey>> 
   slug: "webAddress",
   isGiftCard: "giftCardProduct",
   warrantyPolicyId: "warranty",
+  brandId: "brand",
 };
 
 interface UseProductSubmitOptions {
