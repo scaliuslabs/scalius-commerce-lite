@@ -20,7 +20,12 @@ import {
   scheduleRecommendationRefreshAfterWrite,
   type CatalogQueueMessage,
 } from "./catalog-jobs";
-import { isNightlyCatalogTick, runNightlyCatalogMaintenance } from "../scheduled/catalog-projections";
+import {
+  isNightlyCatalogTick,
+  PROJECTIONS_REBUILT_FOR_VERSION_KEY,
+  queuePostDeployProjectionRebuild,
+  runNightlyCatalogMaintenance,
+} from "../scheduled/catalog-projections";
 import { adminCatalogProjectionRoutes } from "../routes/admin/catalog-projections";
 import { errorResponseFromError } from "./api-response";
 
@@ -131,6 +136,29 @@ describe("nightly catalogue maintenance", () => {
     expect(sent[0]).toEqual({ type: "catalog.projections.rebuild", afterProductId: null });
     // Sold today first, then the never-computed lists.
     expect(sent[1]).toEqual({ type: "catalog.recommendations.refresh", productIds: ["prod_00002", "prod_00000", "prod_00001"] });
+  });
+});
+
+describe("post-deploy projection rebuild", () => {
+  it("queues one rebuild per API version", async () => {
+    const kv = new Map<string, string>();
+    const cache = { get: async (key: string) => kv.get(key) ?? null, put: async (key: string, value: string) => { kv.set(key, value); } };
+    const { queue, sent } = fakeQueue();
+    const env = (id: string | undefined) => ({
+      CACHE: cache,
+      JOBS_QUEUE: queue,
+      CF_VERSION_METADATA: id ? { id, tag: "", timestamp: "" } : undefined,
+    }) as unknown as Env;
+
+    await expect(queuePostDeployProjectionRebuild(env("v1"))).resolves.toBe(true);
+    await expect(queuePostDeployProjectionRebuild(env("v1"))).resolves.toBe(false);
+    await expect(queuePostDeployProjectionRebuild(env("v2"))).resolves.toBe(true);
+    await expect(queuePostDeployProjectionRebuild(env(undefined))).resolves.toBe(false);
+    expect(sent).toEqual([
+      { type: "catalog.projections.rebuild", afterProductId: null },
+      { type: "catalog.projections.rebuild", afterProductId: null },
+    ]);
+    expect(kv.get(PROJECTIONS_REBUILT_FOR_VERSION_KEY)).toBe("v2");
   });
 });
 

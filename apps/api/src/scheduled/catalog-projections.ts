@@ -26,6 +26,25 @@ const NIGHTLY_WINDOW_MINUTES = 15;
  */
 export const NIGHTLY_RECOMMENDATION_REFRESH_LIMIT = 3_000;
 
+/** KV hint: the Worker version whose post-deploy projection rebuild was queued. */
+export const PROJECTIONS_REBUILT_FOR_VERSION_KEY = "catalog:projections:rebuilt-for-version";
+
+/**
+ * The first cron tick of a new API version queues one full projection
+ * rebuild. Migrations apply before the new Worker goes live, so a write the
+ * previous version committed in between (it does not know the projections)
+ * is healed within one tick instead of at night. The KV key is a hint: if it
+ * is lost, one more rebuild runs.
+ */
+export async function queuePostDeployProjectionRebuild(env: Env): Promise<boolean> {
+  const version = env.CF_VERSION_METADATA?.id;
+  if (!version || !env.CACHE || !env.JOBS_QUEUE) return false;
+  if (await env.CACHE.get(PROJECTIONS_REBUILT_FOR_VERSION_KEY) === version) return false;
+  await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null);
+  await env.CACHE.put(PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
+  return true;
+}
+
 export function isNightlyCatalogTick(scheduledTime: number | undefined): boolean {
   if (typeof scheduledTime !== "number" || !Number.isFinite(scheduledTime)) return false;
   const at = new Date(scheduledTime);

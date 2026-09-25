@@ -160,6 +160,18 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", () => {
         }
         const after = await db.select().from(productBuyerState).orderBy(asc(productBuyerState.productId));
         expect(JSON.stringify(after.map(({ refreshedAt: _r, ...row }) => row))).toBe(before);
+
+        // Migration 0091's PostgreSQL sidecar fills the same rows from empty tables.
+        const facetRows = async () => JSON.stringify((await client.query("SELECT * FROM product_facet_values ORDER BY owner_id, facet_key")).rows);
+        const rebuiltFacets = await facetRows();
+        await client.query("DELETE FROM product_buyer_state; DELETE FROM product_facet_values;");
+        const sidecar = readFileSync(fileURLToPath(new URL(
+            "../../../../database/migrations/postgres/0091_catalogue_projection_fill.sql", import.meta.url,
+        )), "utf8").split("--> statement-breakpoint").slice(0, -1);
+        for (const statement of sidecar) await client.query(statement);
+        const filled = await db.select().from(productBuyerState).orderBy(asc(productBuyerState.productId));
+        expect(JSON.stringify(filled.map(({ refreshedAt: _r, ...row }) => row))).toBe(before);
+        expect(await facetRows()).toBe(rebuiltFacets);
         const typed = await client.query(
             "SELECT facet_key, value_key, value_number FROM product_facet_values WHERE facet_key IN ('attr_display', 'attr_wifi') ORDER BY value_key",
         );

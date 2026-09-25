@@ -68,27 +68,33 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
     return out;
 }
 
-/** The products a scope names, as a condition on `products` (one bound parameter). */
-function productScopeCondition(kind: "product" | "sku", ids: readonly string[]): SQL {
-    const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
-    return kind === "product"
-        ? sql`${products.id} IN ${idSet}`
-        : sql`${products.id} IN (
-            SELECT scope_sku.product_id FROM product_variants AS scope_sku
-            WHERE scope_sku.id IN ${idSet}
-        )`;
+/**
+ * Which products a refresh covers: `on(column)` is the condition on a column
+ * holding a product id; `pricing` scopes the buyer pricing projection
+ * (undefined ranks every SKU once, which is what a whole-store fill wants).
+ */
+interface ProductScope {
+    on(column: SQL): SQL;
+    pricing: SQL | undefined;
 }
 
-/** The same scope as a condition on a column holding a product id. */
-function productIdColumnScope(column: SQL, kind: "product" | "sku", ids: readonly string[]): SQL {
+/** The products named by ids (or by their SKUs' ids), as one bound JSON parameter. */
+function idScope(kind: "product" | "sku", ids: readonly string[]): ProductScope {
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
-    return kind === "product"
+    const on = (column: SQL) => kind === "product"
         ? sql`${column} IN ${idSet}`
         : sql`${column} IN (
             SELECT scope_sku.product_id FROM product_variants AS scope_sku
             WHERE scope_sku.id IN ${idSet}
         )`;
+    return { on, pricing: on(sql`${products.id}`) };
 }
+
+/**
+ * Every product. `1 = 1` (not an empty WHERE): an INSERT ... SELECT ... ON
+ * CONFLICT needs a WHERE for SQLite to parse, and PostgreSQL wants a boolean.
+ */
+const EVERY_PRODUCT: ProductScope = { on: () => sql`1 = 1`, pricing: undefined };
 
 /**
  * The live buyer state of the scoped products, in `product_buyer_state`
@@ -103,8 +109,8 @@ function productIdColumnScope(column: SQL, kind: "product" | "sku", ids: readonl
  * - `availability_band`: the card SKU's band (its own low-stock level, else
  *   the store default), as `resolveBuyerAvailabilityBand`.
  */
-export function selectLiveCatalogBuyerState(db: Database, scope: SQL) {
-    const pricing = buildBuyerCatalogPricingProjection(db, { productScope: scope });
+export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingScope: SQL | undefined = scope) {
+    const pricing = buildBuyerCatalogPricingProjection(db, { productScope: pricingScope });
     const cardSku = alias(productVariants, "buyer_state_card_sku");
     const effective = sql`${pricing.effectivePriceMinor}`;
     const available = sql`(${cardSku.stock} - ${cardSku.reservedStock})`;
@@ -155,11 +161,11 @@ export function selectLiveCatalogBuyerState(db: Database, scope: SQL) {
         .where(scope);
 }
 
-function buyerStateUpsert(db: Database, scope: SQL): SQLiteBatchItem {
+function buyerStateUpsert(db: Database, scope: ProductScope): SQLiteBatchItem {
     const excluded = (column: string) => sql.raw(`excluded.${column}`);
     return db
         .insert(productBuyerState)
-        .select(selectLiveCatalogBuyerState(db, scope) as never)
+        .select(selectLiveCatalogBuyerState(db, scope.on(sql`${products.id}`), scope.pricing) as never)
         .onConflictDoUpdate({
             // Unqualified: an insert-select renders a column target as
             // "table"."column", which PostgreSQL refuses in ON CONFLICT.
@@ -278,24 +284,18 @@ export function selectLiveOptionFacetRows(db: Database, productScope: SQL) {
         ));
 }
 
-function facetRefreshStatements(db: Database, kind: "product" | "sku", ids: readonly string[]): SQLiteBatchItem[] {
+function facetRefreshStatements(db: Database, scope: ProductScope): SQLiteBatchItem[] {
     return [
         db.delete(productFacetValues)
-            .where(productIdColumnScope(sql`${productFacetValues.productId}`, kind, ids)),
+            .where(scope.on(sql`${productFacetValues.productId}`)),
         // DO NOTHING: two option axes whose names normalise to one key
         // ("Screen size", "screen-size") keep the first row instead of
         // failing the merchant's write.
         db.insert(productFacetValues)
-            .select(selectLiveAttributeFacetRows(
-                db,
-                productIdColumnScope(sql`${productAttributeValues.productId}`, kind, ids),
-            ) as never)
+            .select(selectLiveAttributeFacetRows(db, scope.on(sql`${productAttributeValues.productId}`)) as never)
             .onConflictDoNothing(),
         db.insert(productFacetValues)
-            .select(selectLiveOptionFacetRows(
-                db,
-                productIdColumnScope(sql`${productVariants.productId}`, kind, ids),
-            ) as never)
+            .select(selectLiveOptionFacetRows(db, scope.on(sql`${productVariants.productId}`)) as never)
             .onConflictDoNothing(),
     ];
 }
@@ -308,8 +308,9 @@ function refreshStatementsForIds(
 ): SQLiteBatchItem[] {
     const statements: SQLiteBatchItem[] = [];
     for (const chunk of chunks(uniqueIds(ids), CATALOG_PROJECTION_PRODUCTS_PER_CALL)) {
-        if (options.facets !== false) statements.push(...facetRefreshStatements(db, kind, chunk));
-        statements.push(buyerStateUpsert(db, productScopeCondition(kind, chunk)));
+        const scope = idScope(kind, chunk);
+        if (options.facets !== false) statements.push(...facetRefreshStatements(db, scope));
+        statements.push(buyerStateUpsert(db, scope));
     }
     return statements;
 }
@@ -337,6 +338,18 @@ export function catalogBuyerStateRefreshStatementsForSkus(
     skuIds: readonly string[],
 ): SQLiteBatchItem[] {
     return refreshStatementsForIds(db, "sku", skuIds, { facets: false });
+}
+
+/**
+ * Both projections for every product at once: the statements of the
+ * migration that fills them when the tables arrive (0091, generated from this
+ * function by `packages/core/scripts/catalog-projection-fill.ts`), so a store
+ * never serves empty listings between the migration and a rebuild. The
+ * request path and the rebuild use the scoped statements above; these read
+ * the whole catalogue in one pass each.
+ */
+export function catalogProjectionFillStatements(db: Database): SQLiteBatchItem[] {
+    return [...facetRefreshStatements(db, EVERY_PRODUCT), buyerStateUpsert(db, EVERY_PRODUCT)];
 }
 
 export interface CatalogProjectionRebuildResult {
