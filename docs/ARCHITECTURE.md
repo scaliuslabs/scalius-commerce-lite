@@ -220,6 +220,35 @@ all off by default, add no `vars` and no installed secret, derive their keys
 from the same master secret, and store their flags in the same Platform settings
 document. See [AUTOMATED-DEPLOYMENTS.md](AUTOMATED-DEPLOYMENTS.md).
 
+### Build outputs and secrets
+
+No build inlines a local value. Secrets reach a Worker only through its `env`
+at request time; `.dev.vars` and `.env*` exist for `wrangler dev`/`astro dev`
+bindings and never for a bundle.
+
+- Storefront: Astro inlines every non-`PUBLIC_` variable it can see (Vite env
+  files plus all of `process.env`) as string literals wherever server code
+  reads `import.meta.env.NAME`, and wherever a module mentions a bare
+  `import.meta.env` (even in a comment) it inlines every variable the module's
+  text names. `@astrojs/cloudflare` copies `.dev.vars` into `process.env`
+  before the build, and the Cloudflare Vite plugin writes `.dev.vars` into
+  `dist/server/`. `apps/storefront/integrations/build-env-isolation.mjs`
+  rewrites every module so only the built-in keys (`DEV`, `SSR`, `PROD`,
+  `MODE`, `BASE_URL`, `SITE`, `ASSETS_PREFIX`) survive, turns off Vite env
+  files, and drops env files from the bundle.
+- Dashboard: `envDir: false`; it reads no env.
+- API: `wrangler deploy` bundles with esbuild and inlines no env.
+- Source policy (`scripts/check-source-policies.mjs`): storefront and dashboard
+  code use only the built-in `import.meta.env` keys and never `process.env`.
+- `pnpm check:dist-secrets` (`scripts/check-dist-secrets.mjs`) scans every
+  `dist/` file for env files, `import.meta.env` objects with extra keys, and
+  known secret names or names from the app's local env files bound to string
+  literals, reporting names only. `pnpm check:build-canaries`
+  (`scripts/check-build-canaries.mjs`) builds a throwaway copy of each app with
+  canary `.dev.vars`/`.env*` files, canary shell secrets and, for the
+  storefront, a probe route that reads them, and fails if any canary reaches
+  `dist/`. `pnpm run deploy*` runs both after the build, before any upload.
+
 ## Database Provider Boundary
 
 D1 remains the zero-configuration starter database. TursoDB is the portable

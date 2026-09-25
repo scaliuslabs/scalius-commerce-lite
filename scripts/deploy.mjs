@@ -24,7 +24,9 @@
  *   pnpm --filter @scalius/database upgrade:schema --provider <provider> ...
  *
  * Runs in order (full deploy):
- *   1. turbo build       — builds all workspaces
+ *   1. turbo build       — builds all workspaces, then fails if dist/ carries
+ *                          any local env value (check-dist-secrets.mjs) or a
+ *                          canary build leaks one (check-build-canaries.mjs)
  *   2. D1 migration, or read-only external schema compatibility preflight
  *   3. wrangler deploy   — deploys the API Worker (which also serves the
  *                          dashboard SPA from its ASSETS binding) and the
@@ -965,12 +967,28 @@ export async function verifyPostDeployTarget(
   }
 }
 
-function checkDistEnvFiles(targets = deployTargets) {
-  const appDirs = targets.flatMap((target) => appDirsByTarget[target]).join(" ");
-  run(
-    `node scripts/clean-dist-env-files.mjs --check ${appDirs}`,
-    "Verify app dist outputs do not contain local env files",
-  );
+// The built output must carry no local env value: the dist scan catches env
+// files and inlined env in what is about to ship, and the canary builds prove
+// the bundlers cannot inline .dev.vars, .env* or shell secrets at all.
+export function getDistSecretCommands(targets) {
+  const appDirs = targets.flatMap((target) => {
+    if (!appDirsByTarget[target]) throw new Error(`Unknown deploy target: ${target}`);
+    return appDirsByTarget[target];
+  });
+  return [
+    {
+      cmd: `node scripts/check-dist-secrets.mjs ${appDirs.join(" ")}`,
+      label: "Verify app dist outputs carry no local env values",
+    },
+    {
+      cmd: `node scripts/check-build-canaries.mjs ${appDirs.map((dir) => dir.replace(/^apps\//, "")).join(" ")}`,
+      label: "Prove canary env values never reach a build",
+    },
+  ];
+}
+
+function checkDistSecrets(targets = deployTargets) {
+  for (const { cmd, label } of getDistSecretCommands(targets)) run(cmd, label);
 }
 
 // ── Main
@@ -1112,7 +1130,7 @@ export async function main() {
 
     if (requestedTarget) {
       buildTarget(requestedTarget);
-      checkDistEnvFiles([requestedTarget]);
+      checkDistSecrets([requestedTarget]);
 
       if (dryRun) {
         console.log("\nDRY RUN: skipping database migrations and Worker deploy.");
@@ -1133,7 +1151,7 @@ export async function main() {
 
     // 2. Build: all workspaces via Turbo
     run(getSequentialWorkspaceCommand("build"), "Build all workspaces sequentially");
-    checkDistEnvFiles(deployTargets);
+    checkDistSecrets(deployTargets);
 
     if (dryRun) {
       console.log("\nDRY RUN: skipping database migrations and Worker deploys.");
