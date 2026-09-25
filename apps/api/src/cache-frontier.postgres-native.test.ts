@@ -4,14 +4,18 @@
 // commit seqs, through the adapter's SQLite-profile compiler. Opt-in: point
 // SCALIUS_TEST_POSTGRES_URL at a disposable local server; the test creates
 // and drops its own database.
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client, types } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
 import type { Database } from "@scalius/database/client";
 import { hashCacheDep } from "@scalius/shared/cache-frontier";
-import { compileCanonicalPostgresSchema } from "../../../packages/database/scripts/postgres-schema";
 import {
   checkHashedDependencies,
   readCommitSeq,
@@ -20,6 +24,15 @@ import {
 } from "./cache-frontier";
 
 const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+
+/** The canonical PostgreSQL schema, compiled by the database package's own script. */
+function canonicalPostgresSchemaSql(): string {
+  const databaseDir = fileURLToPath(new URL("../../../packages/database/", import.meta.url));
+  const out = join(mkdtempSync(join(tmpdir(), "scalius-s4-pg-schema-")), "schema.sql");
+  const tsx = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
+  execFileSync(tsx, ["scripts/postgres-schema.ts", "--out", out], { cwd: databaseDir });
+  return readFileSync(out, "utf8");
+}
 const cleanups: Array<() => Promise<void>> = [];
 afterAll(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
@@ -37,7 +50,7 @@ async function postgres(): Promise<{ db: Database; client: Client }> {
   url.pathname = `/${name}`;
   const client = new Client({ connectionString: url.toString(), types: { getTypeParser: parseBigint } });
   await client.connect();
-  await client.query((await compileCanonicalPostgresSchema()).sql);
+  await client.query(canonicalPostgresSchemaSql());
   cleanups.push(async () => {
     await client.end();
     await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
