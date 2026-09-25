@@ -10,8 +10,12 @@ export const WARRANTY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/warranty-policies/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
     DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/warranty-policies/*/restore": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/warranty-claims": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
@@ -20,6 +24,7 @@ export const WARRANTY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { allOf: [PERMISSIONS.ORDERS_EDIT, PERMISSIONS.CONVERSATIONS_REPLY] },
   },
   "/api/v1/admin/warranty-claims/*": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PATCH: { allOf: [PERMISSIONS.ORDERS_EDIT, PERMISSIONS.CONVERSATIONS_REPLY] },
   },
 };

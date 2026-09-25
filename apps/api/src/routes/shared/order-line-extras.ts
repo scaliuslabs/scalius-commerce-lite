@@ -53,13 +53,24 @@ export const orderLineGiftCardExtraSchema = z.object({
 export const orderLineWarrantyExtraSchema = z.object({
   warrantyId: z.string(),
   policyName: z.string(),
-  provider: z.string(),
+  provider: z.enum(["brand", "store"]),
+  /** The frozen revision's terms: the warranty the buyer bought. */
+  durationValue: z.number().int().positive(),
+  durationUnit: z.enum(["days", "months", "years"]),
+  replacementDays: z.number().int().nullable(),
+  terms: z.string().nullable(),
   quantity: z.number().int().positive(),
   startsAt: isoTimestamp,
   expiresAt: isoTimestamp,
   replacementUntil: isoTimestamp.nullable(),
   voided: z.boolean(),
   openClaimId: z.string().nullable(),
+  claim: z.object({
+    id: z.string(),
+    conversationId: z.string(),
+    status: z.enum(["open", "in_progress", "resolved", "rejected"]),
+    resolution: z.enum(["repair", "replacement", "refund", "other"]).nullable(),
+  }).nullable().openapi({ description: "The latest claim on this warranty (an open one first)" }),
 }).openapi("OrderLineWarrantyExtra");
 
 export const orderLineExtrasSchema = z.object({
