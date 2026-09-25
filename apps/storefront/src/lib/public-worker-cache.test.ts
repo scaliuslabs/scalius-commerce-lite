@@ -56,6 +56,7 @@ function createContext(overrides: Partial<PublicStorefrontCacheContext> = {}) {
     } as unknown as PublicStorefrontCacheContext["cache"],
     readGeneration: vi.fn(async () => "gen1"),
     buildId: "build-a",
+    workerVersion: "ver-1",
     render,
     waitUntil: (promise) => pending.push(promise),
     ...overrides,
@@ -140,13 +141,17 @@ describe("public storefront cache policy", () => {
     expect(policy?.canonicalUrl).toBe("https://shop.example/products/fish");
   });
 
-  it("keys entries by build, generation, and canonical URL", () => {
-    expect(publicStorefrontCacheKey("https://shop.example/search?q=fish", "build-a", "gen1"))
-      .toBe("https://shop.example/__cache/build-a/gen1/search?q=fish");
-    expect(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen2"))
-      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen1"));
-    expect(publicStorefrontCacheKey("https://shop.example/", "build-b", "gen1"))
-      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen1"));
+  it("keys entries by build, Worker version, generation, and canonical URL", () => {
+    expect(publicStorefrontCacheKey("https://shop.example/search?q=fish", "build-a", "ver-1", "gen1"))
+      .toBe("https://shop.example/__cache/build-a/ver-1/gen1/search?q=fish");
+    expect(publicStorefrontCacheKey("https://shop.example/", "build-a", "ver-1", "gen2"))
+      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "ver-1", "gen1"));
+    expect(publicStorefrontCacheKey("https://shop.example/", "build-b", "ver-1", "gen1"))
+      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "ver-1", "gen1"));
+    // Same build id and generation, new deploy: BUILD_ID hashes only some
+    // inputs, the Worker version changes with any of them.
+    expect(publicStorefrontCacheKey("https://shop.example/", "build-a", "ver-2", "gen1"))
+      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "ver-1", "gen1"));
   });
 });
 
@@ -165,7 +170,7 @@ describe("servePublicStorefrontRequest", () => {
     expect(rendered.url).toBe("https://shop.example/products/fish");
     expect(rendered.headers.get(GENERATION_HEADER)).toBe("gen1");
     expect(context.cache.put).toHaveBeenCalledWith(
-      "https://shop.example/__cache/build-a/gen1/products/fish",
+      "https://shop.example/__cache/build-a/ver-1/gen1/products/fish",
       expect.any(Response),
     );
 
@@ -205,6 +210,34 @@ describe("servePublicStorefrontRequest", () => {
     expect(afterWrite.headers.get("X-Cache-Status")).toBe("MISS");
     expect(render).toHaveBeenCalledTimes(2);
     expect(render.mock.calls[1]![0].headers.get(GENERATION_HEADER)).toBe("gen2");
+  });
+
+  it("misses after a deploy under the same build id and generation", async () => {
+    const { context, render, settle } = createContext();
+    await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
+    await settle();
+    const afterDeploy = await servePublicStorefrontRequest(
+      new Request("https://shop.example/"),
+      { ...context, workerVersion: "ver-2" },
+    );
+
+    expect(afterDeploy.headers.get("X-Cache-Status")).toBe("MISS");
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders uncached without a Worker version", async () => {
+    const { context, render } = createContext({ workerVersion: null });
+
+    await servePublicStorefrontRequest(
+      new Request("https://shop.example/", { headers: { [GENERATION_HEADER]: "forged" } }),
+      context,
+    );
+
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(render.mock.calls[0]![0].headers.has(GENERATION_HEADER)).toBe(false);
+    expect(context.readGeneration).not.toHaveBeenCalled();
+    expect(context.cache.match).not.toHaveBeenCalled();
+    expect(context.cache.put).not.toHaveBeenCalled();
   });
 
   it("renders private requests directly without reading the generation or touching the cache", async () => {

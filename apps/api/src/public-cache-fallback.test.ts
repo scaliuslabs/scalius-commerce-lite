@@ -45,6 +45,7 @@ async function readThroughCache(cacheResponse: Response) {
   } as unknown as ExecutionContext;
   const worker = new ApiWorker(ctx, {
     SCALIUS_SECRET: "public-cache-fallback-master-secret-0123456789",
+    CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
   } as Env) as unknown as TestApiWorker;
   const response = await worker.fetch(new Request("https://api.example.test/api/v1/categories?ref=secret", {
     headers: { "X-Scalius-Cache-Generation": "abc123" },

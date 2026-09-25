@@ -425,6 +425,7 @@ app.openapi(batchRoute, async (c) => {
   // rendered here exactly as PublicApi renders them (renderPublicRead). A
   // PublicApi miss would instead wait for a separate, usually cold, isolate.
   const readPart = createLocalPublicReader({
+    env: c.env,
     cache: typeof caches === "undefined" ? null : caches.default,
     render: (part) => renderPublicRead(part, c.env, ctx as ExecutionContext),
     waitUntil: (promise) => ctx?.waitUntil(promise),
