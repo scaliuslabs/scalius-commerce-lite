@@ -136,11 +136,13 @@ export default function OrderSuccessButtons({
     }
     if (!orderId) return "hidden";
     try {
+      // "Not yours" is a normal answer (200, owned: false), never a logged 404.
       const response = await fetch(
-        `/api/customer-auth/orders/${encodeURIComponent(orderId)}`,
-        { credentials: "same-origin", cache: "no-store" },
+        `/api/customer-auth/orders/${encodeURIComponent(orderId)}/owned`,
+        { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } },
       );
-      return response.ok ? "saved" : "hidden";
+      const payload = await response.json().catch(() => null) as { owned?: unknown } | null;
+      return response.ok && payload?.owned === true ? "saved" : "hidden";
     } catch {
       return "hidden";
     }
