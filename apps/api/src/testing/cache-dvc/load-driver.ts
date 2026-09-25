@@ -225,7 +225,11 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       const [row] = await context.sql("SELECT aggregate_revision AS revision, is_active AS active FROM products WHERE id = ?", [product.id]);
       await products.bulkUpdateProducts(context.db, [{ id: String(product.id), expectedAggregateRevision: Number(row!.revision) }], { isActive: Number(row!.active) === 0 });
     } else {
-      await context.sql("UPDATE settings SET value = json_set(value, '$.homepageMetaDescription', ?) WHERE category = 'seo' AND key = 'document'", [`Load ${Math.floor(random() * 1e6)}`]).catch(() => []);
+      // A settings document save (the catalogue seed has none, so the first one inserts).
+      await context.sql(
+        "INSERT INTO settings (id, key, value, type, category) VALUES ('dvc_load_seo', 'document', ?, 'json', 'seo') ON CONFLICT (id) DO UPDATE SET value = excluded.value",
+        [JSON.stringify({ homepageTitle: "Load store", homepageMetaDescription: `Load ${Math.floor(random() * 1e6)}`, socialImage: "", discovery: {}, returnPolicy: {} })],
+      );
     }
     const ms = performance.now() - began;
     context.setPhase("harness");
@@ -239,12 +243,42 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
     stat.ms.push(ms);
   };
 
+  // Bulk amplification (CACHE-DESIGN §11): one 90-product unpublish and its
+  // restore, each one batch; S1 measured 1,170 key writes for the unpublish.
+  const bulk: Record<string, { keysAdvanced: number; rowsWritten: number; ms: number }> = {};
+  {
+    const chosen = productRows.slice(0, 90).map((row) => String(row.id));
+    for (const [label, active] of [["unpublish90", false], ["republish90", true]] as const) {
+      const claims = [];
+      for (const id of chosen) {
+        const [row] = await context.sql("SELECT aggregate_revision AS revision FROM products WHERE id = ?", [id]);
+        claims.push({ id, expectedAggregateRevision: Number(row!.revision) });
+      }
+      context.setPhase(`bulk:${label}`);
+      const phaseMeter = context.meter();
+      const writtenBefore = context.postgresActivity ? (await context.postgresActivity()).written : phaseMeter.rowsWritten;
+      const before = await clock();
+      const began = performance.now();
+      await products.bulkUpdateProducts(context.db, claims, { isActive: active });
+      const ms = performance.now() - began;
+      const writtenAfter = context.postgresActivity ? (await context.postgresActivity()).written : phaseMeter.rowsWritten;
+      context.setPhase("harness");
+      const keys = Number((await context.sql("SELECT count(*) AS n FROM cache_dep WHERE seq > ?", [before]))[0]!.n);
+      bulk[label] = { keysAdvanced: keys, rowsWritten: writtenAfter - writtenBefore, ms: Math.round(ms) };
+    }
+  }
+
   const wallStarted = performance.now();
   const pgStart = context.postgresActivity ? await context.postgresActivity() : null;
   for (let index = 0; index < options.reads; index += 1) {
     now += 10; // 100 page views per simulated second
     await view();
     if (index % options.readsPerWrite === options.readsPerWrite - 1) await write();
+    if (index % 1000 === 999) {
+      const parts = Object.values(byType).reduce((sum, stats) => sum + stats.parts, 0);
+      const hits = Object.values(byType).reduce((sum, stats) => sum + stats.hits, 0);
+      console.error(`[DVC load progress] ${index + 1}/${options.reads} views, part hit ratio ${(hits / Math.max(1, parts)).toFixed(3)}, ${Math.round((performance.now() - wallStarted) / 1000)}s`);
+    }
   }
   const pgEnd = context.postgresActivity ? await context.postgresActivity() : null;
   const cacheDepRows = Number((await context.sql("SELECT count(*) AS n FROM cache_dep", []))[0]!.n);
@@ -265,6 +299,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       writeMs: { p50: percentile(stat.ms, 50), p95: percentile(stat.ms, 95) },
     }])),
     databasePhases: context.provider === "d1" ? context.phases : { rowsRead: (pgEnd?.read ?? 0) - (pgStart?.read ?? 0), rowsWritten: (pgEnd?.written ?? 0) - (pgStart?.written ?? 0) },
+    bulkAmplification: bulk,
     cacheDepRows,
   };
   return report;
