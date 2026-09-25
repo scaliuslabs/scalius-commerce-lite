@@ -558,22 +558,29 @@ const Thumbs = ({ className }: { className?: string }) => (
 );
 
 export function ProductPageSketch({ layout }: { layout: StorefrontGalleryRenderer }) {
-  const spec = layout;
-  const photo = (
-    <span className={cn("flex min-w-0 gap-0.5", spec.thumbnails === "beside" ? "flex-row" : "flex-col")}>
-      {spec.thumbnails === "beside" ? <Thumbs className="flex-col" /> : null}
-      <Block className={cn("min-w-0 flex-1", spec.gallery === "stacked" ? "h-6" : "aspect-square")} />
-      {spec.thumbnails === "below" ? <Thumbs /> : null}
+  // Stacked (Dawn) and grid (Target) show every photo beside the details.
+  const photo = layout.gallery === "stacked" ? (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <Block className="aspect-square w-full" />
+      <Block className="h-3 w-full" />
+    </span>
+  ) : layout.gallery === "grid" ? (
+    <span className="grid min-w-0 grid-cols-2 gap-0.5">
+      <Block className="aspect-square" />
+      <Block className="aspect-square" />
+      <Block className="aspect-square" />
+      <Block className="aspect-square" />
+    </span>
+  ) : (
+    <span className={cn("flex min-w-0 gap-0.5", layout.thumbnails === "beside" ? "flex-row" : "flex-col")}>
+      {layout.thumbnails === "beside" ? <Thumbs className="flex-col" /> : null}
+      <Block className={cn("min-w-0 flex-1", layout.stageRatio < 1 ? "aspect-3/4" : "aspect-square")} />
+      {layout.thumbnails === "below" ? <Thumbs /> : null}
     </span>
   );
-  return spec.gallery === "stacked" ? (
-    <Sketch>
-      {photo}
-      <Details />
-    </Sketch>
-  ) : (
+  return (
     <Sketch className="flex-row gap-1.5">
-      <span className="w-1/2 shrink-0">{photo}</span>
+      <span className={cn("shrink-0", layout.gallery === "beside" ? "w-1/2" : "w-3/5")}>{photo}</span>
       <Details />
     </Sketch>
   );

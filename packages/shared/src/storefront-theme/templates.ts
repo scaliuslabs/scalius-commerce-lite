@@ -124,7 +124,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "stacked",
         buyBox: ["boutique"],
-        below: ["description", "policies", "content-blocks", "related"],
+        below: ["description", "content-blocks", "policies", "reviews", "related"],
         sticky: { ...NO_STICKY, desktop: "info-column" },
       },
       footer: "minimal-columns",
@@ -155,7 +155,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["accordion-drawer"],
       card: ["portrait"],
       listing: { layout: ["shelves"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "portrait", buyBox: ["fashion"], below: ["description", "related", "recently-viewed"], sticky: NO_STICKY },
+      product: { gallery: "portrait", buyBox: ["fashion"], below: ["description", "reviews", "related", "recently-viewed"], sticky: NO_STICKY },
       footer: "newsletter-grey",
     }),
     home: [
@@ -186,7 +186,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-below",
         buyBox: ["fashion"],
-        below: ["frequently-bought-together", "description", "related"],
+        below: ["frequently-bought-together", "description", "reviews", "related"],
         sticky: NO_STICKY,
       },
       footer: "newsletter-grey",
@@ -226,7 +226,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-below",
         buyBox: ["spec"],
-        below: ["spec-table", "description", "questions", "reviews", "related"],
+        below: ["spec-table", "description", "warranty", "questions", "reviews", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "none", desktop: "anchor-bar" },
       },
       footer: "support-dark",
@@ -260,7 +260,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-below",
         buyBox: ["tech"],
-        below: ["spec-table", "description", "policies", "related", "recently-viewed"],
+        below: ["spec-table", "description", "warranty", "policies", "reviews", "related", "recently-viewed"],
         sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "side-rail" },
       },
       footer: "brand-black",
@@ -299,7 +299,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-below",
         buyBox: ["marketplace-3col"],
-        below: ["key-attributes", "spec-table", "reviews", "questions", "related"],
+        below: ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "questions", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "none" },
       },
       footer: "directory",
@@ -336,7 +336,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "image-grid",
         buyBox: ["retail"],
-        below: ["key-attributes", "description", "spec-table", "questions", "compare-similar", "reviews", "related"],
+        below: ["about-bullets", "description", "spec-table", "warranty", "questions", "compare-similar", "reviews", "related"],
         sticky: { ...NO_STICKY, desktop: "product-bar" },
       },
       footer: "minimal-columns",
@@ -369,7 +369,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       // No per-page: the default listing stays today's (pixel-identical), and
       // most stores get no extra crawl variant.
       listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "classic", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
+      product: { gallery: "classic", buyBox: ["classic"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
     }),
     home: [

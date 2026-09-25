@@ -117,7 +117,7 @@ describe("storefront theme document v5", () => {
     expect(resolved.blocks.product).toMatchObject({
       gallery: { variant: "classic" },
       buyBox: { variant: "classic" },
-      below: ["description", "related"],
+      below: ["description", "reviews", "related"],
       sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" },
     });
     // On a store too small for the departments rail it still renders the classic menu.
