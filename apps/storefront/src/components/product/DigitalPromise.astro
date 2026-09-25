@@ -1,0 +1,11 @@
+---
+// Owned by B3 (digital goods): the digital buy box's promise bullets (delivery time, where to redeem); renders nothing until B3 ships it.
+import type { Product } from "@/lib/api";
+import type { ProductFulfilment } from "@/lib/delivery-facts";
+
+export interface Props {
+  product: Product;
+  /** What the page sells (the chosen SKU, or every buyable SKU). */
+  fulfilment: ProductFulfilment;
+}
+---

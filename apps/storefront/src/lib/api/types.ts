@@ -43,6 +43,7 @@ import type {
 } from "@scalius/shared/fulfilment";
 import type { CustomizationFieldType } from "@scalius/shared/line-properties";
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
+import type { OrderLineExtras } from "../order-line-extras";
 
 export type {
   GetProductsResponse,
@@ -658,6 +659,8 @@ export interface OrderItem extends OrderLineFulfilmentFacts {
   discountAmountMinor?: number | null;
   taxableAmountMinor?: number | null;
   taxAmountMinor?: number;
+  /** Wave B facts about the line (review, downloads, gift cards, warranty); absent until each feature ships. */
+  extras?: OrderLineExtras | null;
 }
 
 export type OrderReceiptSupportRequestType =

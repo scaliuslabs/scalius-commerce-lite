@@ -526,6 +526,7 @@ export function buildProductGroupJsonLd({
   brandName,
   variesBy,
   variants,
+  rootFacts = null,
   maxBytes = PRODUCT_JSON_LD_MAX_BYTES,
 }: {
   name: string;
@@ -536,6 +537,8 @@ export function buildProductGroupJsonLd({
   brandName: string | null;
   variesBy: string[];
   variants: ProductGroupVariantSchema[];
+  /** Group-level facts (review aggregate and items), counted in the byte budget before variants. */
+  rootFacts?: object | null;
   maxBytes?: number;
 }) {
   const group = {
@@ -548,6 +551,7 @@ export function buildProductGroupJsonLd({
     productGroupID,
     ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
     ...(variesBy.length > 0 ? { variesBy } : {}),
+    ...rootFacts,
   };
   const nodes = variants.map((variant) => {
     const image = variant.image ?? images[0] ?? null;

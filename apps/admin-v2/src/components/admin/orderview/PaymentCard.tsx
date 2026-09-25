@@ -58,6 +58,8 @@ import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
+import { GiftCardTenderRows } from "./GiftCardTenderRows";
+import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
 type CodAction = "collected" | "failed" | "returned";
@@ -126,6 +128,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const [refundAmount, setRefundAmount] = useState<number | null>(null);
   const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState<string>("requested_by_customer");
+  const [refundSettlement, setRefundSettlement] = useState<RefundSettlement>("original");
   const [manualSettlementConfirmed, setManualSettlementConfirmed] = useState(false);
   // One key per opened refund dialog: a repeated submit replays the first refund.
   const refundRequestKey = useRef("");
@@ -230,6 +233,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     setRefundReason(owed === null ? "requested_by_customer" : "returned_items");
     refundRequestKey.current = crypto.randomUUID();
     setManualSettlementConfirmed(false);
+    setRefundSettlement("original");
     setRefundOpen(true);
   };
 
@@ -292,6 +296,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         amount: refundValue,
         reason: refundReason,
         manualSettlementConfirmed: requiresManualSettlementConfirmation ? true : undefined,
+        ...refundSettlementBody(refundSettlement),
       },
       { onSuccess: () => setRefundOpen(false) },
     );
@@ -348,6 +353,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           ) : (
             <Row label={t("payment.method")} value={paymentMethodLabel(o, order.paymentMethod ?? "cod")} />
           )}
+          <GiftCardTenderRows order={order} payments={payments} />
           {refundedAmount > 0 ? (
             <>
               <Row label={t("payment.refunded")} value={`−${money(refundedAmount)}`} />
@@ -708,6 +714,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 ))}
               </NativeSelect>
             </div>
+            <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} />
             {requiresManualSettlementConfirmation ? (
               <div className="flex items-start gap-3">
                 <span className="flex h-lh items-center">

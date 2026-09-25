@@ -16,6 +16,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { InboxNavBadge } from "~/components/admin/inbox/InboxNavBadge";
+import { ReviewsNavBadge } from "~/components/admin/reviews/ReviewsNavBadge";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
@@ -60,6 +61,7 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
                 <SidebarMenuSubButton asChild isActive={child === activeChild}>
                   <ShellLink to={child.to} preload="intent" current={child === activeChild} onClick={close}>
                     <span>{t(child.key)}</span>
+                    {child.badge === "reviews" ? <ReviewsNavBadge /> : null}
                   </ShellLink>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>

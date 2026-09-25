@@ -25,6 +25,11 @@ export const notificationEventMessages = defineMessages({
     support_request_status_updated: "Support request updated",
     conversation_reply: "New reply",
     conversation_message: "New customer message",
+    order_digital_delivered: "Digital items delivered",
+    gift_card_issued: "Gift card received",
+    review_request: "Review request",
+    review_pending: "Review waiting for approval",
+    digital_keys_exhausted: "Licence keys ran out",
   },
   bn: {
     groupOrders: "অর্ডার",
@@ -49,5 +54,10 @@ export const notificationEventMessages = defineMessages({
     support_request_status_updated: "সাপোর্ট রিকোয়েস্ট আপডেট",
     conversation_reply: "নতুন উত্তর",
     conversation_message: "ক্রেতার নতুন মেসেজ",
+    order_digital_delivered: "ডিজিটাল পণ্য পাঠানো হয়েছে",
+    gift_card_issued: "গিফট কার্ড পাওয়া গেছে",
+    review_request: "রিভিউয়ের অনুরোধ",
+    review_pending: "অনুমোদনের অপেক্ষায় রিভিউ",
+    digital_keys_exhausted: "লাইসেন্স কী শেষ",
   },
 });
