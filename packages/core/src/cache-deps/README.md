@@ -11,7 +11,9 @@ those keys on every committed buyer-visible change.
   for every statement. That covers the D1 request client (`prepare`, batches
   included), the Turso adapter and the PostgreSQL adapter.
   - Outside a scope it costs one `AsyncLocalStorage.getStore()`.
-  - Inside a scope it reports the tables the statement touched.
+  - Inside a scope it reports the tables the statement touched, and for a
+    settings statement its SQL and bound parameters (D1 at `bind` time), so
+    coverage can tell which documents it read.
 - `withDependencyScope(render, options)`: runs one public render and returns
   `{ value, dependencies }`. The scope is request-scoped through
   AsyncLocalStorage, so concurrent requests and concurrent batch parts never
@@ -50,6 +52,7 @@ Import from inside core with `import { deps } from "../../cache-deps";`.
    | A product page, card, JSON-LD block or feed row | `deps.product(id)` / `deps.products(ids)` |
    | Which products are in a listing (and newest order) | `deps.listMembership(scope)`; scope is `"all"`, `categoryScope(id)` or `brandScope(id)` |
    | Sorting or filtering by price, band, discount or name | `deps.listOrder("price" \| "band" \| "disc" \| "name", scope)` |
+   | The on-sale home list's candidate window | `deps.listOrder("sale", "all")` plus `deps.products(candidateIds)` for every candidate, shown or not |
    | Facet values and counts | `deps.listFacets(scope)` |
    | Search results | `deps.search()` plus `deps.listMembership("all")` |
    | Sitemap or feed | `deps.listMembership("all")`, `deps.discoveryMembership()`, `deps.products(rowIds)` |
@@ -88,7 +91,15 @@ Import from inside core with `import { deps } from "../../cache-deps";`.
 Coverage is decided by kind. A table is covered when a declared key's kind is
 one of `cacheDepKindsForTable(table)`, or when its own `t:<table>` is
 declared. For example, `products` is covered by any `p:`, `lo:`, `lm:` or
-`srch` key. Declare the precise keys the output actually depends on. The
+`srch` key.
+
+Settings are the exception (`CACHE_DEP_ROW_KEYED_TABLES`): every render
+declares `set:platform:document`, so a kind rule would cover any settings
+read. Each settings source of each statement must pin `category` and `key`
+(`=` or `IN` against literals or bound values, `pinnedSourceValues`), and
+every document it pins needs its own `set:<category>:<key>` declared. A
+statement that reads the whole table, or joins settings on a column, falls
+back to `t:settings`. Declare the precise keys the output actually depends on. The
 kind rule is only the safety net, and the S6 differential property test
 checks that the declared keys are enough.
 

@@ -45,7 +45,9 @@ import { deps } from "./declare-deps";
  * primary image) that no listing key tracks, so a product outside the page
  * can enter or leave it through any SKU, gallery or media change: the
  * coarse table keys are the only exact ones. They also cover every row's
- * gallery, SKU image and band, so no per-row media keys are needed.
+ * gallery, SKU image and band, so no per-row media keys are needed. The SKU
+ * topology test reads option definitions, values and SKU assignments of
+ * products outside the page too, so those tables are coarse keys as well.
  */
 function declareFeedPage(
     params: StorefrontFeedProductFilterInput,
@@ -58,6 +60,9 @@ function declareFeedPage(
     deps.table("product_variants");
     deps.table("product_media");
     deps.table("media");
+    deps.table("product_option_definitions");
+    deps.table("product_option_values");
+    deps.table("product_variant_option_values");
     deps.products(productIds);
     deps.categories(categoryIds);
     // The published brand joined by products.brand_id; attribute names.

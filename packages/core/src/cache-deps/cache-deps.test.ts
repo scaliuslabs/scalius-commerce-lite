@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   categories,
@@ -43,7 +43,8 @@ describe("dependency scope", { timeout: 30_000 }, () => {
     };
     const renderSettings = async () => {
       await tick(1);
-      await db.select({ key: settings.key }).from(settings).all();
+      await db.select({ key: settings.key }).from(settings)
+        .where(and(eq(settings.category, "seo"), eq(settings.key, "document"))).all();
       deps.settings("seo", "document");
       await tick(3);
       return "settings";
@@ -145,9 +146,66 @@ describe("coverage fallback", { timeout: 30_000 }, () => {
     const resolution = resolveCacheDependencies({
       declared: [cacheDep.listMembership(categoryScope("cat_1")), cacheDep.settings("seo", "document")],
       tables: ["products", "product_buyer_state", "category_closure", "settings"],
+      rowKeyedStatements: [{
+        tables: ["settings"],
+        sql: `select "value" from "settings" where ("settings"."key" = ? and "settings"."category" = ?)`,
+        params: ["document", "seo"],
+      }],
     });
     expect(resolution.coarseTables).toEqual([]);
     expect(resolution.keys).toEqual(["lm:cat:cat_1", "set:seo:document", "store"]);
+  });
+
+  it("covers a settings read only by the keys of the documents it reads, not by any set: key", () => {
+    const platform = cacheDep.settings("platform", "document");
+    const covered = (sql: string, params: unknown[] = [], declared: string[] = [platform]) => resolveCacheDependencies({
+      declared,
+      tables: ["settings", "products"],
+      rowKeyedStatements: [{ tables: ["settings", "products"], sql, params }],
+    }).coarseTables.filter((table) => table === "settings");
+    const document = `select value from settings where key = 'document' and category = ?`;
+    // Its own document: covered.
+    expect(covered(document, ["platform"])).toEqual([]);
+    // Another document, while the render carries set:platform:document: not covered.
+    expect(covered(document, ["seo"])).toEqual(["settings"]);
+    // One statement reading two documents needs both keys.
+    const two = `select value from "settings" where "settings"."key" = ? and "settings"."category" in (?, ?)`;
+    expect(covered(two, ["document", "platform", "seo"])).toEqual(["settings"]);
+    expect(covered(two, ["document", "platform", "seo"], [platform, cacheDep.settings("seo", "document")])).toEqual([]);
+    // A document subquery inside a product read: only the subquery's pins count.
+    const embedded = `select p.id, (select json_extract(value, '$.currencyCode') from settings where category = 'platform' and key = 'document') from products p where p.slug = ? and p.discount_type in ('flat', 'percentage')`;
+    expect(covered(embedded, ["red-shirt"])).toEqual([]);
+    // A read that pins no document (the whole table, a join on a column) is never covered by a document key.
+    expect(covered(`select value from settings`)).toEqual(["settings"]);
+    expect(covered(`select value from settings where key = 'document'`)).toEqual(["settings"]);
+    expect(covered(`select p.id from products p join settings s on s.category = p.slug where s.key = 'document'`)).toEqual(["settings"]);
+    // A read no statement reported (a transport without values) is not covered either.
+    expect(resolveCacheDependencies({ declared: [platform], tables: ["settings"] }).coarseTables).toEqual(["settings"]);
+    // t:settings covers every settings read.
+    expect(covered(`select value from settings`, [], [cacheDep.table("settings")])).toEqual([]);
+  });
+
+  it("fails a strict render whose settings read misses its own document key", async () => {
+    const { db } = createSqliteD1Database();
+    const readSeo = () => db.select({ value: settings.value }).from(settings)
+      .where(and(eq(settings.key, "document"), eq(settings.category, "seo"))).all();
+    // Every public render declares the Platform document; that must not cover an SEO read.
+    await expect(withDependencyScope(async () => {
+      deps.settings("platform", "document");
+      await readSeo();
+    }, { strict: true, label: "/api/v1/seo" })).rejects.toThrow(/uncovered tables settings/);
+    await expect(withDependencyScope(async () => {
+      deps.settings("platform", "document");
+      deps.settings("seo", "document");
+      await readSeo();
+    }, { strict: true })).resolves.toMatchObject({ dependencies: { coarseTables: [] } });
+    // The whole table read falls back to t:settings outside strict mode.
+    const { dependencies } = await withDependencyScope(async () => {
+      deps.settings("seo", "document");
+      await db.select({ value: settings.value }).from(settings).all();
+    }, silent);
+    expect(dependencies.coarseTables).toEqual(["settings"]);
+    expect(dependencies.keys).toContain("t:settings");
   });
 
   it("falls back to t:<table> for an uncovered registered table and logs it once, masked", async () => {
