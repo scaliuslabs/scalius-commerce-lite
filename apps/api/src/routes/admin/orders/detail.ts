@@ -55,6 +55,7 @@ import {
     selectedProductOptionSchema,
 } from "../../../schemas/entities";
 import { nullableTimestampSchema, timestampSchema } from "../../../schemas/timestamps";
+import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../../shared/order-line-extras";
 import {
     customizationViewSchema,
     deliveryMethodKindSchema,
@@ -398,6 +399,11 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
+/** Order detail whose items may carry per-line extras (downloads, gift cards, warranty, review). */
+const orderDetailWithLineExtrasSchema = orderDetailSchema.extend({
+    items: z.array(orderItemSchema.extend(orderLineExtrasShape)),
+});
+
 const getOrderRoute = createRoute({
     operationId: "dashboard.orders.get",
     method: "get",
@@ -410,7 +416,7 @@ const getOrderRoute = createRoute({
     responses: {
         200: {
             description: "Order details",
-            content: { "application/json": { schema: successEnvelope(orderDetailSchema) } },
+            content: { "application/json": { schema: successEnvelope(orderDetailWithLineExtrasSchema) } },
         },
         404: errorResponses[404],
     }
@@ -421,7 +427,13 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
     const orderId = c.req.valid("param").id;
     const result = await getOrderDetails(db, orderId);
     if (!result) throw new NotFoundError("Order not found");
-    return ok(c, result);
+    const lineExtras = await composeOrderLineExtras(db, {
+        orderId,
+        orderItemIds: result.items.map((item) => item.id),
+        audience: "staff",
+        currencyDecimalPlaces: result.currencyDecimalPlaces ?? 2,
+    });
+    return ok(c, { ...result, items: result.items.map((item) => withOrderLineExtras(item, lineExtras)) });
 }) as unknown as AdminRouteHandler<typeof getOrderRoute>);
 
 // ─── PUT /:id/details ───────────────────────────────────────────────────────

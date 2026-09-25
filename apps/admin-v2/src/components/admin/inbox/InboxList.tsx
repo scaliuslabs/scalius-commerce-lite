@@ -17,14 +17,15 @@ import { getApiV1AdminConversations } from "@scalius/api-client/sdk";
 import { formatOrderTimestamp } from "../orderview/formatters";
 import { threadPreview, threadTitle } from "./conversation-format";
 import { inboxKeys, type InboxItem, type InboxQuery } from "~/lib/api-query-options/inbox";
-import type { InboxSearch } from "./inbox-search";
+import { INBOX_SUBJECTS, type InboxSearch } from "./inbox-search";
 
 const STATUSES = ["open", "pending", "closed"] as const;
 const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * The inbox list (Shopify Inbox): Open / Waiting / Closed, who it's assigned
- * to, a search, and one row per conversation with its unread count.
+ * to, what it is about (order, store question, review, warranty claim), a
+ * search, and one row per conversation with its unread count.
  */
 export function InboxList({
   search,
@@ -41,6 +42,7 @@ export function InboxList({
   const [term, setTerm] = useState(search.q ?? "");
   const status: "open" | "pending" | "closed" = search.status ?? "open";
   const assignee = search.assignee ?? "all";
+  const subject = search.subject ?? "all";
 
   // Typing searches after a pause; the term lives in component state until then.
   useEffect(() => {
@@ -53,6 +55,7 @@ export function InboxList({
   const query: InboxQuery = {
     status,
     assignee: assignee === "all" ? undefined : assignee,
+    subjectType: subject === "all" ? undefined : subject,
     q: search.q || undefined,
   };
   const list = useInfiniteQuery({
@@ -63,7 +66,7 @@ export function InboxList({
     refetchInterval: 30_000,
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(search.q) || assignee !== "all";
+  const filtered = Boolean(search.q) || assignee !== "all" || subject !== "all";
 
   return (
     <section aria-label={t("title")} className={cn("flex min-h-0 flex-col", className)}>
@@ -86,15 +89,27 @@ export function InboxList({
             className="pl-9"
           />
         </div>
-        <NativeSelect
-          aria-label={t("assigneeFilter")}
-          value={assignee}
-          onValueChange={(value) => onSearchChange({ assignee: value === "all" ? undefined : (value as InboxSearch["assignee"]) })}
-        >
-          <option value="all">{t("assignee.all")}</option>
-          <option value="me">{t("assignee.me")}</option>
-          <option value="none">{t("assignee.none")}</option>
-        </NativeSelect>
+        <div className="grid grid-cols-2 gap-2">
+          <NativeSelect
+            aria-label={t("assigneeFilter")}
+            value={assignee}
+            onValueChange={(value) => onSearchChange({ assignee: value === "all" ? undefined : (value as InboxSearch["assignee"]) })}
+          >
+            <option value="all">{t("assignee.all")}</option>
+            <option value="me">{t("assignee.me")}</option>
+            <option value="none">{t("assignee.none")}</option>
+          </NativeSelect>
+          <NativeSelect
+            aria-label={t("subjectFilter")}
+            value={subject}
+            onValueChange={(value) => onSearchChange({ subject: value === "all" ? undefined : (value as InboxSearch["subject"]) })}
+          >
+            <option value="all">{t("subject.all")}</option>
+            {INBOX_SUBJECTS.map((value) => (
+              <option key={value} value={value}>{t(`subject.${value}`)}</option>
+            ))}
+          </NativeSelect>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {list.isPending ? (
@@ -122,7 +137,7 @@ export function InboxList({
                 variant="outline"
                 onClick={() => {
                   setTerm("");
-                  onSearchChange({ q: undefined, assignee: undefined });
+                  onSearchChange({ q: undefined, assignee: undefined, subject: undefined });
                 }}
               >
                 {t("clearFilters")}

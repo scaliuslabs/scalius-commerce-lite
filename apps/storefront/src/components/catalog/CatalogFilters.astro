@@ -33,6 +33,7 @@ import {
   catalogApplyButton,
   showsCatalogPriceFilter,
   type CatalogFacetGroup,
+  type CatalogRatingRow,
 } from "@/lib/catalog-filters";
 import {
   CATALOG_FACET_SEARCH_MIN_VALUES,
@@ -42,6 +43,7 @@ import {
   type CatalogFilterPresentation,
 } from "@/lib/catalog-listing";
 import { formatMoney } from "@/lib/currency";
+import { PRODUCT_LIST_MIN_RATING_PARAM } from "@/lib/product-list-query";
 import { Search } from "lucide-react";
 
 interface Props {
@@ -61,6 +63,8 @@ interface Props {
   presentation: CatalogFilterPresentation;
   /** Leave the category group out (the sub-category pills above the results carry it). */
   withoutCategories?: boolean;
+  /** The Customer rating group's "N★ & up" rows (catalogRatingRows); empty hides the group. */
+  ratingRows?: CatalogRatingRow[];
 }
 
 const {
@@ -79,6 +83,7 @@ const {
   currencyCode,
   presentation,
   withoutCategories = false,
+  ratingRows = [],
 } = Astro.props;
 
 const placement = presentation.placement;
@@ -107,31 +112,37 @@ const searchField = !dense && !bar;
 
 type Section =
   | { kind: "availability"; key: string; name: string; selectedCount: number }
+  | { kind: "rating"; key: string; name: string; selectedCount: number }
   | { kind: "price"; key: string; name: string; selectedCount: number }
   | { kind: "group"; key: string; name: string; selectedCount: number; group: CatalogFacetGroup };
 const facetSections: Section[] = groups
   .filter((group) => !(withoutCategories && group.kind === "category"))
   .map((group) => ({ kind: "group", key: group.key, name: group.name, selectedCount: group.selectedCount, group }));
 const availabilitySection: Section = { kind: "availability", key: "availability", name: "Availability", selectedCount: availabilitySelected };
+const ratingSelected = ratingRows.some((row) => row.selected);
+const rating: Section[] = ratingRows.length > 0
+  ? [{ kind: "rating", key: "rating", name: "Customer rating", selectedCount: ratingSelected ? 1 : 0 }]
+  : [];
 const priceSection: Section | null = showPrice
   ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
   : null;
 // The order follows the references:
-// - dense column (Amazon, Daraz): availability, brand and the first specs as
+// - dense column (Amazon, Daraz): availability, the customer rating (Amazon
+//   lists "Customer Reviews" near the top), brand and the first specs as
 //   tight checkbox rows, then price and the other specs, the category links
 //   last (pills or the breadcrumb carry the tree above);
-// - bar (Dawn): availability, price, then the facets;
+// - bar (Dawn): availability, price, the rating, then the facets;
 // - comfortable column and drawer (Apple Gadgets, Fabrilife, Target): the
-//   category links, price, availability, then the facets.
+//   category links, price, availability, the rating, then the facets.
 const categorySections = facetSections.filter((section) => section.kind === "group" && section.group.kind === "category");
 const brandSections = facetSections.filter((section) => section.kind === "group" && section.group.facets[0]!.kind === "brand");
 const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
 const price = priceSection ? [priceSection] : [];
 const sections: Section[] = dense
-  ? [availabilitySection, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
+  ? [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
   : bar
-    ? [availabilitySection, ...price, ...brandSections, ...specSections]
-    : [...categorySections, ...price, availabilitySection, ...brandSections, ...specSections];
+    ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections]
+    : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
 // A column opens its first groups (and any in use) so the page does not
 // start with a wall; a bar's dropdowns open on demand.
 const OPEN_GROUPS = 6;
@@ -228,6 +239,36 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   <span class="catalog-facet-label">{label}</span>
                 </label>
               ))}
+            </fieldset>
+          ) : section.kind === "rating" ? (
+            <fieldset class="catalog-facet-body" data-catalog-rating-group>
+              <legend class="sr-only">Customer rating</legend>
+              {ratingRows.map(({ min, count, selected }) => (
+                <label class="catalog-facet-row catalog-rating-row">
+                  <input
+                    type="radio"
+                    name={PRODUCT_LIST_MIN_RATING_PARAM}
+                    value={String(min)}
+                    checked={selected}
+                    disabled={count === 0 && !selected}
+                    data-catalog-rating
+                    class="catalog-facet-check"
+                  />
+                  <span class="catalog-facet-label catalog-rating-label">
+                    <span class="sc-stars catalog-rating-stars" style={`--sc-fill:${min * 20}%`} aria-hidden="true"></span>
+                    <span aria-hidden="true">&amp; up</span>
+                    <span class="sr-only">{min} stars and up</span>
+                  </span>
+                  <span class="catalog-facet-count" data-catalog-facet-count>{count}</span>
+                </label>
+              ))}
+              {ratingSelected && (
+                // "Any rating" undoes the choice, in the form and without JavaScript.
+                <label class="catalog-facet-row">
+                  <input type="radio" name={PRODUCT_LIST_MIN_RATING_PARAM} value="" data-catalog-rating class="catalog-facet-check" />
+                  <span class="catalog-facet-label">Any rating</span>
+                </label>
+              )}
             </fieldset>
           ) : section.kind === "price" ? (
             <fieldset class="catalog-facet-body" data-catalog-price>

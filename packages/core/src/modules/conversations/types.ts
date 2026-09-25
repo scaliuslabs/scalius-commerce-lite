@@ -69,6 +69,8 @@ export interface BuyerConversationThread extends BuyerConversationSummary {
 export interface StaffConversationSummary {
   id: string;
   subjectType: ConversationSubjectType;
+  /** The review or warranty claim a Wave B thread is about; null for order and store threads. */
+  subjectId: string | null;
   subject: string | null;
   status: ConversationStatus;
   orderId: string | null;

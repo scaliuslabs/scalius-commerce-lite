@@ -31,6 +31,19 @@ export interface OrderItem {
   discountAmountMinor?: number | null;
   taxableAmountMinor?: number | null;
   taxAmountMinor?: number | null;
+  /**
+   * Wave B facts about the line, composed by the API (absent until each
+   * feature ships). Each card reads and narrows only its own key.
+   */
+  extras?: OrderLineExtras;
+}
+
+export interface OrderLineExtras {
+  review?: unknown;
+  downloads?: unknown;
+  licenceKeys?: unknown;
+  giftCards?: unknown;
+  warranty?: unknown;
 }
 
 export interface OrderLineProperty {

@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 import { autoFulfillerFor, FULFILLER_REGISTRY, type FulfillerRegistry } from "./registry";
 import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./ledger";
 import { applyOrderStatusChange } from "../orders/status/lifecycle";
+import { checkoutDocument, type AutoFulfilMode } from "../settings/documents";
 
 /** Queue message: hand an order's automatic lines over (ids only, no buyer data). */
 export interface OrderAutoFulfilQueueMessage {
@@ -29,6 +30,18 @@ const CLOSED_ORDER_STATUSES = [
     OrderStatus.REFUNDED,
     OrderStatus.INCOMPLETE,
 ];
+/**
+ * Staff confirmed the order: settling a payment never moves an order past
+ * `pending` (an incomplete order becomes `pending`), so `confirmed` or any
+ * later handover status is a staff decision. `processing` still precedes
+ * confirmation (processing → confirmed).
+ */
+const STAFF_CONFIRMED_ORDER_STATUSES = [
+    OrderStatus.CONFIRMED,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+    OrderStatus.COMPLETED,
+];
 
 export interface AutoFulfilResult {
     orderId: string;
@@ -36,14 +49,26 @@ export interface AutoFulfilResult {
     fulfilledTypes: FulfillmentType[];
     /** Auto types still waiting: no fulfiller registered (fails closed). */
     unavailableTypes: FulfillmentType[];
-    skipped: "no_auto_lines" | "unsettled" | "closed" | null;
+    /** `awaiting_confirmation`: the store hands over only after staff confirm the order. */
+    skipped: "no_auto_lines" | "unsettled" | "closed" | "awaiting_confirmation" | null;
     delivered: boolean;
+}
+
+/**
+ * The store's delivery timing (`checkout.autoFulfilMode`). A stored document
+ * that fails validation waits for staff confirmation: keys and codes are
+ * never handed over on a guess. A failed read throws (the job retries).
+ */
+async function readAutoFulfilMode(db: Database): Promise<AutoFulfilMode> {
+    const { value, invalid } = await checkoutDocument.readDetailed(db);
+    return invalid ? "after_confirmation" : value.autoFulfilMode;
 }
 
 /**
  * Hands every settled order's automatic lines over, idempotently: one
  * fulfilment per type (request key `auto:<type>`), whose unique index makes
- * retries and concurrent queue deliveries safe. Only after settlement (F10).
+ * retries and concurrent queue deliveries safe. Only after settlement (F10),
+ * and in `after_confirmation` mode only once staff confirmed the order.
  */
 export async function autoFulfilOrder(
     db: Database,
@@ -74,6 +99,15 @@ export async function autoFulfilOrder(
     if (pending.length === 0) return { ...result, skipped: "no_auto_lines" };
     if (!(SETTLED_PAYMENT_STATUSES as string[]).includes(order.paymentStatus)) {
         return { ...result, skipped: "unsettled" };
+    }
+    // With no fulfiller for any pending type there is nothing to time.
+    const deliverable = pending.some((item) => autoFulfillerFor(item.fulfillmentType as FulfillmentType, registry));
+    if (
+        deliverable
+        && await readAutoFulfilMode(db) === "after_confirmation"
+        && !(STAFF_CONFIRMED_ORDER_STATUSES as string[]).includes(order.status)
+    ) {
+        return { ...result, skipped: "awaiting_confirmation" };
     }
 
     const fulfilledAfter = new Map(items.map((item) => [item.id, item.fulfilledQuantity]));
@@ -150,22 +184,44 @@ export async function autoFulfilOrder(
     return result;
 }
 
+/** At most this many orders per sweep (Wave B §11.3), run sequentially. */
+export const AUTO_FULFIL_SWEEP_LIMIT = 50;
+
+/**
+ * The partial index `order_items_auto_pending_idx` predicate, written out
+ * literally: SQLite uses a partial index only when the query's WHERE contains
+ * its terms as written (bound parameters never match). Keep it identical to
+ * the index and to `AUTO_FULFILLMENT_TYPES`.
+ */
+const AUTO_PENDING_LINE = sql`${orderItems.fulfillmentType} IN ('digital', 'gift_card') AND ${orderItems.fulfilledQuantity} < ${orderItems.quantity}`;
+
 /**
  * The 15-minute backstop: settled, open orders with automatic lines not
- * handed over yet. Bounded; each is then run through `autoFulfilOrder`.
+ * handed over yet (and, in `after_confirmation` mode, confirmed by staff).
+ * Driven from the partial index of owed automatic lines, so it never visits
+ * the store's settled order history. Each is then run through `autoFulfilOrder`.
  */
-export async function listOrdersAwaitingAutoFulfil(db: Database, limit = 50): Promise<string[]> {
-    const rows = await db.select({ id: orders.id }).from(orders).where(and(
-        inArray(orders.paymentStatus, SETTLED_PAYMENT_STATUSES),
-        notInArray(orders.status, CLOSED_ORDER_STATUSES),
-        isNull(orders.deletedAt),
-        sql`EXISTS (
-            SELECT 1 FROM ${orderItems}
-            WHERE ${orderItems.orderId} = ${orders.id}
-              AND ${inArray(orderItems.fulfillmentType, [...AUTO_FULFILLMENT_TYPES])}
-              AND ${orderItems.fulfilledQuantity} < ${orderItems.quantity}
-        )`,
-    )).limit(Math.max(1, Math.min(limit, 200))).all();
+export async function listOrdersAwaitingAutoFulfil(
+    db: Database,
+    limit = AUTO_FULFIL_SWEEP_LIMIT,
+    mode?: AutoFulfilMode,
+): Promise<string[]> {
+    const autoFulfilMode = mode ?? await readAutoFulfilMode(db);
+    const rows = await db.selectDistinct({ id: orderItems.orderId })
+        .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(and(
+            AUTO_PENDING_LINE,
+            inArray(orders.paymentStatus, SETTLED_PAYMENT_STATUSES),
+            notInArray(orders.status, CLOSED_ORDER_STATUSES),
+            isNull(orders.deletedAt),
+            autoFulfilMode === "after_confirmation"
+                ? inArray(orders.status, STAFF_CONFIRMED_ORDER_STATUSES)
+                : undefined,
+        ))
+        .orderBy(asc(orderItems.orderId))
+        .limit(Math.max(1, Math.min(limit, AUTO_FULFIL_SWEEP_LIMIT)))
+        .all();
     return rows.map((row) => row.id);
 }
 

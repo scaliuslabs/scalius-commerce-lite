@@ -30,6 +30,7 @@ import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order
 
 import { ok } from "../utils/api-response";
 import { productPageMerchandisingFields } from "../schemas/product-merchandising";
+import { productPageReviewFields } from "../schemas/reviews";
 import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
@@ -56,15 +57,31 @@ function validatePriceRange(
   }
 }
 
+// Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).
+const cardRatingSchema = z.object({
+  average: z.number().min(1).max(5).openapi({ description: "Average of the published reviews, two decimals truncated (4.66)." }),
+  count: z.number().int().min(1).openapi({ description: "Published reviews." }),
+}).nullable().openapi({ description: "Published-review rating; null when the product has no published review." });
+const ratingFacetSchema = z.array(z.object({
+  min: z.number().int().min(1).max(4).openapi({ description: "Whole stars: products averaging at least this (`minRating`)." }),
+  count: z.number().int().min(0).openapi({ description: "Products matching the other selections and this threshold." }),
+})).max(4).openapi({
+  description: "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.",
+});
+const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().openapi({
+  description: "Only products whose published-review average is at least this many whole stars (1-4).",
+});
+
 const productFilterSchema = z.object({
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   sort: z
-    .enum(["relevance", "newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
+    .enum(["relevance", "newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"])
     .optional()
-    .openapi({ description: "Sort order. Defaults to relevance when `search` is set, otherwise newest." }),
+    .openapi({ description: "Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last." }),
+  minRating: minRatingQuerySchema,
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
@@ -123,6 +140,7 @@ const storefrontProductSchema = z.object({
   updatedAt: z.string().nullable(),
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
+  rating: cardRatingSchema,
 }).passthrough();
 
 const buyerPriceRangeSchema = z.object({
@@ -351,6 +369,7 @@ const recommendedProductSchema = z.object({
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
   createdAt: z.string().nullable(),
+  rating: cardRatingSchema,
 });
 
 const productRecommendationsSchema = z.object({
@@ -407,6 +426,7 @@ const productDetailDataSchema = z.object({
       canonicalPath: z.string().nullable(),
     }).nullable(),
     ...productPageMerchandisingFields,
+    ...productPageReviewFields,
     offers: z.array(z.object({
       promotionId: z.string(),
       title: z.string(),
@@ -541,6 +561,7 @@ const listProductsRoute = createRoute({
         pagination: paginationSchema,
         priceRange: buyerPriceRangeSchema,
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
         correctedQuery: z.string().nullable().openapi({
           description: "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).",
         }),

@@ -39,6 +39,7 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
         (p) =>
           !p.includes("permanent_delete") &&
           p !== PERMISSIONS.ORDERS_REFUND &&
+          p !== PERMISSIONS.GIFT_CARDS_MANAGE &&
           p !== PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT &&
           p !== PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT &&
           p !== PERMISSIONS.TEAM_MANAGE_ROLES &&

@@ -11,7 +11,7 @@
 // page, Chaldal's quick-add grid). Filters are a GET form, so they work
 // without JavaScript.
 import "./catalog-listing.css";
-import type { BuyerPriceRange, Product, ProductFacet } from "@/lib/api";
+import type { BuyerPriceRange, Product, ProductFacet, RatingFacetValue } from "@/lib/api";
 import AppliedCatalogFilters from "./AppliedCatalogFilters.astro";
 import CatalogAspectChips from "./CatalogAspectChips.astro";
 import CatalogChipLinks from "./CatalogChipLinks.astro";
@@ -31,6 +31,7 @@ import {
 import {
   catalogFacetGroups,
   catalogFacetValueCounts,
+  catalogRatingRows,
   showsCatalogPriceFilter,
   visibleCatalogFacets,
 } from "@/lib/catalog-filters";
@@ -60,6 +61,8 @@ interface Props {
   products: Product[];
   pagination: { page: number; totalPages: number; total: number };
   facets: ProductFacet[];
+  /** "N★ & up" rows of the listing's scope (the API's `ratingFacet`). */
+  ratingFacet?: RatingFacetValue[];
   priceRange?: BuyerPriceRange;
   queryState: ProductListQueryState;
   pathname: string;
@@ -86,6 +89,7 @@ const {
   products,
   pagination,
   facets,
+  ratingFacet = [],
   priceRange,
   queryState,
   pathname,
@@ -113,13 +117,19 @@ const refinementCount = countActiveProductListFilters(currentFilters) - (query ?
 const shownFacets = visibleCatalogFacets(facets, currentFilters);
 const filterFacets = shownFacets.filter((facet) => facet.kind !== "category");
 const showsPrice = showsCatalogPriceFilter(priceRange, currentFilters);
+// Reviews show only once the store has a published review (and reviews are on).
+const hasReviews = resolved.facts.hasReviews;
+const ratingRows = catalogRatingRows(ratingFacet, currentFilters, hasReviews);
 // The small-catalogue rule: sort needs two results, filters eight and a
 // facet (or the price) with two values; either stays while the buyer needs
 // it to undo a refinement.
 const controls = catalogListingControls({
   total: pagination.total,
   refinementCount,
-  facetValueCounts: catalogFacetValueCounts(shownFacets, showsPrice ? priceRange : undefined),
+  facetValueCounts: [
+    ...catalogFacetValueCounts(shownFacets, showsPrice ? priceRange : undefined),
+    ratingRows.filter(({ count }) => count > 0).length,
+  ],
   storeShown: resolved.blocks.listing.filters.shown,
 });
 const showSort = controls.sort && piece("sort");
@@ -133,6 +143,8 @@ const sortOptions = [
   { value: "name-asc", label: "Name: A to Z" },
   { value: "name-desc", label: "Name: Z to A" },
   { value: "discount", label: "Biggest discount" },
+  // Amazon's "Avg. Customer Review": offered once the store has reviews.
+  ...(hasReviews || sortBy === "rating" ? [{ value: "rating", label: "Top rated" }] : []),
 ];
 const viewSelect = { pathname, defaultSort, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
@@ -326,6 +338,7 @@ const breadcrumbVisible = piece("breadcrumb");
           currencyCode={currencyCode}
           presentation={presentation.filters}
           withoutCategories={pillLinks.length > 0 && pills.length === 0}
+          ratingRows={ratingRows}
         />
       </div>
     </aside>

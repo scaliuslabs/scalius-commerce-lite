@@ -14,6 +14,7 @@ import type {
   ProductFacetKind,
   ProductFacetValue,
   ProductRecommendations,
+  RatingFacetValue,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
@@ -228,7 +229,10 @@ export interface ProductListOptions {
     | "price-desc"
     | "name-asc"
     | "name-desc"
-    | "discount";
+    | "discount"
+    | "rating";
+  /** "N★ & up": whole stars 1-4. */
+  minRating?: number;
   search?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -252,6 +256,7 @@ type ProductListPayload = {
   pagination?: PaginatedResponse<Product>["pagination"];
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  ratingFacet?: unknown;
   correctedQuery?: string | null;
 };
 
@@ -295,6 +300,23 @@ const FACET_DISPLAYS = new Set<ProductFacetDisplay>(["checkbox", "range", "swatc
 /** A swatch paints a `style` attribute, so only a plain hex colour is kept. */
 const FACET_SWATCH = /^#[0-9a-f]{6}$/i;
 const finiteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+/**
+ * The listing's "N★ & up" rows, highest first: whole stars 1-4 with a
+ * non-negative count. Anything malformed is dropped (no rating group).
+ */
+export function normalizeRatingFacet(value: unknown): RatingFacetValue[] {
+  if (!Array.isArray(value)) return [];
+  const rows = new Map<number, number>();
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const { min, count } = candidate as Record<string, unknown>;
+    if (typeof min !== "number" || !Number.isInteger(min) || min < 1 || min > 4) continue;
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) continue;
+    rows.set(min, count);
+  }
+  return [...rows].map(([min, count]) => ({ min, count })).sort((left, right) => right.min - left.min);
+}
 
 /** The listing facets as the catalog components read them; malformed facets and values are dropped. */
 export function normalizeProductFacets(value: unknown): ProductFacet[] {
@@ -402,6 +424,7 @@ function normalizeProductListPayload(
     pagination: candidate.pagination,
     priceRange: normalizeBuyerPriceRange(candidate.priceRange),
     facets: normalizeProductFacets(candidate.facets),
+    ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
     correctedQuery: typeof candidate.correctedQuery === "string" ? candidate.correctedQuery : null,
   };
 }
@@ -532,6 +555,7 @@ export async function getProductsByCategory(
           pagination: PaginatedResponse<Product>["pagination"];
           priceRange?: BuyerPriceRange;
           facets?: ProductFacet[];
+          ratingFacet?: unknown;
         }>(data);
         return d
           ? {
@@ -540,6 +564,7 @@ export async function getProductsByCategory(
               pagination: d.pagination,
               priceRange: normalizeBuyerPriceRange(d.priceRange),
               facets: normalizeProductFacets(d.facets),
+              ratingFacet: normalizeRatingFacet(d.ratingFacet),
             }
           : null;
       } catch (error: unknown) {

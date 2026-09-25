@@ -18,6 +18,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { variantOptionLabelSql } from "../products/option-model";
 import { hasFulfiller } from "../fulfilment/registry";
+import { digitalDeliverableSql } from "../digital/deliverable";
 import {
     loadProductMediaProjections,
     type ProductMediaProjection,
@@ -195,6 +196,8 @@ export interface StorefrontCartVariantRow {
     taxClassId: string | null;
     imageId: string | null;
     fulfillmentKind: string;
+    /** A digital SKU has something to deliver (a ready file or available keys); false for other kinds. */
+    digitalDeliverable: boolean;
 }
 
 function variantLabel(variant: Pick<StorefrontCartVariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
@@ -336,6 +339,9 @@ export function selectStorefrontCartVariantRows(
             taxClassId: productVariants.taxClassId,
             imageId: productVariants.imageId,
             fulfillmentKind: productVariants.fulfillmentKind,
+            // Digital readiness in the same read (no round trip); only digital SKUs pay for the check.
+            digitalDeliverable: sql<boolean>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalDeliverableSql(productVariants.id)} ELSE 0 END`
+                .mapWith((value) => Number(value) === 1),
         })
         .from(productVariants)
         .where(and(
@@ -505,7 +511,9 @@ export function resolveStorefrontCartValidationFromRows(
             null,
         );
         const displayName = `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""}`;
-        if (knownType !== null && !hasFulfiller(knownType)) {
+        // A digital line also needs something to deliver; gift cards are generated at issue.
+        const deliverable = knownType !== "digital" || variant.digitalDeliverable === true;
+        if (knownType !== null && (!hasFulfiller(knownType) || !deliverable)) {
             addIssue(issues, item, index, {
                 code: "FULFILMENT_UNAVAILABLE",
                 action: "remove",

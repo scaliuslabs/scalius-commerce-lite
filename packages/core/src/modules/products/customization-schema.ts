@@ -10,14 +10,15 @@ import { FULFILLMENT_KINDS } from "@scalius/shared/fulfilment";
 import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
 
 /**
- * Kinds the product editor offers in Wave A. Digital and gift cards need
- * their Wave B fulfillers; until then checkout would refuse those lines.
+ * Kinds the product API accepts (Wave B). Checkout still refuses a digital
+ * line until its variant is deliverable and the digital fulfiller exists, so
+ * accepting the kind here never sells something that cannot be delivered.
  */
-export const EDITABLE_FULFILLMENT_KINDS = ["physical", "service"] as const satisfies readonly (typeof FULFILLMENT_KINDS)[number][];
+export const EDITABLE_FULFILLMENT_KINDS = FULFILLMENT_KINDS;
 export type EditableFulfillmentKind = (typeof EDITABLE_FULFILLMENT_KINDS)[number];
 
 export const editableFulfillmentKindSchema = z.enum(EDITABLE_FULFILLMENT_KINDS)
-    .describe("physical: shipped or picked up. service: performed, nothing delivered (no address needed).");
+    .describe("physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).");
 
 const surchargeSchema = z.number().min(0).max(MAX_PRODUCT_PRICE)
     .describe("Added to one unit's price when the buyer uses this input, in major units.");

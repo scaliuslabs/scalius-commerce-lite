@@ -1,7 +1,11 @@
 import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts } from "@scalius/database/schema";
 import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
-import type { NotificationSubjectType, NotificationType } from "./notification-types";
+import {
+  isCodeBearingNotificationType,
+  type NotificationSubjectType,
+  type NotificationType,
+} from "./notification-types";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -40,6 +44,11 @@ export interface OrderNotificationDeliveryReceiptClaim {
   receiptKey: string;
   claimId: string;
   attempts: number;
+  /**
+   * A code-bearing message (gift card, licence keys): the receipt never
+   * stores the provider's raw response, which may echo the message.
+   */
+  redacted: boolean;
 }
 
 export interface OrderNotificationDeliveryReceiptResult {
@@ -145,6 +154,7 @@ export async function claimOrderNotificationDeliveryReceipt(
         receiptKey: row.receiptKey,
         claimId: row.claimId,
         attempts: row.attempts,
+        redacted: isCodeBearingNotificationType(target.notificationType),
       },
     };
   }
@@ -172,7 +182,7 @@ export async function markOrderNotificationDeliveryReceiptAccepted(
       provider: result.provider ?? undefined,
       providerMessageId: result.providerMessageId ?? null,
       providerStatus: result.providerStatus ?? "accepted",
-      rawResponse: normalizeRawResponse(result.rawResponse),
+      rawResponse: receipt.redacted ? null : normalizeRawResponse(result.rawResponse),
       claimId: null,
       claimExpiresAt: null,
       lastError: null,
@@ -198,7 +208,7 @@ export async function markOrderNotificationDeliveryReceiptSkipped(
       provider: result.provider ?? undefined,
       providerMessageId: result.providerMessageId ?? null,
       providerStatus: normalizeRawResponse(result.providerStatus ?? reason),
-      rawResponse: normalizeRawResponse(result.rawResponse),
+      rawResponse: receipt.redacted ? null : normalizeRawResponse(result.rawResponse),
       claimId: null,
       claimExpiresAt: null,
       lastError: normalizeError(reason),
@@ -224,7 +234,7 @@ export async function markOrderNotificationDeliveryReceiptFailed(
       provider: result.provider ?? undefined,
       providerMessageId: result.providerMessageId ?? null,
       providerStatus: normalizeRawResponse(result.providerStatus),
-      rawResponse: normalizeRawResponse(result.rawResponse),
+      rawResponse: receipt.redacted ? null : normalizeRawResponse(result.rawResponse),
       claimId: null,
       claimExpiresAt: null,
       lastError: normalizeError(error),

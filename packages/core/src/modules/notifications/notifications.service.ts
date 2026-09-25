@@ -1128,6 +1128,12 @@ export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
     recipient: string;
     recipientMasked?: string | null;
     send: (target: OrderNotificationDeliveryTarget) => Promise<DeliverySendResult>;
+    /**
+     * Values the message carries that must never be recorded (gift-card codes,
+     * licence keys): scrubbed from every provider status and error before it
+     * reaches a receipt, an outcome or the outbox; the raw response is dropped.
+     */
+    redact?: readonly string[];
 }): Promise<OrderNotificationChannelOutcome> {
     const target = await createOrderNotificationDeliveryTarget(options);
     const claim = await claimOrderNotificationDeliveryReceipt(options.db, target);
@@ -1135,8 +1141,11 @@ export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
         return outcomeFromUnclaimedReceipt(target, claim.reason);
     }
 
+    const send = options.redact
+        ? redactingSend(options.send, options.redact)
+        : options.send;
     try {
-        const result = await options.send(target);
+        const result = await send(target);
         if (!result.success) {
             if (!isDeliveryFailureRetryable(result)) {
                 await blockProviderForMerchantActionableFailure(options.db, {
@@ -1177,6 +1186,43 @@ export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
         }
         return await markFailedOutcome(options.db, target, claim.receipt, error);
     }
+}
+
+const REDACTED = "[redacted]";
+/** Shorter fragments are ordinary words; codes and keys are longer. */
+const MIN_REDACTED_LENGTH = 4;
+
+/** Removes each secret value, and each part of a listed value, from a provider text. */
+export function redactSecrets(text: string, secrets: readonly string[]): string {
+    const needles = new Set<string>();
+    for (const secret of secrets) {
+        for (const part of [secret, ...secret.split(/[\s,;|]+/)]) {
+            const needle = part.trim();
+            if (needle.length >= MIN_REDACTED_LENGTH) needles.add(needle);
+        }
+    }
+    let redacted = text;
+    // Longest first, so a whole list goes before its parts.
+    for (const needle of [...needles].sort((a, b) => b.length - a.length)) {
+        redacted = redacted.split(needle).join(REDACTED);
+    }
+    return redacted;
+}
+
+function redactingSend(
+    send: (target: OrderNotificationDeliveryTarget) => Promise<DeliverySendResult>,
+    secrets: readonly string[],
+): (target: OrderNotificationDeliveryTarget) => Promise<DeliverySendResult> {
+    const clean = (value: string | null | undefined) => (value == null ? value : redactSecrets(value, secrets));
+    return async (target) => {
+        let result: DeliverySendResult;
+        try {
+            result = await send(target);
+        } catch (error: unknown) {
+            throw new Error(redactSecrets(normalizeError(error), secrets));
+        }
+        return { ...result, providerStatus: clean(result.providerStatus), rawResponse: null };
+    };
 }
 
 export async function recordProviderBlockedDeliveryIfNeeded(options: DeliveryReceiptSubject & {

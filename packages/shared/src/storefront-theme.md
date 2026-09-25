@@ -228,7 +228,7 @@ Where the data departs from SYNTHESIS.md, and why:
    sections valid without one.
 3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
    add a migration that resets stored theme rows to the defaults (0082 was
-   the version 4 reset; 0093 is the version 5 reset). There is no backward
+   the version 4 reset; 0097 is the version 5 reset). There is no backward
    compatibility.
 4. Deploy order: a storefront that reads an older or newer document version
    renders its own default whole and logs a warning, and a store shape with
@@ -238,7 +238,7 @@ Where the data departs from SYNTHESIS.md, and why:
    Department mall default (the v3 Classic look), which is what the reset
    migration puts every store on anyway; only its homepage category tiles
    hide until the new storefront is live (they need two roots, and an
-   unknown shape reads as empty). Checked for 0093 by feeding the v5 API's
+   unknown shape reads as empty). Checked for 0097 by feeding the v5 API's
    serialized layout payload to the v4 reader and resolver from
    `lean/fidelity`.
 

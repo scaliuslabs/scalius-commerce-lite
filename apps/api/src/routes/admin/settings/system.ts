@@ -287,6 +287,8 @@ const checkoutFlowSettingsSchema = z.object({
     checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
     partialPaymentEnabled: z.boolean(),
     partialPaymentAmount: z.number(),
+    /** When digital and gift-card lines are delivered (Wave B); B3/B4 surface it in the dashboard. */
+    autoFulfilMode: z.enum(["after_payment", "after_confirmation"]),
     revision: z.number().int().nonnegative(),
 });
 
@@ -314,8 +316,11 @@ app.openapi(getCheckoutFlowRoute, async (c) => {
 });
 
 const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
-    .omit({ revision: true })
-    .extend({ expectedRevision: z.number().int().nonnegative() })
+    .omit({ revision: true, autoFulfilMode: true })
+    .extend({
+        autoFulfilMode: checkoutFlowSettingsSchema.shape.autoFulfilMode.optional(),
+        expectedRevision: z.number().int().nonnegative(),
+    })
     .strict();
 
 const saveCheckoutFlowRoute = createRoute({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
+import { TEMPLATED_NOTIFICATION_TYPES } from "./notification-types";
 import {
   defaultNotificationTemplates,
   findUnknownVariables,
@@ -16,7 +16,7 @@ import {
 describe("notification templates", () => {
   it.each(["en", "bn"] as const)("ships %s defaults that only use variables their event can fill", (language) => {
     const defaults = defaultNotificationTemplates(language);
-    for (const event of ORDER_NOTIFICATION_TYPES) {
+    for (const event of TEMPLATED_NOTIFICATION_TYPES) {
       const email = defaults.email[event];
       expect(findUnknownVariables(`${email.subject}\n${email.body}`, event)).toEqual([]);
       expect(findUnknownVariables(defaults.sms[event].body, event)).toEqual([]);
@@ -95,6 +95,21 @@ describe("notification templates", () => {
     expect(email.html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(email.html).toContain("<p style=\"margin:0 0 16px;\">Second paragraph &amp; more</p>");
     expect(email.text).toContain("Hi <img src=x onerror=alert(1)>");
+  });
+
+  it("previews the digital, gift card and review messages in their real frame, not an order summary", () => {
+    const defaults = defaultNotificationTemplates("en");
+    for (const event of ["order_digital_delivered", "gift_card_issued", "review_request"] as const) {
+      const email = sampleOrderEmail({ event, language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email[event] });
+      expect(email.html).not.toContain("Dhanmondi");
+      expect(email.html).not.toContain("EID10");
+      expect(email.html).not.toMatch(/\{\{\s*\w+\s*\}\}/);
+    }
+    const gift = sampleOrderEmail({ event: "gift_card_issued", language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email.gift_card_issued });
+    expect(gift.html).toContain("SAMPLE0000000000");
+    const review = sampleOrderEmail({ event: "review_request", language: "en", store: { name: "Shop", logoUrl: null }, template: defaults.email.review_request });
+    expect(review.html).toContain("Cotton panjabi");
+    expect(review.html).toContain("https://example.com/account/orders/1001#reviews");
   });
 
   it("links only plain http(s) addresses in the message, without letting them break out", () => {

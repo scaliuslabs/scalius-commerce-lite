@@ -49,18 +49,39 @@ const ORDER_EVENT_GROUPS = [
 /** The order events, grouped for display; labels come from `notificationEventMessages`. */
 export const NOTIFICATION_EVENT_GROUPS = ORDER_EVENT_GROUPS;
 
-export type NotificationEventGroup = { key: "groupOrders" | "groupPayments" | "groupSupport" | "groupConversations"; events: readonly NotificationType[] };
+export type NotificationEventGroup = {
+  key:
+    | "groupOrders"
+    | "groupPayments"
+    | "groupSupport"
+    | "groupConversations"
+    | "groupReviews"
+    | "groupDigital"
+    | "groupDigitalGiftCards";
+  events: readonly NotificationType[];
+};
 
-/** What the customer rules table lists: the order events and a reply in a conversation. */
+/**
+ * What the customer rules table lists: the order events, a reply in a
+ * conversation (warranty claim and review threads included), the review
+ * request, and digital delivery and gift cards.
+ */
 export const CUSTOMER_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   ...ORDER_EVENT_GROUPS,
   { key: "groupConversations", events: ["conversation_reply"] },
+  { key: "groupReviews", events: ["review_request"] },
+  { key: "groupDigitalGiftCards", events: ["order_digital_delivered", "gift_card_issued"] },
 ];
 
-/** What the staff rules table lists: the order events and a new customer message. */
+/**
+ * What the staff rules table lists: the order events, a new customer message,
+ * a review waiting for approval, and licence keys running out.
+ */
 export const STAFF_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   ...ORDER_EVENT_GROUPS,
   { key: "groupConversations", events: ["conversation_message"] },
+  { key: "groupReviews", events: ["review_pending"] },
+  { key: "groupDigital", events: ["digital_keys_exhausted"] },
 ];
 
 export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
@@ -68,7 +89,11 @@ export type AdminNotificationChannel = (typeof ADMIN_NOTIFICATION_CHANNELS)[numb
 export type CustomerNotificationConfig = Record<NotificationType, Record<CustomerNotificationChannel, boolean>>;
 export type AdminNotificationConfig = Record<NotificationType, Record<AdminNotificationChannel, boolean>>;
 
-/** Whether an event can use a channel at all (a reply never goes by WhatsApp; staff email is for customer messages). */
+/**
+ * Whether an event can use a channel at all: replies, codes, keys and review
+ * links never go by the order WhatsApp template; staff email is for customer
+ * messages and the staff alerts that allow it.
+ */
 export function customerChannelAllowed(event: NotificationType, channel: string): boolean {
   return (customerChannelsForType(event) as readonly string[]).includes(channel);
 }
@@ -77,16 +102,22 @@ export function adminChannelAllowed(event: NotificationType, channel: string): b
   return (adminChannelsForType(event) as readonly string[]).includes(channel);
 }
 
+/** Mirrors core `defaultCustomerChannels` (settings/documents.ts) for an unsaved event. */
 function defaultCustomerChannels(event: NotificationType): readonly string[] {
-  if (event === "order_ready_for_pickup") return ["email", "sms"];
+  if (event === "order_ready_for_pickup" || event === "order_digital_delivered" || event === "gift_card_issued") {
+    return ["email", "sms"];
+  }
   return ["email"];
 }
 
+/** Mirrors core `defaultAdminChannels` (settings/documents.ts) for an unsaved event. */
 function defaultAdminChannels(event: NotificationType): readonly string[] {
+  if (event === "digital_keys_exhausted") return ["push", "email"];
   return event === "order_created"
     || event === "order_cancelled"
     || event === "support_request_submitted"
     || event === "conversation_message"
+    || event === "review_pending"
     ? ["push"]
     : [];
 }
@@ -127,7 +158,7 @@ export function buildAdminNotificationConfig(
   return config;
 }
 
-/** The saved shapes: every order event, plus the conversation event each audience may use. */
+/** The saved shapes: every order event, plus the other events each audience may use. */
 export type CustomerRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannels>["channels"];
 export type AdminRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannelsAdminChannels>["channels"];
 

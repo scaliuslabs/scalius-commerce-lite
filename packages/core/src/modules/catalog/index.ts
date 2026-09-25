@@ -19,6 +19,18 @@ export {
 } from "./facets";
 export * from "./compare";
 export * from "./product-page";
+export {
+  getPublicProductReviews,
+  PRODUCT_PAGE_REVIEW_COUNT,
+  PUBLIC_REVIEW_PAGE_SIZE,
+  PUBLIC_REVIEW_SORTS,
+  type ProductPageReviews,
+  type PublicReview,
+  type PublicReviewPage,
+  type PublicReviewQuery,
+  type PublicReviewSort,
+  type PublicReviewSummary,
+} from "./product-reviews";
 export * from "./search";
 export * from "./feed";
 export * from "./sitemap";

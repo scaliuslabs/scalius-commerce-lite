@@ -44,9 +44,12 @@ import { PricingCard } from "./product-form/PricingCard";
 import { AttributesSection } from "./product-form/AttributesSection";
 import { ProductSearchListing } from "./product-form/ProductSearchListing";
 import { FulfilmentCard } from "./product-form/FulfilmentCard";
+import { DigitalDeliveryCard } from "./product-form/DigitalDeliveryCard";
+import { GiftCardProductCard } from "./product-form/GiftCardProductCard";
 import { BuyerInputsCard } from "./product-form/BuyerInputsCard";
 import { StatusCard } from "./product-form/StatusCard";
 import { OrganizationCard } from "./product-form/OrganizationCard";
+import { WarrantyCard } from "./product-form/WarrantyCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { productFieldLabel } from "./product-form/utils";
 import { autoHandleFor } from "./search-listing/SearchListingCard";
@@ -390,6 +393,8 @@ function ProductEditor({
                 </CardContent>
               </Card>
               <FulfilmentCard form={form} hasOptions={variantPrices !== null} />
+              <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
+              <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
               <BuyerInputsCard
                 form={form}
                 readOnly={readOnly}
@@ -408,6 +413,7 @@ function ProductEditor({
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
               <OrganizationCard form={form} categories={categories} />
+              <WarrantyCard form={form} readOnly={readOnly} />
             </div>
           </fieldset>
           {readOnly ? null : (

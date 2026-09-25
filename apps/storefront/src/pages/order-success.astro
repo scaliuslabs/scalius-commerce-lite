@@ -1,5 +1,6 @@
 ---
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
+import LineExtras from "@/components/order/LineExtras.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -797,6 +798,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         )}
                       </p>
                     )}
+                    <LineExtras line={item} context={{ orderId, access: "receipt" }} />
                     </div>
                   </div>
                   <div class="shrink-0 text-right">

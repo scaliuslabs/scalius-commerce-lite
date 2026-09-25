@@ -61,6 +61,9 @@ const storefrontProductCardSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  rating: z.object({ average: z.number(), count: z.number().int() }).nullable().openapi({
+    description: "Published-review average and count; null without a published review.",
+  }),
   cardFacts: optionalProductCardFacts,
 });
 const storefrontCategoryCardSchema = z.object({

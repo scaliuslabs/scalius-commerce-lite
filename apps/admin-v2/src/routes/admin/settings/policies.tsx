@@ -11,6 +11,7 @@ import { PoliciesCard, StorePagePicker } from "~/components/admin/settings/Polic
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { NativeSelect } from "~/components/ui/native-select";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
+import { WarrantyPoliciesEntry } from "~/components/admin/settings/warranty-policies/WarrantyPoliciesEntry";
 import { SettingsCard, SettingsField, SettingsPage, SettingsCardLoading } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -161,6 +162,7 @@ function PoliciesPage() {
     <SettingsPage page="policies" readOnly={!canEdit}>
       <PoliciesCard canEdit={canEdit} />
       <ReturnPolicyCard canEdit={canEdit} />
+      <WarrantyPoliciesEntry />
     </SettingsPage>
   );
 }

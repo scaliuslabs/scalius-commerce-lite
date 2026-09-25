@@ -102,6 +102,8 @@ const model = productCardModel(product, {
   currencyCode,
   hoverImage: anatomy.hoverImage,
   quickBuy: anatomy.quickBuy,
+  // Ratings show only while the store takes reviews and has a published one.
+  ratings: resolved.facts.hasReviews,
 });
 // Intrinsic size in the card's own photo ratio (the box's CSS ratio), so the
 // photo never shifts the grid.

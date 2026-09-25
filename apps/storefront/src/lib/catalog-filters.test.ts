@@ -10,6 +10,7 @@ import {
   catalogCountQuery,
   catalogFacetGroups,
   catalogFilterSearchParams,
+  catalogRatingRows,
   setupCatalogFilters,
   showsCatalogPriceFilter,
   visibleCatalogFacets,
@@ -377,5 +378,45 @@ describe("catalog filter form", () => {
     // A range the pending selection leaves without products keeps its old hint.
     expect(placeholders).toEqual(["13", "15.6", "1"]);
     expect(form.querySelector("button")!.textContent).toBe("Show 4 products");
+  });
+
+  it("counts the \"N★ & up\" rows for the pending selection", () => {
+    document.body.innerHTML = `
+      <form>
+        <label><input type="radio" name="minRating" value="4" data-catalog-rating /><span data-catalog-facet-count>9</span></label>
+        <label><input type="radio" name="minRating" value="3" data-catalog-rating checked /><span data-catalog-facet-count>12</span></label>
+        <label><input type="radio" name="minRating" value="2" data-catalog-rating /><span data-catalog-facet-count>15</span></label>
+        <label><input type="radio" name="minRating" value="" data-catalog-rating /></label>
+        <button type="submit" data-catalog-filter-apply>Show 12 products</button>
+      </form>
+    `;
+    const form = document.querySelector("form")!;
+    applyCatalogFilterCounts(form, [], 5, [{ min: 4, count: 0 }, { min: 3, count: 5 }, { min: 2, count: 7 }]);
+    const rows = [...form.querySelectorAll<HTMLInputElement>("input[data-catalog-rating]")];
+    expect(rows.map((row) => row.closest("label")!.textContent!.trim())).toEqual(["0", "5", "7", ""]);
+    expect(rows.map((row) => row.disabled)).toEqual([true, false, false, false]);
+  });
+});
+
+describe("customer rating rows", () => {
+  const facet = [{ min: 4, count: 12 }, { min: 3, count: 18 }, { min: 2, count: 20 }];
+
+  it("offers 4★, 3★ and 2★ & up with their counts once the store has reviews", () => {
+    expect(catalogRatingRows(facet, {}, true)).toEqual([
+      { min: 4, count: 12, selected: false },
+      { min: 3, count: 18, selected: false },
+      { min: 2, count: 20, selected: false },
+    ]);
+    expect(catalogRatingRows(facet, { minRating: "3" }, true).find((row) => row.selected)).toEqual({ min: 3, count: 18, selected: true });
+  });
+
+  it("shows nothing while the store has no reviews or nothing in scope has one", () => {
+    expect(catalogRatingRows(facet, {}, false)).toEqual([]);
+    expect(catalogRatingRows([], {}, true)).toEqual([]);
+    expect(catalogRatingRows([{ min: 4, count: 0 }, { min: 3, count: 0 }], {}, true)).toEqual([]);
+  });
+
+  it("keeps the buyer's choice so it can be undone, even at zero", () => {
+    expect(catalogRatingRows([], { minRating: "4" }, false)).toEqual([{ min: 4, count: 0, selected: true }]);
   });
 });

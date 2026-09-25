@@ -11,6 +11,8 @@ import {
     FULFILLMENT_TYPES,
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
+import { digitalFulfiller } from "./auto/digital";
+import { giftCardFulfiller } from "./auto/gift-card";
 
 export interface AutoFulfilLine {
     orderItemId: string;
@@ -41,13 +43,21 @@ export type FulfillerEntry =
 
 export type FulfillerRegistry = Readonly<Record<FulfillmentType, FulfillerEntry | null>>;
 
-/** Wave A: the manual types only. Wave B adds the digital and gift-card fulfillers here. */
+function autoEntry(fulfiller: AutoFulfiller | null): FulfillerEntry | null {
+    return fulfiller ? { mode: "auto", fulfiller } : null;
+}
+
+/**
+ * The manual types, and the automatic ones composed from `auto/*` (each file
+ * is filled by the slice that owns its domain). A missing automatic fulfiller
+ * stays `null`: those lines fail closed.
+ */
 export const FULFILLER_REGISTRY: FulfillerRegistry = Object.freeze({
     ship: { mode: "manual" },
     pickup: { mode: "manual" },
     service: { mode: "manual" },
-    digital: null,
-    gift_card: null,
+    digital: autoEntry(digitalFulfiller),
+    gift_card: autoEntry(giftCardFulfiller),
 });
 
 export function hasFulfiller(

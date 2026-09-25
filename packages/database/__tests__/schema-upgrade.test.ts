@@ -371,6 +371,30 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 95,
+        name: "0095_reviews",
+        sqliteStatements: 22,
+        postgresStatements: 30,
+      },
+      {
+        version: 96,
+        name: "0096_digital_goods",
+        sqliteStatements: 20,
+        postgresStatements: 22,
+      },
+      {
+        version: 97,
+        name: "0097_gift_cards",
+        sqliteStatements: 23,
+        postgresStatements: 33,
+      },
+      {
+        version: 98,
+        name: "0098_warranty",
+        sqliteStatements: 24,
+        postgresStatements: 30,
+      },
     ]);
   });
 
@@ -514,6 +538,10 @@ describe("provider-neutral schema upgrades", () => {
           { version: 92, name: "0092_attribute_option_presets" },
           { version: 93, name: "0093_theme_document_v5" },
           { version: 94, name: "0094_media_rendition_ladder" },
+          { version: 95, name: "0095_reviews" },
+          { version: 96, name: "0096_digital_goods" },
+          { version: 97, name: "0097_gift_cards" },
+          { version: 98, name: "0098_warranty" },
         ],
       });
     } finally {

@@ -1,0 +1,32 @@
+/*
+ * Rating stars (reviews, Wave B §2.4; imported by global.css): five stars drawn by one element, a
+ * star mask over a two-stop fill, so a 4.5 reads as four and a half stars
+ * at any size and in any font. The element is decorative (aria-hidden); the
+ * number and its words sit beside it for assistive technology.
+ *
+ *   <span class="sc-stars" style="--sc-fill:90%" aria-hidden="true"></span>
+ *
+ * `--sc-star` sets the star size, `--sc-star-on`/`--sc-star-off` the colours
+ * (amber on a quiet track by default; each card variant sets its reference's).
+ */
+.sc-stars {
+  --sc-star: 1em;
+  --sc-star-on: #f59e0b;
+  --sc-star-off: color-mix(in srgb, currentColor 22%, transparent);
+  display: inline-block;
+  flex-shrink: 0;
+  width: calc(var(--sc-star) * 5);
+  height: var(--sc-star);
+  vertical-align: -0.125em;
+  background: linear-gradient(90deg, var(--sc-star-on) var(--sc-fill, 0%), var(--sc-star-off) var(--sc-fill, 0%));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 26 26'%3E%3Cpath d='M12 1.6l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.7l-6.4 3.5L7 14.1l-5.3-5 7.2-.9z'/%3E%3C/svg%3E") repeat-x left center / var(--sc-star) var(--sc-star);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 26 26'%3E%3Cpath d='M12 1.6l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.7l-6.4 3.5L7 14.1l-5.3-5 7.2-.9z'/%3E%3C/svg%3E") repeat-x left center / var(--sc-star) var(--sc-star);
+}
+
+@media (forced-colors: active) {
+  .sc-stars {
+    forced-color-adjust: none;
+    --sc-star-on: CanvasText;
+    --sc-star-off: GrayText;
+  }
+}

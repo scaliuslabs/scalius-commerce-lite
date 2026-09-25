@@ -24,7 +24,8 @@ import {
   openRequestLabel,
   orderPaymentLine,
 } from "@/lib/account-format";
-import { CONVERSATION_COPY, fetchInboxUnread, inboxBadgeText } from "@/lib/account-inbox";
+import { CONVERSATION_COPY, inboxBadgeText } from "@/lib/account-inbox";
+import { fetchAccountSummary, visibleAccountFeatureTabs } from "@/lib/account-tabs";
 
 /** Fields the account list reads beyond the generated order type. */
 export type AccountOrder = CustomerOrder;
@@ -280,7 +281,10 @@ function renderProfile(customer: CustomerInfo): void {
   }
 }
 
-/** The account tabs (this page and the Inbox) with the unread-replies badge. */
+/**
+ * The account tabs (this page, the Inbox, then any Reviews, Downloads, Gift
+ * cards or Warranties tab with something in it) with the unread-replies badge.
+ */
 function renderAccountTabs(runId: number): void {
   const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium";
   if (!document.getElementById("accountTabs")) {
@@ -293,12 +297,17 @@ function renderAccountTabs(runId: number): void {
       <a href="/account/inbox" data-astro-prefetch="false" class="${tab} gap-2 border-transparent text-muted-foreground hover:text-foreground">${escapeHtml(CONVERSATION_COPY.inboxTitle)}<span id="accountInboxBadge" hidden class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"></span></a>`;
     byId("authState").prepend(nav);
   }
-  void fetchInboxUnread().then((unread) => {
+  void fetchAccountSummary().then((summary) => {
     const badge = document.getElementById("accountInboxBadge");
     if (!badge || accountWindow.__scaliusAccountInitRun !== runId) return;
-    const text = inboxBadgeText(unread);
+    const text = inboxBadgeText(summary?.unreadInbox ?? 0);
     badge.innerHTML = text ? `${escapeHtml(text)}<span class="sr-only"> unread</span>` : "";
     badge.hidden = !text;
+    const nav = document.getElementById("accountTabs");
+    nav?.querySelectorAll("[data-account-feature-tab]").forEach((link) => link.remove());
+    nav?.insertAdjacentHTML("beforeend", visibleAccountFeatureTabs(summary).map((feature) =>
+      `<a href="${escapeHtml(feature.href)}" data-astro-prefetch="false" data-account-feature-tab class="${tab} border-transparent text-muted-foreground hover:text-foreground">${escapeHtml(feature.label)}</a>`,
+    ).join(""));
   });
 }
 

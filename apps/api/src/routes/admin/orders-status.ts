@@ -32,6 +32,7 @@ import { successEnvelope, messageResponse, errorResponses, conflictResponse, ser
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
+import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
@@ -348,6 +349,8 @@ app.openapi(postCodRoute, async (c) => {
     const result = await processCodAction(db, orderId, data);
     const { availabilityTransitionVariantIds, ...responseData } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    // Collected cash settles the order: hand over its automatic lines.
+    if (data.action === "collected") await enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, orderId, "orders-cod-action");
     await recordOrderEvent(db, data.action === "collected"
         ? {
             orderId,
