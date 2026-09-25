@@ -94,7 +94,10 @@ Storefront category ([slug].astro)
 | `public-eligibility.ts` | Shared public catalogue predicates and default simple-SKU values. Every buyer-facing surface uses these instead of checking only `products.isActive` and `products.deletedAt`. |
 | `buyer-projection.ts`, `money.ts` | Integer buyer pricing and availability projections, store-currency helpers. |
 | `catalog-projections.ts` | `catalogProjectionRefreshStatements()` (both projections, per product) and `catalogBuyerStateRefreshStatementsForSkus()` (buyer state, per SKU, for stock writes): statements every product, SKU, stock and checkout batch appends after its ledger edge and CAS, at most 90 products each through one `json_each` parameter; `rebuildCatalogProjections()` recomputes them in keyset pages. Single-sourced from the buyer pricing projection and the public eligibility predicate. `catalog-projections.d1.test.ts` is the drift test. |
-| `semantic-sections.ts` | Named product-editor sections (details, media, SEO, ...) saved under the aggregate revision. |
+| `semantic-sections.ts` | Named product-editor sections (details, media, SEO, content blocks, template, bundles, ...) saved under the aggregate revision. |
+| `content-blocks.ts` | The `content_blocks` section (bounded list, `content_block` chunk read, replace with keep-by-id; strict `@scalius/shared/product-content-blocks` schemas, sanitised rich-text HTML, ready media checked and guarded in the batch) and the product page's one ordered block read. Tabs mirrored from `product_rich_content` (0090 triggers, id `pcb_<row id>`) are read-only here and keep their legacy ids on the page until the contract step drops that table. |
+| `bundles.ts` | The `bundles` section (quantity tiers, whole taka, no gift cards) and the active-tier reads the product page and checkout price from. |
+| `emi.ts` | The product page's "EMI on card payment, from X/month" line from the `emi` settings document; informational only. |
 
 ## API Endpoints
 
