@@ -149,6 +149,13 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
                 <td>
                   {item.productName || t("items.unnamed")}
                   {item.variantLabel ? <small>{item.variantLabel}</small> : null}
+                  {/* Buyer inputs as the order froze them: "Engraving: Rahim (+৳200)". */}
+                  {(item.properties ?? []).map((property, index) => (
+                    <small key={`${property.label}-${index}`}>
+                      {property.label}: {property.displayValue}
+                      {property.priceMinor > 0 && saved ? ` (+${minor(property.priceMinor)})` : ""}
+                    </small>
+                  ))}
                   {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
