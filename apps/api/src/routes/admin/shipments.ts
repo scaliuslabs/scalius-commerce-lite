@@ -1,6 +1,7 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { getShipment, deleteShipmentRecord } from "@scalius/core/modules/delivery";
+import { assertShipmentDeletable } from "@scalius/core/modules/fulfilment";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
@@ -90,6 +91,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
         throw new NotFoundError("Shipment not found");
     }
 
+    await assertShipmentDeletable(db, shipmentId);
     await deleteShipmentRecord(db, shipmentId);
     return ok(c, { message: "Shipment deleted successfully" });
 });

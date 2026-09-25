@@ -102,6 +102,13 @@ export const adminOrderFulfilmentSchema = buyerOrderFulfilmentSchema.extend({
   /** Cash taken at the pickup counter or the service in the same action, in major units. */
   cashCollected: z.number().nullable(),
   voidedAt: nullableTimestampSchema,
+  /**
+   * Void is allowed now: an active own-rider parcel, pickup or service
+   * fulfilment of an order still confirmed. Courier-booked parcels follow the
+   * courier's status (webhooks), so they are never voided here.
+   */
+  canVoid: z.boolean(),
+  voidBlockedReason: z.enum(["voided", "courier", "delivered", "order_not_confirmed"]).nullable(),
 });
 
 /** Order-level fields every order projection carries after Wave A. */

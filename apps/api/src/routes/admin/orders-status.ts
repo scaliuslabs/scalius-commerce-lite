@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
+    assertShipmentDeletable,
     bulkShipOrders,
     createFulfillmentShipment,
     getOrderShipments,
@@ -512,7 +513,7 @@ app.openapi(postFulfillRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await createFulfillmentShipment(db, orderId, data);
+    const result = await createFulfillmentShipment(db, orderId, data, actorIdOf(c));
     const {
         statusChange,
         availabilityTransitionVariantIds,
@@ -740,6 +741,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
+    await assertShipmentDeletable(db, shipmentId);
     await deleteShipmentRecord(db, shipmentId);
     return ok(c, {});
 });

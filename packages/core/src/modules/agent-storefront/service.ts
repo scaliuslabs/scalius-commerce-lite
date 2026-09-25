@@ -8,10 +8,13 @@ import {
 } from "@scalius/database/schema";
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
+  DELIVERY_ADDRESS_REQUIRED_REASON,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
+  summarizeStorefrontCartFulfilment,
   validateStorefrontCartItems,
   validateStorefrontDeliveryPreflight,
+  type StorefrontCartItemIssue,
 } from "@scalius/core/modules/checkout";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
@@ -116,6 +119,39 @@ export interface AgentStorefrontCheckoutQuote {
   }>;
 }
 
+
+/**
+ * Agent carts are `{variantId, quantity}` and never carry buyer inputs, so a
+ * product whose buyer inputs include a required field cannot be bought
+ * through one (Wave A §3.2).
+ */
+export const AGENT_STOREFRONT_NEEDS_CUSTOMIZATION = "needs_customization" as const;
+
+export type AgentStorefrontCartIssue = Omit<StorefrontCartItemIssue, "code" | "action"> & {
+  code: StorefrontCartItemIssue["code"] | typeof AGENT_STOREFRONT_NEEDS_CUSTOMIZATION;
+  action: StorefrontCartItemIssue["action"];
+};
+
+/** Cart issues as agents read them: a missing required buyer input becomes `needs_customization`. */
+export function presentAgentStorefrontCartIssues(
+  issues: readonly StorefrontCartItemIssue[],
+): AgentStorefrontCartIssue[] {
+  return issues.map((issue) => {
+    if (issue.code !== "PROPERTIES_REQUIRED") return issue;
+    const name = issue.productName ?? "This product";
+    return {
+      ...issue,
+      code: AGENT_STOREFRONT_NEEDS_CUSTOMIZATION,
+      action: "remove",
+      message: `${name} asks for details the buyer enters on its product page, so an agent cart cannot hold it. Remove it, or send the buyer to the product page.`,
+    };
+  });
+}
+
+function isDeliveryAddressRequired(error: unknown): boolean {
+  return error instanceof ValidationError
+    && (error.details as { reason?: unknown } | undefined)?.reason === DELIVERY_ADDRESS_REQUIRED_REASON;
+}
 
 function toEpochSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1_000);
@@ -385,7 +421,7 @@ export async function mutateAgentStorefrontCart(
     });
     if (!proposedValidation.valid) {
       throw new ValidationError("The proposed storefront cart is not currently valid.", {
-        itemIssues: proposedValidation.issues,
+        itemIssues: presentAgentStorefrontCartIssues(proposedValidation.issues),
       });
     }
   }
@@ -458,10 +494,12 @@ export async function setAgentStorefrontDelivery(
   const cart = await loadAgentStorefrontCart(db, current);
   if (!cart.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
-      itemIssues: cart.issues,
+      itemIssues: presentAgentStorefrontCartIssues(cart.issues),
     });
   }
-  if (normalized.cityId && normalized.zoneId) {
+  // A pickup rate is checked without an address; a delivery rate still needs
+  // its city and zone (the preflight refuses it otherwise).
+  if (normalized.shippingMethodId || (normalized.cityId && normalized.zoneId)) {
     await validateStorefrontDeliveryPreflight(db, {
       city: normalized.cityId,
       zone: normalized.zoneId,
@@ -517,19 +555,27 @@ async function loadAgentStorefrontCart(
     currencyCode: currency.currencyCode,
   });
 
+  // Same rule as storefront checkout: a physical line needs one method (a
+  // pickup rate needs no address); a cart with nothing physical needs none.
   let delivery: DeliveryPreflight | undefined;
+  const requiresDeliveryMethod = summarizeStorefrontCartFulfilment(validation, null).requiresDeliveryMethod;
   if (
     validation.valid
-    && row.cityId
-    && row.zoneId
-    && row.shippingMethodId
+    && validation.items.length > 0
+    && (!requiresDeliveryMethod || row.shippingMethodId)
   ) {
-    delivery = await validateStorefrontDeliveryPreflight(db, {
-      city: row.cityId,
-      zone: row.zoneId,
-      area: row.areaId,
-      shippingMethodId: row.shippingMethodId,
-    }, validation);
+    try {
+      delivery = await validateStorefrontDeliveryPreflight(db, {
+        city: row.cityId,
+        zone: row.zoneId,
+        area: row.areaId,
+        shippingMethodId: row.shippingMethodId,
+      }, validation);
+    } catch (error) {
+      // A delivery rate saved while the cart had nothing physical: the cart
+      // now needs its address; checkout asks for it.
+      if (!isDeliveryAddressRequired(error)) throw error;
+    }
   }
 
   return {
@@ -549,7 +595,8 @@ function presentAgentStorefrontCart(state: AgentStorefrontCartState) {
   const { context, delivery, currencyCode: _currencyCode, decimalPlaces, ...cart } = state;
   return {
     context,
-    ...presentStorefrontCartValidation(cart, decimalPlaces),
+    ...presentStorefrontCartValidation(cart, decimalPlaces, delivery?.fulfilment),
+    issues: presentAgentStorefrontCartIssues(cart.issues),
     ...(delivery ? { delivery: presentStorefrontDeliveryPreflight(delivery, decimalPlaces) } : {}),
   };
 }
@@ -630,7 +677,7 @@ async function assertAgentStorefrontDiscountValid(
   const projection = currentCart ?? await loadAgentStorefrontCart(db, row);
   if (!projection.valid || projection.items.length === 0) {
     throw new ValidationError("Add valid available items before applying a discount.", {
-      itemIssues: projection.issues,
+      itemIssues: presentAgentStorefrontCartIssues(projection.issues),
     });
   }
   await quoteAgentStorefrontDiscount(db, row, projection, normalizedCode, customerPhone);
@@ -676,15 +723,14 @@ function assertAgentStorefrontCheckoutProjection(
   }
   if (!projection.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
-      itemIssues: projection.issues,
+      itemIssues: presentAgentStorefrontCartIssues(projection.issues),
     });
   }
-  const delivery = projection.context.delivery;
-  if (!delivery.cityId || !delivery.zoneId || !delivery.shippingMethodId) {
-    throw new ValidationError("Select a city, zone, and shipping method before checkout.");
-  }
   if (!projection.delivery) {
-    throw new ValidationError("The delivery selection could not be validated.");
+    // Only a cart with a physical line gets here: it needs one method.
+    throw new ValidationError(projection.context.delivery.shippingMethodId
+      ? "Select a city and zone for this delivery method, or choose a pickup method."
+      : "Select a delivery or pickup method before checkout.");
   }
 }
 
@@ -698,15 +744,16 @@ export async function quoteAgentStorefrontCheckout(
   const projection = await loadAgentStorefrontCart(db, row);
   assertAgentStorefrontCheckoutProjection(projection);
   const delivery = projection.delivery!;
-  const destination = projection.context.delivery;
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
   const discount = await quoteAgentStorefrontDiscount(db, row, projection, discountCode, input.customerPhone);
   const currency = await getCurrencySettings(db);
   const quote = await calculateStorefrontTaxQuote(db, {
+    // The same destination checkout commits: no address (pickup, service)
+    // means only store-wide rates apply.
     destination: {
-      city: destination.cityId!,
-      zone: destination.zoneId!,
-      area: destination.areaId,
+      city: delivery.address?.city ?? null,
+      zone: delivery.address?.zone ?? null,
+      area: delivery.address?.area ?? null,
       cityName: delivery.cityName,
       zoneName: delivery.zoneName,
       areaName: delivery.areaName,
@@ -726,7 +773,7 @@ export async function quoteAgentStorefrontCheckout(
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,
-    shippingMethodId: destination.shippingMethodId!,
+    shippingMethodId: delivery.shippingMethod?.id ?? null,
     discountCode,
     quote,
   });

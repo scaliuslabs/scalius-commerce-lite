@@ -32,6 +32,30 @@ function itemTotal(item: InvoiceOrderItemSnapshot, decimalPlaces: number): numbe
   return item.lineSubtotalMinor ?? Math.round(item.price * item.quantity * (10 ** decimalPlaces));
 }
 
+/** Long free-text inputs are cut on the printout so an invoice stays one bounded page. */
+const PRINTED_PROPERTY_VALUE_LENGTH = 200;
+
+function printedPropertyValue(value: string): string {
+  const characters = [...value];
+  return characters.length > PRINTED_PROPERTY_VALUE_LENGTH
+    ? `${characters.slice(0, PRINTED_PROPERTY_VALUE_LENGTH - 1).join("")}…`
+    : value;
+}
+
+/** "Engraving: Anika (+BDT 200.00)" under the line, escaped. */
+function itemProperties(
+  item: InvoiceOrderItemSnapshot,
+  currencyCode: string | null,
+  decimalPlaces: number,
+): string {
+  return (item.properties ?? []).map((property) => {
+    const surcharge = property.priceMinor > 0
+      ? ` (+${formatMoney(property.priceMinor, currencyCode, decimalPlaces, true)})`
+      : "";
+    return `<small>${html(property.label)}: ${html(printedPropertyValue(property.displayValue))}${surcharge}</small>`;
+  }).join("");
+}
+
 export function renderPrintableInvoice(document: InvoiceDocument): string {
   const { order, businessInfo } = document;
   const decimals = order.currencyDecimalPlaces ?? 2;
@@ -44,7 +68,7 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
     .toISOString()
     .slice(0, 10);
   const rows = order.items.map((item) => `
-    <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}</td>
+    <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}${itemProperties(item, order.currencyCode, decimals)}</td>
     <td>${item.quantity}${item.returnedQuantity ? `<small>${item.returnedQuantity} returned</small>` : ""}</td><td>${formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true)}</td>
     <td>${formatMoney(itemTotal(item, decimals), order.currencyCode, decimals, true)}</td></tr>`).join("");
   const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));

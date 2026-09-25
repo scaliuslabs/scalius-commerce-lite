@@ -5,6 +5,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
 import { mapProviderStatus, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 import {
     buildWebhookEventId,
@@ -171,7 +172,13 @@ app.post("/", async (c) => {
             })
             .where(eq(deliveryShipments.id, shipment.id));
 
+        // The ledger follows the parcel (F11): units the courier holds are
+        // recorded before the order moves (delivered needs them); units the
+        // courier never took are unsent again once the order is back to
+        // confirmed.
+        await syncCourierFulfilmentFromShipment(db, shipment.id, normalizedStatus);
         const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+        await syncCourierFulfilmentFromShipment(db, shipment.id, normalizedStatus);
         await enqueueOrderStatusChangeNotification({
             db,
             queue: c.env.JOBS_QUEUE,

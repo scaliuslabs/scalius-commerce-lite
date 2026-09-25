@@ -890,6 +890,8 @@ export async function saveProductOptionMatrix(
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
             discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
+            // Omitted keeps a saved row's kind.
+            ...(variant.fulfillmentKind !== undefined ? { fulfillmentKind: variant.fulfillmentKind } : {}),
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {
@@ -897,6 +899,7 @@ export async function saveProductOptionMatrix(
                 id: variant.id,
                 productId,
                 ...fields,
+                fulfillmentKind: variant.fulfillmentKind ?? "physical",
                 stock: variant.stock > 0 ? 0 : variant.stock,
                 reservedStock: 0,
                 preorderStock: 0,
