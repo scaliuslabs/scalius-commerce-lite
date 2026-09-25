@@ -82,6 +82,68 @@ check it. The release-wide evidence lives in
    `served_by_colo` in `wrangler d1 execute <db> --remote --json --command "SELECT 1"`
    and change the region to match.
 
+## The cart shell
+
+`/cart` used to render for every request: 0.15-1 s of server time in
+production (0.9 s once after a deploy) while every other page answered from
+the cache in about 20 ms. Nothing in its GET HTML depends on the buyer:
+
+- the lines live in `localStorage` (`cart:v3`) and an inline script paints
+  them (or the empty state) before first paint;
+- sign-in state is read in the browser (`cs_auth`), saved details and
+  discounts come from no-store APIs, and cart validation, the tax quote and
+  the order go through server APIs or the POST;
+- the reads are public and generation-cached: layout, cities, delivery
+  methods, checkout settings and the checkout copy. Every write to them bumps
+  the generation.
+
+What was buyer-specific, and where it went:
+
+| Input | Before | Now |
+| --- | --- | --- |
+| `?quickBuyStorage=blocked` (quick buy could not write session storage) | read on the server, rendered as an error | a hidden notice, revealed from `location.search` by an inline script before first paint; the cache key drops every `/cart` query |
+| Session cookie (`cs_tok`, `cs_auth`) | read only by the POST | unchanged: a request carrying one bypasses the cache, like every page |
+| POST (COD form, discount form without JavaScript) | rendered | unchanged: never cached, handled on the server |
+| A failed read (fail-closed "checkout unavailable", English copy) | rendered | rendered for this request only: `markRenderUncacheable` sets `no-store`, and the middleware answers `X-Cache-Status: BYPASS_DEGRADED` and the gateway does not store it |
+
+So an anonymous `GET /cart` goes through the same gateway lane as a product
+page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`):
+one entry per build, Worker version and generation, keyed on `/cart` alone,
+rendered from a cookie-less canonical request. Two things differ from a
+catalogue page: the browser copy is still
+`private, no-cache, no-store, must-revalidate` (the buyer types contact
+details and an address into this document), and prefetch of `/cart` stays
+off. `/checkout`, payment, receipt and account pages are unchanged:
+rendered for every request and `no-store`.
+
+Guardrails: `apps/storefront/src/lib/cart/cart-shell.render.test.ts` renders
+the real page with a buyer's cookies and query and asserts the HTML carries
+none of them, that different buyers get identical bytes, that the page is one
+API batch, that each failed read marks the render uncacheable, and that the
+COD form still posts to `/cart` and a POST is still handled.
+`apps/storefront/src/lib/public-worker-cache.test.ts` covers the gateway
+(canonical key, cookie stripping, browser `no-store`, no Set-Cookie stored,
+signed-in and POST requests rendered live).
+
+Measured 2026-09-25 on a local built stack (`astro build` served by
+`wrangler dev`, the API under `wrangler dev`, local D1; `pnpm perf:storefront`
+with `--kv-explorer` forcing misses, 5 runs, plus 10 sequential `curl`s):
+
+| `/cart` | Before (rendered for every request) | After (shell) |
+| --- | --- | --- |
+| After a generation change | 30-33 ms | 31-41 ms (once per generation, build and data center) |
+| Every later request | 14-16 ms (curl median 13.5 ms) | 5-6 ms (curl median 3.0 ms), `X-Cache-Status: HIT` |
+| API calls on a render | 2 (the batch and the checkout copy) | 1 batch |
+| Phone / desktop LCP (empty cart) | 896 / 108 ms | 900 / 80 ms |
+| CLS, empty cart and a cart with a line | 0 | 0 |
+
+The local API is warm and next to its database, so the saving here is the
+render itself. In production the render cost 0.15-1 s; a hit now costs what
+any cached page costs at the edge. A cash on delivery order placed through the
+cached shell (native form POST) reached `/order-success?orderId=...` with the
+receipt cookie, and a cross-origin POST is refused with 403 (Astro's origin
+check).
+
 ## Cache keys: data and code
 
 Every public cache key, in the API (`publicReadCacheKey`, for both the batch
@@ -173,7 +235,8 @@ bundle size, not with what a request runs.
 
 What the render path does about it:
 
-- A page is one batch (the cart adds one uncached language read), and every
+- A page is one batch (the cart and checkout copy,
+  `/api/v1/checkout-languages/active`, is a batch part too), and every
   part is served inside the batch's own invocation. A render therefore pays
   for at most one API isolate start, and usually none, because the isolate
   that serves storefront renders stays warm. The parts share the module
@@ -309,7 +372,7 @@ also clears it at once.
 
 | Guardrail | Where | Budget |
 | --- | --- | --- |
-| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` | 1 for home, product, category and search (the pages' own read functions, started as the pages start them) |
+| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts`, `apps/storefront/src/lib/cart/cart-shell.render.test.ts` | 1 for home, product, category, search and cart (the pages' own read functions, started as the pages start them) |
 | D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 9 / 3, search 9 / 2 |
 | Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
@@ -344,7 +407,7 @@ It exits 1 when any threshold is exceeded:
 | Metric | Threshold |
 | --- | --- |
 | Cache-hit TTFB | 50 ms |
-| Cache-miss TTFB (and TTFB of pages that always render, such as the cart) | 300 ms |
+| Cache-miss TTFB (and TTFB of pages that always render) | 300 ms |
 | Phone LCP | 1500 ms |
 | Desktop LCP | 1200 ms |
 | CLS (either profile) | 0.1 |

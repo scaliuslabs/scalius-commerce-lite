@@ -56,8 +56,8 @@ export function median(values) {
 
 /**
  * Compares one page's measurements with the budgets. A 5xx first response
- * fails; `ttfbMiss` is only judged for cacheable pages (the cart always
- * renders).
+ * fails; `ttfbMiss` is only judged for cacheable pages (a page that always
+ * renders, such as a signed-in cart, is held to the miss budget on every hit).
  */
 export function evaluateBudgets(row, budgets = DEFAULT_BUDGETS) {
   const failures = [];

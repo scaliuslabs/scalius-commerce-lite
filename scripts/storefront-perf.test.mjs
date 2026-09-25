@@ -48,7 +48,7 @@ describe("storefront perf check", () => {
     expect(isLocalBase("https://localhost.example.com")).toBe(false);
   });
 
-  it("holds an always-rendered page (cart) to the miss budget", () => {
+  it("holds an always-rendered page to the miss budget", () => {
     const cart = { path: "/cart", cacheable: false, ttfbHit: 280, ttfbMiss: null, phone: null, desktop: null };
 
     expect(evaluateBudgets(cart)).toEqual([]);

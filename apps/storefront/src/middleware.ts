@@ -16,7 +16,9 @@ import {
 import { getLayoutData } from "@/lib/api/storefront";
 import { getCdnBase } from "@/lib/media-url";
 import {
-  isPrivateStorefrontPathname,
+  PRIVATE_NO_STORE_CACHE_CONTROL,
+  isUncachedPrivateStorefrontPathname,
+  renderOptedOutOfSharedCache,
   requestBypassesPublicStorefrontCache,
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
@@ -49,10 +51,7 @@ function getEnv(): Env | null {
 }
 
 function setPrivateResponse(response: Response, status: string): void {
-  response.headers.set(
-    "Cache-Control",
-    "private, no-cache, no-store, must-revalidate",
-  );
+  response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
   response.headers.set("Pragma", "no-cache");
   response.headers.set("Expires", "0");
   response.headers.set("X-Cache-Status", status);
@@ -70,7 +69,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const bypassesPublicCache = requestBypassesPublicStorefrontCache(
     request.headers,
   );
-  const explicitlyPrivatePath = isPrivateStorefrontPathname(url.pathname);
+  // The cart is private but a cacheable shell; checkout and the rest are not.
+  const explicitlyPrivatePath = isUncachedPrivateStorefrontPathname(url.pathname);
 
   if (isGet && hasVariantSelection) {
     setPrivateResponse(response, "BYPASS_VARIANT_SELECTION");
@@ -94,7 +94,11 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         (url.pathname === "/.well-known/ucp" &&
           response.headers.get("Content-Type")?.toLowerCase().includes("application/json")));
 
-    if (publicPolicy && publicResponse) {
+    if (publicPolicy && publicResponse && renderOptedOutOfSharedCache(response.headers)) {
+      // The page rendered from a failed read (markRenderUncacheable): serve
+      // it to this buyer only, never from the shared cache.
+      setPrivateResponse(response, "BYPASS_DEGRADED");
+    } else if (publicPolicy && publicResponse) {
       applyBrowserCachePolicyForPublicResponse(response, url.pathname);
       if (
         response.headers.get("Content-Type")?.toLowerCase().includes("text/html")

@@ -20,7 +20,10 @@ describe("public API cache routes", () => {
     expect(isPublicApiCacheRoute(url("/api/v1/storefront/layout/extra"))).toBe(false);
     expect(isPublicApiCacheRoute(url("/api/v1/orders/receipt/order_1"))).toBe(false);
     expect(isPublicApiCacheRoute(url("/api/v1/admin/products"))).toBe(false);
-    expect(isPublicApiCacheRoute(url("/api/v1/checkout-languages/active"))).toBe(false);
+    // The active checkout copy (cart and checkout) is one fixed entry.
+    expect(isPublicApiCacheRoute(url("/api/v1/checkout-languages/active"))).toBe(true);
+    expect(isPublicApiCacheRoute(url("/api/v1/checkout-languages/active?x=1"))).toBe(false);
+    expect(isPublicApiCacheRoute(url("/api/v1/checkout-languages"))).toBe(false);
     expect(isPublicApiCacheRoute(url(`/api/v1/products?q=${"x".repeat(513)}`))).toBe(false);
     // The homepage read is one fixed entry: a query string never reaches the cache.
     expect(isPublicApiCacheRoute(url("/api/v1/storefront/homepage"))).toBe(true);
