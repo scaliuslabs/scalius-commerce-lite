@@ -53,6 +53,7 @@ import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
 import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
+import { Route as AdminReviewsIndexRouteImport } from './routes/admin/reviews/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminSettingsAdvancedRouteImport } from './routes/admin/settings/advanced'
 import { Route as AdminSettingsAppsRouteImport } from './routes/admin/settings/apps'
@@ -308,6 +309,11 @@ const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
   path: '/products/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminReviewsIndexRoute = AdminReviewsIndexRouteImport.update({
+  id: '/reviews/',
+  path: '/reviews/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -537,6 +543,7 @@ export interface FileRoutesByFullPath {
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -611,6 +618,7 @@ export interface FileRoutesByTo {
   '/admin/online-store': typeof AdminOnlineStoreIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
+  '/admin/reviews': typeof AdminReviewsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -689,6 +697,7 @@ export interface FileRoutesById {
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -768,6 +777,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/reviews/'
     | '/admin/settings/'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -842,6 +852,7 @@ export interface FileRouteTypes {
     | '/admin/online-store'
     | '/admin/pages'
     | '/admin/products'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -919,6 +930,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/reviews/'
     | '/admin/settings/'
     | '/admin/articles/$articleId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1261,6 +1273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/reviews/': {
+      id: '/admin/reviews/'
+      path: '/reviews'
+      fullPath: '/admin/reviews/'
+      preLoaderRoute: typeof AdminReviewsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings/': {
       id: '/admin/settings/'
       path: '/'
@@ -1589,6 +1608,7 @@ interface AdminRouteChildren {
   AdminOnlineStoreIndexRoute: typeof AdminOnlineStoreIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
+  AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
   AdminCollectionsCollectionIdEditRoute: typeof AdminCollectionsCollectionIdEditRoute
@@ -1633,6 +1653,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOnlineStoreIndexRoute: AdminOnlineStoreIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
+  AdminReviewsIndexRoute: AdminReviewsIndexRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
   AdminCollectionsCollectionIdEditRoute: AdminCollectionsCollectionIdEditRoute,
