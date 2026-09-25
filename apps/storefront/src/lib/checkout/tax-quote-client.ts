@@ -6,6 +6,7 @@ import {
   type TaxQuoteRequest,
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
+import { isCheckoutDeliveryMode } from "./delivery-mode";
 import type { CartValidationIssue } from "../api/orders";
 import {
   isDeliveryRateUnavailable,
@@ -23,7 +24,20 @@ type CheckoutCartLine = {
   quantity?: unknown;
   name?: unknown;
   options?: unknown;
+  properties?: unknown;
 };
+
+/** A cart line's buyer inputs as the order routes take them (`{key, value}` only). */
+export function cartLineInputs(properties: unknown): Array<{ key: string; value: string }> | undefined {
+  if (!Array.isArray(properties)) return undefined;
+  const inputs = properties.flatMap((property) =>
+    typeof property === "object" && property !== null &&
+      typeof (property as { key?: unknown }).key === "string" &&
+      typeof (property as { value?: unknown }).value === "string"
+      ? [{ key: (property as { key: string }).key, value: (property as { value: string }).value }]
+      : []);
+  return inputs.length > 0 ? inputs : undefined;
+}
 
 export class TaxQuoteUnavailableError extends Error {
   constructor() {
@@ -119,16 +133,18 @@ export function buildTaxQuoteRequest(
     quantity: item.quantity,
     productName: cleanOptionalText(item.name, 200),
     variantLabel: variantLabel(item),
+    properties: cartLineInputs(item.properties),
   }));
+  // The address goes only with a delivery quote: pickup and carts with
+  // nothing physical are quoted without one (store-wide tax only).
+  const mode = isCheckoutDeliveryMode(data.deliveryMode) ? data.deliveryMode : "delivery";
 
   try {
     return normalizeTaxQuoteRequest({
       items,
       inventoryPool: data.inventoryPool,
-      city: data.city,
-      zone: data.zone,
-      area: data.area,
-      shippingMethodId: data.shippingMethodId,
+      ...(mode === "delivery" ? { city: data.city, zone: data.zone, area: data.area } : {}),
+      ...(mode === "none" ? {} : { shippingMethodId: data.shippingMethodId }),
       discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,
     });
@@ -165,7 +181,9 @@ export async function fetchAuthoritativeTaxQuote(
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
-    if (quote.shippingMethod.id !== request.shippingMethodId) {
+    // The quote prices the rate asked for, or no rate at all when nothing in
+    // the cart is physical (the API does not use a rate then).
+    if (quote.shippingMethod && quote.shippingMethod.id !== request.shippingMethodId) {
       throw new TaxQuoteUnavailableError();
     }
     if (quote.items.length !== request.items.length) {

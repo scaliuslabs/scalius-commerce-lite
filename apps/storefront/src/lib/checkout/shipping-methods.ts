@@ -1,15 +1,21 @@
 /**
  * Delivery options on /cart (components/checkout/CheckoutShippingMethods.astro).
  *
- * The options follow the address: every city/zone/area change re-reads the
- * rates offered there (`GET /shipping-methods?cityId&zoneId&areaId`), keeps
- * the buyer's choice while it still applies and otherwise selects the first
- * delivery rate. Pickup is always listed; before an address only pickup is.
+ * The list follows the checkout path (`lib/checkout/delivery-mode.ts`):
+ * - delivery: the options follow the address; every city/zone/area change
+ *   re-reads the rates offered there (`GET /shipping-methods?cityId&zoneId&areaId`),
+ *   keeps the buyer's choice while it still applies and otherwise selects the
+ *   first delivery rate. Pickup rates are listed here only when the store has
+ *   no Delivery/Pickup switch (then pickup is always listed, and alone before
+ *   an address);
+ * - pickup: only the store's pickup locations, no address needed;
+ * - none: nothing to choose (nothing physical in the cart).
  * Other cart code reads the choice from `window.lastShippingEventDetail` and
  * the `shippingLocationChange` event (detail `null` while nothing applies).
  */
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import type { ShippingMethod } from "@/lib/api";
+import type { CheckoutDeliveryMode } from "./delivery-mode";
 
 export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description"> & {
   freeOver: number | null;
@@ -25,6 +31,9 @@ export interface ShippingMethodDetail {
   freeOver: number | null;
   name: string;
   kind: "delivery" | "pickup";
+  /** Pickup rates: where and when to collect. */
+  pickupAddress?: string | null;
+  pickupHours?: string | null;
 }
 
 export interface DeliveryAddress {
@@ -47,6 +56,10 @@ export interface ShippingMethodsCopy {
   replacedText: string;
   replacedSameFeeText: string;
   goneText: string;
+  /** Legend text per path. */
+  deliveryLegendText: string;
+  pickupLegendText: string;
+  pickupHoursText: string;
 }
 
 export function toDeliveryRate(method: ShippingMethod): DeliveryRate {
@@ -103,11 +116,15 @@ export function enhanceShippingMethods(
     readSubtotal: () => number;
     isFeeWaived: () => boolean;
     formatMoney: (amount: number) => string;
+    /** The checkout path; delivery when not given. */
+    readMode?: () => CheckoutDeliveryMode;
     signal?: AbortSignal;
   },
 ): {
   refreshFees(): void;
   setAddress(address: Partial<DeliveryAddress>): Promise<void>;
+  /** The buyer switched Delivery/Pickup, or the cart gained or lost its last physical line. */
+  setMode(mode: CheckoutDeliveryMode): Promise<void>;
   /** The checkout refused the chosen rate: drop it, re-read the address's rates and say what changed. */
   rejectSelected(): Promise<void>;
   /**
@@ -138,7 +155,11 @@ export function enhanceShippingMethods(
     replacedText: data.replacedText || "",
     replacedSameFeeText: data.replacedSameFeeText || "",
     goneText: data.goneText || "",
+    deliveryLegendText: data.deliveryLegendText || "",
+    pickupLegendText: data.pickupLegendText || "",
+    pickupHoursText: data.pickupHoursText || "",
   };
+  const legend = container.querySelector<HTMLElement>("[data-shipping-legend]");
   let initialRates: DeliveryRate[] = [];
   try {
     const parsed = JSON.parse(container.querySelector("script[data-shipping-rates]")?.textContent || "[]");
@@ -147,8 +168,13 @@ export function enhanceShippingMethods(
     initialRates = [];
   }
   const pickupRates = initialRates.filter((rate) => rate.kind === "pickup");
+  // With a Delivery/Pickup switch each path lists only its own rates.
+  const hasModeSwitch = container.dataset.modeSwitch === "true";
+  const readMode = options.readMode ?? (() => "delivery" as CheckoutDeliveryMode);
+  let mode: CheckoutDeliveryMode = readMode();
+  const addressFreeRates = () => (mode === "pickup" || !hasModeSwitch ? pickupRates : []);
 
-  let rates: DeliveryRate[] = pickupRates;
+  let rates: DeliveryRate[] = mode === "none" ? [] : addressFreeRates();
   let selectedId: string | null = null;
   let preferredId: string | null = options.readDraftMethod() ?? null;
   let address: DeliveryAddress = { cityId: "", zoneId: "", areaId: "" };
@@ -158,10 +184,25 @@ export function enhanceShippingMethods(
   const emit = () => {
     const rate = rates.find((candidate) => candidate.id === selectedId) ?? null;
     const detail: ShippingMethodDetail | null = rate
-      ? { id: rate.id, fee: rate.fee, freeOver: rate.freeOver, name: rate.name, kind: rate.kind }
+      ? {
+          id: rate.id,
+          fee: rate.fee,
+          freeOver: rate.freeOver,
+          name: rate.name,
+          kind: rate.kind,
+          ...(rate.kind === "pickup"
+            ? { pickupAddress: rate.pickupAddress, pickupHours: rate.pickupHours }
+            : {}),
+        }
       : null;
     window.lastShippingEventDetail = detail ?? undefined;
     window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail }));
+  };
+
+  const renderLegend = () => {
+    if (!legend) return;
+    const text = mode === "pickup" ? copy.pickupLegendText : copy.deliveryLegendText;
+    if (text && legend.textContent !== text) legend.textContent = text;
   };
 
   const setNote = (text: string, retry = false) => {
@@ -243,11 +284,12 @@ export function enhanceShippingMethods(
       };
       line(rate.description);
       if (rate.kind === "pickup" && rate.pickupAddress) {
-        line(
-          [formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress }), rate.pickupHours]
-            .filter(Boolean).join(" · "),
-          "text-foreground",
-        );
+        line(formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress }), "text-foreground");
+      }
+      if (rate.kind === "pickup" && rate.pickupHours) {
+        line(copy.pickupHoursText
+          ? formatCheckoutLanguageText(copy.pickupHoursText, { hours: rate.pickupHours })
+          : rate.pickupHours);
       }
       const feeNote = document.createElement("span");
       feeNote.className = "mt-0.5 block hidden text-sm text-muted-foreground";
@@ -259,12 +301,12 @@ export function enhanceShippingMethods(
     refreshFees();
   };
 
-  /** Keep the buyer's choice while it applies; otherwise the first delivery rate. */
+  /** Keep the buyer's choice while it applies; otherwise the first rate of the path. */
   const choose = () => {
     const wanted = selectedId ?? preferredId;
     selectedId = rates.some((rate) => rate.id === wanted)
       ? wanted
-      : rates.find((rate) => rate.kind === "delivery")?.id ?? null;
+      : rates.find((rate) => rate.kind === (mode === "pickup" ? "pickup" : "delivery"))?.id ?? null;
   };
 
   /** Says, next to the options, how the buyer's delivery changed. */
@@ -309,7 +351,8 @@ export function enhanceShippingMethods(
   };
 
   const applyLoaded = (loaded: DeliveryRate[]) => {
-    rates = loaded.filter((rate) => !rejected.has(rate.id));
+    rates = loaded.filter((rate) =>
+      !rejected.has(rate.id) && (!hasModeSwitch || rate.kind === "delivery"));
     choose();
     render();
     setNote(rates.some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
@@ -318,13 +361,25 @@ export function enhanceShippingMethods(
   const load = async (force = false) => {
     const hasAddress = Boolean(address.cityId && address.zoneId);
     const current = ++sequence;
-    if (!hasAddress) {
-      rates = pickupRates;
+    renderLegend();
+    if (mode === "none") {
+      // Nothing physical: no method, no fee.
+      rates = [];
       delete list.dataset.addressKey;
-      const pickupId = [selectedId, preferredId].find((id) => rates.some((rate) => rate.id === id));
-      selectedId = pickupId ?? null;
+      selectedId = null;
       render();
-      setNote(copy.chooseAddressText);
+      setNote("");
+      emit();
+      return;
+    }
+    if (mode === "pickup" || !hasAddress) {
+      rates = addressFreeRates().filter((rate) => !rejected.has(rate.id));
+      delete list.dataset.addressKey;
+      const keptId = [selectedId, preferredId].find((id) => rates.some((rate) => rate.id === id));
+      // A single pickup location is simply chosen.
+      selectedId = keptId ?? (mode === "pickup" && rates.length === 1 ? rates[0]!.id : null);
+      render();
+      setNote(mode === "pickup" ? "" : copy.chooseAddressText);
       emit();
       return;
     }
@@ -341,7 +396,7 @@ export function enhanceShippingMethods(
     if (current !== sequence) return;
     list.removeAttribute("aria-busy");
     if (!loaded) {
-      rates = pickupRates;
+      rates = addressFreeRates();
       delete list.dataset.addressKey;
       if (!rates.some((rate) => rate.id === selectedId)) selectedId = null;
       render();
@@ -366,6 +421,17 @@ export function enhanceShippingMethods(
 
   return {
     refreshFees,
+    setMode(next) {
+      if (next === mode) return Promise.resolve();
+      mode = next;
+      showNotice("");
+      // The other path's choice no longer applies; a rate chosen earlier on
+      // this path comes back through the draft preference.
+      if (selectedId && !rates.some((rate) => rate.id === selectedId && rate.kind === (next === "pickup" ? "pickup" : "delivery"))) {
+        selectedId = null;
+      }
+      return load(true);
+    },
     setAddress(next) {
       const nextAddress = {
         cityId: next.cityId ?? "",
@@ -386,7 +452,8 @@ export function enhanceShippingMethods(
     },
     async recheck() {
       const previous = selectedRate();
-      if (!previous || !address.cityId || !address.zoneId) return false;
+      // Pickup rates need no address; the checkout verifies them itself.
+      if (mode !== "delivery" || !previous || !address.cityId || !address.zoneId) return false;
       const current = ++sequence;
       const loaded = await options.loadRates(address);
       // Unreadable rates don't block the order: the checkout verifies the rate itself.

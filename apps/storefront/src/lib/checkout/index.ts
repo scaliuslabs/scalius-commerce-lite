@@ -45,6 +45,8 @@ import {
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
 import { readLastPlacedOrderId, rememberSubmittedCart } from "./receipt-finalization";
+import { cashOnDeliveryDescription, type CheckoutDeliveryMode } from "./delivery-mode";
+import { cartLinePropertyText } from "../cart/line-properties-view";
 
 // COD and the card flow have their own handlers; every hosted gateway shares one.
 registerGateway(codHandler);
@@ -336,7 +338,8 @@ function localizedGatewayPresentation(
       return {
         ...presentation,
         buyerLabel: checkoutCopy.cashOnDeliveryText,
-        description: checkoutCopy.payOnDeliveryText,
+        // At the door, at the pickup counter, or when the service is done.
+        description: cashOnDeliveryDescription(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
       };
     default:
       return presentation;
@@ -345,6 +348,13 @@ function localizedGatewayPresentation(
 
 function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
   return formatMoney(amount, { code: quote.currencyCode });
+}
+
+/** The path the quote priced: no rate means nothing physical to deliver. */
+function quoteDeliveryMode(quote: CheckoutTaxQuote | null): CheckoutDeliveryMode {
+  if (!quote) return "delivery";
+  if (!quote.shippingMethod) return "none";
+  return quote.deliveryMethodKind === "pickup" ? "pickup" : "delivery";
 }
 
 function appendTextElement(
@@ -417,6 +427,15 @@ function appendOrderItems(
         }),
       ].filter(Boolean).join(" · "),
     );
+    // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)".
+    for (const property of item.properties) {
+      appendTextElement(
+        itemCopy,
+        "p",
+        "break-words text-xs leading-5 text-muted-foreground",
+        cartLinePropertyText(property, checkoutCopy.customizationSurchargeText, quote.currencyCode),
+      );
+    }
     row.appendChild(itemCopy);
 
     appendTextElement(
@@ -465,25 +484,40 @@ function appendCheckoutReview(
     phone ? formatBdMobile(phone) : "",
     displayString(data.customerEmail) ?? "",
   ]);
-  const location = [...new Set([
-    displayString(data.areaName),
-    displayString(data.zoneName),
-    displayString(data.cityName),
-  ].filter((value): value is string => Boolean(value)))].join(", ");
-  appendReviewRow(review, checkoutCopy.shipToReviewText, [
-    displayString(data.shippingAddress) ?? "",
-    location,
-  ]);
+  const mode = quoteDeliveryMode(quote);
   const method = quote.shippingMethod;
-  appendReviewRow(review, checkoutCopy.deliveryReviewText, [
-    method.name,
-    method.description ?? "",
-    method.feeWaived
-      ? formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
-          fee: currencyFmt(method.baseAmountMinor / (10 ** quote.decimalPlaces), quote),
-        })
-      : "",
-  ]);
+  if (mode === "delivery") {
+    const location = [...new Set([
+      displayString(data.areaName),
+      displayString(data.zoneName),
+      displayString(data.cityName),
+    ].filter((value): value is string => Boolean(value)))].join(", ");
+    appendReviewRow(review, checkoutCopy.shipToReviewText, [
+      displayString(data.shippingAddress) ?? "",
+      location,
+    ]);
+  } else if (mode === "pickup") {
+    // Where and when to collect, from the quote (the store's own words).
+    appendReviewRow(review, checkoutCopy.pickupReviewText, [
+      quote.pickup?.address ?? "",
+      quote.pickup?.hours
+        ? formatCheckoutLanguageText(checkoutCopy.pickupHoursText, { hours: quote.pickup.hours })
+        : "",
+    ]);
+  } else {
+    appendReviewRow(review, checkoutCopy.deliveryReviewText, [checkoutCopy.orderNoDeliveryText]);
+  }
+  if (method) {
+    appendReviewRow(review, mode === "pickup" ? checkoutCopy.deliveryModePickupText : checkoutCopy.deliveryReviewText, [
+      method.name,
+      method.description ?? "",
+      method.feeWaived
+        ? formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
+            fee: currencyFmt(method.baseAmountMinor / (10 ** quote.decimalPlaces), quote),
+          })
+        : "",
+    ]);
+  }
   if (review.childElementCount > 0) parent.appendChild(review);
 }
 
@@ -622,17 +656,20 @@ export function renderOrderSummaryDetails(
     0,
     quote.shippingAmount - deliveryDiscounts.reduce((total, { shippingAmount }) => total + shippingAmount, 0),
   );
-  const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
-  appendSummaryRow(
-    details,
-    checkoutCopy.shippingText,
-    [
-      deliveryCharged === 0 ? checkoutCopy.freeText : currencyFmt(deliveryCharged, quote),
-      deliveryDiscounts.length > 0 ? ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})` : "",
-    ].join(""),
-    undefined,
-    deliveryCharged < deliveryFee ? currencyFmt(deliveryFee, quote) : undefined,
-  );
+  // Nothing physical: no delivery line at all.
+  if (quote.shippingMethod) {
+    const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
+    appendSummaryRow(
+      details,
+      checkoutCopy.shippingText,
+      [
+        deliveryCharged === 0 ? checkoutCopy.freeText : currencyFmt(deliveryCharged, quote),
+        deliveryDiscounts.length > 0 ? ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})` : "",
+      ].join(""),
+      undefined,
+      deliveryCharged < deliveryFee ? currencyFmt(deliveryFee, quote) : undefined,
+    );
+  }
   // One line per discount on the items, named as the buyer knows it.
   for (const discount of quote.discounts.filter(({ amount }) => amount > 0)) {
     appendSummaryRow(
@@ -727,9 +764,13 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
   const payableAmount = paymentRequest.paymentType === "deposit"
     ? paymentRequest.depositAmount
     : currentQuote.totalAmount;
+  // The server says which methods this cart may use (no cash on delivery
+  // when nothing is shipped, collected or performed).
+  const allowed = currentQuote.allowedPaymentMethods;
   return gateways.filter(
     (gateway) => (
       !(currentConfig.partialPaymentEnabled && gateway.id === "cod")
+      && allowed.includes(gateway.id)
       && isGatewayEligibleForPaymentAmount(
         gateway,
         payableAmount,

@@ -76,8 +76,8 @@ const row = () => document.querySelector<HTMLElement>('[aria-labelledby="cart-re
 
 describe("cart drawer recommendations", () => {
   it("fetches once the drawer opens with items and links suggestions that are not in the cart", async () => {
-    addToCart({ id: "trouser", slug: "trouser", name: "Trouser", price: 900, variantId: "var_trouser", quantity: 1 });
-    addToCart({ id: "shirt", slug: "shirt", name: "Shirt", price: 500, variantId: "var_shirt", quantity: 1 });
+    await addToCart({ id: "trouser", slug: "trouser", name: "Trouser", price: 900, variantId: "var_trouser", quantity: 1 });
+    await addToCart({ id: "shirt", slug: "shirt", name: "Shirt", price: 500, variantId: "var_shirt", quantity: 1 });
     await act(async () => root.render(<CartFlyout />));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -104,7 +104,7 @@ describe("cart drawer recommendations", () => {
 
   it("leaves the row out when the API has nothing to suggest", async () => {
     recommendationResponse = { success: true, data: { reason: "similar", products: [] } };
-    addToCart({ id: "lamp", slug: "lamp", name: "Lamp", price: 900, variantId: "var_lamp", quantity: 1 });
+    await addToCart({ id: "lamp", slug: "lamp", name: "Lamp", price: 900, variantId: "var_lamp", quantity: 1 });
     await openDrawer();
     expect(recommendationUrls).toHaveLength(1);
     expect(row()).toBeNull();
