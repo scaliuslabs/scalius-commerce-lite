@@ -9,19 +9,26 @@ import {
   HOME_COLLECTIONS_FALLBACK_LIMIT,
   HOME_DEAL_LIMIT,
   HOME_LOOKBOOK_LIMIT,
-  homeSectionProductList,
+  homeSectionProductLists,
   storefrontProductSourceKey,
+  storefrontSectionNeedsContent,
   storefrontSectionRenderer,
   type StorefrontProductSource,
   type StorefrontSection,
   type StorefrontSectionOf,
 } from "@scalius/shared/storefront-theme";
 import type { CollectionWithProducts, Product } from "@/lib/api";
-import type { HomepageData, HomepageMediaAsset, HomepageProductList } from "@/lib/api/storefront";
+import type {
+  HomepageBrand,
+  HomepageData,
+  HomepageMediaAsset,
+  HomepageProductList,
+  HomepageSectionData,
+} from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
 
-/** Everything the homepage sections draw from, looked up by source key and media id. */
+/** Everything the homepage sections draw from, looked up by source key, media id and promotion id. */
 export interface HomepageContent {
   hero: ResolvedHomepageHero;
   collections: CollectionWithProducts[];
@@ -29,7 +36,12 @@ export interface HomepageContent {
   deliveryFacts: DeliveryFact[];
   lists: ReadonlyMap<string, HomepageProductList>;
   media: ReadonlyMap<string, HomepageMediaAsset>;
+  brands: readonly HomepageBrand[];
+  /** Running promotions' end times, by promotion id. */
+  promotionEnds: ReadonlyMap<string, string>;
 }
+
+export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = { lists: [], media: [], brands: [], promotions: [] };
 
 export function homepageContent(
   data: Pick<HomepageData, "hero" | "collections" | "presentation" | "sections">,
@@ -42,6 +54,8 @@ export function homepageContent(
     deliveryFacts,
     lists: new Map((data.sections?.lists ?? []).map((list) => [list.key, list])),
     media: new Map((data.sections?.media ?? []).map((asset) => [asset.id, asset])),
+    brands: data.sections?.brands ?? [],
+    promotionEnds: new Map((data.sections?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
   };
 }
 
@@ -114,19 +128,49 @@ function sourceTitleAndHref(
   }
 }
 
-/** Products a section shows from its source (its first N), or null when it has none. */
+function sourceProducts(
+  source: StorefrontProductSource,
+  limit: number,
+  content: HomepageContent,
+): { products: Product[]; title: string; href: string | null } | null {
+  const list = content.lists.get(storefrontProductSourceKey(source));
+  const named = sourceTitleAndHref(source, list);
+  const products = (list?.products ?? []).slice(0, limit) as Product[];
+  return named && products.length > 0 ? { products, ...named } : null;
+}
+
+/** Products a single-list section shows from its source (its first N), or null when it has none. */
 export function homepageSectionProducts(
   section: StorefrontSection,
   content: HomepageContent,
 ): HomepageSectionProducts | null {
-  const request = homeSectionProductList(section);
-  if (!request || section.type === "collections") return null;
-  const list = content.lists.get(storefrontProductSourceKey(request.source));
-  const named = sourceTitleAndHref(request.source, list);
-  const products = (list?.products ?? []).slice(0, request.limit) as Product[];
-  if (!named || products.length === 0) return null;
+  if (section.type === "collections" || section.type === "product-tabs") return null;
+  const [request] = homeSectionProductLists(section);
+  if (!request) return null;
+  const shown = sourceProducts(request.source, request.limit, content);
+  if (!shown) return null;
   const title = "title" in section.settings ? section.settings.title.trim() : "";
-  return { products, title: title || named.title, href: named.href };
+  return { products: shown.products, title: title || shown.title, href: shown.href };
+}
+
+/** One tab of a tabbed product block: its label, cards and "View all". */
+export interface HomepageProductTab extends HomepageSectionProducts {
+  key: string;
+}
+
+/** The tabs that have products, in order; a tab without a label is named after its source. */
+export function homepageSectionTabs(
+  section: StorefrontSectionOf<"product-tabs">,
+  content: HomepageContent,
+): HomepageProductTab[] {
+  const seen = new Set<string>();
+  return section.settings.tabs.flatMap((tab) => {
+    const key = storefrontProductSourceKey(tab.source);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const shown = sourceProducts(tab.source, section.settings.limit, content);
+    return shown ? [{ key, products: shown.products, title: tab.label.trim() || shown.title, href: shown.href }] : [];
+  });
 }
 
 /** The newest products a collections section shows when the store has no homepage collection. */
@@ -139,11 +183,27 @@ export function homepageMedia(content: HomepageContent, id: string | null | unde
   return id ? content.media.get(id) ?? null : null;
 }
 
-/** A deal's end time when it is still ahead: a countdown only ever counts to a real end. */
-export function dealEndsAt(section: StorefrontSectionOf<"deal-block">, now = Date.now()): string | null {
-  const endsAt = section.settings.endsAt;
+/**
+ * A deal's end: its promotion's stored end time while that promotion runs
+ * and the end is still ahead. A countdown only ever counts to a real end.
+ */
+export function dealEndsAt(
+  section: StorefrontSectionOf<"deal-block">,
+  content: Pick<HomepageContent, "promotionEnds">,
+  now = Date.now(),
+): string | null {
+  const id = section.settings.promotionId;
+  const endsAt = id ? content.promotionEnds.get(id) : undefined;
   return endsAt && Date.parse(endsAt) > now ? endsAt : null;
 }
+
+/** Where a brand-wall brand links: its canonical path, else its brand page. */
+export function homepageBrandHref(brand: Pick<HomepageBrand, "slug" | "canonicalPath">): string {
+  return brand.canonicalPath || `/brands/${encodeURIComponent(brand.slug)}`;
+}
+
+/** A brand wall needs four brands to be a wall (the section's fit rule reads the same count). */
+export const HOME_BRAND_WALL_MIN = 4;
 
 export { HOME_DEAL_LIMIT, HOME_LOOKBOOK_LIMIT };
 
@@ -151,10 +211,38 @@ function textPresent(...values: Array<string | null | undefined>): boolean {
   return values.some((value) => Boolean(value?.trim()));
 }
 
+/** A "shop by" section's cards whose photos exist, each with its photo. */
+export function homepageShopByCards(section: StorefrontSectionOf<"shop-by">, content: HomepageContent) {
+  return section.settings.cards.flatMap((card) => {
+    const photo = homepageMedia(content, card.mediaId);
+    return photo ? [{ ...card, photo }] : [];
+  });
+}
+
+/** A banner mosaic's tiles whose photos exist, each with its photo. */
+export function homepageMosaicTiles(section: StorefrontSectionOf<"banner-mosaic">, content: HomepageContent) {
+  return section.settings.tiles.flatMap((tile) => {
+    const photo = homepageMedia(content, tile.mediaId);
+    return photo ? [{ ...tile, photo }] : [];
+  });
+}
+
 /** Whether a section has anything to show on this store (sections without data render nothing). */
 export function homepageSectionRenders(section: StorefrontSection, content: HomepageContent): boolean {
-  if (storefrontSectionRenderer(section) === null) return false;
+  if (storefrontSectionRenderer(section) === null || storefrontSectionNeedsContent(section)) return false;
   switch (section.type) {
+    case "product-tabs":
+      return homepageSectionTabs(section, content).length > 0;
+    case "shop-by":
+      return homepageShopByCards(section, content).length > 0;
+    case "banner-mosaic":
+      return homepageMosaicTiles(section, content).length > 0;
+    case "brand-wall":
+      return content.brands.length >= HOME_BRAND_WALL_MIN;
+    // A client island: it fills itself from this browser's own history
+    // before it paints, and stays hidden (no box) for a first visit.
+    case "recently-viewed":
+      return true;
     case "hero":
       return content.hero.desktop.length > 0 || content.hero.mobile.length > 0;
     case "usp-strip":
@@ -215,8 +303,11 @@ function leadsWithPhoto(section: StorefrontSection, content: HomepageContent): b
     case "product-rail":
     case "product-grid":
     case "deal-block":
+    case "product-tabs":
     case "lookbook":
     case "endless-grid":
+    case "shop-by":
+    case "banner-mosaic":
       return true;
     case "banner":
       return homepageMedia(content, section.settings.mediaId) !== null;

@@ -1,0 +1,62 @@
+---
+// "Shop by" image cards (Target's and Walmart's occasion and department
+// cards, Amazon's quad cards): the merchant's photos, each a square link
+// with its label under it. Two across on phones, then three, then up to
+// four (five to eight cards wrap into two rows). Photos have a fixed ratio,
+// so nothing shifts while they load.
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import SectionHeader from "./SectionHeader.astro";
+
+interface Props {
+  sectionId: string;
+  title: string;
+  cards: Array<{ title: string; href: string; photo: HomepageMediaAsset }>;
+  aboveFold: boolean;
+}
+
+const { sectionId, title, cards, aboveFold } = Astro.props;
+const headingId = `home-${sectionId}-title`;
+const heading = title.trim();
+const columns = cards.length >= 4 ? "lg:grid-cols-4" : cards.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
+---
+
+<section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "Shop by"}>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    {heading && <SectionHeader id={headingId} title={heading} />}
+    <ul class:list={["grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4", columns]}>
+      {cards.map((card) => {
+        const external = card.href.startsWith("https://");
+        return (
+          <li>
+            <a
+              href={card.href}
+              data-astro-prefetch={getStorefrontPrefetchAttribute(card.href, Astro.url)}
+              target={external ? "_blank" : undefined}
+              rel={external ? "noopener noreferrer" : undefined}
+              class="group block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <span class="block aspect-square overflow-hidden rounded-xl bg-muted">
+                <img
+                  src={mediaImageUrl(card.photo.url, 640)}
+                  srcset={mediaImageSrcSet(card.photo.url)}
+                  sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 300px"
+                  alt=""
+                  width={card.photo.width ?? 600}
+                  height={card.photo.height ?? 600}
+                  loading={aboveFold ? "eager" : "lazy"}
+                  decoding="async"
+                  class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                />
+              </span>
+              <span class="mt-2 block text-center text-sm font-semibold text-foreground [overflow-wrap:anywhere] group-hover:underline md:text-base">
+                {card.title}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+</section>

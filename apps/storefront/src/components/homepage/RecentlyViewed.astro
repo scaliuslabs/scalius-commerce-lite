@@ -1,0 +1,26 @@
+---
+// Recently viewed (Amazon's browsing history, Apple Gadgets): a client
+// island. The cached page carries only an empty, hidden section; the inline
+// script right after it fills the row from this browser's own list
+// (lib/recently-viewed.ts) as the parser reaches it, before it paints, so
+// nothing shifts. A first visit, or blocked storage, leaves it hidden.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+
+interface Props {
+  section: StorefrontSectionOf<"recently-viewed">;
+}
+
+const { section } = Astro.props;
+const rootId = `home-${section.id}`;
+const headingId = `${rootId}-title`;
+const title = section.settings.title.trim() || "Recently viewed";
+---
+
+<section id={rootId} class="home-section w-full" aria-labelledby={headingId} hidden data-recently-viewed>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <h2 id={headingId} class="section-heading mb-3 text-foreground [overflow-wrap:anywhere] md:mb-5">{title}</h2>
+    <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
+  </div>
+</section>
+<script is:inline set:html={recentlyViewedRenderScript(rootId)} />
