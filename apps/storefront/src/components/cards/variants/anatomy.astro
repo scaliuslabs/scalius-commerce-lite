@@ -48,13 +48,19 @@ const roundInBody = variant === "fashion-value";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
 const titleClamp = { 1: "line-clamp-1", 2: "line-clamp-2", 3: "line-clamp-3" }[anatomy.titleLines];
 const titleWeight = { regular: "font-normal", medium: "font-medium", strong: "font-semibold" }[anatomy.titleWeight];
+const discounted = model.price.regular !== null;
 const priceTone = anatomy.priceTone === "primary"
   ? "text-primary"
-  : anatomy.priceTone === "sale" && model.price.regular ? "text-destructive" : "text-foreground";
+  : anatomy.priceTone === "sale-always" || (anatomy.priceTone === "sale" && discounted) ? "text-destructive" : "text-foreground";
 const superscriptPrice = variant === "detailed";
+// The discount mark on the photo, beside the price, or both (the price row
+// then repeats the percentage after the struck price, as Fabrilife does).
+const imageMark = anatomy.badge === "image" || anatomy.badge === "both" ? discount : null;
+const priceMark = anatomy.badge === "price" ? discount : anatomy.badge === "both" ? model.percentOff : null;
 const soldText = facts.sold === null
   ? ""
   : variant === "detailed" ? `${boughtInPastMonth(facts.sold)} bought in past month` : `${facts.sold} sold in 30 days`;
+const optionsHint = anatomy.action === "compact" ? "See options" : "Choose options";
 // The card's own look as custom properties; theme-cards.css draws with them.
 const { look } = anatomy;
 const lookStyle = [
@@ -66,6 +72,7 @@ const lookStyle = [
   look.price && `--pc-price-d:${look.price.size.desktop}px;--pc-price-m:${look.price.size.phone}px;--pc-price-w:${look.price.weight}`,
 ].filter(Boolean).join(";");
 const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2M9.5 20.5h.01M17.5 20.5h.01";
+const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4zM7.5 7.5h.01";
 ---
 
 {/* One link per card (the stretched title link) plus at most the buy action
@@ -85,7 +92,8 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
     dimensions={dimensions}
     sizes={sizes}
     loading={loading}
-    badge={anatomy.badge === "image" ? discount : null}
+    badge={imageMark}
+    badgeStyle={anatomy.discountStyle}
     class="product-card-well"
   >
     {
@@ -135,6 +143,21 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
           );
         }
         if (part === "price") {
+          const regular = model.price.regular && (
+            anatomy.strike === "reg" ? (
+              <span class="product-card-meta pc-price-regular pc-price-reg text-muted-foreground">
+                <span aria-hidden="true">reg </span><span class="sr-only">Regular price </span>{model.price.regular}
+              </span>
+            ) : (
+              <span class="product-card-meta pc-price-regular text-muted-foreground">
+                {anatomy.strike === "list" ? <span aria-hidden="true">List: </span> : null}
+                <span class="sr-only">Regular price </span><s>{model.price.regular}</s>
+              </span>
+            )
+          );
+          const mark = priceMark && (
+            <span data-card-discount class:list={["product-card-meta pc-discount font-semibold", `pc-discount-${anatomy.badge === "both" ? "text" : anatomy.discountStyle}`]}>{priceMark}</span>
+          );
           return (
             <p
               class:list={[
@@ -142,9 +165,12 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
                 priceFollowsTitle && "product-card-push mt-auto",
               ]}
             >
+              {/* Amazon's deal box sits on its own line above the price. */}
+              {anatomy.discountStyle === "deal" && mark && <span class="pc-deal-row">{mark}</span>}
+              {anatomy.strike === "before" && regular}
               {superscriptPrice ? (
                 <span class="product-card-price pc-price-super text-foreground">
-                  <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}{model.price.prefix}{model.price.current}</span>
+                  <span class="sr-only">{discounted ? "Sale price " : "Price "}{model.price.prefix}{model.price.current}</span>
                   <span aria-hidden="true">
                     {model.price.prefix && <span class="pc-price-from">{model.price.prefix}</span>}
                     {model.price.parts.symbol && <span class="pc-price-symbol">{model.price.parts.symbol}</span>}
@@ -154,23 +180,14 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
                 </span>
               ) : (
                 <span class:list={["product-card-price", priceTone]}>
-                  <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}</span>
+                  <span class="sr-only">{discounted ? "Sale price " : "Price "}</span>
                   {model.price.prefix}{model.price.current}
                 </span>
               )}
-              {model.price.regular && (
-                <span class="product-card-meta pc-price-regular text-muted-foreground">
-                  {superscriptPrice ? <span aria-hidden="true">List: </span> : null}
-                  <span class="sr-only">Regular price </span><s>{model.price.regular}</s>
-                </span>
-              )}
-              {anatomy.badge === "price" && discount && (
-                anatomy.discount === "off" ? (
-                  <span data-card-discount class="product-card-meta pc-discount-chip rounded-full px-2 font-semibold">{discount}</span>
-                ) : (
-                  <span data-card-discount class="product-card-meta pc-discount font-semibold text-destructive">{discount}</span>
-                )
-              )}
+              {/* Target reads "Sale" beside the price, then "reg ৳1,200" under it. */}
+              {anatomy.strike === "reg" && mark}
+              {anatomy.strike !== "before" && regular}
+              {anatomy.strike !== "reg" && anatomy.discountStyle !== "deal" && mark}
             </p>
           );
         }
@@ -185,9 +202,16 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
           );
         }
         if (part === "rating" && facts.rating) {
-          return (
+          return anatomy.rating === "stars" ? (
+            <p class="product-card-meta pc-rating pc-rating-stars text-foreground" data-card-fact="rating">
+              <span aria-hidden="true" class="pc-rating-average">{facts.rating.average}</span>
+              <span aria-hidden="true" class="pc-stars" style={`--pc-stars:${facts.rating.stars}%`}></span>
+              <span aria-hidden="true" class="pc-rating-count">({facts.rating.countLabel})</span>
+              <span class="sr-only">Rated {facts.rating.average} out of 5 from {facts.rating.count} reviews</span>
+            </p>
+          ) : (
             <p class="product-card-meta pc-rating text-foreground" data-card-fact="rating">
-              <span aria-hidden="true">★ {facts.rating.average} <span class="text-muted-foreground">({facts.rating.count})</span></span>
+              <span aria-hidden="true">★ {facts.rating.average} <span class="text-muted-foreground">({facts.rating.countLabel})</span></span>
               <span class="sr-only">Rated {facts.rating.average} out of 5 from {facts.rating.count} reviews</span>
             </p>
           );
@@ -198,7 +222,12 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
         if (part === "savings") {
           return (
             <p class="product-card-meta pc-savings" data-card-fact="savings">
-              <span class="pc-savings-chip font-semibold">{facts.savings}</span>
+              <span class="pc-savings-chip font-semibold">
+                {variant === "fashion-value" && (
+                  <svg aria-hidden="true" viewBox="0 0 24 24" class="pc-savings-icon" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d={tagIcon} /></svg>
+                )}
+                {facts.savings}
+              </span>
             </p>
           );
         }
@@ -271,6 +300,7 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
             "product-card-action relative z-10 inline-flex w-full items-center justify-center gap-2 px-3 text-sm font-semibold transition-colors",
             !priceFollowsTitle && "product-card-push mt-auto",
             anatomy.action === "outline" ? "pc-action-outline" : "pc-action-solid",
+            anatomy.action === "compact" && "pc-action-compact",
           ]}
         >
           {variant === "spec" && (
@@ -292,6 +322,7 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
             "product-card-action pointer-events-none inline-flex w-full items-center justify-center gap-2 px-3 text-sm font-semibold",
             !priceFollowsTitle && "product-card-push mt-auto",
             variant === "spec" ? "pc-action-solid" : "pc-action-hint",
+            anatomy.action === "compact" && "pc-action-compact",
           ]}
         >
           {variant === "spec" ? (
@@ -299,7 +330,7 @@ const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={cartIcon} /></svg>
               {actionText}
             </>
-          ) : "Choose options"}
+          ) : optionsHint}
         </span>
       )
     }

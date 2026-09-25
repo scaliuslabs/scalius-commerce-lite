@@ -365,6 +365,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 94,
+        name: "0094_media_rendition_ladder",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
     ]);
   });
 
@@ -507,6 +513,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 91, name: "0091_catalogue_projection_fill" },
           { version: 92, name: "0092_attribute_option_presets" },
           { version: 93, name: "0093_theme_document_v5" },
+          { version: 94, name: "0094_media_rendition_ladder" },
         ],
       });
     } finally {

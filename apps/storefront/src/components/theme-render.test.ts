@@ -1106,9 +1106,10 @@ describe("navigation", () => {
       const labels = Array.from(tabs.querySelectorAll(".mobile-tab")).map(
         (item) => item.querySelector(":scope > span:last-child")!.textContent,
       );
-      // Compare waits for the compare page: left out, never a dead tab.
+      // Compare only where the card offers "Add to Compare" (the spec card);
+      // elsewhere it is left out, never a tab to an empty comparison.
       const expectedLabels = chosen
-        .filter((tab) => tab !== "compare")
+        .filter((tab) => tab !== "compare" || layout.productCard.compare)
         .map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
       expect(labels).toEqual(expectedLabels);
       const categories = tabs.querySelector("[data-mobile-menu-open]")!;
@@ -1126,6 +1127,20 @@ describe("navigation", () => {
       expect(page.querySelector("#mobile-cart-count")).toBeNull();
       expect(header.hasAttribute("data-phone-drop")).toBe(false);
     }
+  });
+
+  it("shows the Compare tab only with the card that offers Compare", async () => {
+    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" });
+    const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: "mall-departments" });
+    const compareTab = async (card: string) => {
+      const withCard = structuredClone(theme);
+      withCard.blocks.card = storefrontBlockDefault("card", card) as never;
+      return (await renderNavigationPage(withCard)).querySelector("#mobile-tab-bar [data-compare-tab]");
+    };
+    const tab = await compareTab("spec");
+    expect(tab?.getAttribute("href")).toBe("/compare");
+    expect(tab?.getAttribute("rel")).toBe("nofollow");
+    expect(await compareTab("detailed")).toBeNull();
   });
 
   it("keeps the header within 150 links for a Star Tech-size tree, whatever the menus", async () => {

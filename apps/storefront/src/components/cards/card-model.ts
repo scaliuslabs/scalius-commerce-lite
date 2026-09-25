@@ -58,7 +58,8 @@ export const CARD_PHOTO_INSET: Readonly<Record<string, number>> = {
 export interface ProductCardFactValues {
   brand: string | null;
   keySpecs: string[];
-  rating: { average: string; count: number } | null;
+  /** The average to one decimal, the stars' filled share (0-100) and the count as a card shows it ("1.2K"). */
+  rating: { average: string; count: number; stars: number; countLabel: string } | null;
   /** Units sold in the last 30 days (10 or more). */
   sold: number | null;
   savings: string | null;
@@ -150,6 +151,24 @@ function optionNoun(option: ProductCardFacts["options"][number]): { label: strin
   return { label: `${option.name.trim()}:`, count: option.count, noun: "options" };
 }
 
+/** "118.8K" above a thousand reviews (Amazon), the plain count below. */
+export function compactCount(count: number): string {
+  const whole = Math.floor(count);
+  if (whole < 1000) return String(whole);
+  if (whole < 1_000_000) return `${Math.floor(whole / 100) / 10}K`;
+  return `${Math.floor(whole / 100_000) / 10}M`;
+}
+
+function cardRating(average: number, count: number): NonNullable<ProductCardFactValues["rating"]> {
+  const rounded = Math.round(Math.min(average, 5) * 10) / 10;
+  return {
+    average: rounded.toFixed(1),
+    count: Math.floor(count),
+    stars: Math.round((rounded / 5) * 1000) / 10,
+    countLabel: compactCount(count),
+  };
+}
+
 function cardFactValues(
   facts: ProductCardFacts | undefined,
   product: ProductCardProduct,
@@ -174,9 +193,7 @@ function cardFactValues(
       .map((spec) => spec.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, KEY_SPECS_MAX),
-    rating: rating && rating.count > 0 && rating.average > 0
-      ? { average: (Math.round(Math.min(rating.average, 5) * 10) / 10).toFixed(1), count: rating.count }
-      : null,
+    rating: rating && rating.count > 0 && rating.average > 0 ? cardRating(rating.average, rating.count) : null,
     sold: sold >= SOLD_COUNT_MIN ? Math.floor(sold) : null,
     savings: saved ? `Save ${saved}` : null,
     packSize: nonEmpty(facts?.packSize),

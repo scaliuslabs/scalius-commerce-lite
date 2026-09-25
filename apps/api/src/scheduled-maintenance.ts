@@ -19,7 +19,7 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
-import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
+import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
@@ -49,7 +49,7 @@ export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /**
  * Rendition backfill budget. Each image costs one R2 read, one Images info
- * call, up to six Images transforms, six R2 writes and a few D1 queries: a
+ * call, up to eight Images transforms, eight R2 writes and a few D1 queries: a
  * few seconds of wall time but little Worker CPU (the transforms run in the
  * Images service). The backfill runs last and starts no new image once the
  * run is this old, so the run ends well inside the 15-minute cron wall limit
@@ -60,6 +60,19 @@ export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
 export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
 /** CPU guard against the 30 s cron CPU limit (~tens of ms of our CPU per image). */
 export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
+/**
+ * A large backlog (the 0094 ladder migration sends every image back to its
+ * original) is fanned out to the jobs queue beyond what this run renders
+ * inline: up to this many images per 15-minute run, 10 `sendBatch` calls
+ * of 100 (the Queues per-call limit). Queue consumers render them in
+ * parallel (Queues runs up to 250 concurrent consumer invocations), so a
+ * demo-sized catalogue is re-rendered within minutes instead of hours.
+ * Each image is eight Images transforms: 1,000 images are 8,000 unique
+ * transformations, billed per unique transformation per month (5,000
+ * included; a free account stops transforming beyond that and its cards
+ * keep their placeholders until the allowance resets).
+ */
+export const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = 1_000;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -531,6 +544,18 @@ async function runScheduledMaintenanceInner(
   await isolated(async () => {
     const images = env.IMAGES;
     if (images) {
+      const queue = env.JOBS_QUEUE;
+      if (queue) {
+        const fanout = await timed("media_rendition_fanout", () =>
+          enqueueMediaVariantsBacklog(db, queue, {
+            skip: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+            limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
+          }),
+        ).catch(() => null);
+        if (fanout && fanout.queued > 0) {
+          console.log(`[scheduled] Media rendition backlog: queued=${fanout.queued}, hasMore=${fanout.hasMore}`);
+        }
+      }
       const renditions = await timed("media_rendition_backfill", () =>
         backfillMissingMediaVariants(db, env.BUCKET, images, {
           deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,

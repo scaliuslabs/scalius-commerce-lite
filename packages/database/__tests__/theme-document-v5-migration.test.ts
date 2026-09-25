@@ -26,7 +26,7 @@ describe(MIGRATION, () => {
     it.each(["d1", "turso"] as const)("drops a version 4 store's theme rows on %s", (provider) => {
         const sqlite = createMigratedSqlite({ provider, beforeMigration: "0093_" });
         sqlite.exec(seed(V4));
-        sqlite.exec(compiledMigrationSql(provider, undefined, "0093_"));
+        sqlite.exec(compiledMigrationSql(provider, "0094_", "0093_"));
         for (const table of ["theme_settings", "theme_settings_drafts", "theme_settings_versions", "theme_preview_sessions"]) {
             expect(count(sqlite, table), table).toBe(0);
         }
@@ -37,7 +37,7 @@ describe(MIGRATION, () => {
     it.each(["d1", "turso"] as const)("keeps version 5 rows of a version 5 store on %s", (provider) => {
         const sqlite = createMigratedSqlite({ provider, beforeMigration: "0093_" });
         sqlite.exec(seed(V5));
-        sqlite.exec(compiledMigrationSql(provider, undefined, "0093_"));
+        sqlite.exec(compiledMigrationSql(provider, "0094_", "0093_"));
         expect(count(sqlite, "theme_settings")).toBe(1);
         expect(count(sqlite, "theme_settings_drafts")).toBe(1);
         expect(sqlite.prepare("SELECT id FROM theme_settings_versions").all()).toEqual([{ id: "tv_new" }]);

@@ -21,11 +21,13 @@ interface Props {
   dimensions: { width: number; height: number };
   /** The discount pill on the photo, when the card puts it there. */
   badge: string | null;
+  /** The mark's shape on the variants' own cards (pill, tag, flag...), drawn by theme-cards.css. */
+  badgeStyle?: string;
   /** Extra classes for the box (the standard card keeps its own). */
   class?: string;
 }
 
-const { model, sizes, loading, dimensions, badge, class: className } = Astro.props;
+const { model, sizes, loading, dimensions, badge, badgeStyle, class: className } = Astro.props;
 const { width, height } = dimensions;
 const hover = model.image ? model.hoverImage : null;
 // Hooks for the variants' own badge drawing (the standard card's markup stays as it was).
@@ -62,7 +64,7 @@ const own = className !== undefined;
   <div class:list={[own && "product-card-badges", "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"]}>
     {
       badge && (
-        <span data-card-discount class:list={[own && "product-card-badge", "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"]}>
+        <span data-card-discount class:list={[own && "product-card-badge", own && badgeStyle && `pc-badge-${badgeStyle}`, "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"]}>
           {badge}
         </span>
       )

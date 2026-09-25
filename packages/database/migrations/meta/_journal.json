@@ -659,6 +659,13 @@
       "when": 1790300024000,
       "tag": "0093_theme_document_v5",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1790300025000,
+      "tag": "0094_media_rendition_ladder",
+      "breakpoints": true
     }
   ]
 }

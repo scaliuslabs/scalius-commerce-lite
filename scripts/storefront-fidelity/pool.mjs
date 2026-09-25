@@ -21,7 +21,7 @@ import { loadSharp } from "./lib/context.mjs";
 
 export const POOL_SIZE = 240;
 export const LEGACY_POOL_INDEXES = [6, 16, 26];
-const WIDTHS = [160, 320, 480, 640, 960, 1600];
+const WIDTHS = [160, 240, 320, 400, 480, 640, 960, 1600];
 const MAX = 2400;
 const PALETTES = [[20, 20, 24], [200, 30, 40], [30, 90, 200], [240, 240, 240], [60, 160, 90], [230, 150, 30], [120, 60, 160], [180, 180, 190], [15, 60, 90], [250, 200, 210]];
 const KINDS = ["phone", "laptop", "headphone", "watch", "shoe", "bag", "bottle", "box"];

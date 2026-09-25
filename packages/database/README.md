@@ -357,7 +357,7 @@ ledger. Every migration from 0050 onward must:
 - be listed in the runtime release manifest used by `/readyz`.
 
 The current release is the one `CURRENT_DATABASE_SCHEMA` names in
-`src/schema-contract.ts` (`0093_theme_document_v5` at this writing). The release chain also
+`src/schema-contract.ts` (`0094_media_rendition_ladder` at this writing). The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54
