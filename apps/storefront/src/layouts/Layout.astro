@@ -132,13 +132,15 @@ const tiktokPixelEnabled = analyticsScripts.some((script) => {
   );
 });
 const navigationData = layoutData?.navigation || [];
+// The theme's navigation source renders the menu, the category tree or both.
+const categoryTree = layoutData?.categoryTree ?? null;
 // The menu's column beside the content (computers) and the bottom tab bar
 // (phones) both belong to the header, so pages without it show neither.
 const showNavigationSidebar =
   !hideHeader &&
   !hideNavigationSidebar &&
   themeLayout.navigation === "sidebar" &&
-  navigationData.length > 0;
+  (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
 const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
 
 // Provide sensible defaults if API fails to prevent blank header/footer
@@ -452,6 +454,7 @@ if (!window.$RefreshReg$) {
           <Header
             headerData={headerData}
             navigation={navigationData}
+            categoryTree={categoryTree}
             storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
@@ -465,7 +468,7 @@ if (!window.$RefreshReg$) {
       {/* With the sidebar, <main> is the content column: full-bleed sections
           span the column, never the sidebar. */}
       <div class="site-shell" data-site-shell={showNavigationSidebar ? "sidebar" : undefined}>
-        {showNavigationSidebar && <SidebarNav navigation={navigationData} />}
+        {showNavigationSidebar && <SidebarNav navigation={navigationData} categoryTree={categoryTree} />}
         <main id="main-content" tabindex="-1" class="w-full h-full mb-3 focus:outline-none">
           <slot />
         </main>

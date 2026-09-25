@@ -5,6 +5,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getHomepageData, getLayoutData, getPageRenderData } from "@scalius/core/modules/storefront";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
+import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared/checkout-language";
 import { NotFoundError, ValidationError } from "../utils/api-error";
@@ -223,6 +224,22 @@ const layoutDataSchema = z.object({
   })),
   header: headerSchema,
   navigation: z.array(navigationItemSchema),
+  /**
+   * The reachable category tree (published, every ancestor published, leading
+   * to a public product), flat with parentId, top levels first and bounded.
+   * The theme's navigation source renders it, the header menu or both.
+   */
+  categoryTree: z.object({
+    nodes: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      slug: z.string(),
+      parentId: z.string().nullable(),
+      canonicalPath: z.string().nullable(),
+      imageUrl: z.string().nullable(),
+    })).max(CATEGORY_NAVIGATION_LAYOUT_NODES),
+    truncated: z.boolean(),
+  }),
   footer: footerSchema,
   currency: z.object({
     code: z.string(),

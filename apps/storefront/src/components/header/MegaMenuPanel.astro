@@ -1,8 +1,12 @@
 ---
-// A mega menu panel: full width under the header, one column per
-// second-level item (its photo when it links a category with one, its name,
-// then its own links) and a "Shop all" link for the parent. Photos are small,
-// lazy, fixed-ratio and decorative (the link text names them).
+// A mega menu panel (Fabrilife): about 980px wide under the header row,
+// centred, up to four columns. A second-level item with links of its own is
+// a column: its name as an uppercase heading, then up to ten links;
+// second-level items without links of their own share plain columns of ten.
+// "View all <department> →" closes the panel, and with `promoImages` linked
+// items that have a photo move out of the columns into photo tiles beside
+// them (the same links, so the header's link count does not grow). Photos
+// are small, lazy and fetched only once the panel opens.
 import type { NavigationItem } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
@@ -16,130 +20,132 @@ import {
 interface Props {
   id: string;
   item: NavigationItem;
-  /**
-   * Linked items with a photo render as 120px photo tiles instead of text
-   * (Fabrilife's promo images): the same links, so the header's link count
-   * does not grow; photos are lazy and fetched only once the panel opens.
-   */
   promoImages?: boolean;
 }
 
+/** Links a column lists (Fabrilife: 7-10). */
+const COLUMN_LINKS = 10;
+/** Columns a panel shows; a department with more groups lists the rest on its page. */
+const MAX_COLUMNS = 4;
+const MAX_TILES = 4;
+
 const { id, item, promoImages = false } = Astro.props;
-const columns = navigationChildren(item);
-const photo = (url: string | undefined) => (url ? mediaImageUrl(url, 480) : "");
-const featurePhoto = item.href ? photo(item.imageUrl) : "";
+const children = navigationChildren(item);
 const link = (target: NavigationItem) => ({
   href: target.href,
   "aria-current": ariaCurrent(navigationCurrent(target, Astro.url)),
   "data-astro-prefetch": getStorefrontPrefetchAttribute(target.href, Astro.url),
   ...navigationLinkAttributes(target),
 });
+
+// Photo tiles: linked items with a photo, second or third level, first found first.
+const tiles = promoImages
+  ? [...children, ...children.flatMap((child) => navigationChildren(child))]
+      .filter((entry) => entry.href && entry.imageUrl && navigationChildren(entry).length === 0)
+      .slice(0, MAX_TILES)
+  : [];
+const tiled = new Set(tiles);
+const columnCount = tiles.length > 0 ? MAX_COLUMNS - 1 : MAX_COLUMNS;
+
+type Column = { heading: NavigationItem | null; links: NavigationItem[] };
+const groups: Column[] = children
+  .filter((child) => navigationChildren(child).length > 0)
+  .map((child) => ({
+    heading: child,
+    links: navigationChildren(child).filter((entry) => !tiled.has(entry)).slice(0, COLUMN_LINKS),
+  }));
+const loose = children.filter((child) => navigationChildren(child).length === 0 && !tiled.has(child));
+const plain: Column[] = [];
+for (let start = 0; start < loose.length; start += COLUMN_LINKS) {
+  plain.push({ heading: null, links: loose.slice(start, start + COLUMN_LINKS) });
+}
+const columns = [...groups, ...plain].slice(0, columnCount);
 ---
 
 <div id={id} class="mega-panel" data-mega-panel hidden>
-  <div class="mega-panel-scroll">
-    <div class:list={["mega-panel-layout", featurePhoto && "mega-panel-layout--feature"]}>
-      <div class="mega-panel-main">
-        {
-          item.href && !featurePhoto && (
-            <a class="mega-shop-all" {...link(item)}>
-              Shop all {item.title}
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" /></svg>
-            </a>
-          )
-        }
-        <ul class="mega-columns">
-          {
-            columns.map((column) => {
-              const image = photo(column.imageUrl);
-              const links = navigationChildren(column);
-              const Heading = column.href ? "a" : "p";
-              return (
-                <li class="mega-column">
-                  <Heading class="mega-column-heading" {...(column.href ? link(column) : {})}>
-                    {image && (
-                      <span class="mega-column-photo">
-                        <img src={image} alt="" width="480" height="360" loading="lazy" decoding="async" />
-                      </span>
-                    )}
-                    <span class="mega-column-title">{column.title}</span>
-                  </Heading>
-                  {promoImages && links.some((entry) => entry.href && entry.imageUrl) && (
-                    <ul class="mega-promo">
-                      {links
-                        .filter((entry) => entry.href && entry.imageUrl)
-                        .map((entry) => (
-                          <li>
-                            <a class="mega-promo-tile" {...link(entry)}>
-                              <span class="mega-promo-photo">
-                                <img src={mediaImageUrl(entry.imageUrl!, 240)} alt="" width="120" height="120" loading="lazy" decoding="async" />
-                              </span>
-                              <span class="mega-promo-title">{entry.title}</span>
-                            </a>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                  {links.length > 0 && (
-                    <ul class="mega-links">
-                      {links.filter((entry) => !(promoImages && entry.href && entry.imageUrl)).map((entry) =>
-                        entry.href ? (
-                          <li>
-                            <a class="mega-link" {...link(entry)}>
-                              {entry.title}
-                            </a>
-                          </li>
-                        ) : (
-                          <li class="mega-link">{entry.title}</li>
-                        ),
-                      )}
-                    </ul>
-                  )}
-                </li>
-              );
-            })
-          }
-        </ul>
-      </div>
+  <div class="mega-body" data-tiles={tiles.length > 0 ? "" : undefined}>
+    <ul class="mega-columns" style={`--mega-columns: ${columnCount}`}>
       {
-        featurePhoto && (
-          <a class="mega-feature" {...link(item)}>
-            <span class="mega-feature-photo">
-              <img src={featurePhoto} alt="" width="480" height="600" loading="lazy" decoding="async" />
-            </span>
-            <span class="mega-shop-all">
-              Shop all {item.title}
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" /></svg>
-            </span>
-          </a>
-        )
+        columns.map((column) => (
+          <li class="mega-column">
+            {column.heading &&
+              (column.heading.href ? (
+                <a class="mega-column-heading" {...link(column.heading)}>
+                  <span class="mega-column-title">{column.heading.title}</span>
+                </a>
+              ) : (
+                <p class="mega-column-heading">
+                  <span class="mega-column-title">{column.heading.title}</span>
+                </p>
+              ))}
+            {column.links.length > 0 && (
+              <ul class="mega-links">
+                {column.links.map((entry) =>
+                  entry.href ? (
+                    <li>
+                      <a class="mega-link" {...link(entry)}>
+                        {entry.title}
+                      </a>
+                    </li>
+                  ) : (
+                    <li class="mega-link">{entry.title}</li>
+                  ),
+                )}
+              </ul>
+            )}
+          </li>
+        ))
       }
-    </div>
+    </ul>
+    {
+      tiles.length > 0 && (
+        <ul class="mega-promo" aria-label={`Featured in ${item.title}`}>
+          {tiles.map((entry) => (
+            <li>
+              <a class="mega-promo-tile" {...link(entry)}>
+                <span class="mega-promo-photo">
+                  <img src={mediaImageUrl(entry.imageUrl!, 240)} alt="" width="120" height="120" loading="lazy" decoding="async" />
+                </span>
+                <span class="mega-promo-title">{entry.title}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
   </div>
+  {
+    item.href && (
+      <div class="mega-foot">
+        <a class="mega-shop-all" {...link(item)}>
+          View all {item.title}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" /></svg>
+        </a>
+      </div>
+    )
+  }
 </div>
 
-<style>
-  /* Anchored to the header's menu row (its nearest positioned ancestor), so
-     the columns line up with the header content; the backdrop bleeds to the
-     viewport edges. */
+<style is:global>
+  /* Centred under the header row it hangs from (its nearest positioned
+     ancestor): Fabrilife's 980px panel at 1440px. */
   .mega-panel {
     position: absolute;
-    top: calc(100% + 1px);
-    left: 0;
-    right: 0;
+    top: 100%;
+    left: 50%;
     z-index: 60;
-    color: var(--foreground);
-  }
-
-  .mega-panel::before {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    inset-block: 0;
-    inset-inline: calc(50% - 50vw);
-    background: var(--background);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 28px 48px -32px rgb(0 0 0 / 0.35);
+    width: min(61.25rem, calc(100% - 2rem));
+    max-height: calc(100dvh - var(--header-height, 8rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    translate: -50% 0;
+    border: 1px solid var(--border);
+    border-top: 0;
+    background: var(--popover, var(--background));
+    color: var(--popover-foreground, var(--foreground));
+    box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.35);
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .mega-panel:not([hidden]) {
@@ -153,100 +159,78 @@ const link = (target: NavigationItem) => ({
     }
   }
 
-  .mega-panel-scroll {
-    max-height: calc(100dvh - var(--header-height, 8rem));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 1.75rem 0.25rem 2.25rem;
-  }
-
-  .mega-panel-layout {
+  .mega-body {
     display: grid;
-    gap: 2.5rem;
+    gap: 2rem;
+    padding: 1.75rem 2rem 1.5rem;
   }
 
-  .mega-panel-layout--feature {
-    grid-template-columns: minmax(0, 1fr) clamp(12rem, 20vw, 16rem);
+  .mega-body[data-tiles] {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .mega-columns {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-    gap: 1.75rem 2rem;
+    grid-template-columns: repeat(var(--mega-columns, 4), minmax(0, 1fr));
+    gap: 1.5rem 2rem;
     align-items: start;
   }
 
   .mega-column-heading {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    color: var(--foreground);
-  }
-
-  .mega-column-photo,
-  .mega-feature-photo {
     display: block;
-    overflow: hidden;
-    border-radius: var(--radius);
-    background: var(--muted);
-  }
-
-  .mega-column-photo {
-    aspect-ratio: 4 / 3;
-  }
-
-  .mega-feature-photo {
-    aspect-ratio: 4 / 5;
-  }
-
-  .mega-column-photo img,
-  .mega-feature-photo img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 400ms ease;
-  }
-
-  a:hover > .mega-column-photo img,
-  a:hover > .mega-feature-photo img {
-    transform: scale(1.04);
+    margin-bottom: 0.625rem;
+    color: var(--primary);
   }
 
   .mega-column-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    letter-spacing: var(--theme-label-tracking, 0.01em);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     line-height: 1.3;
+    text-transform: uppercase;
   }
 
   a.mega-column-heading:hover .mega-column-title,
-  a.mega-link:hover,
   .mega-shop-all:hover {
     text-decoration: underline;
     text-underline-offset: 0.25em;
   }
 
-  .mega-links {
-    margin-top: 0.375rem;
+  /* Fabrilife's 34px rows. */
+  .mega-link {
+    display: flex;
+    align-items: center;
+    min-height: 2.125rem;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    color: var(--popover-foreground, var(--foreground));
+    overflow-wrap: anywhere;
   }
 
-  .mega-links:empty {
-    display: none;
+  a.mega-link:hover,
+  a.mega-link[aria-current] {
+    color: var(--primary);
+  }
+
+  a.mega-link[aria-current="page"] {
+    font-weight: 600;
   }
 
   .mega-promo {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 7.5rem));
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    grid-template-columns: repeat(2, 7.5rem);
+    gap: 1rem 1.25rem;
+    align-content: start;
+    padding-left: 2rem;
+    border-left: 1px solid var(--border);
   }
 
   .mega-promo-tile {
     display: flex;
     flex-direction: column;
     gap: 0.375rem;
-    color: var(--foreground);
-    font-size: 0.8125rem;
+    color: var(--popover-foreground, var(--foreground));
+    font-size: 0.75rem;
     line-height: 1.3;
   }
 
@@ -269,29 +253,20 @@ const link = (target: NavigationItem) => ({
     text-underline-offset: 0.25em;
   }
 
-  .mega-link {
-    display: flex;
-    align-items: center;
-    min-height: 2rem;
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-  }
-
-  a.mega-link:hover,
-  a.mega-link[aria-current] {
-    color: var(--foreground);
+  .mega-foot {
+    padding: 0.875rem 2rem;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--muted) 45%, transparent);
   }
 
   .mega-shop-all {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    min-height: 2.25rem;
-    margin-bottom: 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    letter-spacing: var(--theme-label-tracking, 0.01em);
-    color: var(--foreground);
+    min-height: 1.5rem;
+    color: var(--primary);
+    font-size: 0.8125rem;
+    font-weight: 700;
   }
 
   .mega-shop-all svg {
@@ -302,16 +277,6 @@ const link = (target: NavigationItem) => ({
     stroke-width: 1.75;
     stroke-linecap: round;
     stroke-linejoin: round;
-  }
-
-  .mega-feature {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .mega-feature .mega-shop-all {
-    margin-bottom: 0;
   }
 
   .mega-panel a:focus-visible {
@@ -330,11 +295,6 @@ const link = (target: NavigationItem) => ({
   @media (prefers-reduced-motion: reduce) {
     .mega-panel:not([hidden]) {
       animation: none;
-    }
-
-    .mega-column-photo img,
-    .mega-feature-photo img {
-      transition: none;
     }
   }
 </style>

@@ -9,7 +9,10 @@
 //
 // Levels are `position: fixed` inside `.drill` (which contains layout), so
 // every level fills the drawer's menu area whatever the scroll position of
-// the level under it.
+// the level under it. A long name wraps in the back bar: the level starts
+// with an invisible copy of the bar, so its first row is never covered.
+// The top level ends with "All categories" (/categories) when the header
+// shows only part of the tree.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
@@ -25,9 +28,11 @@ interface Props {
   idPrefix: string;
   depth?: number;
   parent?: NavigationItem;
+  /** The top level ends with "All categories" (/categories). */
+  allCategories?: boolean;
 }
 
-const { items = [], idPrefix, depth = 0, parent } = Astro.props;
+const { items = [], idPrefix, depth = 0, parent, allCategories = false } = Astro.props;
 const visible = items.filter((item) => item?.title);
 const link = (item: NavigationItem) => ({
   href: item.href,
@@ -40,6 +45,12 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
 ---
 
 <Wrapper {...wrapperProps}>
+{parent && (
+  <div class="drill-level-ghost" aria-hidden="true">
+    <span class="drill-ghost-icon"></span>
+    <span>{parent.title}</span>
+  </div>
+)}
 <ul class="drill-list" data-menu-list data-depth={depth}>
   {parent?.href && (
     <li class="drill-row">
@@ -67,13 +78,9 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
       <li class="drill-row">
         <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={`--drill-depth: ${depth + 1}`}>
           <summary class="drill-link drill-next" data-drill-index={index}>
-            <svg class="drill-back-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m10 4-4 4 4 4" />
-            </svg>
+            <i class="nav-chevron nav-chevron--left drill-back-icon" aria-hidden="true"></i>
             <span>{item.title}</span>
-            <svg class="drill-next-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m6 4 4 4-4 4" />
-            </svg>
+            <i class="nav-chevron nav-chevron--right drill-next-icon" aria-hidden="true"></i>
           </summary>
           <div class="drill-level" data-menu-panel>
             <Astro.self items={children} idPrefix={idPrefix} depth={depth + 1} parent={item} />
@@ -82,19 +89,27 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
       </li>
     );
   })}
+  {depth === 0 && allCategories && (
+    <li class="drill-row drill-row--all">
+      <a class="drill-link drill-link--all" href="/categories">
+        <span>All categories</span>
+        <i class="nav-chevron nav-chevron--right drill-next-icon" aria-hidden="true"></i>
+      </a>
+    </li>
+  )}
 </ul>
 </Wrapper>
 
-<style>
+<style is:global>
   /* The root wrapper is a dynamic element (no scope attribute): global selector. */
-  :global(.drill[data-drill]) {
+  .drill[data-drill] {
     position: relative;
     height: 100%;
     min-height: 0;
     contain: layout;
   }
 
-  :global(.drill[data-drill]) > .drill-list {
+  .drill[data-drill] > .drill-list {
     height: 100%;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -126,9 +141,10 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     cursor: pointer;
   }
 
-  .drill-list[data-depth="0"] > .drill-row > .drill-link,
-  .drill-list[data-depth="0"] > .drill-row > .drill-node > .drill-next {
-    font-weight: 600;
+  /* Amazon and Target list departments in regular weight (the "All" rows and the back bar stand out). */
+  .drill-list[data-depth="0"] > .drill-row > .drill-link:not(.drill-link--all),
+  .drill-list[data-depth="0"] > .drill-row > .drill-node:not([open]) > .drill-next {
+    font-weight: 400;
   }
 
   .drill-link--all {
@@ -144,7 +160,7 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     min-width: 0;
   }
 
-  .drill-link svg {
+  .drill-link .nav-chevron {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
@@ -155,7 +171,7 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     stroke-linejoin: round;
   }
 
-  .drill-back-icon {
+  .drill-link .drill-back-icon {
     display: none;
   }
 
@@ -177,14 +193,21 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
   }
 
   /* An open row becomes the level's "back" bar on top; its level fills the rest. */
+  .drill-node[open] > .drill-next,
+  .drill-level-ghost {
+    min-height: 3rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
   .drill-node[open] > .drill-next {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: calc(var(--drill-depth) * 2 + 1);
-    height: 3rem;
-    padding-inline: 1.25rem;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
     background: var(--card);
@@ -200,9 +223,34 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     display: none;
   }
 
+  /* The bar's twin: same text, same box, so the level starts under it at any length. */
+  .drill-level-ghost {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    visibility: hidden;
+    border-bottom: 1px solid transparent;
+    overflow-wrap: anywhere;
+  }
+
+  .drill-ghost-icon {
+    flex-shrink: 0;
+    width: 1rem;
+  }
+
+  .drill-row--all {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .drill-row--all .drill-link > span {
+    flex: 1;
+  }
+
   .drill-level {
     position: fixed;
-    inset: 3rem 0 0;
+    inset: 0;
     z-index: calc(var(--drill-depth) * 2);
     overflow-y: auto;
     overscroll-behavior: contain;
