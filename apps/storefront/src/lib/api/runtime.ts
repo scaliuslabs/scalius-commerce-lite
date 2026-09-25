@@ -16,9 +16,9 @@
  *   fail closed; the storefront origin stays the request origin so discovery
  *   output stays absolute.
  *
- * SSR code reads these through the getters below instead of import.meta.env
- * (build-time only). Client-side imports get a no-op store, so every getter
- * returns undefined in the browser.
+ * SSR code reads these through the getters below, never from build-time env
+ * (see integrations/build-env-isolation.mjs). Client-side imports get a no-op
+ * store, so every getter returns undefined in the browser.
  */
 import {
   mediaHostFromUrl,
@@ -270,7 +270,7 @@ export async function createRequestRuntime(
 
 /**
  * Seeds the request runtime and runs the rest of the request inside it.
- * Nothing is read from Wrangler vars or import.meta.env, and nothing is
+ * Nothing is read from Wrangler vars or build-time env, and nothing is
  * retained across requests.
  */
 export async function runWithRequestRuntime<R>(

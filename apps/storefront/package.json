@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "astro dev --host",
     "start": "node ./dist/server/entry.mjs",
-    "build": "node scripts/generate-build-id.js && astro check && astro build && node ../../scripts/clean-dist-env-files.mjs apps/storefront",
+    "build": "node scripts/generate-build-id.js && astro check && astro build && node ../../scripts/check-dist-secrets.mjs apps/storefront",
     "preview": "astro preview",
     "astro": "astro",
     "deploy": "node ../../scripts/deploy.mjs --only storefront",

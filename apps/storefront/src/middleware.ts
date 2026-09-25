@@ -131,7 +131,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // when that read resolves). Storefront pages start the layout read together
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
-// import.meta.env, and nothing is retained across requests.
+// build-time env, and nothing is retained across requests.
 const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
   runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
