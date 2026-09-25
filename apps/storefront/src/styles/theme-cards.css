@@ -331,6 +331,24 @@
   font-weight: 600;
 }
 
+/* The rating line (reviews): stars from rating-stars.css, then the count.
+   Each variant below sets its reference's size and colours. */
+.site-root .product-card .pc-rating-visual {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  line-height: 1;
+}
+
+.site-root .product-card .pc-stars {
+  --sc-star: 0.875rem;
+}
+
+.site-root .product-card .pc-rating-count {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ─── boutique: Dawn ───────────────────────────────────────────────────────
    Square lifestyle photo on a grey well, no chrome; title 13/400 with
    Dawn's tracking, price 16/400; "Sale" / "Sold out" pills at the photo's
@@ -631,6 +649,17 @@
   font-weight: 700;
 }
 
+/* Dark stars and a plain grey count ("★★★★☆ 128"). */
+.site-root .product-card[data-card-variant="retail"] .pc-stars {
+  --sc-star: 0.8125rem;
+  --sc-star-on: var(--foreground);
+  --sc-star-off: color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+
+.site-root .product-card[data-card-variant="retail"] .pc-rating-count {
+  font-size: 0.75rem;
+}
+
 /* ─── marketplace: Daraz ───────────────────────────────────────────────────
    A white 2px tile (a shadow on hover); the photo edge to edge; title
    13/400 in two lines; price 18/400 in the action colour on its own line,
@@ -668,6 +697,17 @@
 .site-root .product-card[data-card-variant="marketplace"] .pc-discount {
   font-weight: 400;
   color: var(--foreground);
+}
+
+/* Small yellow stars and a grey "(128)". */
+.site-root .product-card[data-card-variant="marketplace"] .pc-stars {
+  --sc-star: 0.75rem;
+  --sc-star-on: #faca51;
+  --sc-star-off: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+
+.site-root .product-card[data-card-variant="marketplace"] .pc-rating-count {
+  font-size: 0.75rem;
 }
 
 /* ─── quick-add: Chaldal ───────────────────────────────────────────────────
@@ -804,6 +844,21 @@
 
 .site-root .product-card[data-card-variant="detailed"] .pc-delivery strong {
   text-transform: uppercase;
+}
+
+/* "4.6 ★★★★½ (1,234)": the average, orange stars, the count in link colour. */
+.site-root .product-card[data-card-variant="detailed"] .pc-rating-average {
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-stars {
+  --sc-star: 1rem;
+  --sc-star-on: #de7921;
+}
+
+.site-root .product-card[data-card-variant="detailed"] .pc-rating-count {
+  color: var(--primary);
 }
 
 /* ─── List rows ────────────────────────────────────────────────────────────

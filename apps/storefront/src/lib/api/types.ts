@@ -96,8 +96,50 @@ export interface PaginatedResponse<T> {
   };
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  /** "N★ & up" rows of the listing's scope (empty when nothing in scope has a review). */
+  ratingFacet?: RatingFacetValue[];
   /** Set when the search matched nothing and these results are for this corrected query. */
   correctedQuery?: string | null;
+}
+
+/** One "N★ & up" row of a listing: products averaging at least `min` stars. */
+export interface RatingFacetValue {
+  min: number;
+  count: number;
+}
+
+/** A card's published-review average and count; null without a published review. */
+export interface ProductCardRating {
+  average: number;
+  count: number;
+}
+
+/** Published-review aggregates of one product (5★ first in the histogram). */
+export interface ProductReviewSummary {
+  average: number;
+  count: number;
+  histogram: Array<{ rating: number; count: number }>;
+}
+
+/** One published review, as the product page and the public list send it. */
+export interface PublicProductReview {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  authorName: string;
+  variantLabel: string | null;
+  verifiedPurchase: true;
+  publishedAt: string;
+  editedAt: string | null;
+  reply: { body: string; repliedAt: string } | null;
+}
+
+/** The product page's `reviews`: the summary and the first page (null when the store's reviews are off). */
+export interface ProductReviews {
+  summary: ProductReviewSummary;
+  items: PublicProductReview[];
+  nextCursor: string | null;
 }
 
 export interface BuyerPriceRange {
@@ -231,6 +273,10 @@ export interface Product {
   secondaryImageUrl?: string | null;
   /** Listing and homepage cards only: stored facts a card can show (core catalog/card-facts.ts). */
   cardFacts?: ProductCardFacts;
+  /** Listing and homepage cards only: the published-review average and count; null without one. */
+  rating?: ProductCardRating | null;
+  /** Product page only: published reviews (null when the store's reviews are off). */
+  reviews?: ProductReviews | null;
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
@@ -482,6 +528,7 @@ export interface CollectionWithProducts extends Collection {
   pagination: PaginatedResponse<Product>["pagination"];
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  ratingFacet?: RatingFacetValue[];
 }
 
 // ---------------------------------------------------------------------------

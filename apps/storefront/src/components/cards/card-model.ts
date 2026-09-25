@@ -19,9 +19,8 @@ import type {
 } from "@scalius/shared/storefront-theme";
 import { cssNamedColour } from "./css-colours";
 
-/** Facts no reader sends yet (reviews, EMI plans on cards); kept so the slots stay honest. */
+/** Facts no reader sends yet (EMI plans on cards); kept so the slot stays honest. */
 export interface ProductCardPendingFacts {
-  rating?: { average: number; count: number } | null;
   /** The lowest monthly EMI amount in major units, from the merchant's EMI plans. */
   emiMonthlyFrom?: number | null;
 }
@@ -58,7 +57,12 @@ export const CARD_PHOTO_INSET: Readonly<Record<string, number>> = {
 export interface ProductCardFactValues {
   brand: string | null;
   keySpecs: string[];
-  rating: { average: string; count: number } | null;
+  /**
+   * The published-review average and count (`product.rating`, from the
+   * listing's stats join): "4.6" to one decimal, the average itself for the
+   * star fill, and the count. Null without a published review: never "(0)".
+   */
+  rating: { average: string; value: number; count: number } | null;
   /** Units sold in the last 30 days (10 or more). */
   sold: number | null;
   savings: string | null;
@@ -174,8 +178,12 @@ function cardFactValues(
       .map((spec) => spec.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, KEY_SPECS_MAX),
-    rating: rating && rating.count > 0 && rating.average > 0
-      ? { average: (Math.round(Math.min(rating.average, 5) * 10) / 10).toFixed(1), count: rating.count }
+    rating: rating && Number.isInteger(rating.count) && rating.count > 0 && Number.isFinite(rating.average) && rating.average > 0
+      ? {
+          average: (Math.round(Math.min(rating.average, 5) * 10) / 10).toFixed(1),
+          value: Math.min(rating.average, 5),
+          count: rating.count,
+        }
       : null,
     sold: sold >= SOLD_COUNT_MIN ? Math.floor(sold) : null,
     savings: saved ? `Save ${saved}` : null,

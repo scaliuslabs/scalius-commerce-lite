@@ -14,6 +14,7 @@ import {
   emptyProductPagination,
   normalizeBuyerPriceRange,
   normalizeProductFacets,
+  normalizeRatingFacet,
   normalizeProductListOptions,
   type ProductListOptions,
 } from "./products";
@@ -61,6 +62,7 @@ export async function getProductsByBrand(
           pagination: PaginatedResponse<Product>["pagination"];
           priceRange?: unknown;
           facets?: unknown;
+          ratingFacet?: unknown;
         }>(data);
         return payload
           ? {
@@ -69,6 +71,7 @@ export async function getProductsByBrand(
               pagination: payload.pagination,
               priceRange: normalizeBuyerPriceRange(payload.priceRange),
               facets: normalizeProductFacets(payload.facets),
+              ratingFacet: normalizeRatingFacet(payload.ratingFacet),
             }
           : null;
       } catch (error: unknown) {

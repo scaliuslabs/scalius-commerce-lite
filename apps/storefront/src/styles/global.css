@@ -2,6 +2,7 @@
 
 @import "tailwindcss" source("../");
 @import "./theme-foundation.css";
+@import "./rating-stars.css";
 
 @plugin '@tailwindcss/typography';
 

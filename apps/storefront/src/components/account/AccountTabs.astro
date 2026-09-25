@@ -1,0 +1,45 @@
+---
+// The account tab strip on server-rendered account pages: Orders and profile,
+// Inbox (with the unread badge), then each feature tab whose count is above
+// zero (lib/account-tabs.ts). The current tab always shows, even at zero, so a
+// buyer on /account/downloads is never on a page without its tab. /account
+// itself renders the same strip in the browser (lib/account-page.ts).
+import { ACCOUNT_FEATURE_TABS, type AccountSummary } from "@/lib/account-tabs";
+import { CONVERSATION_COPY, inboxBadgeText } from "@/lib/account-inbox";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+export type AccountTabKey = "account" | "inbox" | "reviews" | "downloads" | "gift-cards" | "warranties";
+
+export interface Props {
+  current: AccountTabKey;
+  summary: AccountSummary | null;
+}
+
+const { current, summary } = Astro.props;
+const tabClass = "inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium";
+const tabKey = (href: string) => href.replace(/^\/account\//, "") as AccountTabKey;
+const tabs = [
+  { key: "account" as AccountTabKey, href: "/account", label: CONVERSATION_COPY.accountTab, badge: "" },
+  { key: "inbox" as AccountTabKey, href: "/account/inbox", label: CONVERSATION_COPY.inboxTitle, badge: inboxBadgeText(summary?.unreadInbox ?? 0) },
+  ...ACCOUNT_FEATURE_TABS
+    .filter((tab) => tabKey(tab.href) === current || (summary?.[tab.count] ?? 0) > 0)
+    .map((tab) => ({ key: tabKey(tab.href), href: tab.href as string, label: tab.label as string, badge: "" })),
+];
+const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
+---
+
+<nav aria-label="Account" class="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+  {tabs.map((tab) => (
+    <a
+      href={tab.href}
+      aria-current={tab.key === current ? "page" : undefined}
+      data-astro-prefetch={tab.key === "account" && current !== "account" ? accountPrefetch : "false"}
+      class:list={[tabClass, tab.key === current ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"]}
+    >
+      {tab.label}
+      {tab.badge && (
+        <span class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{tab.badge}<span class="sr-only"> unread</span></span>
+      )}
+    </a>
+  ))}
+</nav>

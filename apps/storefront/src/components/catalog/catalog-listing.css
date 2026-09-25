@@ -197,6 +197,17 @@
   text-decoration: underline;
 }
 
+/* Customer rating ("4★ & up"): the stars then "& up", as Amazon and Daraz list them. */
+.catalog-rating-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.catalog-rating-stars {
+  --sc-star: 0.9375rem;
+}
+
 .catalog-facet-links {
   margin: 0;
   padding: 0;

@@ -1,8 +1,126 @@
 ---
-// Owned by B2 (reviews storefront): the product page's `reviews` module (summary, histogram, list, pager); renders nothing until B2 ships it.
+// The product page's `reviews` module (Wave B §2.4), laid out like Amazon's
+// "Customer reviews" and Daraz's "Ratings & Reviews": the average, the stars
+// and a 5-row histogram on the left (each bar links to that star's reviews),
+// the list on the right with Most recent / Highest / Lowest, the first five
+// reviews rendered here and "Show more" beneath.
+//
+// Without JavaScript every control is a link to /products/<slug>/reviews
+// (noindex, cached), and "Show more" continues the list there. With it, sort,
+// the star filter and "Show more" read the same pages through
+// /api/reviews/<productId> and update the list in place.
+//
+// Reviews off: nothing. On with no published review: the zero-state row.
+import "./product-reviews.css";
 import type { Product } from "@/lib/api";
+import ReviewsOverview from "./ReviewsOverview.astro";
+import {
+  DEFAULT_REVIEW_VIEW,
+  REVIEW_SORTS,
+  productReviewsPageHref,
+  publicReviewListMarkup,
+  readProductReviews,
+  type ReviewCopy,
+} from "./review-format";
 
 export interface Props {
   product: Product;
+  copy: ReviewCopy;
+  /** Base language code for dates ("en", "bn"). */
+  language: string;
+  /** The store's name for "Response from …" (Business settings); null says "the store". */
+  storeName: string | null;
 }
+
+const { product, copy, language, storeName } = Astro.props;
+const reviews = readProductReviews(product.reviews);
+const summary = reviews?.summary ?? null;
+const hasReviews = Boolean(summary && summary.count > 0);
+const listMarkup = reviews && hasReviews
+  ? publicReviewListMarkup(reviews.items, { copy, language, storeName })
+  : "";
+const sortLabels: Record<(typeof REVIEW_SORTS)[number], string> = {
+  recent: copy.reviewsSortRecentText,
+  highest: copy.reviewsSortHighestText,
+  lowest: copy.reviewsSortLowestText,
+};
+const nextHref = reviews?.nextCursor
+  ? productReviewsPageHref(product.slug, { after: reviews.nextCursor })
+  : null;
+// The strings the script needs to render more reviews in the same words.
+const scriptCopy = JSON.stringify({
+  reviewsRatedText: copy.reviewsRatedText,
+  reviewsVerifiedText: copy.reviewsVerifiedText,
+  reviewsEditedText: copy.reviewsEditedText,
+  reviewsReplyText: copy.reviewsReplyText,
+  reviewsReplyFallbackText: copy.reviewsReplyFallbackText,
+  reviewsFilteredText: copy.reviewsFilteredText,
+  reviewsFilterEmptyText: copy.reviewsFilterEmptyText,
+  reviewsLoadFailedText: copy.reviewsLoadFailedText,
+});
 ---
+
+{summary && (
+  <section
+    id="reviews"
+    class="product-reviews mx-auto max-w-7xl px-3 py-6 sm:px-6 lg:px-8 lg:py-10"
+    aria-labelledby="reviews-heading"
+    data-product-reviews={hasReviews ? "" : undefined}
+    data-product-id={product.id}
+    data-product-slug={product.slug}
+    data-review-language={language}
+    data-review-store={storeName ?? ""}
+    data-review-copy={hasReviews ? scriptCopy : undefined}
+    data-review-cursor={reviews?.nextCursor ?? ""}
+  >
+    <h2 id="reviews-heading" class="product-reviews-heading">{copy.reviewsTitleText}</h2>
+
+    {!hasReviews ? (
+      <p class="product-reviews-empty" data-review-empty>{copy.reviewsEmptyText}</p>
+    ) : (
+      <div class="product-reviews-layout">
+        <ReviewsOverview summary={summary} copy={copy} slug={product.slug} />
+
+        <div class="product-reviews-main">
+          <div class="product-reviews-toolbar">
+            <nav class="product-reviews-sort" aria-label={copy.reviewsSortLabelText}>
+              <span class="product-reviews-sort-label" aria-hidden="true">{copy.reviewsSortLabelText}</span>
+              {REVIEW_SORTS.map((sort) => (
+                <a
+                  href={productReviewsPageHref(product.slug, { sort })}
+                  class="product-reviews-sort-option"
+                  data-review-sort={sort}
+                  aria-current={sort === DEFAULT_REVIEW_VIEW.sort ? "true" : undefined}
+                >{sortLabels[sort]}</a>
+              ))}
+            </nav>
+            <p class="product-reviews-filter" data-review-filter hidden>
+              <span data-review-filter-label></span>
+              <a href={productReviewsPageHref(product.slug)} data-review-filter-clear class="product-reviews-filter-clear">{copy.reviewsFilterAllText}</a>
+            </p>
+          </div>
+
+          <ul class="product-reviews-list" data-review-list set:html={listMarkup}></ul>
+          <p class="product-reviews-status" data-review-status role="status" hidden></p>
+
+          <div class="product-reviews-more">
+            <a
+              href={nextHref ?? productReviewsPageHref(product.slug)}
+              class="product-reviews-more-button"
+              data-review-more
+              hidden={!nextHref}
+            >{copy.reviewsShowMoreText}</a>
+            <a href={productReviewsPageHref(product.slug)} class="product-reviews-all" data-review-all>{copy.reviewsSeeAllText}</a>
+          </div>
+        </div>
+      </div>
+    )}
+  </section>
+)}
+
+<script>
+  import { setupProductReviews } from "./product-reviews";
+
+  setupProductReviews();
+  document.addEventListener("astro:page-load", setupProductReviews);
+</script>
