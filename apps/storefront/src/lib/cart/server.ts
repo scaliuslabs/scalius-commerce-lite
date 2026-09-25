@@ -10,6 +10,12 @@ import {
 import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
+import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
+import {
+  checkoutAddressForMode,
+  missingCheckoutFields,
+  resolveCheckoutDeliveryMode,
+} from "@/lib/checkout/delivery-mode";
 import {
   cartItemVariantLabel,
   normalizeCartItemOptions,
@@ -47,6 +53,8 @@ interface ValidatedCartItem {
   variantId: string;
   options?: CartItemOption[];
   freeDelivery?: boolean;
+  /** Buyer inputs (`{key, value}`), sent in the body to be validated and priced by the API. */
+  properties?: Array<{ key: string; value: string }>;
 }
 
 function parseCartItems(raw: unknown): ValidatedCartItem[] {
@@ -105,6 +113,20 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       return item[key] as string;
     };
 
+    let properties: ValidatedCartItem["properties"];
+    try {
+      properties = parseRequestProperties(
+        Array.isArray(item.properties)
+          ? item.properties.map((property) =>
+              typeof property === "object" && property !== null
+                ? { key: (property as { key?: unknown }).key, value: (property as { value?: unknown }).value }
+                : property)
+          : item.properties,
+      );
+    } catch {
+      throw new Error(`Cart item "${item.name}" has invalid details.`);
+    }
+
     return {
       cartKey,
       id: item.id as string,
@@ -116,6 +138,7 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       variantId: item.variantId.trim(),
       options: normalizeCartItemOptions(item.options),
       freeDelivery: typeof item.freeDelivery === "boolean" ? item.freeDelivery : undefined,
+      ...(properties ? { properties } : {}),
     };
   });
 }
@@ -195,20 +218,17 @@ export async function processOrder(
     // Validate cart item shape and value ranges (defense against crafted form data)
     const cartItemsArray = parseCartItems(cartItems);
 
-    if (
-      !customerName ||
-      !customerPhone ||
-      !shippingAddress ||
-      !cityId ||
-      !zoneId ||
-      !shippingLocationId ||
-      cartItemsArray.length === 0
-    ) {
+    // Phone and name are required on every path (phone is how Bangladesh
+    // checkout identifies the buyer); the rest depends on the path below.
+    if (!customerName || !customerPhone || cartItemsArray.length === 0) {
       throw new Error(
         "Please fill in all required fields and add items to your cart.",
       );
     }
 
+    // The buyer's Delivery/Pickup choice only decides what is sent: the API
+    // resolves the path from the SKUs and the chosen rate's kind.
+    const chosenPath = formData.get("deliveryMode") === "pickup" ? "pickup" : "delivery";
     const cartValidation = await validateCartItemsWithApi(
       cartItemsArray.map((item) => ({
         cartKey: item.cartKey,
@@ -218,12 +238,13 @@ export async function processOrder(
         price: item.price,
         productName: item.name,
         variantLabel: displayVariantLabel(item),
+        ...(item.properties ? { properties: item.properties } : {}),
       })),
       {
-        city: cityId,
-        zone: zoneId,
-        area: areaId,
-        shippingMethodId: shippingLocationId,
+        ...(shippingLocationId ? { shippingMethodId: shippingLocationId } : {}),
+        ...(chosenPath === "delivery" && cityId && zoneId
+          ? { city: cityId, zone: zoneId, area: areaId }
+          : {}),
       },
     );
 
@@ -240,40 +261,68 @@ export async function processOrder(
         cartValidation.data.issues,
       );
     }
-    if (!cartValidation.data.delivery) {
+    const validated = cartValidation.data;
+    const delivery = validated.delivery;
+    // Nothing physical: no method, no fee, no address. Otherwise the rate's
+    // own kind decides between delivery (address required) and pickup.
+    const mode = resolveCheckoutDeliveryMode(
+      validated.requiresDeliveryMethod !== false,
+      delivery?.kind ?? chosenPath,
+    );
+    const missing = missingCheckoutFields(mode, {
+      customerName,
+      customerPhone,
+      shippingAddress,
+      city: cityId,
+      zone: zoneId,
+      shippingMethod: shippingLocationId,
+    });
+    if (missing.length > 0) {
+      throw new Error("Please fill in all required fields and add items to your cart.");
+    }
+    if (mode !== "none" && !delivery) {
       throw new Error("Delivery information is no longer available. Please refresh checkout and try again.");
     }
+    // This form places cash-on-delivery orders only; a cart that can't be
+    // paid in cash (nothing handed over in person) is refused before commit.
+    if (Array.isArray(validated.allowedPaymentMethods) && !validated.allowedPaymentMethods.includes("cod")) {
+      throw new Error("This order can't be paid with cash on delivery.");
+    }
 
-    const processedItems: CreateOrderPayload["items"] = cartValidation.data.items.map((item) => ({
-      cartKey: item.cartKey,
-      productId: item.productId,
-      variantId: item.variantId,
-      quantity: item.quantity,
-      price: item.unitPrice,
-      productName: item.productName,
-      variantLabel: item.variantLabel,
-    }));
-    const shippingCharge = cartValidation.data.delivery.shippingCharge;
-    const cityName = cartValidation.data.delivery.cityName;
-    const zoneName = cartValidation.data.delivery.zoneName;
-    const areaName = cartValidation.data.delivery.areaName;
+    const inputsByCartKey = new Map(cartItemsArray.map((item) => [item.cartKey, item.properties]));
+    const processedItems: CreateOrderPayload["items"] = validated.items.map((item) => {
+      const properties = item.cartKey ? inputsByCartKey.get(item.cartKey) : undefined;
+      return {
+        cartKey: item.cartKey,
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        price: item.unitPrice,
+        productName: item.productName,
+        variantLabel: item.variantLabel,
+        ...(properties ? { properties } : {}),
+      };
+    });
+    const address = checkoutAddressForMode(mode, {
+      shippingAddress,
+      city: cityId,
+      zone: zoneId,
+      area: areaId,
+      cityName: delivery?.cityName,
+      zoneName: delivery?.zoneName,
+      areaName: delivery?.areaName,
+    });
     const payload: CreateOrderPayload = {
       checkoutRequestId,
       expectedQuoteFingerprint,
       customerName,
       customerPhone,
       customerEmail,
-      shippingAddress,
-      city: cityId,
-      zone: zoneId,
-      area: areaId,
-      cityName,
-      zoneName,
-      areaName,
+      ...address,
       notes,
       items: processedItems,
-      shippingCharge,
-      shippingMethodId: shippingLocationId,
+      shippingCharge: mode === "none" ? 0 : delivery?.shippingCharge ?? 0,
+      shippingMethodId: mode === "none" ? null : shippingLocationId,
       discountCodes,
       paymentMethod: "cod",
     };

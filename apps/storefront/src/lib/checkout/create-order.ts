@@ -6,7 +6,8 @@ import { getCheckoutErrorMessage } from "./error-messages";
 import type { CreateOrderPayload } from "../api/types";
 import type { CartValidationIssue } from "../api/orders";
 import { cartItemVariantLabel } from "../cart/item-options";
-import { readDiscountCodes } from "./tax-quote-client";
+import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
+import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
 
 type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
 
@@ -29,6 +30,7 @@ type CheckoutCartLine = {
   price: number;
   name?: string;
   options?: unknown;
+  properties?: unknown;
 };
 
 type ErrorPayload = {
@@ -113,15 +115,24 @@ export async function createOrder(
     // ignore parse errors
   }
 
-  const items = Object.entries(cartItems).map(([cartKey, item]) => ({
-    cartKey,
-    productId: item.id,
-    variantId: readPersistedVariantId(item.variantId),
-    quantity: item.quantity,
-    price: item.price,
-    productName: typeof item.name === "string" ? item.name : null,
-    variantLabel: variantLabelForCartLine(item),
-  }));
+  const items = Object.entries(cartItems).map(([cartKey, item]) => {
+    const properties = cartLineInputs(item.properties);
+    return {
+      cartKey,
+      productId: item.id,
+      variantId: readPersistedVariantId(item.variantId),
+      quantity: item.quantity,
+      price: item.price,
+      productName: typeof item.name === "string" ? item.name : null,
+      variantLabel: variantLabelForCartLine(item),
+      ...(properties ? { properties } : {}),
+    };
+  });
+  // The address goes with the order only when something ships.
+  const deliveryMode = isCheckoutDeliveryMode(checkoutData.deliveryMode)
+    ? checkoutData.deliveryMode
+    : "delivery";
+  const address = checkoutAddressForMode(deliveryMode, checkoutData);
   const checkoutRequestId = readString(
     checkoutData.checkoutRequestId ?? checkoutData.checkoutId,
   ).trim();
@@ -144,17 +155,15 @@ export async function createOrder(
     customerName: readString(checkoutData.customerName),
     customerPhone: readString(checkoutData.customerPhone),
     customerEmail: readOptionalString(checkoutData.customerEmail),
-    shippingAddress: readString(checkoutData.shippingAddress),
-    city: readString(checkoutData.city),
-    zone: readString(checkoutData.zone),
-    area: readOptionalString(checkoutData.area),
-    cityName: readOptionalString(checkoutData.cityName),
-    zoneName: readOptionalString(checkoutData.zoneName),
-    areaName: readOptionalString(checkoutData.areaName),
+    ...address,
     notes: readOptionalString(checkoutData.notes),
     items,
-    shippingCharge: parseFloat((checkoutData.shippingCharge as string) || "0"),
-    shippingMethodId: readOptionalString(checkoutData.shippingMethodId),
+    shippingCharge: deliveryMode === "none"
+      ? 0
+      : parseFloat((checkoutData.shippingCharge as string) || "0"),
+    shippingMethodId: deliveryMode === "none"
+      ? null
+      : readOptionalString(checkoutData.shippingMethodId),
     discountCodes: readDiscountCodes(checkoutData),
     paymentMethod: paymentMethod as PaymentMethod,
   };

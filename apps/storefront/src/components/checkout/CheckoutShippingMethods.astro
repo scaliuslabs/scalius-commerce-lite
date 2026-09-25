@@ -1,17 +1,21 @@
 ---
-// Delivery options. The list follows the chosen address, so the browser
-// renders it (`enhanceShippingMethods`); the server ships every active rate
-// only so pickup can be offered before an address is chosen.
+// Delivery options. The list follows the checkout path and the chosen
+// address, so the browser renders it (`enhanceShippingMethods`); the server
+// ships every active rate only so pickup can be offered without an address.
 import type { ShippingMethod } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 interface Props {
   shippingMethods: ShippingMethod[];
   shippingMethodLabel: string;
+  pickupLocationLabel: string;
+  /** The page shows a Delivery/Pickup switch: each path lists only its own rates. */
+  modeSwitch: boolean;
   freeText: string;
   freeOverText: string;
   waivedShippingFeeText: string;
   pickupFromText: string;
+  pickupHoursText: string;
   chooseAddressText: string;
   noDeliveryText: string;
   failedText: string;
@@ -23,15 +27,19 @@ interface Props {
   goneText: string;
 }
 
-const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
+const { shippingMethods, shippingMethodLabel, pickupLocationLabel, modeSwitch, ...copy } = Astro.props;
 ---
 
 <div
   data-shipping-methods
+  data-mode-switch={modeSwitch ? "true" : "false"}
+  data-delivery-legend-text={shippingMethodLabel}
+  data-pickup-legend-text={pickupLocationLabel}
   data-free-text={copy.freeText}
   data-free-over-text={copy.freeOverText}
   data-waived-text={copy.waivedShippingFeeText}
   data-pickup-from-text={copy.pickupFromText}
+  data-pickup-hours-text={copy.pickupHoursText}
   data-choose-address-text={copy.chooseAddressText}
   data-no-delivery-text={copy.noDeliveryText}
   data-failed-text={copy.failedText}
@@ -44,7 +52,7 @@ const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
 >
   <script is:inline type="application/json" data-shipping-rates set:html={serializeJsonForInlineScript(shippingMethods)} />
   <fieldset id="shippingMethods" class="rounded-lg" aria-describedby="shippingMethodNotice shippingMethodNote shippingMethodError">
-    <legend class="mb-2 block text-sm font-medium text-foreground">{shippingMethodLabel}</legend>
+    <legend class="mb-2 block text-sm font-medium text-foreground" data-shipping-legend>{shippingMethodLabel}</legend>
     <p id="shippingMethodNote" class="mb-2 text-sm text-muted-foreground" role="status" data-shipping-note>
       {copy.chooseAddressText}
     </p>

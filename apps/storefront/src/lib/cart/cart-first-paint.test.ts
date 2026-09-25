@@ -42,10 +42,10 @@ describe("cart page first paint", () => {
   });
 
   it("shows it for a saved cart with no lines, and keeps loading for one with lines", () => {
-    localStorage.setItem("cart", JSON.stringify({ items: {} }));
+    localStorage.setItem("cart:v3", JSON.stringify({ items: {} }));
     expect(run()).toBe("empty");
     document.getElementById("cartPageRoot")!.dataset.cartState = "loading";
-    localStorage.setItem("cart", JSON.stringify({ items: { line: { id: "p1", name: "Panjabi", variantId: "v1" } } }));
+    localStorage.setItem("cart:v3", JSON.stringify({ items: { line: { id: "p1", name: "Panjabi", variantId: "v1" } } }));
     expect(run()).toBe("loading");
   });
 
@@ -58,7 +58,47 @@ describe("cart page first paint", () => {
   });
 
   it("keeps loading when storage cannot be read", () => {
-    localStorage.setItem("cart", "{not json");
+    localStorage.setItem("cart:v3", "{not json");
     expect(run()).toBe("loading");
+  });
+
+  it("never reads a v2 cart (dropped at the v3 deploy)", () => {
+    localStorage.setItem("cart", JSON.stringify({ items: { line: { id: "p1", name: "Panjabi", variantId: "v1" } } }));
+    expect(run()).toBe("empty");
+  });
+
+  it("hides the delivery section before paint when nothing in the cart is physical", () => {
+    const root = () => document.getElementById("cartPageRoot")!;
+    localStorage.setItem("cart:v3", JSON.stringify({ items: {
+      a: { id: "p1", name: "Installation", variantId: "v1", fulfillmentKind: "service" },
+    } }));
+    run();
+    expect(root().dataset.deliveryNeed).toBe("none");
+
+    document.body.innerHTML = `<div id="cartPageRoot" data-cart-state="loading" data-delivery-need="method"></div>`;
+    localStorage.setItem("cart:v3", JSON.stringify({ items: {
+      a: { id: "p1", name: "Installation", variantId: "v1", fulfillmentKind: "service" },
+      b: { id: "p2", name: "Fan", variantId: "v2" },
+    } }));
+    run();
+    // A line of unknown kind counts as physical: the address is never skipped by mistake.
+    expect(root().dataset.deliveryNeed).toBe("method");
+  });
+
+  it("restores the buyer's pickup choice before paint only where the store offers the switch", () => {
+    const root = () => document.getElementById("cartPageRoot")!;
+    sessionStorage.setItem("scalius_checkout_form_draft", JSON.stringify({ values: { deliveryMode: "pickup" } }));
+    document.body.innerHTML = `<div id="cartPageRoot" data-cart-state="loading" data-delivery-mode="delivery" data-mode-switch="false"></div>`;
+    run();
+    expect(root().dataset.deliveryMode).toBe("delivery");
+    document.body.innerHTML = `<div id="cartPageRoot" data-cart-state="loading" data-delivery-mode="delivery" data-mode-switch="true"></div>`;
+    run();
+    expect(root().dataset.deliveryMode).toBe("pickup");
+  });
+
+  it("hides the address with CSS on the pickup and no-delivery paths, so nothing moves when scripts load", () => {
+    expect(cartPage).toMatch(/group-data-\[delivery-mode=pickup\]:hidden[^"]*" data-address-fields/);
+    expect(cartPage).toMatch(/group-data-\[delivery-need=none\]:hidden" data-delivery-section/);
+    expect(cartPage).toMatch(/group-data-\[delivery-need=none\]:block"[\s\S]{0,40}data-no-delivery-note/);
   });
 });

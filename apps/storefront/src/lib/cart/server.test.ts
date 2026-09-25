@@ -428,3 +428,161 @@ describe("cart server order processing", () => {
     });
   });
 });
+
+/**
+ * The no-JS / pre-hydration COD form (Wave A §2.7, §8.2): the same three
+ * paths as the browser checkout. Phone is required on every path, the address
+ * only when something ships, and buyer inputs travel in the body.
+ */
+describe("cart server order processing: delivery, pickup and nothing to deliver", () => {
+  const validatedLine = {
+    index: 0,
+    cartKey: "line_1",
+    productId: "product-1",
+    variantId: "variant_1",
+    quantity: 1,
+    unitPrice: 300,
+    productName: "Engraved pen",
+    variantLabel: null,
+    freeDelivery: false,
+    availableQuantity: 5,
+    propertiesHash: "0123456789abcdef",
+    properties: [{ key: "engraving", type: "text", label: "Engraving", value: "Anika", displayValue: "Anika", price: 200, priceMinor: 20_000 }],
+  };
+
+  function formWith(values: Record<string, string>, line: Record<string, unknown> = {}): FormData {
+    const formData = buildCodFormData();
+    for (const [key, value] of Object.entries(values)) {
+      if (value === "") formData.delete(key);
+      else formData.set(key, value);
+    }
+    formData.set("cartItems", JSON.stringify({
+      line_1: {
+        id: "product-1",
+        name: "Engraved pen",
+        price: 300,
+        quantity: 1,
+        variantId: "variant_1",
+        properties: [{ key: "engraving", value: "Anika", label: "Engraving", displayValue: "Anika", priceMinor: 20_000 }],
+        propertiesHash: "0123456789abcdef",
+        ...line,
+      },
+    }));
+    return formData;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createOrder.mockResolvedValue({ success: true, orderId: "order_1", receiptToken: "receipt_1" });
+  });
+
+  it("sends a pickup order with the pickup rate only, and no address even when one was typed", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: "pickup", requiresShipping: false,
+        allowedPaymentMethods: ["cod"],
+        delivery: {
+          kind: "pickup", shippingCharge: 0, cityName: null, zoneName: null, areaName: null,
+          shippingMethod: { id: "pickup_1", name: "Shop pickup", description: null, baseAmountMinor: 0, feeWaived: false },
+          pickup: { address: "Shop 12, Dhanmondi", hours: "10am–8pm" },
+        },
+      },
+    });
+
+    const result = await processOrder(formWith({ deliveryMode: "pickup", shippingLocation: "pickup_1" }));
+
+    expect(result).toMatchObject({ success: true, orderId: "order_1" });
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(
+      [expect.objectContaining({ properties: [{ key: "engraving", value: "Anika" }] })],
+      { shippingMethodId: "pickup_1" },
+    );
+    const payload = mocks.createOrder.mock.calls[0]![0];
+    expect(payload).toMatchObject({
+      customerPhone: "+8801712345678",
+      shippingAddress: null,
+      city: null,
+      zone: null,
+      area: null,
+      shippingMethodId: "pickup_1",
+      shippingCharge: 0,
+      items: [expect.objectContaining({ price: 300, properties: [{ key: "engraving", value: "Anika" }] })],
+    });
+    // Only identity goes to the order: labels and prices come from the server.
+    expect(JSON.stringify(payload.items)).not.toContain("displayValue");
+  });
+
+  it("needs only name and phone when nothing in the cart is physical", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [{ ...validatedLine, fulfillmentKind: "service" }], subtotal: 300,
+        hasFreeDeliveryProduct: false, requiresDeliveryMethod: false, deliveryMethodKind: null,
+        requiresShipping: false, allowedPaymentMethods: ["cod"],
+      },
+    });
+
+    const result = await processOrder(formWith({
+      shippingAddress: "", city: "", zone: "", shippingLocation: "",
+    }));
+
+    expect(result).toMatchObject({ success: true });
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), {});
+    expect(mocks.createOrder.mock.calls[0]![0]).toMatchObject({
+      shippingAddress: null,
+      city: null,
+      zone: null,
+      shippingMethodId: null,
+      shippingCharge: 0,
+    });
+  });
+
+  it("still requires the phone when nothing is delivered", async () => {
+    const result = await processOrder(formWith({ customerPhone: "", shippingAddress: "", city: "", zone: "", shippingLocation: "" }));
+    expect(result).toMatchObject({ success: false });
+    expect(mocks.validateCartItems).not.toHaveBeenCalled();
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("requires the address for a delivery rate", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: null, requiresShipping: false,
+        allowedPaymentMethods: ["cod"],
+      },
+    });
+
+    const result = await processOrder(formWith({ shippingAddress: "" }));
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: "Please fill in all required fields and add items to your cart." },
+    });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses cash on delivery for a cart the store can't take cash for", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [{ ...validatedLine, fulfillmentKind: "digital" }], subtotal: 300,
+        hasFreeDeliveryProduct: false, requiresDeliveryMethod: false, deliveryMethodKind: null,
+        requiresShipping: false, allowedPaymentMethods: ["stripe"],
+      },
+    });
+
+    const result = await processOrder(formWith({ shippingAddress: "", city: "", zone: "", shippingLocation: "" }));
+
+    expect(result).toMatchObject({ success: false });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses malformed buyer inputs before calling the store", async () => {
+    const result = await processOrder(formWith({}, { properties: [{ key: "Bad Key", value: "x" }] }));
+    expect(result).toMatchObject({ success: false });
+    expect(mocks.validateCartItems).not.toHaveBeenCalled();
+  });
+});

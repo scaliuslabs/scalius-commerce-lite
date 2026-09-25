@@ -25,6 +25,12 @@ export function renderCartIssueAction(
   if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
     return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" onclick="window.refreshCartIssueItem(${jsKey})">Refresh price</button>`;
   }
+  // A required or refused buyer input: back to the product page with the
+  // line's inputs (handed over in session storage, never the URL).
+  if (issue.action === "edit_properties" && productSlug) {
+    const query = issue.variantId ? `?${new URLSearchParams({ variant: issue.variantId })}` : "";
+    return `<a class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" href="${escapeHtml(`/products/${encodeURIComponent(productSlug)}${query}`)}" onclick="return window.editCartLine ? window.editCartLine(${jsKey}) : true">Edit details</a>`;
+  }
   if (issue.action === "select_variant" && productSlug) {
     return `<a class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" href="${escapeHtml(`/products/${encodeURIComponent(productSlug)}`)}">Choose option</a>`;
   }
