@@ -99,11 +99,49 @@ export function catalogFilterSearchParams(form: HTMLFormElement): URLSearchParam
 export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
   const query = new URLSearchParams();
   for (const [key, value] of params) {
-    if (key === "sortBy" || key === "page") continue;
+    if (key === "sortBy" || key === "page" || key === "limit") continue;
     query.append(key === "q" ? "search" : key, value);
   }
   query.set("limit", "1");
   return query;
+}
+
+const facetValueText = (label: HTMLLabelElement) =>
+  label.querySelector("input[data-catalog-facet]")?.getAttribute("value") ?? "";
+
+/**
+ * A search field over a long facet list (Apple Gadgets): typing hides the
+ * values that do not contain the text and opens the folded rest. Enter
+ * never submits the form from it.
+ */
+export function setupCatalogFacetSearch(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>("[data-catalog-facet-search]").forEach((box) => {
+    const input = box.querySelector<HTMLInputElement>("input[data-catalog-facet-query]");
+    const list = box.closest("fieldset");
+    if (!input || !list || box.dataset.bound === "true") return;
+    box.dataset.bound = "true";
+    box.hidden = false;
+    const empty = box.querySelector<HTMLElement>("[data-catalog-facet-search-empty]");
+    const more = list.querySelector<HTMLDetailsElement>("details");
+    const moreWasOpen = more?.open ?? false;
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") event.preventDefault();
+    });
+    input.addEventListener("input", () => {
+      const needle = input.value.trim().toLocaleLowerCase();
+      let shown = 0;
+      list.querySelectorAll<HTMLLabelElement>("label").forEach((label) => {
+        const match = !needle || facetValueText(label).toLocaleLowerCase().includes(needle);
+        label.hidden = !match;
+        if (match) shown += 1;
+      });
+      if (more) {
+        more.open = needle ? true : moreWasOpen;
+        more.querySelector("summary")!.hidden = Boolean(needle);
+      }
+      if (empty) empty.hidden = shown > 0;
+    });
+  });
 }
 
 /**
@@ -116,8 +154,13 @@ export function setupCatalogFilters(): void {
   if (!form || form.dataset.filtersBound === "true") return;
   form.dataset.filtersBound = "true";
 
-  const desktop = window.matchMedia("(min-width: 1024px)");
+  // The desktop sidebar applies each change at once; a sheet or a drawer
+  // (every width) waits for its "Show N products" button.
+  const wide = window.matchMedia("(min-width: 1024px)");
+  const drawer = form.dataset.catalogApply === "sheet";
+  const desktop = { get matches() { return wide.matches && !drawer; } };
   const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]");
+  setupCatalogFacetSearch(form);
   const endpoint = form.dataset.countEndpoint;
   let countTimer: ReturnType<typeof setTimeout> | undefined;
   let countRequest: AbortController | undefined;
@@ -156,6 +199,8 @@ export function setupCatalogFilters(): void {
   });
   form.addEventListener("change", (event) => {
     const target = event.target;
+    // A facet's own search narrows its list; it is not a filter.
+    if (target instanceof HTMLElement && target.hasAttribute("data-catalog-facet-query")) return;
     // Search and price fields apply on Enter (or the Apply button), not per keystroke.
     if (target instanceof HTMLInputElement && (target.type === "search" || target.inputMode === "decimal")) {
       if (!desktop.matches) refreshCount();

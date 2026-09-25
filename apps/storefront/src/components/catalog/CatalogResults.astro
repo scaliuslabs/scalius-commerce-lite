@@ -1,0 +1,76 @@
+---
+// A listing's products: the theme's card in the fluid grid, one product per
+// row (list), or Chaldal's dense quick-add grid. The frame carries
+// `data-catalog-results` for the paging script (appends the next page's
+// cards) and the list styles; the grid/list toggle's stored choice is
+// applied by an inline script before the grid paints (no layout shift).
+import type { Product } from "@/lib/api";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import {
+  productCardImageSizes,
+  productGridFluidCss,
+  productGridSpec,
+  type ProductGridContext,
+  type ProductGridPhoneLayout,
+} from "@/lib/product-card-layout";
+import { LIST_ROW_IMAGE_SIZES, quickGridSpec } from "@/lib/catalog-listing";
+import { CATALOG_VIEW_STORAGE_KEY } from "@/lib/catalog-paging";
+
+interface Props {
+  products: Product[];
+  results: "grid" | "list" | "quick";
+  phoneLayout: ProductGridPhoneLayout;
+  context: ProductGridContext;
+  /** The grid/list toggle is on: restore the buyer's stored view. */
+  restoreView: boolean;
+  /** Mark the frame for the paging and toggle scripts (list and quick grids always are). */
+  marked: boolean;
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const { products, results, phoneLayout, context, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+
+let sizes: string | undefined;
+let style: string | undefined;
+if (results === "list") {
+  sizes = LIST_ROW_IMAGE_SIZES;
+} else if (results === "quick") {
+  const { theme, layout } = await currentRequestTheme(Astro.locals);
+  const grid = quickGridSpec(productGridSpec(layout.grid, theme.tokens.imageRatio));
+  const fluid = productGridFluidCss(grid);
+  sizes = productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context);
+  style = [
+    `--theme-card-min-phone:${grid.cardMin.phone}`,
+    `--theme-card-min-tablet:${grid.cardMin.tablet}`,
+    `--theme-card-min-desktop:${grid.cardMin.desktop}`,
+    `--theme-grid-gap-phone:${grid.gap.phone}`,
+    `--theme-grid-gap-desktop:${grid.gap.desktop}`,
+    `--grid-card-min-fluid:${fluid.cardMin}`,
+    `--grid-gap-fluid:${fluid.gap}`,
+  ].join(";");
+}
+// The quick grid keeps its columns on phones; list rows are rows everywhere.
+const gridPhoneLayout = results === "grid" ? phoneLayout : "grid";
+const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.stringify(CATALOG_VIEW_STORAGE_KEY)});if(v==="grid"||v==="list")s.nextElementSibling.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
+---
+
+{restoreView && <script is:inline set:html={restoreScript} />}
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} style={style}>
+  {products.map((product, index) => (
+    <ProductCard
+      product={product}
+      currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
+      index={index}
+      aboveFold
+      context={context}
+      phoneLayout={gridPhoneLayout}
+      sizes={sizes}
+      headingLevel="h2"
+    />
+  ))}
+</ProductGrid>

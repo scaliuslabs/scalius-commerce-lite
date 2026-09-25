@@ -1,0 +1,166 @@
+---
+// The body of every listing page (category, collection, search): the page
+// header, the listing (CatalogListing, laid out by the theme's listing
+// template) and the merchant's guide below it. Pages keep their own data
+// reads, SEO (canonical, robots, JSON-LD) and analytics; everything a buyer
+// sees between the site header and footer is decided here, once.
+//
+// `hero` is the category/collection header: breadcrumb, h1, description,
+// product count, and the category banner when the theme's toolbar asks for
+// it. Search has no hero; it renders its own heading in the `intro` slot.
+import type { ComponentProps } from "astro/types";
+import RichContent from "@/components/RichContent.astro";
+import CatalogDescription from "./CatalogDescription.astro";
+import CatalogListing from "./CatalogListing.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
+import { ArrowLeft, Tags } from "lucide-react";
+
+type ListingProps = ComponentProps<typeof CatalogListing>;
+
+interface Props {
+  kind: "category" | "collection" | "search";
+  listing: ListingProps;
+  hero?: {
+    title: string;
+    /** Rich-text description; shown on the first page only (the page decides). */
+    description?: string | null;
+    /** Products in the listing. */
+    count: number;
+    /** The category banner (Apple Gadgets), shown when the toolbar has `category-banner`. */
+    banner?: { src: string; srcset?: string; alt: string } | null;
+    /** Links under the description (a collection's categories). */
+    links?: Array<{ label: string; href: string }>;
+  };
+  /** The merchant's guide below the listing (unfiltered views only; the page decides). */
+  content?: { html: string; label: string } | null;
+  /** `data-*` attributes on the page root (analytics reads them). */
+  data?: Record<`data-${string}`, string | undefined>;
+}
+
+const { kind, listing, hero, content, data = {} } = Astro.props;
+const { resolved } = await currentRequestTheme(Astro.locals);
+const toolbar = new Set(resolved.blocks.listing.toolbar);
+
+// Today's category and collection headers differ in small ways; each keeps
+// its own look (the default listing stays pixel-identical).
+const HEADERS = {
+  category: {
+    tag: "div",
+    inner: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8",
+    nav: "text-sm mb-4",
+    list: "flex items-center space-x-2",
+    home: "text-muted-foreground hover:text-foreground",
+    back: false,
+    text: "space-y-2 max-w-xl",
+    title: "text-3xl font-bold text-foreground sm:text-4xl",
+    count: "sm:flex",
+    body: { tag: "div", class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6" },
+  },
+  collection: {
+    tag: "section",
+    inner: "mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8",
+    nav: "mb-4 text-sm",
+    list: "flex items-center gap-2",
+    home: "inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground",
+    back: true,
+    text: "max-w-2xl space-y-2",
+    title: "text-3xl font-bold tracking-tight text-foreground sm:text-4xl",
+    count: "lg:flex",
+    body: { tag: "section", class: "mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8" },
+  },
+  search: {
+    body: { tag: "div", class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6" },
+  },
+} as const;
+const header = kind === "search" ? null : HEADERS[kind];
+const body = HEADERS[kind].body;
+const Header = header?.tag ?? "div";
+const Body = body.tag;
+// The breadcrumb stays in the page for assistive technology (it matches the
+// BreadcrumbList JSON-LD) when the template hides it visually.
+const breadcrumbVisible = toolbar.has("breadcrumb");
+const banner = toolbar.has("category-banner") ? hero?.banner : null;
+---
+
+<div class="min-h-screen bg-muted/30" {...data}>
+  {header && hero && (
+    <Header class="border-b border-border bg-linear-to-b from-muted/30 to-background">
+      <div class={header.inner}>
+        {banner && (
+          <img
+            src={banner.src}
+            srcset={banner.srcset}
+            sizes="(max-width: 1279px) 100vw, 1216px"
+            alt={banner.alt}
+            width="1344"
+            height="296"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            data-catalog-banner
+            class="mb-4 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:mb-6 sm:aspect-[1344/296]"
+          />
+        )}
+        <nav class:list={[header.nav, !breadcrumbVisible && "sr-only"]} aria-label={breadcrumbVisible ? undefined : "Breadcrumb"}>
+          <ol class={header.list}>
+            <li>
+              <a href="/" class={header.home}>
+                {header.back && <ArrowLeft className="h-4 w-4" />}
+                Home
+              </a>
+            </li>
+            <li class="text-muted-foreground/50" aria-hidden="true">/</li>
+            <li>
+              <span class="font-medium text-foreground">{hero.title}</span>
+            </li>
+          </ol>
+        </nav>
+        <div class="flex justify-between items-start gap-4 flex-wrap">
+          <div class={header.text}>
+            <h1 class={header.title}>{hero.title}</h1>
+            {hero.description && hasRenderableHtmlContent(hero.description) && <CatalogDescription content={hero.description} />}
+            {hero.links && hero.links.length > 0 && (
+              <div class="flex flex-wrap gap-2 pt-2">
+                {hero.links.map((link) => (
+                  <a
+                    href={link.href}
+                    class="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+          <div class:list={["hidden items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-sm", header.count]}>
+            <Tags className="h-4 w-4 text-muted-foreground" />
+            <span class="text-sm font-medium text-foreground">
+              {hero.count} {hero.count === 1 ? "product" : "products"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Header>
+  )}
+
+  <Body class={body.class}>
+    <slot name="intro" />
+    <CatalogListing {...listing}>
+      <slot name="empty" slot="empty" />
+    </CatalogListing>
+
+    {content && hasRenderableHtmlContent(content.html) && (
+      <section
+        class="mx-auto mt-10 max-w-4xl border-t border-border pt-8 sm:mt-12 sm:pt-10"
+        aria-label={content.label}
+      >
+        <RichContent
+          content={content.html}
+          className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
+          processShortcodes={false}
+        />
+      </section>
+    )}
+  </Body>
+</div>
