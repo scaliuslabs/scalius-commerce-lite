@@ -23,3 +23,18 @@ export declare function syncLocalPlatform(options?: {
   env?: Record<string, string | undefined>;
   state?: string;
 }): Promise<{ origins: DevOrigins; changed: boolean; wranglerState: string }>;
+export declare const DEFAULT_API_WORKER_NAME: string;
+export declare function devApiWorkerName(ports?: DevPorts): string;
+export declare function localStorefrontWorkerConfig<T extends Record<string, unknown>>(
+  builtConfig: T,
+  options: { apiWorkerName: string; port?: number; inspectorPort?: number },
+): T;
+export declare function storefrontBindingProblems(
+  html: string,
+  expected: { storefrontUrl: string; mediaUrl?: string },
+): string[];
+export declare function verifyStorefrontBinding(options: {
+  storefrontUrl: string;
+  mediaUrl?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<true>;
