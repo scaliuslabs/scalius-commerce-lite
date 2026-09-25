@@ -222,6 +222,21 @@ describe("calculateTaxQuote", () => {
         expect(quote.taxMinor).toBe(300);
     });
 
+    it("applies only store-wide rates to an order with no address (pickup, service, digital)", () => {
+        const quote = calculateTaxQuote(input({
+            destination: { city: null, zone: null, area: null },
+            rates: [
+                rate({ id: "global", rateBps: 100 }),
+                rate({ id: "city-match", rateBps: 400, jurisdictionType: "city", jurisdictionId: "city-1" }),
+                rate({ id: "zone-match", rateBps: 200, jurisdictionType: "zone", jurisdictionId: "zone-1" }),
+                rate({ id: "area-match", rateBps: 300, jurisdictionType: "area", jurisdictionId: "area-1" }),
+            ],
+        }));
+        expect(quote.lines[0]?.components.map((component) => component.rateId)).toEqual(["global"]);
+        expect(quote.taxMinor).toBe(100);
+        expect(quote.destination).toEqual({ city: null, zone: null, area: null });
+    });
+
     it("keeps exempt classes and untaxed shipping at zero", () => {
         const quote = calculateTaxQuote(input({
             lines: [{ ...input().lines[0]!, taxClassId: "class-exempt" }],

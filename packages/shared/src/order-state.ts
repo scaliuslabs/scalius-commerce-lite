@@ -131,10 +131,24 @@ export function canTransitionTo(
   return getAvailableTransitions(dimension, current).includes(next);
 }
 
+export interface OrderCodActionContext {
+  /**
+   * `orders.requires_shipping`. An order with nothing to ship (pickup or
+   * service) collects cash at the counter or at the service, so `collected`
+   * is also allowed once it is confirmed. Defaults to true.
+   */
+  requiresShipping?: boolean;
+}
+
 export function canProcessOrderCodAction(
   currentStatus: string,
   action: OrderCodAction,
+  context: OrderCodActionContext = {},
 ): boolean {
   const current = normalizeOrderStatus(currentStatus);
-  return current !== null && ORDER_COD_ACTION_STATUSES[action].includes(current);
+  if (current === null) return false;
+  if (ORDER_COD_ACTION_STATUSES[action].includes(current)) return true;
+  return action === "collected"
+    && context.requiresShipping === false
+    && current === "confirmed";
 }
