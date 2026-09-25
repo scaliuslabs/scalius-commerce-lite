@@ -141,7 +141,7 @@ function ResolveDialog({
     }
     if (!canSubmit || shippedReason) return;
     const returnRequest = isReturnApproval
-      ? { expectedOrderVersion: order.version, reason: request.reason, notes: request.message?.trim() || null, lines: returnLines }
+      ? { expectedOrderVersion: order.version, reason: request.reason, notes: null, lines: returnLines }
       : null;
     mutation.mutate({
       orderId: order.id,

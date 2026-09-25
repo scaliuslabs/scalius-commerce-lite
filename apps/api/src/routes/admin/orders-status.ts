@@ -2,11 +2,8 @@ import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from
 import {
     assertShipmentDeletable,
     bulkShipOrders,
-    createFulfillmentShipment,
-    getOrderShipments,
     lookupUnknownOrderShipment,
     markOrderDelivered,
-    markParcelReturned,
     processCodAction,
     reconcileOrderShipment,
     resolveUnknownOrderShipment,
@@ -38,7 +35,6 @@ import { bumpCacheGeneration } from "../../utils/cache-generation";
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
-    enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
@@ -68,12 +64,6 @@ const codTrackingSchema = z.object({
 
 const codActionResponseSchema = successEnvelope(z.object({
     message: z.string(),
-}));
-
-const fulfillmentResultSchema = successEnvelope(z.object({
-    shipmentId: z.string(),
-    isFinalShipment: z.boolean(),
-    fulfillmentStatus: z.string(),
 }));
 
 const enhancedShipmentSchema = deliveryShipmentSchema.extend({
@@ -275,49 +265,6 @@ app.openapi(markDeliveredRoute, async (c) => {
     return ok(c, { message: result.message });
 });
 
-// ─── POST /:id/shipments/:shipmentId/returned ────────────────────────────────
-
-const parcelReturnedRoute = createRoute({
-    operationId: "dashboard.orders.parcel_returned",
-    method: "post",
-    path: "/{id}/shipments/{shipmentId}/returned",
-    tags: ["Admin - Orders"],
-    summary: "An own-courier parcel of a part-sent order came back: its items go back on the unsent list",
-    request: { params: z.object({ id: z.string(), shipmentId: z.string() }) },
-    responses: {
-        200: {
-            description: "Parcel back; its items can be sent again or the order cancelled",
-            content: {
-                "application/json": {
-                    schema: successEnvelope(z.object({
-                        orderId: z.string(),
-                        shipmentId: z.string(),
-                        quantity: z.number().int(),
-                        replayed: z.boolean(),
-                    })),
-                },
-            },
-        },
-        ...adminMutationErrorResponses,
-    },
-});
-
-app.openapi(parcelReturnedRoute, async (c) => {
-    const db = c.get("db");
-    const { id: orderId, shipmentId } = c.req.valid("param");
-    const result = await markParcelReturned(db, orderId, shipmentId);
-    if (!result.replayed) {
-        await recordOrderEvent(db, {
-            orderId,
-            kind: "parcel_returned",
-            actorId: actorIdOf(c),
-            requestKey: shipmentId,
-            data: { quantity: result.quantity },
-        });
-    }
-    return ok(c, result);
-});
-
 // ─── GET /:id/cod ────────────────────────────────────────────────────────────
 
 const getCodRoute = createRoute({
@@ -444,119 +391,6 @@ app.openapi(postCodRoute, async (c) => {
     }
 
     return ok(c, responseData);
-});
-
-// ─── GET /:id/fulfill ────────────────────────────────────────────────────────
-
-const getFulfillRoute = createRoute({
-    operationId: "dashboard.orders.fulfillment_get",
-    method: "get",
-    path: "/{id}/fulfill",
-    tags: ["Admin - Orders"],
-    summary: "Get fulfillment shipments for an order",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        200: {
-            description: "Order shipments",
-            content: { "application/json": { schema: successEnvelope(z.object({ shipments: z.array(deliveryShipmentSchema) })) } },
-        },
-    }
-});
-
-app.openapi(getFulfillRoute, async (c) => {
-    const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const shipments = await getOrderShipments(db, orderId);
-    return ok(c, { shipments });
-});
-
-// ─── POST /:id/fulfill ──────────────────────────────────────────────────────
-
-const fulfillSchema = z.object({
-    /** Retry key: a repeated request returns the first shipment instead of failing. */
-    requestKey: z.string().uuid().optional(),
-    /** Part of a line is fine; defaults to everything not sent yet. */
-    items: z.array(z.object({
-        itemId: z.string().min(1),
-        quantity: z.number().int().min(1),
-    })).min(1).optional(),
-    itemIds: z.array(z.string()).optional(),
-    trackingId: z.string().trim().max(180).optional(),
-    trackingUrl: z.string().trim().url("Enter a full link, starting with https://").optional(),
-    courierName: z.string().trim().max(120).optional(),
-    note: z.string().trim().max(500).optional(),
-    shipmentAmount: z.number().min(0, "The delivery cost can't be negative.").optional(),
-});
-
-const postFulfillRoute = createRoute({
-    operationId: "dashboard.orders.fulfill",
-    method: "post",
-    path: "/{id}/fulfill",
-    tags: ["Admin - Orders"],
-    summary: "Create a fulfillment shipment",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: fulfillSchema } } }
-    },
-    responses: {
-        201: {
-            description: "Fulfillment created",
-            content: { "application/json": { schema: fulfillmentResultSchema } },
-        },
-        ...adminMutationErrorResponses,
-    }
-});
-
-app.openapi(postFulfillRoute, async (c) => {
-    const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const data = c.req.valid("json");
-    const result = await createFulfillmentShipment(db, orderId, data, actorIdOf(c));
-    const {
-        statusChange,
-        availabilityTransitionVariantIds,
-        replayed,
-        ...responseData
-    } = result;
-    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
-    if (!replayed) {
-        await recordOrderEvent(db, {
-            orderId,
-            kind: "shipment_created",
-            actorId: actorIdOf(c),
-            requestKey: result.shipmentId,
-            data: {
-                courierName: data.courierName || null,
-                trackingId: data.trackingId || null,
-                final: result.isFinalShipment,
-                quantity: result.lines.reduce((sum, line) => sum + line.quantity, 0),
-                items: result.lines,
-            },
-        });
-    }
-    await enqueueOrderStatusChangeNotification({
-        db,
-        queue: c.env.JOBS_QUEUE,
-        statusChange,
-        trackingId: typeof data.trackingId === "string" ? data.trackingId : null,
-        source: "orders-manual-fulfillment",
-    });
-    if (!replayed && !statusChange) {
-        // An earlier parcel of a split shipment: the buyer hears about each
-        // parcel as it leaves, not only when the last one does (R2-ORD-06).
-        await enqueueOrderNotificationsForStatus({
-            db,
-            queue: c.env.JOBS_QUEUE,
-            orderIds: [orderId],
-            newStatus: "shipped",
-            trackingByOrderId: { [orderId]: typeof data.trackingId === "string" ? data.trackingId : null },
-            dedupeKeyByOrderId: { [orderId]: `shipment:${result.shipmentId}:order_shipped` },
-            source: "orders-manual-fulfillment-parcel",
-        });
-    }
-    return created(c, responseData);
 });
 
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────

@@ -434,7 +434,7 @@ describe("PaymentCard", () => {
       mocks.cod.mockResolvedValue({ tracking: null });
       await render({
         ...codOrder, status: "confirmed", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
-        items: [{ id: "i1", quantity: 2, shippedQuantity: 1 }] as Order["items"],
+        items: [{ id: "i1", quantity: 2, fulfillmentType: "ship", fulfilledQuantity: 1 }] as Order["items"],
       });
       expect(button(en["cod.recordFailure"])).toBeDefined();
       expect(button(en["cod.markCollected"])).toBeUndefined();

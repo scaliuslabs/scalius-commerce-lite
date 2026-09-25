@@ -26,7 +26,7 @@ const request = {
   message: null, submittedAt: 1, resolvedAt: null, createdAt: 1, updatedAt: 1,
 } as OrderSupportRequest;
 const order = {
-  id: "ord_1", version: 3, status: "pending", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 0 }],
+  id: "ord_1", version: 3, status: "pending", items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 0 }],
   supportRequests: [request],
 } as unknown as Order;
 
@@ -91,7 +91,7 @@ describe("customer requests", () => {
   });
 
   it("won't accept a cancellation while units are with the courier", async () => {
-    const partlySent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    const partlySent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, fulfilledQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(
       <QueryClientProvider client={new QueryClient()}>
         <OrderConversationCard order={partlySent} request={{ action: "reviewCancellation", id: 1 }} />

@@ -8,7 +8,6 @@ import {
     deliveryShipments,
     CodStatus,
     OrderStatus,
-    ItemFulfillmentStatus,
     PaymentMethod,
     PaymentRecordStatus,
     PaymentStatus,
@@ -135,41 +134,29 @@ export function assertOrderCodActionAllowed(
  * merchant-confirmed delivered order is also its delivery authority. Keep
  * provider shipments untouched: their status remains owned by provider sync.
  *
- * The batch is intentionally idempotent. COD/status retries can repair legacy
- * rows that reached delivered order state while their manual shipment still
- * said processing and their line items still said shipped.
+ * Idempotent: COD/status retries can repair a delivered order whose manual
+ * parcel still said processing.
  */
 export async function markManualDeliveryEvidence(
     db: Database,
     orderId: string,
 ): Promise<void> {
-    const writes = [
-        db.update(orderItems).set({
-            fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
-        }).where(and(
-            eq(orderItems.orderId, orderId),
-            eq(orderItems.fulfillmentStatus, ItemFulfillmentStatus.SHIPPED),
-        )),
-        db.update(deliveryShipments).set({
-            status: ShipmentStatus.DELIVERED,
-            rawStatus: ShipmentStatus.DELIVERED,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(deliveryShipments.orderId, orderId),
-            eq(deliveryShipments.providerType, "manual"),
-            sql`${deliveryShipments.providerId} IS NULL`,
-            // A parcel that failed once and was delivered on the next try is delivered.
-            sql`${deliveryShipments.status} NOT IN (
-                ${ShipmentStatus.DELIVERED},
-                ${ShipmentStatus.RETURNED},
-                ${ShipmentStatus.CANCELLED},
-                ${ShipmentStatus.FAILED}
-            )`,
-        )),
-    ];
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(writes as any);
+    await db.update(deliveryShipments).set({
+        status: ShipmentStatus.DELIVERED,
+        rawStatus: ShipmentStatus.DELIVERED,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(deliveryShipments.orderId, orderId),
+        eq(deliveryShipments.providerType, "manual"),
+        sql`${deliveryShipments.providerId} IS NULL`,
+        // A parcel that failed once and was delivered on the next try is delivered.
+        sql`${deliveryShipments.status} NOT IN (
+            ${ShipmentStatus.DELIVERED},
+            ${ShipmentStatus.RETURNED},
+            ${ShipmentStatus.CANCELLED},
+            ${ShipmentStatus.FAILED}
+        )`,
+    ));
 }
 
 export async function getRecordedCodCollection(
@@ -419,13 +406,12 @@ export async function applyOrderStatusChange(
  * Units handed over are out of the building (with a courier, collected at the
  * counter, or a service performed): cancelling would put them back into
  * sellable stock (R2-ORD-02, Wave A F8). They must come back as a return, or
- * the fulfilment be voided, first. Lines the previous API sent count until
- * the contract migration drops `shipped_quantity`.
+ * the fulfilment be voided, first.
  */
 async function assertNothingHandedOver(db: Database, orderId: string): Promise<void> {
     const rows = await db.select({
         type: orderItems.fulfillmentType,
-        handedOver: sql<number>`coalesce(sum(CASE WHEN ${orderItems.fulfilledQuantity} > ${orderItems.shippedQuantity} THEN ${orderItems.fulfilledQuantity} ELSE ${orderItems.shippedQuantity} END), 0)`,
+        handedOver: sql<number>`coalesce(sum(${orderItems.fulfilledQuantity}), 0)`,
     }).from(orderItems).where(eq(orderItems.orderId, orderId)).groupBy(orderItems.fulfillmentType).all();
     const byType = new Map<string, number>(rows.map((row) => [row.type, Number(row.handedOver) || 0]));
     const count = (type: string) => byType.get(type) ?? 0;
@@ -446,13 +432,13 @@ function nothingSentCondition(orderId: string) {
     return sql`NOT EXISTS (
         SELECT 1 FROM ${orderItems}
         WHERE ${orderItems.orderId} = ${orderId}
-          AND (${orderItems.fulfilledQuantity} > 0 OR ${orderItems.shippedQuantity} > 0)
+          AND ${orderItems.fulfilledQuantity} > 0
     )`;
 }
 
 /**
- * A line is handed over once the ledger covers its quantity (or the previous
- * API marked it shipped). `ship` and `pickup` lines always gate delivered;
+ * A line is handed over once the ledger covers its quantity. `ship` and
+ * `pickup` lines always gate delivered;
  * `service` lines gate it when nothing ships (a courier's delivered is not
  * held back by an installation still to do); digital and gift-card lines
  * fulfil themselves after payment and never gate it.
@@ -469,7 +455,6 @@ export async function assertOrderLinesHandedOver(
         eq(orderItems.orderId, orderId),
         inArray(orderItems.fulfillmentType, gatingTypes as ["ship", "pickup", "service"]),
         sql`${orderItems.fulfilledQuantity} < ${orderItems.quantity}`,
-        sql`${orderItems.fulfillmentStatus} NOT IN (${ItemFulfillmentStatus.SHIPPED}, ${ItemFulfillmentStatus.DELIVERED})`,
     )).get();
     const missing = Number(row?.missing ?? 0);
     if (missing > 0) {

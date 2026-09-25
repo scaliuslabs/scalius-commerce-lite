@@ -16,9 +16,9 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 vi.mock("~/lib/api-query-options/orders", () => ({
   // Two unsent kurtas, one of two attars already with the courier, one untracked gift card.
   getOrderItems: async () => [
-    { quantity: 2, shippedQuantity: 0, inventoryTracked: true },
-    { quantity: 2, shippedQuantity: 1, inventoryTracked: true },
-    { quantity: 1, shippedQuantity: 0, inventoryTracked: false },
+    { quantity: 2, fulfilledQuantity: 0, inventoryTracked: true },
+    { quantity: 2, fulfilledQuantity: 1, inventoryTracked: true },
+    { quantity: 1, fulfilledQuantity: 0, inventoryTracked: false },
   ],
 }));
 

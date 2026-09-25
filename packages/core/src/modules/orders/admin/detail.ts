@@ -49,7 +49,7 @@ const ORDER_EDIT_EVIDENCE_KEYS = [
     "hasInvoiceHistory",
     "hasPaymentPlan",
     "hasPromotionAllocation",
-    "hasNonPendingItem",
+    "hasHandedOverItem",
     "hasCleanCodTracking",
 ] as const;
 type OrderEditEvidenceKey = (typeof ORDER_EDIT_EVIDENCE_KEYS)[number];
@@ -141,8 +141,6 @@ async function getOrderDetailsOnce(
                 productImageObjectKey: publishedMediaObjectKey(),
                 productImageStatus: media.status,
                 variantLabel: orderItems.variantLabel,
-                fulfillmentStatus: orderItems.fulfillmentStatus,
-                shippedQuantity: orderItems.shippedQuantity,
                 inventoryTracked: orderItems.inventoryTracked,
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
@@ -211,8 +209,6 @@ async function getOrderDetailsOnce(
                 ? getCurrentPublicMediaUrl(item.productImageObjectKey)
                 : null,
         variantLabel: item.variantLabel || null,
-        fulfillmentStatus: item.fulfillmentStatus,
-        shippedQuantity: item.shippedQuantity,
         inventoryTracked: item.inventoryTracked,
         unitPriceMinor: item.unitPriceMinor,
         lineSubtotalMinor: item.lineSubtotalMinor,

@@ -31,11 +31,6 @@ export interface ReconcileOrderReturnInput {
   returnId: string;
 }
 
-export function isReturnItemEligible(item: OrderItem): boolean {
-  const status = item.fulfillmentStatus?.toLowerCase();
-  return status === "shipped" || status === "delivered";
-}
-
 function committedQuantity(orderReturn: OrderReturnDto, line: OrderReturnLineDto): number {
   if (orderReturn.status === "requested") return line.requestedQuantity;
   if (
@@ -66,9 +61,8 @@ export function getRemainingReturnableQuantities(
   return new Map(
     items.map((item) => {
       // Services never reach the buyer as goods, so nothing of them comes back (F12).
-      if (item.fulfillmentType && item.fulfillmentType !== "ship" && item.fulfillmentType !== "pickup") return [item.id, 0];
-      const sent = item.fulfilledQuantity ?? item.shippedQuantity ?? (isReturnItemEligible(item) ? item.quantity : 0);
-      return [item.id, Math.max(0, sent - (committedByItem.get(item.id) ?? 0))];
+      if (item.fulfillmentType !== "ship" && item.fulfillmentType !== "pickup") return [item.id, 0];
+      return [item.id, Math.max(0, item.fulfilledQuantity - (committedByItem.get(item.id) ?? 0))];
     }),
   );
 }

@@ -415,7 +415,8 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     it("advances only provider-less manual shipments from the merchant delivered command", async () => {
       sqlite.exec(`
         UPDATE orders SET status = 'shipped', payment_method = 'stripe', payment_status = 'paid', paid_amount_minor = 16000, balance_due_minor = 0;
-        UPDATE order_items SET fulfillment_status = 'shipped', shipped_quantity = quantity;
+        INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type) VALUES ('ful_sent', 'order_local', 'ship', 'sent', 'admin');
+        INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity) VALUES ('fln_sent', 'ful_sent', 'order_local', 'item_local', 1);
         INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status) VALUES
           ('courier_ship', 'order_local', 'provider_local', 'pathao', 'in_transit'),
           ('manual_ship', 'order_local', NULL, 'manual', 'in_transit');
@@ -425,7 +426,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         { id: "courier_ship", status: "in_transit" },
         { id: "manual_ship", status: "delivered" },
       ]);
-      expect(sqlite.prepare("SELECT fulfillment_status FROM order_items").get()).toEqual({ fulfillment_status: "delivered" });
+      expect(sqlite.prepare("SELECT fulfilled_quantity FROM order_items").get()).toEqual({ fulfilled_quantity: 1 });
     });
 
     it("lists a bounded newest-first shipment page with provider names in one read", async () => {

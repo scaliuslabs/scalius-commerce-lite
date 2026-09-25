@@ -125,6 +125,8 @@ describe("ShipmentCard recovery authority", () => {
         productName: "Test product",
         productImage: null,
         variantLabel: null,
+        fulfillmentType: "ship",
+        fulfilledQuantity: 1,
       }],
       shipments: [],
     });
@@ -134,44 +136,48 @@ describe("ShipmentCard recovery authority", () => {
     expect(host.textContent).not.toContain(en["fulfill.submit"]);
   });
 
-  it("lists what each parcel holds", async () => {
+  it("lists what each parcel holds, from the fulfilment recorded with it", async () => {
     const line = (id: string, productName: string, quantity: number) => ({
-      id, productId: `p_${id}`, variantId: null, quantity, shippedQuantity: quantity, price: 600,
-      productName, productImage: null, variantLabel: null,
+      id, productId: `p_${id}`, variantId: null, quantity, fulfillmentType: "ship" as const, fulfilledQuantity: quantity,
+      price: 600, productName, productImage: null, variantLabel: null,
     });
-    const parcel = (id: string, shipmentItems: string | null) => ({
+    const parcel = (id: string) => ({
       id, orderId: order.id, providerId: null, providerType: "manual", externalId: null, trackingId: null,
-      status: "in_transit", rawStatus: null, shipmentItems, createdAt: 1_783_000_000,
+      status: "in_transit", rawStatus: null, createdAt: 1_783_000_000,
+    });
+    const fulfilment = (shipmentId: string, lines: Array<[string, number]>) => ({
+      id: `ful_${shipmentId}`, kind: "ship" as const, createdAt: null, status: "active" as const, actorType: "admin" as const,
+      cashCollected: null, voidedAt: null,
+      lines: lines.map(([orderItemId, quantity]) => ({ orderItemId, quantity })),
+      tracking: { shipmentId, courierName: null, trackingId: null, trackingUrl: null, status: "in_transit" },
     });
     await render({
       shipmentRecovery: undefined,
       status: "shipped",
       items: [line("i1", "Kurta", 4), line("i2", "Attar", 1)],
-      shipments: [
-        parcel("s1", JSON.stringify([{ itemId: "i1", quantity: 2 }])),
-        parcel("s2", JSON.stringify([{ itemId: "i1", quantity: 2 }, { itemId: "i2", quantity: 1 }])),
-      ],
+      shipments: [parcel("s1"), parcel("s2"), parcel("s_unlinked")],
+      fulfillments: [fulfilment("s1", [["i1", 2]]), fulfilment("s2", [["i1", 2], ["i2", 1]])],
     });
     const parcels = [...host.querySelectorAll("#order-shipments ul.divide-y > li")].map((row) =>
       [...row.querySelectorAll("ul li")].map((item) => item.textContent));
-    expect(parcels).toEqual([["2 × Kurta"], ["2 × Kurta", "1 × Attar"]]);
+    // A parcel no fulfilment names lists nothing rather than guessing.
+    expect(parcels).toEqual([["2 × Kurta"], ["2 × Kurta", "1 × Attar"], []]);
   });
 
-  const kurta = (quantity: number, shippedQuantity: number) => ({
-    id: "i1", productId: "p1", variantId: null, quantity, shippedQuantity, price: 600,
+  const kurta = (quantity: number, fulfilledQuantity: number) => ({
+    id: "i1", productId: "p1", variantId: null, quantity, fulfillmentType: "ship" as const, fulfilledQuantity, price: 600,
     productName: "Kurta", productImage: null, variantLabel: null,
   });
-  const riderParcel = (quantity: number) => ({
+  const riderParcel = () => ({
     id: "s1", orderId: order.id, providerId: null, providerType: "manual", courierName: "R3 Rider Jamal",
-    externalId: null, trackingId: null, status: "in_transit", rawStatus: null,
-    shipmentItems: JSON.stringify([{ itemId: "i1", quantity }]), createdAt: 1_783_000_000,
+    externalId: null, trackingId: null, status: "in_transit", rawStatus: null, createdAt: 1_783_000_000,
   });
 
   it("words a failed own-rider delivery once, with the attempt and reason (R3-ORD-05)", async () => {
     client.setQueryData(queryKeys.orders.cod(order.id), {
       tracking: { codStatus: "failed", deliveryAttempts: 1, failureReason: "no_cash", failureNote: "Will pay tomorrow" },
     });
-    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel(2)] });
+    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel()] });
     const label = en["shipments.failedAttempt"].replace("{count}", "1").replace("{reason}", en["cod.reason.no_cash"]);
     expect(host.querySelector('[data-testid="shipment-status"]')?.textContent).toBe(label);
     expect(host.textContent?.split(en["cod.status.failed"]).length).toBe(2);
@@ -182,7 +188,7 @@ describe("ShipmentCard recovery authority", () => {
   it("offers Mark delivered for a shipped, fully sent order paid online", async () => {
     await render({
       shipmentRecovery: undefined, status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1200, balanceDue: 0,
-      items: [kurta(2, 2)], shipments: [riderParcel(2)],
+      items: [kurta(2, 2)], shipments: [riderParcel()],
     });
     const button = [...host.querySelectorAll("button")].find((element) => element.textContent === en["primary.markDelivered"]);
     await act(async () => button!.click());
@@ -190,7 +196,7 @@ describe("ShipmentCard recovery authority", () => {
   });
 
   it("offers no Mark delivered for a cash order: collecting the cash delivers it", async () => {
-    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel(2)] });
+    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel()] });
     expect(host.textContent).not.toContain(en["primary.markDelivered"]);
   });
 });

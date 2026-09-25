@@ -51,16 +51,6 @@ export const InventoryPool = {
 
 export type InventoryPoolType = (typeof InventoryPool)[keyof typeof InventoryPool];
 
-export const ItemFulfillmentStatus = {
-    PENDING: "pending",
-    PICKED: "picked",
-    PACKED: "packed",
-    SHIPPED: "shipped",
-    DELIVERED: "delivered",
-} as const;
-
-export type ItemFulfillmentStatusType = (typeof ItemFulfillmentStatus)[keyof typeof ItemFulfillmentStatus];
-
 export const DeliveryProvider = {
     PATHAO: "pathao",
     STEADFAST: "steadfast",

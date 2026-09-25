@@ -414,7 +414,6 @@ function renderSupport(detail: AccountOrderDetail): void {
       <article class="rounded-lg border border-border p-4 text-sm">
         <h3 class="font-medium text-foreground">${escapeHtml(request.label)}</h3>
         <p class="mt-1 text-muted-foreground">${escapeHtml(request.reason)}</p>
-        ${request.message ? `<p class="mt-1 text-muted-foreground">${escapeHtml(request.message)}</p>` : ""}
         <time class="mt-1 block text-muted-foreground" datetime="${escapeHtml(request.submittedAt || request.createdAt || "")}">${escapeHtml(formatAccountDate(request.submittedAt || request.createdAt))}</time>
       </article>`).join("");
   }

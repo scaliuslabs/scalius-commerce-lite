@@ -6,6 +6,7 @@ const all = { canChangeOrderStatus: true, canManageOrderShipments: true, canUpda
 const item = {
   id: "item_1", productId: "p1", variantId: null, quantity: 1, price: 500,
   productName: "Shirt", productImage: null, variantLabel: null,
+  fulfillmentType: "ship" as const, fulfilledQuantity: 0,
 };
 const base = {
   id: "ord_1", version: 1, status: "pending", paymentMethod: "cod", paymentStatus: "unpaid",
@@ -39,14 +40,14 @@ describe("order primary phone action", () => {
   it("keeps sending the rest of a partly sent order as the next step", () => {
     const partlySent = order({
       status: "shipped",
-      items: [{ ...item, quantity: 4, shippedQuantity: 2 }],
+      items: [{ ...item, quantity: 4, fulfilledQuantity: 2 }],
       shipments: [{ id: "s1", orderId: "ord_1", providerId: null, providerType: "manual", externalId: null, trackingId: null, status: "in_transit", rawStatus: null, createdAt: 1 }],
     });
     expect(resolveOrderPrimaryAction(partlySent, all)).toBe("sendOwnCourier");
     expect(unitsLeftToSend(partlySent)).toBe(2);
     // Nothing sent yet, or everything sent: the usual steps.
     expect(unitsLeftToSend(order({ status: "confirmed" }))).toBe(0);
-    expect(resolveOrderPrimaryAction(order({ ...partlySent, items: [{ ...item, quantity: 4, shippedQuantity: 4 }] }), all)).toBe("collectCod");
+    expect(resolveOrderPrimaryAction(order({ ...partlySent, items: [{ ...item, quantity: 4, fulfilledQuantity: 4 }] }), all)).toBe("collectCod");
   });
 
   it("puts an open cancellation request first", () => {
@@ -99,12 +100,12 @@ describe("order primary phone action", () => {
   });
 
   it("marks a shipped, fully sent order paid online delivered; a cash order collects instead", () => {
-    const sent = { ...item, quantity: 2, shippedQuantity: 2 };
+    const sent = { ...item, quantity: 2, fulfilledQuantity: 2 };
     const paidOnline = order({ status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1000, balanceDue: 0, items: [sent] });
     expect(resolveOrderPrimaryAction(paidOnline, all)).toBe("markDelivered");
     expect(resolveOrderPrimaryAction(paidOnline, { ...all, canChangeOrderStatus: false })).toBeNull();
     expect(resolveOrderPrimaryAction(order({ status: "shipped", items: [sent] }), all)).toBe("collectCod");
-    const partly = order({ status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", balanceDue: 0, items: [{ ...sent, shippedQuantity: 1 }] });
+    const partly = order({ status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", balanceDue: 0, items: [{ ...sent, fulfilledQuantity: 1 }] });
     expect(resolveOrderPrimaryAction(partly, all)).not.toBe("markDelivered");
   });
 

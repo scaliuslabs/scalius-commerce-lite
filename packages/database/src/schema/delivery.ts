@@ -145,7 +145,6 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     note: text("note"),
     metadata: text("metadata"),
     lastChecked: integer("last_checked", { mode: "timestamp" }),
-    shipmentItems: text("shipment_items"),
     /** Amount to collect for this shipment, in minor units of the order currency. */
     shipmentAmountMinor: integer("shipment_amount_minor"),
     isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).notNull().default(false),

@@ -114,7 +114,6 @@ export const receiptSupportRequestSchema = z.object({
   label: z.string(),
   actionLabel: z.string(),
   reason: z.string(),
-  message: z.string().nullable(),
   submittedAt: z.string().nullable(),
   resolvedAt: z.string().nullable(),
   createdAt: z.string().nullable(),
