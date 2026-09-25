@@ -35,7 +35,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `currency` | `currencyCode`, `currencySymbol`, `usdExchangeRate` | -- |
 | `customer_countries` | `allowedCountries`, `allowedCountriesMode` | -- |
 | `checkout` | `guestCheckoutEnabled`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount` (admin CAS revision) | -- |
-| `customer_auth` | `authVerificationMethod` summary + advanced `policy` (stored policy wins) | -- |
+| `customer_auth` | Customer accounts: `email` / `whatsapp` collection and code `channels` (any other shape resets to defaults) | -- |
 | `customer_requests` | buyer self-service request policy | -- |
 | `header` / `footer` / `homepage` | storefront presentation (independent CAS revisions) | -- |
 | `seo` | titles, meta description, robots, `discovery`, `returnPolicy` | -- |
