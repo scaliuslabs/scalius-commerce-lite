@@ -168,7 +168,7 @@ const pageDescription = pageMetaDescription;
 const productPageCopy = resolveProductPageCopy(layoutData.storefrontCopy);
 const quickBuyNoticeByError: Record<string, string> = {
   customization_required: productPageCopy.customizationNeededText,
-  customization_invalid: productPageCopy.customizationNeededText,
+  customization_invalid: productPageCopy.customizationInvalidText,
   customization_unavailable: productPageCopy.customizationUnavailableText,
   product_unavailable: "This item is not available right now.",
   variant_required: "Please choose an available option before buying.",
@@ -383,6 +383,7 @@ const deliveryFacts = buildDeliveryFacts({
   freeDelivery: product.freeDelivery,
   fulfilment: pageFulfilment,
   payAtServiceText: productPageCopy.payAtServiceText,
+  pickupAvailableText: productPageCopy.pickupAvailableText,
   formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
 });
 const fulfilmentBadge =
