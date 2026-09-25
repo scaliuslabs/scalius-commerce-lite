@@ -3,12 +3,15 @@
 // provider, every table is registered or exempt, and the triggers advance
 // exactly the registry's keys on D1, node:sqlite Turso and the real Turso
 // engine, with a clock that orders commits.
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { connect } from "@tursodatabase/database";
 import { describe, expect, it } from "vitest";
 
 import {
   CACHE_DEP_EXEMPT_TABLES,
+  CACHE_DEP_SOFT_TABLES,
   CACHE_DEP_TABLES,
   cacheDepKind,
   isCacheDep,
@@ -79,6 +82,10 @@ describe("0093_cache_dependencies", () => {
       expect(rows.some((row) => row.tableName === table), table).toBe(true);
     }
     expect(sqlite.prepare("SELECT id, seq, floor, coarse FROM cache_clock").all()).toEqual([{ id: 1, seq: 0, floor: 0, coarse: 0 }]);
+    // The installed text is the generator's, whichever migration last wrote it.
+    const installed = new Map((sqlite.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string; sql: string }>)
+      .map((row) => [row.name, row.sql]));
+    for (const trigger of generateCacheDepTriggers()) expect(installed.get(trigger.name), trigger.name).toBe(trigger.sqlite);
   });
 
   it("has a PostgreSQL trigger for every rule in the sidecar", () => {
@@ -101,6 +108,13 @@ describe("0093_cache_dependencies", () => {
     const both = Object.keys(CACHE_DEP_TABLES).filter((table) => table in CACHE_DEP_EXEMPT_TABLES);
     expect(both).toEqual([]);
     for (const [table, reason] of Object.entries(CACHE_DEP_EXEMPT_TABLES)) expect(reason.length, table).toBeGreaterThan(20);
+    // Soft tables are exempt, with the soft-ordering reason, and have no trigger.
+    for (const table of CACHE_DEP_SOFT_TABLES) {
+      expect(CACHE_DEP_EXEMPT_TABLES[table], table).toMatch(/^Soft ordering only/);
+      expect(table in CACHE_DEP_TABLES, table).toBe(false);
+    }
+    expect(Object.entries(CACHE_DEP_EXEMPT_TABLES).filter(([, reason]) => reason.startsWith("Soft ordering only"))
+      .map(([table]) => table).sort()).toEqual([...CACHE_DEP_SOFT_TABLES].sort());
     // Registered kinds are real kinds, and every key a rule can emit parses.
     for (const [table, spec] of Object.entries(CACHE_DEP_TABLES as Record<string, CacheDepTableSpec>)) {
       for (const kind of spec.kinds) expect(cacheDepKind(`${kind}:x`) ?? cacheDepKind(kind), table).toBe(kind);
@@ -182,4 +196,37 @@ describe("0093_cache_dependencies", () => {
     });
     await database.close();
   }, 60_000);
+
+  it("serializes BEGIN CONCURRENT bumps on the Turso MVCC clock row: the later commit conflicts and its retry is newer", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "scalius-cache-dep-"));
+    try {
+      const path = join(directory, "store.db");
+      const setup = await connect(path);
+      for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
+        await setup.exec(statement).catch(() => undefined);
+      }
+      await setup.exec("INSERT INTO categories (id, name, slug, status) VALUES ('cat_a', 'A', 'a', 'published'), ('cat_b', 'B', 'b', 'published')");
+      await setup.exec("PRAGMA journal_mode=mvcc");
+      await setup.close();
+      const first = await connect(path);
+      const second = await connect(path);
+      await first.exec("BEGIN CONCURRENT");
+      await second.exec("BEGIN CONCURRENT");
+      // Disjoint data rows: only the clock row is shared.
+      await first.exec("UPDATE categories SET name = 'A2' WHERE id = 'cat_a'");
+      await second.exec("UPDATE categories SET name = 'B2' WHERE id = 'cat_b'");
+      await first.exec("COMMIT");
+      await expect(second.exec("COMMIT")).rejects.toThrow(/conflict/i);
+      await second.exec("ROLLBACK").catch(() => undefined);
+      // The adapter retries a conflict; the retry commits after the first, with a newer seq.
+      await second.exec("UPDATE categories SET name = 'B2' WHERE id = 'cat_b'");
+      const seq = async (dep: string) => Number((await first.prepare("SELECT seq FROM cache_dep WHERE dep = ?").get(dep) as { seq: number }).seq);
+      expect(await seq("c:cat_b")).toBeGreaterThan(await seq("c:cat_a"));
+      expect((await first.prepare("SELECT seq FROM cache_clock").get() as { seq: number }).seq).toBe(await seq("c:cat_b"));
+      await first.close();
+      await second.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

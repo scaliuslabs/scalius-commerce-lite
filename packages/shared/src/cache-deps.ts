@@ -470,6 +470,24 @@ const DRAFTS = "Dashboard drafts, history or sessions: public reads use the publ
 const MACHINERY = "Cache machinery itself.";
 const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
 
+/**
+ * Soft-ordering tables (owner decision 4): a read of them never gets a hard
+ * key or the `t:` fallback; the reader bounds its staleness with
+ * `CACHE_DEP_SOFT_MAX_AGE_SECONDS`. Each is also in `CACHE_DEP_EXEMPT_TABLES`.
+ */
+export const CACHE_DEP_SOFT_TABLES = [
+  "product_recommendations",
+  "product_sales_stats",
+  "orders",
+  "order_items",
+] as const;
+
+export type CacheDepSoftTable = (typeof CACHE_DEP_SOFT_TABLES)[number];
+
+export function isCacheDepSoftTable(table: string): table is CacheDepSoftTable {
+  return (CACHE_DEP_SOFT_TABLES as readonly string[]).includes(table);
+}
+
 /** Tables a public read may touch (or that exist) without a key of their own, with the reason. */
 export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Soft ordering.
