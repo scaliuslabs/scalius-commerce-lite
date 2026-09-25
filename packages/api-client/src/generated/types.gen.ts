@@ -58230,6 +58230,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             price: number;
             categoryId: string | null;
             brandId: string | null;
+            brandName: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
             canonicalPath: string | null;

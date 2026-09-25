@@ -117,6 +117,8 @@ export const productFormSchema = z.object({
   isGiftCard: z.boolean(),
   /** The product's warranty policy (wrp_…), or null for none. */
   warrantyPolicyId: z.string().nullable(),
+  /** The product's brand (brd_…), or null for none. */
+  brandId: z.string().nullable(),
   /** Buyer inputs the product page asks for, in order (each checked in its dialog). */
   customizationSchema: z.array(z.custom<BuyerInputDraft>()).max(CUSTOMIZATION_LIMITS.fields, {
     error: () => translate(productMessages, "buyerInputsFull", { max: CUSTOMIZATION_LIMITS.fields }),

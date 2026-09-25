@@ -212083,6 +212083,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "brandName": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "metaTitle": {
                           "type": "string",
                           "nullable": true
@@ -212659,6 +212663,7 @@
                         "price",
                         "categoryId",
                         "brandId",
+                        "brandName",
                         "metaTitle",
                         "metaDescription",
                         "canonicalPath",

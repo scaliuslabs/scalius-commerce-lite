@@ -140,13 +140,13 @@ describe("useProductSubmit", () => {
     mocks.serverMutation.mockResolvedValue({ aggregateRevision: 5 });
     await requireResult(result).submit(productValues());
     expect(mocks.formatted.mock.calls[0]![1]).toEqual({
-      customizationSchema: false, fulfillmentKind: false, isGiftCard: false, warrantyPolicyId: false,
+      customizationSchema: false, fulfillmentKind: false, isGiftCard: false, warrantyPolicyId: false, brandId: false,
     });
 
-    dirty.fields = { customizationSchema: [{ label: true }], fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true };
+    dirty.fields = { customizationSchema: [{ label: true }], fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true, brandId: true };
     await requireResult(result).submit(productValues());
     expect(mocks.formatted.mock.calls[1]![1]).toEqual({
-      customizationSchema: true, fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true,
+      customizationSchema: true, fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true, brandId: true,
     });
   });
 
@@ -321,6 +321,7 @@ function productValues(): ProductFormValues {
     fulfillmentKind: "physical",
     isGiftCard: false,
     warrantyPolicyId: null,
+    brandId: null,
     customizationSchema: [],
   };
 }
