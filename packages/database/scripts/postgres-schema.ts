@@ -384,8 +384,15 @@ function sortTablesByForeignKeys(
   return ordered;
 }
 
-export async function compileCanonicalPostgresSchema(): Promise<PostgresSchemaBundle> {
-  const database = await createProviderSchemaDatabase("turso");
+/**
+ * The fresh PostgreSQL schema compiled from the canonical SQLite chain.
+ * `beforeMigration` stops before that file so sidecar parity tests can
+ * upgrade an older schema and compare it with a fresh one.
+ */
+export async function compileCanonicalPostgresSchema(
+  options: { beforeMigration?: string } = {},
+): Promise<PostgresSchemaBundle> {
+  const database = await createProviderSchemaDatabase("turso", ":memory:", options.beforeMigration);
   try {
     const applicationTables = new Set(readApplicationTableNames(database));
     const objects = readSchemaObjects(database);
