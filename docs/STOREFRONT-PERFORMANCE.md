@@ -210,6 +210,79 @@ deploys the API before the storefront. Old storefront HTML stays consistent
 with the API it was rendered from until the storefront deploy changes its
 own version.
 
+### Ad-click and campaign parameters
+
+The canonical URL in the page key drops a fixed allowlist of tracking
+parameters: every `utm_*`, `fbclid`, `gclid`, `gbraid`, `wbraid`,
+`gad_source`, `gad_campaignid`, `srsltid`, `msclkid`, `ttclid`, `yclid`,
+`mc_cid`, `mc_eid`, `igshid`, `_ga` and `ref`
+(`isStorefrontTrackingQueryParam` in `@scalius/shared/storefront-cache-path`).
+An unknown parameter is kept, since it may be functional. The render sees the
+canonical URL, so canonical links, listing filters and pagination links never
+carry them, and they do not count toward the bounded-query guard (a 600-byte
+`fbclid` used to bypass the cache). There is no redirect: the browser URL
+keeps them for client analytics.
+
+Measured on the local built stack (product and category page, plain URL
+warm):
+
+| Visit | Before | After |
+| --- | --- | --- |
+| `?fbclid=…` | HIT | HIT |
+| `?gclid=…&gad_source=1&gad_campaignid=…` | product MISS; category **302** to the bare URL (the tags were stripped from the browser URL) | HIT, 200 |
+| `?srsltid=…` (Google Merchant listings) | product MISS; category **302** | HIT, 200 |
+| `?utm_source=…&utm_id=…` | product MISS; category **302** | HIT, 200 |
+| `?yclid&mc_cid&mc_eid&igshid&_ga` | product MISS; category **302** to `?igshid=4&yclid=1` | HIT, 200 |
+| `?fbclid=` with a 600-byte value | BYPASS | HIT |
+
+Live, a MISS from Bangladesh costs 0.9-2.3 s against 0.11-0.36 s for a hit
+(fidelity audit §5.2), so every such ad click was paying the full miss.
+
+### One store-wide generation: what a save costs (design note)
+
+"Every admin save makes the whole store cold" is by design. There is one
+generation per store (`cache_generation`, mirrored to KV) and every
+buyer-visible write calls `bumpCacheGeneration` after it commits: 174 call
+sites in 45 API files. Same-band stock writes skip the bump. There are no
+purges, tags or warm-up lists, so a stale price, stock band, feed row or
+JSON-LD fact cannot outlive a write by more than the KV mirror delay (about a
+minute).
+
+Measured cost of one bump (local built stack, the demo store's 18 sitemap
+pages plus home, search and cart; 2 runs):
+
+| | Pages | Sum of TTFB | p50 | p95 |
+| --- | --- | --- | --- | --- |
+| First pass after the bump | 18/18 MISS | 695-777 ms | 35-39 ms | 74-75 ms |
+| Second pass | 18/18 HIT | 139-188 ms | 7-8 ms | 28-34 ms |
+
+With the `perf:storefront` forced miss, the local miss is 65-300 ms and the
+hit 4-20 ms. Live from Bangladesh the same step is 0.9-2.3 s against
+0.11-0.36 s, paid once per page, per data center, per bump. The API's public
+read cache uses the same generation, so both the page and its API parts
+miss together. On a store where the merchant edits during trading hours, the
+long tail of product pages is effectively always cold in low-traffic data
+centers.
+
+Options, none implemented (for the lead):
+
+1. Coalesce bumps. Bulk edits and a burst of saves each bump. Holding the
+   bump to one per short window (for example, the first write bumps at once
+   and later writes in the next 10 s bump once at its end) keeps freshness
+   within seconds and cuts the cold events a burst causes to two.
+2. Split the generation by what a page reads (catalogue, content, settings
+   and theme). A theme or CMS save would no longer chill product pages. It
+   costs a dependency map per route, and a missed dependency serves stale
+   facts, the failure the single generation was chosen to rule out.
+3. Serve the previous generation's entry while re-rendering in the
+   background (stale-while-revalidate), for writes that change no buyer
+   fact (copy, theme). Price, stock and availability writes must stay
+   synchronous. Same dependency risk as 2.
+4. Make the miss cheaper. The miss is mostly distance to D1 and a cold
+   isolate, not rendering. This is the only option that keeps the
+   single-generation guarantee and helps every miss, including the first
+   visit after a deploy.
+
 ## Cold isolates
 
 A cache miss that lands on a fresh isolate pays module start-up on top of the
@@ -376,6 +449,8 @@ also clears it at once.
 | D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 7 / 3, search 7 / 2 |
 | Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
+| Product JSON-LD weight | `apps/storefront/src/lib/commerce-structured-data.product-group.test.ts` (also runs the release-check Product JSON-LD smoke on the output) | 20 KB, description once |
+| Ad-click and campaign parameters never split the page cache | `packages/shared/src/storefront-cache-path.test.ts`, `apps/storefront/src/lib/public-worker-cache.test.ts` | exact |
 
 The homepage part reads in two waves whatever its sections are: the
 settings, banners, collections, category rail and published theme first,
@@ -555,10 +630,64 @@ page 1,090 → 54 (1.73M → 2.7k), recommendations 1,045 → 13, manual collect
   show, two at a time.
 - New uploads queue a delayed `media.render_variants` job. The scheduled
   backfill renders what is still missing within a time budget per cron run
-  (`packages/core/src/modules/media/README.md`).
+  (`packages/core/src/modules/media/README.md`). Every cron sweep before it
+  is isolated, so one sweep that keeps failing can no longer starve the
+  backfill (before, any failing sweep aborted the run before it).
+- An image without renditions is a transient state that heals itself. When a
+  public API read renders (a cache miss) and still publishes an original
+  (`media/<id>.<jpg|png|webp|avif>`), it queues that media id's
+  `media.render_variants` job, deduplicated by a 15-minute KV marker and at
+  most 8 ids per read (`apps/api/src/utils/media-rendition-hints.ts`). Buyers
+  see the original until the job renders; the job then bumps the generation
+  and every page switches to the renditions. Every upload path goes through
+  the two media upload routes, which also queue the job
+  (`media-upload-paths.test.ts` holds that).
+- Images inside rich descriptions that have no renditions (external images,
+  or an original URL saved in the text) keep their source but always get
+  `loading="lazy" decoding="async"` (the first image of priority content stays
+  eager), their authored `width`/`height`, and a size from the URL when an
+  image CDN states both (`?w=…&h=…`). Known gap: a description that saved an
+  original URL of ours before its renditions existed keeps pointing at the
+  original, because the saved string does not say renditions now exist.
+  Rewriting saved URLs to the current rendition needs an API-side lookup by
+  object key in the product read (slice 5).
+- Product JSON-LD states the description once (plain text, at most 1,000
+  characters), never per variant; each variant carries one photo and no
+  repeated brand, and the script is capped at 20 KB
+  (`PRODUCT_JSON_LD_MAX_BYTES`). A product whose variants would not fit lists
+  the complete variants that do, in order; the page still sells every SKU.
 - Web fonts from theme presets load with `font-display: swap` and
   metric-matched fallbacks, so they must not move LCP or CLS. If they do,
   `pnpm perf:storefront` shows it.
+
+## Live-store quick wins (2026-09-25, local built stack)
+
+Built storefront served by `wrangler dev` plus the local API. The data is a
+copy of the demo state with:
+
+- `r2-cat-panjabi`'s primary photo replaced by a 2400 px, 1,068 KB JPEG
+  original without renditions (a failed render). It also shows in the
+  related rails.
+- a 4 KB rich description, with that original inlined as an image, on
+  `bb-catalog-panjabi` (6 SKUs) and `f5-variant-table-150` (150 SKUs).
+
+Before is `lean/fidelity`, after is `live-perf-quickwins`. Bytes are what a
+390 px DPR 3 phone fetched by load + 2.5 s (CDP network, unthrottled). The
+after column for the legacy product is after its self-healing render job ran:
+it was queued by the first read and rendered 2 min 9 s later.
+
+| Page | HTML KB | Product JSON-LD KB | Image KB on load | Phone LCP ms |
+| --- | --- | --- | --- | --- |
+| `/products/r2-cat-panjabi` (no renditions) | 139.8 → 138.9 | 4.6 → 3.8 | 1,081 → 370 | **6,848 → 3,342** |
+| `/products/bb-catalog-panjabi` (description image) | 177 → 151.9 | 31.3 → **6.2** | 1,080 → **12** | 748 → 740 |
+| `/products/f5-variant-table-150` | 996.5 → **354** | 662.4 → **19.8** (150 → 23 variants listed) | 1,076 → **8** | 854 → 786 |
+| `/` (legacy product in a rail) | - | - | 1,080 → 142 | 1,018 → 1,040 |
+
+The generated test photo is noise-heavy, so its 960 px rendition is still
+344 KB. A real photo's 960 px rendition is 60-100 KB, which is the audit's
+0.72-0.95 s phone LCP for products with renditions. The rest of the product
+page HTML (150-SKU variant data, header) is slice 5's budget; this change
+takes out only the JSON-LD.
 
 ## Baseline before this work (2026-09-24, live, round 4)
 

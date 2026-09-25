@@ -147,7 +147,12 @@ async function launchChrome(port) {
     await new Promise((r) => setTimeout(r, 200));
     try { if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) break; } catch {}
   }
-  return () => { child.kill("SIGTERM"); rmSync(profile, { recursive: true, force: true }); };
+  // Chrome may still be writing its profile as it exits: retry, and never let
+  // cleanup of a temp dir throw away the measurements.
+  return () => {
+    child.kill("SIGTERM");
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+  };
 }
 
 async function openTarget(port) {
