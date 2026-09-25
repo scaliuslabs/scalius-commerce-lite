@@ -1050,6 +1050,15 @@ export class DvcHarness {
   // The walk
 
   /** One step: an action, time passing, verification, page views. */
+  private coveredLogPos = 0;
+
+  /** Coverage counts every committed row change in the log, not only the generator's own. */
+  private absorbCoverage(): void {
+    const changes = this.rowLog.since(this.coveredLogPos);
+    for (const change of changes) this.coverage.recordChange(change);
+    if (changes.length > 0) this.coveredLogPos = changes[changes.length - 1]!.id;
+  }
+
   async runStep(): Promise<void> {
     this.step += 1;
     this.stats.steps += 1;
@@ -1065,6 +1074,7 @@ export class DvcHarness {
     for (let index = 0; index < views; index += 1) {
       await this.readPage(this.rng.pick(this.pages), index === 0 && sv !== null && this.rng.chance(0.5) ? sv : null);
     }
+    this.absorbCoverage();
     if (this.step % 500 === 0) this.rowLog.trim(Math.min(...[...this.partCache.values()].map((entry) => entry.logPos), ...[...this.truthParts.values()].map((entry) => entry.logPos)) - 1);
   }
 
@@ -1100,6 +1110,27 @@ export class DvcHarness {
         if (this.clock.name === "triggers") await this.crossCheckTriggers(this.rowLog.since(before), triggerBefore, true);
         this.now += 250;
         await this.verifyParts(false);
+        this.absorbCoverage();
+      }
+    }
+    // Second pass: columns a single attempt could not change (a CHECK couples
+    // them to other columns) get more attempts with companions.
+    for (let pass = 0; pass < 3; pass += 1) {
+      const { columns } = this.coverage.gaps(this.model);
+      if (columns.length === 0) break;
+      for (const gap of columns) {
+        const [table, column] = gap.split(".") as [string, string];
+        this.step += 1;
+        this.stats.steps += 1;
+        this.config.setSystemTime(this.now);
+        const mutation = this.mutator.update(table, column);
+        if (!mutation) continue;
+        this.stats.mutations += 1;
+        this.stats.writes += 1;
+        this.remember(`sweep ${mutation.description}`);
+        this.now += 250;
+        await this.verifyParts(false);
+        this.absorbCoverage();
       }
     }
   }
