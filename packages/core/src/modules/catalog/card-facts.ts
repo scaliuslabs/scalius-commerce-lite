@@ -88,12 +88,22 @@ export interface ProductCardFactRow {
     fee: number | null;
 }
 
-function idScope(column: string, productIds: readonly string[] | SQLWrapper): SQL {
+/**
+ * The product ids, written once as the `card_ids` CTE: a caller's id query
+ * can be large (a home list's pricing projection), and inlining it in each
+ * of the four terms can pass D1's statement length limit.
+ */
+function cardIdsCte(productIds: readonly string[] | SQLWrapper): SQL {
     if (Array.isArray(productIds)) {
         const ids = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
-        return sql`${sql.raw(column)} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
+        return sql`card_ids(id) AS (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
     }
-    return sql`${sql.raw(column)} IN (${productIds as SQLWrapper})`;
+    // An embedded query renders parenthesized, which a CTE body cannot be.
+    return sql`card_ids(id) AS (SELECT * FROM ${productIds as SQLWrapper})`;
+}
+
+function idScope(column: string): SQL {
+    return sql`${sql.raw(column)} IN (SELECT id FROM card_ids)`;
 }
 
 /** A colour axis by its standard mapping or its name. */
@@ -118,6 +128,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
     const packRank = CARD_PACK_SIZE_SLUGS.map((slug, index) => `WHEN '${slug}' THEN ${index}`).join(" ");
     // Four terms: D1 refuses a compound SELECT of more than five.
     const facts = sql`(
+        WITH ${cardIdsCte(productIds)}
         SELECT CAST(card_product."id" AS TEXT) AS product_id, CAST('product' AS TEXT) AS kind,
             CAST(card_brand."name" AS TEXT) AS label, CAST(card_brand."slug" AS TEXT) AS value,
             CAST(sales."sold_30d" AS INTEGER) AS amount, CAST(NULL AS INTEGER) AS position,
@@ -140,7 +151,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             AND card_brand."status" = 'published' AND card_brand."deleted_at" IS NULL
         LEFT JOIN "product_sales_stats" sales ON sales."product_id" = card_product."id"
             AND sales."sold_30d" >= ${CARD_SOLD_MIN}
-        WHERE ${idScope(`card_product."id"`, productIds)}
+        WHERE ${idScope(`card_product."id"`)}
         UNION ALL
         SELECT ranked_spec.product_id, 'spec', ranked_spec.label, ranked_spec.value, NULL, ranked_spec.spec_rank, NULL, NULL
         FROM (
@@ -155,7 +166,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
                 AND spec."key_spec" = 1 AND spec."deleted_at" IS NULL
             LEFT JOIN "attribute_groups" spec_group ON spec_group."id" = spec."group_id" AND spec_group."deleted_at" IS NULL
             LEFT JOIN "attribute_values" spec_enum ON spec_enum."id" = spec_value."value_id"
-            WHERE ${idScope(`spec_value."product_id"`, productIds)}
+            WHERE ${idScope(`spec_value."product_id"`)}
         ) AS ranked_spec
         WHERE ranked_spec.spec_rank <= ${CARD_KEY_SPECS_MAX}
         UNION ALL
@@ -166,7 +177,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
                   AND ${VALUE_ON_LIVE_SKU}),
             axis."position", NULL, NULL
         FROM "product_option_definitions" axis
-        WHERE ${idScope(`axis."product_id"`, productIds)} AND axis."deleted_at" IS NULL
+        WHERE ${idScope(`axis."product_id"`)} AND axis."deleted_at" IS NULL
         UNION ALL
         SELECT ranked_swatch.product_id, 'swatch', ranked_swatch.label, NULL, NULL, ranked_swatch.axis_position,
             (SELECT swatch_value."swatch_hex" FROM "product_attributes" swatch_attribute
@@ -183,7 +194,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             FROM "product_option_definitions" axis
             INNER JOIN "product_option_values" axis_value ON axis_value."option_definition_id" = axis."id"
                 AND axis_value."deleted_at" IS NULL
-            WHERE ${idScope(`axis."product_id"`, productIds)} AND axis."deleted_at" IS NULL
+            WHERE ${idScope(`axis."product_id"`)} AND axis."deleted_at" IS NULL
               AND ${COLOUR_AXIS} AND ${VALUE_ON_LIVE_SKU}
         ) AS ranked_swatch
         WHERE ranked_swatch.swatch_rank <= ${CARD_SWATCHES_MAX}
