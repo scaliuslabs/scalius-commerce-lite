@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FolderTree } from "lucide-react";
@@ -23,6 +23,8 @@ import {
   type CategoryListItem,
 } from "~/lib/api-query-options/categories";
 import { categoryPathLabel, indexCategories } from "~/lib/category-tree";
+import { MoveCategoryDialog, type MoveTarget } from "~/components/admin/catalog/MoveCategoryDialog";
+import { categoryFormMessages } from "~/i18n/category-form";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { Button } from "~/components/ui/button";
@@ -76,6 +78,9 @@ function CategoriesPage() {
   const { categories: can } = useCatalogActionPermissions();
   const editTo = (row: CategoryListItem) => (can.canEdit ? `/admin/categories/${row.id}/edit` : undefined);
   const { data: lookup } = useQuery(categoryFormOptionsQueryOptions());
+  const f = useMessages(categoryFormMessages);
+  // The dialog stays mounted; each opening gets a fresh picker by bumping its key.
+  const [moving, setMoving] = useState<{ key: number; target: MoveTarget | null }>({ key: 0, target: null });
   const byId = useMemo(() => indexCategories(lookup?.categories ?? []), [lookup]);
 
   const columns = useMemo<ColumnDef<CategoryListItem, unknown>[]>(() => [
@@ -134,6 +139,7 @@ function CategoriesPage() {
   ], [t, search.trashed, can.canEdit, byId]);
 
   return (
+    <>
     <ResourceListPage<CategoryListItem>
       title={t("categories")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
@@ -152,6 +158,13 @@ function CategoriesPage() {
         { value: "internal", label: t("hidden") },
       ] }}
       rowTo={editTo}
+      rowActions={(row) => (can.canEdit && !search.trashed ? [{
+        label: f("moveCategory"),
+        onClick: () => setMoving((current) => ({
+          key: current.key + 1,
+          target: { id: row.id, name: row.name, parentId: row.parentId, revision: row.revision },
+        })),
+      }] : [])}
       rowLabel={(row) => row.name}
       viewUrl={(row) => (row.status === "published" ? getStorefrontPath(`/categories/${row.slug}`) : undefined)}
       lifecycle={{
@@ -164,5 +177,7 @@ function CategoriesPage() {
             : apiData(postApiV1AdminCategoriesBulkDelete({ body: { categories: claims(rows), permanent: action === "delete" } })),
       }}
     />
+    <MoveCategoryDialog key={moving.key} target={moving.target} onClose={() => setMoving((current) => ({ ...current, target: null }))} />
+    </>
   );
 }
