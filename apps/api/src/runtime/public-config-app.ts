@@ -1,5 +1,6 @@
 import { createRuntimeApiApp } from "./base-app";
 import { checkoutRoutes } from "../routes/checkout";
+import { checkoutGiftCardRoutes } from "../routes/checkout-gift-cards";
 import { publicCheckoutLanguageRoutes } from "../routes/checkout-languages";
 import { footerRoutes } from "../routes/footer";
 import { headerRoutes } from "../routes/header";
@@ -28,6 +29,7 @@ app.route("/platform", platformRoutes);
 // the layout; serving them here keeps the buyer graph (orders, customer
 // auth, agent contexts) out of page renders.
 app.route("/checkout", checkoutRoutes);
+app.route("/checkout/gift-cards", checkoutGiftCardRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);

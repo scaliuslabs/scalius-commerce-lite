@@ -34,6 +34,14 @@ import { DASHBOARD_CATALOG_PROJECTION_OPERATIONS } from "./dashboard-catalog-pro
 import { DASHBOARD_MERCHANDISING_OPERATIONS } from "./dashboard-merchandising";
 import { DASHBOARD_ATTRIBUTE_TYPED_OPERATIONS } from "./dashboard-attributes-typed";
 import { STOREFRONT_ATTRIBUTES_TYPED_OPERATIONS } from "./storefront-attributes-typed";
+import { DASHBOARD_REVIEW_OPERATIONS } from "./dashboard-reviews";
+import { DASHBOARD_GIFT_CARD_OPERATIONS } from "./dashboard-gift-cards";
+import { DASHBOARD_DIGITAL_OPERATIONS } from "./dashboard-digital";
+import { DASHBOARD_WARRANTY_OPERATIONS } from "./dashboard-warranty";
+import { STOREFRONT_REVIEW_OPERATIONS } from "./storefront-reviews";
+import { STOREFRONT_GIFT_CARD_OPERATIONS } from "./storefront-gift-cards";
+import { STOREFRONT_DIGITAL_OPERATIONS } from "./storefront-digital";
+import { STOREFRONT_WARRANTY_OPERATIONS } from "./storefront-warranty";
 import type { OperationRegistryEntry } from "./entry";
 
 export type { OperationRegistryEntry } from "./entry";
@@ -77,6 +85,14 @@ export const OPERATIONS = {
   ...DASHBOARD_MERCHANDISING_OPERATIONS,
   ...DASHBOARD_ATTRIBUTE_TYPED_OPERATIONS,
   ...STOREFRONT_ATTRIBUTES_TYPED_OPERATIONS,
+  ...DASHBOARD_REVIEW_OPERATIONS,
+  ...DASHBOARD_GIFT_CARD_OPERATIONS,
+  ...DASHBOARD_DIGITAL_OPERATIONS,
+  ...DASHBOARD_WARRANTY_OPERATIONS,
+  ...STOREFRONT_REVIEW_OPERATIONS,
+  ...STOREFRONT_GIFT_CARD_OPERATIONS,
+  ...STOREFRONT_DIGITAL_OPERATIONS,
+  ...STOREFRONT_WARRANTY_OPERATIONS,
 } satisfies Record<string, OperationRegistryEntry>;
 
 /** The per-domain groups, for the one-group-per-operation check. */
@@ -104,6 +120,14 @@ export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistr
   DASHBOARD_MERCHANDISING_OPERATIONS,
   DASHBOARD_ATTRIBUTE_TYPED_OPERATIONS,
   STOREFRONT_ATTRIBUTES_TYPED_OPERATIONS,
+  DASHBOARD_REVIEW_OPERATIONS,
+  DASHBOARD_GIFT_CARD_OPERATIONS,
+  DASHBOARD_DIGITAL_OPERATIONS,
+  DASHBOARD_WARRANTY_OPERATIONS,
+  STOREFRONT_REVIEW_OPERATIONS,
+  STOREFRONT_GIFT_CARD_OPERATIONS,
+  STOREFRONT_DIGITAL_OPERATIONS,
+  STOREFRONT_WARRANTY_OPERATIONS,
 ];
 
 export type OperationId = keyof typeof OPERATIONS;
