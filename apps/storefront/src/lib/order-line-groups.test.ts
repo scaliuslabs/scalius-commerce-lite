@@ -200,7 +200,7 @@ describe("finished-order wording", () => {
     expect(orderCompletionWording({ ...pickupOrder, status: "confirmed" }, copy)).toBeNull();
     expect(orderCompletionWording({ ...pickupOrder, status: "delivered" }, copy)).toEqual({
       statusLabel: "Picked up",
-      title: "Picked up",
+      title: "Order picked up",
       messageTemplate: "Order #{orderId} has been picked up.",
     });
     expect(orderCompletionWording({ ...serviceOrder, status: "completed" }, copy)).toMatchObject({
@@ -214,7 +214,7 @@ describe("finished-order wording", () => {
     const order = { ...pickupOrder, status: "delivered", id: "ord_1", orderNumber: 1001, paymentStatus: "paid" };
     expect(withOrderCompletionWording(view, order, copy)).toEqual({
       kind: "order_updated",
-      title: "Picked up",
+      title: "Order picked up",
       message: "Order #1001 has been picked up.",
       orderStatusLabel: "Picked up",
     });
