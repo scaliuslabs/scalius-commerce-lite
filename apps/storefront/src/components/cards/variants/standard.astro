@@ -5,7 +5,7 @@
 import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
 import CardMedia from "../parts/CardMedia.astro";
-import type { ProductCardModel } from "../card-model";
+import { CARD_IMAGE_DIMENSIONS, type ProductCardModel } from "../card-model";
 
 interface Props {
   model: ProductCardModel;
@@ -28,7 +28,7 @@ const TitleTag = headingLevel;
   data-card-badge="image"
   class="group relative flex flex-col h-full bg-card overflow-hidden"
 >
-  <CardMedia model={model} ratio={ratio} sizes={sizes} loading={loading} badge={model.percentOff} />
+  <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[ratio]} sizes={sizes} loading={loading} badge={model.percentOff} />
 
   <div class="product-card-body p-3 sm:p-4 flex flex-col flex-1">
     <TitleTag

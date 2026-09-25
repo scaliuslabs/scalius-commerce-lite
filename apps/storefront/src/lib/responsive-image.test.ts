@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
-import { capSizesDensity, responsiveImageSources } from "./responsive-image";
+import { capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
 
 describe("capSizesDensity", () => {
   it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
@@ -90,5 +90,18 @@ describe("productImageSources", () => {
   it("uses the placeholder when the product has no image", () => {
     expect(productImageSources(null, slot)).toEqual({ src: PRODUCT_IMAGE_FALLBACK });
     expect(productImageSources("  ", slot)).toEqual({ src: PRODUCT_IMAGE_FALLBACK });
+  });
+});
+
+describe("scaleSizes", () => {
+  it("shrinks every entry to the share of the slot the photo fills, conditions kept", () => {
+    expect(scaleSizes("(max-width: 639px) calc(50vw - 20px), 246px", 0.8)).toBe(
+      "(max-width: 639px) calc((50vw - 20px) * 0.8), calc((246px) * 0.8)",
+    );
+  });
+
+  it("leaves a photo that fills its slot alone", () => {
+    expect(scaleSizes("(max-width: 639px) 44vw, 19vw", 1)).toBe("(max-width: 639px) 44vw, 19vw");
+    expect(scaleSizes("19vw", 0)).toBe("19vw");
   });
 });

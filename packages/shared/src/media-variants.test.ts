@@ -3,6 +3,7 @@ import {
   mediaImageSrcSet,
   mediaImageUrl,
   mediaOriginalUrl,
+  isUnrenderedMediaOriginal,
   mediaVariantWidths,
 } from "./media-variants";
 
@@ -57,5 +58,17 @@ describe("rendition URLs", () => {
 
   it("maps a rendition back to the original upload", () => {
     expect(mediaOriginalUrl(master)).toBe("https://cdn.example.com/media/media_abc123.jpg");
+  });
+
+  it("names our own raster uploads served without renditions, and nothing else", () => {
+    expect(isUnrenderedMediaOriginal("https://cdn.example.com/media/media_abc123.jpg")).toBe(true);
+    expect(isUnrenderedMediaOriginal("media/a1b2c3d4.PNG?v=2")).toBe(true);
+    // Older nested keys (imports, the audit's legacy rows) are ours too.
+    expect(isUnrenderedMediaOriginal("http://localhost:9031/api/v1/media/media/legacy/p006.jpg")).toBe(true);
+    expect(isUnrenderedMediaOriginal(master)).toBe(false);
+    expect(isUnrenderedMediaOriginal("https://cdn.example.com/media/logo.svg")).toBe(false);
+    expect(isUnrenderedMediaOriginal("https://images.example.org/photos/pic.jpg")).toBe(false);
+    expect(isUnrenderedMediaOriginal("https://cdn.example.com/media/media_abc123.jpg/9999.webp")).toBe(false);
+    expect(isUnrenderedMediaOriginal("")).toBe(false);
   });
 });
