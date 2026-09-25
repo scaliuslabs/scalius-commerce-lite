@@ -3,7 +3,7 @@
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import { getLayoutData } from "@/lib/api";
-import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
+import { ACCOUNT_OFFLINE_MESSAGE, ACCOUNT_PAGE_CONTAINER } from "@/lib/account-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 
 const layoutData = await getLayoutData();
@@ -14,7 +14,7 @@ const error = "mt-1 hidden text-sm text-destructive";
 
 <Layout title="Account" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-5xl px-4 py-8" data-account-page>
+  <section class={ACCOUNT_PAGE_CONTAINER} data-account-page>
     <div id="loadingState" class="flex min-h-[400px] items-center justify-center">
       <p class="text-sm text-muted-foreground">Loading your account…</p>
     </div>
@@ -145,6 +145,7 @@ const error = "mt-1 hidden text-sm text-destructive";
 
 <script>
   import { bindSignOut, initializeAccountPage } from "@/lib/account-page";
+  import { focusMainHeadingIfLost } from "@/lib/focus-main-heading";
 
   type AccountWindow = Window & { __scaliusAccountPageBound?: boolean };
   const accountWindow = window as AccountWindow;
@@ -156,7 +157,8 @@ const error = "mt-1 hidden text-sm text-destructive";
   if (!accountWindow.__scaliusAccountPageBound) {
     accountWindow.__scaliusAccountPageBound = true;
     document.addEventListener("astro:page-load", start);
-    window.addEventListener("customer-login", () => void initializeAccountPage());
+    // Signing in shows the account here; focus lands on its heading.
+    window.addEventListener("customer-login", () => void initializeAccountPage().then(focusMainHeadingIfLost));
   }
 
   if (document.readyState === "loading") {
