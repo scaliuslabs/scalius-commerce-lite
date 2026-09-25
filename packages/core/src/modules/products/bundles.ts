@@ -244,3 +244,18 @@ export async function buildProductBundleReplaceStatements(
     }
     return statements;
 }
+
+/** Inserts giving `targetId` a copy of `sourceId`'s tiers (active or not), for duplicating a product. */
+export async function buildProductBundleCopyStatements(
+    db: Database,
+    sourceId: string,
+    targetId: string,
+): Promise<SQLiteBatchItem[]> {
+    const rows = await db.select(bundleColumns).from(productBundles)
+        .where(eq(productBundles.productId, sourceId)).limit(PRODUCT_BUNDLES_MAX).all();
+    return rows.map(({ id: _id, productId: _productId, ...row }) => db.insert(productBundles).values({
+        ...row,
+        id: `${PRODUCT_BUNDLE_ID_PREFIX}${nanoid()}`,
+        productId: targetId,
+    }));
+}
