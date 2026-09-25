@@ -445,9 +445,6 @@ importers:
       '@nanostores/react':
         specifier: ^1.1.0
         version: 1.1.0(nanostores@1.5.2)(react@19.2.8)
-      '@player.style/microvideo':
-        specifier: 0.2.0
-        version: 0.2.0(media-chrome@4.19.2(react@19.2.8))
       '@qwik.dev/partytown':
         specifier: ^0.14.3
         version: 0.14.3
@@ -2219,11 +2216,6 @@ packages:
   '@paralleldrive/cuid2@3.3.0':
     resolution: {integrity: sha512-OqiFvSOF0dBSesELYY2CAMa4YINvlLpvKOz/rv6NeZEqiyttlHgv98Juwv4Ch+GrEV7IZ8jfI2VcEoYUjXXCjw==}
     hasBin: true
-
-  '@player.style/microvideo@0.2.0':
-    resolution: {integrity: sha512-mKjViQmnc4XTVv5983wmxIm6SWoRffeeqlhUV4yOxntKxl/di+E7pAIdRwwDi6P5xG2bGziAXzlYlzpLOcj/0w==}
-    peerDependencies:
-      media-chrome: '>=1.0.0'
 
   '@poppinss/colors@4.1.6':
     resolution: {integrity: sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg==}
@@ -8567,10 +8559,6 @@ snapshots:
       '@noble/hashes': 2.3.0
       bignumber.js: 9.3.1
       error-causes: 3.0.2
-
-  '@player.style/microvideo@0.2.0(media-chrome@4.19.2(react@19.2.8))':
-    dependencies:
-      media-chrome: 4.19.2(react@19.2.8)
 
   '@poppinss/colors@4.1.6':
     dependencies:
