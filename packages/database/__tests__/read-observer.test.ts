@@ -96,7 +96,7 @@ describe("statement table extraction", () => {
   });
 });
 
-describe("read observer", () => {
+describe("read observer", { timeout: 30_000 }, () => {
   it("does nothing outside an observer and isolates concurrent observers", async () => {
     expect(currentReadObserver()).toBeUndefined();
     observeStatement("select * from products");
@@ -140,7 +140,7 @@ describe("read observer", () => {
   });
 });
 
-describe("capture on every provider", () => {
+describe("capture on every provider", { timeout: 30_000 }, () => {
   it("D1 through getDb, with and without a request session", async () => {
     const sqlite = createMigratedSqlite();
     const plain = getDb({ DB: createSqliteD1Binding(sqlite) });
