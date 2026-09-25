@@ -4,8 +4,10 @@
 // column, then fly-outs; Apple Gadgets: one 200px column). Each level is a
 // native <details>, so the menu opens without JavaScript; nav-menus.ts adds
 // hover intent, arrow keys, Escape with focus return and flipping at the
-// viewport's end. Items that don't fit on one line move into "More"
-// (nav-disclosure.ts builds its entries from the row).
+// viewport's end. Items that don't fit on one line move, as they are, into
+// "More" (nav-disclosure.ts), which also names the roots past `maxTopItems`
+// and "All categories"; columns cut to the link budget fill up on intent
+// (nav-panels.ts).
 // - layout row: items side by side (a header row or inline in the bar).
 // - layout bar: the category bar, items spread across the full width.
 // - flyouts cascade: fly-outs beside the column; indent: nested lists inside it.
@@ -361,7 +363,7 @@ const link = (item: NavigationItem) => ({
     padding: 0.375rem 0.75rem;
     color: var(--popover-foreground);
     font-size: 0.875rem;
-    font-weight: 600;
+    font-weight: 500 !important;
     white-space: normal;
     text-decoration: none;
     text-transform: none !important;
