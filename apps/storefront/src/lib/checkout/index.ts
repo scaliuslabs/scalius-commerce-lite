@@ -252,6 +252,8 @@ function appendProviderIdentity(
   presentation: GatewayPresentation,
   gatewayId: string,
 ): void {
+  // A gift card is the tender itself, not a provider: no badge.
+  if (gatewayId === "gift_card" && !presentation.markSrc) return;
   const identity = document.createElement("span");
   identity.className =
     "flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2";
