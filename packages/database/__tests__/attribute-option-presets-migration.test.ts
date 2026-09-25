@@ -69,7 +69,7 @@ describe(MIGRATION, () => {
         // Presets are not buyer-visible and nothing references the new rows.
         expect(sqlite.prepare(PROJECTIONS).all()).toEqual(projections);
         expect(sqlite.prepare("SELECT value_id FROM product_attribute_values").all()).toEqual([{ value_id: null }]);
-        expect(sqlite.prepare("SELECT version, name FROM scalius_schema_migrations ORDER BY version DESC LIMIT 1").get())
+        expect(sqlite.prepare("SELECT version, name FROM scalius_schema_migrations WHERE version = 92").get())
             .toEqual({ version: 92, name: MIGRATION });
 
         // The next release re-runs the copy before dropping the column: idempotent.

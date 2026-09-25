@@ -652,6 +652,34 @@
       "when": 1790300023000,
       "tag": "0092_attribute_option_presets",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1790300024000,
+      "tag": "0093_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1790300025000,
+      "tag": "0094_digital_goods",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1790300026000,
+      "tag": "0095_gift_cards",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1790300027000,
+      "tag": "0096_warranty",
+      "breakpoints": true
     }
   ]
 }
