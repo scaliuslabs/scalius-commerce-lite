@@ -2,6 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminAttributes,
   getApiV1AdminAttributesByIdValues,
+  getApiV1AdminAttributesCategorySetsByCategoryId,
+  getApiV1AdminAttributesGroups,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
@@ -32,3 +34,21 @@ export const attributeValuesQueryOptions = (params: AttributeValuesQuery) =>
     queryFn: () => getAttributeValues(params),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
+
+export const attributeGroupsQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.attributes.all, "groups"] as const,
+    queryFn: () => apiData(getApiV1AdminAttributesGroups()),
+    staleTime: LOOKUP_STALE_TIME_MS,
+  });
+
+export type AttributeGroupDto = ApiResult<typeof getApiV1AdminAttributesGroups>["groups"][number];
+
+export const categoryAttributeSetQueryOptions = (categoryId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.attributes.all, "category-set", categoryId] as const,
+    queryFn: () => apiData(getApiV1AdminAttributesCategorySetsByCategoryId({ path: { categoryId } })),
+    staleTime: 0,
+  });
+
+export type CategoryAttributeSetEntry = ApiResult<typeof getApiV1AdminAttributesCategorySetsByCategoryId>["attributes"][number];

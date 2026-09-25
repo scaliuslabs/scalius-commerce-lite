@@ -11,6 +11,7 @@ import { RichContent } from "../ui/rich-content";
 import { NativeSelect } from "../ui/native-select";
 import { SearchableSelect } from "../ui/searchable-select";
 import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
+import { CategoryAttributeSetCard } from "@/components/admin/catalog/CategoryAttributeSetCard";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
@@ -276,6 +277,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               />
             </CardContent>
           </Card>
+
+          {isEdit && defaultValues?.id ? (
+            <CategoryAttributeSetCard categoryId={defaultValues.id} canEdit={canSave} />
+          ) : null}
 
           <SearchListingCard
             resource="category"

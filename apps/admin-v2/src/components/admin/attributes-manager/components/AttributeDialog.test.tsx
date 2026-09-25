@@ -12,6 +12,8 @@ vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminAttributes: api.create,
   putApiV1AdminAttributesById: api.update,
+  getApiV1AdminAttributesGroups: () => Promise.resolve({ groups: [] }),
+  postApiV1AdminAttributesByIdConvertType: vi.fn(),
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -82,7 +84,7 @@ describe("AttributeDialog", () => {
     expect(field("attribute-handle").placeholder).toBe("kapor");
     expect(text()).toContain("Leave empty to make it from the name. If it is taken, a number is added.");
     await press("Create");
-    expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: undefined, filterable: true } });
+    expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: undefined, filterable: true, groupId: null, unit: null, facetDisplay: "checkbox", keySpec: false, highlight: false, valueType: "text" } });
     expect(api.success).toHaveBeenCalledWith("Attribute saved");
   });
 
@@ -97,7 +99,7 @@ describe("AttributeDialog", () => {
 
     await type(field("attribute-handle"), "Fabric Type");
     await press("Create");
-    expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: "fabric-type", filterable: true } });
+    expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: "fabric-type", filterable: true, groupId: null, unit: null, facetDisplay: "checkbox", keySpec: false, highlight: false, valueType: "text" } });
     expect(api.close).toHaveBeenCalled();
   });
 
