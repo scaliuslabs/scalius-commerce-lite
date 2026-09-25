@@ -1,6 +1,6 @@
 # Storefront render performance
 
-Last reviewed: 2026-09-24
+Last reviewed: 2026-09-25
 
 How a storefront page is served, what each page is allowed to cost, and how to
 check it. The release-wide evidence lives in
@@ -10,7 +10,8 @@ check it. The release-wide evidence lives in
 
 1. **Cache hit.** The storefront gateway (`apps/storefront/src/worker.ts`,
    `lib/public-worker-cache.ts`) reads the store's cache generation from KV and
-   serves the page from the Cache API under `build + generation + canonical URL`.
+   serves the page from the Cache API under `build + Worker version +
+   generation + canonical URL` (see [Cache keys](#cache-keys-data-and-code)).
    No API call. Measured server time at the edge: 3-20 ms.
 2. **Cache miss.** Astro renders the page. Each page starts all of its public
    reads together, including the layout read, and the storefront transport
@@ -41,8 +42,10 @@ check it. The release-wide evidence lives in
    (`apps/api/src/public-read.ts`):
    - It first looks the part up in the data center's Cache API
      (`caches.default`) under `publicReadCacheKey`: `path + sorted query +
-     __cg=<generation>`. That is the same function the `PublicApi` entrypoint
-     path uses, so the two cannot drift apart.
+     __cg=<generation> + __cv=<API Worker version>`. That is the same
+     function the `PublicApi` entrypoint path uses, so the two cannot drift
+     apart (`storefront-batch-route.test.ts` checks the batch stores under
+     the exact URLs the default entrypoint hands to `PublicApi`).
    - On a miss it renders the part in-process with `renderPublicRead`. That
      is the render `PublicApi` itself runs: the runtime app, the baseline
      security headers, and the public cache headers.
@@ -78,6 +81,72 @@ check it. The release-wide evidence lives in
    store's traffic is too light. If the database moves, check
    `served_by_colo` in `wrangler d1 execute <db> --remote --json --command "SELECT 1"`
    and change the region to match.
+
+## Cache keys: data and code
+
+Every public cache key, in the API (`publicReadCacheKey`, for both the batch
+and the `PublicApi` entrypoint) and in the storefront gateway
+(`publicStorefrontCacheKey`), carries two identities:
+
+- the store's **cache generation**, which changes on every buyer-visible
+  write (`bumpCacheGeneration`);
+- the running **Worker version**, `CF_VERSION_METADATA.id` from the
+  `version_metadata` binding (`readWorkerVersion` in
+  `@scalius/shared/cache-generation`).
+
+Why the version: the generation only says when the data changed. Before
+2026-09-25 nothing in the key said which code rendered an entry. Templates
+Phase 4 added `sections` to `GET /api/v1/storefront/homepage`. After a
+restart on the new code with no data write, the batch still served the old
+payload from the Cache API, and the new storefront rendered an empty home
+page. Production had the same hazard after every deploy, with entries living
+up to a day in the Cache API and never replaced until a merchant write.
+
+Why this identity and not the others considered:
+
+- **Worker version metadata (chosen).** Cloudflare assigns a new id to every
+  deployed version (every deploy, secret change or version upload) and the
+  same id to every isolate of that version, so entries are still shared
+  across isolates and requests. `wrangler dev` (the API) assigns a fresh id
+  on every start and every reload (checked with `unstable_startWorker` on
+  wrangler 4.128: same id within a run, new id after a code reload and after
+  a restart); the Vite plugin under `astro dev` (the storefront) takes its
+  bindings from the same Miniflare plugin, so a fresh id on every start. It
+  covers local development with no script to remember. Reading it is a property access: no KV or D1 read on
+  the hot path. It covers every input, including bundled packages,
+  dependencies, compatibility flags and payloads whose schema did not change.
+- A content hash of the public route response schemas, generated beside
+  `openapi-contract.gen.ts`. Rejected: it changes only when a declared
+  schema changes. A fix to how a field is computed, or any change in
+  `packages/core` under the same schema, would still serve the old payload. It also depends on
+  `generate:sdk` having run.
+- A deploy-time generation bump in `scripts/deploy.mjs`. Rejected: it does
+  not cover local restarts, couples every deploy to a database write, and is
+  skipped by any deploy that does not go through the script.
+
+Trade-off: every deploy of a Worker starts its public cache cold (the API's
+parts, or the storefront's pages), even a redeploy of identical code. The
+first page per data center after a deploy is a cache miss (see the cold
+render figures below); nothing else changes. The old entries are never
+purged; they are simply no longer addressed, and age out.
+
+Fail-closed: without the binding `readWorkerVersion` returns null and
+nothing is cached (an unversioned key could serve another build's payload).
+`pnpm check:env` fails when any Wrangler config lacks
+`"version_metadata": { "binding": "CF_VERSION_METADATA" }`.
+
+The storefront key still carries `BUILD_ID` too, which the pages report in
+`X-Storefront-Build` and deploy verification compares. `BUILD_ID` is a source
+hash (`apps/storefront/scripts/generate-build-id.js`); it now also hashes the
+workspace packages the storefront bundles (`@scalius/shared`,
+`@scalius/api-client`), which it used to miss. It is still not a complete
+build identity (toolchain, root config), which is why the key does not rely
+on it alone.
+
+Deploy order matters across the two Workers: a full `pnpm run deploy`
+deploys the API before the storefront. Old storefront HTML stays consistent
+with the API it was rendered from until the storefront deploy changes its
+own version.
 
 ## Cold isolates
 
@@ -202,7 +271,8 @@ second isolate (see the render path).
 ## Known platform failure: a stuck Workers Cache key
 
 Seen on 2026-09-24. In one colo (SIN), one key of the `PublicApi` Workers
-Cache entrypoint (`/api/v1/storefront/homepage?__cg=<generation>`) answered
+Cache entrypoint (`/api/v1/storefront/homepage?__cg=<generation>`, before
+the key also carried `__cv=<version>`) answered
 every request with the same broken response, while other colos and every
 other key were fine:
 
@@ -232,7 +302,8 @@ the path and colo and no query values. This applies to single reads through
 the entrypoint (`worker.ts`); storefront batch parts no longer go through the
 entrypoint at all (see the render path above). Our own 5xx
 passes through untouched, so a real outage does not double the database load.
-Bumping the cache generation (any buyer-visible save) also clears it at once.
+Bumping the cache generation (any buyer-visible save) or deploying the API
+also clears it at once.
 
 ## Budgets and guardrails
 
@@ -240,7 +311,7 @@ Bumping the cache generation (any buyer-visible save) also clears it at once.
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` | 1 for home, product, category and search (the pages' own read functions, started as the pages start them) |
 | D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 9 / 3, search 9 / 2 |
-| Batch safety (public parts only, per-part status, generation-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
+| Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
 
 The homepage part reads in two waves whatever its sections are: the

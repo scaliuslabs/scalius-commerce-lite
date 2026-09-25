@@ -40,10 +40,11 @@ class MemoryCache {
   }
 }
 
-function setup() {
+function setup(version = "version-a") {
   const { sqlite, binding } = createSqliteD1Database();
   sqlite.exec(SEED);
   const env = {
+    CF_VERSION_METADATA: { id: version, tag: "", timestamp: "" },
     DB: binding,
     SCALIUS_SECRET: "storefront-batch-route-master-secret-0123456789",
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
@@ -93,8 +94,8 @@ describe("storefront batch parts", () => {
     expect(publicApi).not.toHaveBeenCalled();
     // Only the three 200s are stored, each under the key PublicApi would use.
     expect(cache.puts).toEqual(PARTS.slice(0, 3).map((path) =>
-      publicReadCacheKey(new Request(`https://api.internal${path}`), "gen1")));
-    expect(cache.puts[0]).toBe("https://api.internal/api/v1/storefront/layout?__cg=gen1");
+      publicReadCacheKey(new Request(`https://api.internal${path}`), env, "gen1")));
+    expect(cache.puts[0]).toBe("https://api.internal/api/v1/storefront/layout?__cg=gen1&__cv=version-a");
   });
 
   it("are answered from the data center cache for the same generation, and re-rendered for a new one", async () => {
@@ -112,8 +113,49 @@ describe("storefront batch parts", () => {
     expect(rendersForBatchOnly).toBe(2);
     expect(render.mock.calls.length - rendersForBatchOnly).toBe(1 + PARTS.length);
     expect(next.map((part) => part.status)).toEqual([200, 200, 200, 404]);
-    expect(cache.puts.filter((key) => key.endsWith("__cg=gen2"))).toHaveLength(3);
+    expect(cache.puts.filter((key) => key.includes("__cg=gen2"))).toHaveLength(3);
     render.mockRestore();
+  });
+
+  it("are re-rendered after a deploy at the same generation, never served from the old code's entries", async () => {
+    const { env, ctx, cache, waits } = setup("version-a");
+    await batch(env, ctx);
+    await Promise.all(waits);
+    // Plant a payload the old code rendered under the old version's key, as
+    // the Cache API still holds it after the deploy.
+    const layoutKey = publicReadCacheKey(new Request("https://api.internal/api/v1/storefront/layout"), env, "gen1")!;
+    cache.entries.set(layoutKey, new Response('{"old":"shape"}', {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
+    }));
+    expect((await batch(env, ctx))[0]!.body).toBe('{"old":"shape"}');
+
+    const deployed = { ...env, CF_VERSION_METADATA: { id: "version-b", tag: "", timestamp: "" } } as Env;
+    const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
+    const afterDeploy = await batch(deployed, ctx);
+    await Promise.all(waits);
+
+    expect(afterDeploy[0]!.body).not.toBe('{"old":"shape"}');
+    // The batch route plus every part rendered again under the new version.
+    expect(render).toHaveBeenCalledTimes(1 + PARTS.length);
+    expect(cache.puts.filter((key) => key.endsWith("__cv=version-b"))).toHaveLength(3);
+    render.mockRestore();
+  });
+
+  it("are stored under the exact key the default entrypoint hands to PublicApi", async () => {
+    const { env, ctx, cache, waits, publicApi } = setup();
+    await batch(env, ctx);
+    await Promise.all(waits);
+    publicApi.mockImplementation(async () => new Response("{}"));
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(ctx, env) as unknown as TestWorker;
+
+    for (const path of PARTS.slice(0, 3)) {
+      await worker.fetch(new Request(`https://api.internal${path}`, {
+        headers: { "X-Scalius-Cache-Generation": "gen1" },
+      }));
+    }
+
+    expect(publicApi.mock.calls.map(([request]) => request.url)).toEqual(cache.puts);
   });
 
   it("give the same status, body and cache headers as the PublicApi entrypoint", async () => {
@@ -123,7 +165,7 @@ describe("storefront batch parts", () => {
     const { PublicApi } = await import("./worker");
 
     for (const path of PARTS) {
-      const key = publicReadCacheKey(new Request(`https://api.internal${path}`), "gen1")!;
+      const key = publicReadCacheKey(new Request(`https://api.internal${path}`), env, "gen1")!;
       const viaPublicApi = await (new PublicApi(ctx, env) as unknown as TestWorker).fetch(new Request(key));
       const inBatch = (await batch(env, ctx))[PARTS.indexOf(path)]!;
 
@@ -163,6 +205,7 @@ describe("local public reader", () => {
     let active = 0;
     let peak = 0;
     const read = createLocalPublicReader({
+      env: { CF_VERSION_METADATA: { id: "version-a" } },
       cache: null,
       maxConcurrentRenders: 2,
       waitUntil: () => undefined,
@@ -183,6 +226,7 @@ describe("local public reader", () => {
 
   it("still renders when the cache lookup fails", async () => {
     const read = createLocalPublicReader({
+      env: { CF_VERSION_METADATA: { id: "version-a" } },
       cache: { match: async () => { throw new Error("cache down"); }, put: async () => undefined },
       maxConcurrentRenders: 2,
       waitUntil: () => undefined,

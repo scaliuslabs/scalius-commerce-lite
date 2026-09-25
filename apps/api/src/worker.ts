@@ -27,7 +27,7 @@ import {
   getPublicApiCachePolicy,
   isCacheLayerServerError,
   logCacheLayerFallback,
-  withoutCacheGeneration,
+  withoutCacheIdentity,
 } from "./public-cache-policy";
 import { publicReadCacheKey, renderPublicRead } from "./public-read";
 import { readCacheGeneration } from "./utils/cache-generation";
@@ -103,13 +103,14 @@ async function fetchApiApp(
 }
 
 /**
- * Workers Cache entrypoint for anonymous public reads. The request URL carries
- * the cache generation, so the cache key changes on every buyer-visible write;
- * the generation is removed before the application sees the request.
+ * Workers Cache entrypoint for anonymous public reads. The request URL is
+ * `publicReadCacheKey`: it carries the cache generation and the Worker
+ * version, so the key changes on every buyer-visible write and every deploy;
+ * both are removed before the application sees the request.
  */
 export class PublicApi extends WorkerEntrypoint<Env> {
   async fetch(incoming: Request): Promise<Response> {
-    const request = withoutCacheGeneration(await resolveFrontProxy(incoming, this.env));
+    const request = withoutCacheIdentity(await resolveFrontProxy(incoming, this.env));
     if (!getPublicApiCachePolicy(request)) {
       return new Response("Request is not eligible for public caching", {
         status: 400,
@@ -174,7 +175,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       const generation =
         normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
         ?? await readCacheGeneration(this.env, this.ctx);
-      const cacheKey = publicReadCacheKey(request, generation);
+      const cacheKey = publicReadCacheKey(request, this.env, generation);
       if (cacheKey) {
         const cached = await this.ctx.exports.PublicApi.fetch(new Request(cacheKey, request));
         // The cache is a hint: a server error from the cache layer itself (a

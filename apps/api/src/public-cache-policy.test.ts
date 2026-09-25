@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
-  withCacheGeneration,
-  withoutCacheGeneration,
+  withCacheIdentity,
+  withoutCacheIdentity,
 } from "./public-cache-policy";
+import { publicReadCacheKey } from "./public-read";
 
 describe("public API cache policy", () => {
   it.each([
@@ -36,6 +37,7 @@ describe("public API cache policy", () => {
     ["GET", "/api/v1/hero/sliders", {}],
     ["GET", "/api/v1/hero/sliders?type=tablet", {}],
     ["GET", "/api/v1/products?__cg=forged", {}],
+    ["GET", "/api/v1/products?__cv=forged", {}],
   ])("never caches %s %s", (method, path, headers) => {
     expect(
       getPublicApiCachePolicy(new Request(`https://api.example.com${path}`, { method, headers })),
@@ -60,14 +62,34 @@ describe("public API cache policy", () => {
     expect(permuted).toEqual(canonical);
   });
 
-  it("puts the cache generation in the cache key and removes it before the app", () => {
-    const keyed = withCacheGeneration("https://api.example.com/api/v1/pages?page=2", "a1b2");
-    expect(keyed).toBe("https://api.example.com/api/v1/pages?page=2&__cg=a1b2");
-    expect(withCacheGeneration("https://api.example.com/api/v1/pages?page=2", "c3d4")).not.toBe(keyed);
+  it("puts the cache generation and Worker version in the cache key and removes both before the app", () => {
+    const keyed = withCacheIdentity("https://api.example.com/api/v1/pages?page=2", "a1b2", "ver-1");
+    expect(keyed).toBe("https://api.example.com/api/v1/pages?page=2&__cg=a1b2&__cv=ver-1");
+    expect(withCacheIdentity("https://api.example.com/api/v1/pages?page=2", "c3d4", "ver-1")).not.toBe(keyed);
+    expect(withCacheIdentity("https://api.example.com/api/v1/pages?page=2", "a1b2", "ver-2")).not.toBe(keyed);
 
-    const appRequest = withoutCacheGeneration(new Request(keyed));
+    const appRequest = withoutCacheIdentity(new Request(keyed));
     expect(appRequest.url).toBe("https://api.example.com/api/v1/pages?page=2");
     expect(getPublicApiCachePolicy(appRequest)).not.toBeNull();
+  });
+
+  it("keys the same read at the same generation differently for different code", () => {
+    // The lead's reproduction: a deploy changed the homepage payload shape
+    // with no data write, so the generation stayed and the old payload was
+    // served. The Worker version is what tells the two apart.
+    const read = () => new Request("https://api.example.com/api/v1/storefront/homepage");
+    const before = publicReadCacheKey(read(), { CF_VERSION_METADATA: { id: "ver-1" } }, "gen1");
+    const after = publicReadCacheKey(read(), { CF_VERSION_METADATA: { id: "ver-2" } }, "gen1");
+
+    expect(before).toBe("https://api.example.com/api/v1/storefront/homepage?__cg=gen1&__cv=ver-1");
+    expect(after).not.toBe(before);
+    expect(publicReadCacheKey(read(), { CF_VERSION_METADATA: { id: "ver-1" } }, "gen1")).toBe(before);
+  });
+
+  it("caches nothing without a generation or a Worker version", () => {
+    const read = new Request("https://api.example.com/api/v1/products");
+    expect(publicReadCacheKey(read, { CF_VERSION_METADATA: { id: "ver-1" } }, null)).toBeNull();
+    expect(publicReadCacheKey(read, {}, "gen1")).toBeNull();
   });
 
   it("gives the edge a bounded lifetime without extending browser freshness", () => {
