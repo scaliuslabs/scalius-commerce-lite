@@ -11,15 +11,17 @@
  * 4. Creates the default local admin account unless --skip-admin is passed
  *
  * No URL is written anywhere: Workers read platform URLs from the dashboard
- * (Settings -> System -> Platform via GET /api/v1/platform) and local
- * development falls back to localhost:8787 (API), :4322 (storefront), and
- * :4323 (dashboard) automatically in code.
+ * (Settings -> System -> Platform via GET /api/v1/platform). Local
+ * development uses the ports from scripts/dev-ports.mjs (default :8787 API,
+ * :4322 storefront, :4323 dashboard), and scripts/dev.sh points the local
+ * Platform document at them.
  */
 
 import { execSync } from "child_process";
 import { appendFileSync, existsSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { devOrigins } from "./dev-ports.mjs";
 import {
   assertLocalSecretSync,
   assertPassword,
@@ -267,7 +269,7 @@ if (envOnly) {
   console.log("  3. pnpm dev          — Start API + admin + storefront\n");
 } else {
   console.log("  1. pnpm dev          — Start API + admin + storefront");
-  console.log("  2. http://localhost:4323/admin");
+  console.log(`  2. ${devOrigins().dashboardUrl}/admin`);
   if (!skipAdmin) {
     console.log(`  3. Sign in as ${localAdminEmail} with the configured local admin password.\n`);
   } else {
