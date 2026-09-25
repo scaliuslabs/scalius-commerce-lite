@@ -1,7 +1,17 @@
 // src/modules/attributes/attributes.service.ts
-// All DB queries and business logic for the product attributes domain.
+// Attribute definitions (typed: value type, group, unit, order, key spec,
+// highlight, filter widget) and the string-keyed value routes the dashboard
+// already uses. The value vocabulary lives in attribute_values
+// (./attribute-values.ts); the JSON `options` column is no longer read or
+// written.
 
-import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
+import {
+    attributeValues,
+    productAttributes,
+    productAttributeValues,
+    productFacetValues,
+    products,
+} from "@scalius/database/schema";
 import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -11,16 +21,61 @@ import {
     type Database,
 } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import {
+    defaultAttributeFacetDisplay,
+    isAttributeFacetDisplayAllowed,
+} from "@scalius/shared/catalog-attributes";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
-import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.validation";
+import {
+    isReservedAttributeSlug,
+    type CreateAttributeInput,
+    type UpdateAttributeInput,
+} from "./attributes.validation";
+import { encodeAttributeValue } from "./attribute-value-codec";
+import { attributeValueInsertStatement, readLiveAttributeDefinition } from "./attribute-definition";
+import { assertLiveAttributeGroup } from "./attribute-groups";
+import {
+    createAttributeValueRow,
+    newAttributeValueId,
+    planAttributeValuePresets,
+    readAttributePresetTexts,
+    refreshProductsReferencingValues,
+} from "./attribute-values";
+import {
+    forEachAttributeProductChunk,
+    jsonIdSet,
+    productRevisionBumpStatement,
+    type CatalogProjectionRefresh,
+} from "./projection-refresh";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ATTRIBUTE_BULK_IDS = 90;
 const MAX_ATTRIBUTE_PAGE_SIZE = 500;
 const MAX_ATTRIBUTE_AGENT_PAGE_SIZE = 50;
 const MAX_ATTRIBUTE_VALUE_LENGTH = 100;
+/** Preset values the legacy list returns per attribute as `options`. */
+const MAX_LISTED_OPTIONS = 500;
+
+/** The typed definition columns every attribute response carries. */
+const typedDefinitionColumns = {
+    groupId: productAttributes.groupId,
+    valueType: productAttributes.valueType,
+    unit: productAttributes.unit,
+    sortOrder: productAttributes.sortOrder,
+    keySpec: productAttributes.keySpec,
+    highlight: productAttributes.highlight,
+    facetDisplay: productAttributes.facetDisplay,
+};
+
+const attributeMutationColumns = {
+    id: productAttributes.id,
+    name: productAttributes.name,
+    slug: productAttributes.slug,
+    filterable: productAttributes.filterable,
+    ...typedDefinitionColumns,
+};
 
 function attributeIdentityKey(value: string): string {
     return value.trim().toLowerCase();
@@ -57,20 +112,37 @@ async function findAttributeIdentityConflict(
     return rows.find((row) => row.deletedAt === null) ?? rows[0];
 }
 
-function productRevisionBumpForAttributeValues(
-    db: Database,
-    condition: SQL,
-) {
-    return db.update(products)
-        .set({
-            aggregateRevision: sql`${products.aggregateRevision} + 1`,
-            updatedAt: sql`unixepoch()`,
+/** Live preset values per attribute (first 500 each, in order), for the legacy `options` field. */
+async function presetOptionsByAttribute(db: Database, attributeIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    if (attributeIds.length === 0) return map;
+    const ranked = db
+        .select({
+            attributeId: attributeValues.attributeId,
+            value: attributeValues.value,
+            rank: sql<number>`ROW_NUMBER() OVER (
+                PARTITION BY ${attributeValues.attributeId}
+                ORDER BY ${attributeValues.sortOrder}, ${attributeValues.normalizedValue}, ${attributeValues.id}
+            )`.as("option_rank"),
         })
-        .where(sql`${products.id} IN (
-            SELECT ${productAttributeValues.productId}
-            FROM ${productAttributeValues}
-            WHERE ${condition}
-        )`);
+        .from(attributeValues)
+        .where(and(
+            isNull(attributeValues.deletedAt),
+            sql`${attributeValues.attributeId} IN ${jsonIdSet(attributeIds)}`,
+        ))
+        .as("ranked_attribute_options");
+    const rows = await db
+        .select({ attributeId: ranked.attributeId, value: ranked.value })
+        .from(ranked)
+        .where(sql`${ranked.rank} <= ${MAX_LISTED_OPTIONS}`)
+        .orderBy(ranked.attributeId, sql`${ranked.rank}`)
+        .all();
+    for (const row of rows) {
+        const list = map.get(row.attributeId) ?? [];
+        list.push(row.value);
+        map.set(row.attributeId, list);
+    }
+    return map;
 }
 
 // ─────────────────────────────────────────
@@ -140,12 +212,21 @@ export async function listAttributes(
 
     const total = totalResult?.count ?? 0;
 
-    const ALLOWED_SORT_FIELDS = ["name", "slug", "filterable", "createdAt", "updatedAt"] as const;
+    const ALLOWED_SORT_FIELDS = ["name", "slug", "filterable", "createdAt", "updatedAt", "sortOrder"] as const;
     type SortField = typeof ALLOWED_SORT_FIELDS[number];
     const safeSortField: SortField = ALLOWED_SORT_FIELDS.includes(sort as SortField) ? sort as SortField : "name";
     const sortColumn = productAttributes[safeSortField];
     const attributes = await db
-        .select()
+        .select({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            filterable: productAttributes.filterable,
+            createdAt: productAttributes.createdAt,
+            updatedAt: productAttributes.updatedAt,
+            deletedAt: productAttributes.deletedAt,
+            ...typedDefinitionColumns,
+        })
         .from(productAttributes)
         .where(combinedWhereClause)
         .orderBy(
@@ -177,8 +258,10 @@ export async function listAttributes(
         valueCounts.map((item) => [item.attributeId, item.valueCount]),
     );
 
+    const presetOptions = await presetOptionsByAttribute(db, attributeIds);
     const enrichedAttributes = attributes.map((attr) => ({
         ...attr,
+        options: presetOptions.get(attr.id) ?? [],
         valueCount: valueCountMap.get(attr.id) || 0
     }));
 
@@ -237,7 +320,7 @@ export async function listAttributeAgentSummaries(
             : sql`0 = 1`);
     }
     const where = and(...conditions);
-    const allowedSortFields = ["name", "slug", "filterable", "createdAt", "updatedAt"] as const;
+    const allowedSortFields = ["name", "slug", "filterable", "createdAt", "updatedAt", "sortOrder"] as const;
     type SortField = typeof allowedSortFields[number];
     const sort = allowedSortFields.includes(options.sort as SortField)
         ? options.sort as SortField
@@ -253,6 +336,7 @@ export async function listAttributeAgentSummaries(
             slug: productAttributes.slug,
             filterable: productAttributes.filterable,
             deletedAt: productAttributes.deletedAt,
+            ...typedDefinitionColumns,
         })
         .from(productAttributes)
         .where(where)
@@ -274,7 +358,24 @@ export async function createAttribute(
     db: Database,
     data: CreateAttributeInput,
 ) {
-    const { name, slug, filterable, options } = data;
+    const { name, slug } = data;
+    const filterable = data.filterable ?? true;
+    const valueType = data.valueType ?? "text";
+    const options = data.options ?? [];
+    if (slug && isReservedAttributeSlug(slug)) {
+        throw new ValidationError("That slug is a storefront listing query key. Choose another.", { field: "slug" });
+    }
+    const facetDisplay = data.facetDisplay ?? defaultAttributeFacetDisplay(valueType);
+    if (!isAttributeFacetDisplayAllowed(valueType, facetDisplay)) {
+        throw new ValidationError(`A ${facetDisplay} filter does not suit ${valueType} values.`, { field: "facetDisplay" });
+    }
+    if (data.unit && valueType !== "number") {
+        throw new ValidationError("Only number attributes have a unit.", { field: "unit" });
+    }
+    if ((valueType === "number" || valueType === "boolean") && options.length > 0) {
+        throw new ValidationError("Number and yes/no attributes have no preset values.", { field: "options" });
+    }
+    await assertLiveAttributeGroup(db, data.groupId);
 
     const existingAttribute = await findAttributeIdentityConflict(db, { name, slug });
 
@@ -288,23 +389,31 @@ export async function createAttribute(
     }
 
     const newAttributeId = "attr_" + nanoid();
-    const insertWithSlug = async (handle: string) => db
-        .insert(productAttributes)
-        .values({
-            id: newAttributeId,
-            name,
-            slug: handle,
-            filterable,
-            options: options || null,
-            createdAt: sql`(cast(strftime('%s','now') as int))`,
-            updatedAt: sql`(cast(strftime('%s','now') as int))`
-        })
-        .returning({
-            id: productAttributes.id,
-            name: productAttributes.name,
-            slug: productAttributes.slug,
-            filterable: productAttributes.filterable,
-        });
+    const presetRows = options.map((value, index) => ({ id: newAttributeValueId(), value, sortOrder: index }));
+    const insertWithSlug = async (handle: string) => {
+        const results = await safeBatch(db, [
+            db
+                .insert(productAttributes)
+                .values({
+                    id: newAttributeId,
+                    name,
+                    slug: handle,
+                    filterable,
+                    valueType,
+                    groupId: data.groupId ?? null,
+                    unit: valueType === "number" ? data.unit ?? null : null,
+                    sortOrder: data.sortOrder ?? 0,
+                    keySpec: data.keySpec ?? false,
+                    highlight: data.highlight ?? false,
+                    facetDisplay,
+                    createdAt: sql`(cast(strftime('%s','now') as int))`,
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`
+                })
+                .returning(attributeMutationColumns),
+            ...(presetRows.length > 0 ? [attributeValueInsertStatement(db, newAttributeId, presetRows)] : []),
+        ] as never) as unknown[];
+        return results[0] as Array<Record<keyof typeof attributeMutationColumns, unknown>>;
+    };
     const [insertedAttribute] = slug
         ? await insertWithSlug(slug)
         : await insertWithDerivedHandle(
@@ -312,6 +421,7 @@ export async function createAttribute(
                 db,
                 table: productAttributes,
                 column: productAttributes.slug,
+                isReserved: isReservedAttributeSlug,
                 isHandleConflict: (error) => /product_attributes(?:_slug_unique|\.slug)/i.test(
                     error instanceof Error ? error.message : String(error),
                 ),
@@ -322,22 +432,41 @@ export async function createAttribute(
         );
     if (!insertedAttribute) throw new Error("Attribute insert did not return a row");
 
-    return { attribute: insertedAttribute };
+    return { attribute: insertedAttribute as AttributeMutationResult };
 }
 
+export type AttributeMutationResult = {
+    id: string;
+    name: string;
+    slug: string;
+    filterable: boolean;
+    groupId: string | null;
+    valueType: "text" | "number" | "boolean" | "enum";
+    unit: string | null;
+    sortOrder: number;
+    keySpec: boolean;
+    highlight: boolean;
+    facetDisplay: "checkbox" | "range" | "swatch" | "search_list";
+};
+
+/**
+ * Updates the definition. `valueType` is not editable here (see
+ * `convertAttributeValueType`); unit and filter widget are checked against the
+ * stored type. `options` replaces the value vocabulary (attribute_values):
+ * enum values that products use cannot be removed, and renaming or reordering
+ * an enum value rewrites its products in bounded batches with their refresh.
+ */
 export async function updateAttribute(
     db: Database,
     id: string,
     data: UpdateAttributeInput,
+    refresh: CatalogProjectionRefresh,
 ) {
-    const activeAttribute = await db
-        .select({ id: productAttributes.id })
-        .from(productAttributes)
-        .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
-        .get();
+    const current = await readLiveAttributeDefinition(db, id);
 
-    if (!activeAttribute) throw new NotFoundError("Attribute not found");
-
+    if (data.slug && data.slug !== current.slug && isReservedAttributeSlug(data.slug)) {
+        throw new ValidationError("That slug is a storefront listing query key. Choose another.", { field: "slug" });
+    }
     if (data.name || data.slug) {
         const existingAttribute = await findAttributeIdentityConflict(db, {
             name: data.name,
@@ -349,22 +478,49 @@ export async function updateAttribute(
             throw new ConflictError("An attribute with that name or slug already exists.");
         }
     }
+    if (data.facetDisplay && !isAttributeFacetDisplayAllowed(current.valueType, data.facetDisplay)) {
+        throw new ValidationError(
+            `A ${data.facetDisplay} filter does not suit ${current.valueType} values.`,
+            { field: "facetDisplay" },
+        );
+    }
+    if (data.unit && current.valueType !== "number") {
+        throw new ValidationError("Only number attributes have a unit.", { field: "unit" });
+    }
+    if (data.groupId !== undefined) await assertLiveAttributeGroup(db, data.groupId);
 
-    const [updatedAttribute] = await db
-        .update(productAttributes)
-        .set({
-            ...data,
-            updatedAt: sql`(cast(strftime('%s','now') as int))`
-        })
-        .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
-        .returning({
-            id: productAttributes.id,
-            name: productAttributes.name,
-            slug: productAttributes.slug,
-            filterable: productAttributes.filterable,
-        });
+    const { options, ...definition } = data;
+    const plan = options !== undefined
+        ? await planAttributeValuePresets(db, current, options ?? [])
+        : undefined;
 
+    let results: unknown[];
+    try {
+        results = await safeBatch(db, [
+            db
+                .update(productAttributes)
+                .set({
+                    ...definition,
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`
+                })
+                .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
+                .returning(attributeMutationColumns),
+            ...(plan?.statements ?? []),
+        ] as never) as unknown[];
+    } catch (error) {
+        if (isBatchGuardError(error, "ATTRIBUTE_VALUE_IN_USE")) {
+            throw new ConflictError("Products started using a removed value meanwhile. Refresh and try again.");
+        }
+        throw error;
+    }
+    const [updatedAttribute] = results[0] as AttributeMutationResult[];
     if (!updatedAttribute) throw new NotFoundError("Attribute not found");
+
+    if (plan && plan.changedEnumValueIds.length > 0) {
+        await refreshProductsReferencingValues(db, plan.changedEnumValueIds, refresh, {
+            rewriteDisplay: plan.renamedEnumValueIds.length > 0,
+        });
+    }
 
     return { attribute: updatedAttribute };
 }
@@ -454,15 +610,28 @@ async function deleteAttributes(
 
     await assertAttributesDeletable(db, ids, permanent);
 
-    const write = permanent
-        ? db.delete(productAttributes).where(inArray(productAttributes.id, ids))
-        : db
-            .update(productAttributes)
-            .set({ deletedAt: sql`unixepoch()` })
-            .where(inArray(productAttributes.id, ids));
+    // A permanent delete removes the product values, then the value
+    // vocabulary (product values name it ON DELETE RESTRICT), then the
+    // definition, and the attribute's facet rows: what a refresh would leave.
+    const writes: SQLiteBatchItem[] = permanent
+        ? [
+            db.delete(productFacetValues).where(and(
+                sql`${productFacetValues.facetKind} = 'attribute'`,
+                sql`${productFacetValues.facetKey} IN ${jsonIdSet(ids)}`,
+            )),
+            db.delete(productAttributeValues).where(sql`${productAttributeValues.attributeId} IN ${jsonIdSet(ids)}`),
+            db.delete(attributeValues).where(sql`${attributeValues.attributeId} IN ${jsonIdSet(ids)}`),
+            db.delete(productAttributes).where(sql`${productAttributes.id} IN ${jsonIdSet(ids)}`),
+        ]
+        : [
+            db
+                .update(productAttributes)
+                .set({ deletedAt: sql`unixepoch()` })
+                .where(inArray(productAttributes.id, ids)),
+        ];
 
     try {
-        await safeBatch(db, [attributeDeleteGuard(db, ids, permanent), write] as never);
+        await safeBatch(db, [attributeDeleteGuard(db, ids, permanent), ...writes] as never);
     } catch (error) {
         if (isBatchGuardError(error, "ATTRIBUTE_DELETE_CONFLICT")) {
             throw new ConflictError(
@@ -644,25 +813,6 @@ function requireExistingAttributeValue(value: string): string {
     return value;
 }
 
-async function usedAttributeValueKeys(
-    db: Database,
-    attributeId: string,
-    keys: string[],
-): Promise<Set<string>> {
-    if (keys.length === 0) return new Set();
-    const rows = await db
-        .select({ valueKey: sql<string>`lower(trim(${productAttributeValues.value}))` })
-        .from(productAttributeValues)
-        .where(and(
-            eq(productAttributeValues.attributeId, attributeId),
-            sql`lower(trim(${productAttributeValues.value})) IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(keys)})
-            )`,
-        ))
-        .groupBy(sql`lower(trim(${productAttributeValues.value}))`)
-        .all();
-    return new Set(rows.map((row) => row.valueKey));
-}
 
 export async function listAttributeValues(
     db: Database,
@@ -683,7 +833,10 @@ export async function listAttributeValues(
     );
 
     const attribute = await db
-        .select()
+        .select({
+            name: productAttributes.name,
+            updatedAt: productAttributes.updatedAt,
+        })
         .from(productAttributes)
         .where(
             and(
@@ -696,7 +849,8 @@ export async function listAttributeValues(
     if (!attribute) throw new NotFoundError("Attribute not found");
 
     const offset = (page - 1) * limit;
-    const attrOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
+    // Presets are the attribute's live attribute_values rows, in their order.
+    const attrOptions = dedupeAttributeOptions(await readAttributePresetTexts(db, attributeId));
     const attrOptionKeys = new Set(attrOptions.map(attributeValueKey));
 
     // Build WHERE conditions for DB-level filtering
@@ -865,156 +1019,153 @@ export async function listAttributeValues(
     };
 }
 
+
+/** Adds a preset (text) or a value (enum) to the attribute's vocabulary. */
 export async function addAttributeValue(
     db: Database,
     attributeId: string,
     value: string,
 ) {
-    const attribute = await db
-        .select()
-        .from(productAttributes)
-        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
-        .get();
-
-    if (!attribute) throw new NotFoundError("Attribute not found");
-
-    const normalizedValue = normalizeAttributeValue(value);
-    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
-    if (currentOptions.some((option) => attributeValueKey(option) === attributeValueKey(normalizedValue))) {
-        throw new ConflictError(`Value "${normalizedValue}" already exists for this attribute`);
-    }
-
-    const newOptions = [...currentOptions, normalizedValue];
-    await db
-        .update(productAttributes)
-        .set({ options: newOptions, updatedAt: sql`unixepoch()` })
-        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)));
+    await createAttributeValueRow(db, attributeId, { value: normalizeAttributeValue(value) });
 }
 
+/** A live vocabulary row of the attribute with this normalised text. */
+async function findPresetRow(db: Database, attributeId: string, value: string) {
+    return db
+        .select({ id: attributeValues.id, value: attributeValues.value })
+        .from(attributeValues)
+        .where(and(
+            eq(attributeValues.attributeId, attributeId),
+            isNull(attributeValues.deletedAt),
+            sql`${attributeValues.normalizedValue} = lower(trim(${value}))`,
+        ))
+        .get();
+}
+
+/** Product value rows of the attribute whose text matches `value` (normalised). */
+function productValueTextMatch(attributeId: string, value: string): SQL {
+    return and(
+        eq(productAttributeValues.attributeId, attributeId),
+        sql`lower(trim(${productAttributeValues.value})) = lower(trim(${value}))`,
+    )!;
+}
+
+async function productValueTextUsed(db: Database, attributeId: string, value: string): Promise<boolean> {
+    const row = await db
+        .select({ id: productAttributeValues.id })
+        .from(productAttributeValues)
+        .where(productValueTextMatch(attributeId, value))
+        .limit(1)
+        .get();
+    return row !== undefined;
+}
+
+/**
+ * Renames a value across every product (and its preset). Enum values are
+ * renamed on their attribute_values row and the products naming it follow;
+ * text, number and yes/no values are rewritten by matching text. Products are
+ * rewritten 90 per batch, each batch with their revision bump and projection
+ * refresh.
+ */
 export async function renameAttributeValue(
     db: Database,
     attributeId: string,
     oldValue: string,
     newValue: string,
+    refresh: CatalogProjectionRefresh,
 ) {
-    const attribute = await db
-        .select()
-        .from(productAttributes)
-        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
-        .get();
-
-    if (!attribute) throw new NotFoundError("Attribute not found");
-
-    const normalizedOldValue = requireExistingAttributeValue(oldValue);
-    const normalizedNewValue = normalizeAttributeValue(newValue);
-    const oldValueKey = attributeValueKey(normalizedOldValue);
-    const newValueKey = attributeValueKey(normalizedNewValue);
-    const rawOptions = (attribute.options as string[]) || [];
-    const usedValueKeys = await usedAttributeValueKeys(
-        db,
-        attributeId,
-        oldValueKey === newValueKey ? [oldValueKey] : [oldValueKey, newValueKey],
-    );
-    const sourceExists = usedValueKeys.has(oldValueKey) || rawOptions.some(
-        (option) => attributeValueKey(option) === oldValueKey,
-    );
-    if (!sourceExists) {
+    const attribute = await readLiveAttributeDefinition(db, attributeId);
+    const source = requireExistingAttributeValue(oldValue).trim();
+    const target = normalizeAttributeValue(newValue);
+    const preset = await findPresetRow(db, attributeId, source);
+    const sourceUsed = await productValueTextUsed(db, attributeId, source);
+    if (!preset && !sourceUsed) {
         throw new NotFoundError(`Attribute value "${oldValue.trim()}" no longer exists`);
     }
-    if (
-        oldValueKey !== newValueKey &&
-        (usedValueKeys.has(newValueKey) || rawOptions.some(
-            (option) => attributeValueKey(option) === newValueKey,
-        ))
-    ) {
-        throw new ConflictError(
-            `Value "${normalizedNewValue}" already exists for this attribute`,
+    if (attributeValueKey(source) !== attributeValueKey(target)) {
+        const clash = await findPresetRow(db, attributeId, target) ?? (
+            await productValueTextUsed(db, attributeId, target) ? { id: "" } : undefined
         );
+        if (clash) throw new ConflictError(`Value "${target}" already exists for this attribute`);
     }
 
-    const affectedValueCondition = and(
-            eq(productAttributeValues.attributeId, attributeId),
-            sql`lower(trim(${productAttributeValues.value})) = ${oldValueKey}`,
-        )!;
-    const batchOps: unknown[] = [
-        productRevisionBumpForAttributeValues(db, affectedValueCondition),
-        db
-            .update(productAttributeValues)
-            .set({ value: normalizedNewValue })
-            .where(
-                and(
-                    eq(productAttributeValues.attributeId, attributeId),
-                    sql`lower(trim(${productAttributeValues.value})) = ${oldValueKey}`,
-                )
-            ),
-    ];
-
-    const currentOptions = dedupeAttributeOptions(rawOptions);
-    if (currentOptions.some((option) => attributeValueKey(option) === oldValueKey)) {
-        const newOptions = dedupeAttributeOptions(currentOptions.map((option) =>
-            attributeValueKey(option) === oldValueKey ? normalizedNewValue : option
-        ));
-        batchOps.push(
-            db
-                .update(productAttributes)
-                .set({ options: newOptions, updatedAt: sql`unixepoch()` })
-                .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
-        );
+    if (attribute.valueType === "enum" && preset) {
+        await db.update(attributeValues)
+            .set({ value: target, normalizedValue: sql`lower(trim(${target}))`, updatedAt: sql`unixepoch()` })
+            .where(and(eq(attributeValues.id, preset.id), isNull(attributeValues.deletedAt)))
+            .run();
+        await refreshProductsReferencingValues(db, [preset.id], refresh, { rewriteDisplay: true });
+        return;
     }
 
-    await safeBatch(db, batchOps as never);
+    const encoded = encodeAttributeValue(attribute.valueType, target, attribute.unit);
+    if (encoded === null) {
+        throw new ValidationError(
+            attribute.valueType === "number"
+                ? `"${target}" is not a number.`
+                : `"${target}" is not yes or no.`,
+            { field: "newValue" },
+        );
+    }
+    if (preset) {
+        await db.update(attributeValues)
+            .set({ value: target, normalizedValue: sql`lower(trim(${target}))`, updatedAt: sql`unixepoch()` })
+            .where(and(eq(attributeValues.id, preset.id), isNull(attributeValues.deletedAt)))
+            .run();
+    }
+    const match = productValueTextMatch(attributeId, source);
+    await forEachAttributeProductChunk(db, match, (productIds) => [
+        db.update(productAttributeValues)
+            .set({ value: encoded.value, valueNumber: encoded.valueNumber })
+            .where(and(match, sql`${productAttributeValues.productId} IN ${jsonIdSet(productIds)}`)),
+        productRevisionBumpStatement(db, productIds),
+        ...refresh(productIds),
+    ]);
 }
 
+/**
+ * Removes a value from every product that has it (the products lose that
+ * attribute), then retires its preset/enum row. Bounded like the rename.
+ */
 export async function deleteAttributeValue(
     db: Database,
     attributeId: string,
     value: string,
+    refresh: CatalogProjectionRefresh,
 ) {
-    const attribute = await db
-        .select()
-        .from(productAttributes)
-        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
-        .get();
-
-    if (!attribute) throw new NotFoundError("Attribute not found");
-
-    const normalizedValue = requireExistingAttributeValue(value);
-    const normalizedValueKey = attributeValueKey(normalizedValue);
-    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
-    const usedValueKeys = await usedAttributeValueKeys(db, attributeId, [normalizedValueKey]);
-    const sourceExists = usedValueKeys.has(normalizedValueKey) || currentOptions.some(
-        (option) => attributeValueKey(option) === normalizedValueKey,
-    );
-    if (!sourceExists) {
+    const attribute = await readLiveAttributeDefinition(db, attributeId);
+    const source = requireExistingAttributeValue(value).trim();
+    const preset = await findPresetRow(db, attributeId, source);
+    const sourceUsed = await productValueTextUsed(db, attributeId, source);
+    if (!preset && !sourceUsed) {
         throw new NotFoundError(`Attribute value "${value.trim()}" no longer exists`);
     }
-    const affectedValueCondition = and(
-            eq(productAttributeValues.attributeId, attributeId),
-            sql`lower(trim(${productAttributeValues.value})) = ${normalizedValueKey}`,
-        )!;
-    const batchOps: unknown[] = [
-        productRevisionBumpForAttributeValues(db, affectedValueCondition),
-        db
-            .delete(productAttributeValues)
-            .where(
-                and(
-                    eq(productAttributeValues.attributeId, attributeId),
-                    sql`lower(trim(${productAttributeValues.value})) = ${normalizedValueKey}`,
-                )
-            ),
-    ];
-
-    if (currentOptions.some((option) => attributeValueKey(option) === normalizedValueKey)) {
-        const newOptions = currentOptions.filter(
-            (option) => attributeValueKey(option) !== normalizedValueKey,
-        );
-        batchOps.push(
-            db
-                .update(productAttributes)
-                .set({ options: newOptions, updatedAt: sql`unixepoch()` })
-                .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
-        );
+    const textMatch = productValueTextMatch(attributeId, source);
+    const match = attribute.valueType === "enum" && preset
+        ? or(textMatch, eq(productAttributeValues.valueId, preset.id))!
+        : textMatch;
+    await forEachAttributeProductChunk(db, match, (productIds) => [
+        productRevisionBumpStatement(db, productIds),
+        db.delete(productAttributeValues)
+            .where(and(match, sql`${productAttributeValues.productId} IN ${jsonIdSet(productIds)}`)),
+        ...refresh(productIds),
+    ]);
+    if (preset) {
+        try {
+            await safeBatch(db, [
+                buildBatchGuard(db, sql`NOT EXISTS (
+                    SELECT 1 FROM ${productAttributeValues} WHERE ${productAttributeValues.valueId} = ${preset.id}
+                )`, "ATTRIBUTE_VALUE_IN_USE"),
+                db.update(attributeValues)
+                    .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                    .where(and(eq(attributeValues.id, preset.id), isNull(attributeValues.deletedAt))),
+            ] as never);
+        } catch (error) {
+            if (isBatchGuardError(error, "ATTRIBUTE_VALUE_IN_USE")) {
+                throw new ConflictError("Products started using this value while it was being deleted. Try again.");
+            }
+            throw error;
+        }
     }
-
-    await safeBatch(db, batchOps as never);
 }
+
