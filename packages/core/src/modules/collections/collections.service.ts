@@ -48,6 +48,7 @@ import {
     selectProductMediaProjectionRows,
     type ProductMediaProjectionRow,
 } from "../products/media";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 import {
     categoryScope,
     declareProductCards,
@@ -691,11 +692,11 @@ export async function updateCollectionProducts(
 
     const updated = await db
         .update(collections)
-        .set({
+        .set(truthfulUpdatedAt(collections, {
             config: stringifyCollectionConfig({ ...config, productIds }),
             version: sql`${collections.version} + 1`,
             updatedAt: sql`(unixepoch())`,
-        })
+        }))
         .where(and(
             eq(collections.id, id),
             eq(collections.version, data.expectedVersion),
@@ -715,11 +716,11 @@ export async function deleteCollection(db: Database, id: string): Promise<void> 
 
     await db
         .update(collections)
-        .set({
+        .set(truthfulUpdatedAt(collections, {
             deletedAt: sql`(unixepoch())`,
             version: sql`${collections.version} + 1`,
             updatedAt: sql`(unixepoch())`,
-        })
+        }))
         .where(eq(collections.id, id));
 }
 
@@ -739,11 +740,11 @@ export async function bulkDeleteCollections(
     } else {
         await db
             .update(collections)
-            .set({
+            .set(truthfulUpdatedAt(collections, {
                 deletedAt: sql`(unixepoch())`,
                 version: sql`${collections.version} + 1`,
                 updatedAt: sql`(unixepoch())`,
-            })
+            }))
             .where(and(
                 inArray(collections.id, normalizedIds),
                 isNull(collections.deletedAt),
@@ -766,11 +767,11 @@ export async function bulkActivateCollections(db: Database, ids: string[]): Prom
         db,
         rows.map((row) => ({ isActive: true, rawConfig: row.config })),
     );
-    const results = await safeBatch(db, rows.map((row) => db.update(collections).set({
+    const results = await safeBatch(db, rows.map((row) => db.update(collections).set(truthfulUpdatedAt(collections, {
         isActive: true,
         version: row.version + 1,
         updatedAt: sql`(unixepoch())`,
-    }).where(and(
+    })).where(and(
         eq(collections.id, row.id),
         eq(collections.version, row.version),
         isNull(collections.deletedAt),
@@ -786,11 +787,11 @@ export async function bulkDeactivateCollections(db: Database, ids: string[]): Pr
 
     await db
         .update(collections)
-        .set({
+        .set(truthfulUpdatedAt(collections, {
             isActive: false,
             version: sql`${collections.version} + 1`,
             updatedAt: sql`(unixepoch())`,
-        })
+        }))
         .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
 }
 
@@ -815,12 +816,12 @@ export async function restoreCollections(db: Database, ids: string[]): Promise<v
     const nextSortOrder = Number(maxRows[0]?.max ?? -1) + 1;
     const results = await safeBatch(db, normalizedIds.map((id, index) => {
         const row = byId.get(id)!;
-        return db.update(collections).set({
+        return db.update(collections).set(truthfulUpdatedAt(collections, {
             deletedAt: null,
             sortOrder: nextSortOrder + index,
             version: row.version + 1,
             updatedAt: sql`(unixepoch())`,
-        }).where(and(
+        })).where(and(
             eq(collections.id, id),
             eq(collections.version, row.version),
             isNotNull(collections.deletedAt),
@@ -872,11 +873,11 @@ export async function reorderCollections(
         db,
         items.map((item) =>
             db.update(collections)
-                .set({
+                .set(truthfulUpdatedAt(collections, {
                     sortOrder: item.sortOrder,
                     version: item.expectedVersion + 1,
                     updatedAt: sql`(unixepoch())`,
-                })
+                }))
                 .where(and(
                     eq(collections.id, item.id.trim()),
                     eq(collections.version, item.expectedVersion),
