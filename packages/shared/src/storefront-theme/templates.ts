@@ -218,7 +218,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" }],
       card: ["spec"],
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
         toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page"],
         phoneLayout: "list-row",
         paging: "numbered",
@@ -256,7 +256,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["bottom-tabs"],
       card: ["tech-rounded"],
-      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: {
         gallery: "thumbs-below",
         buyBox: ["tech"],
@@ -291,7 +291,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["drill-in-drawer"],
       card: ["marketplace"],
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 190, rowPitch: 18, label: 13 }, // Daraz
         toolbar: ["breadcrumb", "aspect-chips", "result-count", "sort", "grid-list-toggle"],
         phoneLayout: "grid",
         paging: "numbered",
@@ -368,7 +368,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["standard"],
       // No per-page: the default listing stays today's (pixel-identical), and
       // most stores get no extra crawl variant.
-      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
     }),

@@ -36,7 +36,7 @@ numbers come from the storefront study
     "topBar", "header",
     "navigation": { "source", "maxTopItems", "linkBudget" },   // shared by every header surface
     "desktopNav", "mobileNav", "card",
-    "listing": { "layout", "filters": { "style", "openByDefault" }, "toolbar": [], "phoneLayout", "paging" },
+    "listing": { "layout", "filters": { "style", "openByDefault", "column"?, "rowPitch"?, "label"? }, "toolbar": [], "phoneLayout", "paging" },
     "product": { "gallery", "buyBox", "below": [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
     "footer"
   },
@@ -108,6 +108,12 @@ numbers come from the storefront study
   270px, 28px, 16px), `bar-dropdowns` (Dawn, Aarong: up to 4 facet
   dropdowns in a bar, the rest in a drawer) or `drawer` (Target, Chaldal).
   `openByDefault` opens the facet groups (never for `bar-dropdowns`).
+  A template may set its reference's own numbers over the style's:
+  `column` (180-340px), `rowPitch` (16-36px) and `label` (12-18px);
+  `resolved.blocks.listing.filters.spec` carries the result
+  (`storefrontListingFilterSpec`). Marketplace is Daraz's 190/18/13,
+  spec-catalogue Star Tech's 225/32/14, rounded-tech Apple Gadgets'
+  316/28/16 and department-mall Amazon's 262/22/14 (sidebar-dense).
   Phones always use a Filter button and a 288px sheet. The small-catalogue
   rule is `storefrontListingFiltersShown`: filters need 8 results and a
   facet with two values, unless the buyer already refined; a store with

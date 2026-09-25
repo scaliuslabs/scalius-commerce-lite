@@ -1,5 +1,37 @@
-<div class="-mx-1 backdrop-blur bg-background/95 gap-2 grid grid-cols-2 lg:hidden mb-4 p-1 rounded-xl sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30">
-  <button aria-controls="filter-section" aria-expanded="false" class="bg-background border border-border flex font-semibold gap-2 items-center justify-center min-h-11 px-3 py-2.5 relative rounded-lg shadow-sm text-foreground text-sm" id="mobile-filter-toggle" type="button">
+<div class="catalog-band" data-catalog-band="" data-placement="sidebar">
+  <div class="catalog-band-heading">
+    <nav aria-label="Breadcrumb" class="catalog-band-crumbs">
+      <ol>
+        <li>
+          <a href="/">
+            "Home"
+        <li aria-hidden="true">
+          "›"
+        <li aria-current="page" class="sr-only">
+          "Sarees"
+    <h1 class="catalog-band-title">
+      "Sarees"
+    <p aria-live="polite" class="catalog-band-count">
+      "50 products"
+  <div class="catalog-band-tools">
+    <div class="flex gap-3 items-center">
+      <label class="font-medium text-foreground text-sm whitespace-nowrap" for="sortByDesktop">
+        "Sort by:"
+      <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary min-w-[160px] rounded-lg text-foreground text-sm" data-catalog-sort="true" data-current-filters="{"page":"2","sortBy":"price-asc","minPrice":"600","size":["M"],"fabric":["Fabric 11"],"hasDiscount":"true"}" data-default-sort="newest" data-list-pathname="/categories/sarees" id="sortByDesktop" name="sortBy">
+        <option value="newest">
+          "Latest"
+        <option selected="" value="price-asc">
+          "Price: Low to High"
+        <option value="price-desc">
+          "Price: High to Low"
+        <option value="name-asc">
+          "Name: A to Z"
+        <option value="name-desc">
+          "Name: Z to A"
+        <option value="discount">
+          "Biggest discount"
+<div class="-mx-1 backdrop-blur bg-background/95 gap-2 grid grid-cols-2 lg:hidden mb-3 p-1 rounded-xl sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30" data-catalog-phone-bar="">
+  <button aria-controls="filter-section" aria-expanded="false" class="bg-background border border-border flex font-semibold gap-2 items-center justify-center min-h-11 px-3 py-2 relative rounded-lg shadow-sm shrink-0 text-foreground text-sm" id="mobile-filter-toggle" type="button">
     <svg aria-hidden="true" class="h-4 lucide lucide-sliders-horizontal w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
       <path d="M10 5H3">
       <path d="M12 19H3">
@@ -30,9 +62,9 @@
         "Name: Z to A"
       <option value="discount">
         "Biggest discount"
-<div class="flex flex-col gap-6 lg:flex-row">
-  <aside aria-labelledby="mobile-filter-title" class="bg-black/50 fixed hidden inset-0 lg:bg-transparent lg:block lg:shrink-0 lg:static lg:w-80 lg:z-0 z-60" id="filter-section">
-    <div class="bg-background filter-sheet flex flex-col lg:border lg:border-border lg:h-full lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:overflow-hidden lg:rounded-lg lg:shadow-sm lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:w-full max-h-[88dvh] rounded-t-2xl text-foreground w-full">
+<div class="flex flex-col gap-6 lg:flex-row" data-catalog-layout="sidebar">
+  <aside aria-labelledby="mobile-filter-title" class="bg-black/50 fixed hidden inset-0 lg:bg-transparent lg:block lg:shrink-0 lg:static lg:z-auto z-60" data-placement="sidebar" id="filter-section" style="--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px">
+    <div class="bg-background filter-sheet flex flex-col lg:bg-transparent lg:max-h-none lg:rounded-none max-h-[88dvh] rounded-t-2xl text-foreground w-full">
       <div class="bg-background border-b border-border flex items-center justify-between lg:hidden p-4">
         <h2 class="font-semibold text-lg" id="mobile-filter-title">
           "Filters"
@@ -40,160 +72,182 @@
           <svg aria-hidden="true" class="h-5 lucide lucide-x w-5" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
             <path d="M18 6 6 18">
             <path d="m6 6 12 12">
-      <form autocomplete="off" class="grow overflow-y-auto" data-catalog-filters="" data-count-endpoint="/categories/sarees/products" id="filterForm" method="get">
+      <form action="/categories/sarees" autocomplete="off" class="catalog-filter-form grow overflow-y-auto" data-catalog-filters="" data-count-endpoint="/categories/sarees/products" data-filter-style="sidebar-dense" data-placement="sidebar" id="filterForm" method="get">
         <input name="sortBy" type="hidden" value="price-asc">
-        <div class="lg:p-6 lg:pb-6 p-4 pb-28 space-y-3">
-          <div class="mb-6 relative">
-            <svg aria-hidden="true" class="-translate-y-1/2 absolute h-4 left-3 lucide lucide-search pointer-events-none text-muted-foreground top-1/2 w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
-              <path d="m21 21-4.34-4.34">
-              <circle cx="11" cy="11" r="8">
-            <label class="sr-only" for="catalog-filter-search">
-              "Search this category"
-            <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm pl-9 pr-4 py-2.5 rounded-lg text-base text-foreground w-full" enterkeyhint="search" id="catalog-filter-search" maxlength="120" name="q" placeholder="Search this category…" type="search" value="">
-          <details class="bg-background border border-border group rounded-lg" open="">
-            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
-              "Shopping options"
-              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="catalog-filter-groups">
+          <details class="catalog-facet group" id="catalog-facet-availability" open="">
+            <summary class="catalog-facet-summary">
+              <span class="min-w-0 truncate">
+                "Availability"
+              <span class="catalog-facet-selected tabular-nums">
+                <span aria-hidden="true">
+                  "(1)"
+                <span class="sr-only">
+                  ", 1 selected"
+              <svg aria-hidden="true" class="catalog-facet-chevron" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="m6 9 6 6 6-6">
-            <div class="pb-4 px-4 space-y-2">
-              <label class="bg-muted/50 cursor-pointer flex font-medium gap-3 items-center justify-between min-h-11 px-3 py-2 rounded-lg text-foreground text-sm">
-                "On sale"
-                <input checked="" class="appearance-none before:absolute before:bg-background before:h-4 before:left-0.5 before:rounded-full before:shadow before:top-0.5 before:transition-transform before:w-4 bg-input checked:before:translate-x-4 checked:bg-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring h-5 motion-reduce:before:transition-none motion-reduce:transition-none relative rounded-full shrink-0 transition-colors w-9" name="hasDiscount" role="switch" type="checkbox" value="true">
-              <label class="bg-muted/50 cursor-pointer flex font-medium gap-3 items-center justify-between min-h-11 px-3 py-2 rounded-lg text-foreground text-sm">
-                "Free delivery"
-                <input class="appearance-none before:absolute before:bg-background before:h-4 before:left-0.5 before:rounded-full before:shadow before:top-0.5 before:transition-transform before:w-4 bg-input checked:before:translate-x-4 checked:bg-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring h-5 motion-reduce:before:transition-none motion-reduce:transition-none relative rounded-full shrink-0 transition-colors w-9" name="freeDelivery" role="switch" type="checkbox" value="true">
-          <details class="bg-background border border-border group rounded-lg" open="">
-            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
-              "Price"
-              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+            <fieldset class="catalog-facet-body">
+              <legend class="sr-only">
+                "Availability"
+              <label class="catalog-facet-row">
+                <input class="catalog-facet-check" name="inStock" type="checkbox" value="true">
+                <span class="catalog-facet-label">
+                  "Exclude out of stock"
+              <label class="catalog-facet-row">
+                <input checked="" class="catalog-facet-check" name="hasDiscount" type="checkbox" value="true">
+                <span class="catalog-facet-label">
+                  "On sale"
+              <label class="catalog-facet-row">
+                <input class="catalog-facet-check" name="freeDelivery" type="checkbox" value="true">
+                <span class="catalog-facet-label">
+                  "Free delivery"
+          <details class="catalog-facet group" id="catalog-facet-size" open="">
+            <summary class="catalog-facet-summary">
+              <span class="min-w-0 truncate">
+                "Size"
+              <span class="catalog-facet-selected tabular-nums">
+                <span aria-hidden="true">
+                  "(1)"
+                <span class="sr-only">
+                  ", 1 selected"
+              <svg aria-hidden="true" class="catalog-facet-chevron" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="m6 9 6 6 6-6">
-            <div class="pb-4 px-4">
-              <p class="mb-3 text-muted-foreground text-sm">
-                "The highest price is ৳4,500"
-              <div class="gap-3 grid grid-cols-2">
-                <div>
-                  <label class="block font-medium mb-1.5 text-muted-foreground text-sm" for="catalog-minPrice">
-                    "From"
-                  <div class="relative">
-                    <span aria-hidden="true" class="-translate-y-1/2 absolute left-3 pointer-events-none text-muted-foreground text-sm top-1/2">
-                      "৳"
-                    <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary h-11 lg:h-10 lg:text-sm pl-7 pr-3 rounded-lg text-base text-foreground w-full" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="600">
-                <div>
-                  <label class="block font-medium mb-1.5 text-muted-foreground text-sm" for="catalog-maxPrice">
-                    "To"
-                  <div class="relative">
-                    <span aria-hidden="true" class="-translate-y-1/2 absolute left-3 pointer-events-none text-muted-foreground text-sm top-1/2">
-                      "৳"
-                    <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary h-11 lg:h-10 lg:text-sm pl-7 pr-3 rounded-lg text-base text-foreground w-full" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
-              <button class="bg-background border border-border font-semibold hidden hover:bg-muted items-center justify-center lg:inline-flex min-h-10 mt-3 px-4 rounded-lg text-foreground text-sm transition-colors w-full" type="submit">
-                "Apply price"
-          <details class="bg-background border border-border group rounded-lg" open="">
-            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
-              "Size"
-              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="m6 9 6 6 6-6">
-            <fieldset class="pb-4 px-4 space-y-1">
+            <fieldset class="catalog-facet-body" data-catalog-facet-display="checkbox" data-catalog-facet-group="" data-facet-kind="values" data-facet-slugs="size">
               <legend class="sr-only">
                 "Size"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="size" type="checkbox" value="S">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "S"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "12"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input checked="" class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="size" type="checkbox" value="M">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "M"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "20"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" disabled="" name="size" type="checkbox" value="L">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "L"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "0"
-          <details class="bg-background border border-border group rounded-lg" open="">
-            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
-              "Fabric"
-              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="catalog-facet-values">
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="size" type="checkbox" value="S">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "S"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "12"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input checked="" class="catalog-facet-check" data-catalog-facet="" name="size" type="checkbox" value="M">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "M"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "20"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" disabled="" name="size" type="checkbox" value="L">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "L"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "0"
+          <details class="catalog-facet group" id="catalog-facet-fabric" open="">
+            <summary class="catalog-facet-summary">
+              <span class="min-w-0 truncate">
+                "Fabric"
+              <span class="catalog-facet-selected tabular-nums">
+                <span aria-hidden="true">
+                  "(1)"
+                <span class="sr-only">
+                  ", 1 selected"
+              <svg aria-hidden="true" class="catalog-facet-chevron" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="m6 9 6 6 6-6">
-            <fieldset class="pb-4 px-4 space-y-1">
+            <fieldset class="catalog-facet-body" data-catalog-facet-display="checkbox" data-catalog-facet-group="" data-facet-kind="values" data-facet-slugs="fabric">
               <legend class="sr-only">
                 "Fabric"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 1">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 1"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "1"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 2">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 2"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "2"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 3">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 3"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "3"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 4">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 4"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "4"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 5">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 5"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "5"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 6">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 6"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "6"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 7">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 7"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "7"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 8">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 8"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "8"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 9">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 9"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "9"
-              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 10">
-                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
-                  "Fabric 10"
-                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
-                  "10"
-              <details class="group/more" open="">
-                <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-medium hover:underline items-center list-none min-h-11 px-2 text-primary text-sm">
-                  <span class="group-open/more:hidden">
-                    "Show 1 more"
-                  <span class="group-open/more:inline hidden">
-                    "Show less"
-                <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
-                  <input checked="" class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 11">
-                  <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+              <div class="catalog-facet-values">
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 2">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 2"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "2"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 3">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 3"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "3"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 4">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 4"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "4"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 5">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 5"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "5"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 6">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 6"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "6"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 7">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 7"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "7"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 8">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 8"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "8"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 9">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 9"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "9"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 10">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
+                    "Fabric 10"
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
+                    "10"
+                <label class="catalog-facet-row" data-catalog-facet-row="">
+                  <input checked="" class="catalog-facet-check" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 11">
+                  <span class="catalog-facet-label" data-catalog-facet-label="">
                     "Fabric 11"
-                  <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  <span class="catalog-facet-count" data-catalog-facet-count="">
                     "11"
-          <a class="bg-background border border-border font-semibold hidden hover:bg-muted items-center justify-center lg:flex min-h-10 px-4 rounded-lg text-foreground text-sm transition-colors w-full" href="/categories/sarees">
+              <a aria-expanded="false" class="catalog-facet-more" data-catalog-facet-more="" data-less-label="See less" data-more-label="See more (1)" href="/categories/sarees?fabric=Fabric+11&hasDiscount=true&minPrice=600&showAll=fabric&size=M&sortBy=price-asc">
+                "See more (1)"
+          <details class="catalog-facet group" id="catalog-facet-price" open="">
+            <summary class="catalog-facet-summary">
+              <span class="min-w-0 truncate">
+                "Price"
+              <span class="catalog-facet-selected tabular-nums">
+                <span aria-hidden="true">
+                  "(1)"
+                <span class="sr-only">
+                  ", 1 selected"
+              <svg aria-hidden="true" class="catalog-facet-chevron" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6">
+            <fieldset class="catalog-facet-body" data-catalog-price="">
+              <legend class="sr-only">
+                "Price"
+              <div class="catalog-price-slider" data-catalog-price-slider="" hidden="">
+                <input aria-label="Minimum price" data-catalog-price-thumb="min" max="4500" min="500" step="10" type="range" value="600">
+                <input aria-label="Maximum price" data-catalog-price-thumb="max" max="4500" min="500" step="10" type="range" value="4500">
+              <div class="catalog-price-fields">
+                <div class="min-w-0 relative">
+                  <label class="sr-only" for="catalog-minPrice">
+                    "Min price"
+                  <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
+                    "৳"
+                  <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="600">
+                <div class="min-w-0 relative">
+                  <label class="sr-only" for="catalog-maxPrice">
+                    "Max price"
+                  <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
+                    "৳"
+                  <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
+                <button class="catalog-filter-go" type="submit">
+                  "Go"
+                  <span class="sr-only">
+                    " (apply price)"
+              <p class="catalog-facet-note">
+                "Up to ৳4,500"
+          <a class="catalog-filter-clear" href="/categories/sarees">
             "Clear all"
         <div class="bg-background border-border border-t bottom-0 fixed inset-x-0 lg:hidden p-4 pb-[max(1rem,env(safe-area-inset-bottom))] z-50">
           <div class="gap-3 grid grid-cols-2">
@@ -202,34 +256,6 @@
             <button aria-live="polite" class="bg-primary disabled:cursor-not-allowed disabled:opacity-50 font-semibold h-12 inline-flex items-center justify-center px-4 rounded-lg text-primary-foreground text-sm" data-catalog-filter-apply="" type="submit">
               "Show 50 products"
   <div class="flex-1 min-w-0">
-    <div class="bg-background border border-border gap-4 hidden items-center justify-between lg:flex mb-6 p-4 rounded-lg shadow-sm">
-      <p class="font-medium text-foreground text-sm">
-        "Showing "
-        <span class="font-bold text-primary">
-          "20"
-        " of "
-        <span class="font-bold text-primary">
-          "50"
-        " products"
-      <div class="flex gap-3 items-center">
-        <label class="font-medium text-foreground text-sm whitespace-nowrap" for="sortByDesktop">
-          "Sort by:"
-        <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary min-w-[160px] rounded-lg text-foreground text-sm" data-catalog-sort="true" data-current-filters="{"page":"2","sortBy":"price-asc","minPrice":"600","size":["M"],"fabric":["Fabric 11"],"hasDiscount":"true"}" data-default-sort="newest" data-list-pathname="/categories/sarees" id="sortByDesktop" name="sortBy">
-          <option value="newest">
-            "Latest"
-          <option selected="" value="price-asc">
-            "Price: Low to High"
-          <option value="price-desc">
-            "Price: High to Low"
-          <option value="name-asc">
-            "Name: A to Z"
-          <option value="name-desc">
-            "Name: Z to A"
-          <option value="discount">
-            "Biggest discount"
-    <p class="lg:hidden mb-3 text-muted-foreground text-sm">
-      <span class="font-semibold text-foreground">
-        "50 products"
     <nav aria-label="Applied filters" class="flex gap-2 items-center lg:flex-wrap mb-4 overflow-x-auto pb-1">
       <a aria-label="Remove Price: From ৳600 filter" class="bg-background border border-border font-medium gap-1.5 hover:bg-muted hover:border-primary/40 inline-flex items-center min-h-9 px-3 py-1.5 rounded-full shrink-0 text-foreground text-sm transition-colors" href="/categories/sarees?fabric=Fabric+11&hasDiscount=true&size=M&sortBy=price-asc">
         <span>
