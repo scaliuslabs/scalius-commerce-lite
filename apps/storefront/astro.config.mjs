@@ -107,7 +107,8 @@ export default defineConfig({
   adapter: cloudflare({
     imageService: "passthrough",
     persistState: { path: persistStatePath },
-    // Unique inspector port so admin (9230) + storefront (9231) + API (9229) don't clash during parallel builds
-    inspectorPort: 9231,
+    // No fixed inspector port: parallel local stacks (API, worktrees) would
+    // otherwise collide on it and the dev server exits before it is ready.
+    inspectorPort: false,
   }),
 });
