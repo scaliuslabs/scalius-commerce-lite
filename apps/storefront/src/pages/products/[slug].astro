@@ -259,11 +259,8 @@ const sellerSchemaName =
   layoutData.business?.legalName?.trim() ||
   null;
 
-// Brand from product attributes (mirrors facebook-feed.xml.ts pattern)
-const brandAttribute = product.attributes?.find(
-  (a: { name: string }) => a.name.toLowerCase() === "brand",
-);
-const brandName = brandAttribute?.value?.trim() || null;
+// Brand from the published brand record only (never a "Brand" attribute; none is omitted)
+const brandName = product.brand?.name?.trim() || null;
 const productCondition = normalizeSavedProductCondition(
   product.productCondition,
 );

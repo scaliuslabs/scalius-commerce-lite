@@ -1,4 +1,5 @@
 import {
+    brands,
     categories,
     collections,
     heroSliders,
@@ -25,6 +26,7 @@ export const MEDIA_USAGE_KINDS = [
     "product",
     "category",
     "collection",
+    "brand",
     "page",
     "article",
     "banner",
@@ -135,7 +137,7 @@ type UsageRow = { media_id: string; kind: MediaUsageKind; ref_id: string; name: 
 
 /**
  * (media_id, kind, ref_id, name, trashed) for every place that shows the
- * requested files: product photos and video covers by id, then each group of
+ * requested files: product photos, video covers and brand logos by id, then each group of
  * text surfaces by object-key substring. Sequential, bounded reads.
  */
 async function loadUsageRows(db: Database, ids: readonly string[]): Promise<UsageRow[]> {
@@ -148,7 +150,11 @@ async function loadUsageRows(db: Database, ids: readonly string[]): Promise<Usag
         SELECT video.poster_media_id, 'video_cover', video.id, video.filename,
                CASE WHEN video.status = 'ready' THEN 0 ELSE 1 END
         FROM ${media} AS video
-        WHERE video.status <> 'deleted' AND video.poster_media_id IN ${idSet(ids)}`);
+        WHERE video.status <> 'deleted' AND video.poster_media_id IN ${idSet(ids)}
+        UNION ALL
+        SELECT ${brands.logoMediaId}, 'brand', ${brands.id}, ${brands.name}, ${trashedFlag(brands.deletedAt)}
+        FROM ${brands}
+        WHERE ${brands.logoMediaId} IN ${idSet(ids)}`);
     for (const group of textReferenceGroups()) {
         rows.push(...await db.all<UsageRow>(sql`
             SELECT k.id AS media_id, t.kind AS kind, t.ref_id AS ref_id, t.name AS name, t.trashed AS trashed
@@ -224,7 +230,7 @@ export async function loadMediaUsage(db: Database, id: string): Promise<MediaUsa
 
 /**
  * Atomic guard for the permanent-delete claim: no product photo, video cover,
- * order snapshot or saved text surface may still point at the file.
+ * brand logo, order snapshot or saved text surface may still point at the file.
  */
 export function noMediaUsage(id: string, objectKey: string): SQL {
     const textGuards = textReferenceGroups().map((group) => sql`NOT EXISTS (
@@ -236,5 +242,7 @@ export function noMediaUsage(id: string, objectKey: string): SQL {
         SELECT 1 FROM ${media} AS video WHERE video.poster_media_id = ${id} AND video.status <> 'deleted'
     ) AND NOT EXISTS (
         SELECT 1 FROM ${orderItems} WHERE ${orderItems.productImageMediaId} = ${id}
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${brands} WHERE ${brands.logoMediaId} = ${id}
     ) AND ${sql.join(textGuards, sql` AND `)}`;
 }

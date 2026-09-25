@@ -155,6 +155,29 @@ describe("media usage", () => {
       .rejects.toBeInstanceOf(MediaDependencyConflictError);
   });
 
+  it("lists a brand logo as a place and refuses permanent delete while a brand uses it", async () => {
+    seedMedia("media_brand");
+    sqlite.exec(`
+      INSERT INTO brands (id, name, slug, logo_media_id, status) VALUES
+        ('brd_walton01', 'Walton', 'walton', 'media_brand', 'published'),
+        ('brd_old00001', 'Old', 'old', 'media_brand', 'draft');
+      UPDATE brands SET deleted_at = unixepoch() WHERE id = 'brd_old00001';
+    `);
+
+    expect((await countMediaUsage(db, ["media_brand"])).get("media_brand")).toEqual({ usageCount: 2, keptForOrders: false });
+    expect((await loadMediaUsage(db, "media_brand")).references).toEqual([
+      { kind: "brand", id: "brd_old00001", name: "Old", trashed: true },
+      { kind: "brand", id: "brd_walton01", name: "Walton", trashed: false },
+    ]);
+
+    const trashed = await trashMediaFile(db, "media_brand", 1);
+    await expect(permanentlyDeleteMediaFile(db, "media_brand", trashed.version, bucket().bucket))
+      .rejects.toBeInstanceOf(MediaDependencyConflictError);
+    sqlite.exec("DELETE FROM brands");
+    await permanentlyDeleteMediaFile(db, "media_brand", trashed.version, bucket().bucket);
+    expect(sqlite.prepare("SELECT status FROM media WHERE id = 'media_brand'").get()).toEqual({ status: "deleted" });
+  });
+
   it("rechecks usage inside the delete claim when a reference lands after the preflight", async () => {
     const photo = seedMedia("media_race");
     sqlite.exec(`INSERT INTO collections (id, name, content, presentation, config) VALUES ('col_a', 'Eid', '', 'grid', '{}')`);
