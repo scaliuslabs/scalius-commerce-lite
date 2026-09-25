@@ -267,7 +267,7 @@ const breadcrumbVisible = piece("breadcrumb");
 <CatalogAspectChips chips={aspectChips} />
 <CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
-<div class:list={["flex flex-col lg:flex-row", placement === "sidebar" ? "gap-6" : "gap-3"]} data-catalog-layout={placement}>
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement}>
   {showFilters && (
     <aside
       id="filter-section"
