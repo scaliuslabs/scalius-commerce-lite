@@ -148,6 +148,7 @@ describe("block variant matrix", () => {
     expect(rows.length).toBeLessThan(200);
   });
 
+  // About 1.5 s alone; a loaded host (parallel worktree suites) needs headroom.
   it("parses, passes AA and resolves every pair with every palette and density", () => {
     let documents = 0;
     for (const row of rows) {
@@ -181,5 +182,5 @@ describe("block variant matrix", () => {
       }
     }
     expect(documents).toBe(rows.length * STOREFRONT_THEME_PALETTE_KEYS.length * STOREFRONT_DENSITIES.length);
-  });
+  }, 30_000);
 });
