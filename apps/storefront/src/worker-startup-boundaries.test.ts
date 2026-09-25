@@ -18,15 +18,18 @@ vi.stubGlobal("caches", {
 });
 
 describe("storefront Worker gateway cache", () => {
-  it("serves a stored public page under the KV generation without rendering", async () => {
+  it("serves a stored public page under the Worker version and KV generation without rendering", async () => {
     cacheStore.set(
-      "https://shop.example/__cache/test-build/gen7/products/fish",
+      "https://shop.example/__cache/test-build/version-a/gen7/products/fish",
       new Response("cached page", { headers: { "Content-Type": "text/html" } }),
     );
     const kvGet = vi.fn(async () => "gen7");
     const { default: StorefrontGateway } = await import("./worker");
     const worker = Object.assign(new StorefrontGateway(), {
-      env: { CACHE: { get: kvGet } } as unknown as Env,
+      env: {
+        CACHE: { get: kvGet },
+        CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
+      } as unknown as Env,
       ctx: { waitUntil: vi.fn() } as unknown as ExecutionContext,
     });
     handle.mockClear();

@@ -13,9 +13,11 @@ import {
 import { applyBrowserCachePolicyForPublicResponse } from "@/lib/public-discovery-cache";
 
 // Anonymous public pages are cached per data center in the Cache API under
-// a key made of the build, the store's cache generation, and the canonical
-// URL. A buyer-visible write replaces the generation, a deploy replaces the
-// build, and old entries age out; nothing is ever purged.
+// a key made of the build, the Worker version, the store's cache generation,
+// and the canonical URL. A buyer-visible write replaces the generation, a
+// deploy (or a `wrangler dev`/`astro dev` start) replaces the Worker version,
+// and old entries age out; nothing is ever purged. The version covers what
+// BUILD_ID's source hash cannot: every bundled package and toolchain input.
 
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
@@ -164,14 +166,15 @@ export function getPublicStorefrontCachePolicy(
   return { canonicalUrl: new URL(canonicalCachePath, url.origin).toString() };
 }
 
-/** Cache API key: build and generation first, then the canonical URL. */
+/** Cache API key: build, Worker version and generation first, then the canonical URL. */
 export function publicStorefrontCacheKey(
   canonicalUrl: string,
   buildId: string,
+  workerVersion: string,
   generation: string,
 ): string {
   const url = new URL(canonicalUrl);
-  return `${url.origin}/__cache/${encodeURIComponent(buildId)}/${generation}${url.pathname}${url.search}`;
+  return `${url.origin}/__cache/${encodeURIComponent(buildId)}/${encodeURIComponent(workerVersion)}/${generation}${url.pathname}${url.search}`;
 }
 
 /** Only the gateway sets the generation a render pins its API reads to. */
@@ -212,6 +215,11 @@ export interface PublicStorefrontCacheContext {
   /** The store's cache generation, or `null` to serve uncached. */
   readGeneration(): Promise<string | null>;
   buildId: string;
+  /**
+   * This Worker's version (`readWorkerVersion`), or `null` to serve uncached:
+   * an unversioned key could serve the previous deploy's HTML.
+   */
+  workerVersion: string | null;
   render(request: Request): Promise<Response>;
   waitUntil(promise: Promise<unknown>): void;
 }
@@ -227,12 +235,13 @@ export async function servePublicStorefrontRequest(
   context: PublicStorefrontCacheContext,
 ): Promise<Response> {
   const policy = getPublicStorefrontCachePolicy(request);
-  const generation = policy ? await context.readGeneration() : null;
-  if (!policy || !generation) {
+  const workerVersion = policy ? context.workerVersion : null;
+  const generation = workerVersion ? await context.readGeneration() : null;
+  if (!policy || !workerVersion || !generation) {
     return context.render(withGenerationHeader(request, null));
   }
 
-  const key = publicStorefrontCacheKey(policy.canonicalUrl, context.buildId, generation);
+  const key = publicStorefrontCacheKey(policy.canonicalUrl, context.buildId, workerVersion, generation);
   const pathname = new URL(policy.canonicalUrl).pathname;
   const stored = await context.cache.match(key);
   if (stored) return fromStoredResponse(stored, request, pathname);

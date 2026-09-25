@@ -82,8 +82,8 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 ### Public Storefront (`/api/v1/storefront`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `PublicApi` edge cache keyed by the store cache generation |
-| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `PublicApi` edge cache keyed by the store cache generation |
+| GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `PublicApi` edge cache keyed by the store cache generation and the API Worker version |
+| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `PublicApi` edge cache keyed by the store cache generation and the API Worker version |
 | GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery, public platform origins, merchant CSP sources) | `PublicApi` edge cache keyed by the store cache generation |
 
 ### Public Hero (`/api/v1/hero`)
