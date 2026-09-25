@@ -6,6 +6,12 @@ import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payme
 import type { TaxQuote } from "../tax/types";
 import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
 import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
+import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
+import type {
+    AdminOrderFulfilmentView,
+    OrderLineFulfilmentFacts,
+    OrderPickupView,
+} from "./line-presentation";
 
 export interface OrderSupportRequestView {
     id: string;
@@ -169,8 +175,8 @@ export interface OrderListItem {
     /** Browser-loaded CAS token for archive/restore and other list mutations. */
     version: number;
     itemCount: number;
-    city: string;
-    zone: string;
+    city: string | null;
+    zone: string | null;
     area: string | null;
     cityName: string | null;
     zoneName: string | null;
@@ -188,13 +194,25 @@ export interface OrderListItem {
     /** Value of received returns not yet given back (major units). */
     refundDue: number;
     refundedAmount: number;
+    /** Some line ships, so the order has a delivery address. */
+    requiresShipping: boolean;
+    /** The order's one delivery method; null when nothing physical was bought. */
+    shippingMethodKind: DeliveryMethodKind | null;
+    /** Staff marked a pickup order ready to collect. */
+    pickupReadyAt: Date | null;
 }
 
 export interface OrderDetails extends OrderListItem {
     editReadiness: OrderEditReadiness;
     notes: string | null;
-    shippingAddress: string;
+    /** Null when nothing ships (pickup, service-only or digital orders). */
+    shippingAddress: string | null;
     customerId: string | null;
+    pickup: OrderPickupView | null;
+    /** Every fulfilment in the ledger, voided ones included. */
+    fulfillments: AdminOrderFulfilmentView[];
+    /** The order thread, once the buyer or staff started one. */
+    conversation: { id: string; unread: boolean } | null;
     /** The customer record the order is filed under; its title can differ from the order's own name. */
     customerRecord: { id: string; name: string; phone: string; kind: "account" | "guest" | "merchant" } | null;
     balanceDue: number | null;
@@ -221,7 +239,7 @@ export interface OrderDetails extends OrderListItem {
         method: "automatic" | "code";
         amount: number;
     }>;
-    items: {
+    items: (OrderLineFulfilmentFacts & {
         id: string;
         productId: string;
         variantId: string | null;
@@ -231,7 +249,7 @@ export interface OrderDetails extends OrderListItem {
         productImage: string | null;
         variantLabel: string | null;
         fulfillmentStatus: string;
-        /** Units already handed to a courier (a line can be sent in parts). */
+        /** Legacy sent-unit counter; read `fulfilledQuantity`. Dropped by the contract migration. */
         shippedQuantity: number;
         /** Stock is tracked for this line (cancel/return restock counts only these). */
         inventoryTracked: boolean;
@@ -240,7 +258,7 @@ export interface OrderDetails extends OrderListItem {
         discountAmountMinor: number | null;
         taxableAmountMinor: number | null;
         taxAmountMinor: number;
-    }[];
+    })[];
     refundAttempts: OrderRefundAttemptView[];
     activeRefundOperation: ActiveRefundOperationView | null;
     supportRequests: OrderSupportRequestView[];
@@ -255,9 +273,12 @@ export interface StorefrontOrderItem {
     productId: string;
     variantId: string;
     quantity: number;
+    /** The unit price the buyer saw: base plus surcharges. */
     price: number;
     productName?: string | null;
     variantLabel?: string | null;
+    /** Buyer inputs `[{ key, value }]` (line-item properties). */
+    properties?: Array<{ key: string; value: string }>;
 }
 
 export interface CreateStorefrontOrderInput {
@@ -266,10 +287,11 @@ export interface CreateStorefrontOrderInput {
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
-    shippingAddress: string;
-    city: string;
-    zone: string;
-    area: string | null;
+    /** Required only when a line ships (a `delivery` rate for physical items). */
+    shippingAddress?: string | null;
+    city?: string | null;
+    zone?: string | null;
+    area?: string | null;
     cityName?: string | null;
     zoneName?: string | null;
     areaName?: string | null;
@@ -299,6 +321,10 @@ export interface CreateStorefrontOrderResult {
     paymentMethod: string;
     taxQuote: TaxQuote;
     commitPayload: StorefrontOrderCommitPayload;
+    /** Some line ships: the order carries an address. */
+    requiresShipping: boolean;
+    /** `propertiesHash` per line, in cart order, for the quote fingerprint. */
+    linePropertiesHashes: string[];
 }
 
 /** Immutable buyer-reviewed delivery method facts captured for a storefront order. */
@@ -309,6 +335,16 @@ export interface StorefrontOrderShippingMethodSnapshot {
     /** Configured method fee before any product-level delivery waiver. */
     baseAmountMinor: number;
     feeWaived: boolean;
+}
+
+/** How an order's physical lines reach the buyer, frozen at commit. */
+export interface StorefrontOrderFulfilmentSnapshot {
+    /** Some line has fulfilment type `ship`: the order carries an address. */
+    requiresShipping: boolean;
+    /** The chosen rate's kind; null when nothing physical was bought. */
+    shippingMethodKind: DeliveryMethodKind | null;
+    pickupAddress: string | null;
+    pickupHours: string | null;
 }
 
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
@@ -328,19 +364,25 @@ export interface StorefrontOrderCommitPayload {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
+        /** Null unless something ships. */
+        shippingAddress: string | null;
+        city: string | null;
+        zone: string | null;
         area: string | null;
         cityName: string | null;
         zoneName: string | null;
         areaName: string | null;
         notes: string | null;
-        shippingMethodId: string;
-        shippingMethodName: string;
+        /** Null when nothing physical was bought (no delivery method). */
+        shippingMethodId: string | null;
+        shippingMethodName: string | null;
         shippingMethodDescription: string | null;
-        shippingMethodBaseAmountMinor: number;
-        shippingFeeWaived: boolean;
+        shippingMethodBaseAmountMinor: number | null;
+        shippingFeeWaived: boolean | null;
+        requiresShipping?: boolean;
+        shippingMethodKind?: DeliveryMethodKind | null;
+        pickupAddress?: string | null;
+        pickupHours?: string | null;
         currencyCode: string;
         currencyDecimalPlaces: number;
         subtotalAmountMinor: number;
@@ -371,6 +413,13 @@ export interface StorefrontOrderCommitPayload {
         inventoryTracked?: boolean;
         /** Historical image/poster Media asset selected before the order batch. */
         productImageMediaId: string | null;
+        /** How this line reaches the buyer; frozen by the commit. Defaults to `ship`. */
+        fulfillmentType?: FulfillmentType;
+        /** Serialized `order_items.properties` snapshot, or null without buyer inputs. */
+        properties?: string | null;
+        propertiesPriceMinor?: number;
+        /** Unit price before surcharges. */
+        baseUnitPriceMinor?: number;
         unitPriceMinor: number;
         lineSubtotalMinor: number;
         discountAmountMinor: number;

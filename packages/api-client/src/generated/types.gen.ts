@@ -4245,10 +4245,13 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -4388,10 +4391,13 @@ export type GetApiV1StorefrontAgentContextsByContextIdCartResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -4545,10 +4551,13 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -4703,10 +4712,13 @@ export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -4861,10 +4873,13 @@ export type PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -5017,10 +5032,13 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -5175,10 +5193,13 @@ export type PutApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -5335,10 +5356,13 @@ export type PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -5494,10 +5518,13 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod?: boolean;
+            requiresShipping?: boolean;
             delivery?: {
+                kind?: 'delivery' | 'pickup' | null;
                 shippingCharge: number;
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
             };
         };
@@ -8838,7 +8865,12 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 paymentMethod: string;
                 fulfillmentStatus: string;
                 expectedDelivery?: string | null;
-                shippingAddress: string;
+                shippingAddress: string | null;
+                requiresShipping: boolean;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
                 cityName: string | null;
                 zoneName: string | null;
                 areaName?: string | null;
@@ -9358,9 +9390,20 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 paymentMethod: string;
                 fulfillmentStatus: string;
                 expectedDelivery: string | null;
-                shippingAddress: string;
-                city: string;
-                zone: string;
+                shippingAddress: string | null;
+                city: string | null;
+                zone: string | null;
+                requiresShipping: boolean;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
+                pickup: {
+                    address: string | null;
+                    hours: string | null;
+                    readyAt: string | null;
+                } | null;
+                conversationId: string | null;
                 area: string | null;
                 cityName: string | null;
                 zoneName: string | null;
@@ -9391,8 +9434,44 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 taxableAmountMinor: number | null;
                 taxAmountMinor: number;
                 fulfillmentStatus: string;
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                fulfilledQuantity: number;
+                properties: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
+                propertiesPrice: number;
+                propertiesPriceMinor: number;
+                baseUnitPriceMinor: number | null;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
+            }>;
+            fulfillments: Array<{
+                id: string;
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                createdAt: string | null;
+                lines: Array<{
+                    orderItemId: string;
+                    quantity: number;
+                }>;
+                tracking: {
+                    shipmentId: string;
+                    courierName: string | null;
+                    trackingId: string | null;
+                    trackingUrl: string | null;
+                    status: string;
+                } | null;
             }>;
             shipments: Array<{
                 id: string;
@@ -11436,6 +11515,10 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 discountType: string | null;
                 discountPercentage: number | null;
                 discountAmount: number | null;
+                /**
+                 * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                 */
+                fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
                 updatedAt: string | null;
             }>;
@@ -11555,6 +11638,30 @@ export type GetApiV1ProductsBySlugResponses = {
                     }>;
                 }>;
                 features: Array<string>;
+                isGiftCard: boolean;
+                /**
+                 * Buyer inputs asked on the product page, in schema order.
+                 */
+                customization: {
+                    fields: Array<{
+                        key: string;
+                        label: string;
+                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        required: boolean;
+                        help: string | null;
+                        maxLength: number | null;
+                        price: number;
+                        priceMinor: number;
+                        options: Array<{
+                            value: string;
+                            label: string;
+                            price: number;
+                            priceMinor: number;
+                        }>;
+                    }>;
+                } | null;
+                requiresCustomization: boolean;
+                customizationUnavailable: boolean;
                 attributes: Array<{
                     name: string;
                     slug: string;
@@ -11650,6 +11757,10 @@ export type GetApiV1ProductsBySlugResponses = {
                 discountType: string | null;
                 discountPercentage: number | null;
                 discountAmount: number | null;
+                /**
+                 * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                 */
+                fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
                 updatedAt: string | null;
                 deletedAt: string | null;
@@ -12880,7 +12991,37 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 customerPhone: string;
                 customerEmail: string | null;
                 accountLinked: boolean;
-                shippingAddress: string;
+                shippingAddress: string | null;
+                requiresShipping: boolean;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
+                pickup: {
+                    address: string | null;
+                    hours: string | null;
+                    readyAt: string | null;
+                } | null;
+                fulfillments: Array<{
+                    id: string;
+                    /**
+                     * How the order line reaches the buyer, frozen when the order is placed.
+                     */
+                    kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                    createdAt: string | null;
+                    lines: Array<{
+                        orderItemId: string;
+                        quantity: number;
+                    }>;
+                    tracking: {
+                        shipmentId: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        trackingUrl: string | null;
+                        status: string;
+                    } | null;
+                }>;
+                conversationId: string | null;
                 totalAmount: number;
                 shippingCharge: number;
                 discountAmount: number | null;
@@ -12948,8 +13089,8 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
                 pricesIncludeTax: boolean;
-                city: string;
-                zone: string;
+                city: string | null;
+                zone: string | null;
                 area: string | null;
                 cityName: string | null;
                 zoneName: string | null;
@@ -12975,6 +13116,23 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number;
+                    /**
+                     * How the order line reaches the buyer, frozen when the order is placed.
+                     */
+                    fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                    fulfilledQuantity: number;
+                    properties: Array<{
+                        key: string;
+                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        label: string;
+                        value: string;
+                        displayValue: string;
+                        price: number;
+                        priceMinor: number;
+                    }>;
+                    propertiesPrice: number;
+                    propertiesPriceMinor: number;
+                    baseUnitPriceMinor: number | null;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -13268,6 +13426,13 @@ export type PostApiV1OrdersCartValidationData = {
             price: number;
             productName?: string | null;
             variantLabel?: string | null;
+            /**
+             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             */
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         city?: string | null;
@@ -13320,8 +13485,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
-                code: 'PRODUCT_UNAVAILABLE' | 'VARIANT_REQUIRED' | 'VARIANT_UNAVAILABLE' | 'VARIANT_MISMATCH' | 'QUANTITY_UNAVAILABLE' | 'PRICE_CHANGED';
-                action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item';
+                code: 'PRODUCT_UNAVAILABLE' | 'VARIANT_REQUIRED' | 'VARIANT_UNAVAILABLE' | 'VARIANT_MISMATCH' | 'QUANTITY_UNAVAILABLE' | 'PRICE_CHANGED' | 'PROPERTIES_REQUIRED' | 'PROPERTIES_INVALID' | 'FULFILMENT_UNAVAILABLE';
+                action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item' | 'edit_properties';
                 message: string;
                 productName: string | null;
                 variantLabel: string | null;
@@ -13329,6 +13494,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 availableQuantity?: number;
                 submittedPrice?: number;
                 currentPrice?: number;
+                propertyKey?: string | null;
             }>;
             items: Array<{
                 index: number;
@@ -13337,6 +13503,27 @@ export type PostApiV1OrdersCartValidationResponses = {
                 variantId: string;
                 quantity: number;
                 unitPrice: number;
+                baseUnitPrice: number;
+                propertiesPrice: number;
+                propertiesPriceMinor: number;
+                properties: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
+                propertiesHash: string;
+                /**
+                 * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                 */
+                fulfillmentKind: 'physical' | 'digital' | 'service';
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service' | null;
                 productName: string;
                 variantLabel: string | null;
                 freeDelivery: boolean;
@@ -13346,7 +13533,21 @@ export type PostApiV1OrdersCartValidationResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            requiresDeliveryMethod: boolean;
+            /**
+             * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+             */
+            deliveryMethodKind: 'delivery' | 'pickup' | null;
+            requiresShipping: boolean;
+            /**
+             * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
+             */
+            allowedPaymentMethods: Array<string>;
             delivery?: {
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                kind: 'delivery' | 'pickup';
                 shippingCharge: number;
                 shippingMethod: {
                     id: string;
@@ -13355,9 +13556,13 @@ export type PostApiV1OrdersCartValidationResponses = {
                     baseAmountMinor: number;
                     feeWaived: boolean;
                 };
-                cityName: string;
-                zoneName: string;
+                cityName: string | null;
+                zoneName: string | null;
                 areaName: string | null;
+                pickup: {
+                    address: string | null;
+                    hours: string | null;
+                } | null;
             };
         };
     };
@@ -13374,12 +13579,19 @@ export type PostApiV1OrdersTaxQuoteData = {
             quantity: number;
             productName?: string | null;
             variantLabel?: string | null;
+            /**
+             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             */
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
-        city: string;
-        zone: string;
+        city?: string | null;
+        zone?: string | null;
         area?: string | null;
-        shippingMethodId: string;
+        shippingMethodId?: string | null;
         /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
          */
@@ -13449,7 +13661,20 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 description: string | null;
                 baseAmountMinor: number;
                 feeWaived: boolean;
-            };
+            } | null;
+            /**
+             * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+             */
+            deliveryMethodKind: 'delivery' | 'pickup' | null;
+            requiresShipping: boolean;
+            pickup: {
+                address: string | null;
+                hours: string | null;
+            } | null;
+            /**
+             * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
+             */
+            allowedPaymentMethods: Array<string>;
             /**
              * One line per applied discount (automatic and code), with its own amount.
              */
@@ -13537,6 +13762,21 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 unitPrice: number;
                 productName: string;
                 variantLabel: string | null;
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                properties: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
+                propertiesPriceMinor: number;
+                propertiesHash: string;
             }>;
         };
     };
@@ -13554,10 +13794,10 @@ export type PostApiV1OrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
+        shippingAddress?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         cityName?: string | null;
         zoneName?: string | null;
         areaName?: string | null;
@@ -13570,6 +13810,13 @@ export type PostApiV1OrdersData = {
             price: number;
             productName?: string | null;
             variantLabel?: string | null;
+            /**
+             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             */
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
         }>;
         /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
@@ -13676,6 +13923,7 @@ export type PostApiV1OrdersResponses = {
             pricesIncludeTax: boolean;
             currencyCode: string;
             decimalPlaces: number;
+            requiresShipping?: boolean;
             message: string;
         };
     };
@@ -43360,9 +43608,9 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.
+         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
         /**
          * Only orders with an open customer request
          */
@@ -43379,6 +43627,10 @@ export type GetApiV1AdminOrdersData = {
          * Filter by fulfillment status
          */
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+        /**
+         * How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).
+         */
+        deliveryMethod?: 'delivery' | 'pickup' | 'none';
         /**
          * Filter by hosted-payment recovery state
          */
@@ -43509,6 +43761,15 @@ export type GetApiV1AdminOrdersResponses = {
                  */
                 refundDue: number;
                 refundedAmount: number;
+                /**
+                 * Some line ships, so the order has a delivery address.
+                 */
+                requiresShipping: boolean;
+                /**
+                 * The order's one delivery method; null when nothing physical was bought (service or digital only).
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
+                pickupReadyAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -43527,10 +43788,10 @@ export type PostApiV1AdminOrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
+        shippingAddress?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         cityName?: string;
         zoneName?: string;
         areaName?: string | null;
@@ -43541,6 +43802,10 @@ export type PostApiV1AdminOrdersData = {
             productId: string;
             variantId: string | null;
             quantity: number;
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
         }>;
         requestKey?: string;
         shippingMethodId?: string | null;
@@ -43632,9 +43897,9 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.
+         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -43958,6 +44223,15 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  */
                 refundDue: number;
                 refundedAmount: number;
+                /**
+                 * Some line ships, so the order has a delivery address.
+                 */
+                requiresShipping: boolean;
+                /**
+                 * The order's one delivery method; null when nothing physical was bought (service or digital only).
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
+                pickupReadyAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -44109,16 +44383,21 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportResponse = GetApiV1AdminOrde
 
 export type PostApiV1AdminOrdersQuoteData = {
     body?: {
-        city: string;
-        zone: string;
-        area: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         items: Array<{
             productId: string;
             variantId: string | null;
             quantity: number;
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
         }>;
         discountAmount: number | null;
         shippingCharge: number;
+        shippingMethodId?: string | null;
     };
     path?: never;
     query?: never;
@@ -44244,10 +44523,10 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
+        shippingAddress?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         cityName?: string;
         zoneName?: string;
         areaName?: string | null;
@@ -44259,6 +44538,10 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
             productId: string;
             variantId: string | null;
             quantity: number;
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
             orderItemId?: string;
         }>;
     };
@@ -44382,10 +44665,10 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
+        shippingAddress?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         cityName?: string;
         zoneName?: string;
         areaName?: string | null;
@@ -44397,6 +44680,10 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
             productId: string;
             variantId: string | null;
             quantity: number;
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
             orderItemId?: string;
         }>;
         requestKey?: string;
@@ -45226,6 +45513,23 @@ export type GetApiV1AdminOrdersByIdResponses = {
             deletedAt: NullableTimestamp;
             itemCount: number;
             items: Array<{
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                fulfilledQuantity: number;
+                properties: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
+                propertiesPrice: number;
+                propertiesPriceMinor: number;
+                baseUnitPriceMinor: number | null;
                 id: string;
                 productId: string;
                 variantId: string | null;
@@ -45349,6 +45653,15 @@ export type GetApiV1AdminOrdersByIdResponses = {
              */
             refundDue: number;
             refundedAmount: number;
+            /**
+             * Some line ships, so the order has a delivery address.
+             */
+            requiresShipping: boolean;
+            /**
+             * The order's one delivery method; null when nothing physical was bought (service or digital only).
+             */
+            shippingMethodKind: 'delivery' | 'pickup' | null;
+            pickupReadyAt: NullableTimestamp;
             editReadiness: {
                 items: {
                     allowed: boolean;
@@ -45377,6 +45690,38 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
             }>;
+            pickup: {
+                address: string | null;
+                hours: string | null;
+                readyAt: string | null;
+            } | null;
+            fulfillments: Array<{
+                id: string;
+                /**
+                 * How the order line reaches the buyer, frozen when the order is placed.
+                 */
+                kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                createdAt: string | null;
+                lines: Array<{
+                    orderItemId: string;
+                    quantity: number;
+                }>;
+                tracking: {
+                    shipmentId: string;
+                    courierName: string | null;
+                    trackingId: string | null;
+                    trackingUrl: string | null;
+                    status: string;
+                } | null;
+                status: 'active' | 'voided';
+                actorType: 'admin' | 'system';
+                cashCollected: number | null;
+                voidedAt: NullableTimestamp;
+            }>;
+            conversation: {
+                id: string;
+                unread: boolean;
+            } | null;
         };
     };
 };
@@ -45388,10 +45733,10 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
+        shippingAddress?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
         expectedVersion: number;
     };
     path: {
@@ -45572,6 +45917,23 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
     200: {
         success: true;
         data: Array<{
+            /**
+             * How the order line reaches the buyer, frozen when the order is placed.
+             */
+            fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+            fulfilledQuantity: number;
+            properties: Array<{
+                key: string;
+                type: 'text' | 'textarea' | 'select' | 'checkbox';
+                label: string;
+                value: string;
+                displayValue: string;
+                price: number;
+                priceMinor: number;
+            }>;
+            propertiesPrice: number;
+            propertiesPriceMinor: number;
+            baseUnitPriceMinor: number | null;
             id: string;
             productId: string;
             variantId: string | null;
@@ -45953,6 +46315,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     discountAmount?: number | null;
                     barcode?: string | null;
                     barcodeType?: string | null;
+                    /**
+                     * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                     */
+                    fulfillmentKind?: 'physical' | 'digital' | 'service';
                     createdAt?: string | number;
                     updatedAt?: string | number;
                     deletedAt?: NullableTimestamp;
@@ -45995,6 +46361,347 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
 };
 
 export type GetApiV1AdminOrdersByIdFormDataResponse = GetApiV1AdminOrdersByIdFormDataResponses[keyof GetApiV1AdminOrdersByIdFormDataResponses];
+
+export type PostApiV1AdminOrdersByIdFulfillmentsData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+        /**
+         * `ship`: mark as sent with your own rider. `pickup`: the buyer collected it. `service`: the service was performed.
+         */
+        kind: 'ship' | 'pickup' | 'service';
+        /**
+         * Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet.
+         */
+        lines?: Array<{
+            itemId: string;
+            quantity: number;
+        }>;
+        /**
+         * Own-rider parcel details; only for `ship`.
+         */
+        tracking?: {
+            courierName?: string;
+            trackingId?: string;
+            trackingUrl?: string;
+            note?: string;
+            shipmentAmount?: number;
+        };
+        /**
+         * Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due.
+         */
+        cashReceived?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/fulfillments';
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsError = PostApiV1AdminOrdersByIdFulfillmentsErrors[keyof PostApiV1AdminOrdersByIdFulfillmentsErrors];
+
+export type PostApiV1AdminOrdersByIdFulfillmentsResponses = {
+    /**
+     * Fulfilment recorded
+     */
+    201: {
+        success: true;
+        data: {
+            orderId: string;
+            fulfillmentId: string;
+            /**
+             * How the order line reaches the buyer, frozen when the order is placed.
+             */
+            kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+            lines: Array<{
+                orderItemId: string;
+                quantity: number;
+            }>;
+            shipmentId: string | null;
+            orderStatus: string;
+            fulfillmentStatus: string;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersByIdFulfillmentsResponses[keyof PostApiV1AdminOrdersByIdFulfillmentsResponses];
+
+export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+    };
+    path: {
+        id: string;
+        fulfillmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void';
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidError = PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors[keyof PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors];
+
+export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses = {
+    /**
+     * Fulfilment voided
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            fulfillmentId: string;
+            quantity: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses[keyof PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses];
+
+export type PostApiV1AdminOrdersByIdPickupReadyData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/pickup-ready';
+};
+
+export type PostApiV1AdminOrdersByIdPickupReadyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPickupReadyError = PostApiV1AdminOrdersByIdPickupReadyErrors[keyof PostApiV1AdminOrdersByIdPickupReadyErrors];
+
+export type PostApiV1AdminOrdersByIdPickupReadyResponses = {
+    /**
+     * Order marked ready for pickup
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            pickupReadyAt: string;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPickupReadyResponse = PostApiV1AdminOrdersByIdPickupReadyResponses[keyof PostApiV1AdminOrdersByIdPickupReadyResponses];
 
 export type GetApiV1AdminProductsStatsData = {
     body?: never;
@@ -46420,6 +47127,35 @@ export type PostApiV1AdminProductsData = {
             content: string;
             sortOrder: number;
         }>;
+        /**
+         * Buyer inputs asked on the product page (at most 10 fields).
+         */
+        customizationSchema?: {
+            fields: Array<{
+                key: string;
+                label: string;
+                type: 'text' | 'textarea' | 'select' | 'checkbox';
+                required?: boolean;
+                help?: string | null;
+                maxLength?: number;
+                /**
+                 * Added to one unit's price when the buyer uses this input, in major units.
+                 */
+                price?: number;
+                options?: Array<{
+                    value: string;
+                    label: string;
+                    /**
+                     * Added to one unit's price when the buyer uses this input, in major units.
+                     */
+                    price?: number;
+                }>;
+            }>;
+        } | null;
+        /**
+         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         */
+        fulfillmentKind?: 'physical' | 'service';
         optionMatrix?: {
             options: Array<{
                 id: string;
@@ -46454,6 +47190,10 @@ export type PostApiV1AdminProductsData = {
                 discountType: 'percentage' | 'flat';
                 discountPercentage: number | null;
                 discountAmount: number | null;
+                /**
+                 * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+                 */
+                fulfillmentKind?: 'physical' | 'service';
             }>;
         };
         /**
@@ -46478,6 +47218,10 @@ export type PostApiV1AdminProductsData = {
              * Weight in grams.
              */
             weight?: number | null;
+            /**
+             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             */
+            fulfillmentKind?: 'physical' | 'service';
         };
     };
     path?: never;
@@ -47858,6 +48602,29 @@ export type GetApiV1AdminProductsByIdResponses = {
             discountType: 'percentage' | 'flat' | null;
             discountAmount: number | null;
             freeDelivery: boolean;
+            isGiftCard: boolean;
+            /**
+             * Buyer inputs asked on the product page, in schema order.
+             */
+            customizationSchema: {
+                fields: Array<{
+                    key: string;
+                    label: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    required: boolean;
+                    help: string | null;
+                    maxLength: number | null;
+                    price: number;
+                    priceMinor: number;
+                    options: Array<{
+                        value: string;
+                        label: string;
+                        price: number;
+                        priceMinor: number;
+                    }>;
+                }>;
+            } | null;
+            customizationSchemaInvalid: boolean;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: NullableTimestamp;
@@ -47897,6 +48664,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 discountAmount?: number | null;
                 barcode?: string | null;
                 barcodeType?: string | null;
+                /**
+                 * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                 */
+                fulfillmentKind?: 'physical' | 'digital' | 'service';
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: NullableTimestamp;
@@ -47975,6 +48746,35 @@ export type PutApiV1AdminProductsByIdData = {
             content: string;
             sortOrder: number;
         }>;
+        /**
+         * Buyer inputs asked on the product page (at most 10 fields).
+         */
+        customizationSchema?: {
+            fields: Array<{
+                key: string;
+                label: string;
+                type: 'text' | 'textarea' | 'select' | 'checkbox';
+                required?: boolean;
+                help?: string | null;
+                maxLength?: number;
+                /**
+                 * Added to one unit's price when the buyer uses this input, in major units.
+                 */
+                price?: number;
+                options?: Array<{
+                    value: string;
+                    label: string;
+                    /**
+                     * Added to one unit's price when the buyer uses this input, in major units.
+                     */
+                    price?: number;
+                }>;
+            }>;
+        } | null;
+        /**
+         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         */
+        fulfillmentKind?: 'physical' | 'service';
         id: string;
         expectedAggregateRevision: number;
         acknowledgedSkuImageRemovalIds?: Array<string>;
@@ -48522,6 +49322,10 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 discountAmount?: number | null;
                 barcode?: string | null;
                 barcodeType?: string | null;
+                /**
+                 * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+                 */
+                fulfillmentKind?: 'physical' | 'digital' | 'service';
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: NullableTimestamp;
@@ -48551,6 +49355,10 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
+        /**
+         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         */
+        fulfillmentKind?: 'physical' | 'service';
         expectedAggregateRevision: number;
     };
     path: {
@@ -48706,6 +49514,10 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             discountAmount?: number | null;
             barcode?: string | null;
             barcodeType?: string | null;
+            /**
+             * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+             */
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: NullableTimestamp;
@@ -48872,6 +49684,10 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         discountPercentage?: number | null;
         discountAmount?: number | null;
         /**
+         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         */
+        fulfillmentKind?: 'physical' | 'service';
+        /**
          * The SKU stockVersion the new quantity was based on. Required with stock.
          */
         expectedStockVersion?: number;
@@ -49031,6 +49847,10 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             discountAmount?: number | null;
             barcode?: string | null;
             barcodeType?: string | null;
+            /**
+             * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
+             */
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: NullableTimestamp;
@@ -49078,6 +49898,10 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             discountType: 'percentage' | 'flat';
             discountPercentage: number | null;
             discountAmount: number | null;
+            /**
+             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             */
+            fulfillmentKind?: 'physical' | 'service';
         }>;
         expectedAggregateRevision: number;
     };

@@ -88,10 +88,52 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     },
     commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
     runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
-    validateStorefrontCartItems: mocks.validateStorefrontCartItems,
-    validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
+    // Fixtures describe pre-Wave A physical lines; the wrappers add the line
+    // kinds and the delivery plan the real services always return.
+    validateStorefrontCartItems: async (...args: unknown[]) =>
+      withWaveALineDefaults(await mocks.validateStorefrontCartItems(...args)),
+    validateStorefrontDeliveryPreflight: async (db: unknown, input: Record<string, unknown>, cart: { items?: unknown[] }) =>
+      withWaveAPreflightDefaults(await mocks.validateStorefrontDeliveryPreflight(db, input, cart), input, cart),
   };
 });
+
+function withWaveALineDefaults<T>(result: T): T {
+  if (!result || typeof result !== "object" || !Array.isArray((result as { items?: unknown }).items)) return result;
+  const cart = result as unknown as { items: Array<Record<string, unknown>> };
+  return {
+    ...result,
+    items: cart.items.map((item) => ({
+      fulfillmentKind: "physical",
+      isGiftCard: false,
+      properties: [],
+      canonicalProperties: [],
+      propertiesPriceMinor: 0,
+      baseUnitPriceMinor: item.unitPriceMinor,
+      ...item,
+    })),
+  };
+}
+
+function withWaveAPreflightDefaults<T>(
+  result: T,
+  input: Record<string, unknown>,
+  cart: { items?: unknown[] },
+): T {
+  if (!result || typeof result !== "object") return result;
+  return {
+    kind: "delivery",
+    address: { city: input.city, zone: input.zone, area: input.area ?? null },
+    pickup: null,
+    fulfilment: {
+      lineTypes: (cart.items ?? []).map(() => "ship"),
+      requiresDeliveryMethod: true,
+      deliveryMethodKind: "delivery",
+      requiresShipping: true,
+      allowsCashOnDelivery: true,
+    },
+    ...result,
+  };
+}
 
 vi.mock("../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
@@ -569,6 +611,28 @@ describe("cart validation preflight", () => {
   });
 
   it("preflights selected delivery data when cart validation receives city and zone", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPriceMinor: 10_000,
+        productName: "Queue Product",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: true,
+        availableQuantity: null,
+        taxClassId: null,
+        productImageMediaId: null,
+        productImage: null,
+      }],
+      subtotalMinor: 10_000,
+      hasFreeDeliveryProduct: false,
+    });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -623,6 +687,28 @@ describe("cart validation preflight", () => {
   });
 
   it("surfaces stale delivery choices from cart validation without creating checkout side effects", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPriceMinor: 10_000,
+        productName: "Queue Product",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: true,
+        availableQuantity: null,
+        taxClassId: null,
+        productImageMediaId: null,
+        productImage: null,
+      }],
+      subtotalMinor: 10_000,
+      hasFreeDeliveryProduct: false,
+    });
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("A valid active shipping method is required for this order."),
     );
@@ -769,6 +855,7 @@ describe("authoritative tax quote", () => {
     expect(mocks.buildStorefrontCheckoutQuoteFingerprint).toHaveBeenCalledWith(
       expect.objectContaining({ totalMinor: 16_800 }),
       DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+      ["none"],
     );
     const validatedRequestItem = mocks.validateStorefrontCartItems.mock.calls[0]?.[1]?.[0];
     expect(validatedRequestItem).not.toHaveProperty("price");

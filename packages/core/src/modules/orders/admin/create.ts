@@ -9,7 +9,6 @@ import {
     customers,
     customerHistory,
     codTracking,
-    shippingMethods,
     OrderStatus,
     PaymentMethod,
     FulfillmentStatus,
@@ -17,7 +16,7 @@ import {
 } from "@scalius/database/schema";
 import { prepareStockReservationBatch } from "../../inventory";
 import type { ReservationEntry } from "../../inventory";
-import { sql, eq, isNull, and } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers/customer-identity";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { nanoid } from "nanoid";
@@ -38,8 +37,10 @@ import {
 import { prepareManualOrderQuote } from "./quote";
 import type { SQLiteBatchItem } from "./shared";
 
-const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 7;
+// Bound values per multi-row insert row (drizzle binds every column,
+// defaults included); D1 allows 100 per statement.
+const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 21;
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
 
 // ─────────────────────────────────────────
 // Write operations
@@ -88,25 +89,19 @@ export async function createOrder(
             allocationLineIds,
             taxQuote,
             quote,
+            address,
+            requiresShipping,
+            deliveryMethodKind,
+            deliveryMethod: shippingMethod,
         } = manualQuote;
+        const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
+        if (requiresShipping && !shippingAddress) {
+            throw new ValidationError("Enter the delivery address, or choose a pickup method.");
+        }
         const initialPaymentState = computeOrderPaymentState({
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
         });
-        const shippingMethod = data.shippingMethodId
-            ? await db.select({
-                id: shippingMethods.id,
-                name: shippingMethods.name,
-                description: shippingMethods.description,
-                feeMinor: shippingMethods.feeMinor,
-            }).from(shippingMethods).where(and(
-                eq(shippingMethods.id, data.shippingMethodId),
-                isNull(shippingMethods.deletedAt),
-            )).get()
-            : null;
-        if (data.shippingMethodId && !shippingMethod) {
-            throw new ValidationError("That delivery method no longer exists. Choose another.");
-        }
         const existingCustomer = await db
             .select()
             .from(customers)
@@ -137,6 +132,10 @@ export async function createOrder(
 
         return {
             initialPaymentState,
+            address,
+            shippingAddress,
+            requiresShipping,
+            deliveryMethodKind,
             cityName,
             zoneName,
             areaName,
@@ -155,6 +154,10 @@ export async function createOrder(
     });
     const {
         initialPaymentState,
+        address,
+        shippingAddress,
+        requiresShipping,
+        deliveryMethodKind,
         cityName,
         zoneName,
         areaName,
@@ -185,10 +188,10 @@ export async function createOrder(
                 name: data.customerName,
                 phone: data.customerPhone,
                 email: data.customerEmail,
-                address: data.shippingAddress,
-                city: data.city,
-                zone: data.zone,
-                area: data.area,
+                address: shippingAddress,
+                city: address?.city ?? null,
+                zone: address?.zone ?? null,
+                area: address?.area ?? null,
                 totalOrders: 1,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
@@ -202,10 +205,10 @@ export async function createOrder(
                 name: data.customerName,
                 email: data.customerEmail,
                 phone: data.customerPhone,
-                address: data.shippingAddress,
-                city: data.city,
-                zone: data.zone,
-                area: data.area,
+                address: shippingAddress,
+                city: address?.city ?? null,
+                zone: address?.zone ?? null,
+                area: address?.area ?? null,
                 changeType: "created",
                 actor: "staff",
                 createdAt: sql`unixepoch()`,
@@ -242,19 +245,24 @@ export async function createOrder(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            shippingAddress: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            shippingAddress,
+            city: address?.city ?? null,
+            zone: address?.zone ?? null,
+            area: address?.area ?? null,
             cityName,
             zoneName,
             areaName,
+            requiresShipping,
+            shippingMethodKind: deliveryMethodKind,
+            pickupAddress: deliveryMethodKind === "pickup" ? shippingMethod?.pickupAddress ?? null : null,
+            pickupHours: deliveryMethodKind === "pickup" ? shippingMethod?.pickupHours ?? null : null,
             notes: data.notes,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
             shippingAmountMinor: taxQuote.shippingMinor,
-            ...(shippingMethod ? {
+            // A method picked for an order with nothing physical is not used.
+            ...(shippingMethod && deliveryMethodKind ? {
                 shippingMethodId: shippingMethod.id,
                 shippingMethodName: shippingMethod.name,
                 shippingMethodDescription: shippingMethod.description,
@@ -304,6 +312,10 @@ export async function createOrder(
             taxableAmountMinor: lineTax.taxableAmountMinor,
             taxAmountMinor: lineTax.taxMinor,
             fulfillmentStatus: ItemFulfillmentStatus.PENDING,
+            fulfillmentType: item.fulfillmentType,
+            properties: item.properties,
+            propertiesPriceMinor: item.propertiesPriceMinor,
+            baseUnitPriceMinor: item.baseUnitPriceMinor,
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(

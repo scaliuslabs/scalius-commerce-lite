@@ -407,6 +407,9 @@ describe("resolveAdminOrderItemInventory", () => {
                 productImageMediaId: null,
                 taxClassId: null,
                 catalogUnitPriceMinor: 10_000,
+                fulfillmentKind: "physical",
+                isGiftCard: false,
+                customizationSchema: undefined,
             },
             {
                 productId: "prod_2",
@@ -419,6 +422,9 @@ describe("resolveAdminOrderItemInventory", () => {
                 productImageMediaId: null,
                 taxClassId: null,
                 catalogUnitPriceMinor: 10_000,
+                fulfillmentKind: "physical",
+                isGiftCard: false,
+                customizationSchema: undefined,
             },
         ]);
     });

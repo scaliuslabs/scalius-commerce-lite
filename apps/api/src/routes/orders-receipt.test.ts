@@ -21,6 +21,9 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     ...actual,
     createReceiptOrderSupportRequest: orderSupportMocks.createReceiptOrderSupportRequest,
     getReceiptOrderSupportRequestStateForOrder: orderSupportMocks.getReceiptOrderSupportRequestStateForOrder,
+    // The ledger and thread reads are covered on the real schema by orders-owner-receipt.d1.test.ts.
+    listBuyerOrderFulfilments: vi.fn(async () => []),
+    findOrderConversationId: vi.fn(async () => null),
   };
 });
 

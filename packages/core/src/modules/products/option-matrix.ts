@@ -47,6 +47,7 @@ import {
     isProductAggregateRevisionConflict,
 } from "./aggregate-revision";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import { editableFulfillmentKindSchema } from "./customization-schema";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -80,6 +81,8 @@ const matrixVariantInputSchema = z.object({
     discountType: z.enum(["percentage", "flat"]),
     discountPercentage: z.number().min(0).max(100).nullable(),
     discountAmount: catalogMoneySchema.nullable(),
+    /** Omit to keep a saved row's kind (new rows are physical). */
+    fulfillmentKind: editableFulfillmentKindSchema.optional(),
 });
 
 const productOptionMatrixBaseSchema = z.object({

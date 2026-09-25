@@ -188,7 +188,8 @@ export interface OrderCsvRow {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
-  shippingAddress: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: string | null;
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;

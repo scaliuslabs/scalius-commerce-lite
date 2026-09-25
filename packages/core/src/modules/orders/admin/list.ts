@@ -119,6 +119,7 @@ export const ORDER_LIST_VIEWS = [
     "cod_to_collect",
     "delivery_failed",
     "returned",
+    "ready_for_pickup",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -166,6 +167,27 @@ function orderListViewCondition(view: OrderListView): SQL {
                 AND ${codTrackingStatusExists([CodStatus.FAILED])}`;
         case "returned":
             return sql`${orders.status} = ${OrderStatus.RETURNED}`;
+        case "ready_for_pickup":
+            // Shopify's "Ready for pickup": marked ready, not collected yet.
+            return sql`${orders.shippingMethodKind} = 'pickup'
+                AND ${orders.pickupReadyAt} IS NOT NULL
+                AND ${orders.fulfillmentStatus} <> ${FulfillmentStatus.COMPLETE}
+                AND ${inArray(orders.status, [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED])}`;
+    }
+}
+
+/** How the order reaches the buyer: shipped, collected, or nothing physical. */
+export const ORDER_DELIVERY_METHOD_FILTERS = ["delivery", "pickup", "none"] as const;
+export type OrderDeliveryMethodFilter = (typeof ORDER_DELIVERY_METHOD_FILTERS)[number];
+
+function orderDeliveryMethodCondition(filter: OrderDeliveryMethodFilter): SQL {
+    switch (filter) {
+        case "delivery":
+            return sql`${orders.requiresShipping} = 1`;
+        case "pickup":
+            return sql`${orders.shippingMethodKind} = 'pickup'`;
+        case "none":
+            return sql`${orders.requiresShipping} = 0 AND ${orders.shippingMethodKind} IS NULL`;
     }
 }
 
@@ -211,6 +233,7 @@ export async function listOrders(db: Database, options: {
     fulfillmentStatus?: string;
     paymentRecovery?: OrderPaymentRecoveryFilter;
     view?: OrderListView;
+    deliveryMethod?: OrderDeliveryMethodFilter;
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
@@ -232,6 +255,7 @@ export async function listOrders(db: Database, options: {
         paymentMethod,
         fulfillmentStatus,
         paymentRecovery,
+        deliveryMethod,
         page: rawPage = 1,
         limit: rawLimit = 10,
         showArchived = false,
@@ -316,6 +340,10 @@ export async function listOrders(db: Database, options: {
 
     if (fulfillmentStatus) {
         whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`);
+    }
+
+    if (deliveryMethod) {
+        whereConditions.push(orderDeliveryMethodCondition(deliveryMethod));
     }
 
     if (paymentRecovery) {
@@ -600,7 +628,7 @@ export async function listOrders(db: Database, options: {
 /** Address, note and line items for an export page (at most 90 orders per read). */
 export async function loadOrderExportDetails(db: Database, orderIds: readonly string[]) {
     const details = new Map<string, {
-        shippingAddress: string;
+        shippingAddress: string | null;
         notes: string | null;
         /** Every parcel's courier and tracking, in the order they left. */
         courierName: string | null;
@@ -656,8 +684,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
         for (const row of orderRows) {
             const parcel = parcels.get(row.id);
             details.set(row.id, {
-                // Nullable from migration 0083; always present until Wave A S3.
-                shippingAddress: row.shippingAddress ?? "",
+                shippingAddress: row.shippingAddress,
                 notes: row.notes,
                 courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
                 trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,

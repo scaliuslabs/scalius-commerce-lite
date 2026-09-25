@@ -38,6 +38,7 @@ import { getClientIp } from "@scalius/shared/rate-limit";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
+import { linePropertiesInputSchema } from "../../schemas/order-lines";
 import {
     getCustomerSessionTokenFromRequest,
     persistedStorefrontVariantIdSchema,
@@ -186,13 +187,20 @@ const createOrderSchema = z.object({
     .max(100, "Customer name must be less than 100 characters"),
   customerPhone: phoneNumberSchema,
   customerEmail: z.email().nullable(),
+  /**
+   * Required only when something ships: a physical line with a delivery
+   * rate. Pickup, service-only and digital orders omit it (and it is ignored
+   * if sent).
+   */
   shippingAddress: z
     .string()
     .min(10, "Address must be at least 10 characters")
-    .max(500, "Address must be less than 500 characters"),
-  city: z.string().min(1, "City is required"),
-  zone: z.string().min(1, "Zone is required"),
-  area: z.string().nullable(),
+    .max(500, "Address must be less than 500 characters")
+    .nullable()
+    .optional(),
+  city: z.string().min(1, "City is required").nullable().optional(),
+  zone: z.string().min(1, "Zone is required").nullable().optional(),
+  area: z.string().nullable().optional(),
   cityName: z.string().nullable().optional(),
   zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
@@ -206,15 +214,18 @@ const createOrderSchema = z.object({
       productId: z.string().min(1, "Product is required"),
       variantId: persistedStorefrontVariantIdSchema,
       quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
+      /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
       price: z.number().min(0, "Price must be greater than or equal to 0"),
       productName: z.string().optional().nullable(),
-      variantLabel: z.string().optional().nullable()
+      variantLabel: z.string().optional().nullable(),
+      properties: linePropertiesInputSchema,
     }),
   ).min(1, "At least one item is required"),
   discountCodes: discountCodesSchema,
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),
+  /** A delivery or pickup rate; required when a line is physical. */
   shippingMethodId: z.string().optional().nullable(),
   paymentMethod: z
     .enum(listPaymentMethodIds() as [string, ...string[]])
@@ -262,6 +273,8 @@ const checkoutCreatedPayloadSchema = z.object({
   pricesIncludeTax: z.boolean(),
   currencyCode: z.string(),
   decimalPlaces: z.number().int(),
+  /** Some line ships to the buyer's address (false for pickup, service-only and digital orders). */
+  requiresShipping: z.boolean().optional(),
   message: z.string(),
 });
 
@@ -332,6 +345,7 @@ app.openapi(createOrderRoute, async (c) => {
           price: item.price,
           productName: item.productName,
           variantLabel: item.variantLabel,
+          properties: item.properties,
         })),
         inventoryPool: data.inventoryPool,
         city: data.city,
@@ -416,6 +430,7 @@ app.openapi(createOrderRoute, async (c) => {
       await buildStorefrontCheckoutQuoteFingerprint(
         result.taxQuote,
         deliveryPreflight.shippingMethod,
+        result.linePropertiesHashes,
       ),
     );
 
@@ -448,6 +463,7 @@ app.openapi(createOrderRoute, async (c) => {
       pricesIncludeTax: result.taxQuote.pricesIncludeTax,
       currencyCode: result.taxQuote.currencyCode,
       decimalPlaces: result.taxQuote.decimalPlaces,
+      requiresShipping: result.requiresShipping,
       message: "Order created",
     };
 
