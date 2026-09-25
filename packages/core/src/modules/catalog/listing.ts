@@ -24,6 +24,7 @@ import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
     groupCatalogFacets,
+    type CatalogFacetCountInput,
     type CatalogFacetCountRow,
 } from "./facets";
 import {
@@ -126,6 +127,11 @@ type StorefrontCatalogScope = {
     fixedCategory?: StorefrontCategoryProductCategory;
     /** The brand's own page: no brand facet. */
     withoutBrandFacet?: boolean;
+    /**
+     * The category-tree facet: a category's children with subtree counts;
+     * by default the categories the listed products sit in.
+     */
+    categoryFacet?: CatalogFacetCountInput["categoryFacet"] | null;
 };
 
 /**
@@ -257,6 +263,7 @@ async function readStorefrontCatalogResults(
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
         brandFacet: !scope.withoutBrandFacet,
+        categoryFacet: scope.categoryFacet === undefined ? "product-categories" : scope.categoryFacet ?? undefined,
     });
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
@@ -280,11 +287,32 @@ async function readStorefrontCatalogResults(
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
+    // A subtree listing also names, for each row's category, the listing
+    // category's child whose subtree holds it (shelves group by it).
+    const subtreeParentId = scope.categoryFacet && typeof scope.categoryFacet === "object"
+        ? scope.categoryFacet.parentId
+        : null;
+    type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
     const [mediaMap, categoriesData, facetRows] = await Promise.all([
         loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
             ? db
-                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .select({
+                    id: categories.id,
+                    name: categories.name,
+                    slug: categories.slug,
+                    subcategoryId: subtreeParentId
+                        ? sql<string | null>`(
+                            SELECT child_link.ancestor_id FROM category_closure AS child_link
+                            INNER JOIN category_closure AS listing_child
+                                ON listing_child.descendant_id = child_link.ancestor_id
+                               AND listing_child.ancestor_id = ${subtreeParentId}
+                               AND listing_child.depth = 1
+                            WHERE child_link.descendant_id = ${categories.id}
+                            LIMIT 1
+                        )`
+                        : sql<string | null>`NULL`,
+                })
                 .from(categories)
                 .where(and(
                     // One JSON parameter: a 100-card page can name 100 categories,
@@ -292,11 +320,12 @@ async function readStorefrontCatalogResults(
                     sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
-                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
-            : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+                .all() as Promise<ListedCategory[]>
+            : Promise.resolve([] as ListedCategory[]),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
-    const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
+    const categoryMap = new Map(categoriesData.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
+    const subcategoryIds = new Map(categoriesData.map((category) => [category.id, category.subcategoryId]));
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
@@ -312,6 +341,9 @@ async function readStorefrontCatalogResults(
             availableForSale: Boolean(availableForSale),
             ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
             category,
+            ...(subtreeParentId
+                ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }
+                : {}),
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
         };
@@ -354,6 +386,8 @@ export async function getStorefrontCategoryProducts(
             : eq(buyerState.categoryId, category.id),
         sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
+        // Its sub-categories with their subtree counts; a leaf has none.
+        categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
     });
 }
 

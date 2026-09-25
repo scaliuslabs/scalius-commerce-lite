@@ -96,6 +96,7 @@ const collectionCatalogQuerySchema = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&
