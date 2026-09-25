@@ -145,9 +145,18 @@ numbers come from the storefront study
 - **Cards.** A card id's `renders` is its measured anatomy as data: body
   order (title, price, facts), price colour role, discount wording, the buy
   action and its `look` (title emphasis and lines derive from it).
-  `resolved.layout.productCard.look` is always concrete. Facts (brand, key specs, rating, sold, pack size, delivery, EMI)
-  render only when their data exists, so there are no zero states; sold counts
-  show from 10. `standard` is today's card, unchanged. The storefront renders
+  `resolved.layout.productCard.look` is always concrete. Facts (brand, key specs, rating, sold, pack size, delivery, EMI,
+  swatches, options) render only when their data exists, so there are no zero states; sold counts
+  show from 10. The data is each listing and homepage product's `cardFacts`
+  (core `catalog/card-facts.ts`): one bounded statement batched with the card
+  media, so no page gains a D1 round trip. Swatch colours come only from a
+  swatch attribute value of the same name or an exact CSS colour name. Ten
+  cards: `detailed` is Amazon's (swatches, three-line title, "Options: 4
+  sizes", "bought in past month", a superscript price, the delivery line);
+  only `spec` has `compare` (Star Tech's "Add to Compare" and the floating
+  tray to `/compare`). Cards never show one of our originals served without
+  renditions (the placeholder shows while the render job runs), and the
+  hover photo is fetched on intent, decoded, then faded. `standard` is today's card, unchanged. The storefront renders
   `standard` from its own file and every other id from
   `apps/storefront/src/components/cards/variants/anatomy.astro`.
 - **The default renders today's store.** `DEFAULT_STOREFRONT_THEME` is the
