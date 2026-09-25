@@ -366,6 +366,7 @@ const recommendedProductSchema = z.object({
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
   createdAt: z.string().nullable(),
+  rating: cardRatingSchema,
 });
 
 const productRecommendationsSchema = z.object({
