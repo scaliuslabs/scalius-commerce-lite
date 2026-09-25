@@ -4,7 +4,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
-import { formatFormValuesForSubmission } from "../utils";
+import { formatFormValuesForSubmission, productSubmitChanges } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import {
   postApiV1AdminProducts,
@@ -37,6 +37,8 @@ const FIELD_LABELS: Partial<Record<keyof ProductFormValues, ProductMessageKey>> 
   discountPercentage: "discount",
   categoryId: "category",
   slug: "webAddress",
+  isGiftCard: "giftCardProduct",
+  warrantyPolicyId: "warranty",
 };
 
 interface UseProductSubmitOptions {
@@ -91,9 +93,7 @@ export function useProductSubmit({
   const mutation = useMutation({
     mutationFn: async ({ values, acknowledgedSkuImageRemovalIds }: ProductMutationVariables) => {
       const dirty = form.formState.dirtyFields;
-      const formattedValues = formatFormValuesForSubmission(values, isEdit
-        ? { customizationSchema: Boolean(dirty.customizationSchema), fulfillmentKind: Boolean(dirty.fulfillmentKind) }
-        : undefined);
+      const formattedValues = formatFormValuesForSubmission(values, isEdit ? productSubmitChanges(dirty) : undefined);
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId || !aggregateRevision) throw new Error(t("saveFailed"));

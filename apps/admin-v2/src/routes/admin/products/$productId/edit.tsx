@@ -96,6 +96,8 @@ function toFormValues(product: ProductDetail): ProductFormValues {
     attributes: product.attributes || [],
     additionalInfo: (product.additionalInfo || []).map((item) => ({ ...item })),
     fulfillmentKind: fulfilmentModeOf(product.variants),
+    isGiftCard: product.isGiftCard,
+    warrantyPolicyId: product.warrantyPolicyId ?? null,
     customizationSchema: draftsFromView(product.customizationSchema),
   } as ProductFormValues;
 }

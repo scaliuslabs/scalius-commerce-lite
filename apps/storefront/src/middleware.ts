@@ -1,10 +1,8 @@
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
 import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
-import {
-  applyBaselineSecurityHeaders,
-  redirectPlaintextRequest,
-} from "@scalius/shared/http-security";
+import { redirectPlaintextRequest } from "@scalius/shared/http-security";
+import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-helper/private-download-security";
 
 import {
   getRuntimeApiBaseUrl,
@@ -110,18 +108,20 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  return isBrowserContinuationRelayPathname(url.pathname)
-    ? response
-    : setPageCspHeader(
-        response,
-        {
-          apiBaseUrl: getRuntimeApiBaseUrl(),
-          storefrontUrl: getRuntimeStorefrontUrl(),
-          mediaUrl: getRuntimeMediaUrl(),
-          cdnBaseUrl: getCdnBase(),
-        },
-        getRuntimeCspAllowedDomains(),
-      );
+  // A purchased file streams as a sandboxed attachment: it keeps its own policy.
+  return withPageCsp(url.pathname, response, {
+    privateRelay: isBrowserContinuationRelayPathname(url.pathname),
+    setPageCsp: (page) => setPageCspHeader(
+      page,
+      {
+        apiBaseUrl: getRuntimeApiBaseUrl(),
+        storefrontUrl: getRuntimeStorefrontUrl(),
+        mediaUrl: getRuntimeMediaUrl(),
+        cdnBaseUrl: getCdnBase(),
+      },
+      getRuntimeCspAllowedDomains(),
+    ),
+  });
 });
 
 // Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET, then
@@ -146,11 +146,7 @@ const transportSecurityMiddleware = defineMiddleware(
     if (redirect) return redirect;
 
     const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
-    const response = applyBaselineSecurityHeaders(request, await next(), {
-      frameProtection: privateRelay ? "deny" : "same-origin",
-    });
-    if (privateRelay) response.headers.set("Referrer-Policy", "no-referrer");
-    return response;
+    return applyTransportSecurityHeaders(request, await next(), { privateRelay });
   },
 );
 
