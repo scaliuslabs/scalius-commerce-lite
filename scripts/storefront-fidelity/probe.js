@@ -22,7 +22,8 @@
     const above = [...document.body.querySelectorAll("body > *, body > * > *")].filter((e) => vis(e) && e.getBoundingClientRect().bottom <= topR.top + 1 && e.getBoundingClientRect().height > 8 && !e.contains(main));
     out.topBarH = above.length ? Math.max(...above.map((e) => Math.round(e.getBoundingClientRect().height))) : 0;
     // nav links in the header: clipping detection
-    const links = [...main.querySelectorAll("a, summary, button")].filter((a) => vis(a) && !a.closest("[data-drawer], dialog, .nav-drawer, [hidden]"));
+    // Content of a closed <details> is not rendered (content-visibility), though it still has boxes.
+    const links = [...main.querySelectorAll("a, summary, button")].filter((a) => vis(a) && !a.closest("[data-drawer], dialog, .nav-drawer, [hidden]") && !a.closest("details:not([open]) > :not(summary)"));
     const clipped = [];
     for (const a of links) {
       const r = a.getBoundingClientRect();
