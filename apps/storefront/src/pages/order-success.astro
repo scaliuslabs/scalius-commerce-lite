@@ -67,6 +67,7 @@ import {
   formatCheckoutLanguageText,
 } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -176,12 +177,7 @@ if (!orderId || !receiptToken) {
         return `${url.pathname}${url.search}`;
       })()
     : undefined;
-  recoveryState = {
-    title: requestedOrderId ? copy.orderReceiptMissingTitleText : copy.orderReceiptIncompleteTitleText,
-    message: recoveryUrl ? copy.orderReceiptBrowserRecoveryMessageText : copy.orderReceiptTrackOrderHelpText,
-    status: 400,
-    action: recoveryUrl ? { href: recoveryUrl, label: copy.orderReceiptVerifyRecoveryText } : trackOrderAction,
-  };
+  recoveryState = receiptLinkRecoveryState({ requestedOrderId, recoveryUrl }, copy);
 } else {
   try {
     order = await getOrderReceipt(orderId, receiptToken);
