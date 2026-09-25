@@ -70,9 +70,6 @@ interface Props {
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
-  /** Build-generated phone shell CSS used when the complete shared sheet is non-blocking. */
-  criticalCss?: string;
-  criticalCssMedia?: string;
   documentLanguage?: string;
 }
 
@@ -90,8 +87,6 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
-  criticalCss,
-  criticalCssMedia,
   documentLanguage = "en",
 } = Astro.props;
 
@@ -356,17 +351,6 @@ if (!window.$RefreshReg$) {
         the page's LCP image hints; every face swaps over a metric-matched
         fallback, so text never shifts. */}
     <ThemeFonts pairing={storefrontTheme.tokens.typography} />
-
-    {
-      criticalCss && (
-        <style
-          is:inline
-          media={criticalCssMedia}
-          data-product-critical
-          set:html={criticalCss}
-        />
-      )
-    }
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
