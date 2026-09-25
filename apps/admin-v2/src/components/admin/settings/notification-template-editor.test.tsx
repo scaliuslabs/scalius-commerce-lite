@@ -4,7 +4,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/browser";
+import { defaultNotificationTemplates, type TemplatedNotificationType } from "@scalius/core/modules/notifications/browser";
 
 const DEFAULTS = defaultNotificationTemplates("en");
 
@@ -70,13 +70,13 @@ describe("notification message editor", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function renderEditor() {
+  async function renderEditor(event: TemplatedNotificationType = "order_confirmed") {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
           <PermissionProvider isSuperAdmin>
-            <NotificationTemplateEditor event="order_confirmed" />
+            <NotificationTemplateEditor event={event} />
           </PermissionProvider>
         </QueryClientProvider>,
       );
@@ -99,6 +99,22 @@ describe("notification message editor", () => {
     expect(counter()).toMatch(/^\d+ characters · 2 SMS · Unicode$/);
     expect(container.textContent).toContain("Customers don't get this by SMS.");
     expect(container.textContent).toContain("“order_update_bn”");
+  });
+
+  it("edits a gift card message in its own frame, without order details or WhatsApp", async () => {
+    const sms = await renderEditor("gift_card_issued");
+    expect(preview()).toContain("SAMPLE0000000000");
+    expect(container.textContent).toContain("Shown with sample details.");
+    expect(container.textContent).not.toContain("“order_update_bn”");
+
+    const html = container.querySelector<HTMLIFrameElement>("iframe")!.getAttribute("srcdoc")!;
+    expect(html).toContain("SAMPLE0000000000");
+    expect(html).not.toContain("track-order");
+
+    // Order-only variables aren't offered to a gift card message.
+    type(sms, "Code {{gift_card_code}}, order {{order_total}}");
+    act(() => { sms.focus(); sms.blur(); });
+    expect(container.querySelector("#template-sms-body-note")?.textContent).toBe("{{order_total}} can't be used in this message.");
   });
 
   it("names a variable this event can't fill once the merchant leaves the field", async () => {
