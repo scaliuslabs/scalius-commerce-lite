@@ -11,7 +11,7 @@
 import { z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { listLineDeliveries } from "@scalius/core/modules/digital";
-import { listLineIssuedCards } from "@scalius/core/modules/gift-cards";
+import { listLineIssuedCards, listOrderGiftCardTenders } from "@scalius/core/modules/gift-cards";
 import { listLineReviewStates, type LineExtrasInput } from "@scalius/core/modules/reviews";
 import { listLineWarranties } from "@scalius/core/modules/warranty";
 import { fromMinor } from "@scalius/shared/money";
@@ -151,4 +151,24 @@ export function withOrderLineExtras<T extends { id: string }>(
 ): T & { extras?: OrderLineExtras } {
   const lineExtrasForItem = extras.get(item.id);
   return lineExtrasForItem ? { ...item, extras: lineExtrasForItem } : item;
+}
+
+/** The gift cards still paying for an order (receipt and account order page): last 4 and amount only. */
+export const orderGiftCardTenderSchema = z.object({
+  last4: z.string(),
+  amount: z.number(),
+  amountMinor: z.number().int(),
+}).openapi("OrderGiftCardTender");
+
+export async function presentOrderGiftCardTenders(
+  db: Database,
+  orderId: string,
+  currencyDecimalPlaces: number,
+): Promise<Array<z.infer<typeof orderGiftCardTenderSchema>>> {
+  const tenders = await listOrderGiftCardTenders(db, orderId);
+  return tenders.map((tender) => ({
+    last4: tender.last4,
+    amount: fromMinor(tender.amountMinor, currencyDecimalPlaces),
+    amountMinor: tender.amountMinor,
+  }));
 }

@@ -14,7 +14,7 @@ import {
   issueManualGiftCard,
   listGiftCardsForStaff,
   normalizeGiftCardMessage,
-  normalizeGiftCardRecipient,
+  parseGiftCardRecipientStrict,
   updateGiftCardForStaff,
   type StaffGiftCardSummary,
 } from "@scalius/core/modules/gift-cards";
@@ -327,7 +327,7 @@ app.openapi(createRoute({
       .where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get();
     if (!customer) throw new ValidationError("That customer doesn't exist.");
   }
-  const recipient = normalizeGiftCardRecipient(body.recipient ?? null);
+  const recipient = parseGiftCardRecipientStrict(body.recipient ?? null);
   const notify = body.notify && Boolean(recipient?.email || recipient?.phone || body.customerId);
   let outboxId: string | null = null;
   const result = await issueManualGiftCard(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
