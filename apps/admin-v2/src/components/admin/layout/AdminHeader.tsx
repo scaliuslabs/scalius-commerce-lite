@@ -1,58 +1,54 @@
-import { lazy, Suspense } from "react";
-import { Menu } from "lucide-react";
-import { useSidebar } from "@/components/ui/sidebar";
-import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
-import logoDarkImg from "@/assets/logo-dark.png";
-import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { useLocation } from "@tanstack/react-router";
+import { Menu, UserRound, type LucideIcon } from "lucide-react";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { GlobalSearch } from "./GlobalSearch";
-import type { VisibleNavItem } from "./AdminNav";
-import { TOP_BAR_BUTTON } from "./top-bar";
-import { ShellLink } from "./ShellLink";
-import { cn } from "@scalius/shared/utils";
+import { settingsNavMessages } from "~/i18n/settings";
+import { SETTINGS_NAV } from "../settings/settings-nav";
+import { SETTINGS_ITEM, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
+import { useShell } from "./shell";
 
-// Push notifications pull in Firebase; keep them out of the shell chunk.
-const NotificationDropdown = lazy(() =>
-  import("@/components/admin/NotificationDropdown").then((module) => ({
-    default: module.NotificationDropdown,
-  })),
-);
-
-interface AdminHeaderProps {
-  user: UserMenuUser;
-  nav: VisibleNavItem[];
-  canOpen: (path: string) => boolean;
-  /** No menu button where the page has no sidebar (full-screen settings). */
-  showMenu: boolean;
+/** The current page's icon and name: a settings page, a section's sub-page, a section, or My account. */
+function usePageTitle(nav: VisibleNavItem[]): { icon: LucideIcon; title: string } | null {
+  const t = useMessages(shellMessages);
+  const settings = useMessages(settingsNavMessages);
+  const path = useLocation({ select: (location) => location.pathname });
+  if (matchesPath(path, SETTINGS_ITEM.to)) {
+    const page = SETTINGS_NAV.find((item) => matchesPath(path, item.to));
+    return page ? { icon: page.icon, title: settings(page.key) } : { icon: SETTINGS_ITEM.icon, title: t("settings") };
+  }
+  if (matchesPath(path, "/admin/account")) return { icon: UserRound, title: t("accountTitle") };
+  const section = nav.find((item) => isSectionActive(path, item));
+  if (!section) return null;
+  const child = section.children.find((item) => matchesPath(path, item.to));
+  return { icon: section.icon, title: t(child?.key ?? section.key) };
 }
 
 /**
- * The 56px top bar on the near-black frame: logo above the sidebar column, a
- * centred 640px search, notifications and the account menu. Its centre stays
- * free for the contextual save bar, which portals over the search.
+ * The canvas' slim top bar (Shopify's): the current page's icon and name, and
+ * on phones the Menu button that opens the navigation drawer. Its centre is
+ * where the contextual save bar appears.
  */
-export function AdminHeader({ user, nav, canOpen, showMenu }: AdminHeaderProps) {
+export function AdminHeader({ nav }: { nav: VisibleNavItem[] }) {
   const t = useMessages(shellMessages);
-  const { toggleSidebar, openMobile } = useSidebar();
+  const { drawerOpen, setDrawerOpen } = useShell();
+  const page = usePageTitle(nav);
   return (
-    <header data-slot="topbar" className="relative z-20 flex h-14 shrink-0 items-center gap-2 bg-topbar px-2 text-topbar-foreground">
-      {showMenu ? (
-        <button type="button" onClick={toggleSidebar} aria-label={t("toggleSidebar")} aria-expanded={openMobile} className={cn(TOP_BAR_BUTTON, "md:hidden")}>
-          <Menu className="size-5" aria-hidden />
-        </button>
+    <header data-slot="topbar" className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-2 md:px-4">
+      <button
+        type="button"
+        onClick={() => setDrawerOpen(true)}
+        aria-label={t("toggleSidebar")}
+        aria-expanded={drawerOpen}
+        className="flex size-11 items-center justify-center rounded-lg text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+      >
+        <Menu className="size-5" aria-hidden />
+      </button>
+      {page ? (
+        <p className="flex min-w-0 items-center gap-2 text-body font-medium text-foreground">
+          <page.icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="truncate">{page.title}</span>
+        </p>
       ) : null}
-      {/* The logo goes home; it is never "the current page". */}
-      <ShellLink to="/admin" current={false} className={cn(TOP_BAR_BUTTON, "hidden w-56 shrink-0 justify-start px-2 md:flex")}>
-        <img src={withDashboardBasePath(logoDarkImg)} alt="Scalius" className="h-6 w-auto" />
-      </ShellLink>
-      <div id="admin-top-bar-center" className="flex min-w-0 flex-1 justify-center">
-        <GlobalSearch nav={nav} canOpen={canOpen} />
-      </div>
-      <Suspense fallback={<span className="size-11 md:size-9" />}>
-        <NotificationDropdown userId={user.id} />
-      </Suspense>
-      <UserMenu user={user} />
     </header>
   );
 }
