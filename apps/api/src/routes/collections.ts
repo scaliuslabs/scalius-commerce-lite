@@ -13,6 +13,7 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -77,6 +78,7 @@ const collectionProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   availableForSale: z.boolean(),
@@ -114,6 +116,7 @@ const collectionCatalogQuerySchema = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&

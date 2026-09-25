@@ -135,6 +135,17 @@ const CONTAINER_TOKENS = {
   full: "160rem",
 } as const satisfies Record<StorefrontContainer, string>;
 const IMAGE_RATIO_TOKENS = { square: "1 / 1", portrait: "3 / 4", landscape: "4 / 3" } as const satisfies Record<StorefrontImageRatio, string>;
+/** The radius tokens in CSS px (at a 16px root), for looks that need a number. */
+export const STOREFRONT_RADIUS_PX = { square: 0, subtle: 6.4, rounded: 12, soft: 20 } as const satisfies Record<StorefrontThemeRadius, number>;
+/** The photo ratio tokens as width / height. */
+export const STOREFRONT_IMAGE_RATIO_VALUES = { square: 1, portrait: 0.75, landscape: 4 / 3 } as const satisfies Record<StorefrontImageRatio, number>;
+
+/** The ratio token nearest a width / height (portrait below 0.9, landscape above 1.15). */
+export function storefrontNearestImageRatio(ratio: number): StorefrontImageRatio {
+  if (ratio < 0.9) return "portrait";
+  if (ratio > 1.15) return "landscape";
+  return "square";
+}
 
 // ─── Fonts ────────────────────────────────────────────────────────────────
 

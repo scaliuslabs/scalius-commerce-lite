@@ -69,7 +69,7 @@ describe("header scroll geometry", () => {
     // The row's measured anatomy: py-2 around the menu and a top border.
     const classicSource = source("./variants/ClassicHeader.astro");
     expect(classicSource).toContain('class="header-full-nav-row hidden border-t border-border lg:block"');
-    expect(classicSource).toContain('<div class="py-2 flex justify-center relative z-50">');
+    expect(classicSource).toContain('<div class="py-2 flex justify-center relative z-50" data-nav-compact-home=');
     // The menu links, the search field and the phone search row paint with the same variables.
     const nav = source("./DesktopNav.astro");
     expect(nav.match(/height: var\(--nav-link-height, 2\.(?:5|75)rem\)/g)).toHaveLength(3);

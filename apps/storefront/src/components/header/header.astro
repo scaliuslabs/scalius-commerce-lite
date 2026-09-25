@@ -1,11 +1,14 @@
 ---
 // The storefront header: top bar, header, desktop menu and phone navigation,
 // each the variant the resolved theme chose (theme blocks topBar, header,
-// desktopNav, mobileNav; the resolver already applied fit fallbacks). The
-// menu tree comes from nav-tree.ts and each rendering of it gets its share
-// of the header's 150-link budget, so large trees are drilled into rather
-// than dumped into the HTML.
-import type { HeaderData, NavigationItem, SocialLink } from "@/lib/api";
+// desktopNav, mobileNav; the resolver already applied fit fallbacks). Every
+// menu renders one tree, the theme's navigation source (`blocks.navigation`:
+// the header menu, the category tree or both, each target once; nav-tree.ts)
+// and every surface shows at most `maxTopItems` top entries, the rest behind
+// "More" or "All categories" (/categories). The surfaces share the theme's
+// link budget (`planHeaderNavigation`), so a 1,000-category store drills
+// into its tree instead of dumping it into the HTML.
+import type { CategoryNavigationTree, HeaderData, NavigationItem, SocialLink } from "@/lib/api";
 import HeaderLayout from "./HeaderLayout.astro";
 import TopBar from "./TopBar.astro";
 import DesktopNav from "./DesktopNav.astro";
@@ -16,7 +19,7 @@ import DrawerTrigger from "./DrawerTrigger.astro";
 import MobileMenu from "./MobileMenu.astro";
 import MobileTabBar from "./MobileTabBar.astro";
 import PillNav from "./PillNav.astro";
-import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
+import { HEADER_LOGO_WIDTH_DEFAULT, normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 import type {
   STOREFRONT_MOBILE_TABS,
   StorefrontHeaderRenderer,
@@ -26,15 +29,20 @@ import type {
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { headerCondense, headerGeometryStyle, headerSpec } from "./header-variants";
 import {
-  navigationLinkShare,
+  countNavigationLinks,
+  estimateNavRowFit,
+  navigationIndexMode,
   navigationShortcuts,
-  navigationTree,
-  pruneNavigation,
+  planHeaderNavigation,
+  sourceNavigation,
 } from "./nav-tree";
 
 interface Props {
   headerData: HeaderData;
+  /** The header menu (Online store -> Navigation). */
   navigation: NavigationItem[];
+  /** The reachable category tree (layout data), for tree-sourced navigation. */
+  categoryTree?: CategoryNavigationTree | null;
   /** The store's support phone and single social set (see lib/store-identity). */
   storeName: string | null;
   storePhone: string | null;
@@ -50,7 +58,8 @@ interface Props {
 
 const {
   headerData: apiHeaderData,
-  navigation: navigationItems,
+  navigation: menuItems,
+  categoryTree,
   storeName,
   storePhone,
   social,
@@ -60,7 +69,7 @@ const {
 } = Astro.props;
 
 const { resolved } = await currentRequestTheme(Astro.locals);
-const { topBar, header, desktopNav, mobileNav } = resolved.blocks;
+const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
 
 const headerData: HeaderData = {
   topBar: {
@@ -82,9 +91,17 @@ const headerData: HeaderData = {
   social,
 };
 
-// ── Which menus render where ───────────────────────────────────────────
-const tree = navigationTree(navigationItems);
+// ── The tree, and which menus render where ─────────────────────────────
+const categoryNodes = categoryTree?.nodes ?? [];
+const tree = sourceNavigation(navigation.source, menuItems, categoryNodes);
+const treeSourced = navigation.source !== "menu";
 const hasNavigation = tree.length > 0;
+// Shortcut rows (beside "All", the phone's pills) lead with the merchant's
+// own links when the departments come from the tree (Amazon's Deals, Sell...).
+const menuTree = sourceNavigation("menu", menuItems, []);
+const shortcutTree = navigation.source === "tree+menu" && menuTree.length > 0
+  ? [...menuTree, ...tree.filter((item) => !menuTree.some((entry) => entry.href && entry.href === item.href))]
+  : tree;
 const desktopKind = desktopNav.variant;
 const desktopSettings = desktopNav.settings as Record<string, unknown>;
 const railAlways = desktopKind === "departments-rail" && desktopSettings.open === "always";
@@ -106,30 +123,77 @@ const spec = header.variant === "mall-departments" ? null : headerSpec(header.va
 const retailPill = header.variant === "retail-pill";
 const shortcutRow = Boolean(spec?.phoneShortcuts) && hasNavigation;
 const rowLinks = desktopDrill && !retailPill ? 8 : 0;
+const menuPlacement: "inline" | "row" =
+  !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
 
-// Link budget: one share per rendering of the tree in the header HTML
-// (the classic compact copy and "More" entries are built in the browser).
-const renderings = (desktopMenu && !sharedDrawer ? 1 : 0) + 1;
-const share = navigationLinkShare(renderings, (shortcutRow ? 10 : 0) + rowLinks);
-const desktopAllLinks = desktopKind !== "dropdown";
-const desktopTree = desktopMenu ? pruneNavigation(tree, share, { allLinks: desktopAllLinks }) : [];
-const drawerTree = pruneNavigation(tree, share, { allLinks: phoneTree === "drill" });
+// ── The link budget, across every surface ──────────────────────────────
+const rowKinds = ["dropdown", "mega-panel", "cascading", "sticky-category-bar"];
+const desktopRendering = desktopMenu && !sharedDrawer;
+const topBarShown = headerData.topBar.isEnabled && topBar.variant !== "none";
+// Logo, account, track order, search icon, the drawer's own rows and phone.
+const reserved =
+  8 + social.length + (tabs?.length ?? 0) + (topBarShown ? 3 : 0) + (shortcutRow ? 10 : 0) + rowLinks;
+const plan = planHeaderNavigation(
+  tree,
+  {
+    maxTopItems: navigation.maxTopItems,
+    linkBudget: navigation.linkBudget,
+    index: navigationIndexMode(treeSourced, categoryNodes.length > 0),
+  },
+  {
+    desktop: desktopRendering,
+    desktopRow: rowKinds.includes(desktopKind),
+    // Every parent costs one more: its "All X" link, or its toggle and panel
+    // (the header's bytes budget as much as its anchors).
+    desktopAllLinks: true,
+    drawerAllLinks: true,
+    desktopWeight: desktopKind === "mega-panel" ? 0.65 : 0.5,
+    reserved,
+  },
+);
+const desktopTree = desktopRendering ? plan.desktop : [];
+// Panels cut to the budget fill up to their whole content on intent (a
+// hover, focus or touch on the menu): /navigation/panels, nav-panels.ts.
+const panelKinds = ["dropdown", "mega-panel", "cascading", "sticky-category-bar"];
+const panelsSrc =
+  desktopRendering &&
+  panelKinds.includes(desktopKind) &&
+  (Boolean(categoryTree?.truncated) ||
+    countNavigationLinks(desktopTree) < countNavigationLinks(tree.slice(0, navigation.maxTopItems)))
+    ? "/navigation/panels"
+    : undefined;
+// Without JavaScript an inline row (between the logo and the search) cannot
+// wrap: it shows what the narrowest desktop (1024px) surely fits, then "All
+// categories". Rows of their own wrap instead.
+const inlineRowPx = spec && menuPlacement === "inline"
+  ? 1024 - 64 - normalizeHeaderLogoWidth(headerData.logo.width) - (spec.search === "icon" ? 44 : 304) -
+    (spec.utilities === "icons" ? 100 : 190) - 4 * 24
+  : null;
+const noScriptFit = inlineRowPx !== null && plan.allCategories
+  ? estimateNavRowFit(desktopTree.map((item) => item.title), {
+      fontPx: 14,
+      uppercase: spec?.uppercaseMenu,
+      itemChromePx: 28,
+      gapPx: 4,
+      availablePx: Math.max(0, inlineRowPx),
+      maxLabelPx: 208,
+    })
+  : undefined;
 
 const flyouts = desktopSettings.flyouts === "cascading" ? "cascading" : "dropdown";
-const departments = tree.filter((item) => item.href);
+const departments = tree.filter((item) => item.href).slice(0, navigation.maxTopItems);
 const phoneDrop = tabs ? tabs.filter((tab) => tab === "cart" || tab === "account").join(" ") : "";
+const drawerTitle = treeSourced ? "Shop by department" : "Menu";
 
 // The classic header folds the dropdown row into the bar on scroll.
 const condensedMenu = !spec && desktopMenu && desktopKind === "dropdown";
-const menuPlacement: "inline" | "row" =
-  !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
 const stickyMenuRow =
   Boolean(spec) && desktopMenu && menuPlacement === "row" && (header.variant === "spec-two-row" || desktopKind === "sticky-category-bar");
 // Heights and the scroll reserve, from the variant data (HeaderLayout's CSS).
 const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }));
 ---
 
-<header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant}>
+<header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant} data-nav-source={navigation.source}>
   <TopBar
     variant={headerData.topBar.isEnabled ? topBar.variant : "none"}
     text={headerData.topBar.text}
@@ -152,7 +216,15 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
   >
     <Fragment slot="menu">
       {desktopMenu && desktopKind === "dropdown" && (
-        <DesktopNav navigation={desktopTree} id="desktop-nav" navStyle="menu" />
+        <DesktopNav
+          navigation={desktopTree}
+          id="desktop-nav"
+          navStyle="menu"
+          extras={plan.extras}
+          allCategories={plan.allCategories}
+          noScriptFit={noScriptFit}
+          panelsSrc={panelsSrc}
+        />
       )}
       {desktopMenu && desktopKind === "mega-panel" && (
         <DesktopNav
@@ -160,15 +232,35 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
           id="desktop-nav"
           navStyle="mega"
           promoImages={desktopSettings.promoImages === true}
+          extras={plan.extras}
+          allCategories={plan.allCategories}
+          noScriptFit={noScriptFit}
+          panelsSrc={panelsSrc}
         />
       )}
       {desktopMenu && desktopKind === "cascading" && (
-        <CascadingNav navigation={desktopTree} id="cascading-nav" layout="row" flyouts="cascade" />
+        <CascadingNav
+          navigation={desktopTree}
+          id="cascading-nav"
+          layout="row"
+          flyouts="cascade"
+          extras={plan.extras}
+          allCategories={plan.allCategories}
+          panelsSrc={panelsSrc}
+        />
       )}
       {desktopMenu && desktopKind === "sticky-category-bar" && (
-        <CategoryBar navigation={desktopTree.slice(0, 18)} flyouts={flyouts} />
+        <CategoryBar
+          navigation={desktopTree}
+          flyouts={flyouts}
+          extras={plan.extras}
+          allCategories={plan.allCategories}
+          panelsSrc={panelsSrc}
+        />
       )}
-      {desktopMenu && desktopKind === "departments-rail" && <DepartmentsRail navigation={desktopTree} />}
+      {desktopMenu && desktopKind === "departments-rail" && (
+        <DepartmentsRail navigation={desktopTree} allCategories={plan.allCategories} />
+      )}
       {desktopDrill && (
         <div class="drill-row-menu">
           <DrawerTrigger
@@ -177,15 +269,13 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
             label={retailPill ? "Categories" : "All"}
           />
           {rowLinks > 0 && (
-            <ul class="drill-row-links">
-              {navigationShortcuts(tree, rowLinks).map((item) => (
-                <li>
-                  <a href={item.href} {...(item.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
-                    {item.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <DesktopNav
+              navigation={navigationShortcuts(shortcutTree, rowLinks)}
+              id="drill-row-nav"
+              navStyle="menu"
+              align="start"
+              label="Shortcuts"
+            />
           )}
         </div>
       )}
@@ -193,19 +283,20 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     {
       shortcutRow && (
         <div slot="phone-extras" class="header-phone-shortcuts">
-          <PillNav navigation={navigationShortcuts(tree, 10)} />
+          <PillNav navigation={navigationShortcuts(shortcutTree, 10)} />
         </div>
       )
     }
   </HeaderLayout>
 
   <MobileMenu
-    navigation={drawerTree}
+    navigation={plan.drawer}
     contact={headerData.contact}
     social={headerData.social}
     tree={phoneTree}
     screens={sharedDrawer ? "all" : "phone"}
-    title={sharedDrawer ? "Shop by department" : "Menu"}
+    title={drawerTitle}
+    allCategories={plan.drawerAllCategories}
   />
 
   {
@@ -216,53 +307,101 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
         contact={headerData.contact}
         tree="drill"
         screens="all"
-        title="Shop by department"
+        title={drawerTitle}
+        allCategories={plan.drawerAllCategories}
       />
     )
   }
 
   {tabs && <MobileTabBar tabs={tabs} />}
+
+  {/* Without JavaScript, menu rows wrap instead of fitting into "More" (never clipped), and a "More" that needs the script gives way to "All categories". */}
+  <noscript><style is:inline>[data-nav-overflow]{flex-wrap:wrap!important;opacity:1!important;animation:none!important}[data-nav-overflow]>[data-nav-nojs-hidden]{display:none!important}[data-nav-overflow]>[data-nav-nojs-only]{display:flex!important}[data-nav-overflow]>.desktop-nav-more{display:none!important}</style></noscript>
 </header>
+
+<style is:global>
+  /* The menus' chevrons, painted by CSS (masks in currentColor) instead of an
+     inline <svg> per row, and the menus' styles are global (no per-element
+     scope attribute): both keep the header HTML within its budget. */
+  :root {
+    --nav-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    --nav-chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E");
+    --nav-chevron-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m10 4-4 4 4 4'/%3E%3C/svg%3E");
+  }
+
+  .nav-chevron {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    background: currentColor;
+    -webkit-mask: var(--nav-chevron-down) center / contain no-repeat;
+    mask: var(--nav-chevron-down) center / contain no-repeat;
+    transition: transform 200ms ease;
+  }
+
+  .nav-chevron--right {
+    -webkit-mask-image: var(--nav-chevron-right);
+    mask-image: var(--nav-chevron-right);
+  }
+
+  .nav-chevron--left {
+    -webkit-mask-image: var(--nav-chevron-left);
+    mask-image: var(--nav-chevron-left);
+  }
+
+  /* A long top-level name wraps to two lines (then ends in an ellipsis, the
+     whole name in its title) instead of pushing the rest of its row into
+     "More"; in the "More" list it reads whole. */
+  .nav-label {
+    display: -webkit-box;
+    max-width: 13rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Its hover and current marks underline the words (on both lines). */
+  .desktop-nav-link:has(> .nav-label) {
+    background-image: none;
+  }
+
+  .desktop-nav-link:is(:hover, [aria-current]) > .nav-label,
+  .desktop-nav-item:has(> [aria-expanded="true"]) > .desktop-nav-link > .nav-label {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+  }
+
+  [data-nav-more-list] .nav-label {
+    display: inline;
+    max-width: none;
+    -webkit-line-clamp: unset;
+    text-align: start;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-chevron {
+      transition: none;
+    }
+  }
+</style>
 
 <style>
   .drill-row-menu {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
   }
 
-  .drill-row-links {
-    display: none;
-    min-width: 0;
-    overflow: hidden;
-    gap: 0.25rem;
-  }
-
-  @media (min-width: 64rem) {
-    .drill-row-links {
-      display: flex;
-    }
-  }
-
-  .drill-row-links a {
-    display: inline-flex;
-    align-items: center;
-    height: 2.5rem;
-    padding-inline: 0.625rem;
-    color: var(--nav-ink, var(--foreground));
-    font-size: 0.875rem;
-    white-space: nowrap;
-  }
-
-  .drill-row-links a:hover {
-    text-decoration: underline;
-    text-underline-offset: 0.3em;
-  }
-
-  .drill-row-links a:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: -2px;
+  .drill-row-menu > :global(.desktop-nav) {
+    flex: 1;
   }
 
   /* PillNav bleeds to the screen edges by its gutter; this row supplies it. */
@@ -294,9 +433,11 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
   import { installNavDisclosure } from "./nav-disclosure";
   import { installNavMenus } from "./nav-menus";
   import { installDrawer } from "./drawer";
+  import { installNavPanels } from "./nav-panels";
 
   installNavDisclosure();
   installNavMenus();
+  installNavPanels();
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));

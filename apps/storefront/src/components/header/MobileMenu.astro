@@ -4,6 +4,8 @@
 // the computer's "All" drawer (`nav-drawer`, or the phone drawer itself when
 // both use drill-in). drawer.ts owns the dialog behaviour; without
 // JavaScript it opens as the URL's :target from the <noscript> links.
+// Amazon's 365px drawer (at most 90% of a phone), 44px rows; each target
+// once: the fixed "Track your order" row steps aside when the menu has it.
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, Phone, ChevronRight } from "lucide-react";
 import { mediaImageUrl } from "@/lib/media-url";
@@ -22,6 +24,8 @@ interface Props {
   /** phone: below `lg` only; all: every width (the drill-in "All" drawer). */
   screens?: "phone" | "all";
   title?: string;
+  /** The top level ends with "All categories" (/categories). */
+  allCategories?: boolean;
 }
 
 const {
@@ -32,7 +36,14 @@ const {
   tree = "accordion",
   screens = "phone",
   title = "Menu",
+  allCategories = false,
 } = Astro.props;
+const menuHasTrackOrder = (function has(list: NavigationItem[]): boolean {
+  return list.some((item) => {
+    const href = item.href?.split(/[?#]/)[0]?.replace(/\/+$/, "");
+    return href === "/track-order" || /^track (your )?order$/i.test(item.title.trim()) || has(item.subMenu ?? []);
+  });
+})(navigation);
 const phoneHref = telHref(contact.phone);
 const phoneOnly = screens === "phone";
 const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
@@ -52,7 +63,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 <div
   id={`${id}-panel`}
   class:list={[
-    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[365px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
     phoneOnly && "lg:hidden",
   ]}
   role="dialog"
@@ -96,14 +107,19 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
     {
       tree === "drill" ? (
         <div class="min-h-0 flex-1">
-          <DrillDrawer items={navigation} idPrefix={`${id}-drill`} />
+          <DrillDrawer items={navigation} idPrefix={`${id}-drill`} allCategories={allCategories} />
         </div>
       ) : (
-        <NavTree items={navigation} idPrefix={id === "mobile-menu" ? "mobile-nav" : `${id}-tree`} variant="drawer" />
+        <NavTree
+          items={navigation}
+          idPrefix={id === "mobile-menu" ? "mobile-nav" : `${id}-tree`}
+          variant="drawer"
+          allCategories={allCategories}
+        />
       )
     }
 
-    <a
+    {!menuHasTrackOrder && <a
       href="/track-order"
       data-astro-prefetch="false"
       class:list={[
@@ -112,7 +128,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       ]}
     >
       Track your order
-    </a>
+    </a>}
 
     {
       social && social.length > 0 && (

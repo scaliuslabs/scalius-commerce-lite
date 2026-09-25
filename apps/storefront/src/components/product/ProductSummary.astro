@@ -13,7 +13,7 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
+import { getBuyerStockSummary, isVariantAvailable } from "@/lib/product-sellable-variants";
 import {
   createInitialSelection,
   filterVariantsBySelection,
@@ -88,10 +88,22 @@ const actionPresentation = customizationUnavailable
       buyNow: { ...stockActionPresentation.buyNow, disabled: true },
     }
   : stockActionPresentation;
-// Buyer inputs make the buy area a real form (safe before hydration and
-// without JavaScript); without them the classic markup is untouched.
+// The buy area is always a real form posting to /buy/<slug> (safe before
+// hydration and without JavaScript); buyer inputs add their fields to it.
 const buyerInputFields = customizationUnavailable ? [] : (product.customization?.fields ?? []);
-const buyFormId = buyerInputFields.length > 0 ? "product-buy-form" : undefined;
+const buyFormId = "product-buy-form";
+const hasBuyerInputs = buyerInputFields.length > 0;
+// Without JavaScript the option buttons cannot choose a SKU; a plain select of
+// the buyer's purchasable combinations does, in the same form.
+const noScriptVariants = options.length > 0
+  ? variants
+      .filter((variant) => isVariantAvailable(variant))
+      .map((variant) => ({
+        id: variant.id,
+        label: variant.selectedOptions.map((option) => option.value).join(" / "),
+      }))
+      .filter((variant) => variant.label)
+  : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
 const stockAvailable = buyerStockSummary.tone === "available";
 
@@ -259,7 +271,7 @@ function optionAriaLabel(
         <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
       ) : null}
 
-      {buyFormId ? (
+      {hasBuyerInputs ? (
         <ProductBuyerInputs
           formId={buyFormId}
           slug={product.slug}
@@ -269,6 +281,22 @@ function optionAriaLabel(
           currencyPlaces={moneyPlaces(currencyDecimalPlaces, currencyCode)}
           formatMoney={formatPrice}
         />
+      ) : (
+        <form id={buyFormId} method="post" action={`/buy/${encodeURIComponent(product.slug)}`} data-product-buy-form>
+          <input type="hidden" name="variant" value={initialSelectedVariant?.id ?? ""} />
+        </form>
+      )}
+
+      {noScriptVariants.length > 0 ? (
+        <noscript>
+          <style is:inline>.variant-option-selector{display:none}</style>
+          <label for="product-variant-noscript" class="mb-1 block text-sm font-medium text-foreground">{options.map((option) => option.name).join(" / ")}</label>
+          <select id="product-variant-noscript" name="variant" form={buyFormId} class="block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground">
+            {noScriptVariants.map((variant) => (
+              <option value={variant.id} selected={variant.id === initialSelectedVariant?.id}>{variant.label}</option>
+            ))}
+          </select>
+        </noscript>
       ) : null}
 
       <div>
@@ -283,10 +311,10 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="flex gap-2 pt-1">
-        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+        <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
           <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+        <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
           <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>

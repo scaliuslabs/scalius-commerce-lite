@@ -383,6 +383,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 24,
         postgresStatements: 30,
       },
+      {
+        version: 97,
+        name: "0097_theme_document_v5",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -528,6 +534,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 94, name: "0094_digital_goods" },
           { version: 95, name: "0095_gift_cards" },
           { version: 96, name: "0096_warranty" },
+          { version: 97, name: "0097_theme_document_v5" },
         ],
       });
     } finally {

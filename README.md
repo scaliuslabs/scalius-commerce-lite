@@ -226,6 +226,14 @@ pnpm --dir apps/admin-v2 dev   # :4532, proxies to :8931
 The ports are never Worker vars or Wrangler `vars` (`pnpm check:env` forbids
 both). Mailpit stays one shared inbox on `127.0.0.1:8025`.
 
+Wrangler's dev registry is machine-wide, so the API on a non-default port runs
+as `scalius-api-local-<api port>` (`node scripts/dev-ports.mjs
+api-worker-name`; apps/api `pnpm dev` passes it as `--name`). To serve a
+built storefront beside it, `node scripts/dev-ports.mjs storefront-config`
+writes a config whose `BACKEND_API` binding targets that name, and
+`node scripts/dev-ports.mjs verify-binding` fails unless the storefront renders
+this stack's canonical origin.
+
 ## Commands
 
 ```bash

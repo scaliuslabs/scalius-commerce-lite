@@ -370,3 +370,39 @@ describe("tax quote on the pickup and no-delivery paths (Wave A)", () => {
     expect(() => parseTaxQuoteEnvelope({ success: true, data: quote })).toThrow(TaxQuoteContractError);
   });
 });
+
+describe("tax quote with a quantity bundle", () => {
+  // 2 × ৳250 with the "Pair" tier (10% off): the API folds the ৳50 saving into
+  // discountMinor with no promotion line, so the summary lines must name it.
+  const bundleQuote = {
+    ...validQuote({
+      subtotalMinor: 50_000, subtotalAmount: 500,
+      shippingMinor: 6_000, shippingAmount: 60,
+      discountMinor: 5_000, discountAmount: 50,
+      taxMinor: 0, taxAmount: 0,
+      totalMinor: 51_000, totalAmount: 510,
+      shippingMethod: { id: "shipping_1", name: "Inside Dhaka", description: null, baseAmountMinor: 6_000, feeWaived: false },
+      discounts: [], offers: [], rejectedCodes: [],
+      items: [{ ...validQuote().items[0], quantity: 2, unitPrice: 250 }],
+    }),
+    bundleDiscountMinor: 5_000,
+    bundleDiscountAmount: 50,
+    bundles: [{ productId: "prod_1", quantity: 2, discountType: "percentage", label: "Pair" }],
+  };
+
+  it("lists the bundle saving as a discount line so subtotal + delivery - discounts = total", () => {
+    const parsed = parseTaxQuoteEnvelope({ success: true, data: bundleQuote });
+    expect(parsed.discounts).toEqual([
+      { promotionId: "bundle", title: "Pair", code: null, amount: 50, shippingAmount: 0 },
+    ]);
+    const listed = parsed.discounts.reduce((sum, line) => sum + line.amount + line.shippingAmount, 0);
+    expect(parsed.subtotalAmount + parsed.shippingAmount - listed).toBe(parsed.totalAmount);
+  });
+
+  it("adds no line when no bundle applies, and refuses a saving that contradicts its minor units", () => {
+    const none = parseTaxQuoteEnvelope({ success: true, data: { ...validQuote(), bundleDiscountMinor: 0, bundleDiscountAmount: 0, bundles: [] } });
+    expect(none.discounts.map((line) => line.promotionId)).toEqual(["promo_1"]);
+    expect(() => parseTaxQuoteEnvelope({ success: true, data: { ...bundleQuote, bundleDiscountAmount: 5 } }))
+      .toThrow(TaxQuoteContractError);
+  });
+});

@@ -1,4 +1,4 @@
-# Storefront theme document (version 4)
+# Storefront theme document (version 5)
 
 One JSON document describes how the storefront looks: the template it is
 based on, the tokens every block reads, one variant per block, and the
@@ -14,17 +14,18 @@ numbers come from the storefront study
 |---|---|
 | `contrast.ts` | the 19 colour keys, colour maths, the base AA pairs, header-tone surfaces |
 | `tokens.ts` | token enums and specs (density, type scale, radius…), palettes, fonts, the token schema, token CSS |
-| `fit.ts` | `StoreShape` (bounded store facts) and the fit conditions variants declare |
-| `blocks.ts` | the block-variant registry and the blocks schema |
+| `fit.ts` | `StoreShape` (bounded store facts), the navigation facts, and the fit conditions variants declare |
+| `blocks.ts` | the block-variant registry, card looks, listing filter styles, the navigation schema and the blocks schema |
 | `sections.ts` | the section registry (17 types, strict settings) and the types the storefront renders |
 | `home-data.ts` | what homepage sections read (product lists by source, images), shared by the API and the storefront |
 | `document.ts` | the document schema, the document's contrast pairs, strict parsing, token CSS |
 | `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
 | `resolve.ts` | `resolveStorefrontTheme(document, storeShape)` |
+| `fidelity-contract.test.ts` | the slice 0 contract matrix: template x card x filter style x navigation source on empty, tiny, live-small, 30k-seed and huge stores |
 
 ```jsonc
 {
-  "version": 4,                        // literal; a new shape means a new version
+  "version": 5,                        // literal; a new shape means a new version
   "template": "department-mall",       // the template it is based on (a label)
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
@@ -32,8 +33,10 @@ numbers come from the storefront study
     "buttonShape", "surface", "imageRatio", "imageFit", "headerTone", "container"
   },
   "blocks": {                          // each block: { "variant", "settings" }
-    "topBar", "header", "desktopNav", "mobileNav", "card",
-    "listing": { "layout", "toolbar": [], "phoneLayout", "paging" },
+    "topBar", "header",
+    "navigation": { "source", "maxTopItems", "linkBudget" },   // shared by every header surface
+    "desktopNav", "mobileNav", "card",
+    "listing": { "layout", "filters": { "style", "openByDefault", "column"?, "rowPitch"?, "label"? }, "toolbar": [], "phoneLayout", "paging" },
     "product": { "gallery", "buyBox", "below": [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
     "footer"
   },
@@ -48,9 +51,15 @@ numbers come from the storefront study
   (core, storefront) use the same schema. There is no tolerant or legacy
   reader: a stored document that fails the schema fails closed in the
   dashboard, and the storefront renders `DEFAULT_STOREFRONT_THEME` whole.
-- **Tokens are global; blocks choose structure only.** A variant never
-  carries its own radius, font size or colour, so any mix of variants stays
-  coherent (mix rule 1). One card per store (rule 2).
+- **Tokens are global; blocks choose structure.** A variant never carries
+  its own colour, so any mix of variants stays coherent (mix rule 1). One
+  card per store (rule 2). **Cards are the exception for shape and type:**
+  every card but `standard` owns its measured look (`STOREFRONT_CARD_LOOKS`:
+  photo ratio and fit, radius in px, surface, title and price size per
+  viewport and weight). A template's radius, surface and photo tokens never
+  flatten it; `standard` follows them (and the theme's type scale), so
+  today's card stays pixel-identical. Density still owns the grid (card
+  minimum, gaps) and the card's padding.
 - **Readable text per combination.** Every pair in
   `STOREFRONT_THEME_TEXT_PAIRS`, plus the `contrastPairs` of every chosen
   variant and of every variant it can fall back to, must reach WCAG AA
@@ -65,11 +74,51 @@ numbers come from the storefront study
   pieces, product modules and sections without their data are left out.
   `resolved.fallbacks` says what changed and which conditions failed, so the
   dashboard can say why.
-- **Store shape.** The API reads it with bounded counts (`LIMIT 1000`) in the
-  storefront layout batch (no extra round trip) and serves it beside the
-  theme (`storeShape` in the layout data and in the dashboard's theme read).
-  Facts that do not exist yet (brands, key specs, EMI, digital lines,
-  reviews, questions, content blocks) read as absent until their phase lands.
+- **Store shape.** The API reads it in one bounded statement in the
+  storefront layout batch (no extra round trip; `@scalius/core`
+  `storefront/store-shape.ts`) and serves it beside the theme (`storeShape`
+  in the layout data and in the dashboard's theme read). It counts what a
+  buyer can reach: `topCategoryCount` = published roots with a public
+  product in their published subtree; `categoryDepth` = 1 + the deepest
+  `category_closure` level where a category whose every ancestor is
+  published holds a public product; `categoryGroups` = the most
+  second-level categories with two or more published children under one
+  root; `brandCount` = published brands with a public product;
+  `hasKeySpecs` = a live `key_spec` attribute has a value on a public
+  product. "Public product" is `product_buyer_state.is_public`. EMI,
+  digital lines, reviews, questions and content blocks read as absent until
+  their phase lands. On the 30k catalogue seed it reads 25 roots, 4 levels,
+  300 brands and key specs (`store-shape.scale.test.ts`, opt-in).
+- **Navigation.** `blocks.navigation` is shared by every header surface:
+  `source` is `menu`, `category-tree` (published roots with public products
+  and their published descendants, 4 levels at most) or `tree+menu` (the
+  roots in tree order, then the menu's other top items; an item whose target
+  is already present merges into it, keeping the first position and the
+  menu's label). `maxTopItems` (1-18) caps the top entries of a row, rail or
+  drawer root (the rest go behind "More" or "All categories"); `linkBudget`
+  (20-150) caps the anchors of all header surfaces together, clones
+  included. A tree source on a store without a public root renders the
+  menu, and a menu source without a menu renders the tree
+  (`resolved.blocks.navigation`, with a `navigation` fallback). Menu
+  patterns fit against `navTopItems`, `navDepth` and `navGroups` in
+  `resolved.facts`: the source that renders, capped by `maxTopItems`.
+- **Listing filters.** `blocks.listing.filters.style` places the facets:
+  `sidebar-dense` (Amazon, Daraz, Star Tech: 240px column, 22px rows, 14px
+  labels), `sidebar-comfortable` (Apple Gadgets, Fabrilife, Game Ghor:
+  270px, 28px, 16px), `bar-dropdowns` (Dawn, Aarong: up to 4 facet
+  dropdowns in a bar, the rest in a drawer) or `drawer` (Target, Chaldal).
+  `openByDefault` opens the facet groups (never for `bar-dropdowns`).
+  A template may set its reference's own numbers over the style's:
+  `column` (180-340px), `rowPitch` (16-36px) and `label` (12-18px);
+  `resolved.blocks.listing.filters.spec` carries the result
+  (`storefrontListingFilterSpec`). Marketplace is Daraz's 190/18/13,
+  spec-catalogue Star Tech's 225/32/14, rounded-tech Apple Gadgets'
+  316/28/16 and department-mall Amazon's 262/22/14 (sidebar-dense).
+  Phones always use a Filter button and a 288px sheet. The small-catalogue
+  rule is `storefrontListingFiltersShown`: filters need 8 results and a
+  facet with two values, unless the buyer already refined; a store with
+  fewer than 8 products resolves `shown: false`. The listing `layout` is
+  the result arrangement only: `grid`, `list`, `shelves`, `quick-grid`.
 - **Sections.** Each `type` is an entry in `STOREFRONT_SECTION_REGISTRY` with
   its own `version` and strict settings. Sections are optional, repeatable
   and reorderable; ids are unique; at most 24.
@@ -94,11 +143,20 @@ numbers come from the storefront study
   same `two-up` or `four-up` layout share one row. The hero's optional
   `sideBanners` show only with `contained-banners`.
 - **Cards.** A card id's `renders` is its measured anatomy as data: body
-  order (title, price, facts), title emphasis, price colour role, discount
-  wording, and the buy action. Tokens own sizes, radius, surface, photo ratio
-  and fit. Facts (brand, key specs, rating, sold, pack size, delivery, EMI)
-  render only when their data exists, so there are no zero states; sold counts
-  show from 10. `standard` is today's card, unchanged. The storefront renders
+  order (title, price, facts), price colour role, discount wording, the buy
+  action and its `look` (title emphasis and lines derive from it).
+  `resolved.layout.productCard.look` is always concrete. Facts (brand, key specs, rating, sold, pack size, delivery, EMI,
+  swatches, options) render only when their data exists, so there are no zero states; sold counts
+  show from 10. The data is each listing and homepage product's `cardFacts`
+  (core `catalog/card-facts.ts`): one bounded statement batched with the card
+  media, so no page gains a D1 round trip. Swatch colours come only from a
+  swatch attribute value of the same name or an exact CSS colour name. Ten
+  cards: `detailed` is Amazon's (swatches, three-line title, "Options: 4
+  sizes", "bought in past month", a superscript price, the delivery line);
+  only `spec` has `compare` (Star Tech's "Add to Compare" and the floating
+  tray to `/compare`). Cards never show one of our originals served without
+  renditions (the placeholder shows while the render job runs), and the
+  hover photo is fetched on intent, decoded, then faded. `standard` is today's card, unchanged. The storefront renders
   `standard` from its own file and every other id from
   `apps/storefront/src/components/cards/variants/anatomy.astro`.
 - **The default renders today's store.** `DEFAULT_STOREFRONT_THEME` is the
@@ -110,16 +168,16 @@ numbers come from the storefront study
 
 | Id | Best for | Blocks (header / desktop menu / phone menu / card / listing / gallery / buy box / footer) | Tokens |
 |---|---|---|---|
-| `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / bar-drawer / stacked / boutique / minimal-columns | airy, display, square, flat, 1200 |
-| `heritage-editorial` | fashion, sarees, crafts | fashion-department / mega-panel / accordion-drawer / portrait / shelves / portrait / fashion / newsletter-grey | airy, display, uppercase, portrait photos, 1360 |
-| `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / sidebar-grid / thumbs-below / fashion / newsletter-grey | compact, retail, uppercase, square, flat |
-| `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / sidebar-grid (list rows on phones) / thumbs-below / spec / support-dark | dense, flat type, subtle, dark header, contain, 1290 |
-| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / sidebar-grid / thumbs-below / tech / brand-black | comfortable, soft, pill, raised, dark header |
-| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / marketplace / sidebar-grid / thumbs-below / marketplace-3col / directory | dense, flat type, brand header, full width |
-| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / bar-drawer (list rows on phones) / image-grid / retail / minimal-columns | comfortable, rounded, pill, brand header |
-| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / sidebar-grid / classic / classic / product-widgets | compact, subtle, hairline cards, 1440 |
-| `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid / thumbs-below / classic / minimal-columns | compact, rounded, pill, contain, full width |
-| `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / bar-drawer / stacked / boutique / minimal-columns | comfortable, display, rounded, pill, 1200 |
+| `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / grid + bar-dropdowns / stacked / boutique / minimal-columns; nav menu, 6 | airy, display, square, flat, 1200 |
+| `heritage-editorial` | fashion, sarees, crafts | fashion-department / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns / portrait / fashion / newsletter-grey; nav tree+menu, 11 | airy, display, uppercase, portrait photos, 1360 |
+| `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6 | compact, retail, uppercase, square, flat |
+| `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (list rows on phones) / thumbs-below / spec / support-dark; nav category-tree, 18 | dense, flat type, subtle, dark header, contain, 1290 |
+| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, dark header |
+| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / marketplace / grid + sidebar-dense / thumbs-below / marketplace-3col / directory; nav tree+menu, 18 | dense, flat type, brand header, full width |
+| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + sidebar-dense (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
+| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / grid + sidebar-comfortable / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
+| `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid + drawer / thumbs-below / classic / minimal-columns; nav tree+menu, 16 | compact, rounded, pill, contain, full width |
+| `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / grid + drawer / stacked / boutique / minimal-columns; nav menu, 6 | comfortable, display, rounded, pill, 1200 |
 
 Where the data departs from SYNTHESIS.md, and why:
 
@@ -131,6 +189,13 @@ Where the data departs from SYNTHESIS.md, and why:
   row (today's bar and row) instead of the study's utility bar and
   "All departments" rail; both stay available as `utility` and
   `departments-rail` for any other mix.
+- **Mass retail** uses the open dense column (`sidebar-dense`) instead of
+  Target's filter drawer: it is a large-catalogue template, and the owner's
+  rule is that large catalogues show their filters like Amazon and Star Tech
+  (fidelity AUDIT.md section 0). Target's popular-filter chips stay.
+- **Department mall** takes its departments from the tree (`tree+menu`),
+  as Game Ghor's "All departments" does; a store without published roots
+  with products keeps rendering its menu exactly as before.
 - **Card minimums** are grid minimums, not the measured card widths: an
   auto-fill grid stretches cards, and two cards must fit a 360px phone.
   `dense` shares compact's type scale (the 14px phone floor) and uses a 12px
@@ -154,12 +219,20 @@ Where the data departs from SYNTHESIS.md, and why:
    `version`; an optional field (the hero's `sideBanners`) keeps stored
    sections valid without one.
 3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
-   add a migration that resets stored theme rows to the defaults (0082 is
-   the version 4 reset). There is no backward compatibility.
+   add a migration that resets stored theme rows to the defaults (0082 was
+   the version 4 reset; 0097 is the version 5 reset). There is no backward
+   compatibility.
 4. Deploy order: a storefront that reads an older or newer document version
-   renders its own default whole and logs a warning. The v4 default renders
-   the v3 Classic look, and the reset migration puts every store on it, so
-   `deploy:api` then `deploy:storefront` shows no visible change in between.
+   renders its own default whole and logs a warning, and a store shape with
+   keys it does not know reads as an empty store (every block falls back to
+   its always-fitting variant). Between `deploy:api` and
+   `deploy:storefront` a version 4 storefront therefore renders its own
+   Department mall default (the v3 Classic look), which is what the reset
+   migration puts every store on anyway; only its homepage category tiles
+   hide until the new storefront is live (they need two roots, and an
+   unknown shape reads as empty). Checked for 0097 by feeding the v5 API's
+   serialized layout payload to the v4 reader and resolver from
+   `lean/fidelity`.
 
 ## Palettes: references and rationale
 
@@ -203,6 +276,14 @@ the pairing's Bengali family (Noto Sans or Noto Serif Bengali). Swap uses
 metric-matched fallback faces (`<Family> Fallback`, with size-adjust and
 ascent/descent overrides), so it never shifts layout. Only the heading face's
 Latin subset is preloaded.
+
+The dashboard's Theme page offers them in a Typography card (pairing, type
+scale, heading case; the template's values marked, with a reset). Its
+previews draw each pairing in the same files under `Preview <Family>` names,
+registered only when the picker opens
+(`apps/admin-v2/src/components/admin/online-store/type-preview-fonts.ts`,
+keyed by the same font keys as `apps/storefront/src/lib/theme-fonts.ts`, so a
+new family fails the type check until both have its file).
 
 | Pairing | Heading | Body | Bangla | Heading weight / tracking / leading | Body leading | Labels (uppercase) |
 |---|---|---|---|---|---|---|

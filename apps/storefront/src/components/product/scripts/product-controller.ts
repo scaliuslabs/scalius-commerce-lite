@@ -290,8 +290,12 @@ function bindActions() {
       void add(true);
     }
   });
-  // Enter in a text field submits through the first button; anything else still lands here.
-  state.buyerInputs?.form.addEventListener("submit", (event) => {
+  // Enter in a text field (a buyer input or quantity) submits through the
+  // first button; anything else still lands here.
+  const buyForm =
+    state.buyerInputs?.form ??
+    document.querySelector<HTMLFormElement>("form[data-product-buy-form]");
+  buyForm?.addEventListener("submit", (event) => {
     event.preventDefault();
     const submitter = (event as SubmitEvent).submitter;
     void add(Boolean(submitter?.closest('[data-action="buy-now"]')));

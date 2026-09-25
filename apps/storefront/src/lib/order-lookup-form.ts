@@ -10,6 +10,7 @@ import {
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
   DEFAULT_RESEND_AFTER_SECONDS,
+  describeOrderCodeSendRefusal,
   failureNeedsStoreContact,
   formatCountdown,
   getOrderCodeFailureText,
@@ -206,6 +207,17 @@ export function enhanceOrderCodeForm(
     };
     if (storeContact && failureNeedsStoreContact({ status: failure.status, errorCode: typeof data.errorCode === "string" ? data.errorCode : undefined })) storeContact.hidden = false;
     const operation = intent === "verify" ? "verify" : "send";
+    if (intent === "send" && failure.status === 429) {
+      // The code already sent still works: open its field, wait on the resend button.
+      const refusal = describeOrderCodeSendRefusal(copy, failure, text.unavailable);
+      showCodeStep();
+      submit.disabled = false;
+      setMessage(refusal.message, "danger");
+      if (refusal.resendAfterSeconds) waitToResend(refusal.resendAfterSeconds);
+      else allowResendNow();
+      codeInput?.focus();
+      return;
+    }
     if (failure.status === 429 && failure.retryAfterSeconds && button) {
       countdown(
         button,

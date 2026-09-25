@@ -55,6 +55,147 @@
       }
     },
     "schemas": {
+      "ProductCardFacts": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "slug"
+            ],
+            "description": "The published brand entity."
+          },
+          "keySpecs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "description": "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The merchant's option axis name."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "color",
+                    "size",
+                    "other"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "description": "Values sold on at least one live SKU."
+                },
+                "swatches": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "hex": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "`#rrggbb` when a swatch attribute value of the same name has one."
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "hex"
+                    ]
+                  },
+                  "maxItems": 5
+                }
+              },
+              "required": [
+                "name",
+                "kind",
+                "count",
+                "swatches"
+              ]
+            },
+            "description": "Option axes with two or more values, in position order."
+          },
+          "soldLast30Days": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 10,
+            "description": "Units sold in the last 30 days from real orders; null below 10."
+          },
+          "packSize": {
+            "type": "string",
+            "nullable": true
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "free": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "free"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "free": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  },
+                  "feeFrom": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "free",
+                  "feeFrom"
+                ]
+              },
+              {}
+            ],
+            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate."
+          }
+        },
+        "required": [
+          "brand",
+          "keySpecs",
+          "options",
+          "soldLast30Days",
+          "packSize",
+          "delivery"
+        ]
+      },
       "NullableTimestamp": {
         "type": "string",
         "nullable": true,
@@ -73,7 +214,7 @@
           "version": {
             "type": "number",
             "enum": [
-              4
+              5
             ]
           },
           "template": {
@@ -599,6 +740,35 @@
                   }
                 ]
               },
+              "navigation": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "menu",
+                      "category-tree",
+                      "tree+menu"
+                    ]
+                  },
+                  "maxTopItems": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18
+                  },
+                  "linkBudget": {
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 150
+                  }
+                },
+                "required": [
+                  "source",
+                  "maxTopItems",
+                  "linkBudget"
+                ],
+                "additionalProperties": false
+              },
               "desktopNav": {
                 "oneOf": [
                   {
@@ -1065,6 +1235,27 @@
                       "settings"
                     ],
                     "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
+                          "detailed"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               },
@@ -1079,28 +1270,7 @@
                           "variant": {
                             "type": "string",
                             "enum": [
-                              "sidebar-grid"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "bar-drawer"
+                              "grid"
                             ]
                           },
                           "settings": {
@@ -1189,6 +1359,43 @@
                       }
                     ]
                   },
+                  "filters": {
+                    "type": "object",
+                    "properties": {
+                      "style": {
+                        "type": "string",
+                        "enum": [
+                          "sidebar-dense",
+                          "sidebar-comfortable",
+                          "bar-dropdowns",
+                          "drawer"
+                        ]
+                      },
+                      "openByDefault": {
+                        "type": "boolean"
+                      },
+                      "column": {
+                        "type": "integer",
+                        "minimum": 180,
+                        "maximum": 340
+                      },
+                      "rowPitch": {
+                        "type": "integer",
+                        "minimum": 16,
+                        "maximum": 36
+                      },
+                      "label": {
+                        "type": "integer",
+                        "minimum": 12,
+                        "maximum": 18
+                      }
+                    },
+                    "required": [
+                      "style",
+                      "openByDefault"
+                    ],
+                    "additionalProperties": false
+                  },
                   "toolbar": {
                     "type": "array",
                     "items": {
@@ -1226,6 +1433,7 @@
                 },
                 "required": [
                   "layout",
+                  "filters",
                   "toolbar",
                   "phoneLayout",
                   "paging"
@@ -1754,6 +1962,7 @@
             "required": [
               "topBar",
               "header",
+              "navigation",
               "desktopNav",
               "mobileNav",
               "card",
@@ -3278,6 +3487,11 @@
             "minimum": 0,
             "maximum": 4
           },
+          "categoryGroups": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
           "menuTopItems": {
             "type": "integer",
             "minimum": 0,
@@ -3328,6 +3542,7 @@
           "skuCount",
           "topCategoryCount",
           "categoryDepth",
+          "categoryGroups",
           "menuTopItems",
           "menuDepth",
           "menuGroups",
@@ -7533,21 +7748,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -7595,7 +7811,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -7751,21 +7968,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -7813,7 +8031,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -8017,21 +8236,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -8079,7 +8299,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -8487,6 +8708,17 @@
             "required": false,
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "required": false,
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -8674,6 +8906,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "discountedPrice": {
                                 "type": "number"
                               },
@@ -8780,6 +9015,9 @@
                             "secondaryImageUrl": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "cardFacts": {
+                              "$ref": "#/components/schemas/ProductCardFacts"
                             },
                             "discountedPrice": {
                               "type": "number"
@@ -8891,21 +9129,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -8953,7 +9192,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -9851,6 +10091,19 @@
             "description": "Has discount filter",
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -10027,6 +10280,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -10150,21 +10406,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -10212,7 +10469,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -10358,6 +10616,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },
@@ -11988,6 +12252,150 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/navigation/categories": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Get the reachable category tree",
+        "operationId": "storefront.navigation.categories_get",
+        "description": "Published categories whose every ancestor is published and whose published subtree holds a public product, flat with parentId, top levels first; at most 1000 nodes, so a node's parent is always included. The storefront's /categories index; the header gets a budget-sized cut of the same tree with the layout.",
+        "responses": {
+          "200": {
+            "description": "Category tree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "parentId",
+                              "canonicalPath",
+                              "imageUrl"
+                            ]
+                          },
+                          "maxItems": 1000
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "nodes",
+                        "truncated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
                   ]
                 }
               }
@@ -16278,6 +16686,9 @@
                                         "count"
                                       ],
                                       "description": "Published-review average and count; null without a published review."
+                                    },
+                                    "cardFacts": {
+                                      "$ref": "#/components/schemas/ProductCardFacts"
                                     }
                                   },
                                   "required": [
@@ -16382,6 +16793,9 @@
                                       "count"
                                     ],
                                     "description": "Published-review average and count; null without a published review."
+                                  },
+                                  "cardFacts": {
+                                    "$ref": "#/components/schemas/ProductCardFacts"
                                   }
                                 },
                                 "required": [
@@ -16610,6 +17024,9 @@
                                             "count"
                                           ],
                                           "description": "Published-review average and count; null without a published review."
+                                        },
+                                        "cardFacts": {
+                                          "$ref": "#/components/schemas/ProductCardFacts"
                                         }
                                       },
                                       "required": [
@@ -17406,6 +17823,56 @@
                             ]
                           }
                         },
+                        "categoryTree": {
+                          "type": "object",
+                          "properties": {
+                            "nodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "parentId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "canonicalPath": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "imageUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "parentId",
+                                  "canonicalPath",
+                                  "imageUrl"
+                                ]
+                              },
+                              "maxItems": 150
+                            },
+                            "truncated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "nodes",
+                            "truncated"
+                          ]
+                        },
                         "footer": {
                           "type": "object",
                           "properties": {
@@ -17975,6 +18442,7 @@
                         "analytics",
                         "header",
                         "navigation",
+                        "categoryTree",
                         "footer",
                         "currency",
                         "theme",
@@ -18559,6 +19027,9 @@
                                         "count"
                                       ],
                                       "description": "Published-review average and count; null without a published review."
+                                    },
+                                    "cardFacts": {
+                                      "$ref": "#/components/schemas/ProductCardFacts"
                                     }
                                   },
                                   "required": [
@@ -50043,6 +50514,19 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Comma-separated product IDs"
             },
             "required": false,
@@ -50126,6 +50610,9 @@
                                 "type": "string",
                                 "nullable": true,
                                 "description": "The next photo in gallery order, for a card's hover swap. Never a video."
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
                               },
                               "category": {
                                 "type": "object",
@@ -50257,21 +50744,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -50319,7 +50807,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -56825,6 +57314,19 @@
             "schema": {
               "type": "string",
               "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "true",
                 "false"
               ],
@@ -57072,6 +57574,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -57091,6 +57596,11 @@
                                   "name",
                                   "slug"
                                 ]
+                              },
+                              "subcategoryId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself)."
                               },
                               "createdAt": {
                                 "type": "string",
@@ -57195,21 +57705,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -57257,7 +57768,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -57403,6 +57915,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },
@@ -57709,6 +58227,17 @@
             "required": false,
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "required": false,
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -57839,6 +58368,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -57858,6 +58390,11 @@
                                   "name",
                                   "slug"
                                 ]
+                              },
+                              "subcategoryId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself)."
                               },
                               "createdAt": {
                                 "type": "string",
@@ -57963,21 +58500,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -58025,7 +58563,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -58171,6 +58710,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },
@@ -261561,6 +262106,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.delivery-search"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.categories_get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.categories_get"
           ]
         },
         {
