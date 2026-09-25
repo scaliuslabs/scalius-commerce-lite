@@ -9,6 +9,7 @@ import {
 } from "./lib/compare.mjs";
 import { TEMPLATES } from "./lib/context.mjs";
 import { BLOCKS, parseArgs, stagesFor } from "./check.mjs";
+import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
 const reference = JSON.parse(readFileSync(new URL("./reference-metrics.json", import.meta.url), "utf8"));
 
@@ -199,6 +200,30 @@ describe("budgets", () => {
     const checks = variantChecks("department-mall", [{ a: "retail", b: "quick-add", pct: 0, viewport: "desktop" }, { a: "spec", b: "standard", pct: 31.4, viewport: "phone" }], reference.budgets);
     expect(checks.map((c) => c.pass)).toEqual([false, true]);
     expect(checks[0].id).toBe("department-mall/variants/desktop/card.retail~quick-add.diffPct");
+  });
+
+  it("wants every pair three treatments apart, card photos at most 1.2x, and plain cards whole", () => {
+    const checks = variantChecks("department-mall", [], reference.budgets, {
+      structural: [{ a: "standard", b: "boutique", count: 2, differing: ["ratio", "tile"], viewport: "desktop" }, { a: "spec", b: "retail", count: 7, differing: [], viewport: "phone" }],
+      photos: [{ variant: "spec", viewport: "desktop", drawn: 204, fetched: 240, ratio: 1.18 }, { variant: "retail", viewport: "desktop", drawn: 241, fetched: 320, ratio: 1.33 }, { variant: "retail", viewport: "phone", ratio: 2 }],
+      plain: { "spec-phone": { box: { w: 180, h: 400 }, empty: false, titleFontPx: 13 }, "retail-desktop": { box: { w: 250, h: 0 }, empty: true, titleFontPx: 14 } },
+    });
+    const f = (suffix) => checks.find((c) => c.id.endsWith(suffix));
+    expect(f("card.standard~boutique.treatments")).toMatchObject({ pass: false, detail: "2 < 3: ratio, tile" });
+    expect(f("card.spec~retail.treatments").pass).toBe(true);
+    expect(f("desktop/card.spec.photoRatio").pass).toBe(true);
+    expect(f("desktop/card.retail.photoRatio").pass).toBe(false);
+    expect(checks.some((c) => c.id.endsWith("phone/card.retail.photoRatio"))).toBe(false);
+    expect(f("phone/card.spec.titlePx").pass).toBe(false);
+    expect(f("phone/card.spec.plainRenders").pass).toBe(true);
+    expect(f("desktop/card.retail.plainRenders").pass).toBe(false);
+  });
+
+  it("compares cards at their natural size on one white canvas, and names the treatments that differ", () => {
+    const tall = { data: Buffer.from([0, 0, 0, 0]), width: 1, height: 4 };
+    const short = { data: Buffer.from([0, 0]), width: 1, height: 2 };
+    expect(paddedDiffPct(tall, short)).toBe(50);
+    expect(differingTraits({ a: "1", b: "x", c: "y" }, { a: "1", b: "z", c: "q" })).toEqual(["b", "c"]);
   });
 
   it("measures pixel difference as the share of pixels more than 28 grey levels apart", () => {

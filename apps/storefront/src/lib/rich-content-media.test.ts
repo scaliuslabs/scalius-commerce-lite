@@ -17,7 +17,7 @@ describe("optimizeRichContentImages", () => {
 
   it("rewrites our images with renditions to a srcset and loads them lazily", () => {
     const html = optimizeRichContentImages(`<p><img src="${CDN}/media/media_photo001.jpg/1600.webp" alt="Bag"></p>`);
-    expect(html).toContain(`src="${CDN}/media/media_photo001.jpg/640.webp"`);
+    expect(html).toContain(`src="${CDN}/media/media_photo001.jpg/735.webp"`);
     expect(html).toContain(`${CDN}/media/media_photo001.jpg/960.webp 960w`);
     expect(html).toContain('loading="lazy" decoding="async"');
     expect(html).toContain('alt="Bag"');

@@ -4,15 +4,17 @@
  * A published media URL is the largest WebP rendition
  * (`media/<id>.<ext>/<w>.webp`) once renditions exist, else the original
  * (`media/<id>.<ext>`). When a public read renders a still original, its
- * media id is queued for the existing delayed `media.render_variants` job, so
- * a failed upload-time render or an image the backfill has not reached yet
- * gets renditions within minutes of a buyer seeing it. The job skips media
+ * media id is queued for the `media.render_variants` job with no delay, so a
+ * failed upload-time render, an image the backfill has not reached yet, or
+ * one the rendition ladder migration (0094) sent back to its original gets
+ * renditions within seconds of a buyer seeing its placeholder. The job skips media
  * that are already done or cannot have renditions, and bumps the cache
  * generation when it renders, which replaces the original everywhere.
  *
  * Bounded: only reads that were rendered (cache misses), only the first
- * `MAX_BODY_BYTES` of a body, at most `MAX_IDS_PER_READ` ids, and one queue
- * message per id per `HINT_TTL_SECONDS` (a KV marker). Never throws.
+ * `MAX_BODY_BYTES` of a body, at most `MAX_IDS_PER_READ` ids (a listing
+ * page's cards), and one queue message per id per `HINT_TTL_SECONDS` (a KV
+ * marker). Never throws.
  */
 
 import type { MediaVariantsQueue } from "@scalius/core/modules/media";
@@ -20,7 +22,8 @@ import type { MediaVariantsQueue } from "@scalius/core/modules/media";
 export const MEDIA_RENDITION_HINT_KV_PREFIX = "media:rendition-hint:";
 /** One enqueue per media id per cron period: the backfill runs every 15 minutes. */
 export const MEDIA_RENDITION_HINT_TTL_SECONDS = 15 * 60;
-export const MEDIA_RENDITION_HINT_MAX_IDS_PER_READ = 8;
+/** A listing page's first cards: 24 KV reads and at most 24 queue sends per rendered read. */
+export const MEDIA_RENDITION_HINT_MAX_IDS_PER_READ = 24;
 const MAX_BODY_BYTES = 512 * 1024;
 
 const STILL_MIME_BY_EXTENSION: Record<string, string> = {
@@ -109,20 +112,24 @@ export async function queueRenditionsForRenderedOriginals(
     const refs = findStillOriginalMedia(await readBoundedText(response));
     if (refs.length === 0) return [];
     const { enqueueMediaVariantsJob } = await import("@scalius/core/modules/media");
-    const queued: string[] = [];
-    for (const ref of refs) {
+    const images = env.IMAGES;
+    // All ids at once: a card waits on this render, so no id queues behind another.
+    const outcomes = await Promise.all(refs.map(async (ref) => {
       const key = `${MEDIA_RENDITION_HINT_KV_PREFIX}${ref.id}`;
-      if (await kv.get(key).catch(() => null)) continue;
-      const sent = await enqueueMediaVariantsJob(queue, env.IMAGES, {
+      if (await kv.get(key).catch(() => null)) return null;
+      const sent = await enqueueMediaVariantsJob(queue, images, {
         id: ref.id,
         kind: "image",
         mimeType: ref.mimeType,
         variantWidth: null,
-      });
-      if (!sent) continue;
-      queued.push(ref.id);
-      console.log("[media] rendition job queued from a public read", { mediaId: maskMediaId(ref.id) });
+      }, { delaySeconds: 0 });
+      if (!sent) return null;
       await kv.put(key, "1", { expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS }).catch(() => undefined);
+      return ref.id;
+    }));
+    const queued = outcomes.filter((id): id is string => id !== null);
+    if (queued.length > 0) {
+      console.log("[media] rendition jobs queued from a public read", { count: queued.length, first: maskMediaId(queued[0]!) });
     }
     return queued;
   } catch {

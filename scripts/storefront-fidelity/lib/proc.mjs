@@ -166,6 +166,21 @@ export function swapUsedMb() {
   }
 }
 
+/**
+ * System-wide free memory in percent (macOS `memory_pressure`), or null
+ * elsewhere. The brake the host uses: macOS keeps "used swap" high long
+ * after pressure is gone, so the used figure alone aborts healthy runs.
+ */
+export function freeMemoryPct() {
+  try {
+    const out = execFileSync("memory_pressure", [], { encoding: "utf8", timeout: 10000 });
+    const m = /free percentage: (\d+)%/.exec(out);
+    return m ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Resolves once `url` answers (any status), or throws after `timeoutMs`. */
 export async function waitForUrl(url, { timeoutMs = 120000, child } = {}) {
   const end = Date.now() + timeoutMs;

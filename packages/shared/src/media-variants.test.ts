@@ -10,10 +10,17 @@ import {
 const master = "https://cdn.example.com/media/media_abc123.jpg/1200.webp";
 
 describe("mediaVariantWidths", () => {
+  it("steps by at most 1.2x up to 960", () => {
+    const widths = mediaVariantWidths(1600);
+    for (let i = 1; i < widths.length - 1; i += 1) expect(widths[i]! / widths[i - 1]!).toBeLessThanOrEqual(1.2);
+    expect(widths.at(-2)).toBe(960);
+  });
+
   it("never upscales and caps the master rendition", () => {
-    expect(mediaVariantWidths(1200)).toEqual([160, 320, 480, 640, 960, 1200]);
-    expect(mediaVariantWidths(1600)).toEqual([160, 320, 480, 640, 960, 1600]);
-    expect(mediaVariantWidths(6000)).toEqual([160, 320, 480, 640, 960, 1600, 2400]);
+    expect(mediaVariantWidths(1200)).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1200]);
+    expect(mediaVariantWidths(1600)).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600]);
+    expect(mediaVariantWidths(6000)).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600, 2400]);
+    expect(mediaVariantWidths(300)).toEqual([144, 172, 206, 247, 296, 300]);
     expect(mediaVariantWidths(120)).toEqual([120]);
     expect(mediaVariantWidths(0)).toEqual([]);
     expect(mediaVariantWidths(Number.NaN)).toEqual([]);
@@ -23,23 +30,32 @@ describe("mediaVariantWidths", () => {
 describe("rendition URLs", () => {
   it("derives every rendition from the published master URL", () => {
     expect(mediaImageSrcSet(master)).toBe([
-      "https://cdn.example.com/media/media_abc123.jpg/160.webp 160w",
-      "https://cdn.example.com/media/media_abc123.jpg/320.webp 320w",
-      "https://cdn.example.com/media/media_abc123.jpg/480.webp 480w",
-      "https://cdn.example.com/media/media_abc123.jpg/640.webp 640w",
+      "https://cdn.example.com/media/media_abc123.jpg/144.webp 144w",
+      "https://cdn.example.com/media/media_abc123.jpg/172.webp 172w",
+      "https://cdn.example.com/media/media_abc123.jpg/206.webp 206w",
+      "https://cdn.example.com/media/media_abc123.jpg/247.webp 247w",
+      "https://cdn.example.com/media/media_abc123.jpg/296.webp 296w",
+      "https://cdn.example.com/media/media_abc123.jpg/355.webp 355w",
+      "https://cdn.example.com/media/media_abc123.jpg/426.webp 426w",
+      "https://cdn.example.com/media/media_abc123.jpg/511.webp 511w",
+      "https://cdn.example.com/media/media_abc123.jpg/613.webp 613w",
+      "https://cdn.example.com/media/media_abc123.jpg/735.webp 735w",
+      "https://cdn.example.com/media/media_abc123.jpg/882.webp 882w",
       "https://cdn.example.com/media/media_abc123.jpg/960.webp 960w",
       "https://cdn.example.com/media/media_abc123.jpg/1200.webp 1200w",
     ].join(", "));
   });
 
   it("picks the smallest rendition covering the requested width", () => {
-    expect(mediaImageUrl(master, 96)).toBe("https://cdn.example.com/media/media_abc123.jpg/160.webp");
-    expect(mediaImageUrl(master, 600)).toBe("https://cdn.example.com/media/media_abc123.jpg/640.webp");
+    expect(mediaImageUrl(master, 96)).toBe("https://cdn.example.com/media/media_abc123.jpg/144.webp");
+    expect(mediaImageUrl(master, 230)).toBe("https://cdn.example.com/media/media_abc123.jpg/247.webp");
+    expect(mediaImageUrl(master, 330)).toBe("https://cdn.example.com/media/media_abc123.jpg/355.webp");
+    expect(mediaImageUrl(master, 600)).toBe("https://cdn.example.com/media/media_abc123.jpg/613.webp");
     expect(mediaImageUrl(master, 1600)).toBe(master);
   });
 
   it("keeps query strings and works with bare object keys", () => {
-    expect(mediaImageUrl("media/a1b2c3d4.png/640.webp?v=2", 300)).toBe("media/a1b2c3d4.png/320.webp?v=2");
+    expect(mediaImageUrl("media/a1b2c3d4.png/640.webp?v=2", 300)).toBe("media/a1b2c3d4.png/355.webp?v=2");
     expect(mediaOriginalUrl("media/a1b2c3d4.png/640.webp?v=2")).toBe("media/a1b2c3d4.png?v=2");
   });
 

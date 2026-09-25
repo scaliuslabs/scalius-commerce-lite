@@ -241,10 +241,11 @@ function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"
  * (tested). Rationale per palette: storefront-theme.md.
  */
 export const STOREFRONT_THEME_PALETTES = {
-  // Horizon/Dawn, Allbirds: warm white paper, charcoal ink, charcoal
-  // buttons; sand neutrals carry the warmth, the brand colour stays quiet.
+  // Horizon/Dawn, Allbirds, Game Ghor: a white page (every reference of the
+  // templates on this palette is white), charcoal ink, charcoal buttons;
+  // sand neutrals carry the warmth, the brand colour stays quiet.
   retail: palette({
-    background: "#fbfaf7", foreground: "#1d1c1a", card: "#ffffff", "card-foreground": "#1d1c1a",
+    background: "#ffffff", foreground: "#1d1c1a", card: "#ffffff", "card-foreground": "#1d1c1a",
     primary: "#1d1c1a", "primary-foreground": "#fbfaf7",
     secondary: "#f1eee8", "secondary-foreground": "#1d1c1a",
     muted: "#f1eee8", "muted-foreground": "#5d5850",

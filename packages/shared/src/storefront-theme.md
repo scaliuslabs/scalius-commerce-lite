@@ -143,8 +143,16 @@ numbers come from the storefront study
   same `two-up` or `four-up` layout share one row. The hero's optional
   `sideBanners` show only with `contained-banners`.
 - **Cards.** A card id's `renders` is its measured anatomy as data: body
-  order (title, price, facts), price colour role, discount wording, the buy
-  action and its `look` (title emphasis and lines derive from it).
+  order (title, price, facts), price colour role (`sale-always` is Star
+  Tech's red price), discount wording, placement (`both`: Fabrilife's photo
+  tag and the percentage after the price) and shape (pill, tag, flag, text,
+  chip, Amazon's `deal` box), the struck price (after, before, Target's
+  `reg`, Amazon's `List:`), stars or a score for ratings, the buy action
+  (Amazon's `compact` pill) and its `look` (title emphasis and lines derive
+  from it; Star Tech, Fabrilife and Chaldal are white hairline tiles, flat
+  looks sit on the page). Any two cards differ in at least three of these
+  treatments on a product with every fact (render test), and the fidelity
+  harness measures the same on the seeded store's richest product.
   `resolved.layout.productCard.look` is always concrete. Facts (brand, key specs, rating, sold, pack size, delivery, EMI,
   swatches, options) render only when their data exists, so there are no zero states; sold counts
   show from 10. The data is each listing and homepage product's `cardFacts`
@@ -258,7 +266,7 @@ border or a shadow, never both on the same element.
 
 | Token | retail | marketplace | boutique | fresh | beauty | heritage | midnight |
 |---|---|---|---|---|---|---|---|
-| background | #fbfaf7 | #ffffff | #f6f4ef | #ffffff | #ffffff | #faf6ef | #0a0a0b |
+| background | #ffffff | #ffffff | #f6f4ef | #ffffff | #ffffff | #faf6ef | #0a0a0b |
 | foreground (ink) | #1d1c1a | #0f1111 | #242220 | #15231b | #1a1718 | #2a2018 | #f4f4f5 |
 | card | #ffffff | #ffffff | #f6f4ef | #ffffff | #ffffff | #fffdf8 | #141416 |
 | primary (actions) | #1d1c1a | #c2410c | #242220 | #0b7a3e | #1a1718 | #8a3b1e | #f4f4f5 |

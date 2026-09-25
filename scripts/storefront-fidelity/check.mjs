@@ -13,7 +13,11 @@
  *   pnpm fidelity:check [--only <template|block>[,...]] [--report-only]
  *     [--out <dir>] [--state-cache <dir>] [--skip-build] [--keep-run]
  *     [--api-port 9001] [--storefront-port 4601] [--admin-port 4602] [--media-port 4603] [--chrome-port 9601]
- *     [--ref-shots <dir>[,<dir>]] [--max-swap-mb 7000]
+ *     [--ref-shots <dir>[,<dir>]] [--max-swap-mb 7000] [--min-free-pct 25]
+ *
+ * It aborts when free memory drops under --min-free-pct (macOS
+ * `memory_pressure`; the host's brake) or, where that is unreadable, when
+ * used swap passes --max-swap-mb.
  *
  * Blocks: header, card, listing, pdp, footer, size, perf, nav, variants, hover, tiny.
  */
@@ -27,7 +31,7 @@ import {
   compareTemplate, exitCode, extractOurs, hoverChecks, navChecks, parseOnly, perfChecks, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { DEFAULT_PORTS, HARNESS_DIR, ROOT, TEMPLATES, assertLocalDatabase, assertOwnedState, mainCheckoutRoot, openDb } from "./lib/context.mjs";
-import { killAllTracked, listeners, rssSampler, sleep, swapUsedMb } from "./lib/proc.mjs";
+import { freeMemoryPct, killAllTracked, listeners, rssSampler, sleep, swapUsedMb } from "./lib/proc.mjs";
 import { Stack, buildStorefront, storefrontBuilt } from "./lib/stack.mjs";
 import { applyTheme } from "./lib/theme.mjs";
 import { runHover } from "./hover.mjs";
@@ -45,7 +49,7 @@ export const BLOCKS = Object.freeze(["header", "card", "listing", "pdp", "footer
 const MATRIX_BLOCKS = ["header", "card", "listing", "pdp", "footer", "size"];
 
 export function parseArgs(argv) {
-  const o = { only: "", reportOnly: false, out: join(ROOT, ".wrangler", "fidelity"), stateCache: null, skipBuild: false, keepRun: false, refShots: null, maxSwapMb: 7000, ports: { ...DEFAULT_PORTS } };
+  const o = { only: "", reportOnly: false, out: join(ROOT, ".wrangler", "fidelity"), stateCache: null, skipBuild: false, keepRun: false, refShots: null, maxSwapMb: 7000, minFreePct: 25, ports: { ...DEFAULT_PORTS } };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => {
@@ -61,6 +65,7 @@ export function parseArgs(argv) {
     else if (a === "--keep-run") o.keepRun = true;
     else if (a === "--ref-shots") o.refShots = next().split(",").map((p) => resolve(p));
     else if (a === "--max-swap-mb") o.maxSwapMb = Number(next());
+    else if (a === "--min-free-pct") o.minFreePct = Number(next());
     else if (a === "--api-port") o.ports.api = Number(next());
     else if (a === "--storefront-port") o.ports.storefront = Number(next());
     else if (a === "--admin-port") o.ports.admin = Number(next());
@@ -173,9 +178,11 @@ async function main() {
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
   const swapWatch = setInterval(() => {
-    const used = swapUsedMb();
-    if (used !== null && used > opts.maxSwapMb && !aborted) {
-      aborted = `swap ${used} MB > ${opts.maxSwapMb} MB`;
+    const free = freeMemoryPct();
+    const used = free === null ? swapUsedMb() : null;
+    const low = free !== null ? free < opts.minFreePct : used !== null && used > opts.maxSwapMb;
+    if (low && !aborted) {
+      aborted = free !== null ? `free memory ${free}% < ${opts.minFreePct}%` : `swap ${used} MB > ${opts.maxSwapMb} MB`;
       console.error(`\nAborting: ${aborted}`);
       cleanup().finally(() => process.exit(3));
     }
@@ -316,7 +323,7 @@ async function main() {
         }
       }
     }
-    if (results.variants) checks.push(...variantChecks("department-mall", results.variants.diffs, reference.budgets));
+    if (results.variants) checks.push(...variantChecks("department-mall", results.variants.diffs, reference.budgets, results.variants));
     for (const [target, h] of Object.entries(results.hover ?? {})) checks.push(...hoverChecks(target.split(":")[0], h.results, reference.budgets).map((c) => ({ ...c, id: `${target}/${c.block}/${c.viewport}/${c.metric}` })));
 
     if (results.matrix) {
@@ -351,6 +358,7 @@ async function main() {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   main().then((code) => process.exit(code), async (error) => {
     console.error(error instanceof Error ? error.stack : error);
+    if (error?.cause) console.error("cause:", error.cause);
     await killAllTracked();
     process.exit(1);
   });
