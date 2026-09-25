@@ -9,9 +9,9 @@ describe("account navigation", () => {
   });
 
   it("shows a feature tab while it has something, in a fixed order, with the badges", () => {
-    const summary = readAccountSummary({ unreadInbox: 4, reviewsToWrite: 0, reviewsWritten: 2, downloads: 2, giftCards: 0 });
+    const summary = readAccountSummary({ unreadInbox: 4, reviewsToWrite: 0, reviewsWritten: 2, downloads: 2, giftCards: 0, activeWarranties: 1 });
     const tabs = accountNavTabs("orders", summary);
-    expect(keys(tabs)).toEqual(["orders", "profile", "inbox", "reviews", "downloads"]);
+    expect(keys(tabs)).toEqual(["orders", "profile", "inbox", "reviews", "downloads", "warranties"]);
     expect(tabs.find((tab) => tab.key === "inbox")?.badge).toBe("4");
     // Written reviews keep the tab; only reviews still to write earn a badge.
     expect(tabs.find((tab) => tab.key === "reviews")?.badge).toBe("");
@@ -20,6 +20,7 @@ describe("account navigation", () => {
 
   it("keeps the current page's tab at zero, so a buyer is never on a page without its tab", () => {
     expect(keys(accountNavTabs("gift-cards", readAccountSummary({})))).toEqual(["orders", "profile", "inbox", "gift-cards"]);
+    expect(keys(accountNavTabs("warranties", readAccountSummary({})))).toEqual(["orders", "profile", "inbox", "warranties"]);
   });
 
   it("reads malformed counts as zero", () => {

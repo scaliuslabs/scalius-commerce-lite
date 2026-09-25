@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
@@ -49,7 +49,6 @@ import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
 import { GiftCardLinesCard } from "./GiftCardLinesCard";
-import { WarrantyLinesCard } from "./WarrantyLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
   canHandOver,
@@ -63,6 +62,13 @@ import {
 } from "./fulfilment-groups";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order, OrderFulfillment } from "./types";
+
+// Loaded only for orders with warranty records to show.
+const WarrantyLinesCard = lazy(() => import("./WarrantyLinesCard").then((module) => ({ default: module.WarrantyLinesCard })));
+
+function hasWarranties(order: Order): boolean {
+  return order.items.some((item) => Array.isArray(item.extras?.warranty) && item.extras.warranty.length > 0);
+}
 
 /** Orders whose story is over: their lines keep their cards, without status badges or actions. */
 const CLOSED_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
@@ -136,7 +142,11 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
       ))}
       <DigitalLinesCard order={order} />
       <GiftCardLinesCard order={order} />
-      <WarrantyLinesCard order={order} />
+      {hasWarranties(order) && (
+        <Suspense fallback={null}>
+          <WarrantyLinesCard order={order} />
+        </Suspense>
+      )}
     </>
   );
 }

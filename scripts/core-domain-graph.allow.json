@@ -108,7 +108,9 @@
     "storefront -> pages",
     "storefront -> settings",
     "tax -> products",
-    "tax -> settings"
+    "tax -> settings",
+    "warranty -> conversations",
+    "warranty -> media"
   ],
   "cycles": [
     [

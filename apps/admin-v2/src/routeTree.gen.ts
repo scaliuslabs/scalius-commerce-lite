@@ -81,6 +81,7 @@ import { Route as AdminOrdersListAbandonedRouteImport } from './routes/admin/ord
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminSettingsNotificationsEventRouteImport } from './routes/admin/settings/notifications_.$event'
+import { Route as AdminSettingsPoliciesWarrantyRouteImport } from './routes/admin/settings/policies_.warranty'
 import { Route as AdminSettingsShippingAreasRouteImport } from './routes/admin/settings/shipping_.areas'
 import { Route as AdminSettingsUsersUserIdRouteImport } from './routes/admin/settings/users_.$userId'
 import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
@@ -463,6 +464,12 @@ const AdminSettingsNotificationsEventRoute =
     path: '/notifications/$event',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminSettingsPoliciesWarrantyRoute =
+  AdminSettingsPoliciesWarrantyRouteImport.update({
+    id: '/policies_/warranty',
+    path: '/policies/warranty',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
 const AdminSettingsShippingAreasRoute =
   AdminSettingsShippingAreasRouteImport.update({
     id: '/shipping_/areas',
@@ -570,6 +577,7 @@ export interface FileRoutesByFullPath {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
+  '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
@@ -647,6 +655,7 @@ export interface FileRoutesByTo {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
+  '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
@@ -728,6 +737,7 @@ export interface FileRoutesById {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/notifications_/$event': typeof AdminSettingsNotificationsEventRoute
+  '/admin/settings/policies_/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users_/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
@@ -810,6 +820,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/settings/notifications/$event'
+    | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
     | '/admin/online-store/navigation/'
@@ -887,6 +898,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/settings/notifications/$event'
+    | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
     | '/admin/online-store/navigation'
@@ -967,6 +979,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/settings/notifications_/$event'
+    | '/admin/settings/policies_/warranty'
     | '/admin/settings/shipping_/areas'
     | '/admin/settings/users_/$userId'
     | '/admin/online-store/navigation/'
@@ -1494,6 +1507,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsNotificationsEventRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/policies_/warranty': {
+      id: '/admin/settings/policies_/warranty'
+      path: '/policies/warranty'
+      fullPath: '/admin/settings/policies/warranty'
+      preLoaderRoute: typeof AdminSettingsPoliciesWarrantyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/shipping_/areas': {
       id: '/admin/settings/shipping_/areas'
       path: '/shipping/areas'
@@ -1553,6 +1573,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsUsersRoute: typeof AdminSettingsUsersRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminSettingsNotificationsEventRoute: typeof AdminSettingsNotificationsEventRoute
+  AdminSettingsPoliciesWarrantyRoute: typeof AdminSettingsPoliciesWarrantyRoute
   AdminSettingsShippingAreasRoute: typeof AdminSettingsShippingAreasRoute
   AdminSettingsUsersUserIdRoute: typeof AdminSettingsUsersUserIdRoute
   AdminSettingsAgentAccessAuthorizeRequestIdRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
@@ -1574,6 +1595,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsUsersRoute: AdminSettingsUsersRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminSettingsNotificationsEventRoute: AdminSettingsNotificationsEventRoute,
+  AdminSettingsPoliciesWarrantyRoute: AdminSettingsPoliciesWarrantyRoute,
   AdminSettingsShippingAreasRoute: AdminSettingsShippingAreasRoute,
   AdminSettingsUsersUserIdRoute: AdminSettingsUsersUserIdRoute,
   AdminSettingsAgentAccessAuthorizeRequestIdRoute:
