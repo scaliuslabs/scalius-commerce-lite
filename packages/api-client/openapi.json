@@ -45762,45 +45762,7 @@
             }
           },
           "409": {
-            "description": "Download limit reached (DOWNLOAD_LIMIT_REACHED)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "410": {
-            "description": "Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)",
+            "description": "Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED",
             "content": {
               "application/json": {
                 "schema": {
@@ -65327,45 +65289,7 @@
             }
           },
           "409": {
-            "description": "Download limit reached (DOWNLOAD_LIMIT_REACHED)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "410": {
-            "description": "Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)",
+            "description": "Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED",
             "content": {
               "application/json": {
                 "schema": {

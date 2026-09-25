@@ -219,9 +219,9 @@ export async function mintDownloadTicket(
         .get();
     if (!owned || owned.kind !== "file" || !owned.currentR2Key) throw new NotFoundError("Download not found");
     if (owned.revokedAt !== null || Number(owned.accessEnded) === 1) {
-        throw new AppError(410, "DOWNLOAD_REVOKED", "The store removed access to this download.");
+        throw new AppError(409, "DOWNLOAD_REVOKED", "The store removed access to this download.");
     }
-    if (owned.expiresAt !== null && owned.expiresAt <= now) throw new AppError(410, "DOWNLOAD_EXPIRED", "Access to this download has ended.");
+    if (owned.expiresAt !== null && owned.expiresAt <= now) throw new AppError(409, "DOWNLOAD_EXPIRED", "Access to this download has ended.");
 
     // D4: the guard is the WHERE clause; zero rows means the limit was reached.
     const counted = await db.update(digitalEntitlements).set({

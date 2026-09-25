@@ -118,8 +118,7 @@ export async function enforceDigitalBuyerLimit(c: Context<{ Bindings: Env }>, pu
 export const downloadTicketResponses = {
     200: { description: "Ticket minted", content: { "application/json": { schema: successEnvelope(downloadTicketSchema) } } },
     ...errorResponses,
-    409: { ...conflictResponse, description: "Download limit reached (DOWNLOAD_LIMIT_REACHED)" },
-    410: { ...conflictResponse, description: "Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)" },
+    409: { ...conflictResponse, description: "Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED" },
     503: serviceUnavailableResponse,
 };
 
