@@ -3342,6 +3342,1094 @@
           "hasContentBlocks"
         ],
         "additionalProperties": false
+      },
+      "ProductPageContentBlock": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rich-text"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "html": {
+                    "type": "string",
+                    "maxLength": 200000
+                  }
+                },
+                "required": [
+                  "title",
+                  "html"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "image-with-text"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "mediaId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "imageSide": {
+                    "type": "string",
+                    "enum": [
+                      "start",
+                      "end"
+                    ]
+                  },
+                  "cta": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      },
+                      "href": {
+                        "type": "string",
+                        "maxLength": 300,
+                        "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "href"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "heading",
+                  "body",
+                  "mediaId",
+                  "imageSide",
+                  "cta"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "feature-list"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": [
+                      "list",
+                      "cards"
+                    ]
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 240
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  }
+                },
+                "required": [
+                  "heading",
+                  "style",
+                  "items"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "faq"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "answer": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "answer"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  }
+                },
+                "required": [
+                  "heading",
+                  "items"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "video"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "source": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "embed"
+                            ]
+                          },
+                          "url": {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          "posterMediaId": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "url",
+                          "posterMediaId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "media"
+                            ]
+                          },
+                          "mediaId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "mediaId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "heading",
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gallery-strip"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "mediaIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "minItems": 1,
+                    "maxItems": 12
+                  }
+                },
+                "required": [
+                  "heading",
+                  "mediaIds"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "statement"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "accent": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "text",
+                  "accent"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "comparison"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        }
+                      },
+                      "required": [
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 2,
+                    "maxItems": 4
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "minItems": 2,
+                          "maxItems": 4
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  }
+                },
+                "required": [
+                  "heading",
+                  "columns",
+                  "rows"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "pack-picker"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "variants",
+                      "bundles"
+                    ]
+                  }
+                },
+                "required": [
+                  "heading",
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cta-band"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "target": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "order-form"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "buy-box"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "link"
+                            ]
+                          },
+                          "href": {
+                            "type": "string",
+                            "maxLength": 300,
+                            "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "href"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "heading",
+                  "text",
+                  "label",
+                  "target",
+                  "endsAt"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "order-form"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "submitLabel": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "heading",
+                  "submitLabel"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "guarantee"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 600
+                  }
+                },
+                "required": [
+                  "heading",
+                  "text"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "size-chart"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "minItems": 2,
+                    "maxItems": 8
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      "minItems": 2,
+                      "maxItems": 8
+                    },
+                    "minItems": 1,
+                    "maxItems": 30
+                  }
+                },
+                "required": [
+                  "heading",
+                  "columns",
+                  "rows"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "spec-table"
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "heading"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "tabs",
+                  "after-buy-box",
+                  "after-description",
+                  "before-reviews"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "version",
+              "settings",
+              "id",
+              "placement"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ProductBundleTier": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 100
+          },
+          "discountType": {
+            "type": "string",
+            "enum": [
+              "percentage",
+              "fixed_price"
+            ]
+          },
+          "discountPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "price": {
+            "type": "number",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "quantity",
+          "discountType",
+          "discountPercentage",
+          "price",
+          "label",
+          "isActive"
+        ]
       }
     },
     "parameters": {}
@@ -6281,6 +7369,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "listingTemplate": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "description": {
                               "type": "string",
                               "nullable": true
@@ -6310,6 +7402,7 @@
                             "excludeFromSitemap",
                             "createdAt",
                             "updatedAt",
+                            "listingTemplate",
                             "description",
                             "content",
                             "metaTitle",
@@ -13884,11 +14977,37 @@
                               "required": [
                                 "enabled"
                               ]
+                            },
+                            "homeMode": {
+                              "type": "string",
+                              "enum": [
+                                "catalog",
+                                "landing"
+                              ],
+                              "description": "`landing` opens the store on `landingProduct`'s landing page; it is `catalog` whenever that product is not public."
+                            },
+                            "landingProduct": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "slug": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "slug"
+                              ]
                             }
                           },
                           "required": [
                             "categoryRail",
-                            "trustStrip"
+                            "trustStrip",
+                            "homeMode",
+                            "landingProduct"
                           ]
                         },
                         "sections": {
@@ -49429,6 +50548,98 @@
                                 "canonicalPath"
                               ]
                             },
+                            "pageTemplate": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "contentBlocks": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/ProductPageContentBlock"
+                              },
+                              "maxItems": 40,
+                              "description": "Blocks other than the tabs (`additionalInfo`), in placement then page order."
+                            },
+                            "contentBlockMedia": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "image",
+                                      "video"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "altText": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "posterUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "url",
+                                  "altText",
+                                  "width",
+                                  "height",
+                                  "posterUrl"
+                                ]
+                              },
+                              "description": "The ready files the blocks name; a block's missing file is simply absent."
+                            },
+                            "bundles": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/ProductBundleTier"
+                              },
+                              "maxItems": 6,
+                              "description": "Active quantity tiers. Checkout prices them exactly this way (they add to promotions, which are evaluated at catalog prices)."
+                            },
+                            "emi": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "months": {
+                                  "type": "integer"
+                                },
+                                "monthly": {
+                                  "type": "number"
+                                },
+                                "monthlyMinor": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "months",
+                                "monthly",
+                                "monthlyMinor"
+                              ],
+                              "description": "\"EMI on card payment, from X/month\": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible."
+                            },
                             "offers": {
                               "type": "array",
                               "items": {
@@ -49549,6 +50760,11 @@
                             "attributes",
                             "additionalInfo",
                             "brand",
+                            "pageTemplate",
+                            "contentBlocks",
+                            "contentBlockMedia",
+                            "bundles",
+                            "emi",
                             "offers"
                           ]
                         },
@@ -57984,6 +59200,48 @@
                           },
                           "description": "Submitted codes that do not apply right now, with the reason. They add nothing to the totals."
                         },
+                        "bundleDiscountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie)."
+                        },
+                        "bundleDiscountAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "bundles": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "integer",
+                                "description": "The tier the product's cart quantity reached (\"3 for ...\")."
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "enum": [
+                                  "percentage",
+                                  "fixed_price"
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "productId",
+                              "quantity",
+                              "discountType",
+                              "label"
+                            ]
+                          },
+                          "description": "The bundle tiers that priced this quote (empty when promotions did)."
+                        },
                         "items": {
                           "type": "array",
                           "items": {
@@ -58116,6 +59374,9 @@
                         "discounts",
                         "offers",
                         "rejectedCodes",
+                        "bundleDiscountMinor",
+                        "bundleDiscountAmount",
+                        "bundles",
                         "items"
                       ]
                     }
@@ -72651,6 +73912,10 @@
                                 "type": "integer",
                                 "minimum": 1
                               },
+                              "listingTemplate": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "canonicalPath": {
                                 "type": "string",
                                 "nullable": true
@@ -72679,6 +73944,7 @@
                               "sortOrder",
                               "isActive",
                               "version",
+                              "listingTemplate",
                               "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
@@ -73100,6 +74366,12 @@
                     "required": [
                       "source"
                     ]
+                  },
+                  "listingTemplate": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                    "description": "A listing template id from the theme, or null for the theme's default collection listing."
                   }
                 },
                 "required": [
@@ -75844,6 +77116,10 @@
                                   "type": "integer",
                                   "minimum": 1
                                 },
+                                "listingTemplate": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "canonicalPath": {
                                   "type": "string",
                                   "nullable": true
@@ -75888,6 +77164,7 @@
                                 "sortOrder",
                                 "isActive",
                                 "version",
+                                "listingTemplate",
                                 "canonicalPath",
                                 "noIndex",
                                 "excludeFromSitemap",
@@ -76094,6 +77371,10 @@
                           "type": "integer",
                           "minimum": 1
                         },
+                        "listingTemplate": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "canonicalPath": {
                           "type": "string",
                           "nullable": true
@@ -76138,6 +77419,7 @@
                         "sortOrder",
                         "isActive",
                         "version",
+                        "listingTemplate",
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
@@ -76346,6 +77628,12 @@
                         "maxLength": 240
                       }
                     }
+                  },
+                  "listingTemplate": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                    "description": "A listing template id from the theme, or null for the theme's default collection listing."
                   }
                 },
                 "required": [
@@ -132306,11 +133594,28 @@
                               "required": [
                                 "enabled"
                               ]
+                            },
+                            "homeMode": {
+                              "type": "string",
+                              "enum": [
+                                "catalog",
+                                "landing"
+                              ],
+                              "description": "`landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable."
+                            },
+                            "landingProductId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 180,
+                              "description": "The product a landing homepage shows; required when homeMode is landing."
                             }
                           },
                           "required": [
                             "categoryRail",
-                            "trustStrip"
+                            "trustStrip",
+                            "homeMode",
+                            "landingProductId"
                           ]
                         },
                         "revision": {
@@ -132641,6 +133946,21 @@
                       "enabled"
                     ]
                   },
+                  "homeMode": {
+                    "type": "string",
+                    "enum": [
+                      "catalog",
+                      "landing"
+                    ],
+                    "description": "`landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable."
+                  },
+                  "landingProductId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 180,
+                    "description": "The product a landing homepage shows; required when homeMode is landing."
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -132711,11 +134031,28 @@
                               "required": [
                                 "enabled"
                               ]
+                            },
+                            "homeMode": {
+                              "type": "string",
+                              "enum": [
+                                "catalog",
+                                "landing"
+                              ],
+                              "description": "`landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable."
+                            },
+                            "landingProductId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 180,
+                              "description": "The product a landing homepage shows; required when homeMode is landing."
                             }
                           },
                           "required": [
                             "categoryRail",
-                            "trustStrip"
+                            "trustStrip",
+                            "homeMode",
+                            "landingProductId"
                           ]
                         },
                         "revision": {
@@ -161280,6 +162617,818 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.seo.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/emi": {
+      "get": {
+        "operationId": "dashboard.settings_emi.get",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get the store's EMI plans",
+        "description": "The plans behind \"EMI on card payment, from X/month\" on EMI-eligible products. Informational only: checkout does not offer EMI.",
+        "responses": {
+          "200": {
+            "description": "EMI plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Off by default; the line shows only when on and a plan applies."
+                        },
+                        "plans": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+                                "description": "A stable id the editor assigns (lowercase letters, numbers, - and _)."
+                              },
+                              "provider": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60,
+                                "description": "The bank or card as buyers know it (\"City Bank\")."
+                              },
+                              "months": {
+                                "type": "integer",
+                                "minimum": 2,
+                                "maximum": 60
+                              },
+                              "feePercentage": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 50,
+                                "description": "The bank's total conversion fee over the tenure, in percent (0 for a 0% plan)."
+                              },
+                              "minAmount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "The smallest price the plan applies to (whole taka in BDT)."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "provider",
+                              "months",
+                              "feePercentage",
+                              "minAmount"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 24
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "plans",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.settings_emi.update",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save the store's EMI plans",
+        "description": "Replaces the plans. Each plan's monthly amount is the price plus its fee, split over its months and rounded up to whole taka.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Off by default; the line shows only when on and a plan applies."
+                  },
+                  "plans": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+                          "description": "A stable id the editor assigns (lowercase letters, numbers, - and _)."
+                        },
+                        "provider": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60,
+                          "description": "The bank or card as buyers know it (\"City Bank\")."
+                        },
+                        "months": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 60
+                        },
+                        "feePercentage": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 50,
+                          "description": "The bank's total conversion fee over the tenure, in percent (0 for a 0% plan)."
+                        },
+                        "minAmount": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "The smallest price the plan applies to (whole taka in BDT)."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "provider",
+                        "months",
+                        "feePercentage",
+                        "minAmount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 24
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "plans",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "EMI plans saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Off by default; the line shows only when on and a plan applies."
+                        },
+                        "plans": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+                                "description": "A stable id the editor assigns (lowercase letters, numbers, - and _)."
+                              },
+                              "provider": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60,
+                                "description": "The bank or card as buyers know it (\"City Bank\")."
+                              },
+                              "months": {
+                                "type": "integer",
+                                "minimum": 2,
+                                "maximum": 60
+                              },
+                              "feePercentage": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 50,
+                                "description": "The bank's total conversion fee over the tenure, in percent (0 for a 0% plan)."
+                              },
+                              "minAmount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "The smallest price the plan applies to (whole taka in BDT)."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "provider",
+                              "months",
+                              "feePercentage",
+                              "minAmount"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 24
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "plans",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
         }
       }
     },
@@ -194697,7 +196846,11 @@
                 "additional_info",
                 "additional_info_text",
                 "options",
-                "variants"
+                "variants",
+                "content_blocks",
+                "content_block",
+                "template",
+                "bundles"
               ]
             },
             "required": true,
@@ -194709,7 +196862,7 @@
               "type": "integer",
               "nullable": true,
               "minimum": 0,
-              "maximum": 100000,
+              "maximum": 300000,
               "default": 0
             },
             "required": false,
@@ -194855,6 +197008,13 @@
                                 "freeDelivery": {
                                   "type": "boolean"
                                 },
+                                "emiEligible": {
+                                  "type": "boolean"
+                                },
+                                "pageTemplate": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "createdAt": {
                                   "anyOf": [
                                     {
@@ -194930,6 +197090,14 @@
                                     "variants": {
                                       "type": "integer",
                                       "minimum": 0
+                                    },
+                                    "contentBlocks": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "bundles": {
+                                      "type": "integer",
+                                      "minimum": 0
                                     }
                                   },
                                   "required": [
@@ -194937,7 +197105,9 @@
                                     "attributes",
                                     "additionalInfo",
                                     "options",
-                                    "variants"
+                                    "variants",
+                                    "contentBlocks",
+                                    "bundles"
                                   ]
                                 }
                               },
@@ -194959,6 +197129,8 @@
                                 "discountPercentage",
                                 "discountAmount",
                                 "freeDelivery",
+                                "emiEligible",
+                                "pageTemplate",
                                 "createdAt",
                                 "updatedAt",
                                 "deletedAt",
@@ -194971,6 +197143,243 @@
                             "section",
                             "aggregateRevision",
                             "product"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "content_blocks"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "placement": {
+                                    "type": "string",
+                                    "enum": [
+                                      "tabs",
+                                      "after-buy-box",
+                                      "after-description",
+                                      "before-reviews"
+                                    ]
+                                  },
+                                  "position": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "legacy": {
+                                    "type": "boolean",
+                                    "description": "A tab mirrored from Additional information: read-only here, edited through the additional_info section."
+                                  },
+                                  "settingsCharacters": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "settings": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "additionalProperties": {},
+                                    "description": "Inline while the page stays small; null means read it with the content_block section (itemId)."
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "placement",
+                                  "position",
+                                  "type",
+                                  "version",
+                                  "legacy",
+                                  "settingsCharacters",
+                                  "settings"
+                                ]
+                              },
+                              "maxItems": 40
+                            },
+                            "total": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "limit": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "nextOffset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items",
+                            "total",
+                            "offset",
+                            "limit",
+                            "nextOffset"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "content_block"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "itemId": {
+                              "type": "string"
+                            },
+                            "placement": {
+                              "type": "string",
+                              "enum": [
+                                "tabs",
+                                "after-buy-box",
+                                "after-description",
+                                "before-reviews"
+                              ]
+                            },
+                            "position": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "type": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "legacy": {
+                              "type": "boolean"
+                            },
+                            "value": {
+                              "type": "string",
+                              "maxLength": 12000,
+                              "description": "A chunk of the block's settings JSON text."
+                            },
+                            "totalCharacters": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "nextOffset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "itemId",
+                            "placement",
+                            "position",
+                            "type",
+                            "version",
+                            "legacy",
+                            "value",
+                            "totalCharacters",
+                            "offset",
+                            "nextOffset"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "template"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "pageTemplate": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "pageTemplate"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "bundles"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "allOf": [
+                                  {
+                                    "$ref": "#/components/schemas/ProductBundleTier"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items"
                           ]
                         },
                         {
@@ -195863,7 +198272,10 @@
                 "media",
                 "attributes",
                 "additional_info",
-                "additional_info_text"
+                "additional_info_text",
+                "content_blocks",
+                "template",
+                "bundles"
               ]
             },
             "required": true,
@@ -195964,6 +198376,9 @@
                             "minLength": 3,
                             "maxLength": 100,
                             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                          },
+                          "emiEligible": {
+                            "type": "boolean"
                           }
                         }
                       }
@@ -196225,6 +198640,234 @@
                       "offset",
                       "deleteCount",
                       "value"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "content_blocks"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "blocks": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 8,
+                                  "maxLength": 120,
+                                  "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                                },
+                                "placement": {
+                                  "type": "string",
+                                  "enum": [
+                                    "tabs",
+                                    "after-buy-box",
+                                    "after-description",
+                                    "before-reviews"
+                                  ]
+                                },
+                                "keep": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    true
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "placement",
+                                "keep"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 8,
+                                  "maxLength": 120,
+                                  "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                                },
+                                "placement": {
+                                  "type": "string",
+                                  "enum": [
+                                    "tabs",
+                                    "after-buy-box",
+                                    "after-description",
+                                    "before-reviews"
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 40
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "placement",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "maxItems": 40
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "blocks"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "template"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "pageTemplate": {
+                        "type": "string",
+                        "nullable": true,
+                        "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "pageTemplate"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "bundles"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "tiers": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 2,
+                                  "maximum": 100
+                                },
+                                "discountType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "percentage"
+                                  ]
+                                },
+                                "discountPercentage": {
+                                  "type": "number",
+                                  "minimum": 0.01,
+                                  "maximum": 99.99
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "maxLength": 60
+                                },
+                                "isActive": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "quantity",
+                                "discountType",
+                                "discountPercentage",
+                                "label",
+                                "isActive"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 2,
+                                  "maximum": 100
+                                },
+                                "discountType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "fixed_price"
+                                  ]
+                                },
+                                "price": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 99999999
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "maxLength": 60
+                                },
+                                "isActive": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "quantity",
+                                "discountType",
+                                "price",
+                                "label",
+                                "isActive"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "maxItems": 6
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "tiers"
                     ]
                   }
                 ]
@@ -244220,6 +246863,22 @@
             "catalog.optioned-product.v1",
             "dashboard.business-seo-settings",
             "dashboard.complex-product-create"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_emi.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_emi.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_emi.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_emi.update"
           ]
         },
         {

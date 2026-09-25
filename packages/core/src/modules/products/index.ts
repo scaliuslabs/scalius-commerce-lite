@@ -19,3 +19,6 @@ export * from "./variant-identity";
 export * from "./aggregate-revision";
 export * from "./customization";
 export * from "./catalog-projections";
+export * from "./content-blocks";
+export * from "./bundles";
+export * from "./emi";

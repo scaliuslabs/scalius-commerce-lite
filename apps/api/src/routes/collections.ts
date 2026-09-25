@@ -50,6 +50,8 @@ const storefrontCollectionSchema = z.object({
 });
 
 const storefrontCollectionDetailSchema = storefrontCollectionSchema.extend({
+  /** The listing template id from the theme; null renders the theme's default collection listing. */
+  listingTemplate: z.string().nullable(),
   description: z.string().nullable(),
   content: z.string().nullable(),
   metaTitle: z.string().nullable(),

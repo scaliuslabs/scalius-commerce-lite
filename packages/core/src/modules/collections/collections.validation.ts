@@ -4,6 +4,7 @@ import {
     isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import { COLLECTION_CONFIG_ID_LIMIT } from "./collection-config";
 
 const nullableText = (max: number) =>
@@ -35,6 +36,10 @@ const canonicalPathUpdateSchema = z
                 "Canonical path must be a collection route such as /collections/col_1.",
         },
     );
+
+/** Omitted keeps the current value (the theme's default listing on create). */
+const listingTemplateSchema = templateAssignmentSchema.optional()
+    .describe("A listing template id from the theme, or null for the theme's default collection listing.");
 
 // Ids are opaque; an active collection's products must exist (collections.service).
 const productIdSchema = z.string().trim().min(1).max(180);
@@ -93,6 +98,7 @@ export const createCollectionSchema = z.object({
     metaTitle: nullableText(70),
     metaDescription: nullableText(200),
     config: collectionConfigSchema,
+    listingTemplate: listingTemplateSchema,
 }).superRefine(validatePublishReadiness);
 
 export const updateCollectionSchema = z.object({
@@ -108,6 +114,7 @@ export const updateCollectionSchema = z.object({
     metaTitle: optionalNullableText(70),
     metaDescription: optionalNullableText(200),
     config: collectionConfigUpdateSchema.optional(),
+    listingTemplate: listingTemplateSchema,
 });
 
 const productIdListSchema = z.array(productIdSchema).max(COLLECTION_CONFIG_ID_LIMIT);

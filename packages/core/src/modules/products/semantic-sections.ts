@@ -2,13 +2,15 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { readStoreCurrency } from "../settings/store-money";
 import { nanoid } from "nanoid";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { isBatchGuardError, type Database } from "@scalius/database/client";
 import {
     brands,
     categories,
     media,
     productAttributes,
     productAttributeValues,
+    productBundles,
+    productContentBlocks,
     productMedia,
     productOptionDefinitions,
     productOptionValues,
@@ -17,13 +19,27 @@ import {
     productVariantOptionValues,
     productVariants,
 } from "@scalius/database/schema";
-import { ValidationError } from "@scalius/core/errors";
+import { AppError, ValidationError } from "@scalius/core/errors";
 import {
     isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import { defaultProductSkuValues } from "./public-eligibility";
+import {
+    PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
+    PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
+    buildProductContentBlockReplaceStatements,
+    productContentBlockInputListSchema,
+    readProductContentBlockChunk,
+    readProductContentBlockSection,
+} from "./content-blocks";
+import {
+    buildProductBundleReplaceStatements,
+    productBundleTierInputListSchema,
+    readProductBundleSection,
+} from "./bundles";
 import {
     catalogPriceColumns,
     presentCatalogPrice,
@@ -58,10 +74,14 @@ export const productSemanticSectionSchema = z.enum([
     "additional_info_text",
     "options",
     "variants",
+    "content_blocks",
+    "content_block",
+    "template",
+    "bundles",
 ]);
 
 export const productSemanticSectionQuerySchema = z.object({
-    offset: z.coerce.number().int().min(0).max(100_000).default(0),
+    offset: z.coerce.number().int().min(0).max(300_000).default(0),
     limit: z.coerce.number().int().min(1).max(50).default(20),
     field: z.enum(["description", "metaTitle", "metaDescription", "title", "content"]).optional(),
     itemId: z.string().trim().min(1).max(180).optional(),
@@ -93,6 +113,8 @@ const productBasePatchSchema = z.object({
     excludeFromProductFeed: z.boolean().optional(),
     productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable().optional(),
     slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+    /** Shows the store's EMI line (when the store has EMI plans). Informational only. */
+    emiEligible: z.boolean().optional(),
 }).refine(
     (patch) => Object.values(patch).some((value) => value !== undefined),
     "Provide at least one base field.",
@@ -189,6 +211,24 @@ export const productSemanticSectionPatchSchema = z.discriminatedUnion("section",
         deleteCount: z.number().int().min(0).max(100_000),
         value: z.string().max(PRODUCT_SEMANTIC_TEXT_CHUNK_MAX),
     }),
+    z.object({
+        section: z.literal("content_blocks"),
+        expectedAggregateRevision: z.number().int().min(1),
+        /** Every editable block, in page order within each placement; legacy tabs stay as they are. */
+        blocks: productContentBlockInputListSchema,
+    }),
+    z.object({
+        section: z.literal("template"),
+        expectedAggregateRevision: z.number().int().min(1),
+        /** A product page template id from the theme, or null for the theme's default product page. */
+        pageTemplate: templateAssignmentSchema,
+    }),
+    z.object({
+        section: z.literal("bundles"),
+        expectedAggregateRevision: z.number().int().min(1),
+        /** Every tier, in display order; an empty list removes them all. */
+        tiers: productBundleTierInputListSchema,
+    }),
 ]);
 
 export type ProductSemanticSection = z.infer<typeof productSemanticSectionSchema>;
@@ -275,6 +315,8 @@ export async function getProductSemanticSection(
             discountBps: products.discountBps,
             discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
+            emiEligible: products.emiEligible,
+            pageTemplate: products.pageTemplate,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
             deletedAt: products.deletedAt,
@@ -291,6 +333,8 @@ export async function getProductSemanticSection(
             additionalInfoCount: sql<number>`(SELECT count(*) FROM ${productRichContent} WHERE ${productRichContent.productId} = ${sql.raw('"products"."id"')})`,
             optionCount: sql<number>`(SELECT count(*) FROM ${productOptionDefinitions} WHERE ${productOptionDefinitions.productId} = ${sql.raw('"products"."id"')} AND ${productOptionDefinitions.deletedAt} IS NULL)`,
             variantCount: sql<number>`(SELECT count(*) FROM ${productVariants} WHERE ${productVariants.productId} = ${sql.raw('"products"."id"')} AND ${productVariants.deletedAt} IS NULL)`,
+            contentBlockCount: sql<number>`(SELECT count(*) FROM ${productContentBlocks} WHERE ${productContentBlocks.productId} = ${sql.raw('"products"."id"')})`,
+            bundleCount: sql<number>`(SELECT count(*) FROM ${productBundles} WHERE ${productBundles.productId} = ${sql.raw('"products"."id"')})`,
             storeCurrencyCode: storeCurrencyCodeSql(),
         }).from(products).leftJoin(categories, eq(categories.id, products.categoryId))
             .where(eq(products.id, productId)).get();
@@ -317,6 +361,8 @@ export async function getProductSemanticSection(
                 discountPercentage: price.discountPercentage,
                 discountAmount: price.discountAmount,
                 freeDelivery: row.freeDelivery,
+                emiEligible: row.emiEligible,
+                pageTemplate: row.pageTemplate,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 deletedAt: row.deletedAt,
@@ -331,9 +377,35 @@ export async function getProductSemanticSection(
                     additionalInfo: row.additionalInfoCount,
                     options: row.optionCount,
                     variants: row.variantCount,
+                    contentBlocks: row.contentBlockCount,
+                    bundles: row.bundleCount,
                 },
             },
         });
+    }
+
+    if (section === "content_blocks") {
+        const result = await readProductContentBlockSection(db, productId, query);
+        return result ? assertBoundedResult(result) : null;
+    }
+
+    if (section === "content_block") {
+        if (!query.itemId) throw new ValidationError("itemId is required for the content_block section.");
+        const result = await readProductContentBlockChunk(db, productId, query.itemId, query.offset);
+        return result ? assertBoundedResult(result) : null;
+    }
+
+    if (section === "template") {
+        const row = await db.select({
+            aggregateRevision: products.aggregateRevision,
+            pageTemplate: products.pageTemplate,
+        }).from(products).where(eq(products.id, productId)).get();
+        return row ? { section, aggregateRevision: row.aggregateRevision, pageTemplate: row.pageTemplate } : null;
+    }
+
+    if (section === "bundles") {
+        const result = await readProductBundleSection(db, productId);
+        return result ? assertBoundedResult(result) : null;
     }
 
     if (section === "text") {
@@ -573,6 +645,7 @@ async function updateBaseSection(
         excludeFromProductFeed: products.excludeFromProductFeed,
         productCondition: products.productCondition,
         slug: products.slug,
+        emiEligible: products.emiEligible,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
     const { price, discountPercentage, discountAmount, ...otherPatch } = patch;
@@ -615,6 +688,7 @@ async function updateBaseSection(
         excludeFromProductFeed: next.excludeFromProductFeed,
         productCondition: next.productCondition,
         slug: next.slug,
+        emiEligible: next.emiEligible,
     }).where(eq(products.id, productId))];
 
     if (price !== undefined || patch.isActive !== undefined) {
@@ -817,5 +891,39 @@ export async function updateProductSemanticSection(
     }
     if (patch.section === "attributes") return updateAttributesSection(db, productId, patch);
     if (patch.section === "additional_info") return updateAdditionalInfoSection(db, productId, patch);
+    if (patch.section === "content_blocks") {
+        const statements = await buildProductContentBlockReplaceStatements(db, productId, patch.blocks);
+        if (!statements) return null;
+        try {
+            return await commitSectionStatements(db, productId, patch.expectedAggregateRevision, statements);
+        } catch (error) {
+            // A stale revision was already reported; the batch's other guard is the files'.
+            if (!(error instanceof AppError) && isBatchGuardError(error, PRODUCT_CONTENT_BLOCK_MEDIA_GUARD)) {
+                throw new ValidationError(PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE, { field: "blocks" });
+            }
+            throw error;
+        }
+    }
+    if (patch.section === "template") {
+        const product = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).get();
+        if (!product) return null;
+        return commitSectionStatements(db, productId, patch.expectedAggregateRevision, [
+            db.update(products).set({ pageTemplate: patch.pageTemplate }).where(eq(products.id, productId)),
+        ]);
+    }
+    if (patch.section === "bundles") {
+        const statements = await buildProductBundleReplaceStatements(db, productId, patch.tiers);
+        return statements ? commitSectionStatements(db, productId, patch.expectedAggregateRevision, statements) : null;
+    }
     return updateAdditionalInfoTextSection(db, productId, patch);
+}
+
+async function commitSectionStatements(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    statements: SQLiteBatchItem[],
+) {
+    const result = await executeProductAggregateMutationBatch(db, productId, expectedAggregateRevision, statements);
+    return { aggregateRevision: result.aggregateRevision };
 }

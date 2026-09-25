@@ -101,6 +101,7 @@ describe("lookup query options", () => {
         sortOrder: 0,
         isActive: true,
         version: 1,
+        listingTemplate: null,
         canonicalPath: null,
         noIndex: false,
         excludeFromSitemap: false,

@@ -598,6 +598,179 @@ export type StorefrontStoreShape = {
     hasContentBlocks: boolean;
 };
 
+export type ProductPageContentBlock = {
+    type: 'rich-text';
+    version: 1;
+    settings: {
+        title: string;
+        html: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'image-with-text';
+    version: 1;
+    settings: {
+        heading: string;
+        body: string;
+        mediaId: string | null;
+        imageSide: 'start' | 'end';
+        cta: {
+            label: string;
+            href: string;
+        } | null;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'feature-list';
+    version: 1;
+    settings: {
+        heading: string;
+        style: 'list' | 'cards';
+        items: Array<{
+            title: string;
+            text: string;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'faq';
+    version: 1;
+    settings: {
+        heading: string;
+        items: Array<{
+            question: string;
+            answer: string;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'video';
+    version: 1;
+    settings: {
+        heading: string;
+        source: {
+            kind: 'embed';
+            url: string;
+            posterMediaId: string | null;
+        } | {
+            kind: 'media';
+            mediaId: string;
+        };
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'gallery-strip';
+    version: 1;
+    settings: {
+        heading: string;
+        mediaIds: Array<string>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'statement';
+    version: 1;
+    settings: {
+        text: string;
+        accent: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'comparison';
+    version: 1;
+    settings: {
+        heading: string;
+        columns: Array<{
+            label: string;
+        }>;
+        rows: Array<{
+            label: string;
+            values: Array<string>;
+        }>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'pack-picker';
+    version: 1;
+    settings: {
+        heading: string;
+        source: 'variants' | 'bundles';
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'cta-band';
+    version: 1;
+    settings: {
+        heading: string;
+        text: string;
+        label: string;
+        target: {
+            kind: 'order-form';
+        } | {
+            kind: 'buy-box';
+        } | {
+            kind: 'link';
+            href: string;
+        };
+        endsAt: string | null;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'order-form';
+    version: 1;
+    settings: {
+        heading: string;
+        submitLabel: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'guarantee';
+    version: 1;
+    settings: {
+        heading: string;
+        text: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'size-chart';
+    version: 1;
+    settings: {
+        heading: string;
+        columns: Array<string>;
+        rows: Array<Array<string>>;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+} | {
+    type: 'spec-table';
+    version: 1;
+    settings: {
+        heading: string;
+    };
+    id: string;
+    placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+};
+
+export type ProductBundleTier = {
+    quantity: number;
+    discountType: 'percentage' | 'fixed_price';
+    discountPercentage: number | null;
+    price: number | null;
+    label: string | null;
+    isActive: boolean;
+};
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -1520,6 +1693,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
+                listingTemplate: string | null;
                 description: string | null;
                 content: string | null;
                 metaTitle: string | null;
@@ -3633,6 +3807,14 @@ export type GetApiV1StorefrontHomepageResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on `landingProduct`'s landing page; it is `catalog` whenever that product is not public.
+                 */
+                homeMode: 'catalog' | 'landing';
+                landingProduct: {
+                    id: string;
+                    slug: string;
+                } | null;
             };
             sections: {
                 lists: Array<{
@@ -13435,6 +13617,36 @@ export type GetApiV1ProductsBySlugResponses = {
                     slug: string;
                     canonicalPath: string | null;
                 } | null;
+                pageTemplate: string | null;
+                /**
+                 * Blocks other than the tabs (`additionalInfo`), in placement then page order.
+                 */
+                contentBlocks: Array<ProductPageContentBlock>;
+                /**
+                 * The ready files the blocks name; a block's missing file is simply absent.
+                 */
+                contentBlockMedia: Array<{
+                    id: string;
+                    kind: 'image' | 'video';
+                    url: string;
+                    altText: string | null;
+                    width: number | null;
+                    height: number | null;
+                    posterUrl: string | null;
+                }>;
+                /**
+                 * Active quantity tiers. Checkout prices them exactly this way (they add to promotions, which are evaluated at catalog prices).
+                 */
+                bundles: Array<ProductBundleTier>;
+                /**
+                 * "EMI on card payment, from X/month": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible.
+                 */
+                emi: {
+                    provider: string;
+                    months: number;
+                    monthly: number;
+                    monthlyMinor: number;
+                } | null;
                 /**
                  * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
@@ -15741,6 +15953,23 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+            }>;
+            /**
+             * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).
+             */
+            bundleDiscountMinor: number;
+            bundleDiscountAmount: number;
+            /**
+             * The bundle tiers that priced this quote (empty when promotions did).
+             */
+            bundles: Array<{
+                productId: string;
+                /**
+                 * The tier the product's cart quantity reached ("3 for ...").
+                 */
+                quantity: number;
+                discountType: 'percentage' | 'fixed_price';
+                label: string | null;
             }>;
             items: Array<{
                 cartKey?: string | null;
@@ -19931,6 +20160,7 @@ export type GetApiV1AdminCollectionsResponses = {
                 sortOrder: number;
                 isActive: boolean;
                 version: number;
+                listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
@@ -19972,6 +20202,10 @@ export type PostApiV1AdminCollectionsData = {
             title?: string;
             subtitle?: string;
         };
+        /**
+         * A listing template id from the theme, or null for the theme's default collection listing.
+         */
+        listingTemplate?: string | null;
     };
     path?: never;
     query?: never;
@@ -20803,6 +21037,7 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 sortOrder: number;
                 isActive: boolean;
                 version: number;
+                listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
@@ -20956,6 +21191,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             sortOrder: number;
             isActive: boolean;
             version: number;
+            listingTemplate: string | null;
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
@@ -20995,6 +21231,10 @@ export type PutApiV1AdminCollectionsByIdData = {
             title?: string;
             subtitle?: string;
         };
+        /**
+         * A listing template id from the theme, or null for the theme's default collection listing.
+         */
+        listingTemplate?: string | null;
     };
     path: {
         id: string;
@@ -36425,6 +36665,14 @@ export type GetApiV1AdminSettingsHomepagePresentationResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+                 */
+                homeMode: 'catalog' | 'landing';
+                /**
+                 * The product a landing homepage shows; required when homeMode is landing.
+                 */
+                landingProductId: string | null;
             };
             revision: number;
         };
@@ -36443,6 +36691,14 @@ export type PostApiV1AdminSettingsHomepagePresentationData = {
         trustStrip: {
             enabled: boolean;
         };
+        /**
+         * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+         */
+        homeMode?: 'catalog' | 'landing';
+        /**
+         * The product a landing homepage shows; required when homeMode is landing.
+         */
+        landingProductId?: string | null;
         expectedRevision: number;
     };
     path?: never;
@@ -36548,6 +36804,14 @@ export type PostApiV1AdminSettingsHomepagePresentationResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+                /**
+                 * `landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.
+                 */
+                homeMode: 'catalog' | 'landing';
+                /**
+                 * The product a landing homepage shows; required when homeMode is landing.
+                 */
+                landingProductId: string | null;
             };
             revision: number;
         };
@@ -44271,6 +44535,272 @@ export type PutApiV1AdminSettingsPoliciesResponses = {
 };
 
 export type PutApiV1AdminSettingsPoliciesResponse = PutApiV1AdminSettingsPoliciesResponses[keyof PutApiV1AdminSettingsPoliciesResponses];
+
+export type GetApiV1AdminSettingsEmiData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/emi';
+};
+
+export type GetApiV1AdminSettingsEmiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsEmiError = GetApiV1AdminSettingsEmiErrors[keyof GetApiV1AdminSettingsEmiErrors];
+
+export type GetApiV1AdminSettingsEmiResponses = {
+    /**
+     * EMI plans
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Off by default; the line shows only when on and a plan applies.
+             */
+            enabled: boolean;
+            plans: Array<{
+                /**
+                 * A stable id the editor assigns (lowercase letters, numbers, - and _).
+                 */
+                id: string;
+                /**
+                 * The bank or card as buyers know it ("City Bank").
+                 */
+                provider: string;
+                months: number;
+                /**
+                 * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+                 */
+                feePercentage: number;
+                /**
+                 * The smallest price the plan applies to (whole taka in BDT).
+                 */
+                minAmount: number;
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsEmiResponse = GetApiV1AdminSettingsEmiResponses[keyof GetApiV1AdminSettingsEmiResponses];
+
+export type PutApiV1AdminSettingsEmiData = {
+    body: {
+        /**
+         * Off by default; the line shows only when on and a plan applies.
+         */
+        enabled: boolean;
+        plans: Array<{
+            /**
+             * A stable id the editor assigns (lowercase letters, numbers, - and _).
+             */
+            id: string;
+            /**
+             * The bank or card as buyers know it ("City Bank").
+             */
+            provider: string;
+            months: number;
+            /**
+             * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+             */
+            feePercentage: number;
+            /**
+             * The smallest price the plan applies to (whole taka in BDT).
+             */
+            minAmount: number;
+        }>;
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/emi';
+};
+
+export type PutApiV1AdminSettingsEmiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsEmiError = PutApiV1AdminSettingsEmiErrors[keyof PutApiV1AdminSettingsEmiErrors];
+
+export type PutApiV1AdminSettingsEmiResponses = {
+    /**
+     * EMI plans saved
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Off by default; the line shows only when on and a plan applies.
+             */
+            enabled: boolean;
+            plans: Array<{
+                /**
+                 * A stable id the editor assigns (lowercase letters, numbers, - and _).
+                 */
+                id: string;
+                /**
+                 * The bank or card as buyers know it ("City Bank").
+                 */
+                provider: string;
+                months: number;
+                /**
+                 * The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).
+                 */
+                feePercentage: number;
+                /**
+                 * The smallest price the plan applies to (whole taka in BDT).
+                 */
+                minAmount: number;
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsEmiResponse = PutApiV1AdminSettingsEmiResponses[keyof PutApiV1AdminSettingsEmiResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
@@ -53118,7 +53648,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionData = {
     body?: never;
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles';
     };
     query?: {
         offset?: number | null;
@@ -53227,6 +53757,8 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
                 freeDelivery: boolean;
+                emiEligible: boolean;
+                pageTemplate: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | unknown;
@@ -53241,8 +53773,61 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                     additionalInfo: number;
                     options: number;
                     variants: number;
+                    contentBlocks: number;
+                    bundles: number;
                 };
             };
+        } | {
+            section: 'content_blocks';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+                position: number;
+                type: string;
+                version: number;
+                /**
+                 * A tab mirrored from Additional information: read-only here, edited through the additional_info section.
+                 */
+                legacy: boolean;
+                settingsCharacters: number;
+                /**
+                 * Inline while the page stays small; null means read it with the content_block section (itemId).
+                 */
+                settings: {
+                    [key: string]: unknown;
+                } | null;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'content_block';
+            aggregateRevision: number;
+            itemId: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            position: number;
+            type: string;
+            version: number;
+            legacy: boolean;
+            /**
+             * A chunk of the block's settings JSON text.
+             */
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+        } | {
+            section: 'template';
+            aggregateRevision: number;
+            pageTemplate: string | null;
+        } | {
+            section: 'bundles';
+            aggregateRevision: number;
+            items: Array<ProductBundleTier & {
+                id: string;
+            }>;
         } | {
             section: 'text';
             field: 'description' | 'metaTitle' | 'metaDescription';
@@ -53376,6 +53961,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             excludeFromProductFeed?: boolean;
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
+            emiEligible?: boolean;
         };
     } | {
         section: 'text';
@@ -53417,10 +54003,46 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         offset: number;
         deleteCount: number;
         value: string;
+    } | {
+        section: 'content_blocks';
+        expectedAggregateRevision: number;
+        blocks: Array<{
+            id: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            keep: true;
+        } | {
+            id?: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            type: string;
+            version: number;
+            settings: {
+                [key: string]: unknown;
+            };
+        }>;
+    } | {
+        section: 'template';
+        expectedAggregateRevision: number;
+        pageTemplate: string | null;
+    } | {
+        section: 'bundles';
+        expectedAggregateRevision: number;
+        tiers: Array<{
+            quantity: number;
+            discountType: 'percentage';
+            discountPercentage: number;
+            label: string | null;
+            isActive: boolean;
+        } | {
+            quantity: number;
+            discountType: 'fixed_price';
+            price: number;
+            label: string | null;
+            isActive: boolean;
+        }>;
     };
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles';
     };
     query?: never;
     url: '/api/v1/admin/products/{id}/sections/{section}';
