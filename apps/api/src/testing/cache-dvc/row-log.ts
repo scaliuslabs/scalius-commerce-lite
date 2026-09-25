@@ -69,7 +69,7 @@ export class RowLog {
     const tables: string[] = [];
     for (const table of model.values()) {
       const columns = table.columns.map((column) => column.name);
-      if (columns.length === 0) continue;
+      if (columns.length === 0 || table.name === "cache_clock" || table.name === "cache_dep") continue;
       const name = table.name;
       const newImage = imageExpression("NEW", columns);
       const oldImage = imageExpression("OLD", columns);

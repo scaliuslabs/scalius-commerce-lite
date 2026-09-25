@@ -106,7 +106,7 @@ export interface DvcHarnessConfig {
 
 export interface DvcFinding {
   readonly signature: string;
-  readonly kind: "stale-part" | "stale-page";
+  readonly kind: "stale-part" | "stale-page" | "trigger-divergence";
   readonly route: string;
   readonly changed: readonly string[];
   count: number;
@@ -518,8 +518,9 @@ export class DvcHarness {
         }
         const failure = this.staleFailure(entry, fresh);
         if (!this.config.collect) throw failure;
-        this.recordFinding("stale-part", entry.path, this.changedColumnsSince(entry.logPos, entry.tables), failure.report);
+        this.recordFinding("stale-part", entry.path, await this.culprits(entry), failure.report);
         this.store(fresh);
+        continue;
       }
       this.stats.partInvalidations += 1;
       this.stats.invalidationReasons[verdict.reason] = (this.stats.invalidationReasons[verdict.reason] ?? 0) + 1;
@@ -546,12 +547,22 @@ export class DvcHarness {
     return reverted.status === entry.status && reverted.body === entry.body;
   }
 
-  private async renderOnRevertedCopy(path: string, changes: readonly LoggedChange[]): Promise<{ status: number; body: string }> {
+  /**
+   * Render `path` on a copy of the database with `changes` undone (newest
+   * first), except the one candidate `keep` names: an update column kept at
+   * its new value (`table.column`) or an insert/delete left in place
+   * (`table:op`). The copy has no triggers, so guards cannot refuse the undo.
+   */
+  private async renderOnRevertedCopy(path: string, changes: readonly LoggedChange[], keep?: string): Promise<{ status: number; body: string }> {
     const image = (this.sqlite as DatabaseSync & { serialize(): Uint8Array }).serialize();
     const copy = new DatabaseSync(":memory:") as DatabaseSync & { deserialize(image: Uint8Array): void };
     copy.deserialize(image);
     copy.exec("PRAGMA foreign_keys = OFF");
+    for (const { name } of copy.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string }>) {
+      copy.exec(`DROP TRIGGER "${name}"`);
+    }
     for (const change of [...changes].reverse()) {
+      if (keep === `${change.table}:${change.op}`) continue;
       const table = this.model.get(change.table)!;
       const keyColumns = table.pkColumns.length > 0 ? table.pkColumns : table.columns.map((column) => column.name);
       const keyOf = (row: Readonly<Record<string, unknown>>) => keyColumns.map((column) => row[column] as SQLInputValue);
@@ -560,8 +571,9 @@ export class DvcHarness {
       if (change.op === "delete" || change.op === "update") {
         if (change.op === "update") copy.prepare(`DELETE FROM "${change.table}" WHERE ${where}`).run(...keyOf(change.new!));
         const columns = Object.keys(change.old!);
+        const restored = columns.map((column) => (change.op === "update" && keep === `${change.table}.${column}` ? change.new![column] : change.old![column]) as SQLInputValue);
         copy.prepare(`INSERT INTO "${change.table}" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`)
-          .run(...columns.map((column) => change.old![column] as SQLInputValue));
+          .run(...restored);
       }
     }
     const env = { ...(this.env as unknown as Record<string, unknown>), DB: createSqliteD1Binding(copy) } as unknown as Env;
@@ -597,6 +609,22 @@ export class DvcHarness {
       }
     }
     return [...changed].sort();
+  }
+
+  /**
+   * Which of the changes since the entry rendered make the difference: each
+   * candidate alone is applied on top of the entry's state (all others
+   * undone); a candidate whose render differs from the entry is a culprit.
+   */
+  private async culprits(entry: PartEntry): Promise<string[]> {
+    const changes = this.rowLog.since(entry.logPos);
+    const candidates = this.changedColumnsSince(entry.logPos, entry.tables);
+    const found: string[] = [];
+    for (const candidate of candidates) {
+      const alone = await this.renderOnRevertedCopy(entry.path, changes, candidate);
+      if (alone.body !== entry.body || alone.status !== entry.status) found.push(candidate);
+    }
+    return found.length > 0 ? found : candidates.map((candidate) => `${candidate}?`);
   }
 
   private recordFinding(kind: DvcFinding["kind"], route: string, changed: readonly string[], report: string): void {
@@ -846,8 +874,10 @@ export class DvcHarness {
     const before = this.rowLog.position();
     const triggerBefore = this.clock.name === "triggers" ? await this.clock.current() : 0;
     let wrote = false;
+    let singleStatement = kind === "band" || kind === "tree" || kind === "json";
     if (kind === "mutation") {
       const count = this.rng.weighted([[6, 1], [3, 2], [1, 3]]);
+      singleStatement = count === 1;
       for (let index = 0; index < count; index += 1) {
         const mutation = this.mutator.random();
         if (mutation) {
@@ -896,7 +926,7 @@ export class DvcHarness {
     if (!wrote) return null;
     this.stats.writes += 1;
     const changes = this.rowLog.since(before);
-    if (this.clock.name === "triggers") await this.crossCheckTriggers(changes, triggerBefore);
+    if (this.clock.name === "triggers") await this.crossCheckTriggers(changes, triggerBefore, singleStatement);
     return this.clock.current();
   }
 
@@ -931,7 +961,7 @@ export class DvcHarness {
    * With S1's triggers as the clock, compare the keys they advanced with the
    * reference oracle's reading of the registry for the same row changes.
    */
-  private async crossCheckTriggers(changes: readonly LoggedChange[], before: number): Promise<void> {
+  private async crossCheckTriggers(changes: readonly LoggedChange[], before: number, singleStatement = false): Promise<void> {
     const oracle = this.reference.keysFor(changes);
     const rows = this.sqlite.prepare("SELECT dep FROM cache_dep WHERE seq > ?").all(before) as Array<{ dep: string }>;
     const triggers = new Set(rows.map((row) => row.dep));
@@ -942,8 +972,20 @@ export class DvcHarness {
     const triggerOnly = [...triggers].filter((key) => !oracle.has(key));
     check.oracleOnly += oracleOnly.length;
     check.triggerOnly += triggerOnly.length;
-    if (oracleOnly.length > 0 && check.samples.length < 20) {
-      check.samples.push(`#${this.step} oracle-only ${oracleOnly.slice(0, 8).join(" ")} for ${changes.slice(0, 3).map((change) => `${change.op} ${change.table}`).join(", ")}`);
+    const describe = () => changes.slice(0, 4).map((change) => `${change.op} ${change.table}${change.op === "update" ? `(${Object.keys(change.new!).filter((column) => String(change.new![column]) !== String(change.old![column])).join(",")})` : ""}`).join(", ");
+    if (oracleOnly.length > 0 && check.samples.length < 30) {
+      check.samples.push(`#${this.step} oracle-only ${oracleOnly.slice(0, 8).join(" ")} for ${describe()}`);
+    }
+    if (triggerOnly.length > 0 && check.samples.length < 30) {
+      check.samples.push(`#${this.step} trigger-only ${triggerOnly.slice(0, 8).join(" ")} for ${describe()}`);
+    }
+    // One raw statement: the oracle reads the same state the triggers did, so
+    // the key sets must be equal. (Multi-statement service batches can differ
+    // in lookup timing; those stay diagnostics.)
+    if (singleStatement && (oracleOnly.length > 0 || triggerOnly.length > 0)) {
+      const report = `oracle-only: ${oracleOnly.join(" ") || "-"}\ntrigger-only: ${triggerOnly.join(" ") || "-"}\nchanges: ${describe()}\nseed=${this.config.seed} step=${this.step}`;
+      if (!this.config.collect) throw new DvcFailure("[DVC] generated triggers and the registry oracle disagree", report);
+      this.recordFinding("trigger-divergence", changes[0]?.table ?? "?", [...oracleOnly.map((key) => `-${key}`), ...triggerOnly.map((key) => `+${key}`)].slice(0, 12), report);
     }
   }
 
@@ -998,7 +1040,7 @@ export class DvcHarness {
         this.stats.mutations += 1;
         this.stats.writes += 1;
         this.remember(`sweep ${mutation.description}`);
-        if (this.clock.name === "triggers") await this.crossCheckTriggers(this.rowLog.since(before), triggerBefore);
+        if (this.clock.name === "triggers") await this.crossCheckTriggers(this.rowLog.since(before), triggerBefore, true);
         this.now += 250;
         await this.verifyParts(false);
       }
@@ -1029,7 +1071,7 @@ export class DvcHarness {
       `precision: spurious invalidations per write=${s.writes > 0 ? (s.partSpuriousInvalidations / s.writes).toFixed(2) : "n/a"}; hit ratio (validated)=${s.partChecks > 0 ? (s.partValidHits / s.partChecks).toFixed(3) : "n/a"}`,
       `coverage gaps: ops=${gaps.ops.length} columns=${gaps.columns.length}`,
       `uncacheable routes: ${Object.keys(s.uncacheableRoutes).length}; nondeterministic: ${s.nondeterministicRoutes.join(" ") || "none"}`,
-      s.triggerCrossCheck.compared > 0 ? `trigger cross-check: compared=${s.triggerCrossCheck.compared} oracleOnly=${s.triggerCrossCheck.oracleOnly} triggerOnly=${s.triggerCrossCheck.triggerOnly}` : "",
+      s.triggerCrossCheck.compared > 0 ? `trigger cross-check: compared=${s.triggerCrossCheck.compared} oracleOnly=${s.triggerCrossCheck.oracleOnly} triggerOnly=${s.triggerCrossCheck.triggerOnly}\n${s.triggerCrossCheck.samples.map((line) => `  ${line}`).join("\n")}` : "",
     ].filter(Boolean).join("\n");
   }
 

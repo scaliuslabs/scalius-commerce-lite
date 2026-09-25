@@ -56,7 +56,10 @@ export class ReferenceOracle {
       fired = true;
       for (const template of rule.keys) for (const key of this.expand(template, image)) keys.add(key);
     }
-    if (fired || this.visibleChange(spec, change)) keys.add(cacheDep.table(change.table));
+    // `t:<table>` advances with any rule of the table, as the generated
+    // triggers do: a change no rule covers (a non-public buyer-state row) is
+    // invisible to every public read.
+    if (fired) keys.add(cacheDep.table(change.table));
     return keys;
   }
 
@@ -160,7 +163,9 @@ export class ReferenceOracle {
       const ancestors = this.sqlite.prepare(
         "SELECT ancestor_id FROM category_closure WHERE descendant_id = ?",
       ).all(categoryId) as Array<{ ancestor_id: string }>;
-      const scopes = new Set([categoryId, ...ancestors.map((row) => String(row.ancestor_id))]);
+      // The closure holds the category's own row (depth 0) while it exists; a
+      // deleted category has no listing to invalidate.
+      const scopes = new Set(ancestors.map((row) => String(row.ancestor_id)));
       for (const scope of scopes) keys.push(`${prefix}:cat:${scope}`);
     }
     const brandId = toText(state.brand_id);
