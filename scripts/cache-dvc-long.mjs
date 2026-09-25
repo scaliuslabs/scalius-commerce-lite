@@ -8,6 +8,9 @@
  *   node scripts/cache-dvc-long.mjs [--workers 4] [--seeds-per-worker 2] [--steps 20000]
  *     [--provider d1|turso] [--prefix long] [--out <dir>] [--rss-stop-mb 3000] [--swap-stop-mb 7000]
  *
+ * Each worker runs through /tmp/scalius-heavy.sh when it exists, so workers
+ * beyond the host's heavy slots queue instead of piling up.
+ *
  * Memory guard: every 5 s it sums the RSS of every process it started (and
  * their children) and reads `sysctl vm.swapusage`; above --rss-stop-mb or
  * --swap-stop-mb it stops every worker and reports what finished. Workers run
@@ -21,6 +24,7 @@ import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const HEAVY_GATE = "/tmp/scalius-heavy.sh";
 
 export function parseArgs(argv) {
   const options = {
@@ -39,6 +43,11 @@ export function parseArgs(argv) {
     options[key] = typeof options[key] === "number" ? Number(value) : value;
   }
   return options;
+}
+
+/** Refuse to start while the host is already swapping hard (the host memory rule). */
+export function refuseToStart(swapUsed, limit) {
+  return swapUsed > limit ? `swap used ${swapUsed} MB is above ${limit} MB; start nothing heavy` : null;
 }
 
 /** Used swap in MB (macOS `sysctl vm.swapusage`), or 0 where unavailable. */
@@ -100,13 +109,20 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   mkdirSync(options.out, { recursive: true });
   const swapAtStart = readSwap();
+  const refusal = refuseToStart(swapAtStart, options.swapStopMb);
+  if (refusal) {
+    console.error(`[dvc-long] ${refusal}`);
+    process.exitCode = 2;
+    return;
+  }
   console.log(`[dvc-long] ${options.workers} workers x ${options.seedsPerWorker} seeds x ${options.steps} steps, provider ${options.provider}; swap used at start ${swapAtStart} MB`);
   const workers = [];
   for (let index = 0; index < options.workers; index += 1) {
     const report = join(options.out, `worker-${index}.json`);
-    const child = spawn("pnpm", [
-      "exec", "vitest", "run", "apps/api/src/cache-dvc.property.test.ts", "-t", "never serves", "--maxWorkers=1",
-    ], {
+    // Each worker takes a host-wide heavy slot when the gate exists (at most two heavy commands at once).
+    const vitest = ["pnpm", "exec", "vitest", "run", "apps/api/src/cache-dvc.property.test.ts", "-t", "never serves", "--maxWorkers=1"];
+    const command = existsSync(HEAVY_GATE) ? [HEAVY_GATE, ...vitest] : vitest;
+    const child = spawn(command[0], command.slice(1), {
       cwd: root,
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],

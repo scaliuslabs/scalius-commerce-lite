@@ -29,6 +29,7 @@ import { CACHE_DEP_TABLES } from "@scalius/shared/cache-deps";
 import { DvcHarness, type DvcHarnessConfig } from "./testing/cache-dvc/harness";
 import { scopeRecorder, type ScopeRecorderStats } from "./testing/cache-dvc/harness-adapters";
 import { referencePartValidator } from "./testing/cache-dvc/validators";
+import { STRUCTURAL_OP_GAPS } from "./testing/cache-dvc/mutations";
 import { registryColumnsMissingFromSchema, registryTablesMissingFromSchema } from "./testing/cache-dvc/schema-model";
 
 vi.mock("@scalius/database/client", async (importOriginal) => {
@@ -169,7 +170,7 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
         });
         if (process.env.DVC_REPORT) writeFileSync(process.env.DVC_REPORT, JSON.stringify(reports, null, 2));
         console.info(`[DVC] findings:\n${[...harness.findings.values()].map((finding) => `- (${finding.count}x) ${finding.signature}`).join("\n") || "none"}`);
-        console.info(`[DVC] coverage gaps:\n  ops: ${gaps.ops.join(" ")}\n  columns: ${gaps.columns.join(" ")}\n[DVC] refusals:\n${[...harness.coverage.refusals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => `  ${count}x ${key}`).join("\n")}`);
+        console.info(`[DVC] coverage gaps:\n  ops: ${gaps.ops.join(" ")}\n  noise columns: ${gaps.noise.join(" ") || "none"}\n  columns: ${gaps.columns.join(" ")}\n[DVC] refusals:\n${[...harness.coverage.refusals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => `  ${count}x ${key}`).join("\n")}`);
         console.info(`[DVC] ${harness.summary()}\nnon-200 parts: ${nonOk.join(" ") || "none"}\nwall ${((performance.now() - started) / 1000).toFixed(1)}s`);
         if (RECORDER === "scope") {
           const top = (map: Map<string, number>) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([key, count]) => `  ${count}x ${key}`).join("\n") || "  none";
@@ -178,6 +179,11 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
         harness.close();
       }
       if (failure) throw failure;
+      if (MODE === "quick" && !process.env.DVC_SEED) {
+        const gaps = harness.coverage.gaps(harness.model);
+        expect(gaps.noise, "noise columns the run never changed").toEqual([]);
+        expect(gaps.ops.filter((op) => !(op in STRUCTURAL_OP_GAPS)), "registered table operations the run never performed").toEqual([]);
+      }
       harness.assertNoFindings();
     }, TIMEOUT);
   }

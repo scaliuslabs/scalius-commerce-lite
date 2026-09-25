@@ -36,15 +36,28 @@ export class MutationCoverage {
     }
   }
 
+  /** Count a committed change whatever made it (a service, a trigger, a cascade). */
+  recordChange(change: { table: string; op: "insert" | "update" | "delete"; old: Readonly<Record<string, unknown>> | null; new: Readonly<Record<string, unknown>> | null }): void {
+    const op = `${change.table}:${change.op}`;
+    this.ops.set(op, (this.ops.get(op) ?? 0) + 1);
+    if (change.op !== "update") return;
+    for (const column of Object.keys(change.new!)) {
+      if (String(change.new![column]) === String(change.old![column])) continue;
+      const key = `${change.table}.${column}`;
+      this.columns.set(key, (this.columns.get(key) ?? 0) + 1);
+    }
+  }
+
   refused(table: string, reason: string): void {
     const key = `${table}: ${reason.replace(/'[^']*'/g, "'…'").slice(0, 120)}`;
     this.refusals.set(key, (this.refusals.get(key) ?? 0) + 1);
   }
 
   /** Registered tables or columns never changed (the quick run requires none, bar the listed reasons). */
-  gaps(model: SchemaModel): { ops: string[]; columns: string[] } {
+  gaps(model: SchemaModel): { ops: string[]; columns: string[]; noise: string[] } {
     const ops: string[] = [];
     const columns: string[] = [];
+    const noise: string[] = [];
     for (const table of model.values()) {
       if (!table.registered) continue;
       for (const kind of ["insert", "update", "delete"]) {
@@ -52,10 +65,12 @@ export class MutationCoverage {
       }
       for (const column of table.columns) {
         if (column.pk > 0) continue;
-        if (!this.columns.has(`${table.name}.${column.name}`)) columns.push(`${table.name}.${column.name}`);
+        if (this.columns.has(`${table.name}.${column.name}`)) continue;
+        columns.push(`${table.name}.${column.name}`);
+        if (column.noise) noise.push(`${table.name}.${column.name}`);
       }
     }
-    return { ops, columns };
+    return { ops, columns, noise };
   }
 }
 
@@ -63,7 +78,21 @@ type Row = Record<string, SQLInputValue | null>;
 
 const ID_PREFIXES = /^(p|cat|col|brd|media|page|art|menu|nav|promo|ov|opt|v|pmed|attr|atv|atg|loc|zone|ship|tax|rate|lang|an|hero|pcode|pcond|peff|pred|prc|pcb|pbd|pav|o|oi|cus)_/;
 const UNIQUE_HINT = /slug|sku|handle|code|barcode|name|key|path|normalized|checksum|token|value|label|title|filename|object_key/;
-const MAX_ATTEMPTS = 8;
+const MAX_ATTEMPTS = 12;
+/**
+ * Table operations no single-row write can perform, with the reason. Every
+ * other registered table must see an insert, an update and a delete in a quick
+ * run. (Columns: a non-noise column is covered by the generic "any visible
+ * column" rule whatever its value; the hard requirement is that every NOISE
+ * column changes at least once, since a noise column a route outputs is the
+ * one way a registered table can go stale.)
+ */
+export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
+  "promotion_redemptions:update": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
+  "promotion_redemptions:delete": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
+  "promotion_redemptions:insert": "needs a matching order_discount_allocations row, and a delete+insert is refused as immutable",
+};
+
 /** The cache's own clock tables: never mutated (they are the instrument, not the subject). */
 export const MACHINERY_TABLES: ReadonlySet<string> = new Set(["cache_clock", "cache_dep", "cache_generation"]);
 
@@ -132,8 +161,13 @@ export class RowMutator {
     let lastError = "";
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
       const row = this.rng.pick(rows);
+      // A targeted column that the database refuses alone (a CHECK couples it
+      // to another column) is retried with one or two companions.
       const targets = column
-        ? writable.filter((each) => each.name === column)
+        ? [
+          ...writable.filter((each) => each.name === column),
+          ...(attempt >= 3 ? this.rng.sample(writable.filter((each) => each.name !== column), this.rng.int(1, 2)) : []),
+        ]
         : this.rng.sample(writable, this.rng.weighted([[6, 1], [2, 2], [1, 3]]));
       if (targets.length === 0) return null;
       const assignments: string[] = [];
@@ -145,6 +179,15 @@ export class RowMutator {
         assignments.push(`"${target.name}" = ?`);
         values.push(value);
         changed.push(target.name);
+      }
+      for (const target of [...changed]) {
+        const companion = table.columns.find((each) => each.name === `normalized_${target}`);
+        if (!companion || changed.includes(companion.name) || attempt % 2 === 1) continue;
+        const value = values[changed.indexOf(target)];
+        if (typeof value !== "string") continue;
+        assignments.push(`"${companion.name}" = ?`);
+        values.push(normalizeFor(companion.name, value));
+        changed.push(companion.name);
       }
       if (assignments.length === 0) continue;
       const where = this.pkWhere(table, row);
@@ -191,11 +234,19 @@ export class RowMutator {
           } else if (typeof value === "number") {
             source[column.name] = value + 1000 + this.counter;
           }
+        } else if (attempt >= 2 && column.references && this.rng.chance(0.5)) {
+          // Composite uniqueness (one primary image per product, one bundle per
+          // quantity): re-point the clone to another parent.
+          const alternative = this.foreignValue(column);
+          if (alternative !== undefined) source[column.name] = alternative;
+        } else if (attempt >= 4 && typeof value === "number" && column.shape === "integer" && column.enumValues === null) {
+          source[column.name] = value + attempt;
         } else if (attempt > 0 && typeof value === "string" && UNIQUE_HINT.test(column.name) && !column.references
           && column.enumValues === null && column.shape !== "json" && !looksLikeJson(value)) {
           source[column.name] = uniqueVariant(value, suffix);
         }
       }
+      normalizeCompanions(table, source);
       const columns = table.columns.map((column) => column.name).filter((name) => source[name] !== null || !table.columns.find((each) => each.name === name)!.pk);
       const values = columns.map((name) => source[name] ?? null) as SQLInputValue[];
       try {
@@ -206,6 +257,33 @@ export class RowMutator {
         return mutation;
       } catch (error) {
         this.coverage.refused(tableName, errorText(error));
+      }
+    }
+    return this.reinsert(table, rows);
+  }
+
+  /**
+   * When no clone is valid (a row whose identity a trigger or a composite key
+   * ties to other rows), delete an existing row and insert it back in one
+   * transaction: the insert (and delete) triggers fire on a real row.
+   */
+  private reinsert(table: TableModel, rows: readonly Row[]): Mutation | null {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const row = this.rng.pick(rows);
+      const where = this.pkWhere(table, row);
+      const columns = table.columns.map((column) => column.name);
+      this.sqlite.exec("SAVEPOINT dvc_reinsert");
+      try {
+        if (this.run(`DELETE FROM "${table.name}" WHERE ${where.sql}`, where.values) === 0) throw new Error("row vanished");
+        this.run(`INSERT INTO "${table.name}" (${columns.map((name) => `"${name}"`).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+          columns.map((name) => row[name] ?? null) as SQLInputValue[]);
+        this.sqlite.exec("RELEASE dvc_reinsert");
+        const mutation: Mutation = { kind: "insert", table: table.name, columns, description: `DELETE+INSERT ${table.name} ${describeRow(table, row)}` };
+        this.coverage.record(mutation);
+        return mutation;
+      } catch (error) {
+        this.sqlite.exec("ROLLBACK TO dvc_reinsert; RELEASE dvc_reinsert");
+        this.coverage.refused(table.name, `reinsert: ${errorText(error)}`);
       }
     }
     return null;
@@ -372,6 +450,20 @@ export class RowMutator {
 }
 
 const REMOVE = Symbol("remove");
+
+/** The normalised twin of a text column (`normalized_code` is upper-case, the rest lower-case). */
+function normalizeFor(column: string, value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  return column === "normalized_code" ? trimmed.toUpperCase() : trimmed.toLowerCase();
+}
+
+function normalizeCompanions(table: TableModel, row: Row): void {
+  for (const column of table.columns) {
+    if (!column.name.startsWith("normalized_")) continue;
+    const base = row[column.name.slice("normalized_".length)];
+    if (typeof base === "string") row[column.name] = normalizeFor(column.name, base);
+  }
+}
 
 function looksLikeJson(value: string): boolean {
   const first = value.trimStart()[0];

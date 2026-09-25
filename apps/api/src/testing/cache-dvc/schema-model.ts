@@ -70,6 +70,22 @@ function drizzleColumnFacts(): Map<string, Map<string, DrizzleColumnFacts>> {
   return byTable;
 }
 
+/**
+ * `col IN ('a', 'b')` lists in a table's CHECK constraints: the allowed values
+ * of text columns the Drizzle schema types as plain text.
+ */
+function checkInLists(createSql: string): Map<string, string[]> {
+  const lists = new Map<string, string[]>();
+  for (const match of createSql.matchAll(/[`"]?([A-Za-z_][A-Za-z0-9_]*)[`"]?\s+IN\s*\(([^()]*)\)/gi)) {
+    const items = match[2]!.split(",").map((item) => item.trim());
+    if (items.length === 0 || !items.every((item) => /^'[^']*'$/.test(item))) continue;
+    const values = items.map((item) => item.slice(1, -1));
+    const known = lists.get(match[1]!);
+    lists.set(match[1]!, known ? [...new Set([...known, ...values])] : values);
+  }
+  return lists;
+}
+
 /** FTS5 virtual tables and their shadow tables are maintained by triggers, never written directly. */
 function isDerivedStorage(name: string, virtualTables: ReadonlySet<string>): boolean {
   if (virtualTables.has(name)) return true;
@@ -92,6 +108,7 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
       table: string; from: string; to: string | null;
     }>;
     const facts = drizzle.get(row.name);
+    const checkLists = checkInLists(row.sql ?? "");
     const spec = isCacheDepTable(row.name) ? CACHE_DEP_TABLES[row.name] : null;
     const noise = new Set<string>(spec ? spec.noise : []);
     const columns: ColumnModel[] = info.map((column) => {
@@ -111,7 +128,7 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
         shape: fact?.shape ?? baseShape,
         notNull: column.notnull === 1,
         pk: column.pk,
-        enumValues: fact?.enumValues ?? null,
+        enumValues: fact?.enumValues ?? checkLists.get(column.name) ?? null,
         references: reference ? { table: reference.table, column: reference.to ?? "id" } : null,
         noise: noise.has(column.name),
       };
