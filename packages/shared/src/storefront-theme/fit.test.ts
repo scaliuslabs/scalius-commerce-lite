@@ -37,6 +37,7 @@ const DEEP: StoreShape = storeShapeFromFacts({
   skuCount: 50_000,
   topCategoryCount: 18,
   categoryDepth: 3,
+  categoryGroups: 6,
   menu: menu(12, 6, 8),
   brandCount: 300,
   hasCollections: true,
@@ -57,8 +58,9 @@ function withBlock(theme: StorefrontThemeDocument, path: (blocks: StorefrontThem
   return next;
 }
 
-/** Every block that renders fits the store it renders on. */
+/** Every block that renders fits the store it renders on (judged on the resolver's own facts). */
 function assertEverythingFits(resolved: ResolvedStorefrontTheme, shape: StoreShape) {
+  expect(resolved.facts).toMatchObject(shape);
   const blocks: Record<string, string> = {};
   const values = {
     topBar: resolved.blocks.topBar,
@@ -73,7 +75,7 @@ function assertEverythingFits(resolved: ResolvedStorefrontTheme, shape: StoreSha
   };
   for (const slot of STOREFRONT_BLOCK_SLOTS) {
     const block = values[slot];
-    expect(failedFitConditions(storefrontVariantSpec(slot, block.variant).requires, { shape, blocks }), `${slot}=${block.variant}`).toEqual([]);
+    expect(failedFitConditions(storefrontVariantSpec(slot, block.variant).requires, { facts: resolved.facts, blocks }), `${slot}=${block.variant}`).toEqual([]);
     expect(storefrontVariantSpec(slot, block.variant).settings.safeParse(block.settings).success).toBe(true);
     blocks[slot] = block.variant;
   }
@@ -116,9 +118,9 @@ describe("fallback resolution", () => {
     expect(resolve(drill).blocks.desktopNav.variant).toBe("drill-in-drawer");
     // Shelves need a tree or collections; quick-grid needs the quick-add card.
     const shelves = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8 } }; });
-    expect(resolve(shelves).blocks.listing.layout.variant).toBe("bar-drawer");
+    expect(resolve(shelves).blocks.listing.layout.variant).toBe("grid");
     const quickGrid = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "quick-grid", settings: {} }; });
-    expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("sidebar-grid");
+    expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("grid");
     const quickGridQuickAdd = withBlock(quickGrid, (blocks) => { blocks.card = { variant: "quick-add", settings: {} }; });
     expect(resolve(quickGridQuickAdd).blocks.listing.layout.variant).toBe("quick-grid");
     // The digital buy box needs digital lines; the directory footer needs categories.
@@ -147,7 +149,7 @@ describe("fallback resolution", () => {
     expect(boutique.fallbacks).toEqual([expect.objectContaining({ kind: "module", key: "content-blocks" })]);
     const heritage = resolveStorefrontTheme(storefrontTemplateTheme("heritage-editorial"), TINY);
     expect(heritage.blocks.desktopNav.variant).toBe("dropdown");
-    expect(heritage.blocks.listing.layout.variant).toBe("bar-drawer");
+    expect(heritage.blocks.listing.layout.variant).toBe("grid");
     expect(heritage.pages.home.map((section) => section.type)).toContain("category-tiles");
     expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("product-widgets");
   });

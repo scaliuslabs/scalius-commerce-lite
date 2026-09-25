@@ -7,7 +7,7 @@ export type ClientOptions = {
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 4;
+    version: 5;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -106,6 +106,11 @@ export type StorefrontThemeDocument = {
                 [key: string]: never;
             };
         };
+        navigation: {
+            source: 'menu' | 'category-tree' | 'tree+menu';
+            maxTopItems: number;
+            linkBudget: number;
+        };
         desktopNav: {
             variant: 'dropdown';
             settings: {
@@ -202,12 +207,7 @@ export type StorefrontThemeDocument = {
         };
         listing: {
             layout: {
-                variant: 'sidebar-grid';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'bar-drawer';
+                variant: 'grid';
                 settings: {
                     [key: string]: never;
                 };
@@ -226,6 +226,10 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
+            };
+            filters: {
+                style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
+                openByDefault: boolean;
             };
             toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';
@@ -584,6 +588,7 @@ export type StorefrontStoreShape = {
     skuCount: number;
     topCategoryCount: number;
     categoryDepth: number;
+    categoryGroups: number;
     menuTopItems: number;
     menuDepth: number;
     menuGroups: number;
