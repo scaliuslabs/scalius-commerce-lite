@@ -1,27 +1,29 @@
 # Reviews Module
 
-Verified-purchase product reviews (design: `audit/rewrite-2026-09-23/WAVE-B-DESIGN.md` §2). Owner slice: **B1** (core, API, dashboard); B2 builds the storefront on its API. B0 landed the stubs below; they do no I/O and return empty, zero or false, so nothing is buyer-visible until B1.
+Verified-purchase product reviews (design: `audit/rewrite-2026-09-23/WAVE-B-DESIGN.md` §2). Owner slice: **B1** (core, API, dashboard); B2 builds the storefront on its API.
 
-Public entries: `index.ts` (server) and `browser.ts` (statuses, moderation reasons and modes, `LineReviewExtra`).
+Public entries: `index.ts` (server) and `browser.ts` (statuses, moderation reasons, modes and actions, check flags, `LineReviewExtra`).
 
-## Will own
+## Files
 
-Submit, edit and withdraw (account owner or receipt proof), the public keyset list and summary, bulk moderation, merchant replies and the review thread, the admin list, the review-request sweep and send-time recheck, the per-line extras reader and the coalesced cache-bump check.
+- `shared.ts`: ids, the fail-closed settings read, the buyer actor (`customer` = the order's account owner, `guest_receipt` = the receipt's own order) and `reviewableLineConditions` (reviewable type, handed over, delivered/completed, not deleted, within 365 days of the first active fulfilment).
+- `lines.ts`: `listLineReviewStates` (`extras.review`), `countReviewableLinesForCustomer` (account tab), `listReviewableLines` ("To review", one line per product), `readBuyerLine`.
+- `buyer.ts`: `submitReview`, `editReview`, `withdrawReview`, `listBuyerReviews`, `getBuyerReview`.
+- `staff.ts`: `listAdminReviews` (keyset `(created_at, id)`), `getAdminReview`, `getAdminReviewSummary` (per-status counts, a product's stats), `moderateReviews` (≤ 90 ids, one UPDATE), `setReviewReply`, `openReviewThread`, review settings read/save.
+- `requests.ts`: `sweepReviewRequests`, `reviewRequestSendCheck`, `reviewsChangedSince`.
 
-## Seams already mounted (B0)
+The public reads (product page `reviews` field, `GET /products/{id}/reviews`) live in `catalog/product-reviews.ts`, which reads the same tables through its own selects: `catalog` never depends on this domain.
 
-- Stubs: `listLineReviewStates`, `countReviewableLinesForCustomer` (`extras.ts`); `sweepReviewRequests`, `reviewsChangedSince` (`requests.ts`).
-- Routers: `apps/api/src/routes/admin/reviews.ts`, `routes/customer-auth/reviews.ts`, `routes/storefront-orders/reviews.ts`, `routes/product-reviews.ts`.
-- Permissions `REVIEWS_VIEW` / `REVIEWS_MODERATE` in `packages/core/src/auth/rbac/route-permissions/reviews.ts`; operations in `apps/api/src/openapi/operation-registry/{dashboard,storefront}-reviews.ts`.
+## Rules
 
-## Planned edges
+- A review needs a handed-over, reviewable line of a delivered or completed order (service + the `product_reviews_line_eligible` trigger). One per line (`UNIQUE(order_item_id)`); one live (pending/published) review per product per buyer (`reviewer_key` = account owner, else order customer, else `order:<id>`). A retry on the same line returns the same review; a repeat purchase gets `409 REVIEW_EXISTS` naming the review to edit.
+- Moderation is `checkReviewContent` (links, emails, BD phone numbers, repeated characters, block words) and never sees the rating. `auto` publishes clean reviews; `hold` holds all. A held review writes a staff `review_pending` outbox row in the same batch (ids only). Rejection needs a content reason; "low rating" is not one.
+- Buyers edit rating, title, text and display name at most 10 times a day (`edit_count_day`/`edit_day`); every edit writes `rating`, so the stats row's `updated_at` moves even for a text-only edit. Buyers withdraw pending or published reviews. Staff never write buyer text: status, reason, reply and settings only.
+- `product_review_stats` is a trigger projection: nothing here writes it (source policy).
+- Cache: staff moderation, replies to published reviews and settings saves bump the generation in the route. Buyer auto-publishes do not: the 15-minute cron bumps once when `reviewsChangedSince(generationUpdatedAt)` (`>=`) is true.
+- Review requests: the delivered trigger records one row per order; the sweep queues `review_request` outbox rows (dedupe `order:<id>:review_request`) once `requestDelayDays` passed, skipping orders with nothing to review and every due order while reviews or requests are off. The send-time resolver (`apps/api/src/notification-content/review-request.ts`) rechecks and links `/account/orders/<id>#reviews` or `/track-order`, never a token. Channels are the notifications document's `review_request` row.
+- Review text never enters logs, URLs, queue payloads or outbox data.
 
-`reviews → orders` (line eligibility), `conversations` (review thread), `notifications` (`review_pending` staff row), `settings` (the `reviews` document), `products` (product identity). No domain in the existing cycle group may import `reviews`; `catalog` reads the stats table through its own selects.
+## Domain edges
 
-## Invariants (design §2.7)
-
-- Reviews only for fulfilled, reviewable lines of delivered/completed orders (DB trigger + service). One per line; one live review per product per buyer.
-- `product_review_stats` is a trigger projection; no code writes it.
-- Moderation never receives the rating. Rejection needs a content reason.
-- Review text never enters logs, queue payloads or analytics. Staff never author or edit buyer text.
-- Staff moderation bumps the cache generation at once; buyer auto-publishes are coalesced by the 15-minute cron through `reviewsChangedSince`.
+`reviews → settings` (the reviews document), `reviews → notifications` (outbox rows built in the review's own batch), `reviews → media` (published image keys). Orders, order items, fulfilments, products and the review thread row are read or written through the schema (no `orders`, `products` or `conversations` edge). The three targets sit in the existing cycle group, but no member of that group imports `reviews`, so the group does not grow.
