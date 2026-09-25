@@ -16,7 +16,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 
 ### FCM Push: Connected
 
-`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `order_notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
+`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
 
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext resolves to `undefined` rather than being passed to FCM -- there is no environment-variable fallback.
 - Admin channel settings use `getFirebaseServiceAccountReadiness()` and reject enabling Push unless the encrypted settings row contains a usable service account.

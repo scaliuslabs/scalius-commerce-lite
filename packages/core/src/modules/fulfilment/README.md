@@ -30,24 +30,26 @@ row linked to a fulfilment can't be deleted.
 
 | Path | Exports | Purpose |
 |------|---------|---------|
-| `shipments.ts` | `createFulfillmentShipment()`, `getOrderShipments()`, `markParcelReturned()` | Own-courier parcels |
 | `reconcile.ts` | `reconcileOrderShipment()`, `lookupUnknownOrderShipment()`, `resolveUnknownOrderShipment()` | Courier booking repair without calling the provider again |
 | `bulk.ts` | `bulkShipOrders()`, `bulkFulfillOrders()` | Bulk courier booking and bulk Mark as sent |
 | `delivery-outcomes.ts` | `processCodAction()`, `markOrderDelivered()` | Delivered, and COD collected/failed/returned |
-| `ledger.ts` | `recordOrderFulfilment()`, `voidOrderFulfilment()`, `markParcelReturned()`, `recordCourierBookingFulfilment()`, `syncCourierFulfilmentFromShipment()`, `assertShipmentDeletable()`, `deriveOrderFulfilmentStatus()` | The fulfilment ledger (Wave A): the only writer of `order_fulfillments` and their lines |
+| `ledger.ts` | `recordOrderFulfilment()`, `voidOrderFulfilment()`, `recordCourierBookingFulfilment()`, `syncCourierFulfilmentFromShipment()`, `assertShipmentDeletable()`, `deriveOrderFulfilmentStatus()` | The fulfilment ledger (Wave A): the only writer of `order_fulfillments` and their lines |
 | `pickup.ts` | `markOrderReadyForPickup()` | Ready for pickup: `pickup_ready_at` plus the `order_ready_for_pickup` outbox row in one batch |
 | `registry.ts` | `FULFILLER_REGISTRY`, `hasFulfiller()` | Which line types can be handed over (manual: ship, pickup, service; automatic: none until Wave B) |
 | `auto-fulfil.ts` | `autoFulfilOrder()`, `sweepAutoFulfilment()` | Digital and gift-card lines after settlement (queue `order.auto_fulfil` and the 15-minute sweep) |
 | `shared.ts` | -- | Helpers shared by the files above (not exported) |
 
 ### Fulfillment Flow
-1. `createFulfillmentShipment()` checks order is not cancelled/returned
-2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
-3. Claims the order with a version/status/fulfillment check, then creates a provider-less manual/own-courier `deliveryShipments` row at `in_transit` and updates item fulfillment statuses to `shipped`
-4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
-5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
-6. When the final manual shipment actually changes the buyer-visible order status to `shipped`, the core result returns a private `statusChange` fact and the API route records it through the durable order-notification outbox. The fulfillment aggregate is read-only outside shipment-owned commands; `order_completed` remains tied to the buyer-visible `completed` order status.
-7. A later delivered/completed command idempotently moves shipped items and only provider-less manual shipment rows to `delivered`. Carrier/provider shipment rows stay provider-owned and continue through provider sync/reconciliation.
+Own-rider "Mark as sent" is `POST /{id}/fulfillments` with `kind: "ship"`
+(`recordOrderFulfilment()`); bulk "Mark as sent" (`bulkFulfillOrders()`)
+calls the same function per order.
+1. A repeated request key returns the first fulfilment (`replayed: true`).
+2. The order must be confirmed, shipped or delivered, with no shipment claim, refund or payment-session attempt in flight.
+3. The requested lines (or every unsent unit of the kind) are checked against `quantity - fulfilled_quantity`; the ledger triggers enforce the same bound.
+4. One batch: the order version CAS with the derived `fulfillment_status`, the own-rider `delivery_shipments` row at `in_transit`, and the fulfilment with its lines. `fulfilled_quantity` is the triggers' projection.
+5. The last ship line moves a confirmed order to `shipped` (deducting stock); the result carries a private `statusChange` fact the API turns into the shipped notification. An earlier parcel of a split shipment notifies per parcel.
+6. A parcel that comes back is voided through `POST /{id}/fulfillments/{fulfillmentId}/void` (`voidOrderFulfilment()`): its units go back on the unsent list.
+7. A later delivered/completed command moves only provider-less manual shipment rows to `delivered`. Carrier/provider shipment rows stay provider-owned.
 
 ### COD Actions
 `processCodAction()` handles three actions with CAS protection on the order version:

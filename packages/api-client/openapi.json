@@ -35188,9 +35188,6 @@
                               "taxAmountMinor": {
                                 "type": "integer"
                               },
-                              "fulfillmentStatus": {
-                                "type": "string"
-                              },
                               "fulfillmentType": {
                                 "type": "string",
                                 "enum": [
@@ -35280,7 +35277,6 @@
                               "discountAmountMinor",
                               "taxableAmountMinor",
                               "taxAmountMinor",
-                              "fulfillmentStatus",
                               "fulfillmentType",
                               "fulfilledQuantity",
                               "properties",
@@ -35700,10 +35696,6 @@
                               "reason": {
                                 "type": "string"
                               },
-                              "message": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "submittedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
@@ -35728,7 +35720,6 @@
                               "label",
                               "actionLabel",
                               "reason",
-                              "message",
                               "submittedAt",
                               "resolvedAt",
                               "createdAt",
@@ -36465,10 +36456,6 @@
                             "reason": {
                               "type": "string"
                             },
-                            "message": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "submittedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
@@ -36493,7 +36480,6 @@
                             "label",
                             "actionLabel",
                             "reason",
-                            "message",
                             "submittedAt",
                             "resolvedAt",
                             "createdAt",
@@ -36547,10 +36533,6 @@
                               "reason": {
                                 "type": "string"
                               },
-                              "message": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "submittedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
@@ -36575,7 +36557,6 @@
                               "label",
                               "actionLabel",
                               "reason",
-                              "message",
                               "submittedAt",
                               "resolvedAt",
                               "createdAt",
@@ -53657,10 +53638,6 @@
                                   "reason": {
                                     "type": "string"
                                   },
-                                  "message": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
                                   "submittedAt": {
                                     "type": "string",
                                     "nullable": true
@@ -53689,7 +53666,6 @@
                                   "label",
                                   "actionLabel",
                                   "reason",
-                                  "message",
                                   "submittedAt",
                                   "resolvedAt",
                                   "createdAt",
@@ -54307,10 +54283,6 @@
                             "reason": {
                               "type": "string"
                             },
-                            "message": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "submittedAt": {
                               "type": "string",
                               "nullable": true
@@ -54339,7 +54311,6 @@
                             "label",
                             "actionLabel",
                             "reason",
-                            "message",
                             "submittedAt",
                             "resolvedAt",
                             "createdAt",
@@ -54393,10 +54364,6 @@
                               "reason": {
                                 "type": "string"
                               },
-                              "message": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "submittedAt": {
                                 "type": "string",
                                 "nullable": true
@@ -54425,7 +54392,6 @@
                               "label",
                               "actionLabel",
                               "reason",
-                              "message",
                               "submittedAt",
                               "resolvedAt",
                               "createdAt",
@@ -104558,10 +104524,6 @@
                         "lastChecked": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
-                        "shipmentItems": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "shipmentAmount": {
                           "type": "number",
                           "nullable": true
@@ -104605,7 +104567,6 @@
                         "note",
                         "metadata",
                         "lastChecked",
-                        "shipmentItems",
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
@@ -104932,10 +104893,6 @@
                             "lastChecked": {
                               "type": "string"
                             },
-                            "shipmentItems": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "shipmentAmount": {
                               "type": "number",
                               "nullable": true
@@ -104989,7 +104946,6 @@
                             "note",
                             "metadata",
                             "lastChecked",
-                            "shipmentItems",
                             "shipmentAmount",
                             "isFinalShipment",
                             "createdAt",
@@ -155021,299 +154977,6 @@
         }
       }
     },
-    "/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned": {
-      "post": {
-        "operationId": "dashboard.orders.parcel_returned",
-        "tags": [
-          "Admin - Orders"
-        ],
-        "summary": "An own-courier parcel of a part-sent order came back: its items go back on the unsent list",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "shipmentId",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Parcel back; its items can be sent again or the order cancelled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "orderId": {
-                          "type": "string"
-                        },
-                        "shipmentId": {
-                          "type": "string"
-                        },
-                        "quantity": {
-                          "type": "integer"
-                        },
-                        "replayed": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "orderId",
-                        "shipmentId",
-                        "quantity",
-                        "replayed"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "orders.manage_shipments"
-        }
-      }
-    },
     "/api/v1/admin/orders/{id}/cod": {
       "get": {
         "operationId": "dashboard.orders.cod_get",
@@ -155841,536 +155504,6 @@
         }
       }
     },
-    "/api/v1/admin/orders/{id}/fulfill": {
-      "get": {
-        "operationId": "dashboard.orders.fulfillment_get",
-        "tags": [
-          "Admin - Orders"
-        ],
-        "summary": "Get fulfillment shipments for an order",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Order shipments",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "shipments": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "orderId": {
-                                "type": "string"
-                              },
-                              "providerId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "providerType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "status": {
-                                "type": "string"
-                              },
-                              "rawStatus": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "externalId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "trackingId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "trackingUrl": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "courierName": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "note": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "metadata": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "lastChecked": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "shipmentItems": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "shipmentAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "isFinalShipment": {
-                                "type": "boolean",
-                                "nullable": true
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "orderId",
-                              "providerId",
-                              "providerType",
-                              "status",
-                              "rawStatus",
-                              "externalId",
-                              "trackingId",
-                              "trackingUrl",
-                              "courierName",
-                              "note",
-                              "metadata",
-                              "lastChecked",
-                              "shipmentItems",
-                              "shipmentAmount",
-                              "isFinalShipment",
-                              "createdAt",
-                              "updatedAt"
-                            ]
-                          }
-                        }
-                      },
-                      "required": [
-                        "shipments"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "orders.view"
-        }
-      },
-      "post": {
-        "operationId": "dashboard.orders.fulfill",
-        "tags": [
-          "Admin - Orders"
-        ],
-        "summary": "Create a fulfillment shipment",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "requestKey": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "itemId": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "quantity": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "itemId",
-                        "quantity"
-                      ]
-                    },
-                    "minItems": 1
-                  },
-                  "itemIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "trackingId": {
-                    "type": "string",
-                    "maxLength": 180
-                  },
-                  "trackingUrl": {
-                    "type": "string",
-                    "format": "uri"
-                  },
-                  "courierName": {
-                    "type": "string",
-                    "maxLength": 120
-                  },
-                  "note": {
-                    "type": "string",
-                    "maxLength": 500
-                  },
-                  "shipmentAmount": {
-                    "type": "number",
-                    "minimum": 0
-                  }
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Fulfillment created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "shipmentId": {
-                          "type": "string"
-                        },
-                        "isFinalShipment": {
-                          "type": "boolean"
-                        },
-                        "fulfillmentStatus": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "shipmentId",
-                        "isFinalShipment",
-                        "fulfillmentStatus"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "orders.manage_shipments"
-        }
-      }
-    },
     "/api/v1/admin/orders/{id}/shipments": {
       "get": {
         "operationId": "dashboard.orders.shipments",
@@ -156455,10 +155588,6 @@
                           "lastChecked": {
                             "$ref": "#/components/schemas/NullableTimestamp"
                           },
-                          "shipmentItems": {
-                            "type": "string",
-                            "nullable": true
-                          },
                           "shipmentAmount": {
                             "type": "number",
                             "nullable": true
@@ -156506,7 +155635,6 @@
                           "note",
                           "metadata",
                           "lastChecked",
-                          "shipmentItems",
                           "shipmentAmount",
                           "isFinalShipment",
                           "createdAt",
@@ -156684,10 +155812,6 @@
                         "lastChecked": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
-                        "shipmentItems": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "shipmentAmount": {
                           "type": "number",
                           "nullable": true
@@ -156735,7 +155859,6 @@
                         "note",
                         "metadata",
                         "lastChecked",
-                        "shipmentItems",
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
@@ -157027,10 +156150,6 @@
                         "lastChecked": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
-                        "shipmentItems": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "shipmentAmount": {
                           "type": "number",
                           "nullable": true
@@ -157074,7 +156193,6 @@
                         "note",
                         "metadata",
                         "lastChecked",
-                        "shipmentItems",
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
@@ -157522,10 +156640,6 @@
                         "lastChecked": {
                           "type": "string"
                         },
-                        "shipmentItems": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "shipmentAmount": {
                           "type": "number",
                           "nullable": true
@@ -157579,7 +156693,6 @@
                         "note",
                         "metadata",
                         "lastChecked",
-                        "shipmentItems",
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
@@ -157947,10 +157060,6 @@
                         "lastChecked": {
                           "type": "string"
                         },
-                        "shipmentItems": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "shipmentAmount": {
                           "type": "number",
                           "nullable": true
@@ -158004,7 +157113,6 @@
                         "note",
                         "metadata",
                         "lastChecked",
-                        "shipmentItems",
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
@@ -160506,10 +159614,6 @@
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "fulfillmentStatus": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
                                   "unitPriceMinor": {
                                     "type": "number",
                                     "nullable": true
@@ -160565,7 +159669,6 @@
                                   "price",
                                   "productName",
                                   "variantLabel",
-                                  "fulfillmentStatus",
                                   "unitPriceMinor",
                                   "lineSubtotalMinor",
                                   "discountAmountMinor",
@@ -161376,10 +160479,6 @@
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "fulfillmentStatus": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
                                   "unitPriceMinor": {
                                     "type": "number",
                                     "nullable": true
@@ -161435,7 +160534,6 @@
                                   "price",
                                   "productName",
                                   "variantLabel",
-                                  "fulfillmentStatus",
                                   "unitPriceMinor",
                                   "lineSubtotalMinor",
                                   "discountAmountMinor",
@@ -162496,10 +161594,6 @@
                             "reason": {
                               "type": "string"
                             },
-                            "message": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "returnId": {
                               "type": "string",
                               "nullable": true
@@ -162528,7 +161622,6 @@
                             "label",
                             "actionLabel",
                             "reason",
-                            "message",
                             "returnId",
                             "submittedAt",
                             "resolvedAt",
@@ -162583,10 +161676,6 @@
                               "reason": {
                                 "type": "string"
                               },
-                              "message": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "returnId": {
                                 "type": "string",
                                 "nullable": true
@@ -162615,7 +161704,6 @@
                               "label",
                               "actionLabel",
                               "reason",
-                              "message",
                               "returnId",
                               "submittedAt",
                               "resolvedAt",
@@ -173931,12 +173019,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "fulfillmentStatus": {
-                                "type": "string"
-                              },
-                              "shippedQuantity": {
-                                "type": "integer"
-                              },
                               "inventoryTracked": {
                                 "type": "boolean"
                               },
@@ -173975,8 +173057,6 @@
                               "productName",
                               "productImage",
                               "variantLabel",
-                              "fulfillmentStatus",
-                              "shippedQuantity",
                               "inventoryTracked",
                               "unitPriceMinor",
                               "lineSubtotalMinor",
@@ -174585,10 +173665,6 @@
                               "reason": {
                                 "type": "string"
                               },
-                              "message": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "returnId": {
                                 "type": "string",
                                 "nullable": true
@@ -174617,7 +173693,6 @@
                               "label",
                               "actionLabel",
                               "reason",
-                              "message",
                               "returnId",
                               "submittedAt",
                               "resolvedAt",
@@ -175665,12 +174740,6 @@
                             "type": "string",
                             "nullable": true
                           },
-                          "fulfillmentStatus": {
-                            "type": "string"
-                          },
-                          "shippedQuantity": {
-                            "type": "integer"
-                          },
                           "inventoryTracked": {
                             "type": "boolean"
                           },
@@ -175709,8 +174778,6 @@
                           "productName",
                           "productImage",
                           "variantLabel",
-                          "fulfillmentStatus",
-                          "shippedQuantity",
                           "inventoryTracked",
                           "unitPriceMinor",
                           "lineSubtotalMinor",
@@ -232494,8 +231561,7 @@
         ],
         "operationIds": [
           "dashboard.orders.get",
-          "dashboard.orders.fulfill",
-          "dashboard.orders.fulfillment_get"
+          "dashboard.orders.fulfillment_create"
         ],
         "requiresFacts": true,
         "requiresConfirmation": true,
@@ -232503,7 +231569,7 @@
         "rules": [
           "Read the exact order and current fulfillment state first.",
           "Require merchant-supplied shipment and tracking facts.",
-          "Confirm fulfillment and verify the resulting shipment record."
+          "Confirm fulfillment and verify the order's fulfillments and shipment record."
         ]
       },
       {
@@ -237167,23 +236233,7 @@
           ]
         },
         {
-          "operationId": "dashboard.orders.fulfill",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.order-fulfill"
-          ]
-        },
-        {
           "operationId": "dashboard.orders.fulfillment_create",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.orders.fulfillment_create"
-          ]
-        },
-        {
-          "operationId": "dashboard.orders.fulfillment_get",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
@@ -237278,14 +236328,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.orders.notifications"
-          ]
-        },
-        {
-          "operationId": "dashboard.orders.parcel_returned",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.orders.parcel_returned"
           ]
         },
         {

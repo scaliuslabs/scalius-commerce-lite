@@ -21,7 +21,6 @@ import {
     PaymentMethod,
     PaymentRecordStatus,
     PaymentStatus,
-    ItemFulfillmentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
 import { isOnlinePaymentMethod, listPaymentGateways } from "../../payments/gateways/registry";
@@ -79,10 +78,10 @@ export function orderEditEvidenceSelection() {
         hasInvoiceHistory: exists(sql`${orderInvoices}`, sql`${orderInvoices.orderId}`),
         hasPaymentPlan: exists(sql`${paymentPlans}`, sql`${paymentPlans.orderId}`),
         hasPromotionAllocation: exists(sql`${orderDiscountAllocations}`, sql`${orderDiscountAllocations.orderId}`),
-        hasNonPendingItem: exists(
+        hasHandedOverItem: exists(
             sql`${orderItems}`,
             sql`${orderItems.orderId}`,
-            sql`(${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING} OR ${orderItems.fulfilledQuantity} > 0)`,
+            sql`${orderItems.fulfilledQuantity} > 0`,
         ),
         hasCleanCodTracking: exists(
             sql`${codTracking}`,

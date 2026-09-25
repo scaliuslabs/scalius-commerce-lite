@@ -15,9 +15,22 @@ import { saveBusinessSettings } from "../../settings/business-settings.service";
 import { updateOrderStatusFromShipment } from "../../delivery/tracking";
 import { bulkConfirmOrders, updateOrderStatus } from "./lifecycle";
 import { bulkFulfillOrders } from "../../fulfilment/bulk";
-import { createFulfillmentShipment } from "../../fulfilment/shipments";
-import { markParcelReturned, recordOrderFulfilment } from "../../fulfilment/ledger";
+import { recordOrderFulfilment, voidOrderFulfilment } from "../../fulfilment/ledger";
 import { markOrderDelivered, processCodAction } from "../../fulfilment/delivery-outcomes";
+
+/** Own-rider "Mark as sent": a `ship` fulfilment, as POST /{id}/fulfillments records it. */
+function sendParcel(
+    db: Database,
+    orderId: string,
+    input: { requestKey?: string; items?: Array<{ itemId: string; quantity: number }>; courierName?: string; trackingId?: string } = {},
+) {
+    return recordOrderFulfilment(db, orderId, {
+        requestKey: input.requestKey ?? crypto.randomUUID(),
+        kind: "ship",
+        lines: input.items,
+        parcel: { courierName: input.courierName, trackingId: input.trackingId },
+    }, { type: "admin", id: null });
+}
 
 /**
  * Black-box round 3: fulfilment states (shipped, delivered, returned) come
@@ -119,7 +132,7 @@ describe("fulfilment status only follows real parcels", () => {
 
     it("marks a paid, fully sent order delivered through its own action", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await expect(markOrderDelivered(db, id)).rejects.toThrow("Mark the cash as collected first.");
         sqlite.exec(`UPDATE orders SET payment_method = 'stripe', payment_status = 'paid', paid_amount_minor = total_amount_minor, balance_due_minor = 0 WHERE id = '${id}'`);
         sqlite.exec(`UPDATE orders SET payment_status = 'partial', paid_amount_minor = 50000, balance_due_minor = total_amount_minor - 50000 WHERE id = '${id}'`);
@@ -134,16 +147,16 @@ describe("fulfilment status only follows real parcels", () => {
         const id = await manualOrder(2);
         const reserved = stock();
         const itemId = one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id).id;
-        const { shipmentId } = await createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 1 }], courierName: "Rider Kamal" });
+        const { fulfillmentId, shipmentId } = await sendParcel(db, id, { items: [{ itemId, quantity: 1 }], courierName: "Rider Kamal" });
 
         await processCodAction(db, id, { action: "failed", reason: "not_home" });
         expect(one("SELECT delivery_attempts FROM cod_tracking WHERE order_id = ?", id)).toEqual({ delivery_attempts: 1 });
 
-        await markParcelReturned(db, id, shipmentId);
-        expect(one("SELECT shipped_quantity FROM order_items WHERE id = ?", itemId)).toEqual({ shipped_quantity: 0 });
+        await voidOrderFulfilment(db, id, fulfillmentId);
+        expect(one("SELECT fulfilled_quantity FROM order_items WHERE id = ?", itemId)).toEqual({ fulfilled_quantity: 0 });
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id))
             .toEqual({ status: "confirmed", fulfillment_status: "pending" });
-        expect(one("SELECT status FROM delivery_shipments WHERE id = ?", shipmentId)).toEqual({ status: "returned" });
+        expect(one("SELECT status FROM delivery_shipments WHERE id = ?", shipmentId!)).toEqual({ status: "returned" });
         // The unit was only ever reserved, so taking it back moves no stock.
         expect(stock()).toEqual(reserved);
 
@@ -153,7 +166,7 @@ describe("fulfilment status only follows real parcels", () => {
 
     it("says cash was already collected instead of recording it twice from a stale tab (R3-ORD-10)", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 });
         await expect(processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 }))
             .rejects.toThrow("already recorded");
@@ -162,14 +175,14 @@ describe("fulfilment status only follows real parcels", () => {
 
     it("words a failed own-rider delivery as a delivery, not a courier booking (R3-ORD-05)", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, { courierName: "Rider Jamal" });
+        await sendParcel(db, id, { courierName: "Rider Jamal" });
         await processCodAction(db, id, { action: "failed", reason: "no_cash" });
         expect((await getOrderDetails(db, id))?.shipmentRecovery).toMatchObject({ state: "none" });
     });
 
     it("offers a return only once the order was delivered (R3-ORD-14)", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         const { version } = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id);
         const itemId = one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id).id;
         await expect(createOrderReturn(db, id, {
@@ -188,7 +201,7 @@ describe("fulfilment status only follows real parcels", () => {
 
     it("prints refunds made after an invoice was issued under it (R3-ORD-07)", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 });
         await saveBusinessSettings(db, { companyName: "Dhaka Threads" });
         const { version } = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id);
@@ -202,7 +215,7 @@ describe("fulfilment status only follows real parcels", () => {
 
     it("archives delivered, paid orders (R3-ORD-11)", async () => {
         const id = await manualOrder();
-        await createFulfillmentShipment(db, id, {});
+        await sendParcel(db, id, {});
         await processCodAction(db, id, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 });
         const { version } = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id);
         await archiveOrders(db, [{ id, expectedVersion: version }]);

@@ -204,14 +204,17 @@ describe("admin order mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
-        expectResponses(spec, "/api/v1/admin/orders/{id}/fulfill", "post", [
+        expectResponses(spec, "/api/v1/admin/orders/{id}/fulfillments", "post", [
             "201",
             "400",
             "401",
             "403",
             "404",
             "409",
+            "503",
         ]);
+        expect(spec.paths?.["/api/v1/admin/orders/{id}/fulfill"]).toBeUndefined();
+        expect(spec.paths?.["/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned"]).toBeUndefined();
         expectResponses(spec, "/api/v1/admin/orders/{id}/returns", "post", [
             "201",
             "400",

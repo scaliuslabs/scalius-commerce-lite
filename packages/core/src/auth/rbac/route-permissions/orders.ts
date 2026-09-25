@@ -90,14 +90,7 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/*/shipments/*/resolve-unknown/lookup": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/v1/admin/orders/*/fulfill": {
-    GET: { permission: PERMISSIONS.ORDERS_VIEW },
-    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-  },
   "/api/v1/admin/orders/*/mark-delivered": {
-    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-  },
-  "/api/v1/admin/orders/*/shipments/*/returned": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
   "/api/v1/admin/orders/*/fulfillments": {

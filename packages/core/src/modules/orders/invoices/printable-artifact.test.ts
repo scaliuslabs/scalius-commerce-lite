@@ -31,7 +31,7 @@ function invoice(): InvoiceDocument {
       fulfillmentStatus: "pending", paidAmount: 110, balanceDue: 0, createdAt: 1_700_000_000,
       updatedAt: 1_700_000_000, items: [{ id: "oi_1", productId: "p1", variantId: "v1",
         quantity: 1, price: 100, productName: "Item", variantLabel: null,
-        fulfillmentStatus: "pending", unitPriceMinor: 10_000, lineSubtotalMinor: 10_000,
+        unitPriceMinor: 10_000, lineSubtotalMinor: 10_000,
         discountAmountMinor: 0, taxableAmountMinor: 10_000, taxAmountMinor: 0 }],
     },
   };

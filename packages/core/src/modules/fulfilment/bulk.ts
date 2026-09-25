@@ -37,8 +37,7 @@ import {
     SENDABLE_ORDER_STATUSES,
 } from "./shared";
 import { reconcileInventoryForStatus, type BulkOrderActionResult } from "../orders/status/lifecycle";
-import { createFulfillmentShipment } from "./shipments";
-import { recordCourierBookingFulfilment } from "./ledger";
+import { recordCourierBookingFulfilment, recordOrderFulfilment } from "./ledger";
 
 function createShipmentClaimId(): string {
     return `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -310,6 +309,16 @@ export async function bulkShipOrders(
     return results;
 }
 
+/** One order's own-rider parcel from a bulk "Mark as sent". */
+export interface BulkFulfilledParcel {
+    shipmentId: string;
+    /** What the parcel holds, for the timeline. */
+    lines: Array<{ itemId: string; quantity: number }>;
+    statusChange?: { orderId: string; previousStatus: string; newStatus: string; version: number };
+    /** Internal cache signal; API responses must not expose it. */
+    availabilityTransitionVariantIds: string[];
+}
+
 /**
  * Own-courier "Mark as sent" for whole confirmed orders. With a request key,
  * running the same selection again reports the orders it already sent as done.
@@ -319,7 +328,7 @@ export async function bulkFulfillOrders(
     orderIds: readonly string[],
     options: { courierName?: string; note?: string; requestKey?: string },
 ) {
-    const results: Array<BulkOrderActionResult & { shipment?: Awaited<ReturnType<typeof createFulfillmentShipment>> }> = [];
+    const results: Array<BulkOrderActionResult & { shipment?: BulkFulfilledParcel }> = [];
     const shipmentKey = options.requestKey ? `bulk:${options.requestKey}` : null;
     for (const orderId of orderIds) {
         try {
@@ -339,12 +348,21 @@ export async function bulkFulfillOrders(
                 });
                 continue;
             }
-            const shipment = await createFulfillmentShipment(db, orderId, {
-                courierName: options.courierName,
-                note: options.note,
-                ...(shipmentKey ? { requestKey: shipmentKey } : {}),
+            const sent = await recordOrderFulfilment(db, orderId, {
+                requestKey: shipmentKey ?? `bulk:${crypto.randomUUID()}`,
+                kind: "ship",
+                parcel: { courierName: options.courierName, note: options.note },
+            }, { type: "admin", id: null });
+            results.push({
+                orderId,
+                success: true,
+                shipment: {
+                    shipmentId: sent.shipmentId ?? sent.fulfillmentId,
+                    lines: sent.lines.map((line) => ({ itemId: line.orderItemId, quantity: line.quantity })),
+                    statusChange: sent.statusChange,
+                    availabilityTransitionVariantIds: sent.availabilityTransitionVariantIds,
+                },
             });
-            results.push({ orderId, success: true, shipment });
         } catch (error: unknown) {
             results.push({ orderId, success: false, error: error instanceof Error ? error.message : "Couldn't send this order." });
         }

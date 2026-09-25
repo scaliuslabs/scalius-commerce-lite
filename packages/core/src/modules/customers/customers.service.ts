@@ -104,7 +104,6 @@ export function buildCustomerOrderItemDetailProjection() {
         productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
         variantLabel: orderItems.variantLabel,
-        fulfillmentStatus: orderItems.fulfillmentStatus,
         unitPriceMinor: orderItems.unitPriceMinor,
         lineSubtotalMinor: orderItems.lineSubtotalMinor,
         discountAmountMinor: orderItems.discountAmountMinor,

@@ -281,7 +281,6 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
             label: "Return request approved",
             actionLabel: "Request return",
             reason: "The size is not suitable.",
-            message: null,
             submittedAt: "2026-07-21T00:00:00.000Z",
             resolvedAt: null,
             createdAt: "2026-07-21T00:00:00.000Z",
@@ -316,7 +315,6 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
             label: "Cancellation request rejected",
             actionLabel: "Request cancellation",
             reason: "Changed my mind.",
-            message: null,
             submittedAt: "2026-07-21T00:00:00.000Z",
             resolvedAt: "2026-07-21T00:05:00.000Z",
             createdAt: "2026-07-21T00:00:00.000Z",
@@ -356,7 +354,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     const request = {
       id: "request_1", orderId: "ord_1", customerId: null, type: "cancel_pre_shipment",
       status, active, severity: "info", label: "Cancellation request", actionLabel: "Request cancellation",
-      reason: null, message: null, submittedAt: null, resolvedAt: null,
+      reason: null, submittedAt: null, resolvedAt: null,
       createdAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:05:00.000Z",
     } as never;
     act(() => {
@@ -383,7 +381,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
           supportRequests={[{
             id: "request_1", orderId: "ord_1", customerId: null, type: "cancel_pre_shipment",
             status: "rejected", active: false, severity: "danger", label: "Cancellation request rejected",
-            actionLabel: "Request cancellation", reason: null, message: null, submittedAt: null, resolvedAt: null,
+            actionLabel: "Request cancellation", reason: null, submittedAt: null, resolvedAt: null,
             createdAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:05:00.000Z",
           } as never]}
         />,
@@ -411,7 +409,6 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
             label: "Return request approved",
             actionLabel: "Request return",
             reason: "Wrong size",
-            message: null,
             submittedAt: "2026-07-21T00:00:00.000Z",
             resolvedAt: null,
             createdAt: "2026-07-21T00:00:00.000Z",

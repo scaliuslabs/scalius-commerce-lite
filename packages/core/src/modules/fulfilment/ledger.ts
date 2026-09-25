@@ -62,8 +62,6 @@ interface LedgerItemRow {
     quantity: number;
     fulfilledQuantity: number;
     fulfillmentType: string;
-    /** Legacy line status; a line the previous API marked shipped counts as handed over. */
-    legacyStatus: string;
 }
 
 // ─────────────────────────────────────────
@@ -209,7 +207,6 @@ async function selectLedgerItems(db: Database, orderId: string): Promise<LedgerI
         quantity: orderItems.quantity,
         fulfilledQuantity: orderItems.fulfilledQuantity,
         fulfillmentType: orderItems.fulfillmentType,
-        legacyStatus: orderItems.fulfillmentStatus,
     }).from(orderItems)
         .where(eq(orderItems.orderId, orderId))
         .orderBy(asc(orderItems.createdAt), asc(orderItems.id))
@@ -462,8 +459,6 @@ export async function recordOrderFulfilment(
             status: ShipmentStatus.IN_TRANSIT,
             rawStatus: ShipmentStatus.IN_TRANSIT,
             note: input.parcel?.note?.trim() || null,
-            // Legacy readers only; the ledger lines are the truth.
-            shipmentItems: JSON.stringify(lines.map((line) => ({ itemId: line.orderItemId, quantity: line.quantity }))),
             shipmentAmountMinor: shipmentAmount == null ? null : toStoreMinor(shipmentAmount, currency),
             isFinalShipment: shipLinesDone,
             metadata: JSON.stringify({ requestKey }),
@@ -680,137 +675,6 @@ export async function voidOrderFulfilment(
         throw error;
     }
     return { orderId, fulfillmentId, quantity, replayed: false };
-}
-
-/**
- * The legacy parcel route: returns the parcel through its fulfilment. A
- * parcel sent before the ledger existed is covered by the migrated
- * `ful_mig_` fulfilment of the whole order; that one is re-based (voided and
- * re-recorded without the parcel's lines) in one batch.
- */
-export async function markParcelReturned(db: Database, orderId: string, shipmentId: string) {
-    const linked = await db.select({ id: orderFulfillments.id })
-        .from(orderFulfillments)
-        .where(and(eq(orderFulfillments.orderId, orderId), eq(orderFulfillments.shipmentId, shipmentId)))
-        .get();
-    if (linked) {
-        const result = await voidOrderFulfilment(db, orderId, linked.id);
-        return { orderId, shipmentId, quantity: result.quantity, replayed: result.replayed };
-    }
-    return rebaseMigratedFulfilmentForReturnedParcel(db, orderId, shipmentId);
-}
-
-function parseLegacyShipmentLines(value: string | null): FulfilmentLineRecord[] {
-    if (!value) return [];
-    try {
-        const parsed = JSON.parse(value) as unknown;
-        if (!Array.isArray(parsed)) return [];
-        return parsed.flatMap((line) => {
-            const record = line as { itemId?: unknown; quantity?: unknown };
-            return typeof record.itemId === "string" && Number.isInteger(record.quantity) && (record.quantity as number) > 0
-                ? [{ orderItemId: record.itemId, quantity: record.quantity as number }]
-                : [];
-        });
-    } catch {
-        return [];
-    }
-}
-
-async function rebaseMigratedFulfilmentForReturnedParcel(db: Database, orderId: string, shipmentId: string) {
-    const shipment = await db.select({
-        status: deliveryShipments.status,
-        providerType: deliveryShipments.providerType,
-        providerId: deliveryShipments.providerId,
-        shipmentItems: deliveryShipments.shipmentItems,
-    }).from(deliveryShipments).where(and(
-        eq(deliveryShipments.id, shipmentId),
-        eq(deliveryShipments.orderId, orderId),
-    )).get();
-    if (!shipment) throw new NotFoundError("Parcel not found");
-    if (shipment.status === ShipmentStatus.RETURNED) return { orderId, shipmentId, quantity: 0, replayed: true };
-    if (shipment.providerType !== "manual" || shipment.providerId) {
-        throw new ValidationError("The courier reports this parcel's status. Check it with the courier.");
-    }
-    const parcelLines = parseLegacyShipmentLines(shipment.shipmentItems);
-    if (parcelLines.length === 0) throw new ValidationError("This parcel lists no items.");
-    const migrated = await db.select({ id: orderFulfillments.id, requestKey: orderFulfillments.requestKey })
-        .from(orderFulfillments)
-        .where(and(
-            eq(orderFulfillments.orderId, orderId),
-            eq(orderFulfillments.status, "active"),
-            eq(orderFulfillments.kind, "ship"),
-            sql`${orderFulfillments.shipmentId} IS NULL`,
-        ))
-        .orderBy(desc(orderFulfillments.createdAt))
-        .get();
-    if (!migrated) throw new ConflictError("This order changed. Reload to see the latest.");
-    const current = await readFulfilment(db, orderId, migrated.id);
-    const remaining = new Map(current.lines.map((line) => [line.orderItemId, line.quantity]));
-    for (const line of parcelLines) {
-        const held = remaining.get(line.orderItemId) ?? 0;
-        if (held < line.quantity) throw new ConflictError("This order changed. Reload to see the latest.");
-        remaining.set(line.orderItemId, held - line.quantity);
-    }
-    const order = await readOrderForFulfilment(db, orderId);
-    assertNoActiveShipmentClaim(order);
-    if (order.status !== OrderStatus.CONFIRMED) {
-        throw new ValidationError(order.status === OrderStatus.SHIPPED
-            ? "Everything was sent: use Mark returned for the whole order."
-            : "This parcel can't be taken back now. Reload to see the latest.");
-    }
-    const items = await selectLedgerItems(db, orderId);
-    const returned = new Map(parcelLines.map((line) => [line.orderItemId, line.quantity]));
-    const nextFulfillmentStatus = deriveOrderFulfilmentStatus(items.map((item) => ({
-        quantity: item.quantity,
-        fulfilledQuantity: item.fulfilledQuantity - (returned.get(item.id) ?? 0),
-    })));
-    const claimedVersion = order.version + 1;
-    const keptLines = [...remaining.entries()]
-        .filter(([, quantity]) => quantity > 0)
-        .map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
-    const statements: Statement[] = [
-        db.update(orders).set({
-            fulfillmentStatus: nextFulfillmentStatus,
-            version: claimedVersion,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, orderId),
-            eq(orders.version, order.version),
-            eq(orders.status, OrderStatus.CONFIRMED),
-        )) as Statement,
-        buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${claimedVersion})`, FULFILMENT_CLAIM_GUARD),
-        db.update(orderFulfillments).set({ status: "voided", voidedAt: sql`unixepoch()` })
-            .where(and(eq(orderFulfillments.id, migrated.id), eq(orderFulfillments.status, "active"))) as Statement,
-        ...(keptLines.length > 0
-            ? buildFulfilmentInsertStatements(db, {
-                fulfillmentId: createFulfilmentId(),
-                orderId,
-                kind: "ship",
-                requestKey: `rebase:${shipmentId}`,
-                actor: { type: "system", id: null },
-                lines: keptLines,
-            })
-            : []),
-        db.update(deliveryShipments).set({
-            status: ShipmentStatus.RETURNED,
-            rawStatus: ShipmentStatus.RETURNED,
-            updatedAt: sql`unixepoch()`,
-        }).where(eq(deliveryShipments.id, shipmentId)) as Statement,
-    ];
-    try {
-        await safeBatch(db, statements);
-    } catch (error) {
-        if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD) || isLedgerBoundsError(error)) {
-            throw new ConflictError("This order changed. Reload to see the latest.");
-        }
-        throw error;
-    }
-    return {
-        orderId,
-        shipmentId,
-        quantity: parcelLines.reduce((sum, line) => sum + line.quantity, 0),
-        replayed: false,
-    };
 }
 
 /**

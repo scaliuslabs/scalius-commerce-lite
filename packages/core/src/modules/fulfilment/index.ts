@@ -2,7 +2,6 @@
 // own-courier parcels, courier bookings and their reconciliation, bulk
 // shipping, and delivery outcomes (delivered, COD collected/failed/returned).
 // Order status changes go through the orders lifecycle kernel.
-export * from "./shipments";
 export * from "./reconcile";
 export * from "./bulk";
 export * from "./delivery-outcomes";

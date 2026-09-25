@@ -331,7 +331,7 @@ Fulfilment action / webhook / generic editor
 3. applyInventoryForStatusChange() — reserve / deduct / release / restore
    with deterministic movement claims and stockVersion CAS
     ↓
-4. Notification recorded in order_notification_outbox, relayed to JOBS_QUEUE
+4. Notification recorded in notification_outbox, relayed to JOBS_QUEUE
     ↓
 5. Queue consumer dispatches each enabled channel independently
    (email, SMS, WhatsApp, admin push)
@@ -427,14 +427,14 @@ See `packages/core/src/modules/payments/README.md` for the gateway port rules.
 ```
 JOBS_QUEUE message arrives
     ↓
-Claim order_notification_outbox by outboxId
+Claim notification_outbox by outboxId
     ↓
 sendOrderNotificationEmail(..., { outboxId })
     ↓
 Read channel preferences (notifications settings document)
     ↓
 For each enabled customer target:
-    ├─ Claim order_notification_delivery_receipts row
+    ├─ Claim notification_delivery_receipts row
     ├─ EMAIL: Cloudflare Email Service by default, Resend fallback
     ├─ SMS: active SMS provider
     └─ WHATSAPP: Meta Cloud API template

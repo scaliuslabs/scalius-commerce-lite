@@ -1,8 +1,6 @@
 // src/db/schema/orders.ts
 // Order domain tables: orders, checkoutAttempts, orderReceipts, orderItems, orderPayments, refundAttempts,
-// orderSupportRequests, orderSupportRequestEvents, paymentPlans,
-// codTracking, webhookEvents, orderNotificationOutbox,
-// orderNotificationDeliveryReceipts, abandonedCheckouts.
+// orderSupportRequests, paymentPlans, codTracking, webhookEvents, abandonedCheckouts.
 // The fulfilment ledger lives in fulfilment.ts, threads in conversations.ts
 // and the generic outbox in notifications.ts.
 
@@ -22,7 +20,6 @@ import {
     PaymentStatus,
     FulfillmentStatus,
     InventoryPool,
-    ItemFulfillmentStatus,
     PaymentRecordStatus,
     CodStatus,
     PaymentPlanStatus,
@@ -310,10 +307,6 @@ export const orderItems = sqliteTable("order_items", {
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     taxableAmountMinor: integer("taxable_amount_minor").notNull().default(0),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
-    /** Legacy per-line status; dropped by the Wave A contract migration. Read `fulfilledQuantity`. */
-    fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
-    /** Legacy sent-unit counter; dropped by the Wave A contract migration. Read `fulfilledQuantity`. */
-    shippedQuantity: integer("shipped_quantity").notNull().default(0),
     /** How this line reaches the buyer; frozen at commit (trigger-enforced). */
     fulfillmentType: text("fulfillment_type", { enum: ["ship", "pickup", "digital", "gift_card", "service"] })
         .notNull()
@@ -724,7 +717,6 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     type: text("type").notNull(),
     status: text("status").notNull().default("submitted"),
     reason: text("reason").notNull(),
-    message: text("message"),
     activeKey: text("active_key"),
     returnId: text("return_id")
         .references(() => orderReturns.id, { onDelete: "set null" }),
@@ -749,30 +741,6 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     index("order_support_requests_type_status_idx").on(table.type, table.status),
     index("order_support_requests_return_id_idx").on(table.returnId),
     index("order_support_requests_conversation_idx").on(table.conversationId),
-]);
-
-export const orderSupportRequestEvents = sqliteTable("order_support_request_events", {
-    id: text("id").primaryKey(),
-    requestId: text("request_id")
-        .notNull()
-        .references(() => orderSupportRequests.id, { onDelete: "cascade" }),
-    orderId: text("order_id")
-        .notNull()
-        .references(() => orders.id, { onDelete: "cascade" }),
-    customerId: text("customer_id")
-        .references(() => customers.id, { onDelete: "set null" }),
-    actorType: text("actor_type").notNull(),
-    actorId: text("actor_id"),
-    eventType: text("event_type").notNull(),
-    fromStatus: text("from_status"),
-    toStatus: text("to_status"),
-    note: text("note"),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-}, (table) => [
-    index("order_support_request_events_request_created_idx").on(table.requestId, table.createdAt),
-    index("order_support_request_events_order_created_idx").on(table.orderId, table.createdAt),
 ]);
 
 /** The order timeline: staff comments and what happened to the order, newest first. */
@@ -883,79 +851,6 @@ export const webhookEvents = sqliteTable("webhook_events", {
     index("webhook_events_status_processed_at_idx").on(table.status, table.processedAt),
 ]);
 
-export const orderNotificationOutbox = sqliteTable("order_notification_outbox", {
-    id: text("id").primaryKey(),
-    dedupeKey: text("dedupe_key").notNull(),
-    orderId: text("order_id")
-        .notNull()
-        .references(() => orders.id, { onDelete: "cascade" }),
-    notificationType: text("notification_type").notNull(),
-    source: text("source").notNull(),
-    payload: text("payload").notNull(),
-    status: text("status").notNull().default("pending"),
-    attempts: integer("attempts").notNull().default(0),
-    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
-    claimId: text("claim_id"),
-    claimExpiresAt: integer("claim_expires_at"),
-    lastError: text("last_error"),
-    queuedAt: integer("queued_at"),
-    sentAt: integer("sent_at"),
-    createdAt: integer("created_at").notNull().default(UNIX_NOW),
-    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
-}, (table) => [
-    uniqueIndex("order_notification_outbox_dedupe_key_unique").on(table.dedupeKey),
-    index("order_notification_outbox_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
-    index("order_notification_outbox_claim_idx").on(table.status, table.claimExpiresAt),
-    index("order_notification_outbox_queued_idx").on(table.status, table.queuedAt, table.createdAt),
-    index("order_notification_outbox_order_id_idx").on(table.orderId),
-]);
-
-export const orderNotificationDeliveryReceipts = sqliteTable("order_notification_delivery_receipts", {
-    id: text("id").primaryKey(),
-    receiptKey: text("receipt_key").notNull(),
-    outboxId: text("outbox_id")
-        .notNull()
-        .references(() => orderNotificationOutbox.id, { onDelete: "cascade" }),
-    orderId: text("order_id")
-        .notNull()
-        .references(() => orders.id, { onDelete: "cascade" }),
-    notificationType: text("notification_type").notNull(),
-    channel: text("channel").notNull(),
-    provider: text("provider").notNull(),
-    recipientHash: text("recipient_hash").notNull(),
-    recipientMasked: text("recipient_masked"),
-    status: text("status").notNull().default("pending"),
-    providerMessageId: text("provider_message_id"),
-    providerStatus: text("provider_status"),
-    rawResponse: text("raw_response"),
-    attempts: integer("attempts").notNull().default(0),
-    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
-    claimId: text("claim_id"),
-    claimExpiresAt: integer("claim_expires_at"),
-    lastError: text("last_error"),
-    lastAttemptAt: integer("last_attempt_at"),
-    acceptedAt: integer("accepted_at"),
-    deliveredAt: integer("delivered_at"),
-    failedAt: integer("failed_at"),
-    skippedAt: integer("skipped_at"),
-    createdAt: integer("created_at").notNull().default(UNIX_NOW),
-    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
-}, (table) => [
-    uniqueIndex("order_notification_delivery_receipts_receipt_key_unique").on(table.receiptKey),
-    index("order_notification_delivery_receipts_outbox_id_idx").on(table.outboxId),
-    index("order_notification_delivery_receipts_outbox_status_idx").on(table.outboxId, table.status),
-    index("order_notification_delivery_receipts_order_id_created_at_idx").on(table.orderId, table.createdAt),
-    index("order_notification_delivery_receipts_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
-    index("order_notification_delivery_receipts_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
-    index("order_notification_delivery_receipts_provider_message_idx").on(table.provider, table.providerMessageId),
-    index("order_notification_delivery_receipts_provider_status_updated_idx").on(
-        table.channel,
-        table.provider,
-        table.status,
-        table.updatedAt,
-    ),
-]);
-
 export const abandonedCheckouts = sqliteTable(
     "abandoned_checkouts",
     {
@@ -994,12 +889,9 @@ export type OrderItemTaxSnapshot = InferSelectModel<typeof orderItemTaxSnapshots
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
 export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;
-export type OrderSupportRequestEvent = InferSelectModel<typeof orderSupportRequestEvents>;
 export type OrderEvent = InferSelectModel<typeof orderEvents>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;
 export type WebhookEvent = InferSelectModel<typeof webhookEvents>;
-export type OrderNotificationOutbox = InferSelectModel<typeof orderNotificationOutbox>;
-export type OrderNotificationDeliveryReceipt = InferSelectModel<typeof orderNotificationDeliveryReceipts>;
 export type AbandonedCheckout = InferSelectModel<typeof abandonedCheckouts>;

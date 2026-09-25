@@ -16,7 +16,8 @@ const item = (overrides: Partial<OrderItem> = {}): OrderItem => ({
   productName: "T-shirt",
   productImage: null,
   variantLabel: "Black / M",
-  fulfillmentStatus: "delivered",
+  fulfillmentType: "ship",
+  fulfilledQuantity: 5,
   ...overrides,
 });
 
@@ -65,7 +66,7 @@ const returnCase = (
 describe("order return workflow helpers", () => {
   it("counts requested and approved quantities but releases rejected and cancelled cases", () => {
     const remaining = getRemainingReturnableQuantities(
-      [item(), item({ id: "item_2", fulfillmentStatus: "pending" })],
+      [item(), item({ id: "item_2", fulfilledQuantity: 0 })],
       [
         returnCase("requested", 2, 0),
         returnCase("completed", 2, 1),
@@ -78,13 +79,20 @@ describe("order return workflow helpers", () => {
     expect(remaining.get("item_2")).toBe(0);
   });
 
-  it("only lets units that were sent come back", () => {
+  it("only lets units the ledger says were handed over come back, and only ship or pickup lines", () => {
     const remaining = getRemainingReturnableQuantities(
-      [item({ fulfillmentStatus: "pending", shippedQuantity: 2 }), item({ id: "item_2", fulfillmentStatus: "pending", shippedQuantity: 0 })],
+      [
+        item({ fulfilledQuantity: 2 }),
+        item({ id: "item_2", fulfilledQuantity: 0 }),
+        item({ id: "item_3", fulfillmentType: "pickup", fulfilledQuantity: 1 }),
+        item({ id: "item_4", fulfillmentType: "service", fulfilledQuantity: 1 }),
+      ],
       [],
     );
     expect(remaining.get("item_1")).toBe(2);
     expect(remaining.get("item_2")).toBe(0);
+    expect(remaining.get("item_3")).toBe(1);
+    expect(remaining.get("item_4")).toBe(0);
   });
 
   it("never reports a negative outstanding receipt quantity", () => {

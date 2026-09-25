@@ -527,8 +527,6 @@ app.openapi(getItemsRoute, async (c) => {
             variantLabel: orderItems.variantLabel,
             quantity: orderItems.quantity,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
-            fulfillmentStatus: orderItems.fulfillmentStatus,
-            shippedQuantity: orderItems.shippedQuantity,
             inventoryTracked: orderItems.inventoryTracked,
             unitPriceMinor: orderItems.unitPriceMinor,
             lineSubtotalMinor: orderItems.lineSubtotalMinor,
