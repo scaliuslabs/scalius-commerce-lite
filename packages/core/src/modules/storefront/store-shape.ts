@@ -50,10 +50,14 @@ const holdsPublicProduct = (alias: string) => sql.raw(`EXISTS (
  */
 export function selectStoreShapeCounts(db: Database) {
   // `lm:shape`: the set of active products and their SKUs (insert, delete,
-  // is_active or deleted_at), not every product edit. Categories, collections
-  // and shipping methods count through their "any row" keys.
+  // is_active, deleted_at or fulfilment kind), which categories and brands
+  // hold a public product, key-spec values and whether a review is
+  // published; not every product edit. Category, brand, attribute,
+  // collection and shipping rows count through their "any row" keys.
   deps.key(cacheDep.storeShape());
   deps.anyCategory();
+  deps.anyBrand();
+  deps.anyAttribute();
   deps.anyCollection();
   deps.shipping();
   return db

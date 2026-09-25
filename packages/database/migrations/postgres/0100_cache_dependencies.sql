@@ -488,6 +488,54 @@ FOR EACH ROW
 WHEN ((OLD."sku_id" IS DISTINCT FROM NEW."sku_id" OR OLD."has_customer_options" IS DISTINCT FROM NEW."has_customer_options") AND (OLD."product_id" IS DISTINCT FROM NEW."product_id" OR OLD."is_public" IS DISTINCT FROM NEW."is_public") AND OLD."is_public" = 1)
 EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_card_old_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_ins_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape_ins"
+AFTER INSERT ON "product_buyer_state"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN (NEW."is_public" = 1)
+EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_ins_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_del_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape_del"
+AFTER DELETE ON "product_buyer_state"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN (OLD."is_public" = 1)
+EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_del_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape"
+AFTER UPDATE ON "product_buyer_state"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."is_public" IS DISTINCT FROM NEW."is_public" OR OLD."category_id" IS DISTINCT FROM NEW."category_id" OR OLD."brand_id" IS DISTINCT FROM NEW."brand_id"))
+EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_facet_values_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -625,7 +673,7 @@ CREATE CONSTRAINT TRIGGER "cdep_product_variants_shape"
 AFTER UPDATE ON "product_variants"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
-WHEN ((OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at" OR OLD."product_id" IS DISTINCT FROM NEW."product_id"))
+WHEN ((OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at" OR OLD."product_id" IS DISTINCT FROM NEW."product_id" OR OLD."fulfillment_kind" IS DISTINCT FROM NEW."fulfillment_kind"))
 EXECUTE FUNCTION scalius_compat."cdep_product_variants_shape_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_variants_band_fn"()
@@ -1050,6 +1098,80 @@ FOR EACH ROW
 WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_attribute_values_upd_old_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_attribute_values_spec_ins_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = NEW.attribute_id AND spec_attribute.key_spec = 1)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_attribute_values']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_attribute_values_spec_ins"
+AFTER INSERT ON "product_attribute_values"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_product_attribute_values_spec_ins_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_attribute_values_spec_del_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = OLD.attribute_id AND spec_attribute.key_spec = 1)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_attribute_values']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_attribute_values_spec_del"
+AFTER DELETE ON "product_attribute_values"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_product_attribute_values_spec_del_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_attribute_values_spec_upd_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = NEW.attribute_id AND spec_attribute.key_spec = 1)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_attribute_values']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_attribute_values_spec_upd"
+AFTER UPDATE ON "product_attribute_values"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."product_id" IS DISTINCT FROM NEW."product_id" OR OLD."attribute_id" IS DISTINCT FROM NEW."attribute_id" OR OLD."value" IS DISTINCT FROM NEW."value" OR OLD."value_id" IS DISTINCT FROM NEW."value_id" OR OLD."value_number" IS DISTINCT FROM NEW."value_number"))
+EXECUTE FUNCTION scalius_compat."cdep_product_attribute_values_spec_upd_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_attribute_values_spec_upd_old_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = OLD.attribute_id AND spec_attribute.key_spec = 1)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_attribute_values']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_attribute_values_spec_upd_old"
+AFTER UPDATE ON "product_attribute_values"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."attribute_id" IS DISTINCT FROM NEW."attribute_id"))
+EXECUTE FUNCTION scalius_compat."cdep_product_attribute_values_spec_upd_old_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_rich_content_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1359,6 +1481,80 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_review_stats_upd_old_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_review_stats_shape_ins_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 WHERE NEW.rating_rank_milli IS NOT NULL)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_review_stats']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_review_stats_shape_ins"
+AFTER INSERT ON "product_review_stats"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_product_review_stats_shape_ins_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_review_stats_shape_del_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 WHERE OLD.rating_rank_milli IS NOT NULL)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_review_stats']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_review_stats_shape_del"
+AFTER DELETE ON "product_review_stats"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_product_review_stats_shape_del_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_review_stats_shape_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 WHERE NEW.rating_rank_milli IS NULL)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_review_stats']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_review_stats_shape"
+AFTER UPDATE ON "product_review_stats"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."rating_rank_milli" IS DISTINCT FROM NEW."rating_rank_milli"))
+EXECUTE FUNCTION scalius_compat."cdep_product_review_stats_shape_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_review_stats_shape_old_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 WHERE OLD.rating_rank_milli IS NULL)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_review_stats']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_review_stats_shape_old"
+AFTER UPDATE ON "product_review_stats"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."rating_rank_milli" IS DISTINCT FROM NEW."rating_rank_milli"))
+EXECUTE FUNCTION scalius_compat."cdep_product_review_stats_shape_old_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_warranty_policies_ins_fn"()
 RETURNS trigger
@@ -3308,4 +3504,4 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."cdep_promotion_redemptions_del_fn"();
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (100, '0100_cache_dependencies', 'b875e8b5e9f68357f0e6bc828c639e1bb55d131e1abeef6aa76b29e9c95e54df');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (100, '0100_cache_dependencies', 'e1654d5c5f1dda04ab9e11576496980eccdaffd323df70bb0e8a8726a4a78a1f');
