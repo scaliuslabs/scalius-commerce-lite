@@ -9,6 +9,7 @@ import {
 const mocks = vi.hoisted(() => ({
     getPublicCategoryById: vi.fn(),
     getStorefrontProducts: vi.fn(),
+    resolvePublicAttributeFilters: vi.fn(),
 }));
 
 vi.mock("../categories/categories.storefront", () => ({
@@ -17,6 +18,10 @@ vi.mock("../categories/categories.storefront", () => ({
 
 vi.mock("../catalog/listing", () => ({
     getStorefrontProducts: mocks.getStorefrontProducts,
+}));
+
+vi.mock("../catalog/facets", () => ({
+    resolvePublicAttributeFilters: mocks.resolvePublicAttributeFilters,
 }));
 
 import { getNavigationPreviewProductCount } from "./navigation.service";
@@ -34,6 +39,8 @@ describe("navigation preview product count", () => {
             products: [],
             pagination: { total: 12, page: 1, limit: 1, totalPages: 12 },
         });
+        const resolved = [{ kind: "attribute", id: "attr_color", name: "Color", slug: "color", values: ["blue"], keys: ["blue"] }];
+        mocks.resolvePublicAttributeFilters.mockResolvedValue(resolved);
 
         const result = await getNavigationPreviewProductCount(db, {
             categoryId: "cat_1",
@@ -56,13 +63,10 @@ describe("navigation preview product count", () => {
             page: 1,
             limit: 1,
             sort: "newest",
-            attributeFilters: [{
-                id: "color",
-                name: "color",
-                slug: "color",
-                values: ["Blue"],
-            }],
+            attributeFilters: resolved,
         });
+        // The preview resolves slug=value pairs exactly as the storefront link would.
+        expect(mocks.resolvePublicAttributeFilters).toHaveBeenCalledWith(db, { color: ["Blue"] }, []);
     });
 
     it("rejects missing or deleted public categories before counting products", async () => {

@@ -26,6 +26,8 @@ import { rebuildCatalogProjections } from "./catalog-projections";
 import { adjustStock } from "../inventory/stock-adjustment";
 import { getStorefrontCategoryProducts, getStorefrontCollectionProducts, getStorefrontProducts } from "../catalog/listing";
 import { getStorefrontSitemapProducts } from "../catalog/sitemap";
+import { resolvePublicAttributeFilters } from "../catalog/facets";
+import { getStorefrontProductComparison } from "../catalog/compare";
 import {
     refreshProductRecommendations,
     refreshProductSalesStats,
@@ -192,8 +194,31 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", () => {
         const category = await getStorefrontCategoryProducts(db, {
             id: "cat_a", name: "Shirts", slug: "shirts", description: null, imageUrl: null, metaTitle: null,
             metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null, updatedAt: null,
-        }, { page: 1, limit: 10, attributeFilters: [{ id: "option.size", name: "Size", slug: "option.size", values: ["M"] }] });
+        }, { page: 1, limit: 10, attributeFilters: [{ kind: "option", id: "option.size", name: "Size", slug: "option.size", values: ["m"], keys: ["m"] }] });
         expect(category.products.map((product) => product.id)).toEqual([optioned.id]);
+        // Typed facet filters and counts (catalog/facets.ts) compile and agree on PostgreSQL.
+        const shirts = {
+            id: "cat_a", name: "Shirts", slug: "shirts", description: null, imageUrl: null, metaTitle: null,
+            metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null, updatedAt: null,
+        };
+        const typedFilters = await resolvePublicAttributeFilters(db, {
+            brand: ["Walton"], material: ["LINEN"], "display.min": ["10"], "display.max": ["20"], wifi: ["yes"],
+        }, []);
+        expect(typedFilters.map((filter) => [filter.kind, filter.id, filter.keys])).toEqual([
+            ["brand", "brand", ["brd_walton01"]],
+            ["attribute", "attr_material", ["linen"]],
+            ["attribute", "attr_wifi", ["1"]],
+            ["attribute", "attr_display", []],
+        ]);
+        const typedListing = await getStorefrontCategoryProducts(db, shirts, { page: 1, limit: 10, attributeFilters: typedFilters });
+        expect(typedListing.products.map((product) => product.id)).toEqual([simple.id]);
+        const facetsBySlug = Object.fromEntries(typedListing.facets.map((facet) => [facet.slug, facet]));
+        expect(facetsBySlug.brand?.values).toEqual([{ value: "walton", label: "Walton", count: 1, swatch: null }]);
+        expect(facetsBySlug.display).toMatchObject({ display: "range", unit: "in", range: { min: 15.6, max: 15.6 } });
+        expect(facetsBySlug["option.size"]?.values.map((value) => [value.value, value.count])).toEqual([["s", 0], ["m", 0]]);
+        const comparison = await getStorefrontProductComparison(db, [optioned.id, simple.id]);
+        expect(comparison.products.map((product) => product.id)).toEqual([optioned.id, simple.id]);
+        expect(comparison.groups[0]?.rows.find((row) => row.slug === "display")?.values).toEqual(["1000 in", "15.60 in"]);
         const collection = await getStorefrontCollectionProducts(db, { productIds: [simple.id] }, { page: 1, limit: 10 });
         expect(collection.products.map((product) => product.id)).toEqual([simple.id]);
         const sitemap = await getStorefrontSitemapProducts(db, { page: 1, limit: 10 });

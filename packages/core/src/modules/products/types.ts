@@ -158,13 +158,30 @@ export interface StorefrontProductFilterInput {
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     ids?: string;
-    /** Filterable attributes by slug, and product option axes as `option.<axis>` (e.g. `option.size`). */
-    attributeFilters?: Array<{
-        id: string;
-        name: string;
-        slug: string;
-        values: string[];
-    }>;
+    /**
+     * Resolved facet filters (catalog/facets.ts `resolvePublicAttributeFilters`):
+     * typed attributes by slug, product option axes as `option.<axis>`
+     * (e.g. `option.size`) and the brand entity as `brand`.
+     */
+    attributeFilters?: CatalogFacetFilter[];
+}
+
+/** One listing facet filter, as the catalogue projections store it. */
+export interface CatalogFacetFilter {
+    kind: "attribute" | "option" | "brand";
+    /** The attribute id, `option.<axis>`, or `brand`. */
+    id: string;
+    name: string;
+    /** The query key: attribute slug, `option.<axis>` or `brand`. */
+    slug: string;
+    /** The normalised URL values, echoed as the applied filter. */
+    values: string[];
+    /** Buyer-facing text of each value (same order), for a selection nothing in scope carries. */
+    labels?: string[];
+    /** What `product_facet_values.value_key` (attributes, options) or `product_buyer_state.brand_id` holds. */
+    keys: string[];
+    /** Number attributes: the `<slug>.min` / `<slug>.max` bounds (inclusive). */
+    range?: { min: number | null; max: number | null };
 }
 
 export type StorefrontFeedProductFilterInput = Pick<

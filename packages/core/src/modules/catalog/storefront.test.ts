@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getStorefrontProductBySlug } from "./product-page";
 import { getStorefrontProducts as readStorefrontProducts } from "./listing";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { resolvePublicAttributeFilters } from "./facets";
 
 // Rows are seeded with raw SQL: each listing read first fills the stored buyer
 // state (products/catalog-projections.ts), as a release's rebuild does.
@@ -170,38 +171,26 @@ describe("storefront catalog search and option facets", () => {
         const { db } = optionedCatalog((params) => {
             maxParams = Math.max(maxParams, params.length);
         });
-        const size = { id: "option.size", name: "size", slug: "option.size" };
-
         const all = await getStorefrontProducts(db, { category: "cat_shoes" });
         const filtered = await getStorefrontProducts(db, {
             category: "cat_shoes",
-            attributeFilters: [{ ...size, values: ["42"] }],
+            attributeFilters: await resolvePublicAttributeFilters(db, { "option.size": ["42"] }, []),
         });
 
+        const facet = (id: string, name: string, values: Array<[string, string, number]>) => ({
+            id, name, slug: id, kind: "option", display: "checkbox", unit: null, range: null,
+            values: values.map(([value, label, count]) => ({ value, label, count, swatch: null })),
+        });
         expect(all.facets).toEqual([
-            { id: "option.color", name: "Color", slug: "option.color", values: [
-                { value: "Black", count: 1 },
-                { value: "Sand", count: 1 },
-            ] },
-            { id: "option.size", name: "Size", slug: "option.size", values: [
-                { value: "40", count: 1 },
-                { value: "41", count: 2 },
-                { value: "42", count: 1 },
-            ] },
+            facet("option.color", "Color", [["black", "Black", 1], ["sand", "Sand", 1]]),
+            facet("option.size", "Size", [["40", "40", 1], ["41", "41", 2], ["42", "42", 1]]),
         ]);
         expect(filtered.products.map((product) => product.id)).toEqual(["p_loafer"]);
         // OR within the selected axis keeps its own counts; other axes only
         // count products that also match the selection.
         expect(filtered.facets).toEqual([
-            { id: "option.color", name: "Color", slug: "option.color", values: [
-                { value: "Black", count: 0 },
-                { value: "Sand", count: 0 },
-            ] },
-            { id: "option.size", name: "Size", slug: "option.size", values: [
-                { value: "40", count: 1 },
-                { value: "41", count: 2 },
-                { value: "42", count: 1 },
-            ] },
+            facet("option.color", "Color", [["black", "Black", 0], ["sand", "Sand", 0]]),
+            facet("option.size", "Size", [["40", "40", 1], ["41", "41", 2], ["42", "42", 1]]),
         ]);
         expect(maxParams).toBeLessThanOrEqual(100);
     });
@@ -256,19 +245,18 @@ function twoAxisCatalog() {
 }
 
 describe("storefront facet counts follow the buyer's other selections", () => {
-    const color = (values: string[]) => ({ id: "option.color", name: "Color", slug: "option.color", values });
-    const size = (values: string[]) => ({ id: "option.size", name: "Size", slug: "option.size", values });
-    const material = (values: string[]) => ({ id: "attr_material", name: "Material", slug: "material", values });
-    const counts = (facets: Array<{ slug: string; values: Array<{ value: string; count: number }> }>) =>
+    const counts = (facets: Array<{ slug: string; values: Array<{ label: string; count: number }> }>) =>
         Object.fromEntries(facets.map((facet) => [
             facet.slug,
-            Object.fromEntries(facet.values.map(({ value, count }) => [value, count])),
+            Object.fromEntries(facet.values.map(({ label, count }) => [label, count])),
         ]));
+    const filters = (db: Parameters<typeof resolvePublicAttributeFilters>[0], query: Record<string, string[]>) =>
+        resolvePublicAttributeFilters(db, query, []);
 
     it("counts each colour by the SKUs sold in the selected size, never offering a dead end", async () => {
         const { db } = twoAxisCatalog();
 
-        const size42 = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [size(["42"])] });
+        const size42 = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: await filters(db, { "option.size": ["42"] }) });
         expect(counts(size42.facets)).toEqual({
             "option.color": { Black: 2, Chalk: 0 },
             "option.size": { "41": 2, "42": 2 },
@@ -278,11 +266,11 @@ describe("storefront facet counts follow the buyer's other selections", () => {
         // The knit sells Chalk and a 42, but not a Chalk 42.
         const chalk42 = await getStorefrontProducts(db, {
             category: "cat_shoes",
-            attributeFilters: [size(["42"]), color(["Chalk"])],
+            attributeFilters: await filters(db, { "option.size": ["42"], "option.color": ["Chalk"] }),
         });
         expect(chalk42.pagination.total).toBe(0);
 
-        const chalk = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [color(["Chalk"])] });
+        const chalk = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: await filters(db, { "option.color": ["Chalk"] }) });
         expect(chalk.products.map((product) => product.id)).toEqual(["p_knit"]);
         expect(counts(chalk.facets)["option.size"]).toEqual({ "41": 1, "42": 0 });
         expect(counts(chalk.facets).material).toEqual({ Canvas: 0, Knit: 1 });
@@ -291,7 +279,7 @@ describe("storefront facet counts follow the buyer's other selections", () => {
     it("counts option values within the selected attribute values", async () => {
         const { db } = twoAxisCatalog();
 
-        const canvas = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [material(["Canvas"])] });
+        const canvas = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: await filters(db, { material: ["Canvas"] }) });
 
         expect(counts(canvas.facets)).toEqual({
             "option.color": { Black: 1, Chalk: 0 },

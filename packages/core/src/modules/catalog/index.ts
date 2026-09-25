@@ -5,10 +5,19 @@
 // brand records keep their own domains beside this one.
 export * from "./listing";
 export {
+  BRAND_FACET_KEY,
+  FACET_ATTRIBUTE_LIMIT,
+  FACET_VALUE_LIMIT,
+  MAX_PUBLIC_FACET_FILTER_VALUES,
   OPTION_FACET_PREFIX,
+  resolvePublicAttributeFilters,
+  getPublicCategoryFacets,
+  getPublicSearchFacets,
   type PublicProductFacet,
+  type PublicProductFacetKind,
   type PublicProductFacetValue,
 } from "./facets";
+export * from "./compare";
 export * from "./product-page";
 export * from "./search";
 export * from "./feed";

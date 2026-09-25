@@ -10,8 +10,8 @@ import {
   getPublicCategorySection,
   getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
-import { getStorefrontCategoryProducts } from "@scalius/core/modules/catalog";
+import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
@@ -111,12 +111,6 @@ const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
     .openapi({ description: "Published ancestors, root first, ending with this category." }),
 });
 
-const productFacetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
-});
 
 const storefrontCategoryProductSchema = z.object({
   id: z.string(),
@@ -142,12 +136,7 @@ const storefrontCategoryProductSchema = z.object({
 });
 
 const appliedCategoryFiltersSchema = z.object({
-  attributes: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    slug: z.string(),
-    values: z.array(z.string()),
-  })),
+  attributes: z.array(appliedFacetFilterSchema),
   sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"]),
   search: z.string().optional(),
   minPrice: z.number().min(0).optional(),
@@ -510,7 +499,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   });
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
-    attributes: attributeFilters,
+    attributes: appliedFacetFilters(attributeFilters),
     sort: params.sort,
   };
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
@@ -597,7 +586,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     includeDescendants: includeSubcategories === "true",
   });
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
-    attributes: attributeFilters,
+    attributes: appliedFacetFilters(attributeFilters),
     sort: params.sort,
   };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);

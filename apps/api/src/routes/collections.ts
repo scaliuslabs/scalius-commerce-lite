@@ -5,8 +5,9 @@ import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog } from "@scalius/core/modules/collections";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { productFacetSchema } from "../schemas/catalog-facets";
 import { publicCollectionConfig } from "@scalius/core/modules/collections/browser";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { toIsoTimestamp } from "../utils/timestamps";
 import {
   normalizePublicListingSearchParam,
@@ -76,12 +77,6 @@ const collectionProductSchema = z.object({
   hasVariants: z.boolean(),
 });
 
-const collectionFacetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
-});
 
 const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
@@ -192,7 +187,7 @@ const getCollectionByIdRoute = createRoute({
         featuredProduct: collectionProductSchema.optional(),
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
-        facets: z.array(collectionFacetSchema),
+        facets: z.array(productFacetSchema),
       })) } },
     },
     404: errorResponses[404],
