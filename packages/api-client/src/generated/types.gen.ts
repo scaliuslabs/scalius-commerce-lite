@@ -2693,6 +2693,51 @@ export type GetApiV1NavigationResponses = {
 
 export type GetApiV1NavigationResponse = GetApiV1NavigationResponses[keyof GetApiV1NavigationResponses];
 
+export type GetApiV1NavigationCategoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/navigation/categories';
+};
+
+export type GetApiV1NavigationCategoriesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesError = GetApiV1NavigationCategoriesErrors[keyof GetApiV1NavigationCategoriesErrors];
+
+export type GetApiV1NavigationCategoriesResponses = {
+    /**
+     * Category tree
+     */
+    200: {
+        success: true;
+        data: {
+            nodes: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                parentId: string | null;
+                canonicalPath: string | null;
+                imageUrl: string | null;
+            }>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesResponse = GetApiV1NavigationCategoriesResponses[keyof GetApiV1NavigationCategoriesResponses];
+
 export type GetApiV1NavigationPlacementsData = {
     body?: never;
     path?: never;
@@ -4176,6 +4221,17 @@ export type GetApiV1StorefrontLayoutResponses = {
                     }>;
                 }>;
             }>;
+            categoryTree: {
+                nodes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    parentId: string | null;
+                    canonicalPath: string | null;
+                    imageUrl: string | null;
+                }>;
+                truncated: boolean;
+            };
             footer: {
                 logo: {
                     src: string;

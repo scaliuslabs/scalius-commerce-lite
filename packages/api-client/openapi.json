@@ -10842,6 +10842,150 @@
         "security": []
       }
     },
+    "/api/v1/navigation/categories": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Get the reachable category tree",
+        "operationId": "storefront.navigation.categories_get",
+        "description": "Published categories whose every ancestor is published and whose published subtree holds a public product, flat with parentId, top levels first; at most 1000 nodes, so a node's parent is always included. The storefront's /categories index; the header gets a budget-sized cut of the same tree with the layout.",
+        "responses": {
+          "200": {
+            "description": "Category tree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "parentId",
+                              "canonicalPath",
+                              "imageUrl"
+                            ]
+                          },
+                          "maxItems": 1000
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "nodes",
+                        "truncated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/navigation/placements": {
       "get": {
         "tags": [
@@ -16138,6 +16282,56 @@
                             ]
                           }
                         },
+                        "categoryTree": {
+                          "type": "object",
+                          "properties": {
+                            "nodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "parentId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "canonicalPath": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "imageUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "parentId",
+                                  "canonicalPath",
+                                  "imageUrl"
+                                ]
+                              },
+                              "maxItems": 150
+                            },
+                            "truncated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "nodes",
+                            "truncated"
+                          ]
+                        },
                         "footer": {
                           "type": "object",
                           "properties": {
@@ -16707,6 +16901,7 @@
                         "analytics",
                         "header",
                         "navigation",
+                        "categoryTree",
                         "footer",
                         "currency",
                         "theme",
@@ -254130,6 +254325,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.delivery-search"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.categories_get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.categories_get"
           ]
         },
         {

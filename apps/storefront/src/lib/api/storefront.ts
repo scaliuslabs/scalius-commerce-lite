@@ -110,10 +110,30 @@ export interface CurrencyData {
   decimalPlaces?: number;
 }
 
+export interface CategoryNavigationNode {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  canonicalPath: string | null;
+  imageUrl: string | null;
+}
+
+export interface CategoryNavigationTree {
+  nodes: CategoryNavigationNode[];
+  /** More categories exist than these (the /categories index lists them). */
+  truncated: boolean;
+}
+
 export interface LayoutData {
   analytics: AnalyticsConfig[];
   header: HeaderData;
   navigation: NavigationItem[];
+  /**
+   * The reachable category tree, flat with parentId, top levels first, cut to
+   * the header's link budget (absent from an older API: renders as none).
+   */
+  categoryTree?: CategoryNavigationTree | null;
   footer: FooterData;
   currency?: CurrencyData;
   /**

@@ -1,14 +1,17 @@
 /**
- * The one tree every menu renders from. Today it comes from the merchant's
- * header menu (Online store -> Navigation, up to three levels); once
- * categories have parents (catalogue Phase 1a) an automatic menu comes from
- * the category tree through `navigationFromCategoryTree`, and every menu
+ * The one tree every menu renders from: the theme's navigation source
+ * (`blocks.navigation.source`), the merchant's header menu (Online store ->
+ * Navigation, up to three levels), the reachable category tree (up to four,
+ * `navigationFromCategoryTree`) or the tree's departments followed by the
+ * menu's other items (`sourceNavigation`), each target once. Every menu
  * pattern (dropdown, cascading, mega, drill-in drawer, departments rail,
  * category bar) renders it unchanged.
  *
- * Large trees are drilled into, never dumped: `pruneNavigation` keeps a
- * rendering within its share of the header's link budget, top levels first,
- * so deep levels live on their category pages.
+ * Large trees are drilled into, never dumped: `planHeaderNavigation` gives
+ * each surface its share of the theme's link budget and shows at most
+ * `maxTopItems` top entries, the rest behind "More" or "All categories"
+ * (/categories); `pruneNavigation` cuts a rendering to its share, top levels
+ * first, so deep levels live on their category pages.
  */
 import type { NavigationItem } from "@/lib/api";
 
@@ -184,4 +187,253 @@ export function navigationShortcuts(items: readonly NavigationItem[], max: numbe
     .flatMap((item) => (item.href ? [item] : (item.subMenu ?? []).filter((child) => child.href)))
     .slice(0, max)
     .map(({ subMenu: _children, ...item }) => item);
+}
+
+// ── Sources: the menu, the category tree, or both ───────────────────────
+
+const LOCAL_ORIGIN = "https://store.invalid";
+
+/**
+ * What a link points at, for de-duplication: the same-store path (no
+ * trailing slash, case-folded) plus its query, or the full external URL.
+ * Items without a link have no target.
+ */
+export function navigationTargetKey(href: string | undefined): string | null {
+  const value = href?.trim();
+  if (!value || value.startsWith("#")) return null;
+  try {
+    const url = new URL(value, LOCAL_ORIGIN);
+    const path = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
+    const origin = url.origin === LOCAL_ORIGIN ? "" : url.origin;
+    return `${origin}${path.toLowerCase()}${url.search}`;
+  } catch {
+    return value.toLowerCase();
+  }
+}
+
+/** The label a buyer reads, compared without case or spacing differences. */
+function labelKey(title: string): string {
+  return title.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Every target once: the first occurrence wins, top levels before deeper
+ * ones (breadth-first), so a department keeps its place and a repeat deeper
+ * down disappears with its children (the kept one's page lists them). Among
+ * siblings, linkless items with the same label merge into one group.
+ */
+export function dedupeNavigation(items: readonly NavigationItem[]): NavigationItem[] {
+  const tree = navigationTree(items);
+  const seen = new Set<string>();
+  const claimed = new Set<NavigationItem>();
+  let level: NavigationItem[] = tree;
+  while (level.length > 0) {
+    const next: NavigationItem[] = [];
+    for (const item of level) {
+      const key = navigationTargetKey(item.href);
+      if (key !== null) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      claimed.add(item);
+      next.push(...(item.subMenu ?? []));
+    }
+    level = next;
+  }
+  const rebuild = (list: readonly NavigationItem[]): NavigationItem[] => {
+    const out: NavigationItem[] = [];
+    const groups = new Map<string, NavigationItem>();
+    for (const item of list) {
+      if (!claimed.has(item)) continue;
+      const children = rebuild(item.subMenu ?? []);
+      const group = item.href ? undefined : groups.get(labelKey(item.title));
+      if (group) {
+        group.subMenu = [...(group.subMenu ?? []), ...children];
+        continue;
+      }
+      if (!item.href && children.length === 0) continue;
+      const node: NavigationItem = { ...item };
+      if (children.length > 0) node.subMenu = children;
+      else delete node.subMenu;
+      if (!node.href) groups.set(labelKey(node.title), node);
+      out.push(node);
+    }
+    return out;
+  };
+  return rebuild(tree);
+}
+
+/**
+ * The tree's items followed by the menu's: a menu item whose target is
+ * already present at the same level merges into it (the tree's position,
+ * the menu's label and link attributes, the menu's children first, then the
+ * tree's, merged the same way); the rest are appended in menu order.
+ */
+export function mergeNavigation(tree: readonly NavigationItem[], menu: readonly NavigationItem[]): NavigationItem[] {
+  return mergeLevels(tree, menu, "second");
+}
+
+/** `first`'s items then `second`'s; a shared target keeps `first`'s position and `labels`' label and link attributes. */
+function mergeLevels(
+  first: readonly NavigationItem[],
+  second: readonly NavigationItem[],
+  labels: "first" | "second",
+): NavigationItem[] {
+  const out: NavigationItem[] = first.map((item) => ({ ...item }));
+  const byKey = new Map<string, number>();
+  out.forEach((item, index) => {
+    const key = navigationTargetKey(item.href);
+    if (key !== null && !byKey.has(key)) byKey.set(key, index);
+  });
+  for (const item of second) {
+    const key = navigationTargetKey(item.href);
+    const index = key === null ? undefined : byKey.get(key);
+    if (index === undefined) {
+      out.push({ ...item });
+      if (key !== null) byKey.set(key, out.length - 1);
+      continue;
+    }
+    const base = out[index]!;
+    const [labelled, other] = labels === "second" ? [item, base] : [base, item];
+    // The labelled side (the merchant's menu) lists its children first.
+    const children = mergeLevels(labelled.subMenu ?? [], other.subMenu ?? [], "first");
+    const merged: NavigationItem = { ...other, ...labelled };
+    const imageUrl = labelled.imageUrl ?? other.imageUrl;
+    if (imageUrl) merged.imageUrl = imageUrl;
+    if (children.length > 0) merged.subMenu = children;
+    else delete merged.subMenu;
+    out[index] = merged;
+  }
+  return out;
+}
+
+export type NavigationSource = "menu" | "category-tree" | "tree+menu";
+
+/** The tree every header surface renders for a resolved navigation source, each target once. */
+export function sourceNavigation(
+  source: NavigationSource,
+  menu: readonly NavigationItem[] | null | undefined,
+  categories: readonly CategoryTreeNode[] | null | undefined,
+): NavigationItem[] {
+  const menuTree = navigationTree(menu);
+  const tree = navigationFromCategoryTree(categories ?? []);
+  // A tree source without a tree (none reachable, or an API without it) renders the menu.
+  if (source === "menu" || tree.length === 0) return dedupeNavigation(menuTree);
+  if (source === "category-tree") return dedupeNavigation(tree);
+  return dedupeNavigation(mergeNavigation(tree, menuTree));
+}
+
+// ── The header's link budget, across its surfaces ───────────────────────
+
+/** Roots beyond `maxTopItems` a row's "More" list still names before "All categories". */
+export const NAVIGATION_MORE_EXTRAS = 12;
+
+export interface HeaderNavigationSurfaces {
+  /** A desktop menu renders in the header HTML (not only the shared drill drawer). */
+  desktop: boolean;
+  /** The desktop menu is a row with a "More" list (its extras cost links). */
+  desktopRow: boolean;
+  /** Desktop panels add a "Shop all X" link per parent; drill levels an "All X". */
+  desktopAllLinks: boolean;
+  drawerAllLinks: boolean;
+  /** The desktop panels' share of what is left once every root is placed (the drawer's levels get the rest). */
+  desktopWeight: number;
+  /** Links already spoken for: logo, account, utilities, socials, shortcut rows. */
+  reserved: number;
+}
+
+/**
+ * When surfaces end with "All categories" (the /categories index):
+ * - `always`: the navigation comes from the category tree, which the header
+ *   shows only in part;
+ * - `overflow`: a menu with more top items than a surface shows;
+ * - `none`: the store has no reachable category, so there is no index and
+ *   drawers list every top item.
+ */
+export type NavigationIndexMode = "always" | "overflow" | "none";
+
+export function navigationIndexMode(treeSourced: boolean, hasCategories: boolean): NavigationIndexMode {
+  if (!hasCategories) return "none";
+  return treeSourced ? "always" : "overflow";
+}
+
+export interface HeaderNavigationPlan {
+  /** The roots every surface shows (at most `maxTopItems`), with the desktop's share of their children. */
+  desktop: NavigationItem[];
+  /** The same roots with the drawer's share of their children. */
+  drawer: NavigationItem[];
+  /** Roots past `maxTopItems`, childless, for a row's "More" list. */
+  extras: NavigationItem[];
+  /** Surfaces end with "All categories" (/categories): some of the tree is not in the header. */
+  allCategories: boolean;
+}
+
+/**
+ * Splits the header's link budget (theme `navigation.linkBudget`) across
+ * its surfaces: first every surface's roots (at most `maxTopItems`, a row's
+ * extras and the "All categories" links), then what is left, top levels
+ * first, between the desktop panels and the drawer's levels. What does not
+ * fit is one click away on its parent's page and on /categories.
+ */
+export function planHeaderNavigation(
+  tree: readonly NavigationItem[],
+  options: { maxTopItems: number; linkBudget: number; index: NavigationIndexMode },
+  surfaces: HeaderNavigationSurfaces,
+): HeaderNavigationPlan {
+  const bare = ({ subMenu: _children, ...item }: NavigationItem): NavigationItem => item;
+  const top = Math.max(1, options.maxTopItems);
+  const indexed = options.index !== "none";
+  const roots = tree.slice(0, top);
+  // Without an index, a drawer lists every top item and "More" every extra.
+  const drawerRoots = indexed ? roots : tree;
+  const extras = surfaces.desktop && surfaces.desktopRow
+    ? tree.slice(roots.length, indexed ? roots.length + NAVIGATION_MORE_EXTRAS : undefined).map(bare)
+    : [];
+  const allCategories = options.index === "always" || (options.index === "overflow" && tree.length > roots.length);
+  const index = allCategories ? 1 : 0;
+  const desktopLinks = countNavigationLinks(roots.map(bare));
+  const drawerLinks = countNavigationLinks(drawerRoots.map(bare));
+  // A desktop row also carries its extras, "All categories" in "More" and its no-script twin.
+  const desktopRoots = surfaces.desktop ? desktopLinks + extras.length + index * (surfaces.desktopRow ? 2 : 1) : 0;
+  const free = Math.max(0, options.linkBudget - surfaces.reserved - (drawerLinks + index) - desktopRoots);
+  const desktopFree = surfaces.desktop ? Math.floor(free * surfaces.desktopWeight) : 0;
+  return {
+    desktop: surfaces.desktop ? pruneNavigation(roots, desktopLinks + desktopFree, { allLinks: surfaces.desktopAllLinks }) : [],
+    drawer: pruneNavigation(drawerRoots, drawerLinks + free - desktopFree, { allLinks: surfaces.drawerAllLinks }),
+    extras,
+    allCategories,
+  };
+}
+
+// ── Fitting a row before any script runs ────────────────────────────────
+
+/**
+ * A conservative width (px) for a top-level link label: wide glyphs counted
+ * wide, so a row that "fits" by this estimate fits on screen. It decides
+ * which items a server-rendered row shows without JavaScript.
+ */
+export function estimateNavLabelWidth(title: string, options: { fontPx: number; uppercase?: boolean }): number {
+  let em = 0;
+  for (const char of title) {
+    if (/\s/.test(char)) em += 0.3;
+    else if (/[ঀ-৿]/.test(char)) em += /[ঁ-ঃ়-্ৗ]/.test(char) ? 0.2 : 0.75;
+    else if (options.uppercase || /[A-Z0-9&@%]/.test(char)) em += 0.72;
+    else if (/[a-z]/.test(char)) em += 0.56;
+    else em += 0.62;
+  }
+  return Math.ceil(em * options.fontPx * (options.uppercase ? 1.08 : 1));
+}
+
+/** How many leading items fit in `availablePx` (each with its padding and chrome). */
+export function estimateNavRowFit(
+  titles: readonly string[],
+  options: { fontPx: number; uppercase?: boolean; itemChromePx: number; gapPx: number; availablePx: number },
+): number {
+  let used = 0;
+  for (let index = 0; index < titles.length; index += 1) {
+    const width = estimateNavLabelWidth(titles[index]!, options) + options.itemChromePx + (index > 0 ? options.gapPx : 0);
+    if (used + width > options.availablePx) return index;
+    used += width;
+  }
+  return titles.length;
 }

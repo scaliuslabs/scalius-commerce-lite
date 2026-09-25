@@ -11,13 +11,13 @@
  *   `[data-disclosure-item]`. One popup is open at a time. Escape, a press
  *   outside and focus leaving the item close it; Escape returns focus to the
  *   button. A mouse hovering the item opens it after a short intent delay.
- * - `ul[data-nav-overflow]`: top-level items that don't fit move into the
- *   list's "More" item (`[data-nav-more]`, entries `[data-nav-more-index]`).
- *   The entries are built here from the menu itself and a
- *   `template[data-nav-more-template]`, so the server HTML carries each link
- *   once (the header link budget, nav-tree.ts).
- * - `[data-nav-compact-from="<nav id>"]`: filled with a copy of that menu
- *   (ids suffixed `-compact`) for the condensed classic header.
+ * - `ul[data-nav-overflow]`: top-level items (`[data-nav-index]`) that don't
+ *   fit move, as they are, into the row's "More" item (`[data-nav-more]`,
+ *   list `[data-nav-more-list]`), so each link is in the page once (the
+ *   header link budget, nav-tree.ts). Refitted on resize and once the fonts
+ *   have loaded. Without JavaScript the row wraps instead (a <noscript> rule).
+ * - `[data-nav-compact-from="<nav id>"]`: the condensed classic header's bar;
+ *   the menu moves there on scroll and back to `[data-nav-compact-home]`.
  * - Arrow keys: Left/Right/Home/End move along a menu row, Down opens a
  *   popup and enters it, Up/Down/Home/End move inside an open popup.
  * - `[data-pill-scroller]`: the current pill is scrolled into view.
@@ -52,6 +52,16 @@ function openPopups(doc: Document): HTMLElement[] {
   return Array.from(doc.querySelectorAll<HTMLElement>(`${POPUP}[aria-expanded="true"]`));
 }
 
+/**
+ * The disclosure item an event belongs to: a row item moved into "More" is
+ * a plain row of the More list there, so the More item answers for it.
+ */
+function disclosureItem(node: Element | null | undefined): Element | null {
+  const item = node?.closest("[data-disclosure-item]") ?? null;
+  const moreList = item?.parentElement?.closest("[data-nav-more-list]");
+  return moreList ? moreList.closest("[data-disclosure-item]") : item;
+}
+
 function popupButton(item: Element): HTMLElement | null {
   return item.querySelector<HTMLElement>(`:scope > ${POPUP}`);
 }
@@ -64,29 +74,52 @@ function openPopup(button: HTMLElement, viaHover: boolean): void {
   if (viaHover) button.dataset.hoverOpen = "";
 }
 
+/** The row items of a menu row, wherever they currently sit (the row or its "More" list), in menu order. */
+function rowItems(list: HTMLElement): HTMLElement[] {
+  const more = list.querySelector<HTMLElement>(":scope > [data-nav-more]");
+  const moved = more ? Array.from(more.querySelectorAll<HTMLElement>("[data-nav-more-list] > [data-nav-index]")) : [];
+  return [...Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index]")), ...moved].sort(
+    (a, b) => Number(a.dataset.navIndex) - Number(b.dataset.navIndex),
+  );
+}
+
+function closeWithin(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>(`${POPUP}[aria-expanded="true"]`).forEach((button) => setDisclosureOpen(button, false));
+  root.querySelectorAll("details[open]").forEach((menu) => menu.removeAttribute("open"));
+}
+
 /**
- * Hides the top-level items that don't fit on one line and lists them in the
- * "More" dropdown instead; dropdowns near the right edge align to their item's
- * end so they stay on screen. Reads every width before writing.
+ * Fits a menu row (`[data-nav-overflow]`) on one line: the items that don't
+ * fit move, as they are, into the row's "More" list, ahead of the entries
+ * the server put there (roots past `maxTopItems`, "All categories"), so
+ * every link stays in the page exactly once. Dropdowns near the row's end
+ * align to their item's end so they stay on screen. Reads every width
+ * before moving anything.
  */
 export function fitNavOverflow(list: HTMLElement): void {
-  const items = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index]"));
   const more = list.querySelector<HTMLElement>(":scope > [data-nav-more]");
-  if (!more) return;
-  const moreButton = popupButton(more);
-  if (moreButton && isDisclosureOpen(moreButton)) setDisclosureOpen(moreButton, false);
-  for (const item of items) item.hidden = false;
+  const moreList = more?.querySelector<HTMLElement>("[data-nav-more-list]");
+  if (!more || !moreList) return;
+  closeWithin(more);
+  const items = rowItems(list);
+  for (const item of items) {
+    closeWithin(item);
+    list.insertBefore(item, more);
+    item.hidden = false;
+  }
+  const extras = moreList.querySelector(":scope > :not([data-nav-index])") !== null;
   more.hidden = false;
 
   const available = list.clientWidth;
   if (available <= 0) return;
-  const gap = Number.parseFloat(getComputedStyle(list).columnGap) || 0;
+  const view = list.ownerDocument.defaultView;
+  const gap = view ? Number.parseFloat(view.getComputedStyle(list).columnGap) || 0 : 0;
   const moreWidth = more.offsetWidth;
   const widths = items.map((item) => item.offsetWidth);
-
   const total = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, items.length - 1);
+
   let cut = items.length;
-  if (total > available) {
+  if (extras ? total + gap + moreWidth > available : total > available) {
     let used = moreWidth;
     cut = 0;
     while (cut < items.length && used + gap + widths[cut]! <= available) {
@@ -94,157 +127,36 @@ export function fitNavOverflow(list: HTMLElement): void {
       cut += 1;
     }
   }
+  const firstExtra = moreList.firstElementChild;
+  for (const item of items.slice(cut)) moreList.insertBefore(item, firstExtra);
+  more.hidden = cut === items.length && !extras;
+  list.toggleAttribute("data-nav-overflowing", !more.hidden);
 
-  items.forEach((item, index) => {
-    const button = popupButton(item);
-    if (index >= cut && button && isDisclosureOpen(button)) setDisclosureOpen(button, false);
-    if (index >= cut) item.querySelectorAll("details[open]").forEach((menu) => menu.removeAttribute("open"));
-    item.hidden = index >= cut;
-  });
-  more.hidden = cut === items.length;
-  more.querySelectorAll<HTMLElement>("[data-nav-more-index]").forEach((entry) => {
-    entry.hidden = Number(entry.dataset.navMoreIndex) < cut;
-  });
-
-  // Dropdowns that would pass the list's end open towards the start.
+  // Dropdowns that would pass the row's end open towards its start.
+  if (typeof list.getBoundingClientRect !== "function") return;
   const listLeft = list.getBoundingClientRect().left;
-  const ends = items.map((item) => item.getBoundingClientRect().left - listLeft + DROPDOWN_WIDTH_PX);
-  items.forEach((item, index) => item.toggleAttribute("data-align-end", ends[index]! > available));
-}
-
-interface MoreLink {
-  title: string;
-  attributes: Array<[string, string]>;
-}
-
-const COPIED_LINK_ATTRIBUTES = ["href", "target", "rel", "aria-current", "data-astro-prefetch"];
-
-function moreLink(element: Element | null, title?: string): MoreLink | null {
-  if (!element) return null;
-  const text = (title ?? element.textContent ?? "").replace(/\s+/g, " ").trim();
-  if (!text) return null;
-  const attributes = COPIED_LINK_ATTRIBUTES.flatMap((name): Array<[string, string]> => {
-    const value = element.getAttribute(name);
-    return element.tagName === "A" && value !== null ? [[name, value]] : [];
+  items.slice(0, cut).forEach((item) => {
+    item.toggleAttribute("data-align-end", item.getBoundingClientRect().left - listLeft + DROPDOWN_WIDTH_PX > available);
   });
-  return { title: text, attributes };
-}
-
-/** An item's top link and its first-level links, read from the rendered menu. */
-function moreItem(item: HTMLElement): { parent: MoreLink; children: MoreLink[] } | null {
-  const doc = item.ownerDocument;
-  const link = item.querySelector(":scope > a.desktop-nav-link, :scope > a[data-menu-top-link]");
-  const button = item.querySelector<HTMLElement>(":scope > button[data-disclosure]");
-  const summary = item.querySelector<HTMLElement>(":scope > details > summary");
-  const label = button?.querySelector(".sr-only") ? "" : button?.textContent ?? "";
-  const parent = link ? moreLink(link) : button ? moreLink(button, label) : moreLink(summary);
-  if (!parent) return null;
-  const panel = button ? doc.getElementById(button.getAttribute("aria-controls") ?? "") : null;
-  const children: MoreLink[] = [];
-  if (panel?.matches(".mega-panel")) {
-    panel.querySelectorAll(".mega-column > .mega-column-heading").forEach((heading) => {
-      const entry = moreLink(heading, heading.querySelector(".mega-column-title")?.textContent ?? "");
-      if (entry) children.push(entry);
-    });
-  } else if (panel) {
-    panel.querySelectorAll(":scope > ul > li > .nav-dropdown-link").forEach((child) => {
-      const entry = moreLink(child);
-      if (entry) children.push(entry);
-    });
-  } else if (summary) {
-    // A <details> menu (cascading, category bar): its first column, without "Show all".
-    const rows = ":scope > details > [data-menu-panel] > ul > li:not(.fly-row--all)";
-    item
-      .querySelectorAll(`${rows} > a, ${rows} > span, ${rows}:not(:has(> a)) > details > summary`)
-      .forEach((child) => {
-        const entry = moreLink(child);
-        if (entry) children.push(entry);
-      });
-  }
-  return { parent, children };
-}
-
-/** Puts a link's text and attributes on a prototype element (a link or plain text). */
-function fill(element: Element, link: MoreLink): Element {
-  const doc = element.ownerDocument;
-  let target = element;
-  const isLink = link.attributes.some(([name]) => name === "href");
-  if (isLink !== (element.tagName === "A")) {
-    target = doc.createElement(isLink ? "a" : "span");
-    for (const attribute of Array.from(element.attributes)) {
-      if (!COPIED_LINK_ATTRIBUTES.includes(attribute.name)) target.setAttribute(attribute.name, attribute.value);
-    }
-    element.replaceWith(target);
-  }
-  for (const name of COPIED_LINK_ATTRIBUTES) target.removeAttribute(name);
-  for (const [name, value] of link.attributes) target.setAttribute(name, value);
-  target.textContent = link.title;
-  return target;
 }
 
 /**
- * Builds the "More" entries of a menu row from its own items (once): each
- * top link with its first-level links, from the prototype entry in
- * `template[data-nav-more-template]` (so they carry the menu's styles).
+ * The condensed classic header shows the menu in its bar: on scroll the
+ * menu itself moves into `[data-nav-compact-from="<nav id>"]` and back, so
+ * it is in the page once (the header link budget) and keeps its state.
  */
-export function buildNavMoreEntries(list: HTMLElement): void {
-  const target = list.querySelector<HTMLElement>(":scope > [data-nav-more] [data-nav-more-list]");
-  const template = list.parentElement?.querySelector<HTMLTemplateElement>(":scope > template[data-nav-more-template]");
-  if (!target || !template || target.querySelector("[data-nav-more-index]")) return;
-  const prototype = template.content.firstElementChild;
-  if (!prototype) return;
-  for (const item of Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index]"))) {
-    const data = moreItem(item);
-    if (!data) continue;
-    const entry = prototype.cloneNode(true) as HTMLElement;
-    entry.setAttribute("data-nav-more-index", item.dataset.navIndex ?? "");
-    entry.hidden = true;
-    const parent = fill(entry.querySelector(".nav-dropdown-link--parent, [data-more-parent]")!, data.parent);
-    const sublist = entry.querySelector(".nav-dropdown-sublist, [data-more-sublist]");
-    const childPrototype = sublist?.firstElementChild ?? null;
-    if (sublist && childPrototype && data.children.length > 0) {
-      sublist.replaceChildren();
-      for (const child of data.children) {
-        const row = childPrototype.cloneNode(true) as HTMLElement;
-        fill(row.firstElementChild!, child);
-        sublist.append(row);
-      }
-    } else {
-      // A parent without children is a plain row.
-      sublist?.remove();
-      parent.classList.remove("nav-dropdown-link--parent");
-    }
-    target.append(entry);
-  }
-}
-
-/** Fills each compact-menu slot with a copy of its menu (ids suffixed `-compact`). */
-export function cloneCompactMenus(doc: Document): void {
+export function placeCompactMenus(doc: Document): void {
   doc.querySelectorAll<HTMLElement>("[data-nav-compact-from]").forEach((slot) => {
-    if (slot.querySelector("nav")) return;
-    const sourceId = slot.dataset.navCompactFrom ?? "";
-    const source = doc.getElementById(sourceId);
-    if (!source) return;
-    const copy = source.cloneNode(true) as HTMLElement;
-    const suffix = (value: string) =>
-      value.startsWith(sourceId) ? `${sourceId}-compact${value.slice(sourceId.length)}` : value;
-    for (const element of [copy, ...Array.from(copy.querySelectorAll<HTMLElement>("[id], [aria-controls]"))]) {
-      if (element.id) element.id = suffix(element.id);
-      const controls = element.getAttribute("aria-controls");
-      if (controls) element.setAttribute("aria-controls", suffix(controls));
-    }
-    // The copy starts closed and builds its own "More" entries.
-    copy.querySelectorAll<HTMLElement>('[aria-expanded="true"]').forEach((button) => {
-      button.setAttribute("aria-expanded", "false");
-      const panel = copy.querySelector<HTMLElement>(`#${CSS.escape(button.getAttribute("aria-controls") ?? "")}`);
-      if (panel) panel.hidden = true;
-    });
-    copy.querySelectorAll("[data-nav-more-index]").forEach((entry) => entry.remove());
-    copy.querySelectorAll("[data-align-end]").forEach((item) => item.removeAttribute("data-align-end"));
-    copy.querySelectorAll<HTMLElement>("[data-nav-index][hidden], [data-nav-more]").forEach((item) => {
-      item.hidden = item.hasAttribute("data-nav-more");
-    });
-    slot.append(copy);
+    const header = slot.closest<HTMLElement>("#main-header");
+    const nav = doc.getElementById(slot.dataset.navCompactFrom ?? "");
+    if (!header || !nav) return;
+    const home = doc.querySelector<HTMLElement>(`[data-nav-compact-home="${nav.id}"]`);
+    if (!home) return;
+    const compact = header.classList.contains("is-scrolled");
+    const target = compact ? slot : home;
+    if (nav.parentElement === target) return;
+    closeWithin(nav);
+    target.append(nav);
   });
 }
 
@@ -271,7 +183,7 @@ export function handleDisclosureKey(event: KeyboardEvent): void {
   // <details> menus have their own keys (nav-menus.ts).
   if (!target || !list || target.closest("[data-menu-root]")) return;
   const key = event.key;
-  const item = target.closest<HTMLElement>("[data-nav-index], [data-nav-more]");
+  const item = target.closest<HTMLElement>("[data-nav-more]") ?? target.closest<HTMLElement>("[data-nav-index]");
   const button = item?.querySelector<HTMLElement>(`:scope > ${POPUP}`) ?? null;
   const panel = button ? panelFor(button) : null;
 
@@ -316,7 +228,6 @@ const observed = new WeakSet<HTMLElement>();
 function fitAll(doc: Document): void {
   const view = doc.defaultView;
   doc.querySelectorAll<HTMLElement>("[data-nav-overflow]").forEach((list) => {
-    buildNavMoreEntries(list);
     // Phones never lay the desktop menu out, so don't measure it there.
     if (view?.matchMedia(DESKTOP).matches) {
       fitNavOverflow(list);
@@ -389,7 +300,7 @@ export function installNavDisclosure(doc: Document = document): void {
   doc.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     for (const button of openPopups(doc)) {
-      const item = button.closest("[data-disclosure-item]");
+      const item = disclosureItem(button);
       const hadFocus = Boolean(item && doc.activeElement && item.contains(doc.activeElement));
       setDisclosureOpen(button, false);
       if (hadFocus) {
@@ -402,14 +313,14 @@ export function installNavDisclosure(doc: Document = document): void {
   doc.addEventListener("pointerdown", (event) => {
     const target = event.target as Node | null;
     for (const button of openPopups(doc)) {
-      const item = button.closest("[data-disclosure-item]");
+      const item = disclosureItem(button);
       if (!item || !target || !item.contains(target)) setDisclosureOpen(button, false);
     }
   });
 
   doc.addEventListener("focusout", (event) => {
     const next = event.relatedTarget as Node | null;
-    const item = (event.target as Element | null)?.closest("[data-disclosure-item]");
+    const item = disclosureItem(event.target as Element | null);
     const button = item && popupButton(item);
     // A press on a non-focusable spot has no relatedTarget; pointerdown owns it.
     if (!button || !next || item.contains(next) || !isDisclosureOpen(button)) return;
@@ -418,9 +329,10 @@ export function installNavDisclosure(doc: Document = document): void {
 
   doc.addEventListener("pointerover", (event) => {
     if (event.pointerType !== "mouse") return;
-    const item = (event.target as Element | null)?.closest("[data-disclosure-item]");
+    const item = disclosureItem(event.target as Element | null);
     const button = item && popupButton(item);
-    if (!button) return;
+    // "More" opens on a press only (its rows are the moved items).
+    if (!button || item.hasAttribute("data-nav-more")) return;
     clearTimer(button);
     if (isDisclosureOpen(button)) return;
     const switching = openPopups(doc).length > 0;
@@ -429,7 +341,7 @@ export function installNavDisclosure(doc: Document = document): void {
 
   doc.addEventListener("pointerout", (event) => {
     if (event.pointerType !== "mouse") return;
-    const item = (event.target as Element | null)?.closest("[data-disclosure-item]");
+    const item = disclosureItem(event.target as Element | null);
     const button = item && popupButton(item);
     const next = event.relatedTarget as Node | null;
     if (!button || (next && item.contains(next))) return;
@@ -441,11 +353,18 @@ export function installNavDisclosure(doc: Document = document): void {
   });
 
   const refresh = () => {
-    cloneCompactMenus(doc);
+    placeCompactMenus(doc);
     fitAll(doc);
     revealCurrentPill(doc);
   };
   refresh();
+  // Web fonts change every label's width: fit again once they are in.
+  void doc.fonts?.ready.then(() => fitAll(doc));
+  // The classic header's menu follows its condensed state.
+  const header = doc.getElementById("main-header");
+  if (header?.querySelector("[data-nav-compact-from]") && typeof MutationObserver !== "undefined") {
+    new MutationObserver(() => placeCompactMenus(doc)).observe(header, { attributes: true, attributeFilter: ["class"] });
+  }
   view.matchMedia(DESKTOP).addEventListener("change", (event) => {
     for (const button of openPopups(doc)) setDisclosureOpen(button, false);
     if (event.matches) refresh();
