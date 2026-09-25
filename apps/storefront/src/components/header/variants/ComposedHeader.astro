@@ -284,9 +284,10 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    /* Heights from header-variants HEADER_GEOMETRY; they snap (no height
-       transition) so the scroll reserve matches them in every frame. */
+    /* Heights from header-variants HEADER_GEOMETRY, easing with the same
+       transition as the scroll reserve under the header. */
     height: var(--hdr-phone-bar, 3.5rem);
+    transition: height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease);
   }
 
   .hdr.is-scrolled .hdr-bar {
@@ -437,10 +438,15 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     padding: 0 1rem 0.5rem;
   }
 
-  /* The sticky row is exactly the height the scroll reserve holds. */
+  /* The sticky row is exactly the height the scroll reserve holds; it
+     folds with the reserve's transition (hidden once folded). */
   .hdr > .hdr-phone-search {
     box-sizing: border-box;
     height: var(--hdr-phone-search-row, 3.25rem);
+    transition:
+      height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease),
+      padding-bottom var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease),
+      visibility 0s linear;
   }
 
   .hdr-phone-search--page {
@@ -448,8 +454,12 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     border-bottom: 1px solid var(--border);
   }
 
-  .hdr.is-scrolled .hdr-phone-search {
-    display: none;
+  .hdr.is-scrolled > .hdr-phone-search {
+    height: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+    visibility: hidden;
+    transition-delay: 0s, 0s, var(--hdr-condense-duration, 300ms);
   }
 
   @media (min-width: 64rem) {
@@ -650,8 +660,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hdr,
-    .hdr-bar,
     .hdr-cart-count {
       transition: none;
     }
