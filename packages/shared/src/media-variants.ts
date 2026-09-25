@@ -90,3 +90,22 @@ export function mediaOriginalUrl(url: string | null | undefined): string {
   const parsed = url ? parseVariantUrl(url) : null;
   return parsed ? `${parsed.base}${parsed.suffix}` : url ?? "";
 }
+
+const MEDIA_ORIGINAL_PATH = /(?:^|\/)media\/[^/?#]+\.([A-Za-z0-9]{1,10})$/;
+/** Vector files scale without renditions: never an "original" to avoid. */
+const VECTOR_EXTENSIONS = new Set(["svg"]);
+
+/**
+ * A raster upload of our own media store served as uploaded (a legacy or
+ * failed-rendition image, up to 2400px and ~1MB): `media/<id>.<ext>` with
+ * no rendition suffix. Small slots (cards) show their placeholder instead
+ * while the public read queues its render job. External URLs and SVGs are
+ * not ours to resize and return false.
+ */
+export function isUnrenderedMediaOriginal(url: string | null | undefined): boolean {
+  if (!url || parseVariantUrl(url)) return false;
+  const suffixIndex = url.search(/[?#]/);
+  const path = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  const match = MEDIA_ORIGINAL_PATH.exec(path);
+  return Boolean(match && !VECTOR_EXTENSIONS.has(match[1]!.toLowerCase()));
+}

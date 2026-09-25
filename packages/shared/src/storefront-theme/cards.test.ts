@@ -63,6 +63,7 @@ describe("card anatomy", () => {
       body: ["title", "price"],
       action: "block",
       actionLabel: "add-to-cart",
+      compare: false,
     });
   });
 
@@ -75,6 +76,12 @@ describe("card anatomy", () => {
     expect(anatomy("quick-add")).toMatchObject({ action: "round", body: ["price", "title", "pack-size", "delivery"] });
     expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 1 });
     expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "primary" });
+    expect(anatomy("detailed")).toMatchObject({
+      titleLines: 3,
+      body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],
+    });
+    // Only the spec card offers Compare.
+    expect(storefrontBlockVariants("card").filter((id) => anatomy(id).compare)).toEqual(["spec"]);
   });
 });
 
@@ -102,6 +109,7 @@ describe("card looks (fidelity AUDIT.md section 2.1)", () => {
     expect(STOREFRONT_CARD_LOOKS.retail.price.size.desktop).toBe(22);
     expect(STOREFRONT_CARD_LOOKS.boutique.title).toMatchObject({ size: { desktop: 13 }, weight: 400 });
     expect(STOREFRONT_CARD_LOOKS["quick-add"].price.size).toEqual({ desktop: 18, phone: 12 });
+    expect(STOREFRONT_CARD_LOOKS.detailed).toMatchObject({ title: { size: { desktop: 16, phone: 14 }, lines: 3 }, price: { size: { desktop: 28 } } });
     for (const [id, look] of Object.entries(STOREFRONT_CARD_LOOKS)) {
       // The Bangla floor on phones.
       expect(look.title.size.phone, id).toBeGreaterThanOrEqual(14);

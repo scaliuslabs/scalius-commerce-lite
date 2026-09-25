@@ -100,6 +100,9 @@ export const STOREFRONT_CARD_SLOTS = [
   "pack-size",
   "delivery",
   "emi",
+  // Amazon: colour dots above the title, "Options: 4 sizes" under it.
+  "swatches",
+  "options",
 ] as const;
 export type StorefrontCardSlot = (typeof STOREFRONT_CARD_SLOTS)[number];
 /** What a card body shows, top to bottom: the title, the price and optional facts. */
@@ -127,7 +130,7 @@ export interface StorefrontCardLook {
   /** Corner radius in px: the card's frame; on a flat card, the photo's corners. */
   radius: number;
   surface: StorefrontThemeSurface;
-  title: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight; lines: 1 | 2 };
+  title: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight; lines: 1 | 2 | 3 };
   price: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight };
 }
 
@@ -207,6 +210,17 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 18, phone: 12 }, weight: 700 },
   },
+  // Amazon UK search grid (owner's screenshot, 2026-09-25): square photo
+  // contained on a grey well, no card chrome, radius 0; title 16/400 in
+  // three lines (14 on phones), superscript price with 28px whole units
+  // (22 on phones).
+  detailed: {
+    image: { ratio: 1, fit: "contain" },
+    radius: 0,
+    surface: "flat",
+    title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 3 },
+    price: { size: { desktop: 28, phone: 22 }, weight: 400 },
+  },
 } as const satisfies Record<string, StorefrontCardLook>;
 
 /**
@@ -224,7 +238,7 @@ export interface StorefrontCardRenderer {
   /** How a discount reads: "-20%", "Sale", "Save ৳600" or "৳600 OFF". */
   discount: "percent" | "sale" | "save" | "off";
   /** Title lines before it is clamped. */
-  titleLines: 1 | 2;
+  titleLines: 1 | 2 | 3;
   titleWeight: "regular" | "medium" | "strong";
   /** The price's colour role: ink, the action colour, or the sale colour while discounted. */
   priceTone: "ink" | "primary" | "sale";
@@ -233,6 +247,8 @@ export interface StorefrontCardRenderer {
   /** Where the buy action sits: a full-width button, an outline button, or a round button on the photo. */
   action: "block" | "outline" | "round";
   actionLabel: "buy-now" | "add-to-cart";
+  /** An "Add to Compare" toggle under the action, and the floating Compare tray (Star Tech). */
+  compare: boolean;
   /** The card's own look; null follows the template's tokens (standard only). */
   look: StorefrontCardLook | null;
 }
@@ -256,6 +272,7 @@ function card(
     body: ["title", "price"],
     action: "block",
     actionLabel: "add-to-cart",
+    compare: false,
     ...anatomy,
     titleLines: look?.title.lines ?? 2,
     titleWeight: look ? TITLE_WEIGHTS[look.title.weight] : "medium",
@@ -404,6 +421,7 @@ export const STOREFRONT_CARD_VARIANTS = {
       priceTone: "primary",
       body: ["title", "key-specs", "price", "emi"],
       actionLabel: "buy-now",
+      compare: true,
     }),
   }),
   // Apple Gadgets: title 18/600, price 18/600 with a "৳500 OFF" chip, outline
@@ -451,6 +469,16 @@ export const STOREFRONT_CARD_VARIANTS = {
       priceTone: "sale",
       body: ["price", "title", "pack-size", "delivery"],
       action: "round",
+    }),
+  }),
+  // Amazon: colour swatches, title in three lines, "Options: 4 sizes",
+  // rating, "1K+ bought in past month" (only from real sales), a
+  // superscript price with the struck list price, the delivery line.
+  detailed: variant({
+    contrastPairs: [["destructive", "card"]],
+    renders: card(STOREFRONT_CARD_LOOKS.detailed, {
+      badge: "price",
+      body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],
     }),
   }),
 };
