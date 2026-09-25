@@ -978,7 +978,12 @@ export async function duplicateProduct(
     const skus = await freeCopySkus(db, liveVariants.map((variant) => variant.sku));
     const skuOf = new Map(liveVariants.map((variant, index) => [variant.id, skus[index]!]));
 
-    const input = createProductSchema.parse({
+    // A value no live SKU sells (its SKU was removed) stays on the source
+    // until the merchant edits the matrix, but a new product may only carry
+    // values some SKU uses: the copy takes exactly the values its SKUs sell.
+    const soldValueIds = new Set(optionVariants.flatMap((variant) =>
+        variant.selectedOptions.map((option) => option.optionValueId)));
+    const parsed = createProductSchema.safeParse({
         name: name.trim().slice(0, 100),
         description: source.description,
         price: source.price,
@@ -1008,7 +1013,9 @@ export async function duplicateProduct(
                         id: option.id,
                         name: option.name,
                         standardMapping: option.standardMapping,
-                        values: option.values.map((value) => ({ id: value.id, value: value.value })),
+                        values: option.values
+                            .filter((value) => soldValueIds.has(value.id))
+                            .map((value) => ({ id: value.id, value: value.value })),
                     })),
                     variants: optionVariants.map((variant) => ({
                         id: variant.id,
@@ -1040,5 +1047,12 @@ export async function duplicateProduct(
                 },
             }),
     });
-    return createProduct(db, input);
+    if (!parsed.success) {
+        // A copy the product form could not save either: a 400 naming why.
+        const issue = parsed.error.issues[0];
+        throw new ValidationError(issue?.message ?? "This product cannot be copied.", {
+            field: issue?.path.join("."),
+        });
+    }
+    return createProduct(db, parsed.data);
 }
