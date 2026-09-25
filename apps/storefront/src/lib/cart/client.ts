@@ -814,7 +814,10 @@ function applyPendingCartRepairState(): boolean {
   return true;
 }
 
-export async function validateCartSnapshot(): Promise<boolean> {
+export async function validateCartSnapshot(
+  /** Re-render the lines even when the check changed nothing (a page shown again). */
+  { renderUnchanged = true }: { renderUnchanged?: boolean } = {},
+): Promise<boolean> {
   const { items } = cartStore.get();
   const payloadItems = cartValidationPayload(items);
   const sequence = ++cartValidationSequence;
@@ -890,7 +893,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
-    if (shown() !== shownBefore) await renderCartItems();
+    if (renderUnchanged || shown() !== shownBefore) await renderCartItems();
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
@@ -914,7 +917,7 @@ function scheduleCartValidation() {
   cartValidationSequence += 1;
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
-    void validateCartSnapshot();
+    void validateCartSnapshot({ renderUnchanged: false });
   }, 350);
 }
 

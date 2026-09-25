@@ -8,6 +8,7 @@
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
+import LocationFields from "@/components/checkout/LocationFields.astro";
 import { getLayoutData } from "@/lib/api";
 import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import type { LocationData } from "@/lib/api/types";
@@ -108,6 +109,8 @@ const nameValue = nameFailed ? posted!.name : customer?.name ?? "";
 // After a failed save without JavaScript, the first field to fix takes focus (and scrolls into view).
 const firstError = (["name", "address", "city", "zone", "area"] as const).find((key) => fieldErrors[key]) ?? null;
 const errorId = (key: string) => (fieldErrors[key as keyof typeof fieldErrors] ? `${key}Error` : undefined);
+// City, thana and area share one message, at the field still to choose.
+const locationError = fieldErrors.city ?? fieldErrors.zone ?? fieldErrors.area ?? null;
 const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
 ---
 
@@ -205,33 +208,24 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                   <input id="fieldAddress" name="address" type="text" autocomplete="street-address" required maxlength="300" placeholder="House, road, area" value={draft.address} aria-invalid={fieldErrors.address ? "true" : undefined} aria-describedby={errorId("address")} class={ui.field} autofocus={firstError === "address"} />
                   {fieldErrors.address && <p id="addressError" class={ui.fieldError}>{fieldErrors.address}</p>}
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label for="fieldCity" class={ui.label}>City</label>
-                    <select id="fieldCity" name="city" required aria-invalid={fieldErrors.city ? "true" : undefined} aria-describedby={errorId("city")} class={ui.field} data-location="city" autofocus={firstError === "city"}>
-                      <option value="">Select a city</option>
-                      {(locations.cities ?? []).map((city) => <option value={city.id} selected={city.id === draft.city}>{city.name}</option>)}
-                    </select>
-                    {fieldErrors.city && <p id="cityError" class={ui.fieldError}>{fieldErrors.city}</p>}
-                  </div>
-                  <div>
-                    <label for="fieldZone" class={ui.label}>{copy.zoneLabel}</label>
-                    <select id="fieldZone" name="zone" required aria-invalid={fieldErrors.zone ? "true" : undefined} aria-describedby={errorId("zone")} class={ui.field} data-location="zone" autofocus={firstError === "zone"}>
-                      <option value="">{copy.selectZonePlaceholder}</option>
-                      {(locations.zones ?? []).map((zone) => <option value={zone.id} selected={zone.id === draft.zone}>{zone.name}</option>)}
-                    </select>
-                    {fieldErrors.zone && <p id="zoneError" class={ui.fieldError}>{fieldErrors.zone}</p>}
-                  </div>
+                <div>
+                  <LocationFields
+                    idPrefix="profile"
+                    cities={locations.cities ?? []}
+                    zones={locations.zones ?? []}
+                    areas={(locations.zones ?? []).some((zone) => zone.id === draft.zone) ? locations.areas ?? [] : []}
+                    city={draft.city}
+                    zone={draft.zone}
+                    area={draft.area}
+                    copy={copy}
+                    showAreaField
+                    nativeRequired
+                    errorId={locationError ? "locationError" : undefined}
+                    invalid={Boolean(locationError)}
+                    autofocus={firstError === "city" || firstError === "zone" || firstError === "area" ? firstError : null}
+                  />
+                  {locationError && <p id="locationError" class={ui.fieldError}>{locationError}</p>}
                 </div>
-                <div hidden={(locations.areas ?? []).length === 0 && !fieldErrors.area} data-area-field>
-                  <label for="fieldArea" class={ui.label}>Area (optional)</label>
-                  <select id="fieldArea" name="area" aria-invalid={fieldErrors.area ? "true" : undefined} aria-describedby={errorId("area")} class={ui.field} data-location="area" autofocus={firstError === "area"}>
-                    <option value="">Select an area (optional)</option>
-                    {(locations.areas ?? []).map((area) => <option value={area.id} selected={area.id === draft.area}>{area.name}</option>)}
-                  </select>
-                  {fieldErrors.area && <p id="areaError" class={ui.fieldError}>{fieldErrors.area}</p>}
-                </div>
-                <p class="text-sm text-muted-foreground" data-location-status role="status" aria-live="polite"></p>
                 {addressFailed && formMessage && <p role="alert" class="text-sm text-destructive">{formMessage}</p>}
                 <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   {addressFailed
@@ -277,43 +271,14 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
 
 <script>
   import { getAreas, getZones } from "@/lib/api/shipping";
+  import { enhanceLocationSelects } from "@/lib/checkout/location-select";
 
-  // With JavaScript the thana and area lists follow the city and thana at
-  // once; without it the server answers "choose a thana" with the new list.
-  const form = document.querySelector<HTMLFormElement>("form[data-address-form]");
-  const city = form?.querySelector<HTMLSelectElement>("[data-location=city]");
-  const zone = form?.querySelector<HTMLSelectElement>("[data-location=zone]");
-  const area = form?.querySelector<HTMLSelectElement>("[data-location=area]");
-  const areaField = form?.querySelector<HTMLElement>("[data-area-field]");
-  const status = form?.querySelector<HTMLElement>("[data-location-status]");
-  const save = form?.querySelector<HTMLButtonElement>("[data-address-save]");
-
-  if (form && city && zone && area && areaField && status && save) {
-    let read = 0;
-    const fill = (select: HTMLSelectElement, options: Array<{ id: string; name: string }>) => {
-      const placeholder = select.options[0]!;
-      select.replaceChildren(placeholder, ...options.map((option) => new Option(option.name, option.id)));
-      select.value = "";
-    };
-    const load = async (target: "zone" | "area") => {
-      const request = ++read;
-      if (target === "zone") fill(zone, []);
-      fill(area, []);
-      areaField.hidden = true;
-      const parent = target === "zone" ? city.value : zone.value;
-      if (!parent) return;
-      save.disabled = true;
-      status.textContent = "Loading…";
-      const options = await (target === "zone" ? getZones(parent) : getAreas(parent));
-      if (request !== read) return;
-      save.disabled = false;
-      status.textContent = options ? "" : "The list could not be loaded. Choose again or save to try.";
-      if (!options) return;
-      fill(target === "zone" ? zone : area, options);
-      if (target === "area") areaField.hidden = options.length === 0;
-      else if (options.length === 0) status.textContent = "No thanas are available for this city. Choose another city.";
-    };
-    city.addEventListener("change", () => void load("zone"));
-    zone.addEventListener("change", () => void load("area"));
+  // The same search-or-scroll pickers as checkout; without JavaScript the
+  // server answers "choose a thana" with the new city's list.
+  const root = document.querySelector<HTMLElement>("form[data-address-form] [data-location-fields]");
+  if (root) {
+    enhanceLocationSelects(root, {
+      load: (level, parentId) => (level === "zones" ? getZones(parentId) : getAreas(parentId)),
+    });
   }
 </script>
