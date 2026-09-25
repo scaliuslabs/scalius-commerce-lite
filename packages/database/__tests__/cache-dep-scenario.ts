@@ -117,10 +117,10 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
 
   // A category move is a membership change of both the old and the new subtree.
   expect(await bumped(driver, "UPDATE product_buyer_state SET category_id = 'cat_other' WHERE product_id = 'p1'"))
-    .toEqual([...p1Scopes("lm"), "lm:cat:cat_other", "p:p1", "t:product_buyer_state"].sort());
-  // Unpublish: the old scopes only.
+    .toEqual([...p1Scopes("lm"), "lm:cat:cat_other", "lm:shape", "p:p1", "t:product_buyer_state"].sort());
+  // Unpublish: the old scopes only (and the layout's store shape).
   expect(await bumped(driver, "UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'p1'"))
-    .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "p:p1", "t:product_buyer_state"]);
+    .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "lm:shape", "p:p1", "t:product_buyer_state"]);
   // Facts of a non-public product move no listing.
   expect(await bumped(driver, "UPDATE product_buyer_state SET from_minor = 80, to_minor = 80 WHERE product_id = 'p1'")).toEqual([]);
 
@@ -132,7 +132,7 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
   // scope comes straight from the row, next to the closure's ancestors.
   await driver.exec("DELETE FROM category_closure WHERE descendant_id = 'cat_other'");
   expect(await bumped(driver, "UPDATE product_buyer_state SET is_public = 1 WHERE product_id = 'p1'"))
-    .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "p:p1", "t:product_buyer_state"]);
+    .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "lm:shape", "p:p1", "t:product_buyer_state"]);
   await driver.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'p1'");
 
   // Coarse (a rebuild batch): only `store`.

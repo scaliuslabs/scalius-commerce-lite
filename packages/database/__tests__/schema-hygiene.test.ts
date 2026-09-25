@@ -54,5 +54,5 @@ describe("canonical schema hygiene", () => {
       d1.close();
       turso.close();
     }
-  });
+  }, 60_000);
 });

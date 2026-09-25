@@ -418,6 +418,10 @@ const CACHE_DEP_TABLE_RULES = {
         name: "card", event: "update", image: "new", changed: ["sku_id", "has_customer_options"], where: PUBLIC_ROW,
         keys: [p("product_id")],
       },
+      // The layout's store shape: which categories and brands hold a public product.
+      { name: "shape_ins", event: "insert", image: "new", where: PUBLIC_ROW, keys: [SHAPE] },
+      { name: "shape_del", event: "delete", image: "old", where: PUBLIC_ROW, keys: [SHAPE] },
+      { name: "shape", event: "update", image: "new", changed: ["is_public", "category_id", "brand_id"], keys: [SHAPE] },
     ],
   },
   product_facet_values: {
@@ -434,7 +438,7 @@ const CACHE_DEP_TABLE_RULES = {
       { name: "ins", event: "insert", image: "new", keys: [p("product_id"), SHAPE] },
       { name: "del", event: "delete", image: "old", keys: [p("product_id"), SHAPE] },
       { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("product_id")] },
-      { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id"], keys: [SHAPE] },
+      { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id", "fulfillment_kind"], keys: [SHAPE] },
       { name: "band", event: "update", image: "new", bandChanged: true, keys: [p("product_id")] },
       { name: "sale_ins", event: "insert", image: "new", where: SALE_SKU, keys: [SALE] },
       { name: "sale_del", event: "delete", image: "old", where: SALE_SKU, keys: [SALE] },
@@ -470,7 +474,19 @@ const CACHE_DEP_TABLE_RULES = {
       lookup: { table: "product_variants", select: "product_id", key: "id", column: "variant_id" },
     }]),
   },
-  product_attribute_values: { kinds: ["p"], noise: ["created_at"], rules: everyChange([p("product_id")]) },
+  product_attribute_values: {
+    kinds: ["p", "lm"],
+    noise: ["created_at"],
+    note: "`lm:shape`: the layout asks whether any public product has a key-spec value, so a value of a key-spec attribute advances it (the attribute's own flag is `attr:*`).",
+    rules: [
+      ...everyChange([p("product_id")]),
+      ...everyChange([SHAPE]).map((rule): CacheDepRule => ({
+        ...rule,
+        name: `spec_${rule.name}`,
+        where: { exists: "SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = R.attribute_id AND spec_attribute.key_spec = 1" },
+      })),
+    ],
+  },
   product_rich_content: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_content_blocks: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_bundles: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
@@ -481,10 +497,21 @@ const CACHE_DEP_TABLE_RULES = {
     rules: everyChange([p("product_id")]),
   },
   product_review_stats: {
-    kinds: ["p", "lo"],
+    kinds: ["p", "lo", "lm"],
     noise: ["updated_at"],
     note: "The review projection (triggers on product_reviews keep it): the product's summary and card rating, and the rating facet and order of its scopes. Every review write that changes a published count advances the keys at commit, so reviews need no scheduled bump.",
-    rules: everyChange([p("product_id"), { scopes: "lo:rating", from: { product: "product_id" } }]),
+    rules: [
+      ...everyChange([p("product_id"), { scopes: "lo:rating", from: { product: "product_id" } }]),
+      // `lm:shape`: the layout asks whether any product has a published
+      // review. Only a rank appearing or disappearing changes that; the
+      // update rule's old-image companion covers null -> rated.
+      { name: "shape_ins", event: "insert", image: "new", where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NOT NULL" }, keys: [SHAPE] },
+      { name: "shape_del", event: "delete", image: "old", where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NOT NULL" }, keys: [SHAPE] },
+      {
+        name: "shape", event: "update", image: "new", changed: ["rating_rank_milli"],
+        where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NULL" }, keys: [SHAPE],
+      },
+    ],
   },
   warranty_policies: {
     kinds: ["p"],
