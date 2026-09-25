@@ -128,8 +128,10 @@ describe("migrated schema invariants", () => {
     });
     insert("order_items", {
       id: "item_1", order_id: "ord_1", product_id: "prod_1", variant_id: "var_1", quantity: 2, unit_price_minor: 10_000,
-      fulfillment_status: "shipped",
     });
+    // Both units handed to the courier: the ledger is what bounds returns.
+    insert("order_fulfillments", { id: "ful_1", order_id: "ord_1", kind: "ship", request_key: "sent", actor_type: "admin" });
+    insert("order_fulfillment_lines", { id: "fln_1", fulfillment_id: "ful_1", order_id: "ord_1", order_item_id: "item_1", quantity: 2 });
     const returnCase = (id: string) =>
       insert("order_returns", { id, order_id: "ord_1", reason: "damaged", actor_type: "admin" });
     const line = (id: string, returnId: string, quantity: number) => insert("order_return_lines", {
