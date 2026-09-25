@@ -64,6 +64,7 @@ export function describeRejectedCode(
         ? text(copy.discountNotCombinableText, { code, other: rejection.conflictsWith })
         : rejection.message;
     case "lower_savings":
+      if (rejection.bundleSavesMore) return text(copy.discountBundleBetterText, { code });
       return rejection.conflictsWith
         ? text(copy.discountLowerSavingsThanText, { other: rejection.conflictsWith })
         : copy.discountLowerSavingsText;

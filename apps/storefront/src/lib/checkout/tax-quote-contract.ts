@@ -147,6 +147,8 @@ export interface CheckoutRejectedCode {
   conflictsWith?: string;
   offer?: CheckoutDiscountOffer;
   requiresCustomerPhone?: boolean;
+  /** The code applies, but the quantity-bundle saving is bigger, so the bundle is used. */
+  bundleSavesMore?: true;
 }
 
 export interface CheckoutDiscountFacts {
@@ -587,7 +589,11 @@ function parseBundleDiscountLine(
   const amount = nonNegativeAmount(data.bundleDiscountAmount);
   assertAmountMatchesMinor(amount, minor, decimalPlaces);
   if (minor === 0) return null;
-  const bundles = data.bundles ?? [];
+  return bundleDiscountLine(data.bundles, amount);
+}
+
+function bundleDiscountLine(bundles: unknown, amount: number): CheckoutDiscountLine {
+  bundles ??= [];
   if (!Array.isArray(bundles) || bundles.length > TAX_QUOTE_MAX_ITEMS) fail();
   const labels = [...new Set(bundles.flatMap((bundle) =>
     isRecord(bundle) && typeof bundle.label === "string" && bundle.label.trim()
@@ -600,6 +606,17 @@ function parseBundleDiscountLine(
     amount,
     shippingAmount: 0,
   };
+}
+
+/**
+ * The cart preview's (`/discounts/validate`) quantity-bundle saving as the
+ * same "Discount · Pair" line the tax quote shows, or null when none applies
+ * (or the API predates bundle previews).
+ */
+export function parsePreviewBundleDiscountLine(data: Record<string, unknown>): CheckoutDiscountLine | null {
+  if (data.bundleDiscountAmount === undefined || data.bundleDiscountAmount === null) return null;
+  const amount = nonNegativeAmount(data.bundleDiscountAmount);
+  return amount > 0 ? bundleDiscountLine(data.bundles, amount) : null;
 }
 
 const REJECTED_CODE_REASONS = new Set<CheckoutRejectedCodeReason>([
@@ -638,6 +655,7 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
         ...(typeof rejection.conflictsWith === "string" ? { conflictsWith: requiredString(rejection.conflictsWith, 160) } : {}),
         ...(rejection.offer !== undefined ? { offer: parseOffer(rejection.offer) } : {}),
         ...(rejection.requiresCustomerPhone === true ? { requiresCustomerPhone: true } : {}),
+        ...(rejection.bundleSavesMore === true ? { bundleSavesMore: true as const } : {}),
       };
     }),
   };
