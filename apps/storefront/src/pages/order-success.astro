@@ -1,4 +1,5 @@
 ---
+import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -831,8 +832,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       copy={copy}
       client:load
     />
-    {/* Order-thread mount point: S4's panel (components/conversation/**) mounts here with order.conversationId. */}
-    <div data-order-thread-slot hidden class="no-print"></div>
+    {/* The order's conversation with the store, through this browser's receipt proof. */}
+    <OrderConversationPanel orderId={orderId} access="receipt" class="mt-6 rounded-xl border border-border bg-card p-5 print:hidden" />
     {orderRecommendations && orderRecommendations.products.length > 0 && (
       <section aria-labelledby="order-recommendations" class="mt-10 print:hidden">
         <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">
