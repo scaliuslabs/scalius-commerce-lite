@@ -26,6 +26,11 @@ interface Props {
   label?: string;
   placeholder?: string;
   note?: string | null;
+  attachLabel?: string;
+  attachHint?: string;
+  submitLabel?: string;
+  /** Overrides the message for `status` (a form with its own outcome words, like the warranty claim form). */
+  statusMessage?: { tone: "success" | "error"; text: string } | null;
 }
 
 const {
@@ -37,8 +42,11 @@ const {
   label = copy.messageLabel,
   placeholder = "Write your message",
   note = null,
+  attachLabel = copy.attachLabel,
+  attachHint = copy.attachHint,
+  submitLabel = copy.send,
+  statusMessage = status ? conversationStatusMessage(status) : null,
 } = Astro.props;
-const statusMessage = status ? conversationStatusMessage(status) : null;
 const clientMessageKey = newClientMessageKey();
 const accept = "image/jpeg,image/png,image/webp";
 ---
@@ -67,7 +75,7 @@ const accept = "image/jpeg,image/png,image/webp";
     ></textarea>
   </div>
   <div>
-    <label for={`${idPrefix}Images`} class="mb-1.5 block text-sm font-medium text-foreground">{copy.attachLabel}</label>
+    <label for={`${idPrefix}Images`} class="mb-1.5 block text-sm font-medium text-foreground">{attachLabel}</label>
     <input
       id={`${idPrefix}Images`}
       name="images"
@@ -77,7 +85,7 @@ const accept = "image/jpeg,image/png,image/webp";
       aria-describedby={`${idPrefix}ImagesHint`}
       class="block w-full text-sm text-muted-foreground file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-border file:bg-background file:px-4 file:text-sm file:font-medium file:text-foreground hover:file:bg-muted"
     />
-    <p id={`${idPrefix}ImagesHint`} class="mt-1 text-xs text-muted-foreground">{copy.attachHint}</p>
+    <p id={`${idPrefix}ImagesHint`} class="mt-1 text-xs text-muted-foreground">{attachHint}</p>
     <div class="mt-2 flex flex-wrap gap-2 empty:hidden" data-conversation-previews></div>
   </div>
   <p
@@ -89,10 +97,10 @@ const accept = "image/jpeg,image/png,image/webp";
   <div class="flex justify-end">
     <button
       type="submit"
-      data-idle-label={copy.send}
+      data-idle-label={submitLabel}
       data-busy-label={copy.sending}
       class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-    >{copy.send}</button>
+    >{submitLabel}</button>
   </div>
 </form>
 

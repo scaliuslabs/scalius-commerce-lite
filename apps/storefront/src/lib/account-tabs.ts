@@ -1,5 +1,5 @@
 // The account navigation: Orders, Profile and Inbox always, then Reviews,
-// Downloads and Gift cards while the account has something there (or the
+// Downloads, Gift cards and Warranties (active ones) while the account has something there (or the
 // buyer is on that page). One server read, GET /customer-auth/account-summary,
 // gives every count, so every account page renders the same strip and nothing
 // shifts between pages.
@@ -15,7 +15,7 @@ export interface AccountSummary {
 
 const SUMMARY_KEYS = ["unreadInbox", "reviewsToWrite", "reviewsWritten", "downloads", "giftCards", "activeWarranties"] as const satisfies ReadonlyArray<keyof AccountSummary>;
 
-export type AccountSection = "orders" | "profile" | "inbox" | "reviews" | "downloads" | "gift-cards";
+export type AccountSection = "orders" | "profile" | "inbox" | "reviews" | "downloads" | "gift-cards" | "warranties";
 
 export interface AccountNavTab {
   key: AccountSection;
@@ -48,6 +48,7 @@ export function accountNavTabs(current: AccountSection, summary: AccountSummary 
     },
     { key: "downloads", href: "/account/downloads", label: "Downloads", badge: "", badgeLabel: "", show: has("downloads", summary?.downloads ?? 0) },
     { key: "gift-cards", href: "/account/gift-cards", label: "Gift cards", badge: "", badgeLabel: "", show: has("gift-cards", summary?.giftCards ?? 0) },
+    { key: "warranties", href: "/account/warranties", label: "Warranties", badge: "", badgeLabel: "", show: has("warranties", summary?.activeWarranties ?? 0) },
   ];
   return tabs.filter((tab) => tab.show).map(({ show: _show, ...tab }) => tab);
 }

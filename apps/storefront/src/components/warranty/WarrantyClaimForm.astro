@@ -1,0 +1,52 @@
+---
+// B5 (warranty): "Make a claim" as a disclosure holding the claim form: what's
+// wrong and up to three photos. It is the conversation form (the same staged
+// photo upload, the same no-JS post and in-place enhancement); the claim
+// endpoint opens the claim and its thread in one step, then sends the buyer to
+// that thread (the Inbox, or a guest's claim page). A plain post that fails
+// comes back to `returnTo` with this form open and the outcome shown.
+import ConversationReplyForm from "@/components/conversation/ConversationReplyForm.astro";
+import {
+  warrantyClaimAction,
+  warrantyClaimFlagText,
+  type WarrantyAccess,
+  type WarrantyClaimFlag,
+  type WarrantyCopy,
+} from "@/lib/account-warranties";
+
+interface Props {
+  warrantyId: string;
+  access: WarrantyAccess;
+  copy: WarrantyCopy;
+  /** The page to come back to after a refused plain post. */
+  returnTo: string;
+  /** Open on arrival (the page was asked for this warranty's form). */
+  open?: boolean;
+  flag?: WarrantyClaimFlag | null;
+  class?: string;
+}
+
+const { warrantyId, access, copy, returnTo, open = false, flag = null, class: className = "mt-1" } = Astro.props;
+const idPrefix = `warrantyClaim${warrantyId.replace(/[^A-Za-z0-9]/g, "")}`;
+const sinkId = `${idPrefix}Messages`;
+---
+
+<details class:list={["group", className]} open={open || Boolean(flag)} data-warranty-claim>
+  <summary class="inline-flex min-h-11 cursor-pointer list-none items-center text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
+    {copy.warrantyMakeClaimText}
+  </summary>
+  {/* The enhanced post navigates to the new thread; this list only lets it run. */}
+  <ol id={sinkId} hidden></ol>
+  <ConversationReplyForm
+    action={warrantyClaimAction(warrantyId, access)}
+    returnTo={returnTo}
+    messagesTargetId={sinkId}
+    idPrefix={idPrefix}
+    label={copy.warrantyClaimDescriptionText}
+    placeholder={copy.warrantyClaimDescriptionHelpText}
+    attachLabel={copy.warrantyClaimPhotosText}
+    attachHint={copy.warrantyClaimPhotosHelpText}
+    submitLabel={copy.warrantyClaimSubmitText}
+    statusMessage={flag ? { tone: "error", text: warrantyClaimFlagText(flag, copy) } : null}
+  />
+</details>
