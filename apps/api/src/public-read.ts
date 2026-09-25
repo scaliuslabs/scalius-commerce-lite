@@ -1,9 +1,13 @@
 import { applyBaselineSecurityHeaders } from "@scalius/shared/http-security";
-import { PUBLIC_CACHE_MAX_AGE_SECONDS } from "@scalius/shared/cache-generation";
+import {
+  PUBLIC_CACHE_MAX_AGE_SECONDS,
+  readWorkerVersion,
+  type WorkerVersionMetadataEnv,
+} from "@scalius/shared/cache-generation";
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
-  withCacheGeneration,
+  withCacheIdentity,
 } from "./public-cache-policy";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 
@@ -28,14 +32,23 @@ export async function renderPublicRead(
 }
 
 /**
- * The cache key of a public read at a generation: canonical path, sorted
- * query and `__cg=<generation>`. Null for reads that are not publicly
- * cacheable, or without a generation (then nothing is cached).
+ * The cache key of a public read: canonical path, sorted query,
+ * `__cg=<generation>` and `__cv=<Worker version>`. The generation changes on
+ * every buyer-visible write; the version (`CF_VERSION_METADATA`) changes on
+ * every deploy and every `wrangler dev` start or reload, so an entry never
+ * outlives the code that rendered it, whatever that code changed. Null for
+ * reads that are not publicly cacheable, or without a generation or a version
+ * (then nothing is cached).
  */
-export function publicReadCacheKey(request: Request, generation: string | null): string | null {
-  if (!generation) return null;
+export function publicReadCacheKey(
+  request: Request,
+  env: WorkerVersionMetadataEnv,
+  generation: string | null,
+): string | null {
+  const version = readWorkerVersion(env);
+  if (!generation || !version) return null;
   const policy = getPublicApiCachePolicy(request);
-  return policy ? withCacheGeneration(policy.canonicalUrl, generation) : null;
+  return policy ? withCacheIdentity(policy.canonicalUrl, generation, version) : null;
 }
 
 /** Headers `decoratePublicApiResponse` gives every cacheable public read. */
@@ -73,6 +86,8 @@ function fromStoredEntry(stored: Response): Response {
 }
 
 export interface LocalPublicReadDeps {
+  /** The invocation's env; its Worker version is part of every key. */
+  env: WorkerVersionMetadataEnv;
   /** `caches.default` in production; null where the Cache API is missing. */
   cache: Pick<Cache, "match" | "put"> | null;
   render(request: Request): Promise<Response>;
@@ -105,7 +120,7 @@ export function createLocalPublicReader(deps: LocalPublicReadDeps) {
   };
 
   return async (request: Request, generation: string | null): Promise<Response> => {
-    const key = deps.cache ? publicReadCacheKey(request, generation) : null;
+    const key = deps.cache ? publicReadCacheKey(request, deps.env, generation) : null;
     if (key) {
       const stored = await deps.cache!.match(key).catch(() => undefined);
       if (stored) return fromStoredEntry(stored);

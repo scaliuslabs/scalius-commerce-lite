@@ -39,6 +39,19 @@ export function collectResourceBindingViolations(configPath, config) {
   });
 }
 
+// Every public API and storefront cache key carries the Worker version beside
+// the store's cache generation (`readWorkerVersion` in
+// @scalius/shared/cache-generation), so a deploy never serves the previous
+// code's payloads. Without the binding those caches are silently off.
+export const WORKER_VERSION_BINDING = "CF_VERSION_METADATA";
+
+export function collectVersionMetadataViolations(configPath, config) {
+  return config?.version_metadata?.binding === WORKER_VERSION_BINDING ? [] : [
+    `${configPath} must declare "version_metadata": { "binding": "${WORKER_VERSION_BINDING}" }; `
+    + "public cache keys include the Worker version so a deploy never serves the previous code's payloads.",
+  ];
+}
+
 export const apps = [
   {
     name: "api",
@@ -351,6 +364,7 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
 
     for (const configPath of app.configs) {
       const config = readJsoncWith(configPath);
+      errors.push(...collectVersionMetadataViolations(configPath, config));
       errors.push(...collectWranglerVarsViolations(configPath, config));
       errors.push(...collectResourceBindingViolations(configPath, config));
       for (const name of collectConfigNames(config)) {

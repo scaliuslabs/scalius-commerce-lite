@@ -7,6 +7,7 @@ import {
   collectConfigNames,
   collectDuplicateEnvDeclarations,
   collectResourceBindingViolations,
+  collectVersionMetadataViolations,
   collectWranglerVarsViolations,
   extractEnvNames,
   runWorkerEnvCheck,
@@ -85,6 +86,25 @@ describe("worker env check: Wrangler vars", () => {
     });
 
     expect(errors.some((error) => error.includes("apps/api/wrangler.jsonc declares Wrangler vars PURGE_URL"))).toBe(true);
+  });
+});
+
+describe("worker env check: Worker version in public cache keys", () => {
+  it("binds the version metadata in every committed Worker config", () => {
+    for (const app of apps) {
+      for (const configPath of app.configs) {
+        expect(collectVersionMetadataViolations(configPath, readRepoJsonc(configPath)), configPath).toEqual([]);
+      }
+    }
+  });
+
+  it("fails when a config drops the binding or renames it", () => {
+    expect(collectVersionMetadataViolations("apps/api/wrangler.jsonc", {})).toEqual([
+      expect.stringContaining('apps/api/wrangler.jsonc must declare "version_metadata": { "binding": "CF_VERSION_METADATA" }'),
+    ]);
+    expect(collectVersionMetadataViolations("apps/storefront/wrangler.jsonc", {
+      version_metadata: { binding: "VERSION" },
+    })).toHaveLength(1);
   });
 });
 

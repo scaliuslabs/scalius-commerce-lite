@@ -4,8 +4,8 @@ import { isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
 /**
  * Anonymous public API reads served through the `PublicApi` Workers Cache
  * entrypoint. The cache key is the canonical path + sorted query plus the
- * store's cache generation, so a buyer-visible write makes every entry stale
- * without a purge.
+ * store's cache generation and the running Worker version, so a buyer-visible
+ * write or a deploy makes every entry stale without a purge.
  */
 export interface PublicApiCachePolicy {
   canonicalUrl: string;
@@ -13,6 +13,13 @@ export interface PublicApiCachePolicy {
 
 /** Internal query parameter carrying the cache generation into the key. */
 export const CACHE_GENERATION_QUERY_PARAM = "__cg";
+/** Internal query parameter carrying the Worker version into the key. */
+export const CACHE_VERSION_QUERY_PARAM = "__cv";
+const CACHE_KEY_QUERY_PARAMS = [CACHE_GENERATION_QUERY_PARAM, CACHE_VERSION_QUERY_PARAM] as const;
+
+function hasCacheKeyParams(url: URL): boolean {
+  return CACHE_KEY_QUERY_PARAMS.some((name) => url.searchParams.has(name));
+}
 
 function hasPrivateRequestSignals(request: Request): boolean {
   return (
@@ -41,7 +48,7 @@ export function getPublicApiCachePolicy(
   if (hasPrivateRequestSignals(request)) return null;
 
   const url = new URL(request.url);
-  if (url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return null;
+  if (hasCacheKeyParams(url)) return null;
   if (!isPublicApiCacheRoute(url)) return null;
 
   return {
@@ -49,18 +56,22 @@ export function getPublicApiCachePolicy(
   };
 }
 
-/** The canonical URL with the generation appended; it becomes the cache key. */
-export function withCacheGeneration(canonicalUrl: string, generation: string): string {
+/**
+ * The canonical URL with the generation and the Worker version appended; it
+ * becomes the cache key.
+ */
+export function withCacheIdentity(canonicalUrl: string, generation: string, version: string): string {
   const url = new URL(canonicalUrl);
   url.searchParams.append(CACHE_GENERATION_QUERY_PARAM, generation);
+  url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
   return url.toString();
 }
 
-/** Removes the generation before the request reaches the application. */
-export function withoutCacheGeneration(request: Request): Request {
+/** Removes the generation and version before the request reaches the application. */
+export function withoutCacheIdentity(request: Request): Request {
   const url = new URL(request.url);
-  if (!url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return request;
-  url.searchParams.delete(CACHE_GENERATION_QUERY_PARAM);
+  if (!hasCacheKeyParams(url)) return request;
+  for (const name of CACHE_KEY_QUERY_PARAMS) url.searchParams.delete(name);
   return new Request(url.toString(), request);
 }
 

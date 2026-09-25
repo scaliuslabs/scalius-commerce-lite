@@ -56,11 +56,25 @@ function collectFiles(dir, files = []) {
   return files;
 }
 
+/**
+ * Workspace packages bundled into the storefront (`@scalius/shared`,
+ * `@scalius/api-client`, ...): their sources shape the rendered HTML too.
+ */
+function getWorkspaceDependencyDirs() {
+  const manifest = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8'));
+  return Object.entries(manifest.dependencies ?? {})
+    .filter(([name, range]) => name.startsWith('@scalius/') && String(range).startsWith('workspace:'))
+    .map(([name]) => join(repoRoot, 'packages', name.slice('@scalius/'.length)))
+    .filter((dir) => existsSync(dir))
+    .sort();
+}
+
 function getSourceBuildId() {
   const hash = createHash('sha256');
   const roots = [
     join(appRoot, 'src'),
     join(appRoot, 'public'),
+    ...getWorkspaceDependencyDirs().map((dir) => join(dir, 'src')),
   ];
   const files = [];
 
@@ -74,6 +88,7 @@ function getSourceBuildId() {
     join(appRoot, 'tsconfig.json'),
     join(appRoot, 'wrangler.jsonc'),
     join(repoRoot, 'pnpm-lock.yaml'),
+    ...getWorkspaceDependencyDirs().map((dir) => join(dir, 'package.json')),
   ]) {
     if (existsSync(file) && statSync(file).isFile()) files.push(file);
   }

@@ -147,7 +147,10 @@ describe("API Worker startup boundaries", () => {
         waitUntil: vi.fn(),
         exports: { PublicApi: { fetch: cachedFetch } },
       } as unknown as ExecutionContext,
-      runtimeEnv({ CACHE: { get: kvGet } as unknown as KVNamespace }),
+      runtimeEnv({
+        CACHE: { get: kvGet } as unknown as KVNamespace,
+        CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
+      }),
     ) as unknown as TestApiWorker;
 
     await worker.fetch(new Request("https://api.example.test/api/v1/products?page=2&limit=10"));
@@ -158,8 +161,8 @@ describe("API Worker startup boundaries", () => {
 
     expect(kvGet).toHaveBeenCalledWith("cache:generation", { cacheTtl: 30 });
     expect(cachedFetch.mock.calls.map(([request]) => request.url)).toEqual([
-      "https://api.example.test/api/v1/products?limit=10&page=2&__cg=a1b2c3d4e5f60718",
-      "https://api.example.test/api/v1/products?__cg=feedc0de",
+      "https://api.example.test/api/v1/products?limit=10&page=2&__cg=a1b2c3d4e5f60718&__cv=version-a",
+      "https://api.example.test/api/v1/products?__cg=feedc0de&__cv=version-a",
     ]);
     expect(loaded.public).toBe(false);
   });
