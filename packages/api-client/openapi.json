@@ -4943,31 +4943,6 @@
           "isActive"
         ]
       },
-      "ProductReviews": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "summary": {
-            "$ref": "#/components/schemas/PublicReviewSummary"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublicReview"
-            }
-          },
-          "nextCursor": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "summary",
-          "items",
-          "nextCursor"
-        ],
-        "description": "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state."
-      },
       "PublicReviewSummary": {
         "type": "object",
         "properties": {
@@ -5081,6 +5056,29 @@
           "publishedAt",
           "editedAt",
           "reply"
+        ]
+      },
+      "ProductReviews": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/PublicReviewSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicReview"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "summary",
+          "items",
+          "nextCursor"
         ]
       },
       "AdminReviewPage": {
@@ -5291,7 +5289,53 @@
             "minimum": 0
           },
           "product": {
-            "$ref": "#/components/schemas/ProductReviewStatsSummary"
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "productId": {
+                "type": "string"
+              },
+              "productName": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "average": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "histogram": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rating": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "rating",
+                    "count"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "productId",
+              "productName",
+              "count",
+              "average",
+              "histogram"
+            ]
           }
         },
         "required": [
@@ -5299,55 +5343,6 @@
           "published",
           "rejected",
           "product"
-        ]
-      },
-      "ProductReviewStatsSummary": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "productId": {
-            "type": "string"
-          },
-          "productName": {
-            "type": "string"
-          },
-          "count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "average": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 5
-          },
-          "histogram": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "rating": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 5
-                },
-                "count": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              },
-              "required": [
-                "rating",
-                "count"
-              ]
-            }
-          }
-        },
-        "required": [
-          "productId",
-          "productName",
-          "count",
-          "average",
-          "histogram"
         ]
       },
       "ReviewSettings": {
@@ -54037,7 +54032,29 @@
                               "description": "\"EMI on card payment, from X/month\": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible."
                             },
                             "reviews": {
-                              "$ref": "#/components/schemas/ProductReviews"
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "summary": {
+                                  "$ref": "#/components/schemas/PublicReviewSummary"
+                                },
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/PublicReview"
+                                  }
+                                },
+                                "nextCursor": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "summary",
+                                "items",
+                                "nextCursor"
+                              ],
+                              "description": "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state."
                             },
                             "warranty": {
                               "type": "object",
@@ -255062,7 +255079,7 @@
         "rules": [
           "Read the complete current rule set before editing.",
           "Declared order events: order_created, order_confirmed, order_processing, order_shipped, order_ready_for_pickup, order_delivered, order_completed, order_cancelled, order_returned.",
-          "Also declared: refund_processing, refund_failed, order_refunded, order_partially_refunded, payment_balance_paid, support_request_submitted, support_request_status_updated, conversation_reply (email or SMS only).",
+          "Also declared: refund_processing, refund_failed, order_refunded, order_partially_refunded, payment_balance_paid, support_request_submitted, support_request_status_updated; conversation_reply, order_digital_delivered, gift_card_issued, review_request (email or SMS only).",
           "Validate against strict dashboard.notifications.customer_rules_update; if the event is absent, ask/no write. Preserve every other rule.",
           "Confirm the write and verify the returned settings."
         ]

@@ -41,15 +41,19 @@ export const publicReviewSchema = z.object({
     .openapi({ description: "The merchant's public reply (\"Response from <store>\")." }),
 }).openapi("PublicReview");
 
-export const productReviewsSchema = z.object({
+// Unnamed base: a named component loses `.nullable()` in the generated
+// OpenAPI (a bare $ref), so nullable uses inline the object instead.
+const productReviewsShape = z.object({
   summary: publicReviewSummarySchema,
   items: z.array(publicReviewSchema),
   nextCursor: z.string().nullable(),
-}).openapi("ProductReviews");
+});
+
+export const productReviewsSchema = productReviewsShape.openapi("ProductReviews");
 
 /** Spread into the product page's product object. */
 export const productPageReviewFields = {
-  reviews: productReviewsSchema.nullable().openapi({
+  reviews: productReviewsShape.nullable().openapi({
     description: "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.",
   }),
   warranty: z.object({
@@ -175,7 +179,7 @@ export const productReviewStatsSummarySchema = z.object({
   count: z.number().int().nonnegative(),
   average: z.number().min(0).max(5),
   histogram: z.array(z.object({ rating, count: z.number().int().nonnegative() })),
-}).openapi("ProductReviewStatsSummary");
+});
 
 export const adminReviewSummarySchema = z.object({
   pending: z.number().int().nonnegative(),

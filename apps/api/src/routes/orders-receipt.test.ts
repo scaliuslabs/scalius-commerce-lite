@@ -35,6 +35,12 @@ const allowLimiter = { limit: vi.fn(async () => ({ success: true })) };
 
 vi.mock("../utils/order-notification-queue", () => notificationMocks);
 
+// Review extras are covered on the real schema by the reviews domain tests.
+vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/reviews")>(),
+  listLineReviewStates: vi.fn(async () => new Map()),
+}));
+
 // The discount lines are covered on the real schema by orders-owner-receipt.d1.test.ts.
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),
