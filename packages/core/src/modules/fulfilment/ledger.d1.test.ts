@@ -245,11 +245,12 @@ describe("fulfilment ledger", () => {
               unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, fulfillment_type)
             VALUES ('i_dig', 'o_dig', 'p_dig', 'v_dig', 1, 'E-book', 0, 50000, 50000, 0, 0, 0, 'digital');
         `);
-        // Wave A registers no automatic fulfiller: the line waits, fail closed.
-        expect(await autoFulfilOrder(db, "o_dig")).toMatchObject({ skipped: "unsettled" });
+        // Without an automatic fulfiller the line waits, fail closed.
+        const withoutDigital: FulfillerRegistry = { ...FULFILLER_REGISTRY, digital: null };
+        expect(await autoFulfilOrder(db, "o_dig", withoutDigital)).toMatchObject({ skipped: "unsettled" });
         sqlite.exec(`UPDATE orders SET payment_status = 'paid', paid_amount_minor = 50000, balance_due_minor = 0 WHERE id = 'o_dig'`);
         expect(await listOrdersAwaitingAutoFulfil(db)).toEqual(["o_dig"]);
-        expect(await autoFulfilOrder(db, "o_dig")).toMatchObject({ fulfilledTypes: [], unavailableTypes: ["digital"] });
+        expect(await autoFulfilOrder(db, "o_dig", withoutDigital)).toMatchObject({ fulfilledTypes: [], unavailableTypes: ["digital"] });
 
         let deliveries = 0;
         const registry: FulfillerRegistry = {

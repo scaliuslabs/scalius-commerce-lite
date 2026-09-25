@@ -152,10 +152,10 @@ export async function listProductDigitalAssets(db: Database, productId: string):
         version: digitalAssets.version,
         createdAt: digitalAssets.createdAt,
         updatedAt: digitalAssets.updatedAt,
-        available: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = ${digitalAssets.id} AND k.status = 'available')`,
-        assigned: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = ${digitalAssets.id} AND k.status = 'assigned')`,
-        revoked: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = ${digitalAssets.id} AND k.status = 'revoked')`,
-        deliveredCount: sql<number>`(SELECT count(*) FROM ${digitalEntitlements} e WHERE e.asset_id = ${digitalAssets.id})`,
+        available: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'available')`,
+        assigned: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'assigned')`,
+        revoked: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'revoked')`,
+        deliveredCount: sql<number>`(SELECT count(*) FROM ${digitalEntitlements} e WHERE e.asset_id = "digital_assets"."id")`,
     }).from(digitalAssets)
         .where(eq(digitalAssets.productId, productId))
         .orderBy(asc(digitalAssets.sortOrder), asc(digitalAssets.createdAt), asc(digitalAssets.id))
@@ -484,8 +484,8 @@ export async function updateDigitalAsset(db: Database, assetId: string, input: U
 export async function deleteDigitalAsset(db: Database, bucket: R2Bucket | undefined, assetId: string): Promise<{ deleted: true }> {
     const asset = await db.select({
         id: digitalAssets.id,
-        entitlements: sql<number>`(SELECT count(*) FROM ${digitalEntitlements} e WHERE e.asset_id = ${digitalAssets.id})`,
-        keys: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = ${digitalAssets.id})`,
+        entitlements: sql<number>`(SELECT count(*) FROM ${digitalEntitlements} e WHERE e.asset_id = "digital_assets"."id")`,
+        keys: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id")`,
     }).from(digitalAssets).where(eq(digitalAssets.id, assetId)).get();
     if (!asset) throw new NotFoundError("Digital item not found");
     if (Number(asset.entitlements) > 0 || Number(asset.keys) > 0) {
