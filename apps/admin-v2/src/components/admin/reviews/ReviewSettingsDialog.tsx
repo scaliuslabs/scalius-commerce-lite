@@ -94,7 +94,7 @@ function SettingsForm({
 
   return (
     <>
-      <form
+      <form method="post"
         id={formId}
         noValidate
         className="flex flex-col gap-4"

@@ -48,7 +48,7 @@ const TitleTag = headingLevel;
          quiet "(128)", as a department store lists it); nothing at zero. */
       model.facts.rating && (
         <p class="mb-1.5 flex items-center gap-1 text-xs leading-none text-muted-foreground" data-card-fact="rating">
-          <span class="sc-stars" style={`--sc-fill:${reviewStarFill(model.facts.rating.value)};--sc-star:0.8125rem`} aria-hidden="true"></span>
+          <span class="sc-stars" style={`--sc-fill:${reviewStarFill(Number(model.facts.rating.average))};--sc-star:0.8125rem`} aria-hidden="true"></span>
           <span aria-hidden="true" class="tabular-nums">({model.facts.rating.count.toLocaleString("en-IN")})</span>
           <span class="sr-only">Rated {model.facts.rating.average} out of 5 from {model.facts.rating.count.toLocaleString("en-IN")} {model.facts.rating.count === 1 ? "review" : "reviews"}</span>
         </p>

@@ -54,11 +54,12 @@ export function receiptGiftCardTenderLabel(tender: ReceiptGiftCardTender, copy: 
 export function formatOrderSuccessPaymentMethod(
   value: string | null | undefined,
   copy: CheckoutLanguageData,
-  order: OrderGiftCardFacts = {},
+  order: OrderGiftCardFacts & { shippingMethodKind?: string | null; requiresShipping?: boolean | null } = {},
 ): string {
   const giftCard = giftCardCheckoutCopy(copy).giftCardTitleText;
   if (normalize(value) === GIFT_CARD_PAYMENT_METHOD) return giftCard;
-  const method = formatGatewayPaymentMethod(value, copy);
+  // Cash reads "Pay at pickup" / "Pay on service" from the order's delivery facts.
+  const method = formatGatewayPaymentMethod(value, copy, order);
   return readReceiptGiftCardTenders(order).length > 0 ? `${giftCard} + ${method}` : method;
 }
 

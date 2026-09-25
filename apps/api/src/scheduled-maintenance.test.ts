@@ -34,14 +34,8 @@ const mocks = vi.hoisted(() => {
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
     enqueueMediaVariantsBacklog: vi.fn(),
-    sweepAutoFulfilment: vi.fn(async () => ({ scanned: 0, fulfilled: 0, failed: 0 })),
   };
 });
-
-vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/fulfilment")>()),
-  sweepAutoFulfilment: mocks.sweepAutoFulfilment,
-}));
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,

@@ -326,6 +326,23 @@ async function runScheduledMaintenanceInner(
   });
 
   await isolated(async () => {
+    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
+    // or gift-card lines were not handed over. A no-op until Wave B registers
+    // an automatic fulfiller. It runs before the
+    // notification flush so the mail it queues (keys, gift cards, the staff
+    // key-exhausted alert) goes out in this same run.
+    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
+      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    }));
+    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
+      console.log(
+        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
+          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
     const notificationOutbox = await timed("notification_outbox_flush", () =>
       flushPendingNotificationOutbox({
         db,
@@ -342,21 +359,6 @@ async function runScheduledMaintenanceInner(
         `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
           `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
           `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
-      );
-    }
-  });
-
-  await isolated(async () => {
-    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
-    // or gift-card lines were not handed over. A no-op until Wave B registers
-    // an automatic fulfiller.
-    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
-      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-    }));
-    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
-      console.log(
-        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
-          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
       );
     }
   });

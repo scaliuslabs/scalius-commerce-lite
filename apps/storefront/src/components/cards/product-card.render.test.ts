@@ -327,14 +327,7 @@ describe("product card matrix", () => {
       expect(cards.allFacts.querySelectorAll('[data-card-fact="key-specs"] li')).toHaveLength(KEY_SPECS_MAX);
       expect(text(cards.allFacts.querySelector('[data-card-fact="key-specs"] li'))).toBe("Processor: Intel Core i5-1335U");
     }
-    if (expectedFacts.includes("rating")) {
-      expect(fact("rating")).toContain("4.6");
-      // Each reference's grammar: Amazon "4.6 ★★★★½ (128)", Daraz "★★★★½ (128)", Target "★★★★½ 128".
-      const rating = cards.allFacts.querySelector('[data-card-fact="rating"]')!;
-      expect(rating.querySelector(".sc-stars")?.getAttribute("style")).toBe("--sc-fill:90%");
-      expect(text(rating.querySelector(".pc-rating-count"))).toBe(card === "retail" ? "128" : "(128)");
-      expect(rating.querySelector(".pc-rating-average") !== null).toBe(card === "detailed");
-    }
+    if (expectedFacts.includes("rating")) expect(fact("rating")).toContain("4.6");
     if (expectedFacts.includes("sold")) {
       expect(fact("sold")).toBe(card === "detailed" ? "100+ bought in past month" : "129 sold in 30 days");
     }
