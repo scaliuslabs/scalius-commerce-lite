@@ -1,46 +1,58 @@
 ---
-// The product page's photo + details grid (Theme -> Layout -> Product page):
-// `beside` puts the gallery next to the details from 64rem; `stacked` puts
-// the photos on top and the details centred below on every screen.
+// The product page's photo + details grid (Theme -> Layout -> Product page).
+// `beside` puts the gallery next to the details from 64rem (today's 12
+// columns). `stacked` (Dawn) and `grid` (Target) keep every photo in the
+// wide column and the details in a sticky column beside it (345px, 400px),
+// so the buy box starts at the top of the first screen. A buy box with a
+// delivery column (Daraz, Amazon) takes 7 of 12 columns from 80rem.
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
 
 interface Props {
   gallery: ResolvedStorefrontThemeLayout["productPage"]["gallery"];
+  /** The buy box carries a 284px delivery column at the right (from 80rem). */
+  factsColumn?: boolean;
 }
 
-const { gallery } = Astro.props;
+const { gallery, factsColumn = false } = Astro.props;
 ---
 
 <div
   class="product-layout grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8"
   data-gallery={gallery}
+  data-facts-column={factsColumn ? "" : undefined}
 >
   <slot />
 </div>
 
 <style>
-  /* Stacked product page: the photos on top and the details below share one
-     centred column, and the breadcrumb starts where it starts, so every left
-     edge lines up. The column keeps the name and price near the fold under
-     the square photo and its thumbnail strip: on a short landscape screen
-     (1024x768) it shrinks to fit, never below 24rem. */
   @media (min-width: 64rem) {
-    .product-layout[data-gallery="stacked"] > :global(*) {
-      grid-column: 1 / -1;
-      width: 100%;
-      max-width: var(--product-stacked-column);
-      margin-inline: auto;
+    .product-layout[data-gallery="stacked"],
+    .product-layout[data-gallery="grid"] {
+      grid-template-columns: minmax(0, 1fr) var(--product-info-column);
+      align-items: start;
     }
-    .product-layout[data-gallery="stacked"] :global(.gallery-layout) {
-      position: static;
+    .product-layout[data-gallery="stacked"] {
+      --product-info-column: 345px;
     }
-    :global([data-product-stacked-crumbs] ol) {
-      max-width: var(--product-stacked-column);
-      margin-inline: auto;
+    .product-layout[data-gallery="grid"] {
+      --product-info-column: 400px;
+    }
+    .product-layout[data-gallery="stacked"] > :global(*),
+    .product-layout[data-gallery="grid"] > :global(*) {
+      grid-column: auto;
+    }
+    .product-layout[data-gallery="stacked"] > :global(:nth-child(2)),
+    .product-layout[data-gallery="grid"] > :global(:nth-child(2)) {
+      position: sticky;
+      top: calc(var(--header-height, 4rem) + 1rem);
     }
   }
-  .product-layout,
-  :global([data-product-stacked-crumbs]) {
-    --product-stacked-column: max(24rem, min(36rem, calc(100svh - 20rem)));
+  @media (min-width: 80rem) {
+    .product-layout[data-gallery="beside"][data-facts-column] > :global(:nth-child(1)) {
+      grid-column: span 5 / span 5;
+    }
+    .product-layout[data-gallery="beside"][data-facts-column] > :global(:nth-child(2)) {
+      grid-column: span 7 / span 7;
+    }
   }
 </style>

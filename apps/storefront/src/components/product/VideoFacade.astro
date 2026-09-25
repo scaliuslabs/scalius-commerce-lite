@@ -1,0 +1,65 @@
+---
+// Poster first, player on press (scripts/video-facade.ts). The facade fills
+// its parent's fixed-ratio box, so swapping in the player never moves the
+// page. It is a real link: without JavaScript it opens the video itself.
+import { Play } from "lucide-react";
+import type { ResponsiveImageSources } from "@/lib/responsive-image";
+import type { VideoFacadeKind } from "./scripts/video-facade";
+
+interface Props {
+  kind: VideoFacadeKind;
+  /** The file (uploaded video) or the privacy-enhanced embed URL. */
+  src: string;
+  title: string;
+  poster: ResponsiveImageSources | null;
+  /** The poster is the page's first paint (LCP): fetched eagerly, at high priority. */
+  eager?: boolean;
+  /** "0:32"; null leaves the badge out. */
+  duration?: string | null;
+  /** The gallery's own controller binds this facade (it swaps media too). */
+  gallery?: boolean;
+  class?: string;
+}
+
+const { kind, src, title, poster, eager = false, duration = null, gallery = false, class: className } = Astro.props;
+---
+
+<a
+  data-video-facade
+  data-gallery-video={gallery ? "" : undefined}
+  data-video-kind={kind}
+  data-video-src={src}
+  data-video-title={title}
+  href={src}
+  class:list={[
+    "group/video absolute inset-0 flex items-center justify-center overflow-hidden bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+    className,
+  ]}
+  aria-label={`Play video: ${title}`}
+>
+  <img
+    data-video-poster
+    hidden={!poster}
+    src={poster?.src}
+    srcset={poster?.srcset}
+    sizes={poster?.sizes}
+    alt=""
+    width="960"
+    height="960"
+    class="absolute inset-0 h-full w-full object-contain"
+    loading={eager ? "eager" : "lazy"}
+    fetchpriority={eager ? "high" : "low"}
+    decoding="async"
+  />
+  <span
+    class="relative flex h-14 w-14 items-center justify-center rounded-full bg-black/65 text-white shadow-md transition-transform duration-200 group-hover/video:scale-105 motion-reduce:transition-none"
+    aria-hidden="true"
+  >
+    <Play className="ml-0.5 h-6 w-6 fill-current" />
+  </span>
+  <span
+    data-video-duration
+    hidden={!duration}
+    class="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-none text-white"
+  >{duration ?? ""}</span>
+</a>

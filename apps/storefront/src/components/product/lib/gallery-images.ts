@@ -10,8 +10,10 @@
  *   never renders wider than 384px.
  * - From 1024px the gallery spans 7 of 12 columns (`gap-x-10`) of the
  *   `max-w-7xl px-8` section, 6 from 1280px, minus the thumbnail column
- *   (80px / 100px + `lg:gap-5`) when thumbnails sit beside the photo. The
- *   stacked gallery is at most 36rem wide.
+ *   (80px / 100px + `lg:gap-5`, or a narrow strip plus 12px) when
+ *   thumbnails sit beside the photo.
+ * - Stacked and grid galleries fill the column left of the sticky info
+ *   column (ProductPageLayout); on phones they are one swipeable row.
  */
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
 import { capSizesDensity, type ImageSlot } from "@/lib/responsive-image";
@@ -32,8 +34,14 @@ const THUMBNAIL_MAX_WIDTH = 296;
 const MOBILE_MAIN_SIZES = ["(max-width: 407px) calc(100vw - 24px)", "(max-width: 1023px) 384px"];
 
 function desktopMainSizes(layout: ProductGalleryLayout, railBeside: boolean): string[] {
-  if (layout.gallery === "stacked") {
-    return railBeside ? ["(max-width: 1279px) 476px", "456px"] : ["576px"];
+  // Stacked: the column left of a 345px info column and a 40px gap.
+  if (layout.gallery === "stacked") return ["(max-width: 1279px) calc(100vw - 449px)", "831px"];
+  // Grid: two photos across (8px apart) left of a 400px info column.
+  if (layout.gallery === "grid") return ["(max-width: 1279px) calc(50vw - 256px)", "384px"];
+  if (railBeside && layout.thumbnailSize !== null) {
+    // A narrow strip (Amazon): its width plus a 12px gap.
+    const rail = layout.thumbnailSize + 12;
+    return [`(max-width: 1279px) calc(58.34vw - ${54 + rail}px)`, `${588 - rail}px`];
   }
   // 7/12 of (100vw - 64px gutters - 440px gaps) + 240px of spanned gaps.
   return railBeside
@@ -66,6 +74,8 @@ export function productGalleryThumbnailSlot(
   const below = layout.thumbnails === "below";
   const sizes = rail === "mobile"
     ? "68px"
-    : below ? "88px" : "(min-width: 1280px) 96px, 76px";
+    : layout.thumbnailSize !== null
+      ? `${layout.thumbnailSize}px`
+      : below ? "88px" : "(min-width: 1280px) 96px, 76px";
   return { width: GALLERY_IMAGE_WIDTHS.thumbnail, sizes, maxWidth: THUMBNAIL_MAX_WIDTH };
 }
