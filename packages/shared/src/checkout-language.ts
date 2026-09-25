@@ -171,6 +171,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptPaymentStatusNoPaymentDueText: "No payment due",
   orderReceiptPaymentMethodCardText: "Card (Stripe)",
   orderReceiptPaymentMethodSslcommerzText: "Online payment (SSLCommerz)",
+  orderReceiptPaymentMethodPayAtPickupText: "Pay at pickup",
+  orderReceiptPaymentMethodPayOnServiceText: "Pay on service",
   orderReceiptSaveAccountTitleText: "Save this order to your account",
   orderReceiptSavedAccountTitleText: "Order saved to your account",
   orderReceiptSaveAccountHelpText:
@@ -238,6 +240,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   trackOrderCodeSentText: "If these details match an order, we've sent a code to the phone number or email saved on it.",
   trackOrderNumberInvalidText: "Enter your order number, for example #1001.",
   trackOrderPhoneInvalidText: "Enter the phone number used for the order.",
+  trackOrderPhoneFormatInvalidText: "Enter a valid phone number.",
   trackOrderUnavailableText: "Order tracking isn't available right now.",
   storeContactLabelText: "Contact the store:",
   orderCodeResendInText: "Send a new code in {time}",
@@ -682,6 +685,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptPaymentStatusNoPaymentDueText: "কোনো পেমেন্ট বাকি নেই",
   orderReceiptPaymentMethodCardText: "কার্ড (Stripe)",
   orderReceiptPaymentMethodSslcommerzText: "অনলাইন পেমেন্ট (SSLCommerz)",
+  orderReceiptPaymentMethodPayAtPickupText: "সংগ্রহের সময় পরিশোধ",
+  orderReceiptPaymentMethodPayOnServiceText: "সেবার সময় পরিশোধ",
   orderReceiptSaveAccountTitleText: "এই অর্ডারটি আপনার অ্যাকাউন্টে সংরক্ষণ করুন",
   orderReceiptSavedAccountTitleText: "অর্ডারটি আপনার অ্যাকাউন্টে সংরক্ষিত হয়েছে",
   orderReceiptSaveAccountHelpText:
@@ -748,6 +753,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   trackOrderCodeSentText: "তথ্যগুলো কোনো অর্ডারের সাথে মিললে, সেই অর্ডারে সংরক্ষিত ফোন নম্বর বা ইমেইলে একটি কোড পাঠানো হয়েছে।",
   trackOrderNumberInvalidText: "আপনার অর্ডার নম্বর লিখুন, যেমন #1001।",
   trackOrderPhoneInvalidText: "অর্ডারে দেওয়া ফোন নম্বরটি লিখুন।",
+  trackOrderPhoneFormatInvalidText: "সঠিক ফোন নম্বর লিখুন।",
   trackOrderUnavailableText: "এই মুহূর্তে অর্ডার ট্র্যাক করা যাচ্ছে না।",
   storeContactLabelText: "দোকানের সঙ্গে যোগাযোগ:",
   orderCodeResendInText: "{time} পরে নতুন কোড পাঠান",

@@ -151,7 +151,7 @@ describe("order code form", () => {
     await submitWith(view.form, view.submit);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(view.message()).toBe(copy.trackOrderPhoneInvalidText);
+    expect(view.message()).toBe(copy.trackOrderPhoneFormatInvalidText);
   });
 
   it("shows each bad field's message under it and focuses the first, instead of the browser tooltip", async () => {
