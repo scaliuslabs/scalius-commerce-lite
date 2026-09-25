@@ -452,6 +452,8 @@ also clears it at once.
 | Product JSON-LD weight | `apps/storefront/src/lib/commerce-structured-data.product-group.test.ts` (also runs the release-check Product JSON-LD smoke on the output) | 20 KB, description once |
 | Ad-click and campaign parameters never split the page cache | `packages/shared/src/storefront-cache-path.test.ts`, `apps/storefront/src/lib/public-worker-cache.test.ts` | exact |
 
+| Similarity to the reference sites, listing density, navigation at scale, page weights (30k-product seeded store) | `pnpm fidelity:check` (`scripts/storefront-fidelity/`) | below |
+
 The homepage part reads in two waves whatever its sections are: the
 settings, banners, collections, category rail and published theme first,
 then one batch with every product list the sections name (each scoped to
@@ -511,6 +513,111 @@ Miss TTFB measured from a laptop includes the network round trip to the edge.
 From Bangladesh, some ISPs reach Cloudflare in Europe (MXP, MAD, CDG, MRS) as
 often as in SIN or HKG, which adds 150-450 ms per TLS connection. Read the colo
 from `cf-ray` before blaming the server.
+
+### `pnpm fidelity:check`
+
+The acceptance bar for storefront templates is visual similarity to their
+reference sites, measured. `scripts/storefront-fidelity/` measures the built
+storefront against the reference numbers in `reference-metrics.json` and exits
+1 on any breach. Every storefront PR attaches its report.
+
+```sh
+pnpm fidelity:check                                   # everything, ~25 min
+pnpm fidelity:check --only spec-catalogue --report-only
+pnpm fidelity:check --only listing,marketplace --state-cache /tmp/fidelity-cache
+```
+
+What one run does, sequentially:
+
+1. `astro build` of the storefront (`--skip-build` reuses `dist/`).
+2. Seeds a temp D1/KV/R2 state the run owns (`seed-large.mjs`, about 2.5 min):
+   `scripts/catalog-scale-seed.mjs` (30,000 products, about 83,500 SKUs, 300
+   brands as brand entities), the 400 categories reshaped into a 25/125/125/125
+   four-level tree with long and Bangla names, 240 generated photos with real
+   rendition ladders (`pool.mjs`, sharp), 1% legacy primaries with no
+   renditions, 2% products without a photo, three video products (ffmpeg),
+   hero sliders, the five scale menus (`menus.mjs`: 20, 150, 136 on 3 levels,
+   1,150, and the live store's flat 12), and the catalogue projections
+   (migration 0091's statements). `--state-cache <dir>` keeps a pristine copy
+   keyed by a fingerprint of the seed code and the migrations, and later runs
+   copy it instead of seeding.
+3. Starts the API and the built storefront under `wrangler dev` on that state
+   (ports 9001/4601, Chrome on 9601; override with `--api-port`,
+   `--storefront-port`, `--admin-port`, `--media-port`, `--chrome-port`). The
+   two Workers use a private dev registry, so another local
+   `scalius-api-local` cannot answer the service binding. Secrets are fresh
+   random values in a temp env file: no `.dev.vars` is read. It refuses a
+   state inside any repo `.wrangler` directory and any hosted database
+   (`DATABASE_PROVIDER`, `TURSO_*`, `POSTGRES_*`). The Platform `mediaUrl`
+   points at a small static server over the pool (`lib/media-server.mjs`,
+   port 4603) that serves the same object keys R2 would: browsers abort image
+   downloads constantly, and a burst of aborted responses crashes local
+   `wrangler dev` 4.128 (reproduced), so image traffic stays off the Workers
+   under test. If a Worker still dies, the stage restarts the stack once and
+   resumes; a stage that fails twice is a failing check.
+4. Measures, with one headless Chrome over CDP:
+   - `matrix.mjs` + `probe.js`: every template x {home, category, product}
+     x {1440x900, 390x844 DPR 3}: header rows and search, card size,
+     columns, gap, image ratio, title and price type, first product y,
+     products at least half visible, filter controls visible without a click,
+     bottom of the 20th product, facet column width and row pitch, buy box
+     type, CTA and top, footer, HTML, header and JSON-LD weight;
+   - `variants.mjs`: department-mall with each card variant and each listing
+     layout swapped alone; the first cards are compared pixel by pixel;
+   - `navscale.mjs`: every template x the five menus x {1440, 1280, 1024},
+     the open panel, "More", keyboard, the phone drawer, and no JavaScript;
+   - `perf.mjs`: TTFB miss (new cache generation) and hit, phone and desktop
+     LCP and CLS for home, category and product on every template, plus the
+     100-SKU, legacy-image and video products;
+   - `hover.mjs`: hover photo latency at 10 Mbps / 60 ms;
+   - the small-catalogue pass (`seed-tiny.mjs`: 20 active products in two
+     leaves, the 20-link menu).
+5. Compares (`lib/compare.mjs`, unit-tested in `compare.test.mjs`), writes
+   the report, kills every process tree it started (the wrangler parents with
+   their esbuild services and workerd, and Chrome) and deletes the temp state.
+
+The report goes to `.wrangler/fidelity/` (`--out` to change): `summary.md`
+(verdict, pass/fail per template and block, every breach with ours, the
+reference, the rule and the source note), `scorecard.json` (every check plus
+the raw measurements), `pairs/<template>-<page>-<d|m>.jpg` (the reference's
+first screen next to ours, labelled with the numbers) and `shots/`.
+
+Tolerances, from AUDIT.md §8 (`audit/rewrite-2026-09-23/fidelity/`):
+
+| Rule | Metrics | Passes when |
+| --- | --- | --- |
+| size | header, search, card, CTA, footer, facet column, row pitch | within ±10% (never tighter than 2px) |
+| gap | card gap | within ±4px |
+| font | card title and price, product h1 and price | ±1px, weight ±100 |
+| exact | grid columns | equal |
+| ratio | card image ratio | ±0.05 |
+| min | products visible; filters visible (large-catalogue templates) | ≥ the reference |
+| scroll | bottom of the 20th product | ≤ 1.1x the reference |
+| firstY | first product y | ≤ the reference + 40px |
+| budgets | TTFB hit/miss, LCP, CLS, HTML, header, JSON-LD, anchors, buy-box top, hover, card distinctness | the §8 budgets in `reference-metrics.json` |
+
+Blocks for `--only`: `header`, `card`, `listing`, `pdp`, `footer`, `size`,
+`perf`, `nav`, `variants`, `hover`, `tiny`, and any template name. A filter
+also skips the stages it does not need, so `--only listing` runs the matrix
+alone. `--report-only` writes the same report but exits 0: use it while a
+slice is still closing its gaps; the merge gate is the plain command.
+
+Each template maps each block to one reference site
+(`reference-metrics.json` `templates`): for example marketplace takes its
+header from Amazon and its cards and listing from Daraz. Every reference value
+carries its source: the storefront study's site notes or the live density and
+facet measurements of the audit. To refresh the live listing numbers,
+`node scripts/storefront-fidelity/density.mjs --out refs.json` measures the
+reference listings read-only. The pairs read the reference screenshots from
+`audit/rewrite-2026-09-23/{storefront-study,fidelity}/shots` in the main
+checkout (gitignored); `--ref-shots` points elsewhere.
+
+Resources: about 2.5 min of seeding, then roughly 1.5 min per template for all
+stages. Peak memory is about 3 GB of physical footprint (the API's wrangler
+about 1.3 GB, the storefront's about 0.65 GB, Chrome about 0.75 GB); the run
+aborts cleanly when swap passes `--max-swap-mb` (default 7000). Never run it
+beside a typecheck or another stack on a 16 GB host. The generated studio
+photos compress 3-5x better than real photos, so image bytes are understated.
 
 ### Catalogue-scale load data
 
