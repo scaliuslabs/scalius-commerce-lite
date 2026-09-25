@@ -814,7 +814,10 @@ function applyPendingCartRepairState(): boolean {
   return true;
 }
 
-export async function validateCartSnapshot(): Promise<boolean> {
+export async function validateCartSnapshot(
+  /** Re-render the lines even when the check changed nothing (a page shown again). */
+  { renderUnchanged = true }: { renderUnchanged?: boolean } = {},
+): Promise<boolean> {
   const { items } = cartStore.get();
   const payloadItems = cartValidationPayload(items);
   const sequence = ++cartValidationSequence;
@@ -848,6 +851,10 @@ export async function validateCartSnapshot(): Promise<boolean> {
       return !hasBlockingCartIssues();
     }
 
+    // What the lines show: a check that changes none of it re-renders (and
+    // re-prices) nothing, so choosing a delivery option quotes once.
+    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
+    const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     const issues = Array.isArray(rawIssues) ? rawIssues : [];
     const summaryMessage =
@@ -886,7 +893,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
-    await renderCartItems();
+    if (renderUnchanged || shown() !== shownBefore) await renderCartItems();
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
@@ -910,7 +917,7 @@ function scheduleCartValidation() {
   cartValidationSequence += 1;
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
-    void validateCartSnapshot();
+    void validateCartSnapshot({ renderUnchanged: false });
   }, 350);
 }
 

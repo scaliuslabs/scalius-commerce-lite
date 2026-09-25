@@ -13,6 +13,7 @@ import { unwrapData } from "./unwrap";
 import {
   getApiV1Collections,
   getApiV1CollectionsById,
+  getApiV1CollectionsDirectory,
 } from "@scalius/api-client/sdk";
 import { buildCanonicalQueryString } from "@/lib/canonical-query";
 
@@ -85,6 +86,32 @@ export async function getAllCollections(): Promise<Collection[] | null> {
     },
     { ttlSeconds: CACHE_TTL.LONG },
   );
+}
+
+/** One card on `/collections`. */
+export interface CollectionDirectoryEntry {
+  id: string;
+  name: string;
+  canonicalPath: string | null;
+  productCount: number;
+  imageUrl: string | null;
+  imageAlt: string | null;
+}
+
+/**
+ * The `/collections` directory: the collections a buyer can shop, in the
+ * merchant's order, with their product count and a photo. Joins the page's
+ * read batch; `null` when it can't be read.
+ */
+export async function getCollectionDirectory(): Promise<CollectionDirectoryEntry[] | null> {
+  try {
+    const { data } = await getApiV1CollectionsDirectory({ client: getConfiguredSdkClient() });
+    const collections = unwrapData<{ collections: CollectionDirectoryEntry[] }>(data)?.collections;
+    return Array.isArray(collections) ? collections : null;
+  } catch (error: unknown) {
+    console.error("Error fetching the collection directory:", error);
+    return null;
+  }
 }
 
 /**

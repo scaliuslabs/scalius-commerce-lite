@@ -1174,3 +1174,62 @@ export async function resolveCollectionProductsBatch(
     const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })));
     return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : []);
 }
+
+/** The most collections `/collections` lists (a directory, not a paged catalogue). */
+export const COLLECTION_DIRECTORY_LIMIT = 60;
+
+export interface PublicCollectionDirectoryEntry {
+    id: string;
+    name: string;
+    canonicalPath: string | null;
+    /** Products a buyer sees on the collection's page (the catalogue's own count). */
+    productCount: number;
+    /** The featured product's photo, else the collection's first product's. */
+    imageUrl: string | null;
+    imageAlt: string | null;
+}
+
+/**
+ * Every active collection for the `/collections` directory, in the merchant's
+ * order, with its product count and a photo. Two D1 waves: the collections,
+ * then one batch with each collection's first product (and its card media)
+ * and its visible count. Collections nobody can shop (no visible product)
+ * are left out.
+ */
+export async function listPublicCollectionDirectory(db: Database): Promise<PublicCollectionDirectoryEntry[]> {
+    const rows = await db
+        .select({
+            id: collections.id,
+            name: collections.name,
+            config: collections.config,
+            canonicalPath: collections.canonicalPath,
+        })
+        .from(collections)
+        .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
+        .orderBy(asc(collections.sortOrder), asc(collections.name))
+        .limit(COLLECTION_DIRECTORY_LIMIT)
+        .all();
+    if (rows.length === 0) return [];
+
+    const plan = planCollectionProducts(db, rows.map((row) => ({ key: row.id, config: row.config, maxProducts: 1 })));
+    const counts = rows.map((row) => storefrontCollectionVisibleCountQuery(
+        db,
+        collectionMembershipForConfig(normalizeCollectionConfig(row.config)),
+    ));
+    const results = await safeBatch(db, [...plan.statements, ...counts] as Parameters<typeof safeBatch>[1]);
+    const resolved = plan.resolve(results);
+    return rows.flatMap((row, index) => {
+        const productCount = Number((results[plan.statements.length + index] as Array<{ count: number }> | undefined)?.[0]?.count ?? 0);
+        if (productCount === 0) return [];
+        const entry = resolved.get(row.id);
+        const cover = entry?.featuredProduct ?? entry?.products.find((product) => product.imageUrl) ?? null;
+        return [{
+            id: row.id,
+            name: row.name,
+            canonicalPath: row.canonicalPath ?? null,
+            productCount,
+            imageUrl: cover?.imageUrl ?? null,
+            imageAlt: cover?.imageAlt ?? null,
+        }];
+    });
+}

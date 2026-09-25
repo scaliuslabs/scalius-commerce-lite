@@ -6,6 +6,7 @@
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
+import LocationFields from "@/components/checkout/LocationFields.astro";
 import {
   getActiveCheckoutLanguage,
   getCheckoutConfig,
@@ -289,23 +290,19 @@ const secondaryButtonClass =
                   <textarea id="shippingAddress" name="shippingAddress" rows={2} maxlength="500" autocomplete="street-address" required placeholder={copy.shippingAddressPlaceholder} aria-invalid={errorFor("shippingAddress") ? "true" : undefined} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.shippingAddress}</textarea>
                   {errorFor("shippingAddress") && <p class={errorClass}>{errorFor("shippingAddress")}</p>}
                 </div>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label for="quickCity" class={labelClass}>{copy.cityLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
-                    <select id="quickCity" name="city" required autocomplete="address-level2" aria-invalid={errorFor("city") ? "true" : undefined} class={fieldClass}>
-                      <option value="">{copy.selectCityPlaceholder}</option>
-                      {cities.map((city) => <option value={city.id} selected={city.id === form.city}>{city.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label for="quickZone" class={labelClass}>{copy.zoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
-                    <select id="quickZone" name="zone" required autocomplete="address-level3" disabled={zones.length === 0} aria-invalid={errorFor("zone") ? "true" : undefined} class={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-50`}>
-                      <option value="">{copy.selectZonePlaceholder}</option>
-                      {zones.map((zone) => <option value={zone.id} selected={zone.id === form.zone}>{zone.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                {(errorFor("city") || errorFor("zone")) && <p class={errorClass}>{errorFor("city") || errorFor("zone")}</p>}
+                <LocationFields
+                  idPrefix="quick"
+                  cities={cities}
+                  zones={zones}
+                  city={form.city}
+                  zone={form.zone}
+                  copy={copy}
+                  showAreaField={false}
+                  nativeRequired
+                  errorId="quickLocationError"
+                  invalid={Boolean(errorFor("city") || errorFor("zone"))}
+                />
+                {(errorFor("city") || errorFor("zone")) && <p id="quickLocationError" class={errorClass}>{errorFor("city") || errorFor("zone")}</p>}
                 {!(form.city && form.zone) && (
                   <div class="flex flex-wrap items-center gap-3">
                     <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button>
@@ -440,3 +437,30 @@ const secondaryButtonClass =
     </form>
   </div>
 </Layout>
+
+<script>
+  // With JavaScript the city and thana are searchable, and a city's thanas
+  // load in place instead of after the next form post.
+  import { browserApiUrl } from "@/lib/api/browser-url";
+  import { enhanceLocationSelects, fetchLocationOptions } from "@/lib/checkout/location-select";
+
+  const root = document.querySelector<HTMLElement>("[data-location-fields]");
+  const form = root?.closest("form");
+  if (root && form) {
+    const shownZone = root.querySelector<HTMLSelectElement>('select[name="zone"]')?.value ?? "";
+    enhanceLocationSelects(root, {
+      load: (level, parentId) => fetchLocationOptions(browserApiUrl(""), level, parentId),
+      // This page prices delivery on the server: a new thana's options come
+      // with the next step, as the Continue button would bring them.
+      onChange: ({ zoneId }) => {
+        if (!zoneId || zoneId === shownZone) return;
+        const intent = document.createElement("input");
+        intent.type = "hidden";
+        intent.name = "intent";
+        intent.value = "review";
+        form.append(intent);
+        form.submit();
+      },
+    });
+  }
+</script>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BANGLA_CHECKOUT_LANGUAGE_DATA, ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import {
   formatReviewAverage,
+  formatReviewDate,
   pickReviewCopy,
   productReviewsPageHref,
   productReviewsProxyHref,
@@ -46,6 +47,16 @@ describe("review numbers", () => {
       { rating: 2, count: 0, percent: 0 },
       { rating: 1, count: 1, percent: 14 },
     ]);
+  });
+});
+
+describe("review dates", () => {
+  it("show the store's calendar day (Asia/Dhaka), not UTC", () => {
+    // 01:52 on 26 September in Dhaka is still 25 September in UTC.
+    expect(formatReviewDate("2026-09-25T19:52:39.000Z", "en")).toBe("26 September 2026");
+    expect(formatReviewDate("2026-09-25T17:59:00.000Z", "en")).toBe("25 September 2026");
+    expect(formatReviewDate("2026-09-25T19:52:39.000Z", "bn")).toBe("২৬ সেপ্টেম্বর, ২০২৬");
+    expect(formatReviewDate("not a date", "en")).toBe("");
   });
 });
 

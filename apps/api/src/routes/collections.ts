@@ -4,7 +4,7 @@ import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { getPublicCollectionCatalog } from "@scalius/core/modules/collections";
+import { getPublicCollectionCatalog, listPublicCollectionDirectory } from "@scalius/core/modules/collections";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { publicCollectionConfig } from "@scalius/core/modules/collections/browser";
@@ -186,6 +186,34 @@ app.openapi(listCollectionsRoute, async (c) => {
 
   return ok(c, { collections: formattedCollections });
 });
+
+// GET /collections/directory — the /collections page (before /:id)
+const collectionDirectoryRoute = createRoute({
+  method: "get",
+  path: "/directory",
+  operationId: "storefront.collections.directory",
+  tags: ["Collections"],
+  summary: "Active collections a buyer can shop, with their product count and a photo",
+  responses: {
+    200: {
+      description: "Collection directory",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        collections: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          canonicalPath: z.string().nullable(),
+          productCount: z.number().int(),
+          imageUrl: z.string().nullable(),
+          imageAlt: z.string().nullable(),
+        })),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(collectionDirectoryRoute, async (c) =>
+  ok(c, { collections: await listPublicCollectionDirectory(c.get("db")) }));
 
 // GET /collections/:id — get collection by ID
 const getCollectionByIdRoute = createRoute({

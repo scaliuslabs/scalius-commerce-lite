@@ -1,7 +1,9 @@
 /**
- * Loose place-name matching for the thana filter: "mirpur 2" finds
- * "Mirpur-2", Bengali digits count, and Bangla typing ("মিরপুর") finds the
- * English name by comparing consonant skeletons of a rough transliteration.
+ * Place-name search for the location pickers: "mirpur 2" finds "Mirpur-2",
+ * case, accents and Bengali digits don't matter, and Bangla typing
+ * ("মিরপুর") finds the English name through a rough transliteration and,
+ * failing an exact spelling, a consonant skeleton. Names that start with the
+ * typed text come first, then names with a word that starts with it.
  */
 import { toLatinDigits } from "@scalius/shared/phone-input";
 
@@ -14,9 +16,10 @@ const BANGLA_LATIN: Record<string, string> = {
   "স": "s", "হ": "h", "ড়": "r", "ঢ়": "rh", "য়": "y", "ৎ": "t", "ং": "ng", "ঃ": "h", "ঁ": "", "্": "",
 };
 
-/** Lower-case Latin letters and digits only; Bangla transliterated. */
+/** Lower-case Latin letters and digits only; Bangla transliterated, accents dropped. */
 export function placeSearchText(value: string): string {
-  const latin = Array.from(toLatinDigits(value.normalize("NFC")))
+  const plain = value.normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC");
+  const latin = Array.from(toLatinDigits(plain))
     .map((character) => BANGLA_LATIN[character] ?? character)
     .join("");
   return latin.toLocaleLowerCase("en-US").replace(/[^a-z0-9]/g, "");
@@ -25,16 +28,42 @@ export function placeSearchText(value: string): string {
 /** Consonants and digits, doubled letters collapsed: spelling-tolerant. */
 function skeleton(text: string): string {
   return text
+    .replace(/z/g, "j")
+    .replace(/v/g, "b")
     .replace(/[aeiouyw]/g, "")
     .replace(/(.)\1+/g, "$1")
     .replace(/(?<=[bcdgjkpt])h/g, "");
 }
 
-export function placeMatches(name: string, query: string): boolean {
+/** Each word's search text; a word runs to the next space or punctuation. */
+function placeWords(name: string): string[] {
+  return name.split(/[\s\-_,./()]+/u).map(placeSearchText).filter(Boolean);
+}
+
+/**
+ * How well `name` answers `query`: 0 the name starts with it, 1 a word
+ * starts with it, 2 it appears inside the name, 3 a word starts with it
+ * spelled differently. `null` when it doesn't match.
+ */
+export function placeRank(name: string, query: string): number | null {
   const wanted = placeSearchText(query);
-  if (!wanted) return true;
-  const candidate = placeSearchText(name);
-  if (candidate.includes(wanted)) return true;
+  if (!wanted) return 0;
+  const words = placeWords(name);
+  // From each word to the end of the name, so "mirpur 2" finds "Road, Mirpur-2".
+  const tails = words.map((_, index) => words.slice(index).join(""));
+  if (tails[0]?.startsWith(wanted)) return 0;
+  if (tails.some((tail) => tail.startsWith(wanted))) return 1;
+  if (tails[0]?.includes(wanted)) return 2;
   const wantedSkeleton = skeleton(wanted);
-  return wantedSkeleton.length >= 2 && skeleton(candidate).includes(wantedSkeleton);
+  if (wantedSkeleton.length >= 2 && tails.some((tail) => skeleton(tail).startsWith(wantedSkeleton))) return 3;
+  return null;
+}
+
+/** The places matching `query`, best first; equally good ones keep their order. */
+export function rankPlaces<T extends { name: string }>(places: readonly T[], query: string): T[] {
+  return places
+    .map((place, index) => ({ place, index, rank: placeRank(place.name, query) }))
+    .filter((entry): entry is { place: T; index: number; rank: number } => entry.rank !== null)
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map((entry) => entry.place);
 }

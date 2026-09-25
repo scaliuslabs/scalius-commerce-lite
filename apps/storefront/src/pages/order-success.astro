@@ -27,6 +27,7 @@ import {
   getOrderPaymentPresentation,
   receiptGiftCardTenderLabel,
   getOrderSuccessNextSteps,
+  isDigitalLinePreparing,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   isOrderStatusView,
@@ -735,7 +736,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </svg>
           {copy.orderReceiptItemsText}
         </h2>
-        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined}>
+        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined} data-receipt-lines>
         {orderLineGroups.map((group) => (
         <div data-order-line-group={group.type}>
           {showOrderLineGroupHeadings && (
@@ -753,8 +754,10 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
                 copy,
               );
+              const preparing = Boolean(order && isDigitalLinePreparing(item, order));
               return (
-                <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
+                <div class="order-success-print-item border-b border-border pb-3 last:border-0 last:pb-0">
+                <div class="flex items-center justify-between gap-3">
                   <div class="flex min-w-0 items-center gap-3">
                     {item.productImage && (
                       <img
@@ -809,7 +812,6 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         )}
                       </p>
                     )}
-                    <LineExtras line={item} context={{ orderId, access: "receipt" }} />
                     </div>
                   </div>
                   <div class="shrink-0 text-right">
@@ -820,6 +822,22 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>
+                </div>
+                {/* Downloads, gift cards and the review form get the line's full
+                    width (under its text from sm up), not the column beside the total. */}
+                {(item.extras || preparing) && (
+                  <div class={item.productImage ? "sm:pl-[3.75rem]" : undefined}>
+                    <LineExtras line={item} context={{ orderId, access: "receipt" }} />
+                    {preparing && (
+                      <p class="mt-3 flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-foreground" data-download-preparing data-later-text={copy.orderReceiptDownloadLaterText}>
+                        <span class="size-4 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground motion-reduce:animate-none" aria-hidden="true" data-download-preparing-spinner></span>
+                        <span class="min-w-0 flex-1" role="status" data-download-preparing-text>{copy.orderReceiptDownloadPreparingText}</span>
+                        {/* Without JavaScript the buyer checks again; with it the page does. */}
+                        <a href={`${Astro.url.pathname}${Astro.url.search}`} class="shrink-0 font-medium underline underline-offset-2">{copy.orderReceiptRefreshText}</a>
+                      </p>
+                    )}
+                  </div>
+                )}
                 </div>
               );
             })
@@ -882,6 +900,16 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     )}
   </section>
 </Layout>
+
+<script>
+  // A paid download is prepared in the background: the receipt checks back
+  // and shows it when it is ready (lib/receipt-download-poll.ts).
+  import { pollPreparingDownloads } from "@/lib/receipt-download-poll";
+
+  const orderId = document.querySelector<HTMLElement>("[data-order-success-state][data-order-id]")?.dataset.orderId;
+  const laterText = document.querySelector<HTMLElement>("[data-download-preparing]")?.dataset.laterText ?? "";
+  if (orderId) void pollPreparingDownloads({ root: document, orderId, laterText });
+</script>
 
 <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedRecoveryCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
 

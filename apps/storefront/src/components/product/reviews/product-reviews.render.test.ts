@@ -163,6 +163,7 @@ describe("the product page's reviews", () => {
       language: "bn",
     });
     expect(doc.querySelector("[data-review-more]")?.hasAttribute("hidden")).toBe(true);
+    expect(doc.querySelector("[data-review-all]")?.hasAttribute("hidden")).toBe(true);
     expect(text(doc.querySelector("#reviews-heading"))).toBe("ক্রেতাদের রিভিউ");
     expect(text(doc.querySelector(".product-reviews-total"))).toBe("128টি রিভিউ");
   });
