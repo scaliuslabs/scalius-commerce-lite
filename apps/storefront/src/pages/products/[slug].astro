@@ -44,7 +44,10 @@ import {
   getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
 } from "@/components/product/lib/pricing-engine";
-import { resolveExactVariantSelection } from "@/components/product/lib/variant-state-machine";
+import {
+  initialVariantPresentation,
+  resolveExactVariantSelection,
+} from "@/components/product/lib/variant-state-machine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import {
   normalizeSavedProductCondition,
@@ -127,9 +130,13 @@ const unavailableQueryVariantSelection =
     ? requestedQueryVariantSelection
     : null;
 const selectedBuyerVariant = requestedQueryVariantSelection?.variant ?? null;
-const buyerPricingVariants = selectedBuyerVariant
-  ? [selectedBuyerVariant]
-  : buyerVariants;
+// The buy box's own opening choice: metadata states the price the buyer sees.
+const buyerPricingVariants = initialVariantPresentation(
+  product.options ?? [],
+  buyerVariants,
+  queryVariantSelection?.variant ?? null,
+  unavailableQueryVariantSelection?.variant ?? null,
+).pricingVariants;
 const buyerPricePresentation = getBuyerVariantPricePresentation(
   {
     basePrice: product.price,

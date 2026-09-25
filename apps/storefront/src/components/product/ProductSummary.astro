@@ -15,11 +15,8 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scal
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { getBuyerStockSummary, isVariantAvailable } from "@/lib/product-sellable-variants";
 import {
-  createInitialSelection,
-  filterVariantsBySelection,
   getVariantOptionAvailabilityMap,
-  resolveExactVariantSelection,
-  selectedValueMap,
+  initialVariantPresentation,
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
@@ -66,13 +63,12 @@ const actionCopy: ProductActionCopy = pageCopy;
 const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
 // A link to a sold-out combination still shows that combination, marked sold out.
-const initialSelection = initialUnavailableVariant
-  ? selectedValueMap(initialUnavailableVariant)
-  : initialVariant
-    ? selectedValueMap(initialVariant)
-    : createInitialSelection(options, variants);
-const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
-const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
+const {
+  selection: initialSelection,
+  selectedVariant: initialSelectedVariant,
+  stockVariant,
+  pricingVariants,
+} = initialVariantPresentation(options, variants, initialVariant, initialUnavailableVariant);
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
 const stockActionPresentation = getProductActionsPresentation({
   productName: product.name,
@@ -115,11 +111,6 @@ const productPricing: ProductPricing = {
   currencyDecimalPlaces,
   currencyCode,
 };
-const pricingVariants = stockVariant
-  ? [stockVariant]
-  : Object.keys(initialSelection).length
-    ? filterVariantsBySelection(variants, initialSelection)
-    : variants;
 const pricePresentation = getBuyerVariantPricePresentation(productPricing, pricingVariants);
 // "From" only when the buyer's choices really are priced differently.
 const showsStartingPrice =
