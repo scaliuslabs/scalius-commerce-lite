@@ -68,7 +68,7 @@ const {
   navigationStyle,
 } = Astro.props;
 
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, layout: themeLayout } = await currentRequestTheme(Astro.locals);
 const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
 
 const headerData: HeaderData = {
@@ -313,7 +313,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     )
   }
 
-  {tabs && <MobileTabBar tabs={tabs} />}
+  {tabs && <MobileTabBar tabs={tabs} compare={themeLayout.productCard.compare} />}
 
   {/* Without JavaScript, menu rows wrap instead of fitting into "More" (never clipped), and a "More" that needs the script gives way to "All categories". */}
   <noscript><style is:inline>[data-nav-overflow]{flex-wrap:wrap!important;opacity:1!important;animation:none!important}[data-nav-overflow]>[data-nav-nojs-hidden]{display:none!important}[data-nav-overflow]>[data-nav-nojs-only]{display:flex!important}[data-nav-overflow]>.desktop-nav-more{display:none!important}</style></noscript>

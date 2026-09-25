@@ -4,6 +4,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     backfillMissingMediaVariants,
+    enqueueMediaVariantsBacklog,
     enqueueMediaVariantsJob,
     MEDIA_VARIANTS_JOB_DELAY_SECONDS,
     renderMissingMediaVariants,
@@ -115,12 +116,38 @@ describe("media rendition backfill and delayed render job", () => {
             expect(row("media_oldest_png")).toMatchObject({ variant_width: 700, version: 1 });
             expect(row("media_trashed_webp")).toMatchObject({ variant_width: 700 });
             expect(row("media_newer_jpeg").variant_width).toBeNull();
-            expect([160, 320, 480, 640, 700].every((width) => store.objects.has(`${oldest}/${width}.webp`))).toBe(true);
+            expect([144, 172, 206, 247, 296, 355, 426, 511, 613, 700].every((width) => store.objects.has(`${oldest}/${width}.webp`))).toBe(true);
 
             await expect(run()).resolves.toEqual({ scanned: 1, generated: 1, failed: 0, hasMore: false });
             store.transforms.length = 0;
             await expect(run()).resolves.toEqual({ scanned: 0, generated: 0, failed: 0, hasMore: false });
             expect(store.transforms).toEqual([]);
+        });
+
+        it("fans the backlog beyond the inline share out to the queue in batches of 100, oldest first", async () => {
+            for (let index = 0; index < 260; index += 1) {
+                seed(`media_fanout_${String(index).padStart(3, "0")}`, { touchedMinutesAgo: 2_000 - index });
+            }
+            seed("media_fresh_upload", { touchedMinutesAgo: 1 });
+            seed("media_done_already", { variantWidth: 700 });
+            const batches: Array<Array<{ body: { type: string; mediaId: string }; delaySeconds?: number }>> = [];
+            const queue = { sendBatch: vi.fn(async (messages: Array<{ body: { type: string; mediaId: string }; delaySeconds?: number }>) => {
+                batches.push([...messages]);
+            }) };
+
+            await expect(enqueueMediaVariantsBacklog(db, queue, { skip: 40, limit: 150 }))
+                .resolves.toEqual({ queued: 150, hasMore: true });
+            expect(batches.map((batch) => batch.length)).toEqual([100, 50]);
+            expect(batches[0]![0]).toEqual({ body: { type: "media.render_variants", mediaId: "media_fanout_040" }, delaySeconds: 0 });
+            expect(batches[1]!.at(-1)!.body.mediaId).toBe("media_fanout_189");
+
+            batches.length = 0;
+            await expect(enqueueMediaVariantsBacklog(db, queue, { skip: 240, limit: 1_000 }))
+                .resolves.toEqual({ queued: 20, hasMore: false });
+            // Fresh uploads wait for their own pipeline; done images never queue.
+            expect(batches.flat().map((message) => message.body.mediaId)).not.toContain("media_fresh_upload");
+            expect(batches.flat().map((message) => message.body.mediaId)).not.toContain("media_done_already");
+            expect(await enqueueMediaVariantsBacklog(db, queue, { skip: 300, limit: 1_000 })).toEqual({ queued: 0, hasMore: false });
         });
 
         it("drains a backlog larger than one candidate page in a single run when under budget", async () => {

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MEDIA_VARIANTS_JOB_DELAY_SECONDS } from "@scalius/core/modules/media";
 
 import {
   MEDIA_RENDITION_HINT_KV_PREFIX,
@@ -51,7 +50,7 @@ describe("findStillOriginalMedia", () => {
   });
 
   it("stops at the per-read bound", () => {
-    const urls = Array.from({ length: 20 }, (_, index) => `${CDN}/media/media_bulk${String(index).padStart(4, "0")}.png`);
+    const urls = Array.from({ length: 40 }, (_, index) => `${CDN}/media/media_bulk${String(index).padStart(4, "0")}.png`);
     expect(findStillOriginalMedia(JSON.stringify(urls))).toHaveLength(MEDIA_RENDITION_HINT_MAX_IDS_PER_READ);
   });
 });
@@ -61,7 +60,7 @@ describe("queueRenditionsForRenderedOriginals", () => {
     vi.restoreAllMocks();
   });
 
-  it("queues the delayed render job once per original and marks it in KV with a short TTL", async () => {
+  it("queues the render job at once, once per original, and marks it in KV with a short TTL", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const { env, kv, queue } = fakeEnv();
     const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg`, hover: `${CDN}/media/media_done0001.jpg/960.webp` });
@@ -69,7 +68,7 @@ describe("queueRenditionsForRenderedOriginals", () => {
     expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual(["media_legacy01"]);
     expect(queue.send).toHaveBeenCalledWith(
       { type: "media.render_variants", mediaId: "media_legacy01" },
-      { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS },
+      { delaySeconds: 0 },
     );
     expect(kv.put).toHaveBeenCalledWith(`${MEDIA_RENDITION_HINT_KV_PREFIX}media_legacy01`, "1", {
       expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS,
@@ -78,9 +77,17 @@ describe("queueRenditionsForRenderedOriginals", () => {
     expect(console.log).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_legacy01");
 
+    // A listing's worth of originals queues together, one masked line in all.
+    vi.mocked(console.log).mockClear();
+    const many = Array.from({ length: 30 }, (_, index) => `${CDN}/media/media_card${String(index).padStart(4, "0")}.jpg`);
+    expect(await queueRenditionsForRenderedOriginals(body(many), env)).toHaveLength(MEDIA_RENDITION_HINT_MAX_IDS_PER_READ);
+    expect(console.log).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_card0000");
+    queue.send.mockClear();
+
     // A second read inside the TTL is deduplicated by the KV marker.
     await queueRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_legacy01.jpg` }), env);
-    expect(queue.send).toHaveBeenCalledTimes(1);
+    expect(queue.send).not.toHaveBeenCalled();
   });
 
   it("does nothing for reads without originals, or without the queue, KV or Images binding", async () => {

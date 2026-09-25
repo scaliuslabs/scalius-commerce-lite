@@ -58,7 +58,7 @@ const V3_CLASSIC = {
     cardSurface: "bordered",
   },
   css: {
-    popover: "#ffffff", "popover-foreground": "#1d1c1a", ring: "#1d1c1a", background: "#fbfaf7", foreground: "#1d1c1a",
+    popover: "#ffffff", "popover-foreground": "#1d1c1a", ring: "#1d1c1a", background: "#ffffff", foreground: "#1d1c1a",
     card: "#ffffff", "card-foreground": "#1d1c1a", primary: "#1d1c1a", "primary-foreground": "#fbfaf7",
     secondary: "#f1eee8", "secondary-foreground": "#1d1c1a", muted: "#f1eee8", "muted-foreground": "#5d5850",
     accent: "#e9e3d8", "accent-foreground": "#1d1c1a", destructive: "#b42318", "destructive-foreground": "#ffffff",

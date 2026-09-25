@@ -247,9 +247,26 @@ export function navChecks(template, menu, r, budgets) {
 }
 
 /** Card variant distinctness (slice 2 bar): every pair differs by >= N% of pixels. */
-export function variantChecks(template, diffs, budgets) {
-  return diffs.map((d) => budgetCheck("variants", template, d.viewport, `card.${d.a}~${d.b}.diffPct`, d.pct, budgets.cardVariantMinDiffPct, `AUDIT §8 slice 2: any two card variants differ by >= ${budgets.cardVariantMinDiffPct}% of pixels`, "min"));
+export function variantChecks(template, diffs, budgets, { structural = [], photos = [], plain = {} } = {}) {
+  const checks = diffs.map((d) => budgetCheck("variants", template, d.viewport, `card.${d.a}~${d.b}.diffPct`, d.pct, budgets.cardVariantMinDiffPct, `AUDIT §8 slice 2: any two card variants differ by >= ${budgets.cardVariantMinDiffPct}% of pixels (on the product with every signal)`, "min"));
+  // Slice 2b: what a buyer notices, pair by pair.
+  for (const s of structural) {
+    const check = budgetCheck("variants", template, s.viewport, `card.${s.a}~${s.b}.treatments`, s.count, budgets.cardVariantMinTreatments, `slice 2b: any two card variants differ in >= ${budgets.cardVariantMinTreatments} buyer-visible treatments`, "min");
+    checks.push({ ...check, detail: `${check.detail}: ${s.differing.join(", ") || "none"}` });
+  }
+  // A desktop card photo is fetched at most 1.2x its drawn width (DPR 1).
+  for (const p of photos.filter((photo) => photo.viewport === "desktop")) {
+    checks.push(budgetCheck("variants", template, "desktop", `card.${p.variant}.photoRatio`, p.ratio, budgets.cardPhotoMaxRatio, `slice 2b: a card photo is fetched at <= ${budgets.cardPhotoMaxRatio}x its drawn width (${p.fetched}w for ${p.drawn}px)`));
+  }
+  // The plain product (no facts at all) still renders a whole card with phone titles at the Bangla floor.
+  for (const [key, card] of Object.entries(plain)) {
+    const [variant, viewport] = [key.slice(0, key.lastIndexOf("-")), key.slice(key.lastIndexOf("-") + 1)];
+    checks.push({ id: `${template}/variants/${viewport}/card.${variant}.plainRenders`, template, block: "variants", viewport, metric: `card.${variant}.plainRenders`, rule: "true", ours: !card.empty && card.box.h > 0, ref: true, refSite: "bar", src: "slice 2b: a card without facts renders whole", pass: !card.empty && card.box.h > 0, detail: card.empty ? "empty card" : `${Math.round(card.box.w)}x${Math.round(card.box.h)}` });
+    if (viewport === "phone") checks.push(budgetCheck("variants", template, "phone", `card.${variant}.titlePx`, card.titleFontPx, budgets.cardPhoneTitleMinPx, `phone titles never below ${budgets.cardPhoneTitleMinPx}px`, "min"));
+  }
+  return checks;
 }
+
 
 /** Hover photo latency (slice 2 bar). */
 export function hoverChecks(template, samples, budgets) {

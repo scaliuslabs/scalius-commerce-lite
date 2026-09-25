@@ -12,10 +12,15 @@
  */
 
 /**
- * 480 sits between the usual 320/640 steps so two-column phone grids and the
- * mobile product image (~160–270 CSS px at DPR 2–3) do not jump to 640.
+ * A 1.2x geometric ladder: every step is at most 1.2x the one below it, so
+ * any slot from 120 to 960 device pixels (a card 120-480 CSS px wide at DPR
+ * 1 and 2, and at DPR 3 with the phone cap of about 2x) fetches at most 1.2x
+ * the pixels it draws (the storefront's responsive-image test holds every
+ * width). 1600 is the product page's zoom photo. Changing the ladder needs a
+ * migration that re-renders stored images (0094 set this one): the ladder is
+ * read from the published URL alone.
  */
-export const MEDIA_VARIANT_WIDTHS = [160, 320, 480, 640, 960, 1600] as const;
+export const MEDIA_VARIANT_WIDTHS = [144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600] as const;
 /** The largest (master) rendition; wider sources are scaled down to it. */
 export const MEDIA_VARIANT_MAX_WIDTH = 2400;
 /** Social, JSON-LD and catalog feed images: Google/Meta want ≥ 1200 px. */

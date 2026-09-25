@@ -479,7 +479,7 @@ describe("storefront theme render matrix", () => {
       if (layout !== "split" && layout !== "story-cards") {
         // Phones get a phone-sized rendition, and the first slide paints without script.
         const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
-        expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/640.webp 640w");
+        expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/613.webp 613w");
         expect(phoneSource.getAttribute("sizes")).toBe(heroImageCandidate(HOMEPAGE_DATA.hero.mobile[0]!.url, "mobile", layout).sizes);
         expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
         expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
@@ -545,7 +545,7 @@ describe("storefront theme render matrix", () => {
       for (const thumb of thumbs) {
         expect(thumb.getAttribute("loading")).toBe("lazy");
         expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage, rail).sizes);
-        expect(thumb.getAttribute("srcset")).toMatch(/\/160\.webp 160w, \S+\/320\.webp 320w$/);
+        expect(thumb.getAttribute("srcset")).toMatch(/\/144\.webp 144w, (?:\S+\/\d+\.webp \d+w, )*\S+\/\d+\.webp \d+w$/);
       }
     }
     expect(duplicateIds(productPage)).toEqual([]);
@@ -775,9 +775,9 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(buyNow(soldOut)).toBeNull();
   if (card.quickBuy) expect(buyNow(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
 
-  // The discount badge sits on the photo or next to the price.
-  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge === "image");
-  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge === "price");
+  // The discount badge sits on the photo, next to the price, or both (Fabrilife).
+  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge !== "price");
+  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge !== "image");
   expect(soldOut.textContent).toContain("Sold out");
 }
 
@@ -1106,9 +1106,10 @@ describe("navigation", () => {
       const labels = Array.from(tabs.querySelectorAll(".mobile-tab")).map(
         (item) => item.querySelector(":scope > span:last-child")!.textContent,
       );
-      // Compare waits for the compare page: left out, never a dead tab.
+      // Compare only where the card offers "Add to Compare" (the spec card);
+      // elsewhere it is left out, never a tab to an empty comparison.
       const expectedLabels = chosen
-        .filter((tab) => tab !== "compare")
+        .filter((tab) => tab !== "compare" || layout.productCard.compare)
         .map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
       expect(labels).toEqual(expectedLabels);
       const categories = tabs.querySelector("[data-mobile-menu-open]")!;
@@ -1126,6 +1127,20 @@ describe("navigation", () => {
       expect(page.querySelector("#mobile-cart-count")).toBeNull();
       expect(header.hasAttribute("data-phone-drop")).toBe(false);
     }
+  });
+
+  it("shows the Compare tab only with the card that offers Compare", async () => {
+    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" });
+    const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: "mall-departments" });
+    const compareTab = async (card: string) => {
+      const withCard = structuredClone(theme);
+      withCard.blocks.card = storefrontBlockDefault("card", card) as never;
+      return (await renderNavigationPage(withCard)).querySelector("#mobile-tab-bar [data-compare-tab]");
+    };
+    const tab = await compareTab("spec");
+    expect(tab?.getAttribute("href")).toBe("/compare");
+    expect(tab?.getAttribute("rel")).toBe("nofollow");
+    expect(await compareTab("detailed")).toBeNull();
   });
 
   it("keeps the header within 150 links for a Star Tech-size tree, whatever the menus", async () => {

@@ -492,12 +492,12 @@ export function ProductTile({
       >
         {/* The second photo that shows on hover. */}
         {spec.hoverImage ? <span className="ml-auto w-1/3 bg-(--sk-edge)" /> : null}
-        {badge && spec.badge === "image" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {badge && spec.badge !== "price" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
       <Line className="w-full" />
       <span className="flex items-center gap-0.5">
         <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
-        {badge && spec.badge === "price" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {badge && spec.badge !== "image" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
       {spec.quickBuy ? <span className={cn("h-1.5 w-full bg-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
