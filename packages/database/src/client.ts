@@ -11,7 +11,7 @@ import {
   connectNativePostgres,
   createPostgresDatabase,
 } from "./postgres-adapter";
-import { observeD1Prepare, observeStatement } from "./read-observer";
+import { observeD1Prepare, observeD1Statement } from "./read-observer";
 import type { Database } from "./types";
 
 const providerByDatabase = new WeakMap<object, DatabaseProvider>();
@@ -30,10 +30,7 @@ function createD1RequestClient(binding: D1Database): D1Database {
   // The first operation observes the primary. Later reads in the same request
   // may use a replica without losing sequential consistency.
   const session = withSession.call(binding, "first-primary");
-  const prepare = (query: string) => {
-    observeStatement(query);
-    return session.prepare(query);
-  };
+  const prepare = (query: string) => observeD1Statement(query, (sql) => session.prepare(sql));
   const batch = session.batch.bind(session);
   return new Proxy(binding, {
     get(target, property, receiver) {
