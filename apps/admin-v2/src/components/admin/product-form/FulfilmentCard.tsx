@@ -8,6 +8,7 @@ import type { ProductFormValues } from "./types";
 
 const HELP = {
   physical: "fulfilmentPhysicalHelp",
+  digital: "fulfilmentDigitalHelp",
   service: "fulfilmentServiceHelp",
   mixed: "fulfilmentMixedHelp",
 } as const;
@@ -16,7 +17,8 @@ const HELP = {
  * Shopify's "Physical product" switch as a select (Wave A §8.1): what the
  * product is decides whether an order ships, is picked up, or needs no
  * delivery at all. With options, each variant can differ (a Fulfilment
- * column in the variant table). Digital and gift cards come with Wave B.
+ * column in the variant table). Digital files and licence keys are added in
+ * the Digital delivery card; gift cards have their own product switch.
  */
 export function FulfilmentCard({ form, hasOptions }: {
   form: UseFormReturn<ProductFormValues>;
@@ -25,7 +27,8 @@ export function FulfilmentCard({ form, hasOptions }: {
 }) {
   const t = useMessages(productMessages);
   const mode = useWatch({ control: form.control, name: "fulfillmentKind" }) ?? "physical";
-  const choices: ProductFulfilmentMode[] = hasOptions || mode === "mixed" ? ["physical", "service", "mixed"] : ["physical", "service"];
+  const single: ProductFulfilmentMode[] = ["physical", "digital", "service"];
+  const choices: ProductFulfilmentMode[] = hasOptions || mode === "mixed" ? [...single, "mixed"] : single;
   return (
     <Card>
       <CardHeader>
