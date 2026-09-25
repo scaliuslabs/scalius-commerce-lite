@@ -35,6 +35,7 @@ import { ConversationComposer } from "./ConversationComposer";
 import { ConversationMessages } from "./ConversationMessages";
 import { ConversationPane } from "./ConversationPane";
 import { InboxList } from "./InboxList";
+import { validateInboxSearch } from "./inbox-search";
 import type { StaffThread } from "~/lib/api-query-options/inbox";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,6 +45,7 @@ const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, res
 const thread: StaffThread = {
   id: "cnv_thread0000001",
   subjectType: "order",
+  subjectId: null,
   subject: null,
   status: "open",
   orderId: "ord_1",
@@ -126,7 +128,41 @@ describe("dashboard inbox", () => {
     await render(<InboxList search={{ q: "nothing" }} selectedId={null} onSearchChange={onSearchChange} />);
     expect(host.textContent).toContain(en["empty.filtered"]);
     await act(async () => button(en.clearFilters)!.click());
-    expect(onSearchChange).toHaveBeenCalledWith({ q: undefined, assignee: undefined });
+    expect(onSearchChange).toHaveBeenCalledWith({ q: undefined, assignee: undefined, subject: undefined });
+  });
+
+  it("filters by what the conversation is about, and counts that filter when the list is empty", async () => {
+    sdk.list.mockImplementation(() => ok({ items: [], nextCursor: null }));
+    const onSearchChange = vi.fn();
+    await render(<InboxList search={{ subject: "warranty_claim" }} selectedId={null} onSearchChange={onSearchChange} />);
+    expect(sdk.list).toHaveBeenCalledWith({ query: expect.objectContaining({ subjectType: "warranty_claim" }) });
+    expect(host.textContent).toContain(en["empty.filtered"]);
+
+    const select = host.querySelector<HTMLSelectElement>(`select[aria-label="${en.subjectFilter}"]`)!;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      en["subject.all"],
+      en["subject.order"],
+      en["subject.store"],
+      en["subject.review"],
+      en["subject.warranty_claim"],
+    ]);
+    await act(async () => {
+      select.value = "review";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onSearchChange).toHaveBeenCalledWith({ subject: "review" });
+    await act(async () => {
+      select.value = "all";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onSearchChange).toHaveBeenCalledWith({ subject: undefined });
+  });
+
+  it("keeps only known subjects in the inbox URL", () => {
+    expect(validateInboxSearch({ subject: "review" })).toEqual({ subject: "review" });
+    expect(validateInboxSearch({ subject: "warranty_claim", status: "closed" })).toEqual({ subject: "warranty_claim", status: "closed" });
+    expect(validateInboxSearch({ subject: "gift_card" })).toEqual({});
+    expect(validateInboxSearch({ subject: ["order"] })).toEqual({});
   });
 
   it("shows the customer's words and images, colleagues' notes marked internal, and case events", async () => {

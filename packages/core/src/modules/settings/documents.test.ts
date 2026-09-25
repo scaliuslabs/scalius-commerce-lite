@@ -32,16 +32,16 @@ describe("Wave B settings documents", () => {
     .prepare("INSERT INTO settings (id, key, value, type, category, revision) VALUES (?, 'document', ?, 'json', ?, 1)")
     .run(`set_${category}`, value, category);
 
-  it("keeps reviews disabled by default, with auto moderation and a 7-day email request", async () => {
+  it("turns reviews on by default, with auto moderation and a request 7 days after delivery", async () => {
     expect(await readReviewSettings(db)).toEqual({
       ok: true,
       revision: 0,
-      value: { enabled: false, moderation: "auto", requestDelayDays: 7, requestEmail: true, requestSms: false, blockWords: [] },
+      value: { enabled: true, moderation: "auto", requestsEnabled: true, requestDelayDays: 7, blockWords: [] },
     });
-    await reviewsDocument.write(db, { enabled: true, moderation: "hold", blockWords: ["spam", "ফালতু"] });
+    await reviewsDocument.write(db, { enabled: false, moderation: "hold", blockWords: ["spam", "ফালতু"] });
     expect(await readReviewSettings(db)).toMatchObject({
       ok: true,
-      value: { enabled: true, moderation: "hold", requestDelayDays: 7, blockWords: ["spam", "ফালতু"] },
+      value: { enabled: false, moderation: "hold", requestDelayDays: 7, blockWords: ["spam", "ফালতু"] },
     });
   });
 
@@ -53,6 +53,7 @@ describe("Wave B settings documents", () => {
       { moderation: "by_rating" },
       { blockWords: Array.from({ length: 51 }, (_, index) => `w${index}`) },
       { blockWords: [" "] },
+      { blockWords: ["x".repeat(41)] },
     ]) {
       await expect(reviewsDocument.write(db, patch as never)).rejects.toBeInstanceOf(ValidationError);
     }

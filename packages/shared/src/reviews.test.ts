@@ -39,6 +39,7 @@ describe("review vocabulary", () => {
     expect(canTransitionReviewStatus("pending", "published", "system")).toBe(true);
     expect(canTransitionReviewStatus("pending", "rejected", "staff")).toBe(true);
     expect(canTransitionReviewStatus("published", "withdrawn", "buyer")).toBe(true);
+    expect(canTransitionReviewStatus("pending", "withdrawn", "buyer")).toBe(true);
     expect(canTransitionReviewStatus("published", "rejected", "staff")).toBe(true);
     expect(canTransitionReviewStatus("rejected", "published", "staff")).toBe(true);
     expect(canTransitionReviewStatus("published", "pending", "system")).toBe(true);

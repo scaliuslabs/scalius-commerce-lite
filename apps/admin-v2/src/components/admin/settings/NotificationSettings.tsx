@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import { isOrderNotificationType, type NotificationType } from "@scalius/core/modules/notifications/browser";
+import { isTemplatedNotificationType, type NotificationType } from "@scalius/core/modules/notifications/browser";
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,
@@ -92,7 +92,7 @@ function RulesTable({
   allowed: (event: NotificationType, column: string) => boolean;
   onToggle: (event: NotificationType, column: string) => void;
   disabled: boolean;
-  /** Order event names open that message's editor. */
+  /** Templated message names (order events, digital, gift card, review request) open that message's editor. */
   linkEvents?: boolean;
 }) {
   const events = useMessages(notificationEventMessages);
@@ -117,7 +117,7 @@ function RulesTable({
           {group.events.map((event) => (
             <tr key={event} className="border-t border-border">
               <td className="py-1.5 pr-2">
-                {linkEvents && isOrderNotificationType(event) ? (
+                {linkEvents && isTemplatedNotificationType(event) ? (
                   <Link
                     to="/admin/settings/notifications/$event"
                     params={{ event }}

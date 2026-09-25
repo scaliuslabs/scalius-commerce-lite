@@ -131,6 +131,41 @@ describe("notification settings routes", () => {
         expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(expect.anything(), { channel: "whatsapp" });
     });
 
+    it("reads and saves the Wave B customer events, and keeps an older payload without them valid", async () => {
+        mocks.getSmsProviderReadiness.mockResolvedValue({ ...ready, activeProvider: "smsnetbd" });
+        const { request, stored } = createTestApp();
+
+        const initial = await request("");
+        expect(initial.body.data.channels).toMatchObject({
+            order_digital_delivered: ["email", "sms"],
+            gift_card_issued: ["email", "sms"],
+            review_request: ["email"],
+        });
+
+        const saved = await request("", "PUT", {
+            channels: rules(["email"], { review_request: ["email", "sms"], gift_card_issued: ["email"], order_digital_delivered: [] }),
+            expectedRevision: 0,
+        });
+        expect(saved.status).toBe(200);
+        expect(stored()).toMatchObject({
+            orderChannels: { review_request: ["email", "sms"], gift_card_issued: ["email"], order_digital_delivered: [] },
+        });
+
+        expect((await request("", "PUT", { channels: rules(["email"]), expectedRevision: 1 })).status).toBe(200);
+    });
+
+    it("refuses WhatsApp for the Wave B customer events", async () => {
+        const { request, stored } = createTestApp();
+
+        const { status } = await request("", "PUT", {
+            channels: rules(["email"], { gift_card_issued: ["whatsapp"] }),
+            expectedRevision: 0,
+        });
+
+        expect(status).toBe(400);
+        expect(stored()).toBeNull();
+    });
+
     it("refuses a save from a stale page with a revision conflict and keeps the newer save", async () => {
         const { request, stored } = createTestApp();
         await request("", "PUT", { channels: rules(["email"], { order_created: [] }), expectedRevision: 0 });
@@ -174,6 +209,25 @@ describe("notification settings routes", () => {
             revision: 1,
         });
         expect(stored()).toMatchObject({ staffEmailRecipients: ["owner@shop.test", "packing@shop.test"] });
+    });
+
+    it("reads and saves the Wave B staff alerts with push and email", async () => {
+        const { request, stored } = createTestApp();
+
+        const initial = await request("");
+        expect(initial.body.data.adminChannels).toMatchObject({
+            review_pending: ["push"],
+            digital_keys_exhausted: ["push", "email"],
+        });
+
+        const { status } = await request("/admin-channels", "PUT", {
+            channels: rules([], { review_pending: ["push", "email"], digital_keys_exhausted: ["email"] }),
+            emailRecipients: [],
+            expectedRevision: 0,
+        });
+
+        expect(status).toBe(200);
+        expect(stored()).toMatchObject({ adminChannels: { review_pending: ["push", "email"], digital_keys_exhausted: ["email"] } });
     });
 
     it("refuses newly switching on push before Firebase is set up", async () => {

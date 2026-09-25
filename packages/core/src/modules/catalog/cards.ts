@@ -3,6 +3,7 @@
 // and the card built from a row plus its gallery rows. Listings keep their
 // own richer projection (listing.ts).
 import { products } from "@scalius/database/schema";
+import { sql } from "drizzle-orm";
 import type { BuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
     buyerPricingSelection,
@@ -16,6 +17,7 @@ import {
     type ProductCardImages,
     type ProductMediaProjection,
 } from "../products/media";
+import { presentCardRating, reviewStats, type CardRating } from "./shared";
 
 /** The card columns of a product row joined to a buyer pricing projection. */
 export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
@@ -28,6 +30,14 @@ export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingPr
     categoryId: products.categoryId,
     hasVariants: buyerPricing.hasCustomerOptions,
     storeCurrencyCode: storeCurrencyCodeSql().as("collection_store_currency_code"),
+    // The card rating: primary-key probes of the stats projection per card
+    // row (no join, so every caller keeps its own statement shape).
+    ratingAvgCenti: sql<number | null>`(
+        SELECT ${reviewStats.ratingAvgCenti} FROM ${reviewStats} WHERE ${reviewStats.productId} = ${products.id}
+    )`.as("card_rating_avg_centi"),
+    reviewCount: sql<number | null>`(
+        SELECT ${reviewStats.reviewCount} FROM ${reviewStats} WHERE ${reviewStats.productId} = ${products.id}
+    )`.as("card_review_count"),
 });
 
 export type RawProduct = BuyerPricingMinor & {
@@ -39,6 +49,8 @@ export type RawProduct = BuyerPricingMinor & {
     categoryId: string | null;
     hasVariants: number;
     storeCurrencyCode?: string | null;
+    ratingAvgCenti?: number | null;
+    reviewCount?: number | null;
 };
 
 export type ResolvedProduct = {
@@ -55,6 +67,8 @@ export type ResolvedProduct = {
     hasVariants: boolean;
     availableForSale: boolean;
     priceVaries: boolean;
+    /** Published-review average and count; null without a published review. */
+    rating: CardRating;
 } & ProductCardImages;
 
 function enrichProduct(
@@ -62,11 +76,19 @@ function enrichProduct(
     images: ProductCardImages,
     decimalPlaces: number,
 ): ResolvedProduct {
-    const { hasVariants, availableForSale, storeCurrencyCode: _storeCurrencyCode, ...product } = p;
+    const {
+        hasVariants,
+        availableForSale,
+        storeCurrencyCode: _storeCurrencyCode,
+        ratingAvgCenti,
+        reviewCount,
+        ...product
+    } = p;
     return {
         ...presentBuyerPricing(product, decimalPlaces),
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
+        rating: presentCardRating(ratingAvgCenti, reviewCount),
         ...images,
     };
 }

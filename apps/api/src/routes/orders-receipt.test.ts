@@ -41,6 +41,12 @@ vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
   listLineDeliveries: vi.fn(async () => new Map()),
 }));
 
+// Review extras are covered on the real schema by the reviews domain tests.
+vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/reviews")>(),
+  listLineReviewStates: vi.fn(async () => new Map()),
+}));
+
 // The discount lines are covered on the real schema by orders-owner-receipt.d1.test.ts.
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),

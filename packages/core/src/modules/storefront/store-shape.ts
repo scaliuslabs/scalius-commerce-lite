@@ -12,7 +12,7 @@ import {
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { reviewsEnabledSql } from "../settings/documents";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 
@@ -50,13 +50,11 @@ export function selectStoreShapeCounts(db: Database) {
         WHERE m."deleted_at" IS NULL AND m."is_active" = 1
         LIMIT 1
       ) AS capped_shipping_methods)`,
-      // Reviews show only when the reviews document is enabled (a missing or
-      // malformed document reads as disabled) and one review is published.
+      // Reviews show only when reviews are on (no document = the default,
+      // on; a malformed one reads as off) and one review is published.
       publishedReviewCount: sql<number>`(SELECT count(*) FROM (
-        SELECT 1 FROM "settings" s
-        WHERE s."key" = ${SETTINGS_DOCUMENT_ROW_KEY} AND s."category" = 'reviews'
-          AND (CASE WHEN json_valid(s."value") THEN json_type(s."value", '$.enabled') END) = 'true'
-          AND EXISTS (SELECT 1 FROM "product_reviews" r WHERE r."status" = 'published')
+        SELECT 1 FROM "product_review_stats" rs0
+        WHERE rs0."rating_rank_milli" IS NOT NULL AND ${reviewsEnabledSql()} = 1
         LIMIT 1
       ) AS capped_reviews)`,
       digitalSkuCount: sql<number>`(SELECT count(*) FROM (

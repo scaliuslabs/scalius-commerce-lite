@@ -17,10 +17,10 @@ describe("admin sidebar", () => {
     expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts"]);
   });
 
-  it("keeps Reviews and Gift cards out of the menu until their pages ship", () => {
+  it("lists Reviews under Products, and keeps Gift cards out until its page ships", () => {
     const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.REVIEWS_VIEW, PERMISSIONS.GIFT_CARDS_VIEW));
 
-    expect(products!.children.map((child) => child.key)).not.toContain("reviews");
+    expect(products!.children.find((child) => child.key === "reviews")).toMatchObject({ to: "/admin/reviews", badge: "reviews" });
     expect(products!.children.map((child) => child.key)).not.toContain("giftCards");
   });
 
