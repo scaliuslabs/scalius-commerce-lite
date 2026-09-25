@@ -31,7 +31,8 @@ import { useOrderListReturnHref } from "~/lib/order-list-return";
 import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-state";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
-import { OrderItemsCard } from "./orderview/OrderItemsCard";
+import { OrderFulfilmentCards, usePickupReadyAction } from "./orderview/OrderFulfilmentCards";
+import { OrderSummaryCard } from "./orderview/OrderItemsCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
@@ -39,7 +40,7 @@ import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
 import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
 import { PaymentCard } from "./orderview/PaymentCard";
-import { ShipmentCard } from "./orderview/ShipmentCard";
+import { hasDeliveryCard, ShipmentCard } from "./orderview/ShipmentCard";
 import { useCancelRequestGuard } from "./orderview/CancelRequestGuard";
 import { resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } from "./orderview/primary-action";
 import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-badges";
@@ -65,6 +66,7 @@ export function OrderView({ order }: { order: Order }) {
   const statusMutation = useUpdateOrderStatus();
   const restoreMutation = useRestoreOrder();
   const deliveredMutation = useMarkOrderDelivered();
+  const pickupReady = usePickupReadyAction(order.id);
   const archiveMutation = useArchiveOrdersWithUndo({ canUndo: actions.canRestoreOrders });
   const notice = useOrderNotice(order.id);
   const [request, setRequest] = useState<OrderActionRequest | null>(null);
@@ -101,6 +103,8 @@ export function OrderView({ order }: { order: Order }) {
       cancelRequest.guard("confirm", () => statusMutation.mutate({ orderId: order.id, status: "confirmed" }));
     } else if (primary === "markDelivered") {
       deliveredMutation.mutate({ orderId: order.id });
+    } else if (primary === "markReadyForPickup") {
+      pickupReady.run();
     } else if (primary === "bookCourier" || primary === "sendOwnCourier") {
       cancelRequest.guard("send", () => setRequest({ action: primary, id: Date.now() }));
     } else {
@@ -109,7 +113,8 @@ export function OrderView({ order }: { order: Order }) {
   };
 
   const primaryPending = (primary === "confirm" && statusMutation.isPending)
-    || (primary === "markDelivered" && deliveredMutation.isPending);
+    || (primary === "markDelivered" && deliveredMutation.isPending)
+    || (primary === "markReadyForPickup" && pickupReady.isPending);
   const primaryButton = primary ? (
     <Button onClick={runPrimary} loading={primaryPending}>
       {primaryLabel}
@@ -222,8 +227,13 @@ export function OrderView({ order }: { order: Order }) {
               {(order.supportRequests?.length ?? 0) > 0 ? (
                 <div className="order-2 lg:order-none"><OrderSupportRequestsCard order={order} request={request} /></div>
               ) : null}
-              <div className="order-3 lg:order-none"><OrderItemsCard order={order} /></div>
-              <div className="order-4 lg:order-none"><ShipmentCard order={order} request={request} /></div>
+              {/*
+                Messages slot (S4): OrderConversationCard mounts here and replaces
+                OrderSupportRequestsCard above (thread, case banner, composer).
+              */}
+              <div className="order-3 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} /></div>
+              <div className="order-4 lg:order-none"><OrderSummaryCard order={order} /></div>
+              {hasDeliveryCard(order) ? <div className="order-4 lg:order-none"><ShipmentCard order={order} /></div> : null}
               <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>
               <div className="order-8 lg:order-none"><OrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
               <div className="order-9 lg:order-none"><OrderNotificationsCard order={order} /></div>

@@ -173,7 +173,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     && Number(order.balanceDue ?? 0) > 0;
   const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery;
   const cashCollectionAmount = Number(order.balanceDue ?? 0) > 0 ? Number(order.balanceDue) : order.totalAmount;
-  const sentUnits = order.items.reduce((sum, item) => sum + (item.shippedQuantity ?? item.quantity), 0);
+  const sentUnits = order.items.reduce((sum, item) => sum + (item.fulfilledQuantity ?? item.shippedQuantity ?? item.quantity), 0);
 
   const recovery = order.paymentRecovery ?? null;
   const canShowRecoveryLink = canIssueRecoveryLink
