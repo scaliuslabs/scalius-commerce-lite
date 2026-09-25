@@ -402,6 +402,22 @@
     padding-bottom: 0.25rem;
   }
 
+  /* Amazon's and Daraz's group headings sit one row above their values. */
+  .catalog-filter-form[data-filter-style="sidebar-dense"] .catalog-facet-summary {
+    min-height: calc(var(--catalog-row) + 0.25rem);
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-dense"] .catalog-facet-body {
+    padding-bottom: 0.25rem;
+  }
+
+  /* A dense column searches a long list once it is unfolded (See more),
+     so the first screen stays values. */
+  .catalog-filter-form[data-filter-style="sidebar-dense"]
+    .catalog-facet-body:not(:has([data-catalog-facet-more][aria-expanded="true"])) [data-catalog-facet-search] {
+    display: none;
+  }
+
   .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-filter-groups {
     gap: 0.5rem;
   }
