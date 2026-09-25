@@ -714,6 +714,9 @@ export const pageSchema = z.object({
  */
 export const publicPageSchema = pageSchema.omit({ revision: true, updatedAt: true });
 
+/** An article as buyers get it: no `revision`; `updatedAt` feeds the blog's dateModified. */
+export const publicArticleSchema = pageSchema.omit({ revision: true });
+
 // ─────────────────────────────────────────
 // Attributes
 // ─────────────────────────────────────────

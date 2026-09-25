@@ -7,7 +7,7 @@ import {
   paginationSchema,
   successEnvelope,
 } from "../schemas/responses";
-import { pageSchema } from "../schemas/entities";
+import { publicArticleSchema } from "../schemas/entities";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -31,7 +31,7 @@ const listArticlesRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z.object({
-              articles: z.array(pageSchema),
+              articles: z.array(publicArticleSchema),
               pagination: paginationSchema,
             }),
           ),
@@ -64,7 +64,7 @@ const getArticleRoute = createRoute({
       description: "Published article detail",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ article: pageSchema })),
+          schema: successEnvelope(z.object({ article: publicArticleSchema })),
         },
       },
     },

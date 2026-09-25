@@ -13206,10 +13206,6 @@
                               "sortOrder": {
                                 "type": "number"
                               },
-                              "revision": {
-                                "type": "integer",
-                                "minimum": 1
-                              },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
@@ -13239,7 +13235,6 @@
                               "hideFooter",
                               "hideTitle",
                               "sortOrder",
-                              "revision",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -13518,10 +13513,6 @@
                             "sortOrder": {
                               "type": "number"
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 1
-                            },
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
@@ -13551,7 +13542,6 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
-                            "revision",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
