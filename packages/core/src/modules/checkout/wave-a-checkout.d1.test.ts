@@ -268,6 +268,9 @@ describe("Wave A checkout", () => {
             batches = [];
             await checkout({ ...address, shippingMethodId: "m_ship", items });
             const counts = Object.fromEntries(all<{ k: string; n: number }>("SELECT k, n FROM amp").map((row) => [row.k, row.n]));
+            if (process.env.CACHE_DEP_AMPLIFICATION_REPORT) {
+                console.log(`[cache-dep amplification] checkout commit (${items.length} lines): ${JSON.stringify({ depWrites: counts.dep ?? 0, clockWrites: counts.clock ?? 0 })}`);
+            }
             return {
                 statements: batches[0]!.length,
                 keys: all<{ dep: string }>("SELECT dep FROM cache_dep WHERE seq > ? ORDER BY dep", clock).map((row) => row.dep),

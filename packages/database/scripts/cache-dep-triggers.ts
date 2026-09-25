@@ -231,11 +231,17 @@ function keyExpression(table: string, template: CacheDepKeyTemplate, image: stri
   throw new Error("Scope templates are rendered separately.");
 }
 
-/** The public scopes (`all`, `brand:<id>`, `cat:<ancestor>`) of the rule's product, as rows of `scope`. */
+/**
+ * The public scopes of the rule's product, as rows of `scope`: `all`,
+ * `brand:<id>`, `cat:<id>` straight from the product's category, and
+ * `cat:<ancestor>` for every ancestor in `category_closure`. The direct term
+ * does not depend on the closure, so a closure gap can hide an ancestor
+ * subtree's change but never the change of the product's own category.
+ */
 function scopesSql(template: ScopeTemplate, table: string, image: string, d: Dialect): string {
   const id = d.id;
   if ("row" in template.from) {
-    const list = d.list(["'all'", `'brand:' || ${image}.${id("brand_id")}`], "scope_list");
+    const list = d.list(["'all'", `'brand:' || ${image}.${id("brand_id")}`, `'cat:' || ${image}.${id("category_id")}`], "scope_list");
     return `SELECT ${list.value} AS scope FROM ${list.from}`
       + ` UNION ALL SELECT 'cat:' || ${id("ancestor_id")} FROM ${id("category_closure")} WHERE ${id("descendant_id")} = ${image}.${id("category_id")}`;
   }
@@ -243,7 +249,7 @@ function scopesSql(template: ScopeTemplate, table: string, image: string, d: Dia
   const product = `${image}.${id(template.from.product)}`;
   const state = `${id("product_buyer_state")} AS scope_state`;
   const publicState = `scope_state.${id("product_id")} = ${product} AND scope_state.${id("is_public")} = 1`;
-  const list = d.list(["'all'", `'brand:' || scope_state.${id("brand_id")}`], "scope_list");
+  const list = d.list(["'all'", `'brand:' || scope_state.${id("brand_id")}`, `'cat:' || scope_state.${id("category_id")}`], "scope_list");
   return `SELECT ${list.value} AS scope FROM ${state}, ${list.from} WHERE ${publicState}`
     + ` UNION ALL SELECT 'cat:' || scope_closure.${id("ancestor_id")} FROM ${state} JOIN ${id("category_closure")} AS scope_closure ON scope_closure.${id("descendant_id")} = scope_state.${id("category_id")} WHERE ${publicState}`;
 }
@@ -251,12 +257,18 @@ function scopesSql(template: ScopeTemplate, table: string, image: string, d: Dia
 /** Every key of the rule as rows of `dep` (NULL keys included; the caller drops them). */
 function keysSql(table: string, rule: CacheDepRule, d: Dialect): string {
   const image = rule.image === "new" ? "NEW" : "OLD";
-  const plain = rule.keys.filter((template) => !isScope(template))
+  const plain = rule.keys.filter((template) => !isScope(template) && !("rows" in template))
     .map((template) => keyExpression(table, template, image, d));
   plain.push(literal(`t:${table}`));
   const scoped = rule.keys.filter(isScope);
   const keyList = d.list(plain, "key_list");
   const parts = [`SELECT ${keyList.value} AS dep FROM ${keyList.from}`];
+  rule.keys.forEach((template, index) => {
+    if (!("rows" in template)) return;
+    for (const match of template.rows.matchAll(/\bR\.([A-Za-z_][A-Za-z0-9_]*)/g)) assertColumn(table, match[1]!);
+    const alias = `key_ref_${index}`;
+    parts.push(`SELECT ${literal(template.prefix)} || ${alias}.ref FROM (${template.rows.replace(/\bR\./g, `${image}.`)}) AS ${alias}`);
+  });
   if (scoped.length > 0) {
     const from = JSON.stringify(scoped[0]!.from);
     if (scoped.some((template) => JSON.stringify(template.from) !== from)) {
@@ -286,8 +298,19 @@ function guards(table: string, spec: CacheDepTableSpec, rule: CacheDepRule, dial
   const simple: string[] = [];
   const subquery: string[] = [];
   const changed = changedColumns(table, spec, rule);
-  if (rule.event === "update" && changed.length > 0) {
+  // A companion whose key columns are all among the changed ones needs only
+  // the narrower key-column test.
+  const implied = rule.keyColumnsChanged !== undefined && rule.keyColumnsChanged.every((column) => changed.includes(column));
+  if (rule.event === "update" && changed.length > 0 && !implied) {
     simple.push(`(${changed.map((column) => `OLD.${d.id(column)} ${d.distinct} NEW.${d.id(column)}`).join(" OR ")})`);
+  }
+  if (rule.keyColumnsChanged !== undefined) {
+    // An old-image companion fires only when the old image derives other keys.
+    if (rule.event !== "update" || rule.image !== "old" || rule.keyColumnsChanged.length === 0) {
+      throw new Error(`${table}.${rule.name}: a companion is an old-image update rule with key columns.`);
+    }
+    for (const column of rule.keyColumnsChanged) assertColumn(table, column);
+    simple.push(`(${rule.keyColumnsChanged.map((column) => `OLD.${d.id(column)} ${d.distinct} NEW.${d.id(column)}`).join(" OR ")})`);
   }
   if (rule.bandChanged) {
     if (rule.event !== "update") throw new Error(`${table}.${rule.name}: a band rule is an update rule.`);
@@ -299,7 +322,7 @@ function guards(table: string, spec: CacheDepTableSpec, rule: CacheDepRule, dial
     assertColumn(table, column);
     simple.push(`${image}.${d.id(column)} = ${literal(value)}`);
   }
-  if (rule.where?.exists) subquery.push(`EXISTS (${rule.where.exists.replaceAll("R.", `${image}.`)})`);
+  if (rule.where?.exists) subquery.push(`EXISTS (${rule.where.exists.replace(/\bR\./g, `${image}.`)})`);
   if (rule.event === "update" && changed.length === 0 && !rule.bandChanged) {
     throw new Error(`${table}.${rule.name}: an update rule needs changed columns or a band test.`);
   }
