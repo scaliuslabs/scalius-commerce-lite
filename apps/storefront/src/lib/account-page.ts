@@ -3,11 +3,11 @@
 import {
   getCustomerOrders,
   getCustomerSession,
-  logoutCustomer,
   updateCustomerProfile,
   type CustomerInfo,
   type CustomerOrder,
 } from "@/lib/api/customer-auth";
+import { signOutCustomer } from "@/lib/customer-sign-out";
 import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import { renderPhoneVerification } from "@/lib/account-phone-verification";
 import { getShippingAddressError } from "@/lib/checkout/shipping-address";
@@ -575,14 +575,13 @@ export async function initializeAccountPage(): Promise<void> {
   await ordersRead;
 }
 
-/** Signing out clears the checkout draft too (listeners on "customer-logout"). */
+/** Signing out empties this browser's cart and checkout state (shared devices). */
 export function bindSignOut(): void {
   const signOutForm = document.getElementById("signOutForm") as HTMLFormElement | null;
   if (!signOutForm) return;
   signOutForm.onsubmit = async (event) => {
     event.preventDefault();
-    await logoutCustomer();
-    window.dispatchEvent(new CustomEvent("customer-logout"));
+    await signOutCustomer();
     window.location.assign("/");
   };
 }
