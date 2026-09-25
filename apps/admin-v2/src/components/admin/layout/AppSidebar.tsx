@@ -15,6 +15,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { InboxNavBadge } from "~/components/admin/inbox/InboxNavBadge";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
@@ -49,7 +50,7 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
           <ShellLink to={item.to} preload="intent" current={open && !activeChild} onClick={close}>
             <item.icon aria-hidden />
             <span>{t(item.key)}</span>
-            {item.badge ? <item.badge /> : null}
+            {item.badge === "inbox" ? <InboxNavBadge /> : null}
           </ShellLink>
         </SidebarMenuButton>
         {open && item.children.length > 0 ? (

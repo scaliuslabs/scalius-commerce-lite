@@ -9,7 +9,7 @@ import { orderMessages } from "~/i18n/orders";
 import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
 import { formatOrderDate } from "../orderview/formatters";
 import { statusBadgeVariant } from "../orderview/status-badges";
-import type { StaffThread } from "./inbox-api";
+import type { StaffThread } from "~/lib/api-query-options/inbox";
 
 /** The thread's context (Shopify Inbox's right rail): customer, order and its requests. */
 export function ContextRail({ thread, className }: { thread: StaffThread; className?: string }) {

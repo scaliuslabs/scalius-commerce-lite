@@ -18,7 +18,7 @@ import {
   type Category,
 } from "~/components/admin/product-form/types";
 import { draftsFromView, viewFromDrafts } from "~/components/admin/product-form/buyer-inputs";
-import { fulfilmentModeOf } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+import { fulfilmentModeOf } from "~/components/admin/product-form/fulfilment-mode";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound, type ProductRevisionConflict } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";

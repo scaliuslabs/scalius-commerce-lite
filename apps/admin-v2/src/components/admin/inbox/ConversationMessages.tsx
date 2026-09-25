@@ -7,7 +7,8 @@ import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { formatOrderTimestamp } from "../orderview/formatters";
 import { authorName, eventText, initials } from "./conversation-format";
-import { attachmentUrl, fetchOlderMessages, type StaffMessage, type StaffThread } from "./inbox-api";
+import { fetchOlderMessages, type StaffMessage, type StaffThread } from "~/lib/api-query-options/inbox";
+import { attachmentUrl } from "./inbox-api";
 
 /**
  * One thread's lines, oldest first: the customer's messages on the left, the

@@ -1,7 +1,6 @@
 // The dashboard sidebar: one list of sections, filtered by the same page
 // permission map that guards the routes, so a link is shown exactly when its
 // page would open.
-import type { ComponentType } from "react";
 import {
   BadgePercent,
   FileText,
@@ -15,7 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { shellMessages } from "~/i18n/shell";
-import { InboxNavBadge } from "~/components/admin/inbox/InboxNavBadge";
 
 type ShellKey = keyof (typeof shellMessages)["en"];
 
@@ -32,14 +30,20 @@ export interface NavItem {
   children?: NavLink[];
   /** Sits under a small group label (Shopify's "Sales channels ›"). */
   group?: ShellKey;
-  /** A live count beside the label (the inbox's open conversations). */
-  badge?: ComponentType;
+  /**
+   * A live count beside the label (the inbox's open conversations). A name,
+   * not the component: this list loads with every page, the count's code with
+   * the sidebar.
+   */
+  badge?: NavBadge;
 }
+
+export type NavBadge = "inbox";
 
 export const ADMIN_NAV: readonly NavItem[] = [
   { key: "home", to: "/admin", icon: House },
   { key: "orders", to: "/admin/orders", icon: ShoppingBag },
-  { key: "inbox", to: "/admin/inbox", icon: Inbox, badge: InboxNavBadge },
+  { key: "inbox", to: "/admin/inbox", icon: Inbox, badge: "inbox" },
   {
     key: "products",
     to: "/admin/products",
@@ -83,7 +87,7 @@ export interface VisibleNavItem {
   icon: LucideIcon;
   children: NavLink[];
   group?: ShellKey;
-  badge?: ComponentType;
+  badge?: NavBadge;
 }
 
 /** Shopify-style sequences: G then the letter, within a second. */

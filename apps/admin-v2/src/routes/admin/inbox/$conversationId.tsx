@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InboxWorkspace } from "~/components/admin/inbox/InboxWorkspace";
-import { threadQueryOptions } from "~/components/admin/inbox/inbox-api";
+import { threadQueryOptions } from "~/lib/api-query-options/inbox";
 import { validateInboxSearch } from "~/components/admin/inbox/inbox-search";
 import { pageHead } from "~/i18n/page-titles";
 import { RouteErrorComponent } from "~/lib/route-error";
