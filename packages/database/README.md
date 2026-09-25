@@ -242,6 +242,31 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `shippingMethods` | Delivery rates (in `delivery.ts`). Zone (null = Everywhere else), kind (delivery/pickup), name, fee, free-over threshold, soft delete |
 | `deliveryZones` / `deliveryZoneLocations` | Delivery zones and their places; a place belongs to at most one zone |
 | `checkoutLanguages` | Checkout i18n. Unique code, language data JSON, field visibility JSON |
+| `cacheClock` / `cacheDep` | Dependency-validated cache (0093): the commit-ordered clock and each dependency key's last change. Written only by triggers generated from `@scalius/shared/cache-deps` (see "Cache dependency triggers") |
+
+### Cache dependency triggers (0093)
+
+`packages/shared/src/cache-deps.ts` is the one registry of buyer-visible
+tables: the key kinds each one advances, its noise columns (revisions,
+timestamps, raw stock) and one rule per trigger. `scripts/cache-dep-triggers.ts`
+generates the SQLite triggers (guard in `WHEN`, one `INSERT ... ON CONFLICT`
+body, no `CASE`) and their PostgreSQL form (deferred constraint triggers that
+lock the clock row at commit, so seq order is commit order without a new
+deadlock); `scripts/postgres-schema.ts` uses the same PostgreSQL form for fresh
+schemas. After changing the registry:
+
+```bash
+pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write
+```
+
+A released migration is immutable, so a registry change after 0093 ships goes
+into a new migration (drop and recreate the affected triggers); the freshness
+test (`__tests__/cache-dep-triggers.test.ts`) keeps the generator and the
+checked-in files equal. Every table in the schema must be registered or listed
+in `CACHE_DEP_EXEMPT_TABLES` with a reason. A catalogue-wide rebuild batch sets
+`cache_clock.coarse = 1` so every trigger in it advances `store` once instead
+of each product's keys (on PostgreSQL the deferred triggers fire after the
+flag is reset, so they advance the exact keys).
 
 ## JSON Column Shapes
 
