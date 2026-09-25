@@ -33,12 +33,12 @@ import {
 import { bulkShipOrderSchema, type ShipmentCreationOptionsInput } from "../orders/validation";
 import {
     clearShipmentClaim,
-    markAllOrderItemsSent,
     findShipmentByRequestKey,
     SENDABLE_ORDER_STATUSES,
 } from "./shared";
 import { reconcileInventoryForStatus, type BulkOrderActionResult } from "../orders/status/lifecycle";
 import { createFulfillmentShipment } from "./shipments";
+import { recordCourierBookingFulfilment } from "./ledger";
 
 function createShipmentClaimId(): string {
     return `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -153,7 +153,7 @@ export async function bulkShipOrders(
             });
             await assertNoActivePaymentSessionAttempt(db, orderId);
             if (order.status === OrderStatus.SHIPPED) {
-                await markAllOrderItemsSent(db, orderId);
+                await recordCourierBookingFulfilment(db, orderId, order.shipmentClaimId ?? null);
                 const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
                     db,
                     orderId,
@@ -256,7 +256,7 @@ export async function bulkShipOrders(
                 }
 
                 try {
-                    await markAllOrderItemsSent(db, orderId);
+                    await recordCourierBookingFulfilment(db, orderId, claimId);
                     availabilityTransitionVariantIds = await reconcileInventoryForStatus(
                         db,
                         orderId,

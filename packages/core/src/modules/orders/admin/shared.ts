@@ -82,7 +82,7 @@ export function orderEditEvidenceSelection() {
         hasNonPendingItem: exists(
             sql`${orderItems}`,
             sql`${orderItems.orderId}`,
-            sql`${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}`,
+            sql`(${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING} OR ${orderItems.fulfilledQuantity} > 0)`,
         ),
         hasCleanCodTracking: exists(
             sql`${codTracking}`,

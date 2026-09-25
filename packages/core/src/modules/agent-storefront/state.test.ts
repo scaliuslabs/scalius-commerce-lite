@@ -87,10 +87,19 @@ describe("agent storefront checkout state", () => {
       shippingMethodId: null,
     })).toThrow(ValidationError);
     expect(() => normalizeAgentStorefrontDeliverySelection({
-      cityId: null,
+      cityId: "city",
       zoneId: null,
       areaId: null,
       shippingMethodId: "method",
     })).toThrow(ValidationError);
+  });
+
+  it("accepts a method without an address for pickup", () => {
+    expect(normalizeAgentStorefrontDeliverySelection({
+      cityId: null,
+      zoneId: null,
+      areaId: null,
+      shippingMethodId: " pickup_counter ",
+    })).toEqual({ cityId: null, zoneId: null, areaId: null, shippingMethodId: "pickup_counter" });
   });
 });
