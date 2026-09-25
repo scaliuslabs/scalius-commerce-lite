@@ -48,13 +48,21 @@ export class ReferenceOracle {
     const spec: CacheDepTableSpec = CACHE_DEP_TABLES[change.table];
     let fired = false;
     for (const rule of spec.rules as readonly CacheDepRule[]) {
+      // The registry's derived old-image companions are its own reading of
+      // "both images"; the oracle derives that independently below.
+      if (rule.companionOf !== undefined) continue;
       if (rule.event !== change.op) continue;
       if (!this.ruleFires(rule, spec, change)) continue;
-      const image = rule.image === "new" ? change.new : change.old;
-      if (!image) continue;
-      if (!this.whereHolds(rule, image)) continue;
-      fired = true;
-      for (const template of rule.keys) for (const key of this.expand(template, image)) keys.add(key);
+      // An update advances the keys of both row images (a row moved out of a
+      // menu, category or product advances the one it left); insert and
+      // delete have one image.
+      const images = change.op === "update" ? [change.new, change.old] : [rule.image === "new" ? change.new : change.old];
+      for (const image of images) {
+        if (!image) continue;
+        if (!this.whereHolds(rule, image)) continue;
+        fired = true;
+        for (const template of rule.keys) for (const key of this.expand(template, image)) keys.add(key);
+      }
     }
     // `t:<table>` advances with any rule of the table, as the generated
     // triggers do: a change no rule covers (a non-public buyer-state row) is
@@ -143,6 +151,17 @@ export class ReferenceOracle {
       const text = row ? toText(row.v) : null;
       return text === null ? [] : [`${template.prefix}${text}`];
     }
+    if ("rows" in template) {
+      const values: SQLInputValue[] = [];
+      const sql = template.rows.replace(/\bR\.([A-Za-z_][A-Za-z0-9_]*)/g, (_match, column: string) => {
+        values.push(bindable(image[column] ?? null));
+        return "?";
+      });
+      return (this.sqlite.prepare(sql).all(...values) as Array<{ ref: SqlValue }>)
+        .map((row) => toText(row.ref))
+        .filter((ref): ref is string => ref !== null)
+        .map((ref) => `${template.prefix}${ref}`);
+    }
     // Listing scopes.
     let state: { category_id: SqlValue; brand_id: SqlValue } | null;
     if ("row" in template.from) {
@@ -163,9 +182,9 @@ export class ReferenceOracle {
       const ancestors = this.sqlite.prepare(
         "SELECT ancestor_id FROM category_closure WHERE descendant_id = ?",
       ).all(categoryId) as Array<{ ancestor_id: string }>;
-      // The closure holds the category's own row (depth 0) while it exists; a
-      // deleted category has no listing to invalidate.
-      const scopes = new Set(ancestors.map((row) => String(row.ancestor_id)));
+      // The product's own category straight from the row, whatever the
+      // closure holds, plus every ancestor the closure lists.
+      const scopes = new Set([categoryId, ...ancestors.map((row) => String(row.ancestor_id))]);
       for (const scope of scopes) keys.push(`${prefix}:cat:${scope}`);
     }
     const brandId = toText(state.brand_id);

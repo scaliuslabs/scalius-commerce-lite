@@ -16,12 +16,15 @@ import {
 } from "@scalius/database/read-observer";
 import {
   CACHE_DEP_ENTRY_KEY_BUDGET,
+  CACHE_DEP_ROW_KEYED_TABLES,
   cacheDepKind,
   isCacheDep,
   type CacheDepKind,
 } from "@scalius/shared/cache-deps";
 
-import { resolveCacheDependencies } from "./resolve";
+import { resolveCacheDependencies, type CacheDepRowKeyedStatement } from "./resolve";
+
+const ROW_KEYED_TABLES: ReadonlySet<string> = new Set(Object.keys(CACHE_DEP_ROW_KEYED_TABLES));
 
 /** What one cached entry depends on. */
 export interface CacheDependencies {
@@ -96,6 +99,10 @@ export class DependencyScope implements ReadObserver {
   readonly strict: boolean;
   private readonly declared = new Set<string>();
   private readonly tables = new Set<string>();
+  /** Bound statements that read a row-keyed table (settings). */
+  private readonly rowKeyedStatements: CacheDepRowKeyedStatement[] = [];
+  /** The transports report the SQL and parameters of statements touching these tables. */
+  readonly valueTables: ReadonlySet<string> = ROW_KEYED_TABLES;
   private readonly invalidKeys: string[] = [];
   private readonly uncacheableReasons: string[] = [];
   private softMaxAgeSeconds: number | null = null;
@@ -122,6 +129,11 @@ export class DependencyScope implements ReadObserver {
     if (this.parent !== undefined && !(this.parent instanceof DependencyScope)) {
       this.parent.observeTables(tables);
     }
+  }
+
+  observeBoundStatement(tables: readonly string[], sql: string, params: readonly unknown[]): void {
+    if (this.closed) return;
+    this.rowKeyedStatements.push({ tables: [...tables], sql, params: [...params] });
   }
 
   declare(key: string): void {
@@ -167,6 +179,7 @@ export class DependencyScope implements ReadObserver {
     const resolution = resolveCacheDependencies({
       declared: this.declared,
       tables: this.tables,
+      rowKeyedStatements: this.rowKeyedStatements,
       budget,
     });
     if (this.strict && (resolution.coarseTables.length > 0 || resolution.unregisteredTables.length > 0)) {
