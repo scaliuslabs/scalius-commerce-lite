@@ -9,8 +9,8 @@ import {
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
     type OrderNotificationQueueMessage,
-    type OrderNotificationType,
 } from "@scalius/core/modules/notifications";
+import { type OrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import { eq, inArray } from "drizzle-orm";
 
 export interface OrderStatusChange {

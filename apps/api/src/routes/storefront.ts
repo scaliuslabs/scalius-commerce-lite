@@ -3,12 +3,8 @@
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-  getHomepageData,
-  getLayoutData,
-  getPageRenderData,
-} from "@scalius/core/modules/storefront/storefront.service";
-import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
+import { getHomepageData, getLayoutData, getPageRenderData } from "@scalius/core/modules/storefront";
+import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { NotFoundError } from "../utils/api-error";
 import {

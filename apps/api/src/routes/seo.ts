@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getSeoSettings } from "@scalius/core/modules/settings/site-settings.service";
+import { getSeoSettings } from "@scalius/core/modules/settings";
 import {
   SEO_RETURN_POLICY_CATEGORIES,
   SEO_RETURN_POLICY_FEES,

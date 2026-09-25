@@ -1,11 +1,8 @@
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 
-import {
-    getCheckoutFlowValidationIssues,
-    type CheckoutMode,
-} from "./checkout-flow";
-import { checkoutDocument, type CheckoutFlowSettings } from "./documents";
+import { getCheckoutFlowValidationIssues } from "./checkout-flow";
+import { checkoutDocument, type CheckoutFlowSettings, type CheckoutMode } from "./documents";
 import { readStoreCurrency, toStoreMinor } from "./store-money";
 
 export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {

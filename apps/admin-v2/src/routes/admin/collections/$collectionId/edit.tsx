@@ -11,7 +11,7 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import {
   collectionProductIdsForLookup,
   normalizeCollectionConfig,
-} from "@scalius/core/modules/collections/collection-config";
+} from "@scalius/core/modules/collections/browser";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 import { pageHead } from "~/i18n/page-titles";
 

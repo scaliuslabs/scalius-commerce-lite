@@ -1,0 +1,540 @@
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { safeBatch, type Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { ConflictError } from "../../errors";
+import { createAtomicCheckoutAttempt } from "./attempts";
+import { commitStorefrontOrderPayload, type StorefrontOrderCheckoutCommit } from "./commit";
+import type { StorefrontOrderCommitPayload } from "../orders/types";
+import {
+  activatePromotion,
+  archivePromotionDraft,
+  createPromotionDraft,
+  createPromotionDraftSchema,
+  pausePromotion,
+  quoteStorefrontDiscount,
+  updatePromotionDraft,
+  type CreatePromotionDraftInput,
+} from "../promotions";
+import { prepareStockReservationBatch } from "../inventory";
+
+function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommitPayload {
+  return {
+    checkoutToken: "chk_order_discount",
+    checkoutAuthorityRevision,
+    existingCustomer: null,
+    orderData: {
+      id: "order_discount",
+      customerName: "Discount Buyer",
+      customerPhone: "+8801712345678",
+      customerEmail: "buyer@example.com",
+      shippingAddress: "123 Discount Road",
+      city: "city_1",
+      zone: "zone_1",
+      area: null,
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: null,
+      notes: null,
+      currencyCode: "BDT",
+      currencyDecimalPlaces: 2,
+      subtotalAmountMinor: 20_000,
+      shippingAmountMinor: 6_000,
+      shippingMethodId: "shipping_standard",
+      shippingMethodName: "Standard delivery",
+      shippingMethodDescription: "Delivered within 2–3 business days",
+      shippingMethodBaseAmountMinor: 6_000,
+      shippingFeeWaived: false,
+      discountAmountMinor: 0,
+      taxAmountMinor: 0,
+      totalAmountMinor: 26_000,
+      taxLabel: "Tax",
+      pricesIncludeTax: false,
+      status: "incomplete",
+      paymentMethod: "stripe",
+      paymentStatus: "unpaid",
+      paidAmountMinor: 0,
+      balanceDueMinor: 26_000,
+      fulfillmentStatus: "pending",
+      inventoryPool: "regular",
+      inventoryAction: "reserved",
+    },
+    items: [
+      {
+        id: "item_1",
+        taxAllocationLineId: "cart:0:variant_1",
+        cartKey: "line_1",
+        productId: "prod_1",
+        variantId: "variant_1",
+        quantity: 2,
+        productName: "Discounted Product",
+        variantLabel: null,
+        productImageMediaId: null,
+        inventoryTracked: true,
+        unitPriceMinor: 10_000,
+        lineSubtotalMinor: 20_000,
+        discountAmountMinor: 0,
+        taxableAmountMinor: 0,
+        taxAmountMinor: 0,
+      },
+    ],
+    requestUrl: "https://shop.example.com/api/v1/orders",
+    taxQuote: {
+      schemaVersion: 1,
+      calculationVersion: "tax-v1",
+      enabled: false,
+      currencyCode: "BDT",
+      decimalPlaces: 2,
+      displayLabel: "Tax",
+      pricesIncludeTax: false,
+      shippingTaxed: false,
+      settingsVersion: 0,
+      subtotalMinor: 20_000,
+      shippingMinor: 6_000,
+      discountMinor: 0,
+      taxableMinor: 0,
+      taxMinor: 0,
+      totalMinor: 26_000,
+      destination: { city: "city_1", zone: "zone_1", area: null },
+      lines: [{
+        lineId: "cart:0:variant_1",
+        productId: "prod_1",
+        variantId: "variant_1",
+        taxClassId: null,
+        taxClassName: null,
+        unitPriceMinor: 10_000,
+        quantity: 2,
+        grossAmountMinor: 20_000,
+        discountMinor: 0,
+        taxableAmountMinor: 0,
+        taxMinor: 0,
+        totalMinor: 20_000,
+        components: [],
+      }],
+      shipping: {
+        taxClassId: null,
+        taxClassName: null,
+        grossAmountMinor: 6_000,
+        discountMinor: 0,
+        taxableAmountMinor: 0,
+        taxMinor: 0,
+        totalMinor: 6_000,
+        components: [],
+      },
+    },
+  };
+}
+
+
+describe("storefront checkout authority at the atomic commit", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+  let beforeWriteBatch: (() => void | Promise<void>) | undefined;
+  let databaseNow: number;
+
+  beforeEach(() => {
+    beforeWriteBatch = undefined;
+    ({ sqlite, db } = createSqliteD1Database({
+      async beforeBatch(_sqlite, statements) {
+        if (!statements.some((statement) => statement.query.startsWith('insert into "orders"'))) return;
+        const beforeWrite = beforeWriteBatch;
+        beforeWriteBatch = undefined;
+        await beforeWrite?.();
+      },
+    }));
+    databaseNow = Math.floor(Date.now() / 1000);
+    sqlite.function("unixepoch", () => databaseNow);
+    sqlite.exec(`
+      PRAGMA foreign_keys = ON;
+      INSERT INTO products (id, name, slug, price_minor, is_active)
+      VALUES ('prod_1', 'Test product', 'test-product', 10000, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+      VALUES ('variant_1', 'prod_1', 'AUTHORITY-SKU', 10000, 10, 1, 1);
+      INSERT INTO shipping_methods (id, name, fee_minor, is_active)
+      VALUES ('shipping_standard', 'Standard delivery', 6000, 1);
+    `);
+  });
+
+  afterEach(() => sqlite.close());
+
+  function revision(): number {
+    return Number(sqlite.prepare("SELECT revision FROM checkout_authority WHERE id = 'default'").get()?.revision);
+  }
+
+  function checkout(identity = "a") {
+    const attempt = createAtomicCheckoutAttempt({
+      checkoutRequestId: "authority-test",
+      requestKey: `checkout_submit:v1:${identity.repeat(64)}`,
+      requestHash: "b".repeat(64),
+      statusToken: `cst_${identity.repeat(64)}`,
+    });
+    const payload = createPayload(revision());
+    payload.orderData.id = attempt.orderId;
+    payload.checkoutToken = attempt.checkoutToken;
+    return { payload, commit: { attempt, response: { orderId: attempt.orderId } } };
+  }
+
+  async function discountedCheckout(overrides: Partial<CreatePromotionDraftInput> = {}) {
+    const rule = createPromotionDraftSchema.parse({
+      name: "AUDIT50",
+      method: "code",
+      codes: [{ code: "AUDIT50" }],
+      effects: [{ kind: "percentage_off", target: "order", allocation: "once", config: { basisPoints: 5_000 } }],
+      ...overrides,
+    });
+    const created = await createPromotionDraft(db, rule);
+    const promotion = await activatePromotion(db, created.id, created.revision, databaseNow);
+    const { payload, commit } = checkout();
+    const quote = await quoteStorefrontDiscount(db, {
+      codes: ["AUDIT50"],
+      customerPhone: payload.orderData.customerPhone,
+      evaluatedAtEpochSeconds: databaseNow,
+      cart: {
+        currencyCode: "BDT",
+        lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
+        shippingAmountMinor: 6_000,
+      },
+    });
+    const minor = quote.applied!.totalDiscountMinor;
+    Object.assign(payload.orderData, {
+      totalAmountMinor: 26_000 - minor,
+      discountAmountMinor: minor, balanceDueMinor: 26_000 - minor,
+    });
+    payload.items[0]!.discountAmountMinor = minor;
+    payload.taxQuote.discountMinor = minor;
+    payload.taxQuote.totalMinor = 26_000 - minor;
+    payload.taxQuote.lines[0]!.discountMinor = minor;
+    payload.taxQuote.lines[0]!.totalMinor = 20_000 - minor;
+    payload.promotion = quote.snapshot;
+    return { payload, commit, promotion, rule };
+  }
+
+  /** Live code discounts plus a prepared checkout that applies `codes` exactly as the quote allocated them. */
+  async function codesCheckout(
+    rules: Array<Partial<CreatePromotionDraftInput> & Pick<CreatePromotionDraftInput, "name" | "effects">>,
+    codes: string[],
+    identity = "a",
+  ) {
+    for (const rule of rules) {
+      const created = await createPromotionDraft(db, createPromotionDraftSchema.parse({
+        method: "code", codes: [{ code: rule.name }], ...rule,
+      }));
+      await activatePromotion(db, created.id, created.revision, databaseNow);
+    }
+    return preparedWithCodes(codes, identity);
+  }
+
+  async function preparedWithCodes(codes: string[], identity: string) {
+    const { payload, commit } = checkout(identity);
+    const quote = await quoteStorefrontDiscount(db, {
+      codes,
+      customerPhone: payload.orderData.customerPhone,
+      evaluatedAtEpochSeconds: databaseNow,
+      cart: {
+        currencyCode: "BDT",
+        lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
+        shippingAmountMinor: 6_000,
+      },
+    });
+    const lineMinor = quote.taxAllocation?.lines.reduce((total, line) => total + line.amountMinor, 0) ?? 0;
+    const shippingMinor = quote.taxAllocation?.shippingMinor ?? 0;
+    const minor = lineMinor + shippingMinor;
+    Object.assign(payload.orderData, {
+      totalAmountMinor: 26_000 - minor, discountAmountMinor: minor, balanceDueMinor: 26_000 - minor,
+    });
+    payload.items[0]!.discountAmountMinor = lineMinor;
+    payload.taxQuote.discountMinor = minor;
+    payload.taxQuote.totalMinor = 26_000 - minor;
+    payload.taxQuote.lines[0]!.discountMinor = lineMinor;
+    payload.taxQuote.lines[0]!.totalMinor = 20_000 - lineMinor;
+    payload.taxQuote.shipping.discountMinor = shippingMinor;
+    payload.taxQuote.shipping.totalMinor = 6_000 - shippingMinor;
+    payload.promotion = quote.snapshot;
+    return { payload, commit, quote };
+  }
+
+  const productCode = {
+    name: "TEE10",
+    combinesWith: { product: false, order: false, shipping: true },
+    effects: [{ kind: "percentage_off" as const, target: "line" as const, allocation: "across" as const, config: { basisPoints: 1_000 } }],
+  };
+  const shippingCode = {
+    name: "SHIPFREE",
+    effects: [{ kind: "free" as const, target: "shipping" as const, allocation: "once" as const, config: {} }],
+  };
+
+  it("commits two combinable codes on one order with one redemption per code", async () => {
+    const { payload, commit, quote } = await codesCheckout([productCode, shippingCode], ["TEE10", "SHIPFREE"]);
+    expect(quote.rejectedCodes).toEqual([]);
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    expect(sqlite.prepare("SELECT promotion_code, discount_amount_minor FROM promotion_redemptions ORDER BY promotion_code").all())
+      .toEqual([
+        { promotion_code: "SHIPFREE", discount_amount_minor: 6_000 },
+        { promotion_code: "TEE10", discount_amount_minor: 2_000 },
+      ]);
+    expect(sqlite.prepare("SELECT discount_amount_minor, total_amount_minor FROM orders").get())
+      .toEqual({ discount_amount_minor: 8_000, total_amount_minor: 18_000 });
+  });
+
+  it("claims a code typed twice once", async () => {
+    const { payload, commit } = await codesCheckout([productCode], ["TEE10", " tee10 "]);
+    expect(payload.promotion?.cart.submittedCodes).toEqual(["TEE10"]);
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(1);
+  });
+
+  it("refuses the whole second order when one of its two codes runs out concurrently", async () => {
+    const first = await codesCheckout([{ ...productCode, maxRedemptions: 1 }, shippingCode], ["TEE10", "SHIPFREE"]);
+    const second = await preparedWithCodes(["TEE10", "SHIPFREE"], "b");
+    second.payload.items[0]!.id = "item_2";
+    // The first order lands after the second passed its own re-check.
+    beforeWriteBatch = async () => { await commitStorefrontOrderPayload(db, first.payload, first.commit); };
+    await expect(commitStorefrontOrderPayload(db, second.payload, second.commit)).rejects.toThrow(/usage limit/);
+    expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: first.payload.orderData.id }]);
+    // No partial claim: the shipping code's redemption for the refused order rolled back too.
+    expect(sqlite.prepare("SELECT order_id FROM promotion_redemptions GROUP BY order_id").all())
+      .toEqual([{ order_id: first.payload.orderData.id }]);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(2);
+  });
+
+  function expectNoCheckoutWrites() {
+    for (const table of [
+      "orders", "order_items", "checkout_attempts", "order_receipts", "customers",
+      "customer_history", "inventory_movements", "order_tax_snapshots",
+      "order_item_tax_snapshots", "order_notification_outbox", "meta_capi_purchase_outbox",
+      "order_discount_allocations", "promotion_redemptions",
+    ]) {
+      expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);
+    }
+    expect(sqlite.prepare("SELECT stock, reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ stock: 10, reserved_stock: 0 });
+  }
+
+  it.each(["pause", "amount edit", "scope edit", "archive"])(
+    "rejects a discount %s after the commit re-check without committing any checkout writes",
+    async (change) => {
+      const { payload, commit, promotion, rule } = await discountedCheckout();
+      beforeWriteBatch = async () => {
+        if (change === "pause") {
+          await pausePromotion(db, promotion.id, promotion.revision);
+        } else if (change === "archive") {
+          await archivePromotionDraft(db, promotion.id, promotion.revision);
+        } else {
+          await updatePromotionDraft(db, promotion.id, {
+            ...rule,
+            expectedRevision: promotion.revision,
+            effects: [change === "amount edit"
+              ? { kind: "percentage_off", target: "order", allocation: "once", config: { basisPoints: 2_500 } }
+              : { kind: "percentage_off", target: "line", allocation: "across", config: { basisPoints: 5_000, productIds: ["prod_1"] } }],
+          });
+        }
+      };
+      await expect(commitStorefrontOrderPayload(db, payload, commit))
+        .rejects.toThrow("This discount changed or expired during checkout");
+      expect(revision()).toBe(payload.checkoutAuthorityRevision);
+      expectNoCheckoutWrites();
+    },
+  );
+
+  it.each([0, 9, 10, 11])("checks the discount end time at database commit time (+%ss)", async (offset) => {
+    const { payload, commit } = await discountedCheckout({ endsAtEpochSeconds: databaseNow + 10 });
+    beforeWriteBatch = () => { databaseNow += offset; };
+    if (offset >= 10) {
+      await expect(commitStorefrontOrderPayload(db, payload, commit))
+        .rejects.toThrow("This discount changed or expired during checkout");
+      expectNoCheckoutWrites();
+    } else {
+      await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    }
+  });
+
+  it("ignores unrelated discount edits and replays committed money after the discount is paused", async () => {
+    const { payload, commit, promotion, rule } = await discountedCheckout({ maxRedemptionsPerCustomer: 1 });
+    const other = await createPromotionDraft(db, { ...rule, name: "OTHER50", codes: [{ code: "OTHER50", isActive: true }] });
+    const otherActive = await activatePromotion(db, other.id, other.revision, databaseNow);
+    beforeWriteBatch = async () => { await pausePromotion(db, other.id, otherActive.revision); };
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    expect(revision()).toBe(payload.checkoutAuthorityRevision);
+    await pausePromotion(db, promotion.id, promotion.revision);
+    await expect(commitStorefrontOrderPayload(db, payload)).resolves.toMatchObject({ alreadyCommitted: true });
+    expect(sqlite.prepare("SELECT discount_amount_minor, total_amount_minor FROM orders").all())
+      .toEqual([{ discount_amount_minor: 10_000, total_amount_minor: 16_000 }]);
+    for (const table of ["promotion_redemptions", "order_discount_allocations", "order_receipts", "inventory_movements"]) {
+      expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(1);
+    }
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+  });
+
+  it.each(["maxRedemptions", "maxRedemptionsPerCustomer"] as const)(
+    "preserves atomic %s limits for two prepared checkouts",
+    async (limit) => {
+      const { payload, commit } = await discountedCheckout({ [limit]: 1 });
+      const second = checkout("b");
+      const nextPayload = structuredClone(payload);
+      nextPayload.orderData.id = second.payload.orderData.id;
+      nextPayload.checkoutToken = second.payload.checkoutToken;
+      nextPayload.items[0]!.id = "item_2";
+      // The first order lands after the second has passed its own re-check.
+      beforeWriteBatch = async () => { await commitStorefrontOrderPayload(db, payload, commit); };
+      await expect(commitStorefrontOrderPayload(db, nextPayload, second.commit))
+        .rejects.toThrow(/usage limit/);
+      expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: payload.orderData.id }]);
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(1);
+      expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+    },
+  );
+
+  it("rejects a discount change before the order-only replay batch and preserves the existing reservation", async () => {
+    const { payload, commit, promotion } = await discountedCheckout();
+    const reservation = await prepareStockReservationBatch(db, [{
+      variantId: "variant_1", quantity: 2, orderId: payload.orderData.id,
+    }], "regular", {
+      reservationKey: "checkout-ingest:v1",
+      freshOrderIds: new Set([payload.orderData.id]),
+    });
+    await safeBatch(db, reservation.statements);
+    const movements = sqlite.prepare("SELECT * FROM inventory_movements").all();
+    const stock = sqlite.prepare("SELECT stock, reserved_stock, stock_version FROM product_variants WHERE id = 'variant_1'").get();
+    let commitBatches = 0;
+    beforeWriteBatch = () => {
+      commitBatches += 1;
+      // The first batch discovers the already-committed reservation. Change
+      // the discount only when the committer retries without inventory writes.
+      beforeWriteBatch = async () => {
+        commitBatches += 1;
+        await pausePromotion(db, promotion.id, promotion.revision);
+      };
+    };
+    await expect(commitStorefrontOrderPayload(db, payload, commit))
+      .rejects.toThrow("This discount changed or expired during checkout");
+    expect(commitBatches).toBe(2);
+    expect(sqlite.prepare("SELECT * FROM inventory_movements").all()).toEqual(movements);
+    expect(sqlite.prepare("SELECT stock, reserved_stock, stock_version FROM product_variants WHERE id = 'variant_1'").get()).toEqual(stock);
+    for (const table of ["orders", "order_items", "order_receipts", "checkout_attempts", "promotion_redemptions", "customers", "customer_history"]) {
+      expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);
+    }
+  });
+
+  it("rejects a SKU price edit after preparation and leaves no checkout side effects", async () => {
+    const { payload, commit } = checkout();
+    beforeWriteBatch = () => {
+      sqlite.exec("UPDATE product_variants SET price_minor = 90000 WHERE id = 'variant_1'");
+    };
+
+    await expect(commitStorefrontOrderPayload(db, payload, commit))
+      .rejects.toThrow("Checkout details changed while the order was being placed");
+    expect(revision()).toBe(payload.checkoutAuthorityRevision! + 1);
+    expectNoCheckoutWrites();
+  });
+
+  it("commits current authority once and replays the saved order after a later price edit", async () => {
+    const { payload, commit } = checkout();
+    await expect(commitStorefrontOrderPayload(db, payload, commit))
+      .resolves.toMatchObject({ alreadyCommitted: false });
+    expect(sqlite.prepare("SELECT unit_price_minor, quantity FROM order_items").get())
+      .toEqual({ unit_price_minor: 10_000, quantity: 2 });
+    expect(sqlite.prepare("SELECT subtotal_amount_minor, total_amount_minor FROM orders").get())
+      .toEqual({ subtotal_amount_minor: 20_000, total_amount_minor: 26_000 });
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_receipts").get()?.count).toBe(1);
+    expect(sqlite.prepare("SELECT status FROM checkout_attempts").get()?.status).toBe("committed");
+
+    sqlite.exec("UPDATE product_variants SET price_minor = 90000 WHERE id = 'variant_1'");
+    payload.checkoutAuthorityRevision = null;
+    await expect(commitStorefrontOrderPayload(db, payload))
+      .resolves.toMatchObject({ alreadyCommitted: true, orderId: payload.orderData.id });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM orders").get()?.count).toBe(1);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM inventory_movements").get()?.count).toBe(1);
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+  });
+
+  describe("agent storefront context binding", () => {
+    const GRANT = "agr_storefront0123456789";
+    const CONTEXT = "asc_context0123456789abc";
+    const CART = '[{"variantId":"variant_1","quantity":2}]';
+
+    beforeEach(() => {
+      sqlite.exec(`
+        INSERT INTO user (id, name, email) VALUES ('owner_1', 'Owner', 'owner@example.com');
+        INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json,
+          risk_ceiling, status, expires_at)
+        VALUES
+          ('${GRANT}', 'pat', 'owner_1', 'storefront', 'Buyer agent', 'full', '[]', 'read', 'active', ${databaseNow + 172_800}),
+          ('agr_otherowner0123456789', 'pat', 'owner_1', 'storefront', 'Other agent', 'full', '[]', 'read', 'active', ${databaseNow + 172_800});
+        INSERT INTO agent_storefront_contexts (id, grant_id, revision, cart_json, discount_code, expires_at)
+        VALUES ('${CONTEXT}', '${GRANT}', 3, '${CART}', 'SAVE10', ${databaseNow + 3_600});
+      `);
+    });
+
+    type AgentContext = NonNullable<StorefrontOrderCheckoutCommit["agentContext"]>;
+
+    function agentCheckout(overrides: Partial<AgentContext> = {}) {
+      const { payload, commit } = checkout();
+      const agentContext: AgentContext = {
+        contextId: CONTEXT,
+        grantId: GRANT,
+        expectedRevision: 3,
+        expiresAt: new Date((databaseNow + 3_600) * 1000),
+        ...overrides,
+      };
+      return { payload, commit: { ...commit, agentContext } };
+    }
+
+    const context = () => sqlite.prepare(
+      "SELECT revision, cart_json, discount_code FROM agent_storefront_contexts",
+    ).get();
+    const grants = () => sqlite.prepare(
+      "SELECT context_id, order_id, authority_kind, expires_at FROM agent_storefront_order_grants",
+    ).all();
+
+    it("commits the order with a created-order grant and clears the context cart and discount", async () => {
+      const { payload, commit } = agentCheckout({
+        continuation: {
+          id: "acn_payment0123456789abc",
+          kind: "payment",
+          expiresAt: new Date((databaseNow + 1_800) * 1000),
+          bootstrapCodeHash: "c".repeat(64),
+        },
+      });
+
+      await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+
+      expect(context()).toEqual({ revision: 4, cart_json: "[]", discount_code: null });
+      expect(grants()).toEqual([{
+        context_id: CONTEXT, order_id: payload.orderData.id, authority_kind: "created", expires_at: databaseNow + 3_600,
+      }]);
+      expect(sqlite.prepare("SELECT order_id, kind, status FROM agent_storefront_continuations").all())
+        .toEqual([{ order_id: payload.orderData.id, kind: "payment", status: "pending" }]);
+      expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+    });
+
+    const CONTEXT_CONFLICT = /storefront context changed, closed, or expired before the order was committed/;
+
+    it.each([
+      ["a stale context revision", { expectedRevision: 2 }, undefined],
+      ["another grant's context", { grantId: "agr_otherowner0123456789" }, undefined],
+      ["a context that expires before commit", {}, () => { databaseNow += 3_600; }],
+      ["a context closed before commit", {}, () => {
+        sqlite.exec("UPDATE agent_storefront_contexts SET status = 'closed', closed_at = unixepoch()");
+      }],
+      ["a context edited before commit", {}, () => {
+        sqlite.exec("UPDATE agent_storefront_contexts SET revision = 4, cart_json = '[]'");
+      }],
+    ] as const)("refuses %s as a context conflict without checkout writes", async (_label, overrides, race) => {
+      const { payload, commit } = agentCheckout(overrides);
+      let contextBeforeCommit: unknown;
+      beforeWriteBatch = () => {
+        race?.();
+        contextBeforeCommit = context();
+      };
+
+      const failure = commitStorefrontOrderPayload(db, payload, commit);
+      await expect(failure).rejects.toBeInstanceOf(ConflictError);
+      await expect(failure).rejects.toThrow(CONTEXT_CONFLICT);
+      expectNoCheckoutWrites();
+      expect(context()).toEqual(contextBeforeCommit);
+      expect(grants()).toEqual([]);
+    });
+  });
+});

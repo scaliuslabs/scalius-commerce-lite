@@ -30,14 +30,12 @@ vi.mock("@scalius/core/utils/credential-encryption", () => ({
   readStoredCredentialStrict: mocks.readStoredCredentialStrict,
 }));
 
-vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
+vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
   getDeliveryProviders: mocks.getDeliveryProviders,
   getDeliveryProvider: mocks.getDeliveryProvider,
   saveDeliveryProvider: mocks.saveDeliveryProvider,
   testDeliveryProvider: mocks.testDeliveryProvider,
-}));
-
-vi.mock("@scalius/core/modules/delivery/factory", () => ({
   createProvider: mocks.createProvider,
 }));
 

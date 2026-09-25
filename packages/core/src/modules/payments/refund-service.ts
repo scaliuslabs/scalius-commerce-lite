@@ -18,7 +18,7 @@ import { COD_PAYMENT_METHOD, getPaymentGateway, isPaymentMethodId } from "./gate
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { canTransitionTo } from "../orders/order-state-machine";
+import { canTransitionTo } from "../orders/status/state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";

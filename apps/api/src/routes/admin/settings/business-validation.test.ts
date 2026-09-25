@@ -13,7 +13,7 @@ vi.mock("../../../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
-import { saveAllowedCountries } from "@scalius/core/modules/settings/site-settings.service";
+import { saveAllowedCountries } from "@scalius/core/modules/settings";
 import { businessSettingsRoutes } from "./business";
 
 let sqlite: DatabaseSync;

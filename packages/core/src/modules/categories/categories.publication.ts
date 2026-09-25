@@ -1,7 +1,7 @@
 import { categories, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { publicProductBaseConditions } from "../products/products.public-eligibility";
+import { publicProductBaseConditions } from "../products/public-eligibility";
 
 export type CategoryPublishReadiness = {
     ready: boolean;

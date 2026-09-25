@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { isOrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+import { isOrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import { NotificationTemplateEditor } from "~/components/admin/settings/NotificationTemplateEditor";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { useHasPermission } from "~/contexts/PermissionContext";

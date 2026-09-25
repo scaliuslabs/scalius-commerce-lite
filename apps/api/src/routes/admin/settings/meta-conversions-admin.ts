@@ -1,5 +1,4 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsLogs } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { desc, count } from "drizzle-orm";
@@ -7,16 +6,11 @@ import {
     manualLogCleanup,
     summarizeMetaRequestPayload,
     summarizeMetaResponsePayload,
-} from "@scalius/core/modules/analytics/meta.service";
-import {
     buildUnavailableMetaPixelParityDiagnostics,
     getMetaPixelParityDiagnostics,
     metaPixelParityStatuses,
 } from "@scalius/core/modules/analytics";
-import {
-    metaConversionsDocument,
-    type MetaConversionsSettings,
-} from "@scalius/core/modules/settings/documents";
+import { metaConversionsDocument, type MetaConversionsSettings } from "@scalius/core/modules/settings";
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";

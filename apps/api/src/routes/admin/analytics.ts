@@ -2,9 +2,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     analyticsProviderHealthBrowserStatuses,
     analyticsProviderHealthServerStatuses,
-    analyticsRevisionSchema,
-    analyticsScriptTypes,
-    createAnalyticsSchema,
     createAnalyticsScript,
     deleteAnalyticsScript,
     getAnalyticsProviderHealth,
@@ -12,11 +9,16 @@ import {
     listAnalyticsScripts,
     permanentlyDeleteAnalyticsScript,
     restoreAnalyticsScript,
-    toggleAnalyticsSchema,
     toggleAnalyticsScript,
-    updateAnalyticsSchema,
     updateAnalyticsScript,
 } from "@scalius/core/modules/analytics";
+import {
+    analyticsRevisionSchema,
+    analyticsScriptTypes,
+    createAnalyticsSchema,
+    toggleAnalyticsSchema,
+    updateAnalyticsSchema,
+} from "@scalius/core/modules/analytics/browser";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";

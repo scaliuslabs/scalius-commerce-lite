@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -2,10 +2,9 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   CUSTOMER_REQUEST_INTRO_MAX_LENGTH,
   getCustomerRequestIntro,
-  getCustomerRequestPolicyDocument,
   getCustomerRequestPolicyPreview,
-  saveCustomerRequestPolicy,
-} from "@scalius/core/modules/settings/customer-request-policy";
+} from "@scalius/core/modules/settings/browser";
+import { getCustomerRequestPolicyDocument, saveCustomerRequestPolicy } from "@scalius/core/modules/settings";
 
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";

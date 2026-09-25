@@ -12,7 +12,7 @@ import {
   presentStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
   validateStorefrontDeliveryPreflight,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/checkout";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {

@@ -1,7 +1,29 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import * as OrdersService from "@scalius/core/modules/orders";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications";
-import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
+import {
+    bulkShipOrders,
+    createFulfillmentShipment,
+    getOrderShipments,
+    lookupUnknownOrderShipment,
+    markOrderDelivered,
+    markParcelReturned,
+    processCodAction,
+    reconcileOrderShipment,
+    resolveUnknownOrderShipment,
+} from "@scalius/core/modules/fulfilment";
+import {
+    recordOrderEvent,
+    updateOrderStatus,
+    shipmentCreationOptionsSchema,
+    unknownShipmentResolutionSchema,
+} from "@scalius/core/modules/orders";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
+import {
+    getShipments,
+    getDeliveryProvider,
+    getShipment,
+    deleteShipmentRecord,
+    getLatestShipment,
+} from "@scalius/core/modules/delivery";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
@@ -18,10 +40,6 @@ import {
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
-import {
-    shipmentCreationOptionsSchema,
-    unknownShipmentResolutionSchema,
-} from "@scalius/core/modules/orders/orders.validation";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -170,9 +188,9 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
-    const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
+    const result = await updateOrderStatus(db, orderId, data.status);
     if (before && before.status !== data.status) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId,
             kind: "status_changed",
             actorId: actorIdOf(c),
@@ -229,9 +247,9 @@ const markDeliveredRoute = createRoute({
 app.openapi(markDeliveredRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await OrdersService.markOrderDelivered(db, orderId);
+    const result = await markOrderDelivered(db, orderId);
     if (result.notification) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId,
             kind: "status_changed",
             actorId: actorIdOf(c),
@@ -286,9 +304,9 @@ const parcelReturnedRoute = createRoute({
 app.openapi(parcelReturnedRoute, async (c) => {
     const db = c.get("db");
     const { id: orderId, shipmentId } = c.req.valid("param");
-    const result = await OrdersService.markParcelReturned(db, orderId, shipmentId);
+    const result = await markParcelReturned(db, orderId, shipmentId);
     if (!result.replayed) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId,
             kind: "parcel_returned",
             actorId: actorIdOf(c),
@@ -379,10 +397,10 @@ app.openapi(postCodRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.processCodAction(db, orderId, data);
+    const result = await processCodAction(db, orderId, data);
     const { availabilityTransitionVariantIds, ...responseData } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
-    await OrdersService.recordOrderEvent(db, data.action === "collected"
+    await recordOrderEvent(db, data.action === "collected"
         ? {
             orderId,
             kind: "cod_collected",
@@ -449,7 +467,7 @@ const getFulfillRoute = createRoute({
 app.openapi(getFulfillRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const shipments = await OrdersService.getOrderShipments(db, orderId);
+    const shipments = await getOrderShipments(db, orderId);
     return ok(c, { shipments });
 });
 
@@ -494,7 +512,7 @@ app.openapi(postFulfillRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.createFulfillmentShipment(db, orderId, data);
+    const result = await createFulfillmentShipment(db, orderId, data);
     const {
         statusChange,
         availabilityTransitionVariantIds,
@@ -503,7 +521,7 @@ app.openapi(postFulfillRoute, async (c) => {
     } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
     if (!replayed) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId,
             kind: "shipment_created",
             actorId: actorIdOf(c),
@@ -605,7 +623,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const db = c.get("db");
 
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [shipmentResult] = await OrdersService.bulkShipOrders(
+    const [shipmentResult] = await bulkShipOrders(
         db,
         [orderId],
         data.providerId,
@@ -633,7 +651,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const now = new Date();
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, createdShipmentRecord.id));
 
-    await OrdersService.recordOrderEvent(db, {
+    await recordOrderEvent(db, {
         orderId,
         kind: "shipment_created",
         actorId: actorIdOf(c),
@@ -829,7 +847,7 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const db = c.get("db");
 
-    const result = await OrdersService.reconcileOrderShipment(db, orderId, shipmentId);
+    const result = await reconcileOrderShipment(db, orderId, shipmentId);
     const { availabilityTransitionVariantIds, ...responseData } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
@@ -883,7 +901,7 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const db = c.get("db");
-    const result = await OrdersService.lookupUnknownOrderShipment(db, {
+    const result = await lookupUnknownOrderShipment(db, {
         ...data,
         orderId,
         shipmentId,
@@ -932,7 +950,7 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const db = c.get("db");
-    const result = await OrdersService.resolveUnknownOrderShipment(db, {
+    const result = await resolveUnknownOrderShipment(db, {
         ...data,
         orderId,
         shipmentId,

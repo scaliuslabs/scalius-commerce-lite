@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages/pages.service";
+import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";

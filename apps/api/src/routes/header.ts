@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getLayoutData } from "@scalius/core/modules/storefront/storefront.service";
+import { getLayoutData } from "@scalius/core/modules/storefront";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";

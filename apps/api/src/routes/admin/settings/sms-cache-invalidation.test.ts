@@ -14,7 +14,8 @@ vi.mock("@scalius/core/integrations/sms", () => ({
   saveSmsSettings: mocks.saveSmsSettings,
 }));
 
-vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
   clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import {
   Dialog,
   DialogContent,

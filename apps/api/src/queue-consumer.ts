@@ -26,35 +26,37 @@ import {
   orders,
 } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
-import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
+import {
+  processPaymentConfirmed,
+  processPaymentFailed,
+  releaseOrderInventory,
+} from "@scalius/core/modules/payments";
 import {
   processExistingMetaPurchaseOutboxForOrder,
 } from "@scalius/core/integrations/meta/purchase-outbox";
-import { sendOrderNotificationEmail, sendOrderNotification, sendStaffOrderEmails } from "@scalius/core/modules/notifications/notifications.service";
-import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
+  sendOrderNotificationEmail,
+  sendOrderNotification,
+  sendStaffOrderEmails,
+  type OrderNotificationQueueMessage,
   claimOrderNotificationOutboxForProcessing,
   markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
+  composeAuthOtpMessage,
+  readStoreIdentity,
+  getNotificationProviderBlock,
+  isNotificationProviderBreakerFailure,
+  markNotificationProviderBlocked,
 } from "@scalius/core/modules/notifications";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
-import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
-import { composeAuthOtpMessage, readStoreIdentity } from "@scalius/core/modules/notifications/store-messages";
 import {
-  getNotificationProviderBlock,
-  isNotificationProviderBreakerFailure,
-  markNotificationProviderBlocked,
-} from "@scalius/core/modules/notifications/notification-provider-health";
-import {
-  enqueueOrderBalancePaidNotificationForOrder,
-  enqueueOrderCreatedNotificationForOrder,
-} from "./utils/order-notification-queue";
-import {
+  deriveCustomerAuthOtpDeliveryCode,
   claimAuthOtpDeliveryReceipt,
   createAuthOtpDeliveryTarget,
   createAuthOtpProviderClientReference,
@@ -66,7 +68,11 @@ import {
   markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
   type AuthOtpDeliveryChannel,
   type AuthOtpDeliveryReceiptResult,
-} from "@scalius/core/modules/customers/otp-delivery-receipts";
+} from "@scalius/core/modules/customers";
+import {
+  enqueueOrderBalancePaidNotificationForOrder,
+  enqueueOrderCreatedNotificationForOrder,
+} from "./utils/order-notification-queue";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import {
   renderMissingMediaVariants,
@@ -752,7 +758,7 @@ async function processQueueMessage(
 
         // Admin push notification — check admin channel settings before sending
         try {
-          const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings/settings.service");
+          const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings");
           const adminChannels = await getAdminNotificationChannels(db);
           const enabledAdminChannels = adminChannels[payload.notificationType] || [];
 

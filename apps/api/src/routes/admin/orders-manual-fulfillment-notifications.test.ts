@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
     enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
+vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@scalius/core/modules/fulfilment")>();
     return {
         ...actual,
         createFulfillmentShipment: mocks.createFulfillmentShipment,

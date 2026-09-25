@@ -11,15 +11,15 @@ import {
     createSqliteTursoDatabase,
 } from "@scalius/database/testing/sqlite-d1";
 
-import { buildStorefrontCheckoutQuoteFingerprint } from "../orders/checkout-quote-fingerprint";
+import { buildStorefrontCheckoutQuoteFingerprint } from "../checkout/quote-fingerprint";
 import { calculateStorefrontTaxQuote } from "../tax";
 import {
     assertDiscountCodesApplied,
     listProductBuyGetOffers,
     quoteStorefrontDiscount,
     verifyPromotionCheckoutSnapshot,
-    type StorefrontDiscountCart,
 } from "./promotions.checkout";
+import type { StorefrontDiscountCart } from "./checkout-snapshot";
 import { activatePromotion, pausePromotion } from "./promotions.lifecycle";
 import { archivePromotionDraft, createPromotionDraft } from "./promotions.service";
 import type { CreatePromotionDraftInput } from "./promotions.validation";

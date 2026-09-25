@@ -14,7 +14,7 @@ import { navigationRoutes } from "./routes/navigation";
 import { footerRoutes } from "./routes/footer";
 import { pagesRoutes } from "./routes/pages";
 import { articleRoutes } from "./routes/articles";
-import { orderRoutes } from "./routes/orders";
+import { orderRoutes } from "./routes/storefront-orders";
 import { paymentRoutes } from "./routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "./routes/webhooks/payments";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
@@ -73,6 +73,7 @@ import { adminFraudCheckerRoutes } from "./routes/admin/fraud-checker";
 import { adminRbacRoutes } from "./routes/admin/rbac";
 import { adminSettingsRoutes } from "./routes/admin/settings";
 import { adminOrdersRoutes } from "./routes/admin/orders";
+import { adminConversationRoutes } from "./routes/admin/conversations";
 import { adminProductsRoutes } from "./routes/admin/products";
 import {
   adminAuthManagementRoutes,
@@ -231,6 +232,7 @@ app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
 app.route("/admin/rbac", adminRbacRoutes);
 app.route("/admin/settings", adminSettingsRoutes);
 app.route("/admin/orders", adminOrdersRoutes);
+app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/products", adminProductsRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);

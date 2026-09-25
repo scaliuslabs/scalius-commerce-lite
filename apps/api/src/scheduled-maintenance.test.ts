@@ -34,15 +34,14 @@ vi.mock("@scalius/core/modules/inventory", () => ({
   releaseExpiredReservations: mocks.releaseExpiredReservations,
 }));
 
-vi.mock("@scalius/core/modules/orders/abandoned-checkout-cleanup", () => ({
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
   cleanupStaleAbandonedCheckouts: mocks.cleanupStaleAbandonedCheckouts,
 }));
 
-vi.mock("@scalius/core/modules/orders/stale-incomplete-orders", () => ({
+vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/orders")>()),
   archiveStaleIncompleteOrders: mocks.archiveStaleIncompleteOrders,
-}));
-
-vi.mock("@scalius/core/modules/orders", () => ({
   cleanupExpiredOrderPaymentRecoveryChallenges: mocks.cleanupExpiredOrderPaymentRecoveryChallenges,
 }));
 
@@ -54,7 +53,8 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   flushPendingMetaPurchaseOutbox: mocks.flushPendingMetaPurchaseOutbox,
 }));
 
-vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,
   cleanupExpiredCustomerAuthOtpRateLimits: mocks.cleanupExpiredCustomerAuthOtpRateLimits,
   cleanupExpiredCustomerSessions: mocks.cleanupExpiredCustomerSessions,

@@ -6,7 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
 import { ftsMatch } from "@scalius/core/search";
-import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/orders";
+import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/checkout";
 
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";

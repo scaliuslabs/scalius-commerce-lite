@@ -1,6 +1,8 @@
 # Products Core Module
 
-Product CRUD, variant management, ordered image/video associations, rich content (additional info), product attributes, barcode support, and storefront queries.
+The merchant-edited product aggregate: product CRUD, SKUs (variants), normalized options and the option matrix, ordered media, rich content, attributes, barcodes, the aggregate revision, and the product rules other domains read through (public eligibility, buyer pricing and projections, money). Buyer-facing catalogue reads (listings, facets, product page, search, feeds, sitemaps, recommendations, storefront sections) live in [`../catalog`](../catalog/README.md) and depend on this module, never the reverse.
+
+Public entry: `index.ts`.
 
 ## Features
 
@@ -24,7 +26,7 @@ Product CRUD, variant management, ordered image/video associations, rich content
 - `getProductDetails()` fetches `productRichContent` (mapped to `additionalInfo`) and `productAttributeValues` (mapped to `attributes`)
 - Storefront product listing with attribute-based filtering (AND logic across attributes), with page rows/count read in one DB wave and image/category enrichment read in one dependent wave
 - Storefront category-product listing delegates to `getStorefrontCategoryProducts()`, which reuses the shared public product predicate/sort/attribute-filter helpers without paying for the global product list's variant/category enrichment
-- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and ranked recommendations (`products.recommendations.ts`)
+- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and ranked recommendations (`catalog/recommendations.ts`)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
@@ -32,7 +34,7 @@ Product CRUD, variant management, ordered image/video associations, rich content
 - Product options are arbitrary merchant-defined axes, not fixed size/color slots. An axis may explicitly map to `size`, `color`, `material`, `pattern`, or `none` for catalog standards; each non-`none` mapping can be claimed by only one axis. Combination identity is the axis-ordered option-value ID sequence, independent of request order.
 - Product editor concurrency is aggregate-versioned. Admin detail and list/trash rows expose `aggregateRevision`; every direct product-editor mutation requires `expectedAggregateRevision`, increments the product revision exactly once in the same D1 batch, and returns the new revision. External category/attribute/tax cascades bump affected product revisions atomically so an open editor becomes stale. Stale direct writes fail with `PRODUCT_REVISION_CONFLICT` and safe expected/current revision details. Operational inventory transitions remain separately guarded by SKU `stockVersion` and ledger v2.
 - SKU and barcode writes trim values and use global case-insensitive identity. New SKUs without a merchant barcode receive a stable internal `code128` identity; retail barcode types validate supported shape/checksum rules, and discovery outputs whitelist only true retail identifiers. Migration 0006 installs normalized unique indexes plus canonical row triggers, and scanner/admin lookup uses those indexed identities.
-- Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads. The dedicated feed projection carries `canonicalPath`, option-axis mapping, and supported variant barcode fields so storefront XML can emit canonical product links, `variant_option` pairs, ProductGroup-compatible standard attributes, and true GTINs without expanding normal listing cards.
+- Public catalog eligibility is centralized in `public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads. The dedicated feed projection carries `canonicalPath`, option-axis mapping, and supported variant barcode fields so storefront XML can emit canonical product links, `variant_option` pairs, ProductGroup-compatible standard attributes, and true GTINs without expanding normal listing cards.
 - Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
 
 ## Data Flow
@@ -41,7 +43,7 @@ Product CRUD, variant management, ordered image/video associations, rich content
 Admin UI (ProductForm.tsx)
   --> fetch(/api/v1/admin/products) [POST/PUT]
     --> apps/api/src/routes/admin/products.ts [Hono route, Zod validation]
-      --> packages/core/src/modules/products/products.admin.ts [createProduct/updateProduct]
+      --> packages/core/src/modules/products/admin/write.ts [createProduct/updateProduct]
         --> D1 batch: products + productMedia + productRichContent + productAttributeValues
 
 Admin option-matrix editor
@@ -61,7 +63,7 @@ Storefront ([slug].astro)
   --> apps/storefront/src/lib/api/products.ts [getProductBySlug, edge-cached]
     --> fetch(/api/storefront/products/:slug)
       --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
-        --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
+        --> packages/core/src/modules/catalog/product-page.ts [getStorefrontProductBySlug]
           --> D1: parallel queries for ordered product media, variants, richContent, attributes, category, recommendations
         --> apps/storefront/src/lib/product-sellable-variants.ts [buyer-visible SKU resolver]
           --> simple: one active no-option SKU; optioned: customer-option SKUs only; fake "default"/ambiguous rows fail closed
@@ -70,24 +72,28 @@ Storefront category ([slug].astro)
   --> apps/storefront/src/lib/api/products.ts [getProductsByCategory, edge-cached]
     --> fetch(/api/v1/categories/:slug/products)
       --> apps/api/src/routes/categories.ts [resolves category + query attribute filters]
-        --> packages/core/src/modules/products/products.storefront.ts [getStorefrontCategoryProducts]
+        --> packages/core/src/modules/catalog/listing.ts [getStorefrontCategoryProducts]
           --> D1: shared public predicates/sort/attribute filtering + category-scoped rows/count + primary images
 ```
 
 ## Files
 
-| File | Description |
+| Path | Description |
 |------|-------------|
-| `index.ts` | Barrel re-exports from all submodules |
-| `products.types.ts` | Zod schemas for single-SKU create/update operations and shared product/storefront projection types. |
-| `products.validation.ts` | Zod schemas for product create/update, including stable ordered media association IDs, exactly-one-featured validation, attributes, and additional info. |
-| `products.media.ts` | Bounded association loader and the shared pure product/SKU image representation resolvers. |
-| `products.option-model.ts` | Normalized option reads, assignment resolution, axis-ordered combination labels/keys, and the five-axis/150-combination limits. |
-| `products.option-matrix.ts` | Active matrix-subset validation and atomic save. Owns arbitrary axes, potential-combination limits, used-value/unique-combination invariants, unique standard mappings, canonical combination order, per-SKU image ownership, SKU/barcode conflicts, discount consistency, stock allocation, assignment replacement, and safe retirement. |
-| `products.public-eligibility.ts` | Shared public catalog predicates and default simple-SKU values. Any storefront/catalog/search surface that exposes buyer product cards must use these predicates instead of checking only `products.isActive` and `products.deletedAt`. |
-| `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and product write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
-| `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
-| `products.variants.ts` | Single-SKU operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`) and shared normalized identity/axis guards. All reads filter soft-deleted variants; deletion rejects active reservations/open orders and preserves audit history. |
+| `index.ts` | Public entry |
+| `types.ts` | Zod schemas for single-SKU create/update and shared product/storefront projection types. |
+| `validation.ts` | Zod schemas for product create/update: ordered media association ids, exactly-one-featured, attributes, additional info. |
+| `admin/read.ts` | `listProducts`, `listProductAgentSummaries`, `getProductsByIds`, `getProductDetails`, `getProductStats`, `getCategoryStats`. |
+| `admin/write.ts` | `createProduct`, `updateProduct`, `updateProductMediaSection`, `duplicateProduct` under the aggregate revision. |
+| `admin/lifecycle.ts` | `deleteProduct`, `restoreProduct`, `permanentlyDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateProducts`. |
+| `media.ts` | Bounded association loader and the shared product/SKU image resolvers. |
+| `option-model.ts` | Normalized option reads, assignment resolution, axis-ordered combination labels/keys, the five-axis/150-combination limits. |
+| `option-matrix.ts` | Active matrix-subset validation and atomic save (identities, images, discounts, stock allocation, safe retirement). |
+| `variants.ts`, `variant-identity.ts` | Single-SKU operations and normalized SKU/barcode identity. |
+| `aggregate-revision.ts` | The product editor's revision claim and bump. |
+| `public-eligibility.ts` | Shared public catalogue predicates and default simple-SKU values. Every buyer-facing surface uses these instead of checking only `products.isActive` and `products.deletedAt`. |
+| `buyer-projection.ts`, `money.ts` | Integer buyer pricing and availability projections, store-currency helpers. |
+| `semantic-sections.ts` | Named product-editor sections (details, media, SEO, ...) saved under the aggregate revision. |
 
 ## API Endpoints
 
@@ -128,30 +134,9 @@ Storefront category ([slug].astro)
 | PUT | `/{id}/values` | inline | Rename value across all products + options array |
 | DELETE | `/{id}/values` | inline | Remove value from all products + options array |
 
-### Storefront Products (`/api/storefront/products`)
+### Storefront reads
 
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort, `hasVariants`, and SKU-aware `availableForSale` |
-| GET | `/feed` | `getStorefrontFeedProducts` | Dedicated feed projection with description, primary image, category summary, filterable attributes, SKU-aware availability, and buyer-safe variants bulk-read for the current page |
-| GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
-| GET | `/recommendations` | `getStorefrontProductRecommendations` | Ranked buyable products for up to 20 source ids (cart, order) or, without ids, popular/newest. `reason` (`also_bought` only with ≥2 distinct co-buyers for at least half the list, `similar`, `popular`, `new_arrivals`) drives an honest title. One ranking statement plus one media read; cached by store cache generation, so order-based ranking refreshes with the next buyer-visible write or the one-day ceiling. |
-| GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, recommendations |
-
-### Storefront Category Products (`/api/v1/categories`)
-
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/{slug}/products` | `getStorefrontCategoryProducts` | Category-scoped product list using shared public list filtering/sort helpers, preserving the category-products response shape |
-
-### Storefront Attributes (`/api/storefront/attributes`)
-
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/filterable` | inline | All filterable attributes with their unique values (1h cache) |
-| GET | `/category/{categoryId}` | inline | Filterable attributes scoped to a category by ID (30m cache) |
-| GET | `/category-slug/{categorySlug}` | inline | Filterable attributes scoped to a category by slug (30m cache) |
-| GET | `/search-filters?q=X&categoryId=Y` | inline | Filterable attributes for search results (based on matching product categories) |
+See [catalog](../catalog/README.md#api-endpoints).
 
 ## Known Gaps
 
