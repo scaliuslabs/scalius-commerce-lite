@@ -36,18 +36,24 @@ import { deps } from "../../cache-deps";
 /**
  * A cached read that shows automatic promotions is valid only until the next
  * scheduled start or end of one (no row changes at that instant, so no key
- * advances). One small read, and only while a dependency scope records.
+ * advances). Only while a dependency scope records, and as one more
+ * statement of the candidates' batch, never a read of its own.
  */
-async function declareNextAutomaticPromotionTransition(db: Database, nowEpochSeconds: number): Promise<void> {
-    if (!deps.active()) return;
-    const row = await db.select({
+function nextAutomaticPromotionTransitionStatement(db: Database, nowEpochSeconds: number) {
+    return db.select({
         nextStart: sql<number | null>`MIN(CASE WHEN ${promotions.startsAt} > ${nowEpochSeconds} THEN CAST(${promotions.startsAt} AS INTEGER) END)`,
         nextEnd: sql<number | null>`MIN(CASE WHEN ${promotions.endsAt} > ${nowEpochSeconds} THEN CAST(${promotions.endsAt} AS INTEGER) END)`,
     }).from(promotions).where(and(
         eq(promotions.method, "automatic"),
         eq(promotions.status, "active"),
         isNull(promotions.deletedAt),
-    )).get();
+    ));
+}
+
+function declareNextAutomaticPromotionTransition(
+    rows: ReadonlyArray<{ nextStart: number | null; nextEnd: number | null }> | undefined,
+): void {
+    const row = rows?.[0];
     const next = [row?.nextStart, row?.nextEnd]
         .map((value) => (value === null || value === undefined ? null : Number(value)))
         .filter((value): value is number => value !== null && Number.isFinite(value));
@@ -205,7 +211,9 @@ async function loadCandidates(
     codes: readonly string[],
     input: StorefrontDiscountInput,
     now: number,
+    options: { declareTransition?: boolean } = {},
 ) {
+    const declareTransition = Boolean(options.declareTransition) && deps.active();
     const codeIds = sql`SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${idList(promotionCodes.normalizedCode, codes)}`;
     const automaticIds = sql`SELECT automatic.id FROM (SELECT ${promotions.id} AS id FROM ${promotions}
         WHERE ${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
@@ -219,7 +227,7 @@ async function loadCandidates(
         : input.customerPhone
             ? sql`${promotionRedemptions.customerId} IN (SELECT ${customers.id} FROM ${customers} WHERE ${customers.phone} = ${input.customerPhone})`
             : sql`1 = 0`;
-    const [parents, codeRows, conditionRows, effectRows, usageRows] = await db.batch([
+    const [parents, codeRows, conditionRows, effectRows, usageRows, transitionRows] = await db.batch([
         db.select().from(promotions).where(sql`${promotions.id} IN ${candidateIds}`),
         db.select().from(promotionCodes)
             .where(sql`${promotionCodes.promotionId} IN ${candidateIds}`)
@@ -238,7 +246,11 @@ async function loadCandidates(
         }).from(promotionRedemptions)
             .where(sql`${promotionRedemptions.promotionId} IN (${codeIds})`)
             .groupBy(promotionRedemptions.promotionId),
+        ...(declareTransition ? [nextAutomaticPromotionTransitionStatement(db, now)] : []),
     ]);
+    if (declareTransition) {
+        declareNextAutomaticPromotionTransition(transitionRows as Array<{ nextStart: number | null; nextEnd: number | null }> | undefined);
+    }
     const usage = new Map(usageRows.map((row) => [row.promotionId, row]));
     return parents.map((parent) => {
         const stats = usage.get(parent.id);
@@ -717,10 +729,13 @@ export async function listProductBuyGetOffers(
     // Cached product pages: any automatic promotion's rows, limits and
     // schedule decide the offers shown.
     deps.anyPromotion();
-    const [loaded] = await Promise.all([
-        loadCandidates(db, [], { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } }, evaluatedAtEpochSeconds),
-        declareNextAutomaticPromotionTransition(db, evaluatedAtEpochSeconds),
-    ]);
+    const loaded = await loadCandidates(
+        db,
+        [],
+        { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } },
+        evaluatedAtEpochSeconds,
+        { declareTransition: true },
+    );
     const candidates = typedCandidates(loaded)
         .filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
     if (candidates.length === 0) return [];

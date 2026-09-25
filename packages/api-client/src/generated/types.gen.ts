@@ -4391,6 +4391,17 @@ export type GetApiV1StorefrontBatchResponses = {
                  * The part's response body, exactly as its own GET returns it
                  */
                 body: string;
+                /**
+                 * Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof.
+                 */
+                cache?: {
+                    status: 'hit' | 'miss' | 'refresh';
+                    s0: number;
+                    deps: Array<string>;
+                    validUntil: number | null;
+                    softMaxAgeSeconds: number | null;
+                    renderedAt: number;
+                };
             }>;
         };
     };

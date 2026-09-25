@@ -475,6 +475,12 @@ export interface CatalogFacetCountInput {
     categoryId?: string;
     /** Count the brand facet (not on a brand's own page). */
     brandFacet?: boolean;
+    /**
+     * The caller declares `c:` for the category and its ancestors from a
+     * statement it already runs (listing.ts reads them with its count), so
+     * the facet read adds no ancestor lookup of its own.
+     */
+    categoryAncestorsDeclared?: boolean;
     /** Defaults: FACET_ATTRIBUTE_LIMIT attribute facets, FACET_VALUE_LIMIT values per facet. */
     attributeLimit?: number;
     valueLimit?: number;
@@ -523,7 +529,7 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
         declareOptionFacetNames(facetRows);
         return facetRows;
     });
-    if (!input.categoryId || !deps.active()) return rows;
+    if (!input.categoryId || input.categoryAncestorsDeclared || !deps.active()) return rows;
     // The category's effective attribute set is its own and its ancestors'
     // (category_attribute_sets advances only `c:<the set's category>`).
     const ancestors = db

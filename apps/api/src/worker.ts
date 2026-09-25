@@ -24,12 +24,13 @@ import {
   normalizeCacheGeneration,
 } from "@scalius/shared/cache-generation";
 import {
+  API_PART_CACHE_MODE,
   getPublicApiCachePolicy,
   isCacheLayerServerError,
   logCacheLayerFallback,
   withoutCacheIdentity,
 } from "./public-cache-policy";
-import { publicReadCacheKey, renderPublicRead } from "./public-read";
+import { createPublicPartReader, publicReadCacheKey, renderPublicRead } from "./public-read";
 import { readCacheGeneration } from "./utils/cache-generation";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
@@ -166,6 +167,28 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         return applyBaselineSecurityHeaders(request, routed, { frameProtection: "deny" });
       }
       request = routed;
+    }
+
+    if (getPublicApiCachePolicy(request) && API_PART_CACHE_MODE === "strict") {
+      // Dependency-validated: a Workers Cache hit runs no code, so it could
+      // not be validated; direct reads use the batch's reader instead.
+      const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
+      const { getDb } = await import("@scalius/database/client");
+      const reader = createPublicPartReader({
+        mode: "strict",
+        env,
+        cache: typeof caches === "undefined" ? null : caches.default,
+        db: () => getDb(env),
+        render: (part) => renderPublicRead(part, env, this.ctx),
+        waitUntil: (promise) => this.ctx.waitUntil(promise),
+        maxConcurrentRenders: 1,
+      });
+      const [result] = await reader.readParts([request], null);
+      if (result!.status === "rejected") throw result!.reason;
+      const { response, cache } = result!.value;
+      const headers = new Headers(response.headers);
+      headers.set("X-Cache-Status", cache ? cache.status.toUpperCase() : "BYPASS");
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     }
 
     if (getPublicApiCachePolicy(request)) {

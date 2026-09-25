@@ -16875,6 +16875,48 @@
                               "body": {
                                 "type": "string",
                                 "description": "The part's response body, exactly as its own GET returns it"
+                              },
+                              "cache": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hit",
+                                      "miss",
+                                      "refresh"
+                                    ]
+                                  },
+                                  "s0": {
+                                    "type": "integer"
+                                  },
+                                  "deps": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "validUntil": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "softMaxAgeSeconds": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "renderedAt": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "s0",
+                                  "deps",
+                                  "validUntil",
+                                  "softMaxAgeSeconds",
+                                  "renderedAt"
+                                ],
+                                "description": "Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof."
                               }
                             },
                             "required": [
