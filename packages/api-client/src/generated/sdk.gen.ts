@@ -351,7 +351,7 @@ export const postApiV1StorefrontThemePreviewResolve = <ThrowOnError extends bool
 /**
  * Read the homepage section data of a theme preview's draft
  *
- * The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.
+ * The product lists, images, brands and deal promotions the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.
  */
 export const postApiV1StorefrontThemePreviewHomepage = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1StorefrontThemePreviewHomepageData, ThrowOnError>): RequestResult<PostApiV1StorefrontThemePreviewHomepageResponses, PostApiV1StorefrontThemePreviewHomepageErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1StorefrontThemePreviewHomepageResponses, PostApiV1StorefrontThemePreviewHomepageErrors, ThrowOnError>({
     url: '/api/v1/storefront/theme-preview/homepage',

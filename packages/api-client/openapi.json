@@ -2642,6 +2642,12 @@
                                 }
                               ]
                             },
+                            "promotionId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 64
+                            },
                             "endsAt": {
                               "type": "string",
                               "nullable": true,
@@ -2650,8 +2656,304 @@
                           },
                           "required": [
                             "title",
-                            "source",
-                            "endsAt"
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "version",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "product-tabs"
+                          ]
+                        },
+                        "version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "tabs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "source": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "newest"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "kind"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "on-sale"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "kind"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "popular"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "kind"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "collection"
+                                            ]
+                                          },
+                                          "collectionId": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 64
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "collectionId"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "category"
+                                            ]
+                                          },
+                                          "categoryId": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 64
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "categoryId"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "label",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "minItems": 2,
+                              "maxItems": 4
+                            },
+                            "limit": {
+                              "type": "integer",
+                              "minimum": 4,
+                              "maximum": 12
+                            }
+                          },
+                          "required": [
+                            "title",
+                            "tabs",
+                            "limit"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "version",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "shop-by"
+                          ]
+                        },
+                        "version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "cards": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "mediaId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60
+                                  },
+                                  "href": {
+                                    "type": "string",
+                                    "maxLength": 300,
+                                    "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                                  }
+                                },
+                                "required": [
+                                  "mediaId",
+                                  "title",
+                                  "href"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 8
+                            }
+                          },
+                          "required": [
+                            "title",
+                            "cards"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "version",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "banner-mosaic"
+                          ]
+                        },
+                        "version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "tiles": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "mediaId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                  },
+                                  "alt": {
+                                    "type": "string",
+                                    "maxLength": 160
+                                  },
+                                  "href": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 300,
+                                    "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                                  }
+                                },
+                                "required": [
+                                  "mediaId",
+                                  "alt",
+                                  "href"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 5
+                            }
+                          },
+                          "required": [
+                            "tiles"
                           ],
                           "additionalProperties": false
                         }
@@ -18823,11 +19125,91 @@
                                 ]
                               },
                               "maxItems": 24
+                            },
+                            "brands": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "canonicalPath": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "logo": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "mediaId": {
+                                        "type": "string"
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      },
+                                      "alt": {
+                                        "type": "string"
+                                      },
+                                      "width": {
+                                        "type": "integer",
+                                        "nullable": true
+                                      },
+                                      "height": {
+                                        "type": "integer",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "mediaId",
+                                      "url",
+                                      "alt",
+                                      "width",
+                                      "height"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "canonicalPath",
+                                  "logo"
+                                ]
+                              },
+                              "maxItems": 24
+                            },
+                            "promotions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "endsAt": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "endsAt"
+                                ]
+                              },
+                              "maxItems": 4
                             }
                           },
                           "required": [
                             "lists",
-                            "media"
+                            "media",
+                            "brands",
+                            "promotions"
                           ]
                         }
                       },
@@ -20595,7 +20977,7 @@
           "Storefront"
         ],
         "summary": "Read the homepage section data of a theme preview's draft",
-        "description": "The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+        "description": "The product lists, images, brands and deal promotions the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
         "operationId": "system.storefront_theme_preview.homepage",
         "requestBody": {
           "content": {
@@ -20834,11 +21216,91 @@
                             ]
                           },
                           "maxItems": 24
+                        },
+                        "brands": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "logo": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "mediaId": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "alt": {
+                                    "type": "string"
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "mediaId",
+                                  "url",
+                                  "alt",
+                                  "width",
+                                  "height"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "canonicalPath",
+                              "logo"
+                            ]
+                          },
+                          "maxItems": 24
+                        },
+                        "promotions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "endsAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "endsAt"
+                            ]
+                          },
+                          "maxItems": 4
                         }
                       },
                       "required": [
                         "lists",
-                        "media"
+                        "media",
+                        "brands",
+                        "promotions"
                       ]
                     }
                   },
@@ -143741,12 +144203,45 @@
                         },
                         "storeShape": {
                           "$ref": "#/components/schemas/StorefrontStoreShape"
+                        },
+                        "sectionMedia": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "theme",
                         "revision",
-                        "storeShape"
+                        "storeShape",
+                        "sectionMedia"
                       ],
                       "additionalProperties": {}
                     }

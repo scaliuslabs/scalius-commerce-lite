@@ -31,7 +31,7 @@ import {
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
 import { planCollectionProducts } from "../collections/collections.service";
 import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
-import { planHomeMedia } from "./homepage-sections";
+import { planHomeBrands, planHomeMedia, planHomePromotions } from "./homepage-sections";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import {
   businessDocument,
@@ -188,7 +188,8 @@ type BatchItem = Parameters<typeof safeBatch>[1][number];
  *    theme (whose sections say which product lists and images to read).
  * 2. One batch with every product list (homepage collections, section
  *    sources), each with the card media of exactly its rows, the section
- *    images and the hero rendition lookup.
+ *    images, the brand wall's brands, the deal countdowns' promotions and
+ *    the hero rendition lookup.
  *
  * `requests` (a preview's draft sections) replaces the published theme's;
  * with `sectionsOnly` the second batch holds the section reads alone.
@@ -364,19 +365,26 @@ export async function getHomepageData(db: Database, options: {
   ]);
   const listPlan = planHomeProductLists(db, requests.lists.filter((list) => list.source.kind !== "collection"));
   const mediaPlan = planHomeMedia(db, requests.mediaIds);
+  const brandPlan = planHomeBrands(db, requests.brandLimit);
+  const promotionPlan = planHomePromotions(db, requests.promotionIds);
   const statements: BatchItem[] = [
     ...collectionPlan.statements,
     ...listPlan.statements,
     ...mediaPlan.statements,
+    ...brandPlan.statements,
+    ...promotionPlan.statements,
     ...(heroRenditions.statement ? [heroRenditions.statement] : []),
   ];
   const results = statements.length > 0 ? await safeBatch(db, statements) : [];
   const listOffset = collectionPlan.statements.length;
   const mediaOffset = listOffset + listPlan.statements.length;
+  const brandOffset = mediaOffset + mediaPlan.statements.length;
+  const promotionOffset = brandOffset + brandPlan.statements.length;
+  const heroOffset = promotionOffset + promotionPlan.statements.length;
   const resolvedMap = collectionPlan.resolve(results);
   const productLists = listPlan.resolve(results, listOffset);
   const heroSlides = heroRenditions.apply(heroRenditions.statement
-    ? results[mediaOffset + mediaPlan.statements.length] as Array<{ objectKey: string; variantWidth: number | null }>
+    ? results[heroOffset] as Array<{ objectKey: string; variantWidth: number | null }>
     : []);
   const desktopSlideCount = desktopHero?.images.length ?? 0;
   const hero = {
@@ -461,6 +469,8 @@ export async function getHomepageData(db: Database, options: {
     sections: {
       lists,
       media: mediaPlan.resolve(results, mediaOffset),
+      brands: brandPlan.resolve(results, brandOffset),
+      promotions: promotionPlan.resolve(results, promotionOffset),
     },
   };
 }

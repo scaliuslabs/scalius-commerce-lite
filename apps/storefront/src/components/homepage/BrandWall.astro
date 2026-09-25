@@ -1,0 +1,58 @@
+---
+// A brand wall (Apple Gadgets' brand rail, eBay's and Star Tech's logo
+// grids): the store's published brands that have a public product, in the
+// merchant's order, each linking to its brand page. A brand without a logo
+// shows its name in the same box. Boxes have a fixed 3:2 shape, so nothing
+// shifts while logos load.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageBrand } from "@/lib/api/storefront";
+import { homepageBrandHref } from "@/lib/homepage-sections";
+import { mediaImageUrl } from "@/lib/media-url";
+import SectionHeader from "./SectionHeader.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"brand-wall">;
+  brands: readonly HomepageBrand[];
+}
+
+const { section, brands } = Astro.props;
+const headingId = `home-${section.id}-title`;
+const title = section.settings.title.trim() || "Shop by brand";
+const rail = section.settings.style === "rail";
+---
+
+<section class="home-section w-full" aria-labelledby={headingId} data-brand-wall>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <SectionHeader id={headingId} title={title} />
+    <ul
+      class:list={[
+        rail
+          ? "flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
+          : "grid grid-cols-3 gap-3 sm:grid-cols-4 md:gap-4 lg:grid-cols-6",
+      ]}
+    >
+      {brands.map((brand) => (
+        <li class:list={[rail && "w-28 shrink-0 snap-start sm:w-36 lg:w-44"]}>
+          <a
+            href={homepageBrandHref(brand)}
+            class="flex aspect-[3/2] items-center justify-center rounded-xl border border-border bg-card p-3 text-center text-sm font-semibold text-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:p-4"
+          >
+            {brand.logo ? (
+              <img
+                src={mediaImageUrl(brand.logo.url, 320)}
+                alt={brand.name}
+                width={brand.logo.width ?? 240}
+                height={brand.logo.height ?? 160}
+                loading="lazy"
+                decoding="async"
+                class="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <span class="line-clamp-2 [overflow-wrap:anywhere]">{brand.name}</span>
+            )}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>

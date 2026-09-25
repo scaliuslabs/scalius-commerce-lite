@@ -1,0 +1,68 @@
+---
+// A promo banner mosaic (Daraz's and Aarong's campaign blocks, Walmart's
+// hero grid): one large tile beside up to four smaller ones on a 4x2 grid of
+// square cells, so every tile keeps a fixed shape and nothing shifts while
+// the photos load. On phones the large tile leads at 4:3 and the rest sit
+// two across. Each tile is the merchant's photo and its link.
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+interface Props {
+  tiles: Array<{ alt: string; href: string | null; photo: HomepageMediaAsset }>;
+  aboveFold: boolean;
+}
+
+const { tiles, aboveFold } = Astro.props;
+const rest = tiles.length - 1;
+// Desktop placement of each small tile on the 2x2 area beside the large one.
+function smallSpan(index: number): string {
+  if (rest === 1) return "lg:col-span-2 lg:row-span-2";
+  if (rest === 2) return "lg:col-span-2";
+  if (rest === 3 && index === 0) return "lg:col-span-2";
+  return "lg:col-span-1";
+}
+function phoneShape(index: number): string {
+  // An odd one out on phones spans the row at 2:1 instead of leaving a hole.
+  return rest % 2 === 1 && index === rest - 1 ? "col-span-2 aspect-[2/1]" : "aspect-square";
+}
+---
+
+<section class="home-section w-full" aria-label="Promotions">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class:list={["grid grid-cols-2 gap-3 md:gap-4", tiles.length > 1 && "lg:aspect-[2/1] lg:grid-cols-4 lg:grid-rows-2"]}>
+      {tiles.map((tile, index) => {
+        const large = index === 0;
+        const Frame = tile.href ? "a" : "div";
+        const external = tile.href?.startsWith("https://");
+        return (
+          <Frame
+            href={tile.href ?? undefined}
+            data-astro-prefetch={tile.href ? getStorefrontPrefetchAttribute(tile.href, Astro.url) : undefined}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noopener noreferrer" : undefined}
+            aria-label={tile.href && !tile.alt.trim() ? `Promotion ${index + 1}` : undefined}
+            class:list={[
+              "group relative block overflow-hidden rounded-xl bg-muted",
+              large
+                ? ["col-span-2 aspect-[4/3]", tiles.length > 1 ? "lg:col-span-2 lg:row-span-2 lg:aspect-auto" : "lg:aspect-[18/5]"]
+                : [phoneShape(index - 1), smallSpan(index - 1), "lg:aspect-auto"],
+            ]}
+          >
+            <img
+              src={mediaImageUrl(tile.photo.url, large ? 960 : 640)}
+              srcset={mediaImageSrcSet(tile.photo.url)}
+              sizes={large ? "(max-width: 1023px) calc(100vw - 2rem), 600px" : "(max-width: 1023px) 50vw, 300px"}
+              alt={tile.alt}
+              width={tile.photo.width ?? 800}
+              height={tile.photo.height ?? 800}
+              loading={aboveFold && large ? "eager" : "lazy"}
+              decoding="async"
+              class="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+            />
+          </Frame>
+        );
+      })}
+    </div>
+  </div>
+</section>

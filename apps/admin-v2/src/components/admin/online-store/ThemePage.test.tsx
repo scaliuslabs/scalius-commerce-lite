@@ -75,7 +75,7 @@ const SHAPE = storeShapeFromFacts({
 
 function render(theme: StorefrontThemeDocument, storeShape = SHAPE) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape } as never);
+  queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape, sectionMedia: [] } as never);
   queryClient.setQueryData(headerQueryOptions().queryKey, {
     config: { logo: { src: "", alt: "" }, favicon: { src: "", alt: "" }, topBar: { isEnabled: false } },
     revision: 1,

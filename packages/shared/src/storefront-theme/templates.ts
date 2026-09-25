@@ -271,6 +271,8 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       home("category-tiles", "categories", { style: "round" }),
       home("collections", "rails"),
       home("banner", "banner"),
+      home("brand-wall", "brands", { style: "rail" }),
+      home("recently-viewed", "recently-viewed"),
       home("seo-text", "about"),
     ],
   },
@@ -426,8 +428,13 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: { gallery: "stacked", buyBox: ["boutique"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",
     }),
+    // A landing page opens on its offer: the hero, the store's own delivery
+    // and payment facts, then the products themselves, before the story,
+    // proof and questions the merchant writes.
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
+      home("usp-strip", "promise"),
+      home("product-grid", "featured", { columns: 3, rows: 2 }),
       home("editorial", "feature", { layout: "image-with-text", heading: "", body: "", mediaId: null, imageSide: "end" }),
       home("editorial", "highlights", { layout: "multicolumn", heading: "", columns: [] }),
       home("editorial", "testimonials", { layout: "testimonial", quotes: [] }),
