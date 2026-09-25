@@ -253,7 +253,7 @@ describe("catalogue-scale query plans", () => {
         queries.length = 0;
 
         const home = await getHomepageData(db, {
-            requests: { lists: [{ key: "popular", source: { kind: "popular" }, limit: 4 }], mediaIds: [] },
+            requests: { lists: [{ key: "popular", source: { kind: "popular" }, limit: 4 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
             sectionsOnly: true,
         });
 
@@ -510,7 +510,7 @@ describe("catalogue-scale query plans", () => {
                     { key: "category:cat_phone", source: { kind: "category", categoryId: "cat_phone" }, limit: 4 },
                     { key: "collection:col_dyn", source: { kind: "collection", collectionId: "col_dyn" }, limit: 4 },
                 ],
-                mediaIds: ["med_a"],
+                mediaIds: ["med_a"], brandLimit: 0, promotionIds: [],
             },
         });
 
@@ -550,7 +550,7 @@ describe("catalogue-scale query plans", () => {
         queries.length = 0;
 
         const home = await getHomepageData(db, {
-            requests: { lists: [{ key: "on-sale", source: { kind: "on-sale" }, limit: 4 }], mediaIds: [] },
+            requests: { lists: [{ key: "on-sale", source: { kind: "on-sale" }, limit: 4 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
             sectionsOnly: true,
         });
 
@@ -667,7 +667,7 @@ describe("catalogue-scale query plans", () => {
         const listingQueries = [...queries];
         queries.length = 0;
         const home = await getHomepageData(db, {
-            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 4 }], mediaIds: [] },
+            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 4 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
             sectionsOnly: true,
         });
         const cardPlans = plans(joinsPricing);

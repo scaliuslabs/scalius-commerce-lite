@@ -1,12 +1,22 @@
-// Homepage section images (banners, lookbook and editorial photos, hero
-// side banners) by media id, planned as one statement of the homepage's
-// second D1 batch (storefront.service.ts). The product lists are catalog
-// reads (catalog/home-lists.ts).
-import { media } from "@scalius/database/schema";
+// What the homepage sections read besides product lists, each planned as
+// one statement of the homepage's second D1 batch (storefront.service.ts):
+// section images by media id, the brand wall's brands and the deal
+// countdowns' promotions. The product lists are catalog reads
+// (catalog/home-lists.ts).
+import { brands, media, productBuyerState, promotions } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
-import { and, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { homeSectionRequests, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import { getCurrentMediaUrl } from "../../integrations/storage";
+import {
+    brandLogoColumns,
+    brandLogoJoinCondition,
+    presentBrandLogo,
+    publicBrandConditions,
+    type BrandLogo,
+    type BrandLogoRow,
+} from "../brands/brands.storefront";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
 
@@ -66,4 +76,109 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
             });
         },
     };
+}
+
+/** A brand on the brand wall: published, live, with a public product. */
+export interface HomeBrand {
+    id: string;
+    name: string;
+    slug: string;
+    canonicalPath: string | null;
+    logo: BrandLogo | null;
+}
+
+/**
+ * One statement for the brand wall: public brands that have a public
+ * product (the buyer-state brand index), in merchant order.
+ */
+export function planHomeBrands(db: Database, limit: number): {
+    statements: BatchStatement[];
+    resolve(results: readonly unknown[], offset: number): HomeBrand[];
+} {
+    if (limit <= 0) return { statements: [], resolve: () => [] };
+    const statement = db
+        .select({
+            id: brands.id,
+            name: brands.name,
+            slug: brands.slug,
+            canonicalPath: brands.canonicalPath,
+            ...brandLogoColumns,
+        })
+        .from(brands)
+        .leftJoin(media, brandLogoJoinCondition())
+        .where(and(
+            ...publicBrandConditions(),
+            sql`EXISTS (SELECT 1 FROM ${productBuyerState} WHERE ${eq(productBuyerState.isPublic, true)} AND ${productBuyerState.brandId} = ${brands.id})`,
+        ))
+        .orderBy(asc(brands.sortOrder), asc(brands.name), asc(brands.id))
+        .limit(limit);
+    return {
+        statements: [statement],
+        resolve(results, offset) {
+            return (results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow>).map((row) => ({
+                id: row.id,
+                name: row.name,
+                slug: row.slug,
+                canonicalPath: row.canonicalPath,
+                logo: presentBrandLogo(row, row.name),
+            }));
+        },
+    };
+}
+
+/** A running promotion's real end, for a deal countdown. */
+export interface HomePromotionEnd {
+    id: string;
+    endsAt: string;
+}
+
+function epochSeconds(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * One statement for the deal countdowns: the named promotions that are
+ * active, live, started and not yet ended, with their stored end time. A
+ * promotion without an end, paused, archived or over gives no countdown.
+ */
+export function planHomePromotions(db: Database, ids: readonly string[], now = Date.now()): {
+    statements: BatchStatement[];
+    resolve(results: readonly unknown[], offset: number): HomePromotionEnd[];
+} {
+    if (ids.length === 0) return { statements: [], resolve: () => [] };
+    const statement = db
+        .select({ id: promotions.id, startsAt: promotions.startsAt, endsAt: promotions.endsAt })
+        .from(promotions)
+        .where(and(
+            inArray(promotions.id, [...ids]),
+            eq(promotions.status, "active"),
+            isNull(promotions.deletedAt),
+            isNotNull(promotions.endsAt),
+        ));
+    const nowSeconds = Math.floor(now / 1000);
+    return {
+        statements: [statement],
+        resolve(results, offset) {
+            return (results[offset] as Array<{ id: string; startsAt: unknown; endsAt: unknown }>).flatMap((row) => {
+                const starts = epochSeconds(row.startsAt);
+                const ends = epochSeconds(row.endsAt);
+                if (ends === null || ends <= nowSeconds || (starts !== null && starts > nowSeconds)) return [];
+                return [{ id: row.id, endsAt: new Date(ends * 1000).toISOString() }];
+            });
+        },
+    };
+}
+
+/**
+ * The images a theme's homepage sections name, for the dashboard's section
+ * editor previews (the same capped id set and rules the storefront reads).
+ */
+export async function readHomeSectionMedia(db: Database, sections: readonly StorefrontSection[]): Promise<HomeMediaAsset[]> {
+    const plan = planHomeMedia(db, homeSectionRequests(sections).mediaIds);
+    const [statement] = plan.statements;
+    if (!statement) return [];
+    return plan.resolve([await statement], 0);
 }

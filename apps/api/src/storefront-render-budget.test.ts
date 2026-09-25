@@ -80,7 +80,10 @@ function everySectionTheme() {
   set("hero", { layout: "contained-banners", sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }] });
   set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
   set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
-  set("deal-block", { title: "", source: { kind: "on-sale" }, endsAt: null });
+  set("deal-block", { title: "", source: { kind: "on-sale" }, promotionId: "promo_deal" });
+  set("product-tabs", { title: "", limit: 8, tabs: [{ label: "", source: { kind: "newest" } }, { label: "", source: { kind: "popular" } }] });
+  set("shop-by", { title: "", cards: [{ mediaId: "media_banner", title: "Eid", href: "/eid" }] });
+  set("banner-mosaic", { tiles: [{ mediaId: "media_story", alt: "", href: null }, { mediaId: "media_look", alt: "", href: null }] });
   set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" } });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
@@ -101,6 +104,9 @@ const HOME_SEED = `
     ('hero_desktop', 'desktop', '${JSON.stringify([slide("d1", "media/hero.jpg"), slide("d2", "media/side.jpg")])}'),
     ('hero_mobile', 'mobile', '${JSON.stringify([slide("m1", "media/hero.jpg")])}');
   UPDATE products SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'p_cotton';
+  INSERT INTO brands (id, name, slug, status, logo_media_id) VALUES ('brd_aarong01', 'Aarong', 'aarong', 'published', 'media_look');
+  UPDATE products SET brand_id = 'brd_aarong01' WHERE id = 'p_linen';
+  INSERT INTO promotions (id, name, method, status, ends_at) VALUES ('promo_deal', 'Eid deal', 'automatic', 'active', unixepoch() + 86400);
   INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
     ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"showOnHomepage":true,"featuredProductId":"p_linen","maxProducts":8}', 0),
     ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"showOnHomepage":true,"maxProducts":12}', 1);
@@ -221,7 +227,7 @@ describe("storefront page render D1 budget", () => {
     const theme = everySectionTheme();
     expect(new Set(theme.pages.home.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
     const { bodies } = await renderPage("home");
-    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
+    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; brands: unknown[]; promotions: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
     const filled = Object.fromEntries(homepage.sections.lists.map((list) => [list.key, list.products.length]));
     expect(filled).toMatchObject({
       newest: 2,
@@ -231,6 +237,9 @@ describe("storefront page render D1 budget", () => {
       "collection:col_grid": 2,
     });
     expect(homepage.sections.media).toHaveLength(4);
+    // The brand wall and the deal countdown ride in the same second batch.
+    expect(homepage.sections.brands).toEqual([expect.objectContaining({ id: "brd_aarong01", name: "Aarong", logo: expect.objectContaining({ mediaId: "media_look" }) })]);
+    expect(homepage.sections.promotions).toEqual([{ id: "promo_deal", endsAt: expect.any(String) }]);
     expect(homepage.collections).toHaveLength(2);
     // The banner's original upload was pointed at its rendition in the same batch.
     expect(homepage.hero.desktop.images[0]!.url).toBe("https://media.test/media/hero.jpg/1600.webp");

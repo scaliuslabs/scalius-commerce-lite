@@ -83,16 +83,19 @@ export function VisualChoice<Value extends string>({
 
 /**
  * Homepage sections in order, each with Move up / Move down (no drag). A
- * section the store does not show says why under its name.
+ * section the store does not show says why under its name. `actions` adds a
+ * row's own buttons (edit, remove) before the move buttons.
  */
 export function HomepageOrder<Section extends { id: string; type: StorefrontSectionType }>({
   sections,
   notes = {},
+  actions,
   onChange,
 }: {
   sections: readonly Section[];
   /** Why a section does not show on the store, by section id. */
   notes?: Readonly<Record<string, string>>;
+  actions?: (section: Section, name: string) => ReactNode;
   onChange: (sections: Section[]) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
@@ -127,6 +130,7 @@ export function HomepageOrder<Section extends { id: string; type: StorefrontSect
               {name}
               {note ? <span className="block text-muted-foreground">{note}</span> : null}
             </span>
+            {actions?.(section, name)}
             <Button
               ref={buttonRef(`${section.id}:-1`)}
               type="button"
