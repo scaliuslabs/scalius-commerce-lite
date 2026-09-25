@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
     restoreMediaFile: vi.fn(),
     saveMediaVariants: vi.fn(),
     completeMediaUpload: vi.fn(),
+    importMediaFromUrl: vi.fn(),
     bumpCacheGeneration: vi.fn(),
+}));
+
+vi.mock("./media-url-import", () => ({
+    importMediaFromUrl: mocks.importMediaFromUrl,
 }));
 
 vi.mock("@scalius/core/modules/media", async () => {
@@ -220,6 +225,24 @@ describe("admin media cache invalidation", () => {
             { ...env, JOBS_QUEUE: { send } } as unknown as Env);
 
         expect(send).not.toHaveBeenCalled();
+    });
+
+    it("schedules the delayed server render for a URL import that still lacks renditions", async () => {
+        const { app, env } = createTestApp();
+        const send = vi.fn(async () => undefined);
+        mocks.importMediaFromUrl.mockResolvedValueOnce({ ...presentedMedia, variantWidth: null });
+
+        const response = await app.request("/api/v1/admin/media/uploads/import-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sourceUrl: "https://example.com/lamp.jpg" }),
+        }, { ...env, IMAGES: { id: "images" }, JOBS_QUEUE: { send } } as unknown as Env);
+
+        expect(response.status).toBe(201);
+        expect(send).toHaveBeenCalledWith(
+            { type: "media.render_variants", mediaId: "media_123" },
+            { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS },
+        );
     });
 
     it("still returns the committed upload when the queue rejects", async () => {
