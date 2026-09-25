@@ -1,6 +1,7 @@
 ---
 import { Circle, Minus, Plus, ShoppingCart, Tag } from "lucide-react";
 import ProductDetails from "./ProductDetails.astro";
+import ProductBuyerInputs from "./ProductBuyerInputs.astro";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
   getBuyerVariantPricePresentation,
@@ -10,7 +11,7 @@ import {
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import {
@@ -27,6 +28,7 @@ import {
   type ProductActionCopy,
 } from "./lib/product-actions";
 import { describeBuyGetOffer } from "./lib/product-offers";
+import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 
 interface Props {
   product: Product;
@@ -39,7 +41,10 @@ interface Props {
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
-  actionCopy?: Partial<ProductActionCopy>;
+  /** Product-page copy from the active checkout language (buttons, buyer inputs). */
+  actionCopy?: Partial<ProductActionCopy & CheckoutLanguageData>;
+  /** A fulfilment badge beside the stock badge ("No delivery needed" for services). */
+  fulfilmentBadge?: string | null;
 }
 
 const {
@@ -53,9 +58,11 @@ const {
   initialUnavailableVariant = null,
   quickBuyNotice = null,
   actionCopy: providedCopy = {},
+  fulfilmentBadge = null,
 } = Astro.props;
 
-const actionCopy: ProductActionCopy = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
+const pageCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
+const actionCopy: ProductActionCopy = pageCopy;
 const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
 // A link to a sold-out combination still shows that combination, marked sold out.
@@ -67,12 +74,25 @@ const initialSelection = initialUnavailableVariant
 const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
 const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
-const actionPresentation = getProductActionsPresentation({
+const stockActionPresentation = getProductActionsPresentation({
   productName: product.name,
   anyVariantAvailable: getBuyerStockSummary(variants).canPurchaseAny,
   chosenVariantSoldOut: Boolean(stockVariant && !buyerStockSummary.canPurchaseAny),
   copy: actionCopy,
 });
+// A broken buyer-input setup means the product can't be bought at all.
+const customizationUnavailable = product.customizationUnavailable === true;
+const actionPresentation = customizationUnavailable
+  ? {
+      addToCart: { ...stockActionPresentation.addToCart, disabled: true },
+      buyNow: { ...stockActionPresentation.buyNow, disabled: true },
+    }
+  : stockActionPresentation;
+// Buyer inputs make the buy area a real form (safe before hydration and
+// without JavaScript); without them the classic markup is untouched.
+const buyerInputFields = customizationUnavailable ? [] : (product.customization?.fields ?? []);
+const buyFormId = buyerInputFields.length > 0 ? "product-buy-form" : undefined;
+const buyerInputCopy = pickBuyerInputCopy(pageCopy);
 const stockAvailable = buyerStockSummary.tone === "available";
 
 const productPricing: ProductPricing = {
@@ -161,6 +181,7 @@ function optionAriaLabel(
         <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
           <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
         </div>
+        {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
       </div>
       {offers.length > 0 && (
         <ul class="mt-2 space-y-1" data-product-offers>
@@ -232,11 +253,27 @@ function optionAriaLabel(
         );
       })}
 
+      {customizationUnavailable ? (
+        <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+      ) : null}
+
+      {buyFormId ? (
+        <ProductBuyerInputs
+          formId={buyFormId}
+          slug={product.slug}
+          fields={buyerInputFields}
+          copy={buyerInputCopy}
+          variantId={initialSelectedVariant?.id ?? null}
+          currencyPlaces={moneyPlaces(currencyDecimalPlaces, currencyCode)}
+          formatMoney={formatPrice}
+        />
+      ) : null}
+
       <div>
         <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
           <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Minus className="h-4 w-4" aria-hidden="true" /></button>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
           <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Plus className="h-4 w-4" aria-hidden="true" /></button>
         </div>
         <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
@@ -244,10 +281,10 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="flex gap-2 pt-1">
-        <button type="button" data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
           <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type="button" data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+        <button type={buyFormId ? "submit" : "button"} form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
           <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>

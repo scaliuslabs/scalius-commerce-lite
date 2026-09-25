@@ -5,7 +5,7 @@
  * underlying setting is missing or unreadable.
  */
 import type { CheckoutConfig } from "./api/checkout";
-import type { ShippingMethod } from "./api/types";
+import type { ProductVariant, ShippingMethod } from "./api/types";
 import type { StorefrontReturnPolicySettings } from "./commerce-structured-data";
 
 export interface DeliveryFact {
@@ -22,6 +22,31 @@ export interface DeliveryFactsInput {
   formatMoney: (amount: number) => string;
   /** The product ships free (PDP only). */
   freeDelivery?: boolean;
+  /**
+   * What the product page sells (PDP only). Delivery and pickup facts are
+   * stated only for physical goods; a service is paid when it is done.
+   */
+  fulfilment?: ProductFulfilment;
+  /** Cash-on-delivery wording for a service ("Pay when the service is done"). */
+  payAtServiceText?: string;
+}
+
+/** How a product reaches the buyer, for what the page may claim about delivery. */
+export type ProductFulfilment = "physical" | "service" | "digital";
+
+/**
+ * Physical when some SKU is (an unknown kind is physical: it needs delivery);
+ * a service when every SKU is a service; otherwise digital. Gift cards are
+ * never delivered.
+ */
+export function productFulfilment(
+  product: { isGiftCard?: boolean | null },
+  variants: ReadonlyArray<Pick<ProductVariant, "fulfillmentKind">>,
+): ProductFulfilment {
+  if (product.isGiftCard === true) return "digital";
+  const kinds = variants.map((variant) => variant.fulfillmentKind ?? "physical");
+  if (kinds.length === 0 || kinds.includes("physical")) return "physical";
+  return kinds.every((kind) => kind === "service") ? "service" : "digital";
 }
 
 const MAX_LISTED_METHODS = 3;
@@ -130,16 +155,20 @@ function pickupFact(
   };
 }
 
-function codFact(config: CheckoutConfig | null | undefined): DeliveryFact | null {
+function codFact(
+  config: CheckoutConfig | null | undefined,
+  serviceDetail: string | null,
+): DeliveryFact | null {
   if (!config || config.unavailable) return null;
   const cod = config.gateways.some((gateway) => gateway.flow === "cod" || gateway.id === "cod");
   if (!cod) return null;
   return {
     kind: "cod",
     title: "Cash on delivery",
-    detail: config.partialPaymentEnabled
-      ? "Pay a small advance online, the rest on delivery."
-      : "Pay when your order arrives.",
+    detail: serviceDetail
+      ?? (config.partialPaymentEnabled
+        ? "Pay a small advance online, the rest on delivery."
+        : "Pay when your order arrives."),
   };
 }
 
@@ -167,10 +196,15 @@ function returnsFact(policy: StorefrontReturnPolicySettings | null | undefined):
 export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
   const rates = splitDeliveryRates(input.shippingMethods);
   const freeDelivery = input.freeDelivery === true;
+  const fulfilment = input.fulfilment ?? "physical";
+  const physical = fulfilment === "physical";
   return [
-    deliveryFact(rates, input.formatMoney, freeDelivery),
-    pickupFact(rates, input.formatMoney, freeDelivery),
-    codFact(input.checkoutConfig),
+    physical ? deliveryFact(rates, input.formatMoney, freeDelivery) : null,
+    physical ? pickupFact(rates, input.formatMoney, freeDelivery) : null,
+    // Nothing is handed over for a digital item, so there is no cash on delivery.
+    fulfilment === "digital"
+      ? null
+      : codFact(input.checkoutConfig, fulfilment === "service" ? (input.payAtServiceText?.trim() || "Pay when the service is done.") : null),
     returnsFact(input.returnPolicy),
   ].filter((fact): fact is DeliveryFact => fact !== null);
 }

@@ -6,7 +6,8 @@ import {
   getShippingMethods,
 } from "@/lib/api";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
-import { buildDeliveryFacts } from "@/lib/delivery-facts";
+import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
+import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
 import Layout from "@/layouts/Layout.astro";
 import productCriticalCss from "@/styles/product-critical.css?inline";
@@ -31,6 +32,7 @@ import {
   buildMerchantReturnPolicyJsonLd,
   buildOfferShippingDetails,
   gtinJsonLdForVariant,
+  physicalOfferShippingDetails,
 } from "@/lib/commerce-structured-data";
 import {
   getBuyerStockSummary,
@@ -162,7 +164,12 @@ const productOptions = product.options ?? [];
 
 const pageTitle = product.metaTitle || product.name;
 const pageDescription = pageMetaDescription;
+// Product-page copy in the store's checkout language (buttons, buyer inputs).
+const productPageCopy = resolveProductPageCopy(layoutData.storefrontCopy);
 const quickBuyNoticeByError: Record<string, string> = {
+  customization_required: productPageCopy.customizationNeededText,
+  customization_invalid: productPageCopy.customizationNeededText,
+  customization_unavailable: productPageCopy.customizationUnavailableText,
   product_unavailable: "This item is not available right now.",
   variant_required: "Please choose an available option before buying.",
   variant_not_found:
@@ -362,14 +369,24 @@ const offerShippingDetails = buildOfferShippingDetails({
   freeDelivery: product.freeDelivery,
   country: layoutData.business?.country,
 });
+// What the page sells decides what it may say about delivery: services and
+// digital items claim no delivery rates and no Offer shippingDetails.
+const pageFulfilment = productFulfilment(
+  product,
+  selectedBuyerVariant ? [selectedBuyerVariant] : buyerVariants,
+);
 // Delivery fees, cash on delivery and returns, stated under the buy buttons.
 const deliveryFacts = buildDeliveryFacts({
   shippingMethods,
   checkoutConfig,
   returnPolicy: layoutData.seo?.returnPolicy,
   freeDelivery: product.freeDelivery,
+  fulfilment: pageFulfilment,
+  payAtServiceText: productPageCopy.payAtServiceText,
   formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
 });
+const fulfilmentBadge =
+  pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -378,14 +395,17 @@ const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
 
 function withOfferCommerceDetails<T extends Record<string, unknown>>(
   offer: T,
+  offerVariants: typeof buyerVariants,
 ): T {
+  // Services, digital items and gift cards are never shipped.
+  const shippingDetails = physicalOfferShippingDetails(offerShippingDetails, product, offerVariants);
   return {
     ...offer,
     ...(sellerSchemaName
       ? { seller: { "@type": "Organization", name: sellerSchemaName } }
       : {}),
-    ...(offerShippingDetails.length > 0
-      ? { shippingDetails: offerShippingDetails }
+    ...(shippingDetails.length > 0
+      ? { shippingDetails }
       : {}),
     ...(merchantReturnPolicyJsonLd
       ? { hasMerchantReturnPolicy: merchantReturnPolicyJsonLd }
@@ -457,7 +477,7 @@ const productJsonLd =
                     availability: isVariantAvailable(variant)
                       ? "https://schema.org/InStock"
                       : "https://schema.org/OutOfStock",
-                  }),
+                  }, [variant]),
                 };
               }),
             }
@@ -502,7 +522,7 @@ const productJsonLd =
                 availability: primarySchemaAvailability
                   ? "https://schema.org/InStock"
                   : "https://schema.org/OutOfStock",
-              }),
+              }, selectedBuyerVariant ? [selectedBuyerVariant] : buyerVariants),
             },
       )
     : null;
@@ -625,7 +645,8 @@ const productCategoryAnalytics = productCategory
           initialVariant={queryVariantSelection?.variant}
           initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
           quickBuyNotice={quickBuyNotice}
-          actionCopy={layoutData.storefrontCopy}
+          actionCopy={productPageCopy}
+          fulfilmentBadge={fulfilmentBadge}
         >
           <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
         </ProductSummary>
