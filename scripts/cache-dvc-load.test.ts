@@ -26,7 +26,9 @@
  *     pnpm vitest run scripts/cache-dvc-load.test.ts --maxWorkers=1
  *
  * Knobs: DVC_LOAD_READS (default 20000 page views), DVC_LOAD_READS_PER_WRITE
- * (default 10: 100 views/s against 10 writes/s), DVC_LOAD_SEED.
+ * (default 10: 100 views/s against 10 writes/s), DVC_LOAD_SEED, DVC_LOAD_MODE
+ * (`model`, `strict`: S4's production part reader, `generation`: today's
+ * store-wide generation).
  * The driver refuses any Postgres host other than localhost/127.0.0.1 and
  * any D1 other than a local Miniflare state.
  */
@@ -182,7 +184,12 @@ describe.skipIf(!STATE && !POSTGRES_URL)("DVC load driver", () => {
       meter,
       phases,
       ...(pgClient ? { postgresActivity: () => postgresActivity(pgClient!) } : {}),
-    }, { reads: READS, readsPerWrite: READS_PER_WRITE, seed: Number(process.env.DVC_LOAD_SEED ?? 20260925) });
+    }, {
+      reads: READS,
+      readsPerWrite: READS_PER_WRITE,
+      seed: Number(process.env.DVC_LOAD_SEED ?? 20260925),
+      mode: (process.env.DVC_LOAD_MODE ?? "model") as "model" | "strict" | "generation",
+    });
     Object.assign(report, result);
     console.info(`[DVC load] ${JSON.stringify(report, null, 2)}`);
     expect(Number(result.cacheDepRows)).toBeGreaterThan(0);
