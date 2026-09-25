@@ -165,13 +165,8 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
       }
     }
     console.log(`[noise audit] ${urls.length} urls\n${findings.join("\n")}`);
-    // Noise columns a public payload still outputs until its owner removes them
-    // there (the source fix), per the cache lead's ruling.
-    const pendingSourceFix = [
-      "product_variants.updated_at ", // S3a: public catalogue payloads drop variant updatedAt
-    ];
-    expect(findings.filter((finding) =>
-      !finding.endsWith("no rows to test") && !pendingSourceFix.some((prefix) => finding.startsWith(prefix)))).toEqual([]);
+    // Every public payload that output a noise column dropped it at the source.
+    expect(findings.filter((finding) => !finding.endsWith("no rows to test"))).toEqual([]);
     sqlite.close();
   }, 900_000);
 });

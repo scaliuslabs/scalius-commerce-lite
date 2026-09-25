@@ -3,6 +3,7 @@ import type { Database } from "@scalius/database/client";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { deps } from "../../cache-deps";
 
 export const MAX_PRODUCT_MEDIA_ASSOCIATIONS = 250;
 export const PRODUCT_MEDIA_REORDER_OFFSET = 1_000;
@@ -178,6 +179,41 @@ export function resolveProductCardImages(items: readonly ProductMediaProjection[
         imageAlt: primary?.altText ?? null,
         secondaryImageUrl: secondary?.url ?? null,
     };
+}
+
+/**
+ * The media rows whose facts decide a card's images (`resolveProductCardImages`):
+ * the featured item and every item in gallery order up to the last one the
+ * resolution looked at, with their posters. Items after the secondary photo
+ * never change the card, so a long gallery costs its card two or three keys.
+ * Gallery order and the primary flag are `product_media` facts (`p:` keys).
+ */
+export function productCardImageMediaIds(items: readonly ProductMediaProjection[]): string[] {
+    const gallery = ordered(items);
+    if (gallery.length === 0) return [];
+    const primary = resolveProductImageRepresentation(gallery);
+    const secondary = primary
+        ? gallery.findIndex((item) =>
+            item.kind === "image"
+            && item.url
+            && item.id !== primary.productMediaId
+            && item.mediaId !== primary.mediaId
+        )
+        : -1;
+    const primaryIndex = primary ? gallery.findIndex((item) => item.id === primary.productMediaId) : -1;
+    const last = secondary === -1 ? gallery.length - 1 : Math.max(secondary, primaryIndex);
+    const featured = gallery.find((item) => item.isPrimary) ?? gallery[0]!;
+    return productGalleryMediaIds([featured, ...gallery.slice(0, last + 1)]);
+}
+
+/** Every media row (and usable poster) a gallery shows. */
+export function productGalleryMediaIds(items: readonly ProductMediaProjection[]): string[] {
+    const ids = new Set<string>();
+    for (const item of items) {
+        ids.add(item.mediaId);
+        if (item.posterMediaId) ids.add(item.posterMediaId);
+    }
+    return [...ids];
 }
 
 /** Exact SKU image wins; NULL or a missing/corrupt exact row uses the product image. */
@@ -371,6 +407,9 @@ export function resolveProductMediaProjectionRows(
             && row.posterKind === "image"
             && (row.posterStatus === "ready" || row.posterStatus === "trashed")
             && row.posterObjectKey;
+        // A poster that is not usable yet (still processing) stays out of
+        // the projection; the output changes when its own row does.
+        if (row.posterMediaId && !posterIsUsable) deps.media(row.posterMediaId);
         const projection: ProductMediaProjection = {
             id: row.id,
             mediaId: row.mediaId,

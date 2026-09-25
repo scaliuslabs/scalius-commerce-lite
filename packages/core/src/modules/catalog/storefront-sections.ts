@@ -48,6 +48,7 @@ import {
     type ProductRecommendationItem,
 } from "./recommendations";
 import { unixToDate } from "@scalius/shared/utils";
+import { deps } from "./declare-deps";
 
 export const STOREFRONT_PRODUCT_TEXT_CHUNK_MAX = 12_000;
 export const STOREFRONT_PRODUCT_SECTION_RESULT_MAX_BYTES = 60 * 1024;
@@ -153,7 +154,6 @@ export function projectStorefrontProductSection(
                 imageMediaId: product.imageMediaId,
                 imageAlt: product.imageAlt,
                 createdAt: product.createdAt,
-                updatedAt: product.updatedAt,
                 category: detail.category ? {
                     id: detail.category.id,
                     name: detail.category.name,
@@ -270,7 +270,6 @@ export function projectStorefrontProductSection(
                 barcode: variant.barcode,
                 barcodeType: variant.barcodeType,
                 createdAt: variant.createdAt,
-                updatedAt: variant.updatedAt,
             })), query.offset, query.limit, 10),
         });
     }
@@ -300,7 +299,6 @@ async function readPublicProductIdentity(db: Database, slug: string) {
         freeDelivery: products.freeDelivery,
         storeCurrencyCode: storeCurrencyCodeSql(),
         createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
-        updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         category: {
             id: categories.id,
             name: categories.name,
@@ -440,7 +438,6 @@ async function readSummary(
             imageMediaId: primaryImage?.mediaId ?? null,
             imageAlt: primaryImage?.altText ?? null,
             createdAt: unixToDate(identity.createdAt)?.toISOString() ?? null,
-            updatedAt: unixToDate(identity.updatedAt)?.toISOString() ?? null,
             category: identity.category,
             textLengths: {
                 description: identity.descriptionCharacters,
@@ -466,7 +463,20 @@ export async function getStorefrontProductSection(
     query: StorefrontProductSectionQuery,
 ) {
     const identity = await readPublicProductIdentity(db, slug);
-    if (!identity) return null;
+    if (!identity) {
+        // Any product can take this slug or become public under it.
+        deps.listMembership("all");
+        deps.table("products");
+        return null;
+    }
+    deps.product(identity.id);
+    if (identity.categoryId) deps.category(identity.categoryId);
+    else deps.anyCategory();
+    // Summary and variant images use the bounded checkout candidates and the
+    // media page counts every retained file: which rows qualify depends on
+    // media rows the section does not return, so only the coarse key is exact.
+    if (section === "summary" || section === "variants" || section === "media") deps.table("media");
+    if (section === "attributes") deps.anyAttribute();
     const decimalPlaces = storeDecimalPlacesFromCode(identity.storeCurrencyCode);
 
     if (section === "summary") {
@@ -678,7 +688,6 @@ export async function getStorefrontProductSection(
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,
                 createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
-                updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
             }).from(productVariants).where(and(
                 eq(productVariants.productId, identity.id),
                 isNull(productVariants.deletedAt),
@@ -722,7 +731,6 @@ export async function getStorefrontProductSection(
                 barcode: row.barcode,
                 barcodeType: row.barcodeType,
                 createdAt: unixToDate(row.createdAt)?.toISOString() ?? null,
-                updatedAt: unixToDate(row.updatedAt)?.toISOString() ?? null,
             };
         });
         return assertBoundedResult({

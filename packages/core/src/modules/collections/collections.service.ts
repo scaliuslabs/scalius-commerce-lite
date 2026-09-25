@@ -49,6 +49,40 @@ import {
     type ProductMediaProjectionRow,
 } from "../products/media";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
+import { categoryScope } from "@scalius/shared/cache-deps";
+import { deps } from "../../cache-deps";
+import { declareProductCards, declareRequestedProducts } from "../catalog";
+
+/**
+ * What a collection's product set depends on beyond the cards shown: a
+ * manual collection's every configured member (a hidden one shows once it is
+ * public again) and a dynamic one's categories (membership, newest order and
+ * published state). The collection row itself is declared by its reader.
+ *
+ * `shown`: a curated list that shows the first public members in configured
+ * order, up to its limit. Once the limit is reached, members after the last
+ * shown one cannot enter unless one before them changes (their own keys), so
+ * only the members up to that point are declared.
+ */
+function declareCollectionMembership(
+    config: unknown,
+    shown?: { productIds: readonly string[]; limit: number },
+): void {
+    if (!deps.active()) return;
+    const cfg = normalizeCollectionConfig(config);
+    const membership = collectionMembershipForConfig(cfg);
+    let members = membership.productIds;
+    if (shown && shown.productIds.length >= shown.limit && shown.productIds.length > 0) {
+        const last = members.indexOf(shown.productIds[shown.productIds.length - 1]!);
+        if (last !== -1) members = members.slice(0, last + 1);
+    }
+    declareRequestedProducts(members);
+    for (const categoryId of membership.categoryIds) {
+        deps.listMembership(categoryScope(categoryId));
+        deps.category(categoryId);
+    }
+    if (cfg.featuredProductId) declareRequestedProducts([cfg.featuredProductId]);
+}
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -868,6 +902,46 @@ export async function reorderCollections(
 }
 
 // ─────────────────────────────────────────
+// Storefront: XML discovery
+// ─────────────────────────────────────────
+
+/** Collection URLs one sitemap document lists at most (the sitemap protocol allows 50k). */
+export const COLLECTION_SITEMAP_LIMIT = 5000;
+
+/**
+ * Collection pages for XML discovery: active, live, not `noIndex` and not
+ * `excludeFromSitemap`, filtered before the limit (never after a page read).
+ * `updatedAt` is the row's own last change, the page's lastmod.
+ */
+export async function getPublicCollectionSitemapEntries(db: Database) {
+    deps.anyCollection();
+    // Sitemap lastmod: a write that changes only updated_at advances the
+    // discovery key (cache-deps registry), not a collection key.
+    deps.discoveryMembership();
+    const rows = await db
+        .select({
+            id: collections.id,
+            canonicalPath: collections.canonicalPath,
+            updatedAt: sql<number | null>`CAST(COALESCE(${collections.updatedAt}, ${collections.createdAt}) AS INTEGER)`,
+        })
+        .from(collections)
+        .where(and(
+            eq(collections.isActive, true),
+            isNull(collections.deletedAt),
+            eq(collections.noIndex, false),
+            eq(collections.excludeFromSitemap, false),
+        ))
+        .orderBy(asc(collections.sortOrder), asc(collections.id))
+        .limit(COLLECTION_SITEMAP_LIMIT)
+        .all();
+    return rows.map((row) => ({
+        id: row.id,
+        canonicalPath: row.canonicalPath,
+        updatedAt: row.updatedAt ? new Date(Number(row.updatedAt) * 1000).toISOString() : null,
+    }));
+}
+
+// ─────────────────────────────────────────
 // Storefront: product resolution
 // ─────────────────────────────────────────
 
@@ -876,6 +950,8 @@ export async function getPublicCollectionCatalog(
     id: string,
     params: StorefrontProductFilterInput,
 ) {
+    // The row (found or not: a collection can be activated or restored).
+    if (/^[\x21-\x7e]{1,200}$/.test(id)) deps.collection(id);
     const collection = await db
         .select()
         .from(collections)
@@ -888,6 +964,7 @@ export async function getPublicCollectionCatalog(
     if (!collection) return null;
 
     const config = normalizeCollectionConfig(collection.config);
+    declareCollectionMembership(config);
     const membership = collectionMembershipForConfig(config);
     const buyerPricing = buildBuyerCatalogPricingProjection(db, {
         productScope: eq(products.id, config.featuredProductId ?? ""),
@@ -949,7 +1026,9 @@ async function enrichProductsWithMedia(
     db: Database,
     rows: readonly RawProduct[],
 ): Promise<Map<string, ResolvedProduct>> {
-    return resolveProductCards(rows, await loadProductMediaProjections(db, rows.map((row) => row.id)));
+    const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    declareProductCards(rows.map((row) => row.id), mediaByProduct);
+    return resolveProductCards(rows, mediaByProduct);
 }
 
 export interface CollectionProductResult {
@@ -1069,10 +1148,9 @@ export function planCollectionProducts(
             const rowsOf = (list: number | null) =>
                 list === null ? [] : results[productSlots[list]!] as RawProduct[];
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
-            const resolvedProductsById = resolveProductCards(
-                [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)],
-                resolveProductMediaProjectionRows(mediaRows),
-            );
+            const allRows = [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)];
+            const mediaByProduct = resolveProductMediaProjectionRows(mediaRows);
+            const resolvedProductsById = resolveProductCards(allRows, mediaByProduct);
 
             const specificProductsById = new Map<string, ResolvedProduct>();
             for (const prod of rowsOf(pinnedList)) {
@@ -1143,6 +1221,16 @@ export function planCollectionProducts(
                     ? featuredProductsById.get(cfg.featuredProductId) ?? null
                     : null;
 
+                // The cards shown, and the set they are taken from.
+                declareProductCards(
+                    [...collectionProducts.map((product) => product.id), ...(featuredProduct ? [featuredProduct.id] : [])],
+                    mediaByProduct,
+                );
+                declareCollectionMembership(cfg, {
+                    productIds: collectionProducts.map((product) => product.id),
+                    limit: maxProducts,
+                });
+
                 resolvedByKey.set(request.key, { products: collectionProducts, categories: collectionCategories, featuredProduct });
             }
             return resolvedByKey;
@@ -1162,6 +1250,7 @@ export async function resolveCollectionProductsBatch(
         config: unknown;
     }[],
 ): Promise<Map<string, CollectionProductResult>> {
+    deps.collections(parsedCollections.map(({ id }) => id));
     const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })));
     return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : []);
 }

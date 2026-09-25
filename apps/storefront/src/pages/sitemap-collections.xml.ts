@@ -1,6 +1,7 @@
 /**
  * Collections Sitemap
- * Contains all active public collection pages
+ * Active collection pages; the API leaves out noIndex and excludeFromSitemap
+ * collections before its limit and dates each page by its own last change.
  */
 
 import {
@@ -10,7 +11,7 @@ import {
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
-import { getAllCollections } from '@/lib/api/collections';
+import { getSitemapCollections } from '@/lib/api/collections';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
 
@@ -20,19 +21,17 @@ export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
 
-    const collections = await getAllCollections();
+    const collections = await getSitemapCollections();
 
     if (!collections) {
       console.error('Failed to fetch collections for sitemap');
       return xmlDataUnavailableResponse('Collections sitemap is temporarily unavailable');
     }
 
-    const collectionUrls: SitemapUrl[] = collections
-      .filter((collection) => !collection.noIndex && !collection.excludeFromSitemap)
-      .map((collection) => ({
-        loc: `${baseUrl}${normalizeResourceCanonicalPath('collection', collection.canonicalPath) ?? `/collections/${encodeURIComponent(collection.id)}`}`,
-        lastmod: collection.updatedAt ?? collection.createdAt ?? undefined,
-      }));
+    const collectionUrls: SitemapUrl[] = collections.map((collection) => ({
+      loc: `${baseUrl}${normalizeResourceCanonicalPath('collection', collection.canonicalPath) ?? `/collections/${encodeURIComponent(collection.id)}`}`,
+      lastmod: collection.updatedAt ?? undefined,
+    }));
 
     const xml = generateSitemap(collectionUrls, baseUrl);
 

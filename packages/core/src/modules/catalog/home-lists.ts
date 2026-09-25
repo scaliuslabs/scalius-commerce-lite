@@ -21,8 +21,10 @@ import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection
 import {
     resolveProductMediaProjectionRows,
     selectProductMediaProjectionRows,
+    type ProductMediaProjection,
     type ProductMediaProjectionRow,
 } from "../products/media";
+import { categoryScope, declareProductCards, deps } from "./declare-deps";
 import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories/categories.publication";
 import {
@@ -52,6 +54,32 @@ export interface HomeProductList {
     category: { id: string; name: string; slug: string; canonicalPath: string | null } | null;
 }
 
+
+/**
+ * What one home list depends on: its cards, and the set and order it takes
+ * them from. Newest and category lists are the public set's (or the
+ * category subtree's) newest members; on sale adds the discount and band
+ * facts that decide "pays less now"; popular is ordered by sales stats,
+ * which are soft (read from `product_sales_stats`, bounded automatically).
+ */
+function declareHomeProductList(
+    source: HomeProductListRequest["source"],
+    productIds: readonly string[],
+    mediaByProduct: ReadonlyMap<string, ProductMediaProjection[]>,
+): void {
+    if (!deps.active()) return;
+    declareProductCards(productIds, mediaByProduct);
+    if (source.kind === "category") {
+        deps.listMembership(categoryScope(source.categoryId));
+        deps.category(source.categoryId);
+        return;
+    }
+    deps.listMembership("all");
+    if (source.kind === "on-sale") {
+        deps.listOrder("disc", "all");
+        deps.listOrder("band", "all");
+    }
+}
 
 function publicProduct(...extra: SQL[]): SQL[] {
     return [...extra, eq(products.isActive, true), isNull(products.deletedAt), publicProductHasBuyerResolvableSku()];
@@ -183,11 +211,10 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
             const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
             return slots.map(({ key, rows, media }) => {
                 const productRows = results[offset + rows] as RawProduct[];
-                const cards = resolveProductCards(
-                    productRows,
-                    resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]),
-                );
+                const mediaByProduct = resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]);
+                const cards = resolveProductCards(productRows, mediaByProduct);
                 const source = lists.find((list) => list.key === key)!.source;
+                declareHomeProductList(source, productRows.map((row) => row.id), mediaByProduct);
                 const category = source.kind === "category" ? categoryById.get(source.categoryId) ?? null : null;
                 return {
                     key,

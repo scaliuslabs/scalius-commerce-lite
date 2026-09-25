@@ -23,6 +23,7 @@ Public entry: `index.ts`.
 | `cards.ts` | `buildCollectionProductSelect()`, `resolveProductCards()` | Buyer cards for curated lists (homepage collections and section lists) |
 | `feed-diagnostics.ts`, `feed-row-preview.ts` | bounded read-only feed diagnostics and row preview | Dashboard feed tools, same policy as the XML feed |
 | `shared.ts` | -- | Helpers shared by the reads (not exported) |
+| `declare-deps.ts` | `declareProductCards()`, `declareRequestedProducts()` | Cache dependency declarations (`CACHE-DESIGN.md` §6.5): a card is `p:` plus the `m:` rows its images come from (primary and hover photo, never the rest of the gallery); a listing is `lm:`/`lo:price:` of its scope plus the order, filter and facet keys it used. Every read here declares where it loads; `apps/api/src/cache-deps-catalogue.test.ts` renders each public catalogue route in a strict scope and `cache-deps-scale.local.test.ts` checks coverage and the 256-key budget at 30k products |
 
 ## API Endpoints
 
