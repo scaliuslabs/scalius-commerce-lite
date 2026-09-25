@@ -1,4 +1,5 @@
 ---
+import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // src/pages/categories/[slug].astro
 import Layout from "@/layouts/Layout.astro";
 import {
@@ -35,6 +36,9 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 
 const { slug } = Astro.params;
+// Handles are lowercase: a mis-cased link redirects to the one real URL.
+const lowercaseRedirect = lowercaseHandleRedirect(Astro.url);
+if (lowercaseRedirect) return lowercaseRedirect;
 if (!slug) return new Response(null, { status: 404 });
 
 const initialQueryState = resolveProductListQueryState({
