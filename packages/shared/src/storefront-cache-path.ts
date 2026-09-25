@@ -21,7 +21,38 @@ const TRACKING_QUERY_PARAMS = [
   "igshid",
   "_ga",
   "ref",
+  // Read-your-writes (`STOREFRONT_SEEN_SEQ_PARAM`): the gateway reads it before
+  // the key is built; it never splits the cache or reaches a render.
+  "_sv",
 ] as const;
+
+/**
+ * `_sv=<seq>` on a dashboard "view on store" link: the store clock after the
+ * merchant's write (`X-Scalius-Commit-Seq`). A dependency-validated hit is
+ * checked against a frontier at least that new, so the merchant sees their
+ * own change at once (CACHE-DESIGN §6.10).
+ */
+export const STOREFRONT_SEEN_SEQ_PARAM = "_sv";
+
+/** The `_sv` clock value a request carries, or null (absent or malformed). */
+export function readStorefrontSeenSeq(url: URL): number | null {
+  const raw = url.searchParams.get(STOREFRONT_SEEN_SEQ_PARAM);
+  if (raw === null || !/^\d{1,15}$/.test(raw)) return null;
+  return Number(raw);
+}
+
+/** `url` with `_sv` set to the clock value a write answered (`X-Scalius-Commit-Seq`). */
+export function withStorefrontSeenSeq(url: string, seq: number | null | undefined): string {
+  if (seq === null || seq === undefined || !Number.isSafeInteger(seq) || seq < 0) return url;
+  try {
+    const absolute = /^[a-z][a-z0-9+.-]*:/i.test(url);
+    const next = new URL(url, "https://relative.invalid");
+    next.searchParams.set(STOREFRONT_SEEN_SEQ_PARAM, String(seq));
+    return absolute ? next.toString() : `${next.pathname}${next.search}${next.hash}`;
+  } catch {
+    return url;
+  }
+}
 
 const TRACKING_QUERY_PARAM_SET = new Set<string>(TRACKING_QUERY_PARAMS);
 
