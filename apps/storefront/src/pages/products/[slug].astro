@@ -612,7 +612,7 @@ const productCategoryAnalytics = productCategory
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
-    <div class="lg:pt-2">
+    <div class="lg:pt-2" data-product-stacked-crumbs={productPageLayout.gallery === "stacked" ? "" : undefined}>
       <ProductBreadcrumbs product={product} category={productCategory} />
     </div>
 
