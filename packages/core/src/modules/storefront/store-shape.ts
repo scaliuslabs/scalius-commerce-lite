@@ -12,6 +12,8 @@ import {
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { cacheDep } from "@scalius/shared/cache-deps";
+import { deps } from "../../cache-deps";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 
@@ -21,6 +23,13 @@ const cap = STORE_SHAPE_COUNT_CAP;
  * raw subquery unqualified, which is ambiguous across the SKU join.
  */
 export function selectStoreShapeCounts(db: Database) {
+  // `lm:shape`: the set of active products and their SKUs (insert, delete,
+  // is_active or deleted_at), not every product edit. Categories, collections
+  // and shipping methods count through their "any row" keys.
+  deps.key(cacheDep.storeShape());
+  deps.anyCategory();
+  deps.anyCollection();
+  deps.shipping();
   return db
     .select({
       productCount: sql<number>`(SELECT count(*) FROM (

@@ -37,6 +37,7 @@ import {
   encryptCredentials,
   readStoredCredentialStrict,
 } from "@scalius/core/utils/credential-encryption";
+import { deps } from "../../cache-deps";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -186,11 +187,16 @@ export interface SettingsDocument<T extends object> {
   invalidate(ctx?: SettingsDocumentContext): Promise<void>;
 }
 
-/** One batchable read of several documents' rows. */
+/**
+ * One batchable read of several documents' rows. Inside a public render's
+ * dependency scope it declares `set:<document>:document` for each document
+ * asked for (present or not), the key the settings triggers advance.
+ */
 export function selectSettingsDocuments(
   db: Database,
   documents: readonly { key: string }[],
 ) {
+  for (const document of documents) deps.settings(document.key, SETTINGS_DOCUMENT_ROW_KEY);
   return db
     .select({
       category: settingsTable.category,
@@ -393,6 +399,10 @@ export function defineSettingsDocument<T extends object>(
 
   async function readCache(ctx: SettingsDocumentContext): Promise<T | null> {
     if (!definition.cacheKey || !ctx.kv) return null;
+    // A public render never bakes the KV mirror in: KV may lag the row the
+    // entry's dependency key validates (CACHE-DESIGN.md section 6.4), so it
+    // reads the tracked row instead.
+    if (deps.active()) return null;
     let cached: string | null;
     try {
       cached = await ctx.kv.get(definition.cacheKey, { cacheTtl: 60 });

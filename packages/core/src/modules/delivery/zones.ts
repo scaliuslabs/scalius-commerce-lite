@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, isNull, notInArray, or, sql, type SQL } from "dr
 import { alias } from "drizzle-orm/sqlite-core";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
+import { deps } from "../../cache-deps";
 import {
     buildBatchGuard,
     isBatchGuardError,
@@ -188,6 +189,7 @@ export function resolveDeliveryRate(input: {
  * doesn't deliver there); without one, every active rate.
  */
 export async function listDeliveryRatesForAddress(db: Database, address: DeliveryAddress | null) {
+    deps.shipping();
     const conditions: SQL[] = [eq(shippingMethods.isActive, true), isNull(shippingMethods.deletedAt)];
     if (address) {
         const ids = [address.city, address.zone, address.area].filter((id): id is string => Boolean(id));

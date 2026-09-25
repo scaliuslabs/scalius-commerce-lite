@@ -3,6 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { heroSliders } from "@scalius/database/schema";
 import { eq, or, and, isNull } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
+import { deps } from "@scalius/core/cache-deps";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -75,7 +76,6 @@ const listSlidersRoute = createRoute({
           images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
-          updatedAt: z.string().nullable(),
         }).nullable().optional(),
         mobile: z.object({
           id: z.string(),
@@ -83,7 +83,6 @@ const listSlidersRoute = createRoute({
           images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
-          updatedAt: z.string().nullable(),
         }).nullable().optional(),
         slider: z.object({ id: z.string(), type: z.string(), images: z.array(heroImageSchema), isActive: z.boolean() }).passthrough().nullable().optional(),
         images: z.array(heroImageSchema),
@@ -120,6 +119,7 @@ app.openapi(listSlidersRoute, async (c) => {
   }
 
   // Get active sliders
+  deps.hero();
   const sliders = await db
     .select()
     .from(heroSliders)
@@ -149,7 +149,6 @@ app.openapi(listSlidersRoute, async (c) => {
       images: parseHeroImages(slider.images),
       isActive: slider.isActive,
       createdAt: formatHeroTimestamp(slider.createdAt),
-      updatedAt: formatHeroTimestamp(slider.updatedAt),
     };
   };
 
@@ -201,7 +200,6 @@ const getSliderByIdRoute = createRoute({
           images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
-          updatedAt: z.string().nullable(),
         }),
       })) } },
     },
@@ -214,6 +212,7 @@ app.openapi(getSliderByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
 
+  deps.hero();
   const slider = await db
     .select()
     .from(heroSliders)
@@ -241,7 +240,6 @@ app.openapi(getSliderByIdRoute, async (c) => {
       images,
       isActive: slider.isActive,
       createdAt: formatHeroTimestamp(slider.createdAt),
-      updatedAt: formatHeroTimestamp(slider.updatedAt),
     }
   });
 });

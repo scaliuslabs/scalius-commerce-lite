@@ -45,7 +45,6 @@ const listShippingMethodsRoute = createRoute({
           isActive: z.boolean(),
           sortOrder: z.number().int(),
           createdAt: z.string().nullable(),
-          updatedAt: z.string().nullable(),
         })).max(100),
       })) } },
     },
@@ -63,13 +62,13 @@ app.openapi(listShippingMethodsRoute, async (c) => {
   ]);
 
   return ok(c, {
-    shippingMethods: rates.map(({ zoneId, feeMinor, freeOverMinor, createdAt, updatedAt, ...rate }) => ({
+    // updatedAt is left out: it changes without changing what a buyer sees.
+    shippingMethods: rates.map(({ zoneId, feeMinor, freeOverMinor, createdAt, updatedAt: _updatedAt, ...rate }) => ({
       ...rate,
       everywhereElse: zoneId === null,
       fee: fromMinor(feeMinor, decimalPlaces),
       freeOver: freeOverMinor === null ? null : fromMinor(freeOverMinor, decimalPlaces),
       createdAt: createdAt instanceof Date ? createdAt.toISOString() : null,
-      updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : null,
     })),
   });
 });

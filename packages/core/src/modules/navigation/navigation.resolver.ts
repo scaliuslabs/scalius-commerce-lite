@@ -13,6 +13,7 @@ import {
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { contentEntryPath } from "../pages/pages.validation";
+import { deps } from "../../cache-deps";
 
 export const NAVIGATION_RESOURCE_READ_CHUNK_SIZE = 90;
 
@@ -92,6 +93,12 @@ export async function loadNavigationResourceSnapshots(
     ]);
     collectResourceIds(configItems("header", headerConfig), idsByType);
     collectResourceIds(configItems("footer", footerConfig), idsByType);
+    // Every target id asked for, found or not: a later create, rename,
+    // publish or trash of that row advances its own key.
+    deps.pages(idsByType.get("page") ?? []);
+    deps.categories(idsByType.get("category") ?? []);
+    deps.collections(idsByType.get("collection") ?? []);
+    deps.products(idsByType.get("product") ?? []);
 
     const snapshots = new Map<string, NavigationResourceSnapshot>();
 
