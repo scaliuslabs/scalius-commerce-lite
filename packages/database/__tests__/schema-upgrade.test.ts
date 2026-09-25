@@ -359,6 +359,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 93,
+        name: "0093_cache_dependencies",
+        sqliteStatements: 163,
+        postgresStatements: 162,
+      },
     ]);
   });
 
@@ -500,6 +506,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 90, name: "0090_catalogue_schema" },
           { version: 91, name: "0091_catalogue_projection_fill" },
           { version: 92, name: "0092_attribute_option_presets" },
+          { version: 93, name: "0093_cache_dependencies" },
         ],
       });
     } finally {
