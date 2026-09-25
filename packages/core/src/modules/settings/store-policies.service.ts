@@ -6,7 +6,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { ValidationError } from "../../errors";
-import { publicPageVisibilityCondition } from "../pages/pages.service";
+import { declarePublicPagesById, publicPageVisibilityCondition } from "../pages/pages.service";
 import {
   policiesDocument,
   STORE_POLICY_KINDS,
@@ -63,6 +63,7 @@ export async function resolvePublicStorePolicies(
 ): Promise<PublicStorePolicy[]> {
   const ids = linkedPageIds(policies);
   if (ids.length === 0) return [];
+  await declarePublicPagesById(db, ids);
   const rows = await db
     .select({ id: pages.id, title: pages.title, slug: pages.slug })
     .from(pages)

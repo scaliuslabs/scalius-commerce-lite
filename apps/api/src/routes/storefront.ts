@@ -37,7 +37,7 @@ import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { pageSchema } from "../schemas/entities";
+import { publicPageSchema } from "../schemas/entities";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -328,7 +328,7 @@ const pageBySlugRoute = createRoute({
     200: {
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: pageSchema,
+        page: publicPageSchema,
       })) } },
     },
     404: errorResponses[404],

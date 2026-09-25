@@ -9502,10 +9502,6 @@
                             "createdAt": {
                               "type": "string",
                               "nullable": true
-                            },
-                            "updatedAt": {
-                              "type": "string",
-                              "nullable": true
                             }
                           },
                           "required": [
@@ -9513,8 +9509,7 @@
                             "type",
                             "images",
                             "isActive",
-                            "createdAt",
-                            "updatedAt"
+                            "createdAt"
                           ]
                         },
                         "mobile": {
@@ -9588,10 +9583,6 @@
                             "createdAt": {
                               "type": "string",
                               "nullable": true
-                            },
-                            "updatedAt": {
-                              "type": "string",
-                              "nullable": true
                             }
                           },
                           "required": [
@@ -9599,8 +9590,7 @@
                             "type",
                             "images",
                             "isActive",
-                            "createdAt",
-                            "updatedAt"
+                            "createdAt"
                           ]
                         },
                         "slider": {
@@ -9920,10 +9910,6 @@
                             "createdAt": {
                               "type": "string",
                               "nullable": true
-                            },
-                            "updatedAt": {
-                              "type": "string",
-                              "nullable": true
                             }
                           },
                           "required": [
@@ -9931,8 +9917,7 @@
                             "type",
                             "images",
                             "isActive",
-                            "createdAt",
-                            "updatedAt"
+                            "createdAt"
                           ]
                         }
                       },
@@ -12343,14 +12328,7 @@
                               "sortOrder": {
                                 "type": "number"
                               },
-                              "revision": {
-                                "type": "integer",
-                                "minimum": 1
-                              },
                               "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "updatedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
@@ -12376,9 +12354,7 @@
                               "hideFooter",
                               "hideTitle",
                               "sortOrder",
-                              "revision",
                               "createdAt",
-                              "updatedAt",
                               "deletedAt"
                             ]
                           }
@@ -12654,14 +12630,7 @@
                             "sortOrder": {
                               "type": "number"
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 1
-                            },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
-                            },
-                            "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
@@ -12687,9 +12656,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
-                            "revision",
                             "createdAt",
-                            "updatedAt",
                             "deletedAt"
                           ]
                         }
@@ -13016,14 +12983,7 @@
                             "sortOrder": {
                               "type": "number"
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 1
-                            },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
-                            },
-                            "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
@@ -13049,9 +13009,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
-                            "revision",
                             "createdAt",
-                            "updatedAt",
                             "deletedAt"
                           ]
                         }
@@ -13365,10 +13323,6 @@
                               "sortOrder": {
                                 "type": "number"
                               },
-                              "revision": {
-                                "type": "integer",
-                                "minimum": 1
-                              },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
@@ -13398,7 +13352,6 @@
                               "hideFooter",
                               "hideTitle",
                               "sortOrder",
-                              "revision",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -13677,10 +13630,6 @@
                             "sortOrder": {
                               "type": "number"
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 1
-                            },
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
@@ -13710,7 +13659,6 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
-                            "revision",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
@@ -15825,14 +15773,7 @@
                             "sortOrder": {
                               "type": "number"
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 1
-                            },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
-                            },
-                            "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
@@ -15858,9 +15799,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
-                            "revision",
                             "createdAt",
-                            "updatedAt",
                             "deletedAt"
                           ]
                         }
@@ -44583,29 +44522,6 @@
                             },
                             "isDefault": {
                               "type": "boolean"
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -44616,7 +44532,8 @@
                             "fieldVisibility",
                             "isActive",
                             "isDefault"
-                          ]
+                          ],
+                          "description": "Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees."
                         }
                       },
                       "required": [
@@ -46868,10 +46785,6 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -46886,8 +46799,7 @@
                               "description",
                               "isActive",
                               "sortOrder",
-                              "createdAt",
-                              "updatedAt"
+                              "createdAt"
                             ]
                           },
                           "maxItems": 100
@@ -240062,29 +239974,6 @@
                             },
                             "isDefault": {
                               "type": "boolean"
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -240095,7 +239984,8 @@
                             "fieldVisibility",
                             "isActive",
                             "isDefault"
-                          ]
+                          ],
+                          "description": "Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees."
                         }
                       },
                       "required": [
