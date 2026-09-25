@@ -24,7 +24,6 @@ export * from "./pages";
 export * from "./orders";
 export * from "./shipping";
 export * from "./settings";
-export * from "./attributes";
 export * from "./tracking";
 export * from "./abandoned-checkouts";
 

@@ -10,20 +10,36 @@ import {
   resolveProductListQueryState,
 } from "./product-list-query";
 
+function facet(
+  id: string,
+  name: string,
+  slug: string,
+  values: Array<[string, number]>,
+  overrides: Partial<ProductFacet> = {},
+): ProductFacet {
+  return {
+    id,
+    name,
+    slug,
+    kind: slug.startsWith("option.") ? "option" : "attribute",
+    display: "checkbox",
+    unit: null,
+    values: values.map(([value, count]) => ({ value, label: value, count, swatch: null })),
+    range: null,
+    ...overrides,
+  };
+}
+
 const facets: ProductFacet[] = [
-  {
-    id: "attr_color",
-    name: "Color",
-    slug: "color",
-    values: [{ value: "Red", count: 2 }, { value: "Blue", count: 1 }],
-  },
-  {
-    id: "attr_size",
-    name: "Size",
-    slug: "size",
-    values: [{ value: "M", count: 2 }, { value: "L", count: 1 }],
-  },
+  facet("attr_color", "Color", "color", [["Red", 2], ["Blue", 1]]),
+  facet("attr_size", "Size", "size", [["M", 2], ["L", 1]]),
 ];
+
+const displaySize = facet("attr_display", "Display size", "display-size", [], {
+  display: "range",
+  unit: "in",
+  range: { min: 11.6, max: 17.3 },
+});
 
 describe("product list query canonicalization", () => {
   it("keeps unfiltered default category URLs on the parallel fast path", () => {
@@ -135,12 +151,7 @@ describe("product list query canonicalization", () => {
     );
     const state = resolveProductListQueryState({
       url,
-      facets: [{
-        id: "attr_brand",
-        name: "Brand",
-        slug: "brand",
-        values: [{ value: "Apple", count: 4 }],
-      }],
+      facets: [facet("brand", "Brand", "brand", [["Apple", 4]], { kind: "brand" })],
     });
     expect(state.currentFilters).toEqual({ brand: ["Apple"], q: "fish curry" });
     expect(buildProductListHref({ pathname: "/search", currentFilters: state.currentFilters, overrides: { page: 2 } }))
@@ -236,13 +247,61 @@ describe("product list query canonicalization", () => {
     expect(firstPass.options["option.size"]).toEqual(["42", "41"]);
     const authoritative = resolveProductListQueryState({
       url,
-      facets: [{ id: "option.size", name: "Size", slug: "option.size", values: [
-        { value: "41", count: 2 },
-        { value: "42", count: 1 },
-      ] }],
+      facets: [facet("option.size", "Size", "option.size", [["41", 2], ["42", 1]])],
     });
     expect(authoritative.currentFilters).toEqual({ "option.size": ["42", "41"] });
     expect(authoritative.redirectPath).toBeNull();
+  });
+
+  it("finds a facet value typed in another case and redirects to the normalised value", () => {
+    const url = new URL("https://store.test/brands/phones?brand=Samsung&brand=samsung&option.color=Black");
+    const state = resolveProductListQueryState({
+      url,
+      facets: [
+        facet("brand", "Brand", "brand", [["samsung", 3]], { kind: "brand" }),
+        facet("option.color", "Colour", "option.color", [["black", 2]]),
+      ],
+    });
+    expect(state.currentFilters).toEqual({ brand: ["samsung"], "option.color": ["black"] });
+    expect(state.redirectPath).toBe("/brands/phones?brand=samsung&option.color=black");
+  });
+
+  it("keeps range bounds as `<slug>.min` and `<slug>.max` in the options, filters and links", () => {
+    const url = new URL("https://store.test/categories/laptops?display-size.min=13&display-size.max=15.6&size=M");
+    // The first pass forwards them before the facets are known...
+    const firstPass = resolveProductListQueryState({ url, allowUnknownAttributes: true });
+    expect(firstPass.options).toMatchObject({ "display-size.min": 13, "display-size.max": 15.6 });
+    expect(firstPass.redirectPath).toBeNull();
+    // ...and the facets confirm them.
+    const state = resolveProductListQueryState({ url, facets: [...facets, displaySize] });
+    expect(state.options).toMatchObject({ "display-size.min": 13, "display-size.max": 15.6, size: ["M"] });
+    expect(state.currentFilters).toEqual({ "display-size.max": "15.6", "display-size.min": "13", size: ["M"] });
+    expect(state.redirectPath).toBeNull();
+    expect(countActiveProductListFilters(state.currentFilters)).toBe(3);
+    expect(buildProductListHref({ pathname: "/categories/laptops", currentFilters: state.currentFilters, overrides: { page: 2 } }))
+      .toBe("/categories/laptops?display-size.max=15.6&display-size.min=13&page=2&size=M");
+  });
+
+  it("drops bounds of a facet that is not a range", () => {
+    const url = new URL("https://store.test/categories/laptops?size.min=2&display-size.min=13");
+    const state = resolveProductListQueryState({ url, facets });
+    expect(state.currentFilters).toEqual({});
+    expect(state.redirectPath).toBe("/categories/laptops");
+  });
+
+  it("canonicalises range bounds: empty fields, noise, Bangla digits, repeats and reversed bounds", () => {
+    const resolve = (search: string) =>
+      resolveProductListQueryState({ url: new URL(`https://store.test/categories/laptops?${search}`), facets: [displaySize] });
+    // A form submitted without JavaScript sends the empty fields.
+    expect(resolve("display-size.min=&display-size.max=").redirectPath).toBe("/categories/laptops");
+    expect(resolve("display-size.min=abc&display-size.max=15").redirectPath).toBe("/categories/laptops?display-size.max=15");
+    expect(resolve("display-size.min=13.0").redirectPath).toBe("/categories/laptops?display-size.min=13");
+    expect(resolve("display-size.min=%E0%A7%A7%E0%A7%A9").redirectPath).toBe("/categories/laptops?display-size.min=13");
+    expect(resolve("display-size.min=12&display-size.min=13").redirectPath).toBe("/categories/laptops?display-size.min=13");
+    const reversed = resolve("display-size.min=16&display-size.max=13");
+    expect(reversed.options).toMatchObject({ "display-size.min": 13, "display-size.max": 16 });
+    expect(reversed.redirectPath).toBe("/categories/laptops?display-size.max=16&display-size.min=13");
+    expect(resolve("display-size.min=-5").currentFilters).toEqual({ "display-size.min": "-5" });
   });
 
   it("reads Bangla digits in price filters and redirects to Latin digits", () => {

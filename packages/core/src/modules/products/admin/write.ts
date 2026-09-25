@@ -7,7 +7,6 @@ import {
     media,
     productRichContent,
     productAttributeValues,
-    productAttributes,
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
@@ -49,6 +48,7 @@ import {
 } from "../variants";
 import { buildStockMovementClaim } from "../../inventory/stock-movement-claims";
 import { catalogProjectionRefreshStatements } from "../catalog-projections";
+import { prepareProductAttributeValueRows } from "../../attributes/product-attribute-values";
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
@@ -64,7 +64,6 @@ export type SQLiteBatchItem = BatchItem<"sqlite">;
 // product aggregate inserts comfortably below that boundary.
 const PRODUCT_AGGREGATE_INSERT_CHUNK = 18;
 const PRODUCT_MEDIA_INSERT_CHUNK = 12;
-const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
 
 /** A brand a product may point at: it exists and is not in trash (draft is fine). */
 async function assertLiveBrand(db: Database, brandId: string | null | undefined): Promise<void> {
@@ -76,36 +75,6 @@ async function assertLiveBrand(db: Database, brandId: string | null | undefined)
         .get();
     if (!brand) {
         throw new ValidationError("That brand is unavailable or in trash. Choose another brand.", { field: "brandId" });
-    }
-}
-
-async function assertActiveAttributeAssignments(
-    db: Database,
-    assignments: Array<{ attributeId: string }>,
-): Promise<void> {
-    const attributeIds = [...new Set(assignments.map((item) => item.attributeId.trim()).filter(Boolean))];
-    if (attributeIds.length === 0) return;
-    if (attributeIds.length > MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS) {
-        throw new ValidationError(
-            `Assign at most ${MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS} attributes to a product.`,
-        );
-    }
-
-    const activeAttributes = await db
-        .select({ id: productAttributes.id })
-        .from(productAttributes)
-        .where(and(
-            isNull(productAttributes.deletedAt),
-            sql`${productAttributes.id} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(attributeIds)})
-            )`,
-        ))
-        .all();
-
-    if (activeAttributes.length !== attributeIds.length) {
-        throw new ValidationError(
-            "One or more assigned attributes are unavailable or in trash. Remove them and try again.",
-        );
     }
 }
 
@@ -424,14 +393,15 @@ export async function createProduct(
         if (existingProduct) throw new ConflictError("A product with this slug already exists");
     }
 
-    await assertActiveAttributeAssignments(db, data.attributes ?? []);
+    const productId = "prod_" + nanoid();
+    // Typed attribute value rows, validated before any other read (unknown enum values are created first).
+    const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
 
     await assertSkusFree(db, data.optionMatrix
         ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
         : data.defaultSku?.sku ? [{ sku: data.defaultSku.sku, field: "defaultSku.sku" }] : []);
 
-    const productId = "prod_" + nanoid();
     const currency = await readStoreCurrency(db);
     const productPrice = catalogPriceColumns(data, currency);
     // With options, the product price is its lowest variant price (productPriceMinorSql).
@@ -629,23 +599,7 @@ export async function createProduct(
         }
     }
 
-    if (data.attributes && data.attributes.length > 0) {
-        const attributeValuesToInsert = data.attributes
-            .filter((attr) => attr.attributeId && attr.value.trim())
-            .map((attr) => ({
-                id: `val_${nanoid()}`,
-                productId,
-                attributeId: attr.attributeId,
-                value: attr.value,
-            }));
-        if (attributeValuesToInsert.length > 0) {
-            for (let index = 0; index < attributeValuesToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
-                batchOps.push(db.insert(productAttributeValues).values(
-                    attributeValuesToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
-                ));
-            }
-        }
-    }
+    batchOps.push(...attributeRows.statements);
 
     const insertWithSlug = async (slug: string) => {
         await db.batch([
@@ -706,7 +660,7 @@ export async function updateProduct(
         throw new ConflictError("A product with this slug already exists");
     }
 
-    await assertActiveAttributeAssignments(db, data.attributes ?? []);
+    const attributeRows = await prepareProductAttributeValueRows(db, id, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
     const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
     const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
@@ -716,15 +670,6 @@ export async function updateProduct(
     const customizationSchema = data.customizationSchema === undefined
         ? undefined
         : toStoredCustomizationSchema(data.customizationSchema, currency);
-
-    const attributeValuesToInsert = (data.attributes ?? [])
-        .filter((attr) => attr.attributeId && attr.value.trim())
-        .map((attr) => ({
-            id: `val_${nanoid()}`,
-            productId: id,
-            attributeId: attr.attributeId,
-            value: attr.value,
-        }));
 
     const contentToInsert = (data.additionalInfo ?? [])
         .filter((item) => item.title.trim() && item.content.trim())
@@ -791,13 +736,7 @@ export async function updateProduct(
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
     ];
 
-    if (attributeValuesToInsert.length > 0) {
-        for (let index = 0; index < attributeValuesToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
-            batchOps.push(db.insert(productAttributeValues).values(
-                attributeValuesToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
-            ));
-        }
-    }
+    batchOps.push(...attributeRows.statements);
 
     if (contentToInsert.length > 0) {
         for (let index = 0; index < contentToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {

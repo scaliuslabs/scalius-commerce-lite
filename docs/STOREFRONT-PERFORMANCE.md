@@ -373,7 +373,7 @@ also clears it at once.
 | Guardrail | Where | Budget |
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts`, `apps/storefront/src/lib/cart/cart-shell.render.test.ts` | 1 for home, product, category, search and cart (the pages' own read functions, started as the pages start them) |
-| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 9 / 3, search 9 / 2 |
+| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 7 / 3, search 7 / 2 |
 | Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
 
@@ -520,6 +520,13 @@ unscoped set reads every attribute and option row (397k rows at 30k products);
 large stores filter inside a category, whose counts stay bounded by its own
 products. This cap replaced a per-category facet-count cache: no extra table,
 nothing to keep fresh.
+
+Facets (slice 1b) read only the projections: one statement per listing counts
+brand, option-axis and typed-attribute values over the materialized scope, and
+the filters are primary-key probes of `product_facet_values`. The URL contract,
+caps and measurements are in `packages/core/src/modules/catalog/README.md`
+("Facets"); `facets-scale.local.test.ts` checks every count against a brute
+force on the 30k seed.
 
 Measured on the 30k seed (in-process, p50 ms, D1 rows read, before → after):
 shop-all newest 3,219 → 35 (6.05M → 31k), shop-all price 3,696 → 35,
