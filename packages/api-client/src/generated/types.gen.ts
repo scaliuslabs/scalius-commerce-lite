@@ -57688,6 +57688,18 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                     [key: string]: unknown;
                 } | null;
             }>;
+            /**
+             * The ready files the inlined blocks name, for the editor's previews; a missing file is absent.
+             */
+            media: Array<{
+                id: string;
+                kind: 'image' | 'video';
+                url: string;
+                altText: string | null;
+                width: number | null;
+                height: number | null;
+                posterUrl: string | null;
+            }>;
             total: number;
             offset: number;
             limit: number;

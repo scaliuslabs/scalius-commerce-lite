@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { categoriesInTreeOrder, categoryPathLabel, indexCategories, parentChoices } from "./category-tree";
+import { categoriesInTreeOrder, categoryPathLabel, indexCategories } from "./category-tree";
+import { parentChoices } from "./category-parent-choices";
 
 const tree = [
   { id: "a", name: "Men", parentId: null, depth: 0 },
