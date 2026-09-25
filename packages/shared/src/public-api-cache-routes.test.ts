@@ -22,6 +22,10 @@ describe("public API cache routes", () => {
     expect(isPublicApiCacheRoute(url("/api/v1/admin/products"))).toBe(false);
     expect(isPublicApiCacheRoute(url("/api/v1/checkout-languages/active"))).toBe(false);
     expect(isPublicApiCacheRoute(url(`/api/v1/products?q=${"x".repeat(513)}`))).toBe(false);
+    // The homepage read is one fixed entry: a query string never reaches the cache.
+    expect(isPublicApiCacheRoute(url("/api/v1/storefront/homepage"))).toBe(true);
+    expect(isPublicApiCacheRoute(url("/api/v1/storefront/homepage?product=36~newest"))).toBe(false);
+    expect(isPublicApiCacheRoute(url("/api/v1/storefront/homepage?utm_source=x"))).toBe(false);
   });
 });
 

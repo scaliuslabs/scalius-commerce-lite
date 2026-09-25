@@ -1,7 +1,7 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getCurrentMediaUrl } from "../../integrations/storage";
-import { and, asc, eq, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 export const MAX_PRODUCT_MEDIA_ASSOCIATIONS = 250;
@@ -200,12 +200,23 @@ export function resolveSkuImageRepresentation(
     return resolveProductImageRepresentation(items);
 }
 
+/**
+ * Every retained gallery row of the given products. `productIds` is a list,
+ * or a query selecting product ids: a read that knows its products only in
+ * SQL (the homepage's "newest 12") reads their media in the same D1 batch
+ * instead of a later round trip.
+ */
 export function selectProductMediaProjectionRows(
     db: Database,
-    productIds: readonly string[],
+    productIds: readonly string[] | SQLWrapper,
 ) {
-    const uniqueIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
-    const productIdSet = JSON.stringify(uniqueIds);
+    const productScope = Array.isArray(productIds)
+        ? sql`${productMedia.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(
+                    [...new Set(productIds.map((id) => id.trim()).filter(Boolean))],
+                )})
+            )`
+        : inArray(productMedia.productId, productIds as SQLWrapper);
     const poster = alias(media, "product_media_poster");
     return db
         .select({
@@ -243,12 +254,7 @@ export function selectProductMediaProjectionRows(
         .innerJoin(products, eq(products.id, productMedia.productId))
         .innerJoin(media, eq(media.id, productMedia.mediaId))
         .leftJoin(poster, eq(poster.id, media.posterMediaId))
-        .where(and(
-            sql`${productMedia.productId} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
-            )`,
-            retainedMediaCondition(),
-        ))
+        .where(and(productScope, retainedMediaCondition()))
         .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
 }
 

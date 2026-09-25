@@ -1,0 +1,98 @@
+---
+// Campaign banners: one full-width banner (1440x200-436), or a row of
+// consecutive two-up (Fabrilife's campaigns) or four-up banners (Target's
+// promo tiles). A banner with a photo shows its words on a dark scrim, so
+// white text keeps AA contrast over any photo; one without a photo is a
+// colour banner on the theme's secondary colour (eBay). Photos have a fixed
+// ratio, so nothing shifts while they load. Words over a photo sit on a
+// 70% black band (with a short gradient lead-in), so white text keeps AA
+// contrast over any photo however many lines it wraps to.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+interface Props {
+  layout: "full" | "two-up" | "four-up";
+  banners: Array<{ section: StorefrontSectionOf<"banner">; photo: HomepageMediaAsset | null }>;
+  /** The row leads the page: its photos load eagerly. */
+  aboveFold: boolean;
+  /** A row of grouped banners: each banner carries its own section marker. */
+  grouped?: boolean;
+}
+
+const { layout, banners, aboveFold, grouped = false } = Astro.props;
+const RATIO = {
+  full: "aspect-[4/3] sm:aspect-[16/7] lg:aspect-[18/5]",
+  "two-up": "aspect-[4/3] sm:aspect-[16/9]",
+  "four-up": "aspect-[4/5]",
+} as const;
+const SIZES = {
+  full: "(max-width: 1279px) calc(100vw - 2rem), 1216px",
+  "two-up": "(max-width: 639px) calc(100vw - 2rem), (max-width: 1279px) 50vw, 600px",
+  "four-up": "(max-width: 1023px) 50vw, 300px",
+} as const;
+const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 lg:grid-cols-4" }[layout];
+---
+
+<section class="home-section w-full" aria-label={banners.length > 1 ? "Promotions" : undefined}>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class:list={["grid gap-3 md:gap-4", columns]}>
+      {banners.map(({ section, photo }) => {
+        const { heading, text, cta } = section.settings;
+        const title = heading.trim();
+        const body = text.trim();
+        const Frame = cta ? "a" : "div";
+        const headingId = `home-${section.id}-title`;
+        const external = cta?.href.startsWith("https://");
+        return (
+          <Frame
+            href={cta?.href}
+            data-astro-prefetch={cta ? getStorefrontPrefetchAttribute(cta.href, Astro.url) : undefined}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noopener noreferrer" : undefined}
+            class:list={[
+              "group relative block overflow-hidden rounded-xl",
+              photo ? `${RATIO[layout]} bg-muted` : "flex min-h-40 flex-col justify-center bg-secondary p-6 text-secondary-foreground md:min-h-56 md:p-10",
+            ]}
+            aria-labelledby={title ? headingId : undefined}
+            aria-label={!title && cta ? cta.label : undefined}
+            data-home-section={grouped ? "banner" : undefined}
+            data-section-id={grouped ? section.id : undefined}
+          >
+            {photo && (
+              <img
+                src={mediaImageUrl(photo.url, 960)}
+                srcset={mediaImageSrcSet(photo.url)}
+                sizes={SIZES[layout]}
+                alt={title ? "" : photo.alt}
+                width={photo.width ?? 1600}
+                height={photo.height ?? 600}
+                loading={aboveFold ? "eager" : "lazy"}
+                decoding="async"
+                class="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              />
+            )}
+            {(title || body || cta) && (
+              <div class:list={[photo && "absolute inset-x-0 bottom-0 text-white", "[overflow-wrap:anywhere]"]}>
+                {photo && <div class="h-10 bg-linear-to-t from-black/70 to-transparent md:h-16" aria-hidden="true" />}
+                <div class:list={[photo && "bg-black/70 px-4 pb-4 md:px-8 md:pb-8"]}>
+                {title && <h2 id={headingId} class:list={["max-w-2xl font-bold leading-tight", layout === "four-up" ? "text-lg md:text-xl" : "text-xl md:text-3xl"]}>{title}</h2>}
+                {body && <p class:list={["mt-2 max-w-xl text-sm leading-relaxed md:text-base", !photo && "text-secondary-foreground"]}>{body}</p>}
+                {cta && (
+                  <span class:list={[
+                    "mt-4 inline-flex min-h-11 items-center rounded-full px-5 text-sm font-semibold transition-transform group-hover:scale-[1.03] motion-reduce:transition-none",
+                    photo ? "bg-white text-neutral-900" : "bg-primary text-primary-foreground",
+                  ]}>
+                    {cta.label}
+                  </span>
+                )}
+                </div>
+              </div>
+            )}
+          </Frame>
+        );
+      })}
+    </div>
+  </div>
+</section>

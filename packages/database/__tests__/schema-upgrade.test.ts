@@ -323,6 +323,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 20,
         postgresStatements: 20,
       },
+      {
+        version: 87,
+        name: "0087_on_sale_indexes",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -458,6 +464,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 84, name: "0084_line_item_properties" },
           { version: 85, name: "0085_conversations" },
           { version: 86, name: "0086_notification_outbox" },
+          { version: 87, name: "0087_on_sale_indexes" },
         ],
       });
     } finally {

@@ -1,0 +1,71 @@
+---
+// One still hero banner (the split layout's halves): the same picture,
+// focal point, overlay copy and LCP rules as a carousel slide, without the
+// carousel. The frame's size comes from `frameClass` (a fixed ratio).
+import { heroImageCandidate, type StorefrontHeroLayout } from "@/lib/homepage-hero";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import {
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
+  HERO_SLIDE_PRESENTATION,
+  getHeroSlideObjectPosition,
+  type HeroSlide,
+} from "@scalius/shared/hero-slider";
+
+interface Props {
+  slide: HeroSlide;
+  viewport: "desktop" | "mobile";
+  layout: StorefrontHeroLayout;
+  index: number;
+  priority?: boolean;
+  frameClass: string;
+}
+
+const { slide, viewport, layout, index, priority = true, frameClass } = Astro.props;
+const candidate = heroImageCandidate(slide.url, viewport, layout);
+const Frame = slide.link ? "a" : "div";
+const isExternal = slide.link?.startsWith("https://");
+const headline = slide.heading?.trim();
+const buttonLabel = slide.link ? slide.buttonLabel?.trim() : "";
+const lead = index === 0 && priority;
+const presentation = HERO_SLIDE_PRESENTATION[viewport];
+// The <source> media keeps the other viewport's banner (display:none) from
+// downloading at all: the <img> itself only holds a blank pixel.
+const transparentPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+---
+
+<Frame
+  href={slide.link || undefined}
+  data-astro-prefetch={slide.link ? getStorefrontPrefetchAttribute(slide.link, Astro.url) : undefined}
+  target={isExternal ? "_blank" : undefined}
+  rel={isExternal ? "noopener noreferrer" : undefined}
+  class:list={["hero-picture group relative block overflow-hidden bg-muted", frameClass]}
+  aria-label={slide.link && !headline && !slide.title ? `Banner ${index + 1}` : undefined}
+>
+  <picture class="block h-full w-full">
+    <source media={candidate.media} srcset={candidate.srcset ?? candidate.src} sizes={candidate.srcset ? candidate.sizes : undefined} />
+    <img
+      src={transparentPixel}
+      alt={slide.title}
+      width={presentation.width}
+      height={presentation.height}
+      class="h-full w-full object-cover"
+      style={`object-position: ${getHeroSlideObjectPosition(slide.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT)};`}
+      loading="eager"
+      fetchpriority={lead ? "high" : "auto"}
+      decoding={lead ? "sync" : "async"}
+    />
+  </picture>
+  {(headline || buttonLabel) && (
+    <div class="absolute inset-x-0 bottom-0 text-white">
+      <div class="h-12 bg-linear-to-t from-black/70 to-transparent md:h-20" aria-hidden="true" />
+      <div class="bg-black/70 px-5 pb-8 md:px-10 md:pb-12">
+      {headline && <p class="max-w-xl text-2xl font-bold leading-tight [overflow-wrap:anywhere] [text-shadow:0_1px_3px_rgb(0_0_0/0.6)] md:text-4xl">{headline}</p>}
+      {buttonLabel && (
+        <span class="mt-3 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-neutral-900 transition-transform group-hover:scale-[1.03]">
+          {buttonLabel}
+        </span>
+      )}
+      </div>
+    </div>
+  )}
+</Frame>

@@ -1802,6 +1802,36 @@
                                 "story-cards",
                                 "full-screen"
                               ]
+                            },
+                            "sideBanners": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "mediaId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                  },
+                                  "alt": {
+                                    "type": "string",
+                                    "maxLength": 160
+                                  },
+                                  "href": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 300,
+                                    "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                                  }
+                                },
+                                "required": [
+                                  "mediaId",
+                                  "alt",
+                                  "href"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 2
                             }
                           },
                           "required": [
@@ -12116,6 +12146,7 @@
           "Storefront"
         ],
         "summary": "Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)",
+        "description": "Takes no parameters: a query string is rejected, so the generation-cached read has exactly one cache entry and callers cannot choose which products it reads.",
         "responses": {
           "200": {
             "description": "Homepage data",
@@ -12608,19 +12639,246 @@
                             "categoryRail",
                             "trustStrip"
                           ]
+                        },
+                        "sections": {
+                          "type": "object",
+                          "properties": {
+                            "lists": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "discountType": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "discountPercentage": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "discountAmount": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "discountedPrice": {
+                                          "type": "number"
+                                        },
+                                        "priceVaries": {
+                                          "type": "boolean"
+                                        },
+                                        "availableForSale": {
+                                          "type": "boolean"
+                                        },
+                                        "freeDelivery": {
+                                          "type": "boolean"
+                                        },
+                                        "categoryId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "hasVariants": {
+                                          "type": "boolean"
+                                        },
+                                        "imageUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "imageMediaId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "imageAlt": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "secondaryImageUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "slug",
+                                        "price",
+                                        "discountType",
+                                        "discountPercentage",
+                                        "discountAmount",
+                                        "discountedPrice",
+                                        "priceVaries",
+                                        "availableForSale",
+                                        "freeDelivery",
+                                        "categoryId",
+                                        "hasVariants",
+                                        "imageUrl",
+                                        "imageMediaId",
+                                        "imageAlt",
+                                        "secondaryImageUrl"
+                                      ]
+                                    },
+                                    "maxItems": 36
+                                  },
+                                  "category": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "slug": {
+                                        "type": "string"
+                                      },
+                                      "canonicalPath": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name",
+                                      "slug",
+                                      "canonicalPath"
+                                    ]
+                                  },
+                                  "collection": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "products",
+                                  "category",
+                                  "collection"
+                                ]
+                              },
+                              "maxItems": 8
+                            },
+                            "media": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "alt": {
+                                    "type": "string"
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "url",
+                                  "alt",
+                                  "width",
+                                  "height"
+                                ]
+                              },
+                              "maxItems": 24
+                            }
+                          },
+                          "required": [
+                            "lists",
+                            "media"
+                          ]
                         }
                       },
                       "required": [
                         "seo",
                         "hero",
                         "collections",
-                        "presentation"
+                        "presentation",
+                        "sections"
                       ]
                     }
                   },
                   "required": [
                     "success",
                     "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
                   ]
                 }
               }
@@ -14268,6 +14526,347 @@
         "x-scalius-rbac": {
           "type": "unmapped"
         }
+      }
+    },
+    "/api/v1/storefront/theme-preview/homepage": {
+      "post": {
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Read the homepage section data of a theme preview's draft",
+        "description": "The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+        "operationId": "system.storefront_theme_preview.homepage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 52,
+                    "maxLength": 52,
+                    "pattern": "^tpv_[A-Za-z0-9_-]{48}$"
+                  }
+                },
+                "required": [
+                  "token"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The draft's homepage section data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "lists": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "products": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "slug": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "discountType": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "discountPercentage": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "discountAmount": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "discountedPrice": {
+                                      "type": "number"
+                                    },
+                                    "priceVaries": {
+                                      "type": "boolean"
+                                    },
+                                    "availableForSale": {
+                                      "type": "boolean"
+                                    },
+                                    "freeDelivery": {
+                                      "type": "boolean"
+                                    },
+                                    "categoryId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "hasVariants": {
+                                      "type": "boolean"
+                                    },
+                                    "imageUrl": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "imageMediaId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "imageAlt": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "secondaryImageUrl": {
+                                      "type": "string",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "slug",
+                                    "price",
+                                    "discountType",
+                                    "discountPercentage",
+                                    "discountAmount",
+                                    "discountedPrice",
+                                    "priceVaries",
+                                    "availableForSale",
+                                    "freeDelivery",
+                                    "categoryId",
+                                    "hasVariants",
+                                    "imageUrl",
+                                    "imageMediaId",
+                                    "imageAlt",
+                                    "secondaryImageUrl"
+                                  ]
+                                },
+                                "maxItems": 36
+                              },
+                              "category": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "canonicalPath": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "canonicalPath"
+                                ]
+                              },
+                              "collection": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "products",
+                              "category",
+                              "collection"
+                            ]
+                          },
+                          "maxItems": 8
+                        },
+                        "media": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "maxItems": 24
+                        }
+                      },
+                      "required": [
+                        "lists",
+                        "media"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "system",
+          "exposure": "excluded",
+          "principals": [
+            "internal"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Private storefront preview read keyed by the preview cookie bearer; the token must never enter agent input or execution."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
       }
     },
     "/api/v1/platform": {

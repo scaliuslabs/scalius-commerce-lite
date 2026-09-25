@@ -139,6 +139,94 @@ describe("storefront homepage data", () => {
     });
   });
 
+  it("reads the published theme's section lists and images in two batches", async () => {
+    let batches = 0;
+    let statements = 0;
+    const { db, sqlite } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } , onQuery: () => { statements += 1; } });
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT INTO categories (id, name, slug, status, canonical_path) VALUES
+        ('cat_tea', 'Tea', 'tea', 'published', NULL), ('cat_draft', 'Draft', 'draft', 'draft', NULL);
+      INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at, discount_type, discount_bps) VALUES
+        ('p_old', 'Old tea', 1000, 'old-tea', 'cat_tea', 1, ${now - 300}, 'percentage', 1000),
+        ('p_mid', 'Mid tea', 1000, 'mid-tea', 'cat_tea', 1, ${now - 200}, NULL, 0),
+        ('p_new', 'New tea', 1000, 'new-tea', 'cat_draft', 1, ${now - 100}, NULL, 0),
+        ('p_off', 'Hidden', 1000, 'hidden', 'cat_tea', 0, ${now}, NULL, 0);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+        ('v_old', 'p_old', 'OLD', 1000, 5, 0, 1, 1), ('v_mid', 'p_mid', 'MID', 1000, 5, 0, 1, 1),
+        ('v_new', 'p_new', 'NEW', 1000, 5, 0, 1, 1), ('v_off', 'p_off', 'OFF', 1000, 5, 0, 1, 1);
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, alt_text) VALUES
+        ('m_mid', 'mid.webp', 'image', 'media/mid.webp', 1, 'image/webp', 'ready', 800, 800, NULL),
+        ('m_banner', 'banner.webp', 'image', 'media/banner.webp', 1, 'image/webp', 'ready', 1600, 600, 'Tea harvest'),
+        ('m_gone', 'clip.mp4', 'video', 'media/clip.mp4', 1, 'video/mp4', 'ready', 10, 10, NULL);
+      INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES ('pmed_mid01', 'p_mid', 'm_mid', 1, 0);
+      INSERT INTO collections (id, name, presentation, config) VALUES
+        ('col_teas', 'Teas', 'carousel', '{"source":"manual","productIds":["p_mid","p_old"],"title":"Our teas"}');
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at) VALUES
+        ('o_1', 'A', '01700000001', 'x', 'city', 'zone', 'delivered', ${now - 60}, ${now - 60}),
+        ('o_2', 'B', '01700000002', 'x', 'city', 'zone', 'pending', ${now - 60}, ${now - 60}),
+        ('o_3', 'C', '01700000003', 'x', 'city', 'zone', 'cancelled', ${now - 60}, ${now - 60});
+    `);
+    const theme = storefrontTemplateTheme("boutique");
+    theme.pages.home = [
+      { id: "new", type: "product-rail", version: 1, settings: { title: "", source: { kind: "newest" }, limit: 4 } },
+      { id: "sale", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, endsAt: null } },
+      { id: "cat", type: "product-grid", version: 1, settings: { title: "", source: { kind: "category", categoryId: "cat_tea" }, columns: 2, rows: 1 } },
+      { id: "draft", type: "product-grid", version: 1, settings: { title: "", source: { kind: "category", categoryId: "cat_draft" }, columns: 2, rows: 1 } },
+      { id: "col", type: "product-rail", version: 1, settings: { title: "", source: { kind: "collection", collectionId: "col_teas" }, limit: 4 } },
+      { id: "pop", type: "product-rail", version: 1, settings: { title: "", source: { kind: "popular" }, limit: 4 } },
+      { id: "banner", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: "m_banner", cta: null } },
+      { id: "gone", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: "m_gone", cta: null } },
+    ];
+    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
+      .run(JSON.stringify(theme));
+    sqlite.exec(`
+      INSERT INTO order_items (id, order_id, product_id, quantity) VALUES
+        ('oi_1', 'o_1', 'p_old', 1), ('oi_2', 'o_2', 'p_old', 1), ('oi_3', 'o_3', 'p_mid', 1);
+    `);
+
+    batches = 0;
+    const homepage = await getHomepageData(db);
+    expect(batches).toBe(2);
+    const list = (key: string) => homepage.sections.lists.find((each) => each.key === key);
+    const ids = (key: string) => list(key)?.products.map((product) => product.id);
+    expect(ids("newest")).toEqual(["p_new", "p_mid", "p_old"]);
+    expect(list("newest")?.products[1]).toMatchObject({ imageUrl: expect.stringContaining("media/mid.webp") });
+    expect(ids("on-sale")).toEqual(["p_old"]);
+    expect(ids("category:cat_tea")).toEqual(["p_mid", "p_old"]);
+    expect(list("category:cat_tea")?.category).toMatchObject({ name: "Tea", slug: "tea" });
+    // A draft category shows nothing (and says nothing about itself).
+    expect(list("category:cat_draft")).toMatchObject({ products: [], category: null });
+    expect(ids("collection:col_teas")).toEqual(["p_mid", "p_old"]);
+    expect(list("collection:col_teas")?.collection).toEqual({ id: "col_teas", title: "Our teas" });
+    // Two distinct buyers in real orders; the cancelled order does not count.
+    expect(ids("popular")).toEqual(["p_old"]);
+    expect(homepage.sections.media).toEqual([
+      { id: "m_banner", url: expect.stringContaining("media/banner.webp"), alt: "Tea harvest", width: 1600, height: 600 },
+    ]);
+
+    // A preview names its own reads instead of the published theme's.
+    const preview = await getHomepageData(db, {
+      requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 1 }], mediaIds: [] },
+    });
+    expect(preview.sections.lists.map((each) => [each.key, each.products.map((product) => product.id)]))
+      .toEqual([["newest", ["p_new"]]]);
+    expect(preview.sections.media).toEqual([]);
+    expect(statements).toBeGreaterThan(0);
+  });
+
+  it("reads nothing in a second batch when no section needs data", async () => {
+    let batches = 0;
+    const { db, sqlite } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
+    const theme = storefrontTemplateTheme("boutique");
+    theme.pages.home = [{ id: "text", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Hi", body: "" } }];
+    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
+      .run(JSON.stringify(theme));
+    const homepage = await getHomepageData(db);
+    expect(batches).toBe(1);
+    expect(homepage.sections).toEqual({ lists: [], media: [] });
+  });
+
   it("points hero slides saved with an original upload at its published rendition (R3-MOB-01)", async () => {
     const { db, sqlite } = createSqliteD1Database();
     const slide = (id: string, url: string) => ({ id, url, title: `Banner ${id}`, link: "" });

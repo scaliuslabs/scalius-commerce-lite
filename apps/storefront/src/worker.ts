@@ -1,7 +1,7 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
-import { readCacheGenerationHint } from "@scalius/shared/cache-generation";
+import { readCacheGenerationHint, readWorkerVersion } from "@scalius/shared/cache-generation";
 import { servePublicStorefrontRequest } from "./lib/public-worker-cache";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
 import { BUILD_ID } from "./config/build-id";
@@ -42,6 +42,7 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       cache: caches.default,
       readGeneration: () => readCacheGenerationHint(this.env.CACHE),
       buildId: BUILD_ID,
+      workerVersion: readWorkerVersion(this.env),
       render: (renderRequest) => handle(renderRequest, this.env, this.ctx),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
     });

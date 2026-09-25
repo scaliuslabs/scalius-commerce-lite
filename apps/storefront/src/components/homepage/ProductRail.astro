@@ -1,0 +1,206 @@
+---
+// A horizontal product rail: CSS scroll-snap, so it scrolls by touch,
+// trackpad and keyboard with no script. The arrows are a small
+// progressive enhancement (hidden on phones, where buyers swipe).
+// - `collection`: a homepage carousel collection, markup for markup the
+//   classic store's rail (72% of a phone, then 3, 4 and 5 across).
+// - `shelf`: a section rail (Apple Gadgets 280x358 / 164x278): 2.2 cards on a
+//   phone, then 3.3, 4.4 and 5.3, so the next card always peeks in. Fewer
+//   than 4 cards are not a rail: they render as a static grid.
+import type { Product } from "@/lib/api";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import SectionHeader from "./SectionHeader.astro";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+interface Props {
+  title: string;
+  /** Where the whole list lives ("View all"); none for lists no listing shows. */
+  href: string | null;
+  hrefLabel?: string;
+  products: Product[];
+  currencySymbol?: string;
+  currencyCode?: string;
+  /** The rail starts in the first viewport (first photos load eagerly). */
+  aboveFold?: boolean;
+  width?: "collection" | "shelf";
+  /** Unique within the page: the heading's id. */
+  headingId?: string;
+  /** Only the scrolling track (inside a section that draws its own title, a deal block). */
+  bare?: boolean;
+}
+
+const {
+  title,
+  href,
+  hrefLabel = "View all",
+  products,
+  currencySymbol = DEFAULT_CURRENCY.symbol,
+  currencyCode = DEFAULT_CURRENCY.code,
+  aboveFold = false,
+  width = "shelf",
+  headingId,
+  bare = false,
+} = Astro.props;
+const shelf = width === "shelf";
+const itemClass = shelf
+  ? "home-shelf-item shrink-0 snap-start"
+  : "w-[72%] shrink-0 snap-start sm:w-[calc((100%_-_2rem)/3)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]";
+---
+
+{bare && (
+  <div class="flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden">
+    {products.map((product, index) => (
+      <div class={itemClass}>
+        <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} context="shelf" index={index} aboveFold={aboveFold} />
+      </div>
+    ))}
+  </div>
+)}
+
+{!bare && shelf && products.length > 0 && products.length < 4 && (
+  <section class="home-section w-full" aria-labelledby={headingId}>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <SectionHeader id={headingId} title={title} href={href} hrefLabel={hrefLabel} />
+      <ProductGrid>
+        {products.map((product, index) => (
+          <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
+        ))}
+      </ProductGrid>
+    </div>
+  </section>
+)}
+
+{
+  !bare && products.length >= (shelf ? 4 : 1) && (
+    <section
+      class={shelf ? "home-section w-full overflow-hidden" : "w-full overflow-hidden py-3 md:py-6"}
+      aria-labelledby={shelf ? headingId : undefined}
+      data-product-rail
+    >
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-3 flex items-end justify-between gap-4 md:mb-5">
+          <div class="space-y-1">
+            <h2 id={shelf ? headingId : undefined} class="section-heading text-foreground">
+              {title}
+            </h2>
+            <div class="h-0.5 w-8 rounded-full bg-primary" />
+          </div>
+
+          <div class="flex items-center gap-2">
+            {href && (
+              <a
+                href={href}
+                class="group hidden items-center gap-1.5 text-xs font-bold text-foreground transition-colors hover:text-primary sm:flex"
+              >
+                {shelf ? hrefLabel : "View collection"}
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+              </a>
+            )}
+            {products.length > 1 && (
+              <div class="ml-1 hidden items-center gap-1.5 md:flex">
+                <button
+                  type="button"
+                  data-rail-direction="previous"
+                  class="flex h-11 w-11 items-center justify-center rounded-full border border-input bg-background text-foreground shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground md:h-8 md:w-8"
+                  aria-label={`Previous products in ${title}`}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  data-rail-direction="next"
+                  class="flex h-11 w-11 items-center justify-center rounded-full border border-input bg-background text-foreground shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground md:h-8 md:w-8"
+                  aria-label={`Next products in ${title}`}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div class="-mx-4 px-4">
+          <div
+            data-product-rail-track
+            class="flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
+          >
+            {products.map((product, index) => (
+              <div class={itemClass}>
+                <ProductCard
+                  product={product}
+                  currencySymbol={currencySymbol}
+                  currencyCode={currencyCode}
+                  context={shelf ? "shelf" : "rail"}
+                  index={index}
+                  aboveFold={aboveFold}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {href && (
+          <div class="mt-2 flex justify-end sm:hidden">
+            <a
+              href={href}
+              class="flex min-h-11 items-center gap-2 px-3 text-xs font-semibold text-foreground underline decoration-primary/30 underline-offset-4"
+            >
+              {shelf ? hrefLabel : "View collection"}
+              <ArrowRight className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+<script>
+  function initializeProductRails() {
+    document.querySelectorAll<HTMLElement>("[data-product-rail]").forEach((rail) => {
+      if (rail.dataset.ready === "true") return;
+      rail.dataset.ready = "true";
+      const track = rail.querySelector<HTMLElement>("[data-product-rail-track]");
+      if (!track) return;
+      rail.querySelectorAll<HTMLButtonElement>("[data-rail-direction]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const direction = button.dataset.railDirection === "previous" ? -1 : 1;
+          track.scrollBy({
+            left: direction * Math.max(240, track.clientWidth * 0.8),
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "auto"
+              : "smooth",
+          });
+        });
+      });
+    });
+  }
+
+  document.addEventListener("astro:page-load", initializeProductRails);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeProductRails, { once: true });
+  } else {
+    initializeProductRails();
+  }
+</script>
+
+<style>
+  /* SHELF_CARD_SIZES (lib/product-card-layout.ts) follows these widths. */
+  .home-shelf-item {
+    width: 44%;
+  }
+
+  @media (min-width: 640px) {
+    .home-shelf-item { width: 30%; }
+  }
+
+  @media (min-width: 1024px) {
+    .home-shelf-item { width: 22.5%; }
+  }
+
+  @media (min-width: 1280px) {
+    .home-shelf-item { width: 18.8%; }
+  }
+</style>

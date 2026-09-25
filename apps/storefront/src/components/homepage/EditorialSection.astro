@@ -1,0 +1,91 @@
+---
+// Editorial blocks (Dawn): rich text, an image beside text, up to four
+// columns of text, and customer quotes. Plain text only (Astro escapes it);
+// blank lines split paragraphs. Parts without words render nothing.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import { richTextParagraphs } from "@/lib/homepage-sections";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import RichTextSection from "./RichTextSection.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"editorial">;
+  photo: HomepageMediaAsset | null;
+  aboveFold: boolean;
+}
+
+const { section, photo, aboveFold } = Astro.props;
+const settings = section.settings;
+const headingId = `home-section-${section.id}-title`;
+const heading = "heading" in settings ? settings.heading.trim() : "";
+const columns = settings.layout === "multicolumn"
+  ? settings.columns.filter((column) => column.title.trim() || column.text.trim())
+  : [];
+const quotes = settings.layout === "testimonial" ? settings.quotes : [];
+const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2 lg:grid-cols-4"][columns.length] ?? "";
+---
+
+{settings.layout === "rich-text" && <RichTextSection id={section.id} heading={settings.heading} body={settings.body} />}
+
+{settings.layout === "image-with-text" && (
+  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "Our story"}>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class:list={["grid items-center gap-6 md:gap-10", photo && "md:grid-cols-2"]}>
+        {photo && (
+          <div class:list={["overflow-hidden rounded-xl bg-muted", settings.imageSide === "end" && "md:order-last"]}>
+            <img
+              src={mediaImageUrl(photo.url, 960)}
+              srcset={mediaImageSrcSet(photo.url)}
+              sizes="(max-width: 767px) calc(100vw - 2rem), 50vw"
+              alt={photo.alt}
+              width={photo.width ?? 1200}
+              height={photo.height ?? 900}
+              loading={aboveFold ? "eager" : "lazy"}
+              decoding="async"
+              class="aspect-[4/3] h-auto w-full object-cover"
+            />
+          </div>
+        )}
+        <div class="max-w-2xl [overflow-wrap:anywhere]">
+          {heading && <h2 id={headingId} class="section-heading text-foreground">{heading}</h2>}
+          {richTextParagraphs(settings.body).map((paragraph) => (
+            <p class="mt-3 whitespace-pre-line text-base leading-relaxed text-foreground">{paragraph}</p>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+)}
+
+{settings.layout === "multicolumn" && columns.length > 0 && (
+  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "Highlights"}>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {heading && <h2 id={headingId} class="section-heading mb-4 text-foreground md:mb-6">{heading}</h2>}
+      <ul class={`grid gap-6 ${columnClass}`}>
+        {columns.map((column) => (
+          <li class="[overflow-wrap:anywhere]">
+            {column.title && <h3 class="text-base font-semibold text-foreground">{column.title}</h3>}
+            {column.text && <p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{column.text}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}
+
+{settings.layout === "testimonial" && quotes.length > 0 && (
+  <section class="home-section w-full" aria-label="What customers say">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <ul class:list={["grid gap-4 md:gap-6", quotes.length > 1 && "md:grid-cols-2", quotes.length > 2 && "lg:grid-cols-3"]}>
+        {quotes.map((quote) => (
+          <li>
+            <figure class="h-full rounded-xl border border-border bg-card p-5 md:p-6 [overflow-wrap:anywhere]">
+              <blockquote class="text-base leading-relaxed text-foreground md:text-lg">“{quote.quote}”</blockquote>
+              {quote.author && <figcaption class="mt-3 text-sm font-semibold text-muted-foreground">{quote.author}</figcaption>}
+            </figure>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}

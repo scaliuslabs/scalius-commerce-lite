@@ -9,6 +9,7 @@ import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
   CollectionWithProducts,
+  Product,
   HeaderData,
   FooterData,
   NavigationItem,
@@ -66,6 +67,36 @@ export interface HomepageData {
       enabled: boolean;
     };
   };
+  /** What the theme's homepage sections show (lib/homepage-sections.ts reads it by key). */
+  sections: HomepageSectionData;
+}
+
+/** A product list a section reads: one per source key (`storefrontProductSourceKey`). */
+export interface HomepageProductList {
+  key: string;
+  /** Card products (the homepage card projection, not full listing products). */
+  products: Array<Pick<
+    Product,
+    | "id" | "name" | "slug" | "price" | "discountType" | "discountPercentage" | "discountAmount"
+    | "discountedPrice" | "priceVaries" | "availableForSale" | "freeDelivery" | "categoryId"
+    | "hasVariants" | "imageUrl" | "imageAlt"
+  > & { imageMediaId: string | null; secondaryImageUrl: string | null }>;
+  category: { id: string; name: string; slug: string; canonicalPath: string | null } | null;
+  collection: { id: string; title: string } | null;
+}
+
+/** A section image (banner, lookbook or editorial photo, hero side banner). */
+export interface HomepageMediaAsset {
+  id: string;
+  url: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface HomepageSectionData {
+  lists: HomepageProductList[];
+  media: HomepageMediaAsset[];
 }
 
 // =============================================
@@ -192,6 +223,38 @@ export function getLayoutData(): Promise<LayoutData | null> {
     return layout;
   });
   return runtime.layout;
+}
+
+/**
+ * The homepage section data of a theme preview's draft: the API reads what
+ * the stored draft's sections name, behind the preview token (private, never
+ * cached). Only rendered under a live dashboard preview cookie; the
+ * published homepage comes from its one batch part.
+ */
+export async function getThemePreviewHomepageSections(
+  token: string,
+): Promise<HomepageSectionData | null> {
+  const normalizedToken = token.trim();
+  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
+  try {
+    const response = await apiFetch(
+      "/storefront/theme-preview/homepage",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: normalizedToken }),
+        cache: "no-store",
+      },
+      { retries: 0, timeout: 4_000, auth: false },
+    );
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    return unwrapEnvelope<HomepageSectionData>(await response.json() as unknown);
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveThemePreview(
