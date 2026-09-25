@@ -610,6 +610,13 @@
       "when": 1790300017000,
       "tag": "0086_notification_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1790300018000,
+      "tag": "0087_on_sale_indexes",
+      "breakpoints": true
     }
   ]
 }

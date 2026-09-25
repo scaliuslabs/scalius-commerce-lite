@@ -27,7 +27,9 @@ import {
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
-import { resolveCollectionProductsBatch } from "../collections/collections.service";
+import { planCollectionProducts } from "../collections/collections.service";
+import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
+import { planHomeMedia } from "./homepage-sections";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import {
   businessDocument,
@@ -49,7 +51,9 @@ import {
 } from "../settings/settings-store";
 import {
   DEFAULT_STOREFRONT_THEME,
+  homeSectionRequests,
   parseStoredStorefrontThemeDocument,
+  type HomeSectionRequests,
 } from "@scalius/shared/storefront-theme";
 import { parseStoredHeroSlides, type HeroSlide } from "@scalius/shared/hero-slider";
 import { mediaImageSrcSet } from "@scalius/shared/media-variants";
@@ -59,7 +63,7 @@ import {
   normalizeHeaderLogoWidth,
 } from "@scalius/shared/brand-presentation";
 import { getPublicPageBySlug } from "../pages/pages.service";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 import { publicCategoryConditions } from "../categories/categories.publication";
@@ -118,12 +122,10 @@ const HERO_RENDITION_LOOKUP_LIMIT = 90;
  * and paint the full-size original. Such slides are pointed at the image's
  * published (largest) rendition, from which the storefront derives its
  * srcset and a phone-sized preload (@scalius/shared/media-variants). The
- * lookup runs only when a slide still uses an original media URL.
+ * lookup is planned only when a slide still uses an original media URL, and
+ * joins the homepage's second batch.
  */
-export async function withPublishedHeroRenditions(
-  db: Database,
-  slides: HeroSlide[],
-): Promise<HeroSlide[]> {
+function planHeroRenditions(db: Database, slides: HeroSlide[]) {
   const keyByUrl = new Map<string, string>();
   for (const slide of slides) {
     if (keyByUrl.has(slide.url) || mediaImageSrcSet(slide.url)) continue;
@@ -131,9 +133,7 @@ export async function withPublishedHeroRenditions(
     if (key?.startsWith("media/")) keyByUrl.set(slide.url, key);
   }
   const keys = [...new Set(keyByUrl.values())].slice(0, HERO_RENDITION_LOOKUP_LIMIT);
-  if (keys.length === 0) return slides;
-
-  const rows = await db
+  const statement = keys.length === 0 ? null : db
     .select({ objectKey: media.objectKey, variantWidth: media.variantWidth })
     .from(media)
     .where(and(
@@ -141,29 +141,65 @@ export async function withPublishedHeroRenditions(
       isNotNull(media.variantWidth),
       inArray(media.status, ["ready", "trashed"]),
     ));
-  const widthByKey = new Map(rows.map((row) => [row.objectKey, row.variantWidth]));
-
-  return slides.map((slide) => {
-    const key = keyByUrl.get(slide.url);
-    const width = key ? widthByKey.get(key) : null;
-    if (!width) return slide;
-    try {
-      const url = new URL(slide.url);
-      url.pathname = `${url.pathname}/${width}.webp`;
-      return { ...slide, url: url.toString() };
-    } catch {
-      return slide;
-    }
-  });
+  return {
+    statement,
+    apply(rows: Array<{ objectKey: string; variantWidth: number | null }>): HeroSlide[] {
+      const widthByKey = new Map(rows.map((row) => [row.objectKey, row.variantWidth]));
+      return slides.map((slide) => {
+        const key = keyByUrl.get(slide.url);
+        const width = key ? widthByKey.get(key) : null;
+        if (!width) return slide;
+        try {
+          const url = new URL(slide.url);
+          url.pathname = `${url.pathname}/${width}.webp`;
+          return { ...slide, url: url.toString() };
+        } catch {
+          return slide;
+        }
+      });
+    },
+  };
 }
 
+export async function withPublishedHeroRenditions(
+  db: Database,
+  slides: HeroSlide[],
+): Promise<HeroSlide[]> {
+  const plan = planHeroRenditions(db, slides);
+  return plan.apply(plan.statement ? await plan.statement : []);
+}
+
+/** A homepage product list: its products and what it reads from (for titles and "View all"). */
+export interface HomepageProductList extends HomeProductList {
+  /** A collection list's collection (active collections only). */
+  collection: { id: string; title: string } | null;
+}
+
+type BatchItem = Parameters<typeof safeBatch>[1][number];
+
 /**
- * Fetch and shape all homepage data in two batched D1 round-trips.
- * Returns the final { seo, hero, collections, presentation } object for c.json().
+ * Fetch and shape all homepage data in two batched D1 round trips.
+ *
+ * 1. Settings documents, hero banners, active collections, the category
+ *    rail and, unless the caller names the section reads, the published
+ *    theme (whose sections say which product lists and images to read).
+ * 2. One batch with every product list (homepage collections, section
+ *    sources), each with the card media of exactly its rows, the section
+ *    images and the hero rendition lookup.
+ *
+ * `requests` (a preview's draft sections) replaces the published theme's;
+ * with `sectionsOnly` the second batch holds the section reads alone.
  */
-export async function getHomepageData(db: Database) {
+export async function getHomepageData(db: Database, options: {
+  requests?: HomeSectionRequests;
+  /**
+   * Only the section lists and images (a theme preview's draft): the
+   * published homepage collections and banner renditions are not read.
+   */
+  sectionsOnly?: boolean;
+} = {}) {
   // === BATCH 1: Independent top-level queries ===
-  const batchResults = await db.batch([
+  const batchResults = await safeBatch(db, [
     // 0. SEO + homepage presentation documents
     selectSettingsDocuments(db, [seoDocument, homepageDocument]),
 
@@ -175,7 +211,8 @@ export async function getHomepageData(db: Database) {
         and(eq(heroSliders.isActive, true), isNull(heroSliders.deletedAt)),
       ),
 
-    // 2. Active collections (metadata only)
+    // 2. Active collections (metadata only): the homepage ones and any a
+    // section reads from.
     db
       .select({
         id: collections.id,
@@ -218,6 +255,13 @@ export async function getHomepageData(db: Database) {
             AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
         )`,
       )),
+
+    // 4. The published theme: its sections name the lists and images to read.
+    db
+      .select({ value: themeSettings.colors })
+      .from(themeSettings)
+      .where(eq(themeSettings.id, "default"))
+      .limit(1),
   ]);
 
   const [
@@ -225,6 +269,7 @@ export async function getHomepageData(db: Database) {
     heroResults,
     collectionResults,
     categoryResults,
+    themeResults,
   ] =
     batchResults;
 
@@ -240,6 +285,11 @@ export async function getHomepageData(db: Database) {
     homepageMetaDescription: seo.value.homepageMetaDescription.trim() || null,
   };
   const homepageConfig = homepage.value;
+  // An unreadable theme renders the default whole (as the layout read does).
+  const requests = options.requests ?? homeSectionRequests(
+    (parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
+      ?? DEFAULT_STOREFRONT_THEME).pages.home,
+  );
 
   // Process Hero
   const desktopSlider = (heroResults as { type: string }[]).find(
@@ -258,18 +308,13 @@ export async function getHomepageData(db: Database) {
   };
   const desktopHero = formatSlider(desktopSlider);
   const mobileHero = formatSlider(mobileSlider);
-  const heroSlides = await withPublishedHeroRenditions(db, [
+  const heroRenditions = planHeroRenditions(db, options.sectionsOnly ? [] : [
     ...(desktopHero?.images ?? []),
     ...(mobileHero?.images ?? []),
   ]);
-  const desktopSlideCount = desktopHero?.images.length ?? 0;
-  const hero = {
-    desktop: desktopHero && { ...desktopHero, images: heroSlides.slice(0, desktopSlideCount) },
-    mobile: mobileHero && { ...mobileHero, images: heroSlides.slice(desktopSlideCount) },
-  };
 
-  // === BATCH 2: Products for collections ===
-  const parsedCollections = (
+  // === BATCH 2: every product list, its card media, section images ===
+  const activeCollections = (
     collectionResults as Record<string, unknown>[]
   ).map((col) => ({
     id: col.id as string,
@@ -278,18 +323,46 @@ export async function getHomepageData(db: Database) {
     sortOrder: col.sortOrder as number,
     isActive: col.isActive as boolean,
     parsedConfig: normalizeCollectionConfig(col.config),
-  })).filter((collection) => collection.parsedConfig.showOnHomepage);
-
-  const resolvedMap = await resolveCollectionProductsBatch(
-    db,
-    parsedCollections.map((col) => ({ id: col.id, config: col.parsedConfig as Parameters<typeof resolveCollectionProductsBatch>[1][number]["config"] })),
-  );
+  }));
+  const parsedCollections = options.sectionsOnly
+    ? []
+    : activeCollections.filter((collection) => collection.parsedConfig.showOnHomepage);
+  const collectionById = new Map(activeCollections.map((collection) => [collection.id, collection]));
+  const collectionLists = requests.lists.flatMap((list) => {
+    const collection = list.source.kind === "collection" ? collectionById.get(list.source.collectionId) : undefined;
+    return collection ? [{ list, collection }] : [];
+  });
+  const collectionPlan = planCollectionProducts(db, [
+    ...parsedCollections.map((col) => ({ key: `homepage:${col.id}`, config: col.parsedConfig })),
+    ...collectionLists.map(({ list, collection }) => ({ key: list.key, config: collection.parsedConfig, maxProducts: list.limit })),
+  ]);
+  const listPlan = planHomeProductLists(db, requests.lists.filter((list) => list.source.kind !== "collection"));
+  const mediaPlan = planHomeMedia(db, requests.mediaIds);
+  const statements: BatchItem[] = [
+    ...collectionPlan.statements,
+    ...listPlan.statements,
+    ...mediaPlan.statements,
+    ...(heroRenditions.statement ? [heroRenditions.statement] : []),
+  ];
+  const results = statements.length > 0 ? await safeBatch(db, statements) : [];
+  const listOffset = collectionPlan.statements.length;
+  const mediaOffset = listOffset + listPlan.statements.length;
+  const resolvedMap = collectionPlan.resolve(results);
+  const productLists = listPlan.resolve(results, listOffset);
+  const heroSlides = heroRenditions.apply(heroRenditions.statement
+    ? results[mediaOffset + mediaPlan.statements.length] as Array<{ objectKey: string; variantWidth: number | null }>
+    : []);
+  const desktopSlideCount = desktopHero?.images.length ?? 0;
+  const hero = {
+    desktop: desktopHero && { ...desktopHero, images: heroSlides.slice(0, desktopSlideCount) },
+    mobile: mobileHero && { ...mobileHero, images: heroSlides.slice(desktopSlideCount) },
+  };
 
   // Build final collections array
   const formattedCollections = parsedCollections
     .map((col) => {
       const cfg = col.parsedConfig;
-      const resolved = resolvedMap.get(col.id);
+      const resolved = resolvedMap.get(`homepage:${col.id}`);
       if (!resolved || resolved.products.length === 0) return null;
 
       return {
@@ -305,6 +378,24 @@ export async function getHomepageData(db: Database) {
       };
     })
     .filter(Boolean);
+
+  // Section lists in request order; a collection that is gone or inactive reads empty.
+  const lists: HomepageProductList[] = requests.lists.map((list) => {
+    if (list.source.kind === "collection") {
+      const collection = collectionById.get(list.source.collectionId);
+      const resolved = collection ? resolvedMap.get(list.key) : undefined;
+      return {
+        key: list.key,
+        products: resolved?.products ?? [],
+        category: null,
+        collection: collection
+          ? { id: collection.id, title: publicCollectionConfig(collection.parsedConfig).title || collection.name }
+          : null,
+      };
+    }
+    const resolved = productLists.find((each) => each.key === list.key);
+    return { key: list.key, products: resolved?.products ?? [], category: resolved?.category ?? null, collection: null };
+  });
 
   const categoryById = new Map(
     (categoryResults as Array<{
@@ -336,6 +427,10 @@ export async function getHomepageData(db: Database) {
       trustStrip: {
         enabled: homepageConfig.trustStrip.enabled,
       },
+    },
+    sections: {
+      lists,
+      media: mediaPlan.resolve(results, mediaOffset),
     },
   };
 }

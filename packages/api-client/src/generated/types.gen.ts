@@ -351,6 +351,11 @@ export type StorefrontThemeDocument = {
             version: 1;
             settings: {
                 layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
             };
         } | {
             id: string;
@@ -3149,6 +3154,17 @@ export type GetApiV1StorefrontHomepageData = {
 
 export type GetApiV1StorefrontHomepageErrors = {
     /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: {
@@ -3275,6 +3291,47 @@ export type GetApiV1StorefrontHomepageResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+            };
+            sections: {
+                lists: Array<{
+                    key: string;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                    }>;
+                    category: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        canonicalPath: string | null;
+                    } | null;
+                    collection: {
+                        id: string;
+                        title: string;
+                    } | null;
+                }>;
+                media: Array<{
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                }>;
             };
         };
     };
@@ -3707,6 +3764,94 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
 };
 
 export type PostApiV1StorefrontThemePreviewResolveResponse = PostApiV1StorefrontThemePreviewResolveResponses[keyof PostApiV1StorefrontThemePreviewResolveResponses];
+
+export type PostApiV1StorefrontThemePreviewHomepageData = {
+    body?: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/theme-preview/homepage';
+};
+
+export type PostApiV1StorefrontThemePreviewHomepageErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewHomepageError = PostApiV1StorefrontThemePreviewHomepageErrors[keyof PostApiV1StorefrontThemePreviewHomepageErrors];
+
+export type PostApiV1StorefrontThemePreviewHomepageResponses = {
+    /**
+     * The draft's homepage section data
+     */
+    200: {
+        success: true;
+        data: {
+            lists: Array<{
+                key: string;
+                products: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    price: number;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    discountedPrice: number;
+                    priceVaries: boolean;
+                    availableForSale: boolean;
+                    freeDelivery: boolean;
+                    categoryId: string | null;
+                    hasVariants: boolean;
+                    imageUrl: string | null;
+                    imageMediaId: string | null;
+                    imageAlt: string | null;
+                    secondaryImageUrl: string | null;
+                }>;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                } | null;
+                collection: {
+                    id: string;
+                    title: string;
+                } | null;
+            }>;
+            media: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewHomepageResponse = PostApiV1StorefrontThemePreviewHomepageResponses[keyof PostApiV1StorefrontThemePreviewHomepageResponses];
 
 export type GetApiV1PlatformData = {
     body?: never;

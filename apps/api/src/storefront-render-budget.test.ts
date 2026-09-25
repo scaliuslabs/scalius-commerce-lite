@@ -1,6 +1,14 @@
+// Extends zod with .openapi() before the shared theme schemas load (the routes need it).
+import "@hono/zod-openapi";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
+import {
+  STOREFRONT_SECTION_TYPES,
+  storefrontSectionDefault,
+  storefrontTemplateTheme,
+  type StorefrontSection,
+} from "@scalius/shared/storefront-theme";
 
 /**
  * D1 budget of each storefront page render. A page is one storefront batch
@@ -41,6 +49,57 @@ const SEED = `
   INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width) VALUES
     ('media_linen', 'linen.jpg', 'image', 'media/linen.jpg', 1, 'image/jpeg', 'ready', 1600, 1600, 1600);
   INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES ('pmed_linen', 'p_linen', 'media_linen', 1, 0);
+`;
+
+/**
+ * The home page is measured on a store that uses **every section type**:
+ * banners with original uploads (the rendition lookup), a homepage grid and
+ * carousel collection (manual and dynamic), the category rail, and a theme
+ * whose sections read every product source (newest, on sale, popular, a
+ * category, a collection) and every kind of section image.
+ */
+function everySectionTheme() {
+  const theme = storefrontTemplateTheme("department-mall");
+  const sections: StorefrontSection[] = STOREFRONT_SECTION_TYPES.map((type, index) => storefrontSectionDefault(type, `s${index}`));
+  const set = (type: string, settings: Record<string, unknown>, id = type) => {
+    const section = { id, type, version: 1, settings } as StorefrontSection;
+    const at = sections.findIndex((each) => each.type === type && each.id.startsWith("s"));
+    if (at >= 0 && id === type) sections[at] = section;
+    else sections.push(section);
+  };
+  set("hero", { layout: "contained-banners", sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }] });
+  set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
+  set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
+  set("deal-block", { title: "", source: { kind: "on-sale" }, endsAt: null });
+  set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" } });
+  set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
+  set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
+  set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
+  theme.pages.home = sections;
+  return theme;
+}
+
+const slide = (id: string, key: string) => ({ id, url: `https://media.test/${key}`, title: id, heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
+const HOME_SEED = `
+  INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width) VALUES
+    ('media_hero', 'hero.jpg', 'image', 'media/hero.jpg', 1, 'image/jpeg', 'ready', 1600, 600, 1600),
+    ('media_side', 'side.jpg', 'image', 'media/side.jpg', 1, 'image/jpeg', 'ready', 600, 480, 600),
+    ('media_look', 'look.jpg', 'image', 'media/look.jpg', 1, 'image/jpeg', 'ready', 800, 800, 800),
+    ('media_banner', 'banner.jpg', 'image', 'media/banner.jpg', 1, 'image/jpeg', 'ready', 1600, 500, 1600),
+    ('media_story', 'story.jpg', 'image', 'media/story.jpg', 1, 'image/jpeg', 'ready', 1200, 900, 1200);
+  INSERT INTO hero_sliders (id, type, images) VALUES
+    ('hero_desktop', 'desktop', '${JSON.stringify([slide("d1", "media/hero.jpg"), slide("d2", "media/side.jpg")])}'),
+    ('hero_mobile', 'mobile', '${JSON.stringify([slide("m1", "media/hero.jpg")])}');
+  UPDATE products SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'p_cotton';
+  INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
+    ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"showOnHomepage":true,"featuredProductId":"p_linen","maxProducts":8}', 0),
+    ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"showOnHomepage":true,"maxProducts":12}', 1);
+  INSERT INTO settings (id, key, value, category, type) VALUES
+    ('set_homepage', 'document', '{"categoryRail":{"enabled":true,"title":"Shop by category","categoryIds":["cat_panjabi"]},"trustStrip":{"enabled":true}}', 'homepage', 'json');
+  INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at) VALUES
+    ('o_1', 'A', '01700000001', 'Road', 'city', 'zone', 'delivered', unixepoch(), unixepoch()),
+    ('o_2', 'B', '01700000002', 'Road', 'city', 'zone', 'pending', unixepoch(), unixepoch());
+  INSERT INTO order_items (id, order_id, product_id, quantity) VALUES ('oi_1', 'o_1', 'p_linen', 1), ('oi_2', 'o_2', 'p_linen', 1);
 `;
 
 interface Meter {
@@ -97,6 +156,11 @@ function meteredBinding(inner: D1Database): Meter {
 async function renderPage(page: keyof typeof PAGE_PARTS) {
   const { sqlite, binding } = createSqliteD1Database();
   sqlite.exec(SEED);
+  if (page === "home") {
+    sqlite.exec(HOME_SEED);
+    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
+      .run(JSON.stringify(everySectionTheme()));
+  }
   const meter = meteredBinding(binding);
   const env = {
     DB: meter.binding,
@@ -107,10 +171,35 @@ async function renderPage(page: keyof typeof PAGE_PARTS) {
   const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
   const responses = await Promise.all(PAGE_PARTS[page].map((path) =>
     fetchRuntimeApiApp(new Request(`https://api.internal${path}`), env, ctx)));
-  return { statuses: responses.map((response) => response.status), roundTrips: meter.roundTrips, waves: meter.waves };
+  const bodies = await Promise.all(responses.map((response) => response.clone().json().catch(() => null)));
+  return {
+    statuses: responses.map((response) => response.status),
+    bodies,
+    roundTrips: meter.roundTrips,
+    waves: meter.waves,
+  };
 }
 
 describe("storefront page render D1 budget", () => {
+  it("measures the home page on a store whose sections all have data", async () => {
+    const theme = everySectionTheme();
+    expect(new Set(theme.pages.home.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
+    const { bodies } = await renderPage("home");
+    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
+    const filled = Object.fromEntries(homepage.sections.lists.map((list) => [list.key, list.products.length]));
+    expect(filled).toMatchObject({
+      newest: 2,
+      "on-sale": 1,
+      popular: 1,
+      "category:cat_panjabi": 2,
+      "collection:col_grid": 2,
+    });
+    expect(homepage.sections.media).toHaveLength(4);
+    expect(homepage.collections).toHaveLength(2);
+    // The banner's original upload was pointed at its rendition in the same batch.
+    expect(homepage.hero.desktop.images[0]!.url).toBe("https://media.test/media/hero.jpg/1600.webp");
+  });
+
   // Load every route module first: a first dynamic import would otherwise
   // show up as extra waves that production (one bundle) never has.
   beforeAll(async () => {

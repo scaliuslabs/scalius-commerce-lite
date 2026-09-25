@@ -186,6 +186,11 @@ interface Env {
   // The built dashboard SPA (apps/admin-v2/dist). Absent under `pnpm dev`,
   // where Vite serves the dashboard (src/dashboard/surface.ts).
   ASSETS?: { fetch(request: Request): Promise<Response> };
+  // This Worker version (`version_metadata`). Part of every public cache key
+  // so a cached read never outlives the code that rendered it
+  // (`readWorkerVersion` in @scalius/shared/cache-generation). Without it
+  // nothing is cached.
+  CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
 
   // Installed secrets (`wrangler secret put`). Exactly two per deployment.
   SCALIUS_SECRET?: string;

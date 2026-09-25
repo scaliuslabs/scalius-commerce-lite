@@ -131,9 +131,12 @@ catalog intent prefetch globally for truly anonymous pages.
   database and mirrored to the `CACHE` KV namespace (shared with the API
   Worker, read with a 30 s edge cache). Every buyer-visible write replaces it.
 - `servePublicStorefrontRequest()` (`src/lib/public-worker-cache.ts`) keys
-  `caches.default` by host, build ID, generation, and canonical path/query.
-  A write or a deploy therefore makes old entries unreachable; nothing is
-  purged, and old entries age out (edge lifetime 1 day).
+  `caches.default` by host, build ID, Worker version (`CF_VERSION_METADATA`),
+  generation, and canonical path/query. A write or a deploy therefore makes
+  old entries unreachable; nothing is purged, and old entries age out (edge
+  lifetime 1 day). The Worker version changes on every deploy and every dev
+  server start, including changes BUILD_ID's source hash cannot see; without
+  the binding pages render uncached.
 - A miss renders the canonical request pinned to the generation and stores the
   response only when the middleware marked it `X-Cache-Status: MISS` (a
   successful anonymous public response without `Set-Cookie`). Hits return

@@ -13,6 +13,9 @@ import {
 
 vi.mock("../products/media", () => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
+    // The card media of each product statement, planned into the same batch.
+    selectProductMediaProjectionRows: vi.fn(() => ({ selection: { media: true }, orderBy: { mock: { calls: [] } } })),
+    resolveProductMediaProjectionRows: vi.fn(() => new Map()),
     resolveProductImageRepresentation: vi.fn(() => null),
     resolveProductCardImages: vi.fn(() => ({
         imageUrl: null,
