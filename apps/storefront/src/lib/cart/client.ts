@@ -1259,9 +1259,8 @@ async function handleApplyDiscount() {
     }
     codeInput.value = "";
     addDiscountCode(code);
-    if (rejection?.bundleSavesMore) {
-      showDiscountMessage(describeRejectedCode(rejection, copy), "success");
-    } else if (rejection) {
+    if (rejection) {
+      // A kept code that adds nothing now says why under the code itself.
       showDiscountMessage("", "success");
       if (rejection.requiresCustomerPhone) {
         document.getElementById("customerPhone-input")?.focus();
