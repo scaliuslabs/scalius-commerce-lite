@@ -234,6 +234,8 @@ export interface ProductListOptions {
   maxPrice?: number;
   freeDelivery?: boolean;
   hasDiscount?: boolean;
+  /** Only products a buyer can buy now ("Exclude out of stock"). */
+  inStock?: boolean;
   ids?: string[] | string;
   [key: string]: string | number | boolean | string[] | undefined;
 }
@@ -288,7 +290,7 @@ export function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | unde
   return { min, max };
 }
 
-const FACET_KINDS = new Set<ProductFacetKind>(["attribute", "option", "brand"]);
+const FACET_KINDS = new Set<ProductFacetKind>(["attribute", "option", "brand", "category"]);
 const FACET_DISPLAYS = new Set<ProductFacetDisplay>(["checkbox", "range", "swatch", "search_list"]);
 /** A swatch paints a `style` attribute, so only a plain hex colour is kept. */
 const FACET_SWATCH = /^#[0-9a-f]{6}$/i;

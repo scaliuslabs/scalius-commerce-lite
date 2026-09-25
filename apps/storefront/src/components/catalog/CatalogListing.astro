@@ -1,13 +1,15 @@
 ---
-// The shared product listing body for /search, categories and collections,
-// laid out by the theme's listing template (lib/catalog-listing.ts). The
-// layout arranges the results (grid, list rows, shelves on the plain first
-// page, Chaldal's quick-add grid); the filter style places the facets (a
-// sticky column from 1024px with a bottom sheet on phones for the sidebar
-// styles, a filter bar with the facets in a drawer otherwise).
-// Toolbar pieces (count, sort, per-page, grid/list, chips) render when the
-// theme lists them and their data exists. Filters are a GET form, so they
-// work without JavaScript.
+// The shared product listing body for /search, categories, collections and
+// brands, laid out by the theme's listing template (lib/catalog-listing.ts)
+// or the listing's own `listing_template`.
+//
+// Top to bottom: the compact title band (breadcrumb, h1, result count and
+// the view controls on one line), the phone bar (Filters, Sort), the
+// sub-category pills, then the facets where the filter style places them
+// (an open column beside the results, a dropdown bar above them, or a
+// drawer) and the results (grid, list rows, shelves on the plain first
+// page, Chaldal's quick-add grid). Filters are a GET form, so they work
+// without JavaScript.
 import "./catalog-listing.css";
 import type { BuyerPriceRange, Product, ProductFacet } from "@/lib/api";
 import AppliedCatalogFilters from "./AppliedCatalogFilters.astro";
@@ -21,11 +23,17 @@ import CatalogViewSelect from "./CatalogViewSelect.astro";
 import CatalogViewToggle from "./CatalogViewToggle.astro";
 import {
   DEFAULT_PRODUCT_LIST_PAGE_SIZE,
+  PRODUCT_LIST_SHOW_ALL_PARAM,
   buildProductListHref,
   countActiveProductListFilters,
   type ProductListQueryState,
 } from "@/lib/product-list-query";
-import { showsCatalogPriceFilter, visibleCatalogFacets } from "@/lib/catalog-filters";
+import {
+  catalogFacetGroups,
+  catalogFacetValueCounts,
+  showsCatalogPriceFilter,
+  visibleCatalogFacets,
+} from "@/lib/catalog-filters";
 import {
   catalogAspectChips,
   catalogCardContext,
@@ -36,8 +44,17 @@ import {
   catalogShelves,
   type CatalogListingLink,
 } from "@/lib/catalog-listing";
+import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { SlidersHorizontal, X } from "lucide-react";
+
+export interface CatalogBand {
+  title: string;
+  /** Home, then the published ancestors (the current page is the h1). */
+  breadcrumb?: Array<{ label: string; href: string }> | null;
+  /** "3,780 products", or a search's own count line. */
+  countLabel?: string | null;
+}
 
 interface Props {
   products: Product[];
@@ -50,7 +67,7 @@ interface Props {
   searchLabel: string;
   /** Label of the default "newest" order ("Latest", or "Featured" for curated collections). */
   newestLabel?: string;
-  /** Product-list API path used for the live "Show N products" count. */
+  /** Product-list API path used for the live "Show N products" count and "See more". */
   countEndpoint: string;
   currencySymbol: string;
   currencyCode: string;
@@ -58,6 +75,11 @@ interface Props {
   listingName?: string;
   /** Sub-listings: sub-category pills, and the shelves of the shelves layout. */
   subListings?: CatalogListingLink[];
+  /** Links always shown as pills (a collection's categories). */
+  pills?: CatalogListingLink[];
+  /** The listing's own `listing_template` (category, collection or brand). */
+  listingTemplate?: string | null;
+  band: CatalogBand;
 }
 
 const {
@@ -75,29 +97,34 @@ const {
   currencyCode,
   listingName = "this listing",
   subListings = [],
+  pills = [],
+  listingTemplate = null,
+  band,
 } = Astro.props;
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
-const presentation = catalogListingPresentation(resolved.blocks.listing);
+const presentation = catalogListingPresentation(resolved, listingTemplate);
 const piece = (name: Parameters<typeof presentation.toolbar.has>[0]) => presentation.toolbar.has(name);
-const drawer = presentation.filters === "drawer";
+const placement = presentation.filters.placement;
+const drawer = placement === "drawer";
 
 // Filters beyond the search itself (a search is undone by its chip).
 const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
 const shownFacets = visibleCatalogFacets(facets, currentFilters);
+const filterFacets = shownFacets.filter((facet) => facet.kind !== "category");
 const showsPrice = showsCatalogPriceFilter(priceRange, currentFilters);
-// Sorting one product helps nobody, and filtering needs a few products that
-// differ; either stays while the buyer needs it to undo a refinement.
+// The small-catalogue rule: sort needs two results, filters eight and a
+// facet (or the price) with two values; either stays while the buyer needs
+// it to undo a refinement.
 const controls = catalogListingControls({
   total: pagination.total,
   refinementCount,
-  facetCount: shownFacets.length,
-  showsPrice,
+  facetValueCounts: catalogFacetValueCounts(shownFacets, showsPrice ? priceRange : undefined),
+  storeShown: resolved.blocks.listing.filters.shown,
 });
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
-const showBar = showSort || showFilters;
-const productCountLabel = `${pagination.total} ${pagination.total === 1 ? "product" : "products"}`;
+const showPhoneBar = showSort || showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
   { value: "newest", label: newestLabel },
@@ -112,19 +139,34 @@ const viewSelect = { pathname, defaultSort, currentFilters };
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);
 const showViewToggle = piece("grid-list-toggle") && presentation.results !== "quick" && products.length > 1;
 const pageUrl = (page: number) =>
-  buildProductListHref({ pathname, currentFilters, overrides: { page }, defaultSort });
+  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
 
+// Sub-category pills (Star Tech): the children that still hold products
+// (the category facet names them), else every child; a collection's own
+// category links always show.
+const categoryFacet = shownFacets.find((facet) => facet.kind === "category");
+const liveChildren = categoryFacet ? new Set(categoryFacet.values.filter(({ count }) => count > 0).map(({ value }) => value)) : null;
+const childPills = piece("subcategory-pills") && subListings.length > 1
+  ? subListings.filter((link) => !liveChildren || liveChildren.has(decodeURIComponent(link.href.split("/").at(-1) ?? "")))
+  : [];
+const pillLinks = pills.length > 0 ? pills : childPills.length > 1 ? childPills : [];
+
+const groups = catalogFacetGroups(shownFacets, {
+  valuesInHtml: STOREFRONT_FILTER_VALUES_IN_HTML,
+  showAll: typeof currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] === "string" ? currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] as string : null,
+});
 const aspectChips = piece("aspect-chips") && showFilters
-  ? catalogAspectChips(shownFacets, {
+  ? catalogAspectChips(filterFacets, {
       shown: showsPrice,
       applied: Boolean(currentFilters.minPrice || currentFilters.maxPrice),
     })
   : [];
 const popularFilters = piece("popular-filter-chips") && products.length > 0
-  ? catalogPopularFilters({ facets: shownFacets, currentFilters, pathname, defaultSort, total: pagination.total })
+  ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, defaultSort, total: pagination.total })
   : [];
+// Aspect chips share the phone bar's line when there is one.
+const phoneChips = aspectChips.length > 0 && showFilters;
 const quickFilters = drawer && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
-const subcategoryPills = piece("subcategory-pills") && subListings.length > 1 ? subListings : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
 // sorted or later page (those list products in the grid).
@@ -133,20 +175,77 @@ const shelves = presentation.shelves && landing
   ? catalogShelves({
       groups: subListings,
       items: products,
-      maxShelves: Number(resolved.blocks.listing.layout.settings.maxShelves ?? 8),
+      maxShelves: presentation.maxShelves,
       restTitle: `More from ${listingName}`,
     })
   : [];
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
-const resultsLabel = `Showing <span class="font-bold text-primary">${products.length}</span> of <span class="font-bold text-primary">${pagination.total}</span> ${pagination.total === 1 ? "product" : "products"}`;
+const countLabel = piece("result-count") ? band.countLabel : null;
+const breadcrumbVisible = piece("breadcrumb");
 ---
 
-{showBar && (
+<div
+  class="catalog-band"
+  data-catalog-band
+  data-placement={placement}
+>
+  <div class="catalog-band-heading">
+    {band.breadcrumb && band.breadcrumb.length > 0 && (
+      // The breadcrumb stays in the page for assistive technology (it matches
+      // the BreadcrumbList JSON-LD) when the template hides it visually.
+      <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs", !breadcrumbVisible && "sr-only"]}>
+        <ol>
+          {band.breadcrumb.map((crumb) => (
+            <Fragment>
+              <li><a href={crumb.href}>{crumb.label}</a></li>
+              <li aria-hidden="true">›</li>
+            </Fragment>
+          ))}
+          <li class="sr-only" aria-current="page">{band.title}</li>
+        </ol>
+      </nav>
+    )}
+    <h1 class="catalog-band-title">{band.title}</h1>
+    {countLabel && <p class="catalog-band-count" aria-live="polite">{countLabel}</p>}
+  </div>
+  <div class="catalog-band-tools">
+    {drawer && showFilters && (
+      <Fragment>
+        <button
+          type="button"
+          data-catalog-filter-toggle
+          aria-controls="filter-section"
+          aria-expanded="false"
+          class="relative inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span>Filter</span>
+          {refinementCount > 0 && (
+            <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+              {refinementCount}<span class="sr-only"> applied</span>
+            </span>
+          )}
+        </button>
+        <CatalogChipLinks label="Quick filters" links={quickFilters} class="min-w-0" />
+      </Fragment>
+    )}
+    {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
+    {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
+    {showViewToggle && <CatalogViewToggle defaultView={presentation.results === "list" ? "list" : "grid"} />}
+  </div>
+</div>
+
+{showPhoneBar && (
   <div
     class:list={[
-      "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden",
-      showFilters && showSort ? "grid-cols-2" : "grid-cols-1",
+      "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
+      // eBay's phone row: Filters, sort and one chip per facet on one
+      // scrolling line, so the results start one row higher.
+      phoneChips
+        ? "catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1"
+        : ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
+    data-catalog-phone-bar
   >
     {showFilters && (
       <button
@@ -154,7 +253,10 @@ const resultsLabel = `Showing <span class="font-bold text-primary">${products.le
         id="mobile-filter-toggle"
         aria-controls="filter-section"
         aria-expanded="false"
-        class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground shadow-sm"
+        class:list={[
+          "relative flex min-h-11 shrink-0 items-center justify-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm",
+          phoneChips ? "rounded-full" : "rounded-lg",
+        ]}
       >
         <SlidersHorizontal className="h-4 w-4" />
         <span>Filters</span>
@@ -168,53 +270,25 @@ const resultsLabel = `Showing <span class="font-bold text-primary">${products.le
     {showSort && (
       <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />
     )}
+    {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
   </div>
 )}
 
-{drawer && showBar && (
-  <div class="sticky top-[calc(var(--header-height,4rem)+0.5rem)] z-30 mb-4 hidden min-h-14 items-center gap-3 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur lg:flex" data-catalog-filter-bar>
-    {showFilters && (
-      <button
-        type="button"
-        data-catalog-filter-toggle
-        aria-controls="filter-section"
-        aria-expanded="false"
-        class="relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-      >
-        <SlidersHorizontal className="h-4 w-4" />
-        <span>Filter</span>
-        {refinementCount > 0 && (
-          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-            {refinementCount}<span class="sr-only"> applied</span>
-          </span>
-        )}
-      </button>
-    )}
-    <CatalogChipLinks label="Quick filters" links={quickFilters} class="min-w-0" />
-    <div class="ml-auto flex shrink-0 items-center gap-4">
-      {piece("result-count") && (
-        <p class="whitespace-nowrap text-sm font-medium text-foreground" set:html={resultsLabel} />
-      )}
-      {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
-      {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
-      {showViewToggle && <CatalogViewToggle defaultView={presentation.results === "list" ? "list" : "grid"} />}
-    </div>
-  </div>
-)}
+<CatalogChipLinks label={pills.length > 0 ? "Categories" : "Sub-categories"} links={pillLinks} class="mb-3 pb-1" />
+{!phoneChips && <CatalogAspectChips chips={aspectChips} />}
+<CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
-<CatalogChipLinks label="Sub-categories" links={subcategoryPills} class="mb-4 pb-1" />
-<CatalogAspectChips chips={aspectChips} />
-<CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-4 pb-1" />
-
-<div class="flex flex-col gap-6 lg:flex-row">
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement}>
   {showFilters && (
     <aside
       id="filter-section"
       aria-labelledby="mobile-filter-title"
       data-catalog-dialog={drawer ? "drawer" : undefined}
+      data-placement={placement}
+      style={presentation.filters.styleVars || undefined}
       class:list={[
         "fixed inset-0 z-60 hidden bg-black/50",
-        !drawer && "lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent",
+        !drawer && "lg:static lg:z-auto lg:block lg:shrink-0 lg:bg-transparent",
       ]}
     >
       <div
@@ -222,7 +296,7 @@ const resultsLabel = `Showing <span class="font-bold text-primary">${products.le
           "filter-sheet flex max-h-[88dvh] w-full flex-col rounded-t-2xl bg-background text-foreground",
           drawer
             ? "lg:h-full lg:max-h-none lg:w-[22.5rem] lg:max-w-[calc(100vw-3rem)] lg:rounded-none lg:shadow-xl"
-            : "lg:h-full lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm",
+            : "lg:max-h-none lg:rounded-none lg:bg-transparent",
         ]}
       >
         <div class:list={["flex items-center justify-between border-b border-border bg-background p-4", !drawer && "lg:hidden"]}>
@@ -237,45 +311,29 @@ const resultsLabel = `Showing <span class="font-bold text-primary">${products.le
           </button>
         </div>
         <CatalogFilters
-          facets={facets}
+          groups={groups}
           priceRange={priceRange}
           currentFilters={currentFilters}
           query={query}
           sortBy={sortBy}
           defaultSort={defaultSort}
           total={pagination.total}
+          pathname={pathname}
           resetPath={resetPath}
           searchLabel={searchLabel}
           countEndpoint={countEndpoint}
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
           presentation={presentation.filters}
-          facetAnchors={aspectChips.length > 0}
+          withoutCategories={pillLinks.length > 0 && pills.length === 0}
         />
       </div>
     </aside>
   )}
 
   <div class="min-w-0 flex-1">
-    {!drawer && showSort && (
-      <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 shadow-sm lg:flex">
-        {piece("result-count") && <p class="text-sm font-medium text-foreground" set:html={resultsLabel} />}
-        <div class:list={["flex items-center gap-3", !piece("result-count") && "ml-auto"]}>
-          {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
-          <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" bare options={sortOptions} selected={sortBy} {...viewSelect} />
-          {showViewToggle && <CatalogViewToggle defaultView={presentation.results === "list" ? "list" : "grid"} />}
-        </div>
-      </div>
-    )}
-
-    {products.length > 0 && !query && piece("result-count") && (
-      <p class="mb-3 text-sm text-muted-foreground lg:hidden">
-        <span class="font-semibold text-foreground">{productCountLabel}</span>
-      </p>
-    )}
-
     <AppliedCatalogFilters
-      facets={facets}
+      facets={filterFacets}
       currentFilters={currentFilters}
       pathname={pathname}
       resetPath={resetPath}
@@ -330,7 +388,8 @@ const resultsLabel = `Showing <span class="font-bold text-primary">${products.le
       #filter-section.hidden { display: block; position: static; background: transparent; margin-bottom: 1rem; }
       #filter-section .filter-sheet { max-height: none; }
       #filterForm > div:last-child { position: static; }
-      #mobile-filter-toggle, [data-catalog-filter-toggle], #mobile-filter-close { display: none; }
+      #mobile-filter-toggle, [data-catalog-filter-toggle], #mobile-filter-close, [data-catalog-bar-more] { display: none !important; }
+      .catalog-filter-form[data-placement="bar"] [data-bar-overflow] { display: block !important; }
     </style>
   </noscript>
 )}

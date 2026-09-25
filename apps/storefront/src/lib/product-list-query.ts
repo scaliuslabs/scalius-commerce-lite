@@ -5,7 +5,16 @@ import {
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
 
-const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit"] as const;
+const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit", "showAll"] as const;
+
+/**
+ * `showAll=<facet slug>`: the filter form lists every value of that facet
+ * (the "See more" link without JavaScript; with it the values are fetched in
+ * place). A view of the listing, never a filter, so it is `noindex,follow`
+ * and the canonical stays the plain listing. camelCase, so no attribute slug
+ * (lowercase) can collide with it.
+ */
+export const PRODUCT_LIST_SHOW_ALL_PARAM = "showAll";
 
 /**
  * Products per page. The default stays out of URLs; any other size is a
@@ -16,7 +25,7 @@ export const PRODUCT_LIST_PAGE_SIZES = [20, 40, 60] as const;
 export type ProductListPageSize = (typeof PRODUCT_LIST_PAGE_SIZES)[number];
 export const DEFAULT_PRODUCT_LIST_PAGE_SIZE: ProductListPageSize = 20;
 /** Keys of the listing URL that choose a view (page, sort, page size), not a filter. */
-const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit"]);
+const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit", PRODUCT_LIST_SHOW_ALL_PARAM]);
 
 const PRODUCT_LIST_SORT_VALUES = [
   "relevance",
@@ -28,7 +37,7 @@ const PRODUCT_LIST_SORT_VALUES = [
   "discount",
 ] as const satisfies NonNullable<ProductListOptions["sort"]>[];
 
-const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount"] as const;
+const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount", "inStock"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;
 
 const NAVIGATION_PARAM_SET = new Set<string>(PRODUCT_LIST_NAVIGATION_PARAMS);
@@ -248,7 +257,8 @@ function buildAttributeValueMap(
 ): Map<string, Set<string>> {
   return new Map(
     facets
-      .filter((facet) => facet.display !== "range")
+      // Category-tree values are links to sub-listings, never a filter.
+      .filter((facet) => facet.display !== "range" && facet.kind !== "category")
       .map((facet) => [
         facet.slug,
         new Set(facet.values.map(({ value }) => value).filter(Boolean)),
@@ -321,6 +331,12 @@ export function resolveProductListQueryState({
   }
   if (limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE) {
     currentFilters.limit = String(limit);
+  }
+  const showAll = getLastParam(params, PRODUCT_LIST_SHOW_ALL_PARAM)?.trim() ?? "";
+  if (showAll && (FACET_KEY_PATTERN.test(showAll) || showAll === "category")) {
+    currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] = showAll;
+  } else if (params.has(PRODUCT_LIST_SHOW_ALL_PARAM)) {
+    shouldRedirect = true;
   }
 
   const minPriceParam = latinDigits(getLastParam(params, "minPrice"));
