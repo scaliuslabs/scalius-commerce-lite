@@ -65,7 +65,10 @@ describe.runIf(postgresUrl)("S4 clock reads: PostgreSQL parity with D1", () => {
       writes.push([...new Set(Array.from({ length: width }, () => `p:${Math.floor(random() * 40)}`))]);
     }
     const d1Start = Number((sqlite.prepare("SELECT seq FROM cache_clock WHERE id = 1").get() as { seq: number }).seq);
-    const pgStart = Number((await pg.client.query("SELECT seq FROM cache_clock WHERE id = 1")).rows[0].seq);
+    // A fresh PostgreSQL schema has no clock row until its first bump: clock 0.
+    const pgStart = Number((await pg.client.query("SELECT COALESCE((SELECT seq FROM cache_clock WHERE id = 1), 0) AS seq")).rows[0].seq);
+    expect(await readCommitSeq(pg.db)).toBe(pgStart);
+    expect((await readValidationSnapshot(pg.db, ["store"], 0)).S).toBe(pgStart);
     expect(pgStart).toBe(d1Start);
     for (const [index, keys] of writes.entries()) {
       // One committed write: one clock tick for all its keys, as the triggers do.
