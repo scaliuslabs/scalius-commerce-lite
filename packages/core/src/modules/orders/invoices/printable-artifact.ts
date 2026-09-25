@@ -63,6 +63,9 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
     .filter(Boolean)
     .map(html)
     .join(", ");
+  // Pickup and service-only orders carry no address (Wave A).
+  const shipToHeading = address ? "Ship to" : order.shippingMethodName ? "Pickup" : "Delivery";
+  const shipToText = address || (order.shippingMethodName ? html(order.shippingMethodName) : "No delivery needed");
   const issuedAt = document.issuedAt ?? order.createdAt;
   const date = new Date(typeof issuedAt === "number" && issuedAt < 1_000_000_000_000 ? issuedAt * 1000 : issuedAt)
     .toISOString()
@@ -92,7 +95,7 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
 </style></head><body><main>${document.status === "draft" ? '<div class="draft"><strong>Draft invoice</strong> — no invoice number has been allocated.</div>' : ""}
 <header><div><h1>${html(businessInfo.companyName || businessInfo.legalName)}</h1><p>${html(businessInfo.addressLine1)}</p><p>${html(businessInfo.phone)} ${html(businessInfo.email)}</p></div>
 <div><strong>${html(document.invoiceNumber ?? "Draft")}</strong><p>${date}</p><p>Order ${html(formatOrderNumber(order.orderNumber, order.id))}</p></div></header>
-<section class="meta"><div><strong>Bill to</strong><p>${html(order.customerName)}</p><p>${html(order.customerPhone)}</p><p>${html(order.customerEmail)}</p></div><div><strong>Ship to</strong><p>${address}</p><p>Payment: ${html(order.paymentMethod?.toUpperCase())} (${html(order.paymentStatus)})</p></div></section>
+<section class="meta"><div><strong>Bill to</strong><p>${html(order.customerName)}</p><p>${html(order.customerPhone)}</p><p>${html(order.customerEmail)}</p></div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>Payment: ${html(order.paymentMethod?.toUpperCase())} (${html(order.paymentStatus)})</p></div></section>
 <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <section class="totals"><div><span>Subtotal</span><span>${formatMoney(subtotalMinor, order.currencyCode, decimals, true)}</span></div><div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${formatMoney(shippingMinor, order.currencyCode, decimals, true)}</span></div>${discountMinor > 0 ? `<div><span>Discount</span><span>-${formatMoney(discountMinor, order.currencyCode, decimals, true)}</span></div>` : ""}<div><span>${html(order.taxLabel || "Tax")}</span><span>${formatMoney(order.taxAmountMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Total</span><span>${formatMoney(totalMinor, order.currencyCode, decimals, true)}</span></div>${refundedMinor > 0 ? `<div><span>Refunded</span><span>-${formatMoney(refundedMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Net</span><span>${formatMoney(totalMinor - refundedMinor, order.currencyCode, decimals, true)}</span></div>` : ""}</section>
 <footer><p>${html(businessInfo.invoiceFooterText)}</p><p>This is a computer-generated invoice and does not require a signature.</p></footer></main></body></html>`;

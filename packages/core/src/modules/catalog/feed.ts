@@ -34,6 +34,13 @@ import {
 } from "../products/money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
+
+/** A required (or unreadable) buyer-input schema: an agent cart can't buy the product. */
+function requiresBuyerInput(stored: string | null): boolean {
+    const parsed = parseStoredCustomizationSchema(stored);
+    return !parsed.ok || hasRequiredCustomization(parsed.schema);
+}
 import {
     loadProductMediaProjections,
     resolveSkuImageRepresentation,
@@ -351,6 +358,7 @@ export async function getStorefrontFeedProducts(
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            customizationSchema: products.customizationSchema,
             createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
@@ -406,7 +414,7 @@ export async function getStorefrontFeedProducts(
 
     const variantMap = feedVariants.variants;
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, ...productRow }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, customizationSchema, ...productRow }) => {
         const pricing = pricingByProduct.get(productRow.id);
         // The buyer projection counts every SKU. When a product also sells a
         // service, its feed availability comes from its physical SKUs only.
@@ -437,6 +445,9 @@ export async function getStorefrontFeedProducts(
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            // Agents and the UCP catalogue can't send buyer inputs: they skip
+            // products that require one (an unreadable schema counts too).
+            requiresCustomization: requiresBuyerInput(customizationSchema),
             productCondition: product.productCondition,
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
