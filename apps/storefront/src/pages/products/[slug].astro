@@ -24,6 +24,7 @@ import ProductReviews from "@/components/product/reviews/ProductReviews.astro";
 import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
 import { reviewStructuredData } from "@/lib/review-structured-data";
 import { pickReviewCopy } from "@/components/product/reviews/review-format";
+import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { GALLERY_IMAGE_WIDTHS, productGalleryMainSlot } from "@/components/product/lib/gallery-images";
@@ -190,6 +191,7 @@ const pageDescription = pageMetaDescription;
 const productPageCopy = resolveProductPageCopy(layoutData.storefrontCopy);
 // Reviews read the same language (the summary, the module and its dates).
 const reviewCopy = pickReviewCopy(productPageCopy);
+const reviewFormCopy = pickReviewFormCopy(productPageCopy, productPageCopy);
 const reviewLanguage = checkoutLanguageBaseCode(layoutData.storefrontCopy?.languageCode);
 const quickBuyNoticeByError: Record<string, string> = {
   customization_required: productPageCopy.customizationNeededText,
@@ -669,7 +671,7 @@ const productCategoryAnalytics = productCategory
     <StickyBuyBar productName={product.name} />
 
     {/* The template's `reviews` module: after the description, before related products. */}
-    <ProductReviews product={product} copy={reviewCopy} language={reviewLanguage} storeName={sellerSchemaName} />
+    <ProductReviews product={product} copy={reviewCopy} formCopy={reviewFormCopy} language={reviewLanguage} storeName={sellerSchemaName} />
 
     <RelatedProducts
       recommendations={recommendations}

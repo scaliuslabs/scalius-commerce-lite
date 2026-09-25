@@ -212,6 +212,40 @@ export function readBuyerReviews(value: unknown): BuyerReviews | null {
   };
 }
 
+/**
+ * The product page's review call to action for this browser: signed out,
+ * a line to review (resolved by the API), the buyer's review, or none.
+ * `unavailable` keeps the plain link to the account's Reviews page.
+ */
+export type ProductReviewState =
+  | { state: "signed_out" }
+  | { state: "eligible"; orderItemId: string; displayName: string }
+  | { state: "reviewed"; review: BuyerReview }
+  | { state: "ineligible" }
+  | { state: "disabled" }
+  | { state: "unavailable" };
+
+/** GET …/reviews/products/<id>: anything malformed reads as `unavailable`. */
+export function readProductReviewState(value: unknown): ProductReviewState {
+  const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  switch (raw.state) {
+    case "signed_out":
+    case "ineligible":
+    case "disabled":
+      return { state: raw.state };
+    case "eligible":
+      return isReviewId(raw.orderItemId)
+        ? { state: "eligible", orderItemId: raw.orderItemId, displayName: str(raw.displayName) ?? "" }
+        : { state: "unavailable" };
+    case "reviewed": {
+      const review = readBuyerReview(raw.review);
+      return review ? { state: "reviewed", review } : { state: "unavailable" };
+    }
+    default:
+      return { state: "unavailable" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Where a form returns, and the outcome it returns with
 // ---------------------------------------------------------------------------
