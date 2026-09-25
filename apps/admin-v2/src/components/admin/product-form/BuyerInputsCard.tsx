@@ -8,10 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrency } from "@/hooks/use-currency";
-import { LinePropertyFields } from "@/components/admin/order-form/LinePropertyFields";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
-import { BuyerInputDialog } from "./BuyerInputDialog";
 import {
   emptyBuyerInput,
   moveBuyerInput,
@@ -19,6 +17,11 @@ import {
   type BuyerInputDraft,
 } from "./buyer-inputs";
 import type { ProductFormValues } from "./types";
+
+// The editor opens without them: the dialog loads on the first Add or Edit
+// (then stays mounted), the preview when the merchant asks for it.
+const BuyerInputDialog = React.lazy(() => import("./BuyerInputDialog").then((module) => ({ default: module.BuyerInputDialog })));
+const BuyerInputsPreview = React.lazy(() => import("./BuyerInputsPreview").then((module) => ({ default: module.BuyerInputsPreview })));
 
 const TYPE_LABELS = {
   text: "inputType.text",
@@ -47,7 +50,8 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
   const drafts = React.useMemo(() => watched ?? [], [watched]);
   const [editing, setEditing] = React.useState<{ index: number | null; draft: BuyerInputDraft } | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [preview, setPreview] = React.useState<Record<string, string>>({});
+  const [dialogLoaded, setDialogLoaded] = React.useState(false);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
   const listRef = React.useRef<HTMLUListElement>(null);
   const minorFactor = 10 ** getDecimalPlaces(code);
   const schema = React.useMemo(() => schemaFromDrafts(drafts, minorFactor), [drafts, minorFactor]);
@@ -57,6 +61,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
     form.setValue("customizationSchema", next, { shouldDirty: true, shouldValidate: true });
   const open = (index: number | null) => {
     setEditing({ index, draft: index === null ? emptyBuyerInput() : drafts[index]! });
+    setDialogLoaded(true);
     setDialogOpen(true);
   };
   const move = (index: number, direction: -1 | 1) => {
@@ -160,14 +165,17 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
         )}
         {schema ? (
           <section className="space-y-2 border-t pt-4" aria-label={t("buyerInputsPreview")}>
-            <h3 className="text-heading-sm">{t("buyerInputsPreview")}</h3>
-            <LinePropertyFields
-              schema={schema}
-              values={preview}
-              onChange={(key, value) => setPreview((current) => ({ ...current, [key]: value }))}
-              error={null}
-              surcharge={(priceMinor) => fmt(priceMinor / minorFactor)}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-heading-sm">{t("buyerInputsPreview")}</h3>
+              <Button type="button" variant="ghost" size="sm" aria-expanded={previewOpen} onClick={() => setPreviewOpen((value) => !value)}>
+                {t(previewOpen ? "hidePreview" : "showPreview")}
+              </Button>
+            </div>
+            {previewOpen ? (
+              <React.Suspense fallback={<p className="text-body text-muted-foreground">{t("loadingPreview")}</p>}>
+                <BuyerInputsPreview schema={schema} surcharge={(priceMinor) => fmt(priceMinor / minorFactor)} />
+              </React.Suspense>
+            ) : null}
           </section>
         ) : null}
       </CardContent>
@@ -182,6 +190,8 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
           </Button>
         </CardFooter>
       )}
+      {dialogLoaded ? (
+        <React.Suspense fallback={null}>
       <BuyerInputDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -196,6 +206,8 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
           setDialogOpen(false);
         }}
       />
+        </React.Suspense>
+      ) : null}
     </Card>
   );
 }

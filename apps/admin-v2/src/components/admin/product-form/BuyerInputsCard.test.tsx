@@ -58,11 +58,21 @@ describe("BuyerInputsCard", () => {
     act(async () => root.render(<Harness initial={initial} conflict={conflict} />));
   const button = (label: string) => [...document.querySelectorAll("button")].find((element) =>
     element.textContent === label || element.getAttribute("aria-label") === label);
+  /** The dialog and the preview load on first use. */
+  const settle = () => act(async () => {
+    await import("./BuyerInputDialog");
+    await import("./BuyerInputsPreview");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const openAdd = async () => {
+    await act(async () => button(en.addBuyerInput)!.click());
+    await settle();
+  };
 
   it("adds an input from the dialog, with a key made from its label, and previews it", async () => {
     await render([]);
     expect(host.textContent).toContain(en.buyerInputsEmpty);
-    await act(async () => button(en.addBuyerInput)!.click());
+    await openAdd();
     const label = document.querySelector<HTMLInputElement>("#buyer-input-label")!;
     await act(async () => setValue(label, "Engraving text"));
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#buyer-input-price")!, "200"));
@@ -73,13 +83,15 @@ describe("BuyerInputsCard", () => {
     ]);
     expect(form.formState.isDirty).toBe(true);
     expect(host.textContent).toContain(en.buyerInputsPreview);
+    await act(async () => button(en.showPreview)!.click());
+    await settle();
     expect(host.querySelector('[id="line-property-engraving_text"]')).not.toBeNull();
     expect(host.textContent).toContain("+৳200");
   });
 
   it("refuses an input without a label or a choice list without choices", async () => {
     await render([]);
-    await act(async () => button(en.addBuyerInput)!.click());
+    await openAdd();
     await act(async () => button(en.inputDone)!.click());
     expect(document.body.textContent).toContain(en.inputLabelRequired);
     expect(form.getValues("customizationSchema")).toEqual([]);

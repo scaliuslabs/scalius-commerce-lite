@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { orderFormMessages } from "~/i18n/order-form";
-import { editLockMessageKey, formItems, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
+import { editLockMessageKey, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
+import { formItems } from "~/components/admin/order-form/order-form-data";
 
 const allowed = { allowed: true, reason: null };
 const locked = (reason: string | null) => ({ allowed: false, reason });
