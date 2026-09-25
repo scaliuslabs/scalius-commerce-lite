@@ -88,6 +88,42 @@ export function normalizeGiftCardRecipient(input: {
     return { name, email, phone };
 }
 
+/**
+ * A recipient typed by staff: every field that is given must be valid, and
+ * at most one contact. Unlike `normalizeGiftCardRecipient` (frozen line
+ * properties, already validated at checkout), nothing is dropped silently:
+ * a bad value is a field error.
+ */
+export function parseGiftCardRecipientStrict(input: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+} | null | undefined): GiftCardRecipient | null {
+    if (!input) return null;
+    const name = cleanText(input.name, 120);
+    const rawEmail = cleanText(input.email, 254)?.toLowerCase() ?? null;
+    const rawPhone = cleanText(input.phone, 40);
+    if (rawEmail && rawPhone) {
+        throw new ValidationError("Send the gift card to an email or a phone number, not both.", { field: "recipient.phone" });
+    }
+    if (rawEmail && !EMAIL_PATTERN.test(rawEmail)) {
+        throw new ValidationError("Enter a valid recipient email.", { field: "recipient.email" });
+    }
+    let phone: string | null = null;
+    if (rawPhone) {
+        try {
+            phone = validateAndFormatPhone(rawPhone);
+        } catch (error) {
+            throw new ValidationError(
+                error instanceof Error && error.message ? error.message : "Enter a valid recipient phone number.",
+                { field: "recipient.phone" },
+            );
+        }
+    }
+    if (!name && !rawEmail && !phone) return null;
+    return { name, email: rawEmail, phone };
+}
+
 export function normalizeGiftCardMessage(value: unknown): string | null {
     return cleanText(value, GIFT_CARD_LIMITS.maxMessageLength);
 }

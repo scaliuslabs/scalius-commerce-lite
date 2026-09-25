@@ -1,6 +1,6 @@
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { giftCards } from "@scalius/database/schema";
+import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineGiftCardExtra } from "./browser";
 import { maskGiftCardContact } from "./mask";
@@ -63,4 +63,30 @@ export async function countBuyerGiftCards(
 ): Promise<number> {
     const row = await db.select({ value: count() }).from(giftCards).where(eq(giftCards.customerId, customerId)).get();
     return Number(row?.value ?? 0);
+}
+
+/**
+ * The gift cards still paying for an order (succeeded tender rows, in commit
+ * order): last 4 and amount only, for the receipt and the buyer's order page.
+ * Released and refunded tenders are left out.
+ */
+export async function listOrderGiftCardTenders(
+    db: Database,
+    orderId: string,
+): Promise<Array<{ last4: string; amountMinor: number }>> {
+    const rows = await db.select({ last4: giftCards.codeLast4, amountMinor: orderPayments.amountMinor })
+        .from(orderPayments)
+        .innerJoin(giftCardTransactions, and(
+            eq(giftCardTransactions.id, orderPayments.providerRef),
+            eq(giftCardTransactions.kind, "redeem"),
+        ))
+        .innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId))
+        .where(and(
+            eq(orderPayments.orderId, orderId),
+            eq(orderPayments.paymentMethod, "gift_card"),
+            eq(orderPayments.status, "succeeded"),
+        ))
+        .orderBy(asc(orderPayments.createdAt), asc(orderPayments.id))
+        .all();
+    return rows;
 }

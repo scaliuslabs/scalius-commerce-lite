@@ -5,7 +5,7 @@
 // domain. Outbox rows are built by callers; settings are passed in.
 export * from "./browser";
 export type { LineExtrasInput } from "../../utils/line-extras";
-export { countBuyerGiftCards, listLineIssuedCards } from "./extras";
+export { countBuyerGiftCards, listLineIssuedCards, listOrderGiftCardTenders } from "./extras";
 export {
     GIFT_CARDS_UNAVAILABLE_MESSAGE,
     GiftCardsUnavailableError,
@@ -45,6 +45,7 @@ export {
     issueManualGiftCard,
     normalizeGiftCardMessage,
     normalizeGiftCardRecipient,
+    parseGiftCardRecipientStrict,
     storeCreditGiftCardId,
     type GiftCardIssueInput,
     type GiftCardRecipient,
