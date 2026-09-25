@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
+import { TEMPLATED_NOTIFICATION_TYPES } from "./notification-types";
 import {
   defaultNotificationTemplates,
   findUnknownVariables,
@@ -16,7 +16,7 @@ import {
 describe("notification templates", () => {
   it.each(["en", "bn"] as const)("ships %s defaults that only use variables their event can fill", (language) => {
     const defaults = defaultNotificationTemplates(language);
-    for (const event of ORDER_NOTIFICATION_TYPES) {
+    for (const event of TEMPLATED_NOTIFICATION_TYPES) {
       const email = defaults.email[event];
       expect(findUnknownVariables(`${email.subject}\n${email.body}`, event)).toEqual([]);
       expect(findUnknownVariables(defaults.sms[event].body, event)).toEqual([]);

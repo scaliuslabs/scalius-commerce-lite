@@ -49,6 +49,13 @@ interface MessageCopy {
     body: (customer: string, order: string, total: string) => string;
     action: string;
   };
+  /** Staff alerts a domain raises about an order (push title, push/email body). `order` is "#1057". */
+  staffAlert: {
+    review_pending: { title: string; body: (order: string) => string };
+    digital_keys_exhausted: { title: string; body: (order: string) => string };
+    emailSubject: (store: string | null, title: string) => string;
+    action: string;
+  };
   /** Thread notifications: a reply to the buyer, a new buyer message to staff. `order` is "#1057" or null. */
   conversation: {
     replySubject: (store: string | null, order: string | null) => string;
@@ -121,6 +128,18 @@ const EN: MessageCopy = {
   staffOrder: {
     subject: (store, order, customer) => `${store ? `[${store}] ` : ""}Order ${order} placed by ${customer}`,
     body: (customer, order, total) => `${customer} placed order ${order}${total ? ` for ${total}` : ""}.`,
+    action: "View order",
+  },
+  staffAlert: {
+    review_pending: {
+      title: "New review waiting for approval",
+      body: (order) => `A review for order ${order} is waiting for approval.`,
+    },
+    digital_keys_exhausted: {
+      title: "Licence keys ran out",
+      body: (order) => `Order ${order} is waiting for licence keys. Import more keys to deliver it.`,
+    },
+    emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "View order",
   },
   conversation: {
@@ -197,6 +216,18 @@ const BN: MessageCopy = {
   staffOrder: {
     subject: (store, order, customer) => `${store ? `[${store}] ` : ""}${customer} অর্ডার ${order} করেছেন`,
     body: (customer, order, total) => `${customer} অর্ডার ${order} করেছেন${total ? `, মোট ${total}` : ""}।`,
+    action: "অর্ডার দেখুন",
+  },
+  staffAlert: {
+    review_pending: {
+      title: "নতুন রিভিউ অনুমোদনের অপেক্ষায়",
+      body: (order) => `অর্ডার ${order}-এর একটি রিভিউ অনুমোদনের অপেক্ষায় আছে।`,
+    },
+    digital_keys_exhausted: {
+      title: "লাইসেন্স কী শেষ হয়ে গেছে",
+      body: (order) => `অর্ডার ${order} লাইসেন্স কী-এর অপেক্ষায় আছে। ডেলিভারি দিতে আরও কী যোগ করুন।`,
+    },
+    emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "অর্ডার দেখুন",
   },
   conversation: {

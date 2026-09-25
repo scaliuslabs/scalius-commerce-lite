@@ -16,6 +16,7 @@ export {
 } from "./notification-outbox";
 export type {
   ClaimedNotificationOutbox,
+  NotificationBatchQueue,
   NotificationData,
   NotificationInput,
   NotificationOutboxStatus,
@@ -96,3 +97,15 @@ export type {
   ConversationNotificationResult,
 } from "./conversation-notifications";
 export { sendAdminPush, type AdminPushSpec } from "./notifications.service";
+export {
+  NOTHING_TO_SEND,
+  recordNothingToSend,
+  sendResolvedNotification,
+  sendStaffAlertNotification,
+} from "./resolved-notifications";
+export type {
+  NotificationExtraTemplateData,
+  ResolvedNotificationOptions,
+  ResolvedNotificationRecipient,
+  ResolvedNotificationSend,
+} from "./resolved-notifications";
