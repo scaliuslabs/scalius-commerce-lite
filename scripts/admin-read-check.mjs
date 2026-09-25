@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { spawn } from "child_process";
-import { existsSync, mkdtempSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { createServer } from "net";
-import { pathToFileURL } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import {
   buildCookieHeader,
   extractSetCookieHeaders,
@@ -222,62 +222,83 @@ function normalizePathname(pathname) {
   return pathname.replace(/\/+$/, "");
 }
 
-export function buildAdminRoutePlan({ orderId, productId, customerId } = {}) {
+/**
+ * The dashboard's tab titles come from its i18n catalogs (`titleHead` in
+ * apps/admin-v2/src/i18n/page-titles.ts: "Orders · Scalius"). Node can't load
+ * that module (extensionless imports), so the English strings are read from
+ * the catalog source here; admin-read-check.test.mjs imports the real module
+ * and asserts both agree, so the expected titles can't drift from the app.
+ */
+const ADMIN_I18N_DIR = fileURLToPath(new URL("../apps/admin-v2/src/i18n/", import.meta.url));
+export const ADMIN_TITLE_SUFFIX = " · Scalius";
+
+/** The English strings of one `defineMessages` catalog, by key. */
+export function readCatalogEnglish(source, exportName) {
+  const start = source.indexOf(`export const ${exportName} = defineMessages({`);
+  if (start < 0) throw new Error(`Catalog ${exportName} not found.`);
+  const en = /\n\s*en:\s*\{\n([\s\S]*?)\n\s*\},\n/.exec(source.slice(start));
+  if (!en) throw new Error(`Catalog ${exportName} has no en block.`);
+  const messages = {};
+  for (const match of en[1].matchAll(/^\s*(?:"([^"]+)"|([A-Za-z_$][\w$]*)):\s*"((?:[^"\\]|\\.)*)",?\s*$/gm)) {
+    messages[match[1] ?? match[2]] = JSON.parse(`"${match[3]}"`);
+  }
+  return messages;
+}
+
+function loadCatalog(file, exportName) {
+  return readCatalogEnglish(readFileSync(join(ADMIN_I18N_DIR, file), "utf8"), exportName);
+}
+
+/** The English tab title of a page ("Orders · Scalius"); `{vars}` are kept only up to the first one. */
+export function adminPageTitle(messages, key) {
+  const text = messages[key];
+  if (typeof text !== "string") throw new Error(`No page title for ${key}.`);
+  const placeholder = text.indexOf("{");
+  // A title with a runtime value ("Edit order {number}") is checked up to it.
+  return placeholder >= 0 ? text.slice(0, placeholder) : `${text}${ADMIN_TITLE_SUFFIX}`;
+}
+
+export function buildAdminRoutePlan({ orderId, productId, customerId } = {}, catalogs = {
+  pageTitles: loadCatalog("page-titles.ts", "pageTitleMessages"),
+  settingsNav: loadCatalog("settings.ts", "settingsNavMessages"),
+}) {
+  const page = (key) => adminPageTitle(catalogs.pageTitles, key);
+  const settings = (key) => adminPageTitle(catalogs.settingsNav, key);
   const routes = [
-    { label: "dashboard", path: "/admin", titleIncludes: "Dashboard | Scalius Admin" },
-    { label: "products_list", path: "/admin/products", titleIncludes: "Products | Scalius Admin" },
-    { label: "products_new", path: "/admin/products/new", titleIncludes: "New Product | Scalius Admin" },
-    { label: "orders_list", path: "/admin/orders", titleIncludes: "Orders | Scalius Admin" },
-    { label: "orders_new", path: "/admin/orders/new", titleIncludes: "New Order | Scalius Admin" },
-    { label: "customers_list", path: "/admin/customers", titleIncludes: "Customers | Scalius Admin" },
-    { label: "inventory", path: "/admin/inventory", titleIncludes: "Inventory | Scalius Admin" },
-    { label: "media", path: "/admin/media", titleIncludes: "Media | Scalius Admin" },
-    { label: "discounts", path: "/admin/discounts", titleIncludes: "Discounts | Scalius Admin" },
-    { label: "analytics", path: "/admin/analytics", titleIncludes: "Analytics | Scalius Admin" },
-    {
-      label: "settings_seo",
-      path: "/admin/settings?section=seo",
-      titleIncludes: "General settings | Scalius Admin",
-      expectedSearch: { section: "seo" },
-    },
-    {
-      label: "settings_security",
-      path: "/admin/settings?section=security",
-      titleIncludes: "General settings | Scalius Admin",
-      expectedSearch: { section: "security" },
-    },
-    { label: "settings_account", path: "/admin/settings/account", titleIncludes: "Account | Scalius Admin" },
-    { label: "settings_theme", path: "/admin/settings/theme", titleIncludes: "Theme | Scalius Admin" },
-    {
-      label: "settings_notifications",
-      path: "/admin/settings/notifications",
-      titleIncludes: "Notifications | Scalius Admin",
-    },
-    {
-      label: "settings_checkout",
-      path: "/admin/settings/checkout",
-      titleIncludes: "Checkout Settings | Scalius Admin",
-    },
-    { label: "settings_taxes", path: "/admin/settings/taxes", titleIncludes: "Taxes | Scalius Admin" },
+    { label: "dashboard", path: "/admin", titleIncludes: page("home") },
+    { label: "products_list", path: "/admin/products", titleIncludes: page("products") },
+    { label: "products_new", path: "/admin/products/new", titleIncludes: page("addProduct") },
+    { label: "orders_list", path: "/admin/orders", titleIncludes: page("orders") },
+    { label: "orders_new", path: "/admin/orders/new", titleIncludes: page("createOrder") },
+    { label: "customers_list", path: "/admin/customers", titleIncludes: page("customers") },
+    { label: "inventory", path: "/admin/inventory", titleIncludes: page("inventory") },
+    { label: "media", path: "/admin/media", titleIncludes: page("files") },
+    { label: "discounts", path: "/admin/discounts", titleIncludes: page("discounts") },
+    { label: "inbox", path: "/admin/inbox", titleIncludes: page("inbox") },
+    { label: "account", path: "/admin/account", titleIncludes: page("account") },
+    { label: "theme", path: "/admin/online-store/theme", titleIncludes: page("theme") },
+    { label: "settings", path: "/admin/settings", titleIncludes: page("settings") },
+    { label: "settings_notifications", path: "/admin/settings/notifications", titleIncludes: settings("notifications") },
+    { label: "settings_checkout", path: "/admin/settings/checkout", titleIncludes: settings("checkout") },
+    { label: "settings_taxes", path: "/admin/settings/taxes", titleIncludes: settings("taxes") },
   ];
   const skipped = [];
 
   if (typeof productId === "string" && productId.length > 0) {
     const encodedProductId = encodeURIComponent(productId);
     routes.push(
-      { label: "product_view", path: `/admin/products/${encodedProductId}`, titleIncludes: "Product | Scalius Admin" },
-      { label: "product_edit", path: `/admin/products/${encodedProductId}/edit`, titleIncludes: "Edit Product | Scalius Admin" },
+      { label: "product_edit", path: `/admin/products/${encodedProductId}/edit`, titleIncludes: page("product") },
     );
   } else {
-    skipped.push({ label: "product_view", reason: "empty_products" });
     skipped.push({ label: "product_edit", reason: "empty_products" });
   }
 
   if (typeof orderId === "string" && orderId.length > 0) {
     const encodedOrderId = encodeURIComponent(orderId);
     routes.push(
-      { label: "order_view", path: `/admin/orders/${encodedOrderId}`, titleIncludes: "Order #" },
-      { label: "order_edit", path: `/admin/orders/${encodedOrderId}/edit`, titleIncludes: "Edit Order #" },
+      // The order page's title is its number ("#1001 · Scalius").
+      { label: "order_view", path: `/admin/orders/${encodedOrderId}`, titleIncludes: `#` },
+      { label: "order_edit", path: `/admin/orders/${encodedOrderId}/edit`, titleIncludes: page("editOrder") },
     );
   } else {
     skipped.push({ label: "order_view", reason: "empty_orders" });
@@ -287,12 +308,10 @@ export function buildAdminRoutePlan({ orderId, productId, customerId } = {}) {
   if (typeof customerId === "string" && customerId.length > 0) {
     const encodedCustomerId = encodeURIComponent(customerId);
     routes.push(
-      { label: "customer_edit", path: `/admin/customers/${encodedCustomerId}/edit`, titleIncludes: "Edit Customer | Scalius Admin" },
-      { label: "customer_history", path: `/admin/customers/${encodedCustomerId}/history`, titleIncludes: "Customer History | Scalius Admin" },
+      { label: "customer_edit", path: `/admin/customers/${encodedCustomerId}/edit`, titleIncludes: page("customer") },
     );
   } else {
     skipped.push({ label: "customer_edit", reason: "empty_customers" });
-    skipped.push({ label: "customer_history", reason: "empty_customers" });
   }
 
   return { routes, skipped };
