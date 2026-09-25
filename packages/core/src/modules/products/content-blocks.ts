@@ -415,6 +415,36 @@ export async function buildProductContentBlockReplaceStatements(
     return statements;
 }
 
+/**
+ * The statements that give `targetId` a copy of `sourceId`'s own blocks
+ * (legacy mirrored tabs excluded: the copied tabs mirror themselves), for
+ * duplicating a product. Positions are kept, so they follow the copied tabs.
+ */
+export async function buildProductContentBlockCopyStatements(
+    db: Database,
+    sourceId: string,
+    targetId: string,
+): Promise<SQLiteBatchItem[]> {
+    const rows = await db.select({
+        placement: productContentBlocks.placement,
+        position: productContentBlocks.position,
+        type: productContentBlocks.type,
+        version: productContentBlocks.version,
+        settings: productContentBlocks.settings,
+        legacy: legacyTabSql,
+    }).from(productContentBlocks).where(eq(productContentBlocks.productId, sourceId))
+        .orderBy(...blockOrder()).limit(PRODUCT_CONTENT_BLOCKS_MAX).all();
+    return rows.filter((row) => Number(row.legacy) !== 1).map((row) => db.insert(productContentBlocks).values({
+        id: `${PRODUCT_CONTENT_BLOCK_ID_PREFIX}${nanoid()}`,
+        productId: targetId,
+        placement: row.placement,
+        position: row.position,
+        type: row.type,
+        version: row.version,
+        settings: row.settings,
+    }));
+}
+
 // ─────────────────────────────────────────
 // Product page
 // ─────────────────────────────────────────
