@@ -321,6 +321,30 @@ describe("product list query canonicalization", () => {
     expect(state.redirectPath).toBe("/search?minPrice=100");
   });
 
+  it("reads \"N★ & up\" as minRating 1-4 and sorts by rating, both views that stay noindex,follow", () => {
+    const rated = resolveProductListQueryState({ url: new URL("https://store.test/categories/shoes?minRating=4&sortBy=rating") });
+    expect(rated.redirectPath).toBeNull();
+    expect(rated.options).toMatchObject({ minRating: 4, sort: "rating" });
+    expect(rated.currentFilters).toEqual({ minRating: "4", sortBy: "rating" });
+    // A rating filter is a refinement (chip, count, Clear all) and never indexable.
+    expect(countActiveProductListFilters(rated.currentFilters)).toBe(1);
+    expect(isIndexableProductListView(rated.currentFilters)).toBe(false);
+    expect(isIndexableProductListView({ minRating: "3" })).toBe(false);
+    expect(buildProductListHref({ pathname: "/categories/shoes", currentFilters: rated.currentFilters, overrides: { page: 2 } }))
+      .toBe("/categories/shoes?minRating=4&page=2&sortBy=rating");
+
+    // Bangla digits read as Latin; the empty "Any rating" choice, 5 and noise are dropped.
+    expect(resolveProductListQueryState({ url: new URL("https://store.test/search?minRating=%E0%A7%A9") }).redirectPath)
+      .toBe("/search?minRating=3");
+    for (const value of ["", "5", "0", "4.5", "four"]) {
+      const state = resolveProductListQueryState({ url: new URL(`https://store.test/categories/shoes?minRating=${value}`) });
+      expect(state.options.minRating, value).toBeUndefined();
+      expect(state.redirectPath, value).toBe("/categories/shoes");
+    }
+    expect(resolveProductListQueryState({ url: new URL("https://store.test/categories/shoes?minRating=2&minRating=3") }).redirectPath)
+      .toBe("/categories/shoes?minRating=3");
+  });
+
   it("indexes only plain listing pages, each self-canonical", () => {
     expect(isIndexableProductListView({})).toBe(true);
     expect(isIndexableProductListView({ page: "2" })).toBe(true);

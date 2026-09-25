@@ -7,7 +7,7 @@ import type {
   Product,
   BuyerPriceRange,
 } from "./types";
-import { normalizeProductFacets, type ProductListOptions } from "./products";
+import { normalizeProductFacets, normalizeRatingFacet, type ProductListOptions } from "./products";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
@@ -30,6 +30,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     pagination?: CollectionWithProducts["pagination"];
     priceRange?: BuyerPriceRange;
     facets?: unknown;
+    ratingFacet?: unknown;
   }>(payload);
   if (
     !candidate?.collection ||
@@ -59,6 +60,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     pagination: candidate.pagination,
     priceRange: candidate.priceRange,
     facets: normalizeProductFacets(candidate.facets),
+    ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
   } as CollectionWithProducts;
 }
 

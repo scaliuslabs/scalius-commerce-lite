@@ -115,6 +115,7 @@ export const policies = [
       `${storefront}/components/order/ReviewLineAction.astro`,
       `${storefront}/components/order/review-line-action.ts`,
       `${storefront}/pages/account/reviews.astro`,
+      `${storefront}/lib/account-reviews.ts`,
       `${storefront}/components/product/reviews`,
       // Digital goods (B3)
       `${storefront}/components/order/DigitalLineDelivery.astro`,

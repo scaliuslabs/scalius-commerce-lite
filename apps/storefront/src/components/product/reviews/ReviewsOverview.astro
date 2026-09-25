@@ -1,0 +1,64 @@
+---
+// The summary column of a review list: the stars and "4.6 out of 5", the
+// count, and five bars (Amazon's percentages) that each link to that star's
+// reviews. A bar with no reviews is not a link.
+import type { ProductReviewSummary } from "@/lib/api";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import {
+  formatReviewAverage,
+  productReviewsPageHref,
+  reviewCountText,
+  reviewHistogram,
+  reviewStarFill,
+  type ReviewCopy,
+} from "./review-format";
+
+export interface Props {
+  summary: ProductReviewSummary;
+  copy: ReviewCopy;
+  slug: string;
+  /** The star the list is filtered to (the review page), shown as selected. */
+  selectedRating?: number | null;
+}
+
+const { summary, copy, slug, selectedRating = null } = Astro.props;
+const average = formatReviewAverage(summary.average);
+---
+
+<div class="product-reviews-summary">
+  <p class="product-reviews-score">
+    <span class="sc-stars product-reviews-score-stars" style={`--sc-fill:${reviewStarFill(summary.average)}`} aria-hidden="true"></span>
+    <span class="product-reviews-score-value">{formatCheckoutLanguageText(copy.reviewsAverageText, { average })}</span>
+  </p>
+  <p class="product-reviews-total">{reviewCountText(copy, summary.count)}</p>
+  <ul class="product-reviews-histogram">
+    {reviewHistogram(summary).map((row) => {
+      const label = formatCheckoutLanguageText(copy.reviewsStarRowText, { stars: row.rating });
+      const share = formatCheckoutLanguageText(copy.reviewsStarShareText, { percent: `${row.percent}%`, stars: row.rating });
+      const selected = selectedRating === row.rating;
+      return (
+        <li>
+          {row.count > 0 ? (
+            <a
+              href={productReviewsPageHref(slug, { rating: selected ? null : row.rating })}
+              class:list={["product-reviews-bar", selected && "is-selected"]}
+              data-review-rating={row.rating}
+              aria-label={share}
+              aria-current={selected ? "true" : undefined}
+            >
+              <span class="product-reviews-bar-label">{label}</span>
+              <span class="product-reviews-bar-track" aria-hidden="true"><span style={`width:${row.percent}%`}></span></span>
+              <span class="product-reviews-bar-share" aria-hidden="true">{row.percent}%</span>
+            </a>
+          ) : (
+            <span class="product-reviews-bar is-empty">
+              <span class="product-reviews-bar-label">{label}</span>
+              <span class="product-reviews-bar-track" aria-hidden="true"><span style="width:0%"></span></span>
+              <span class="product-reviews-bar-share">0%</span>
+            </span>
+          )}
+        </li>
+      );
+    })}
+  </ul>
+</div>

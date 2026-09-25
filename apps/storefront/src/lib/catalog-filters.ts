@@ -1,8 +1,9 @@
-import type { BuyerPriceRange, ProductFacet } from "@/lib/api";
+import type { BuyerPriceRange, ProductFacet, RatingFacetValue } from "@/lib/api";
 import { createApiUrl } from "@/lib/api/transport";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
 import { catalogSwatchPaint } from "./catalog-swatch";
 import {
+  PRODUCT_LIST_MIN_RATING_PARAM,
   parseProductListRangeKey,
   productListRangeKey,
   type ProductListFilterState,
@@ -169,6 +170,35 @@ export function catalogFacetGroups(
   return groups;
 }
 
+/** One "N★ & up" row of the Customer rating group. */
+export interface CatalogRatingRow {
+  min: number;
+  count: number;
+  selected: boolean;
+}
+
+/**
+ * The Customer rating group (Amazon's "Customer Reviews", Daraz's "Rating"):
+ * "4★ & up", "3★ & up", "2★ & up" with their counts in the listing's scope,
+ * highest first, plus the buyer's own choice. Nothing while the store has no
+ * published review (`hasReviews`) or nothing in scope has one (the API sends
+ * no rows), unless the buyer chose a rating and needs to undo it.
+ */
+export function catalogRatingRows(
+  ratingFacet: readonly RatingFacetValue[] | undefined,
+  currentFilters: ProductListFilterState,
+  hasReviews: boolean,
+): CatalogRatingRow[] {
+  const chosen = Number(selectedValues(currentFilters, PRODUCT_LIST_MIN_RATING_PARAM).at(-1) ?? 0) || null;
+  if (!hasReviews && chosen === null) return [];
+  const rows = new Map((ratingFacet ?? []).map(({ min, count }) => [min, count]));
+  if (chosen !== null && !rows.has(chosen)) rows.set(chosen, 0);
+  if (chosen === null && ![...rows.values()].some((count) => count > 0)) return [];
+  return [...rows]
+    .sort(([left], [right]) => right - left)
+    .map(([min, count]) => ({ min, count, selected: min === chosen }));
+}
+
 /** A price filter only helps when products differ in price (or one is applied). */
 export function showsCatalogPriceFilter(
   priceRange: BuyerPriceRange | undefined,
@@ -196,7 +226,19 @@ export function applyCatalogFilterCounts(
   form: HTMLFormElement,
   facets: readonly ProductFacet[] | null,
   total: number,
+  ratingFacet: readonly RatingFacetValue[] | null = null,
 ): void {
+  // "N★ & up" rows count against every other selection, like a facet value.
+  if (ratingFacet) {
+    const ratingCounts = new Map(ratingFacet.map(({ min, count }) => [String(min), count]));
+    for (const input of form.querySelectorAll<HTMLInputElement>("input[data-catalog-rating]")) {
+      if (!input.value) continue;
+      const count = ratingCounts.get(input.value) ?? 0;
+      input.disabled = count === 0 && !input.checked;
+      const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count]");
+      if (countLabel) countLabel.textContent = String(count);
+    }
+  }
   const counts = new Map(facets?.map((facet) => [
     facet.slug,
     new Map((Array.isArray(facet.values) ? facet.values : []).map(({ value, count }) => [value, count])),
@@ -527,12 +569,18 @@ export function setupCatalogFilters(): void {
           { signal: request.signal },
         );
         const body = (await response.json()) as {
-          data?: { pagination?: { total?: unknown }; facets?: unknown };
+          data?: { pagination?: { total?: unknown }; facets?: unknown; ratingFacet?: unknown };
         };
         const total = body.data?.pagination?.total;
         const facets = body.data?.facets;
+        const ratingFacet = body.data?.ratingFacet;
         if (response.ok && typeof total === "number") {
-          applyCatalogFilterCounts(form, Array.isArray(facets) ? facets as ProductFacet[] : null, total);
+          applyCatalogFilterCounts(
+            form,
+            Array.isArray(facets) ? facets as ProductFacet[] : null,
+            total,
+            Array.isArray(ratingFacet) ? ratingFacet as RatingFacetValue[] : null,
+          );
         }
       } catch {
         // Keep the neutral label; applying still works.
@@ -559,7 +607,7 @@ export function setupCatalogFilters(): void {
 
   // A checkbox tapped before this script loaded (slow networks) already holds
   // its new state; apply it now instead of leaving it silently unapplied.
-  const tappedEarly = [...form.querySelectorAll<HTMLInputElement>("input[type=checkbox]")]
+  const tappedEarly = [...form.querySelectorAll<HTMLInputElement>("input[type=checkbox], input[type=radio]")]
     .some((input) => input.checked !== input.defaultChecked);
   if (tappedEarly) {
     if (desktop.matches) form.requestSubmit();

@@ -1,0 +1,133 @@
+---
+// Every published review of a product, ten at a time (Wave B §2.4): where the
+// product page's sort, star bars and "Show more" lead without JavaScript, and
+// "See all reviews" with it. `?sort=highest|lowest`, `?rating=1..5` and
+// `?after=<cursor>` (the opaque keyset cursor of the page before) shape it;
+// nothing else. It is noindex,follow (the product page carries the review
+// markup), and it is cached like any public page under the store's generation.
+import Layout from "@/layouts/Layout.astro";
+import ReviewsOverview from "@/components/product/reviews/ReviewsOverview.astro";
+import "@/components/product/reviews/product-reviews.css";
+import { getLayoutData, getProductBySlugResult } from "@/lib/api";
+import { getProductReviewsPage } from "@/lib/api/product-reviews";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
+import { resolveStoreName } from "@/lib/store-identity";
+import { markRenderUncacheable } from "@/lib/cache-policy";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import {
+  REVIEW_PAGE_SIZE,
+  REVIEW_SORTS,
+  pickReviewCopy,
+  productReviewsPageHref,
+  publicReviewListMarkup,
+  readReviewListView,
+} from "@/components/product/reviews/review-format";
+
+const { slug } = Astro.params;
+if (!slug) return new Response(null, { status: 404 });
+
+// Only the view's own keys; anything else redirects to the clean URL.
+const view = readReviewListView(Astro.url.searchParams);
+const clean = productReviewsPageHref(slug, { sort: view.sort, rating: view.rating, after: view.cursor });
+if (`${Astro.url.pathname}${Astro.url.search}` !== clean) return Astro.redirect(clean, 301);
+
+const [layoutData, productResult] = await Promise.all([getLayoutData(), getProductBySlugResult(slug)]);
+setRuntimeImageCdnPolicy(layoutData?.media);
+if (productResult.state === "not_found") return new Response(null, { status: 404 });
+if (productResult.state === "unavailable" || !layoutData) {
+  const response = storefrontDataUnavailableResponse("We could not load these reviews. Please try again shortly.");
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+const { product } = productResult.data;
+const page = await getProductReviewsPage(product.id, { ...view, limit: REVIEW_PAGE_SIZE });
+// Reviews off (or the product is not public to reviews): the product page has no reviews to lead to.
+if (page.state === "not_found") return Astro.redirect(`/products/${encodeURIComponent(slug)}`, 302);
+if (page.state === "unavailable") markRenderUncacheable(Astro.response.headers);
+const reviews = page.state === "found" ? page.data : null;
+
+const copyData = resolveProductPageCopy(layoutData.storefrontCopy);
+const copy = pickReviewCopy(copyData);
+const language = checkoutLanguageBaseCode(layoutData.storefrontCopy?.languageCode);
+const storeName = resolveStoreName(layoutData.business);
+const title = formatCheckoutLanguageText(copy.reviewsPageTitleText, { product: product.name });
+const productHref = `/products/${encodeURIComponent(product.slug)}`;
+const sortLabels = {
+  recent: copy.reviewsSortRecentText,
+  highest: copy.reviewsSortHighestText,
+  lowest: copy.reviewsSortLowestText,
+} as const;
+const listMarkup = reviews ? publicReviewListMarkup(reviews.items, { copy, language, storeName }) : "";
+const nextHref = reviews?.nextCursor
+  ? productReviewsPageHref(product.slug, { sort: view.sort, rating: view.rating, after: reviews.nextCursor })
+  : null;
+const firstHref = view.cursor ? productReviewsPageHref(product.slug, { sort: view.sort, rating: view.rating }) : null;
+---
+
+<Layout
+  title={title}
+  description={product.metaDescription ?? undefined}
+  layoutData={layoutData}
+  noindex
+>
+  <section class="product-reviews product-reviews-page mx-auto max-w-7xl px-3 py-4 sm:px-6 lg:px-8 lg:py-8" aria-labelledby="reviews-page-heading">
+    <p class="mb-3">
+      <a href={productHref} class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline">
+        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>
+        {copy.reviewsBackToProductText}
+      </a>
+    </p>
+    <h1 id="reviews-page-heading" class="product-reviews-heading">{title}</h1>
+
+    {!reviews ? (
+      <p class="product-reviews-empty" role="alert">{copy.reviewsLoadFailedText}</p>
+    ) : reviews.summary.count === 0 ? (
+      <p class="product-reviews-empty">{copy.reviewsEmptyText}</p>
+    ) : (
+      <div class="product-reviews-layout">
+        <ReviewsOverview summary={reviews.summary} copy={copy} slug={product.slug} selectedRating={view.rating} />
+
+        <div class="product-reviews-main">
+          <div class="product-reviews-toolbar">
+            <nav class="product-reviews-sort" aria-label={copy.reviewsSortLabelText}>
+              <span class="product-reviews-sort-label" aria-hidden="true">{copy.reviewsSortLabelText}</span>
+              {REVIEW_SORTS.map((sort) => (
+                <a
+                  href={productReviewsPageHref(product.slug, { sort, rating: view.rating })}
+                  class="product-reviews-sort-option"
+                  aria-current={sort === view.sort ? "true" : undefined}
+                >{sortLabels[sort]}</a>
+              ))}
+            </nav>
+            {view.rating !== null && (
+              <p class="product-reviews-filter">
+                <span>{formatCheckoutLanguageText(copy.reviewsFilteredText, { stars: view.rating })}</span>
+                <a href={productReviewsPageHref(product.slug, { sort: view.sort })} class="product-reviews-filter-clear">{copy.reviewsFilterAllText}</a>
+              </p>
+            )}
+          </div>
+
+          {reviews.items.length > 0 ? (
+            <ul class="product-reviews-list" set:html={listMarkup}></ul>
+          ) : (
+            <p class="product-reviews-status">
+              {view.rating !== null
+                ? formatCheckoutLanguageText(copy.reviewsFilterEmptyText, { stars: view.rating })
+                : copy.reviewsEmptyText}
+            </p>
+          )}
+
+          {(nextHref || firstHref) && (
+            <div class="product-reviews-more">
+              {nextHref && <a href={nextHref} class="product-reviews-more-button">{copy.reviewsNextPageText}</a>}
+              {firstHref && <a href={firstHref} class="product-reviews-all">{copy.reviewsFirstPageText}</a>}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </section>
+</Layout>

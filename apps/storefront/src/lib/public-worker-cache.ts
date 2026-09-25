@@ -109,6 +109,8 @@ function isPublicCachePath(pathname: string): boolean {
     pathname === "/" ||
     isBuyerShellPathname(pathname) ||
     /^\/(?:products|categories|collections)\/[^/]+\/?$/.test(pathname) ||
+    // A product's review pages (noindex, but a public page like any other).
+    /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
     // The category index and the header's whole menu panels (a partial).
     /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
     /^\/search\/?$/.test(pathname) ||
