@@ -64,6 +64,8 @@ type Row = Record<string, SQLInputValue | null>;
 const ID_PREFIXES = /^(p|cat|col|brd|media|page|art|menu|nav|promo|ov|opt|v|pmed|attr|atv|atg|loc|zone|ship|tax|rate|lang|an|hero|pcode|pcond|peff|pred|prc|pcb|pbd|pav|o|oi|cus)_/;
 const UNIQUE_HINT = /slug|sku|handle|code|barcode|name|key|path|normalized|checksum|token|value|label|title|filename|object_key/;
 const MAX_ATTEMPTS = 8;
+/** The cache's own clock tables: never mutated (they are the instrument, not the subject). */
+export const MACHINERY_TABLES: ReadonlySet<string> = new Set(["cache_clock", "cache_dep", "cache_generation"]);
 
 export class RowMutator {
   private counter = 0;
@@ -80,7 +82,7 @@ export class RowMutator {
   tableWeights(): Array<readonly [number, TableModel]> {
     const weights: Array<readonly [number, TableModel]> = [];
     for (const table of this.model.values()) {
-      if (table.columns.length === 0) continue;
+      if (table.columns.length === 0 || MACHINERY_TABLES.has(table.name)) continue;
       const weight = table.registered
         ? 10
         : table.exemptReason !== null

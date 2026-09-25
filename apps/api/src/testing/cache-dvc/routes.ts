@@ -75,7 +75,6 @@ function otherParts(): string[] {
     "/api/v1/storefront/homepage",
     "/api/v1/storefront/layout",
     "/api/v1/storefront/pages/slug/about",
-    "/api/v1/storefront/pages/slug/eid-lookbook",
     "/api/v1/checkout/config",
     "/api/v1/checkout-languages/active",
     "/api/v1/shipping-methods",
@@ -98,8 +97,8 @@ function otherParts(): string[] {
     "/api/v1/footer",
     "/api/v1/navigation",
     "/api/v1/navigation/placements",
-    "/api/v1/navigation/menus/menu_main",
-    "/api/v1/navigation/menus/menu_main/items",
+    "/api/v1/navigation/menus/menu_main?revision=1&dependencyRevision=1",
+    "/api/v1/navigation/menus/menu_main/items?revision=1&dependencyRevision=1",
     "/api/v1/navigation/menu_footer",
   ];
 }
@@ -131,7 +130,7 @@ export function dvcPageCatalogue(): DvcPage[] {
     { name: "collection-dynamic", parts: [...SHELL, "/api/v1/collections/col_dynamic"] },
     { name: "brand", parts: [...SHELL, "/api/v1/brands/aarong", `/api/v1/brands/aarong/products?${LIST}`] },
     { name: "cms", parts: [...SHELL, "/api/v1/storefront/pages/slug/about"] },
-    { name: "article", parts: [...SHELL, "/api/v1/storefront/pages/slug/eid-lookbook"] },
+    { name: "article", parts: [...SHELL, "/api/v1/articles/slug/eid-lookbook"] },
     { name: "cart-shell", parts: [...SHELL, ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities"] },
     { name: "sitemap-products", parts: ["/api/v1/products/sitemap"] },
     { name: "feed", parts: ["/api/v1/products/feed", "/api/v1/seo"] },

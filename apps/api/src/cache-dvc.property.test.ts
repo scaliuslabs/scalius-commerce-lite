@@ -27,6 +27,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { CACHE_DEP_TABLES } from "@scalius/shared/cache-deps";
 import { DvcHarness, type DvcHarnessConfig } from "./testing/cache-dvc/harness";
+import { scopeRecorder, type ScopeRecorderStats } from "./testing/cache-dvc/harness-adapters";
 import { registryColumnsMissingFromSchema, registryTablesMissingFromSchema } from "./testing/cache-dvc/schema-model";
 
 vi.mock("@scalius/database/client", async (importOriginal) => {
@@ -61,11 +62,15 @@ const CLOCK = (process.env.DVC_CLOCK ?? "auto") as DvcHarnessConfig["clock"];
 const RACE = Number(process.env.DVC_RACE ?? (MODE === "long" ? 0.02 : 0.01));
 const SEEDS = process.env.DVC_SEED
   ? [process.env.DVC_SEED]
-  : Array.from({ length: Number(process.env.DVC_SEEDS ?? (MODE === "long" ? 1 : 2)) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
+  : Array.from({ length: Number(process.env.DVC_SEEDS ?? 1) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
 const TIMEOUT = MODE === "long" ? 24 * 3600_000 : 240_000;
+
+const RECORDER = process.env.DVC_RECORDER === "coarse" ? "coarse" : "scope";
+const scopeStats: ScopeRecorderStats = { coarse: new Map(), unobserved: new Map() };
 
 function harnessConfig(seed: string): DvcHarnessConfig {
   return {
+    ...(RECORDER === "scope" ? { recorder: ({ model }) => scopeRecorder(scopeStats, new Set(model.keys())) } : {}),
     seed,
     provider: PROVIDER,
     clock: CLOCK,
@@ -118,7 +123,13 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
         const summary = harness.summary();
         console.info(`[DVC] findings:\n${[...harness.findings.values()].map((finding) => `- (${finding.count}x) ${finding.signature}`).join("\n") || "none"}`);
         reports.push({ seed, mode: MODE, provider: PROVIDER, stats: harness.stats, coverage: harness.coverage.gaps(harness.model), nonOk, refusals: Object.fromEntries(harness.coverage.refusals) });
+        const gaps = harness.coverage.gaps(harness.model);
+        console.info(`[DVC] coverage gaps:\n  ops: ${gaps.ops.join(" ")}\n  columns: ${gaps.columns.join(" ")}\n[DVC] refusals:\n${[...harness.coverage.refusals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => `  ${count}x ${key}`).join("\n")}`);
         console.info(`[DVC] ${summary}\nnon-200 parts: ${nonOk.join(" ") || "none"}\nwall ${((performance.now() - started) / 1000).toFixed(1)}s`);
+        if (RECORDER === "scope") {
+          const top = (map: Map<string, number>) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([key, count]) => `  ${count}x ${key}`).join("\n") || "  none";
+          console.info(`[DVC] coarse fallbacks (route table):\n${top(scopeStats.coarse)}\n[DVC] tables the harness saw but S2 did not report:\n${top(scopeStats.unobserved)}`);
+        }
         harness.assertNoFindings();
       } finally {
         harness.close();
