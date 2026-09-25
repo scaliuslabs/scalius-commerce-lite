@@ -18,7 +18,7 @@ import {
 } from "@scalius/database/schema";
 import { DIGITAL_DOWNLOAD_TICKET_TTL_SECONDS } from "@scalius/shared/digital";
 import { AppError, NotFoundError } from "@scalius/core/errors";
-import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import { licenceKeyCrypto, signDownloadTicket, verifyDownloadTicketSignature } from "./secrets";
 
 /** Who is asking: the signed-in account owner, or a holder of this order's receipt proof. */
@@ -29,6 +29,13 @@ export type DigitalBuyerAccess =
 type TicketEnv = { SCALIUS_SECRET?: unknown };
 
 const LIST_LIMIT = 100;
+
+/**
+ * A cancelled, refunded or returned order ends access to what it delivered:
+ * downloads and key reveals stop, and the lists show the access as ended.
+ */
+export const DIGITAL_ACCESS_ENDED_ORDER_STATUSES = ["cancelled", "refunded", "returned"] as const;
+const accessEndedSql = sql<number>`${sql.raw(`"orders"."status"`)} IN ('cancelled', 'refunded', 'returned')`;
 const ID_CHUNK = 90;
 
 function accessCondition(access: DigitalBuyerAccess): SQL {
@@ -98,6 +105,7 @@ export async function listBuyerDownloads(
         sizeBytes: digitalAssets.sizeBytes,
         hasObject: sql<number>`${digitalAssets.currentR2Key} IS NOT NULL`,
         orderNumber: orders.orderNumber,
+        accessEnded: accessEndedSql,
         productName: orderItems.productName,
         variantLabel: orderItems.variantLabel,
     }).from(digitalEntitlements)
@@ -109,6 +117,9 @@ export async function listBuyerDownloads(
         .limit(LIST_LIMIT)
         .all();
 
+    for (const row of rows) {
+        if (Number(row.accessEnded) === 1 && row.revokedAt === null) row.revokedAt = row.createdAt;
+    }
     const keyEntitlements = rows.filter((row) => row.kind === "licence_keys" && row.revokedAt === null).map((row) => row.entitlementId);
     const keysByEntitlement = new Map<string, BuyerLicenceKey[]>();
     for (let offset = 0; offset < keyEntitlements.length; offset += ID_CHUNK) {
@@ -164,7 +175,11 @@ export async function countBuyerDigitalEntitlements(db: Database, customerId: st
     const [row] = await db.select({ count: sql<number>`count(*)` })
         .from(digitalEntitlements)
         .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
-        .where(and(accessCondition({ kind: "customer", customerId }), isNull(digitalEntitlements.revokedAt)))
+        .where(and(
+            accessCondition({ kind: "customer", customerId }),
+            isNull(digitalEntitlements.revokedAt),
+            notInArray(orders.status, [...DIGITAL_ACCESS_ENDED_ORDER_STATUSES]),
+        ))
         .all();
     return Number(row?.count ?? 0);
 }
@@ -196,13 +211,16 @@ export async function mintDownloadTicket(
         downloadCount: digitalEntitlements.downloadCount,
         downloadLimit: digitalEntitlements.downloadLimit,
         currentR2Key: digitalAssets.currentR2Key,
+        accessEnded: accessEndedSql,
     }).from(digitalEntitlements)
         .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
         .innerJoin(digitalAssets, eq(digitalAssets.id, digitalEntitlements.assetId))
         .where(and(eq(digitalEntitlements.id, input.entitlementId), accessCondition(input.access)))
         .get();
     if (!owned || owned.kind !== "file" || !owned.currentR2Key) throw new NotFoundError("Download not found");
-    if (owned.revokedAt !== null) throw new AppError(410, "DOWNLOAD_REVOKED", "The store removed access to this download.");
+    if (owned.revokedAt !== null || Number(owned.accessEnded) === 1) {
+        throw new AppError(410, "DOWNLOAD_REVOKED", "The store removed access to this download.");
+    }
     if (owned.expiresAt !== null && owned.expiresAt <= now) throw new AppError(410, "DOWNLOAD_EXPIRED", "Access to this download has ended.");
 
     // D4: the guard is the WHERE clause; zero rows means the limit was reached.
@@ -213,6 +231,7 @@ export async function mintDownloadTicket(
     }).where(and(
         eq(digitalEntitlements.id, input.entitlementId),
         isNull(digitalEntitlements.revokedAt),
+        sql`NOT EXISTS (SELECT 1 FROM "orders" o WHERE o.id = ${digitalEntitlements.orderId} AND o.status IN ('cancelled', 'refunded', 'returned'))`,
         sql`(${digitalEntitlements.downloadLimit} IS NULL OR ${digitalEntitlements.downloadCount} < ${digitalEntitlements.downloadLimit})`,
         sql`(${digitalEntitlements.expiresAt} IS NULL OR ${digitalEntitlements.expiresAt} > ${now})`,
     )).returning({ downloadCount: digitalEntitlements.downloadCount, downloadLimit: digitalEntitlements.downloadLimit });
@@ -265,11 +284,13 @@ export async function openDownloadTicket(
         filename: digitalAssets.filename,
         mediaType: digitalAssets.mediaType,
         sizeBytes: digitalAssets.sizeBytes,
+        accessEnded: accessEndedSql,
     }).from(digitalEntitlements)
         .innerJoin(digitalAssets, eq(digitalAssets.id, digitalEntitlements.assetId))
+        .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
         .where(eq(digitalEntitlements.id, input.entitlementId))
         .get();
-    if (!row || row.kind !== "file" || !row.r2Key || row.revokedAt !== null) throw notFound;
+    if (!row || row.kind !== "file" || !row.r2Key || row.revokedAt !== null || Number(row.accessEnded) === 1) throw notFound;
     if (row.expiresAt !== null && row.expiresAt <= now) throw notFound;
     return {
         r2Key: row.r2Key,
@@ -298,6 +319,7 @@ export async function revealLicenceKey(
             eq(digitalLicenceKeys.id, input.keyId),
             eq(digitalLicenceKeys.status, "assigned"),
             accessCondition(input.access),
+            notInArray(orders.status, [...DIGITAL_ACCESS_ENDED_ORDER_STATUSES]),
         ))
         .get();
     if (!row || row.revokedAt !== null) throw new NotFoundError("Licence key not found");
