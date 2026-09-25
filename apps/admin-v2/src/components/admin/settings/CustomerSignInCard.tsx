@@ -87,7 +87,8 @@ export function CustomerSignInCard() {
           <span className="font-medium">{t("phoneField")}</span>
           <span className="text-muted-foreground">{t("phoneLocked")}</span>
         </div>
-        <fieldset className="space-y-1 border-t border-border pt-3">
+        <div className="border-t border-border pt-3">
+        <fieldset className="space-y-1">
           <legend className="text-body font-medium">{t("askEmail")}</legend>
           <RadioGroup
             value={identity.email}
@@ -103,7 +104,9 @@ export function CustomerSignInCard() {
           </RadioGroup>
           {emailCodes ? <p className="text-body text-muted-foreground">{t("emailInUse")}</p> : null}
         </fieldset>
-        <fieldset className="space-y-1 border-t border-border pt-3">
+        </div>
+        <div className="border-t border-border pt-3">
+        <fieldset className="space-y-1">
           <legend className="text-body font-medium">{t("askWhatsapp")}</legend>
           <RadioGroup
             value={identity.whatsapp}
@@ -119,6 +122,7 @@ export function CustomerSignInCard() {
           </RadioGroup>
           {whatsappCodes ? <p className="text-body text-muted-foreground">{t("whatsappInUse")}</p> : null}
         </fieldset>
+        </div>
       </SettingsCard>
 
       <SettingsCard id="customerSignIn" title={t("signInTitle")} description={t("signInDescription")}>

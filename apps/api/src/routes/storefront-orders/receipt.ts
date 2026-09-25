@@ -208,7 +208,7 @@ async function enforceOrderLookupRateLimit(env: Env, ip: string): Promise<void> 
     isWithinRateLimit(env, "RL_STANDARD", "order-lookup-ip-minute", ip),
   ]);
   if (!strict || !standard) {
-    throw new RateLimitError("Too many order lookups. Please wait a minute and try again.", 60);
+    throw new RateLimitError("Too many order lookups.", 60);
   }
 }
 
