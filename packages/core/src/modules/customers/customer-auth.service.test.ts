@@ -8,7 +8,8 @@ import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/
 import { ConflictError, RateLimitError, ValidationError } from "../../errors";
 import { saveSmsSettings } from "../../integrations/sms";
 import { getOrderDetails } from "../orders/admin/detail";
-import { getOfferedCustomerAuthPolicy } from "../settings/checkout-readiness";
+import { getOfferedCustomerIdentity } from "../settings/checkout-readiness";
+import { customerAuthDocument } from "../settings/documents";
 import { createAtomicCheckoutAttempt } from "../checkout/attempts";
 import { commitStorefrontOrderPayload } from "../checkout/commit";
 import type { StorefrontOrderCommitPayload } from "../orders/types";
@@ -57,6 +58,8 @@ beforeEach(() => {
   sqlite.exec(`
     INSERT INTO settings (id, key, value, type, category)
       VALUES ('email', 'document', '{"provider":"cloudflare","sender":"shop@example.test","resendApiKey":""}', 'json', 'email');
+    INSERT INTO settings (id, key, value, type, category)
+      VALUES ('auth', 'document', '{"email":"optional","whatsapp":"off","channels":["email","sms"]}', 'json', 'customer_auth');
     INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tee', 'tee', 50000, 1);
     INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
       VALUES ('var_1', 'prod_1', 'TEE-1', 50000, 50, 1, 1);
@@ -427,16 +430,26 @@ describe("merchant changes are attributed and reversible (R3-ORD-13, R3-ORD-17)"
 });
 
 describe("phone sign-in (R3-SB-07)", () => {
-  it("is offered whenever text codes can be sent, even if sign-in settings say email only", async () => {
-    const policy = { otpChannels: ["email"], requiredContactFields: [], optionalContactFields: [], defaultOtpChannel: "email" } as never;
-    expect((await getOfferedCustomerAuthPolicy(db, policy, { encryptionKey: KEY })).otpChannels).not.toContain("sms");
+  it("is offered only when the store chose a phone channel in Customer accounts", async () => {
+    const emailOnly = { email: "required", whatsapp: "off", channels: ["email"] } as const;
+    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    // SMS can send, but the merchant didn't choose it: it is never added.
+    expect((await getOfferedCustomerIdentity(db, { ...emailOnly, channels: [...emailOnly.channels] }, { encryptionKey: KEY })).channels)
+      .not.toContain("sms");
+    await customerAuthDocument.write(db, { ...emailOnly, channels: ["email"] });
     await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, ip: "203.0.113.200", encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .rejects.toThrow("Phone sign-in isn't available yet. Use your email.");
 
-    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
-    expect((await getOfferedCustomerAuthPolicy(db, policy, { encryptionKey: KEY })).otpChannels).toContain("sms");
+    await customerAuthDocument.write(db, { email: "optional", whatsapp: "off", channels: ["sms"] });
     await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, ip: "203.0.113.201", encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .resolves.toMatchObject({ message: "We sent you a code." });
+  });
+
+  it("fails closed when the chosen channel can't send, without falling back", async () => {
+    await customerAuthDocument.write(db, { email: "required", whatsapp: "same_as_phone", channels: ["whatsapp", "sms"] });
+    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, channel: "whatsapp", ip: "203.0.113.202", encryptionKey: KEY, credentialEncryptionKey: KEY }))
+      .rejects.toThrow("WhatsApp codes aren't available right now.");
   });
 
   it("gives a phone-proven buyer their own account and moves the phone's orders there, never renaming the guest record", async () => {

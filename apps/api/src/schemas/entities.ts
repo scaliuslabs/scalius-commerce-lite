@@ -432,6 +432,8 @@ export const orderDetailSchema = z.object({
   customerName: z.string(),
   customerPhone: z.string(),
   customerEmail: z.string().nullable(),
+  /** A separate WhatsApp number when Customer accounts collects one; null means the phone. */
+  customerWhatsapp: z.string().nullable(),
   customerId: z.string().nullable(),
   /** The customer record the order is filed under; its title can differ from the order's own name. */
   customerRecord: z.object({

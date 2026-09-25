@@ -37,7 +37,6 @@ function checkoutLanguage(
       ...overrides,
     },
     fieldVisibility: {
-      showEmailField: true,
       showOrderNotesField: true,
       showAreaField: true,
     },

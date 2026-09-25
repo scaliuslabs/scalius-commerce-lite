@@ -44,7 +44,10 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  window.__CHECKOUT_CONFIG__ = { authVerificationMethod: "email", allowedCountries: ["BD"] } as CheckoutConfig;
+  window.__CHECKOUT_CONFIG__ = {
+    allowedCountries: ["BD"],
+    customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
+  } as unknown as CheckoutConfig;
 });
 
 afterEach(async () => {
@@ -316,15 +319,25 @@ describe("sign-in dialog", () => {
     [["sms"], false],
   ])("with sign-in channels %j, says phone sign-in isn't available: %s", async (otpChannels, noted) => {
     window.__CHECKOUT_CONFIG__ = {
-      authVerificationMethod: "email",
       allowedCountries: ["BD"],
-      customerAuthPolicy: { otpChannels, defaultOtpChannel: otpChannels[0], requiredContactFields: [], optionalContactFields: [] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: otpChannels },
     } as unknown as CheckoutConfig;
     await open();
 
     const note = host.querySelector("[data-phone-sign-in-note]");
     expect(Boolean(note)).toBe(noted);
     if (noted) expect(note?.textContent?.trim()).toBe("Phone sign-in isn't available yet. Use your email.");
+  });
+
+  it("says sign-in codes are unavailable when no chosen channel can send (fail closed)", async () => {
+    window.__CHECKOUT_CONFIG__ = {
+      allowedCountries: ["BD"],
+      customerIdentity: { email: "required", whatsapp: "off", channels: [] },
+    } as unknown as CheckoutConfig;
+    await open();
+    expect(host.querySelector("[data-sign-in-unavailable]")?.textContent?.trim())
+      .toBe("Sign-in codes aren't available right now. Contact the store.");
+    expect(host.querySelector("[data-phone-sign-in-note]")).toBeNull();
   });
 
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {

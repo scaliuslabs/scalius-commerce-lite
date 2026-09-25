@@ -900,7 +900,6 @@ export interface CheckoutLanguageData {
   code: string;
   languageData: CheckoutLanguageStrings;
   fieldVisibility: {
-    showEmailField: boolean;
     showOrderNotesField: boolean;
     showAreaField: boolean;
   };

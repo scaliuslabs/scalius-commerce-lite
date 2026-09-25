@@ -283,6 +283,8 @@ export interface CreateStorefrontOrderInput {
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
+    /** A separate WhatsApp number, kept only when Customer accounts asks for one. */
+    customerWhatsapp?: string | null;
     /** Required only when a line ships (a `delivery` rate for physical items). */
     shippingAddress?: string | null;
     city?: string | null;
@@ -400,6 +402,7 @@ export interface StorefrontOrderCommitPayload {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        customerWhatsapp?: string | null;
         /** Null unless something ships. */
         shippingAddress: string | null;
         city: string | null;

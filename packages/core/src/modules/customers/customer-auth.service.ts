@@ -21,7 +21,7 @@ import {
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
-import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
+import { buildOtpQueuePayload, type OtpQueuePayload } from "./otp-transport";
 import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
 import {
     claimCustomerAuthOtpChallenge,
@@ -39,20 +39,16 @@ import {
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
-    isContactFieldRequiredForAuthChannel,
-    resolveCustomerAuthChannelForRequest,
+    resolveSignInChannel,
     type CustomerAuthOtpChannel,
-    type CustomerAuthPolicyConfig,
+    type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
-import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
-import { getSmsProviderReadiness } from "../../integrations/sms";
-import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
-import { isReady } from "@scalius/shared/readiness";
+import type { EmailRuntimeContext } from "../../integrations/email";
+import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
 import { getAllowedCountries } from "../settings/site-settings.service";
 import {
     customerAuthDocument,
     customerCountriesDocument,
-    type CustomerAuthSettings,
 } from "../settings/documents";
 import { selectSettingsDocuments } from "../settings/settings-store";
 
@@ -256,8 +252,7 @@ export function getCookieConfig(
 }
 
 async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
-    settings: CustomerAuthSettings;
-    policy: CustomerAuthPolicyConfig;
+    identity: CustomerIdentitySettings;
     phoneCountryPolicy: PhoneCountryPolicy;
 }> {
     const rows = await selectSettingsDocuments(db, [customerAuthDocument, customerCountriesDocument]);
@@ -266,8 +261,7 @@ async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
         customerCountriesDocument.fromRows(rows),
     ]);
     return {
-        settings: auth.value,
-        policy: auth.value.policy,
+        identity: auth.value,
         phoneCountryPolicy: {
             countries: countries.value.allowedCountries,
             mode: countries.value.allowedCountriesMode,
@@ -520,11 +514,10 @@ export async function sendOtp(
     db: Database,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
-    const { settings, policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
-    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
-        ?? (input.method === "phone" && input.channel && PHONE_CODE_CHANNELS.includes(input.channel) ? input.channel : null)
-        ?? (input.method === "phone" ? await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey) : null);
+    // Only the channels the store chose in Customer accounts; never another one.
+    const channel = resolveSignInChannel(identity.channels, input.method, input.channel);
     if (!channel) {
         throw new ForbiddenError(
             input.method === "email"
@@ -534,15 +527,9 @@ export async function sendOtp(
     }
     requireKey(input.credentialEncryptionKey, "Customer OTP delivery target encryption key is not configured.");
 
-    // Resolve and validate the delivery transport before counting the request
-    // or touching challenge state.
-    const transport = getOtpTransport(input.method, policy, channel);
-    await assertOtpChannelReady(db, channel, input);
-    const configError = transport.validateConfig(settings);
-    if (configError) {
-        console.error(`[CustomerAuth] Transport ${transport.label} misconfigured: ${configError}`);
-        throw new ServiceUnavailableError(configError);
-    }
+    // A chosen channel that can't send fails closed before counting the
+    // request or touching challenge state.
+    await assertCustomerChannelReady(db, channel, input);
 
     // D1 is the OTP authority: the challenge row counts attempts and
     // consumes codes atomically. The raw code is never stored or queued.
@@ -586,41 +573,16 @@ export async function sendOtp(
     return {
         message: "We sent you a code.",
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000)),
-        queuePayload: transport.buildQueuePayload(settings, channel, deliveryKey, challenge.expiresAt, otpKey),
+        queuePayload: buildOtpQueuePayload({
+            channel,
+            purpose: "customer_login",
+            challengeKey: otpKey,
+            deliveryKey,
+            otpExpiresAt: challenge.expiresAt,
+        }),
         otpStorageKey: otpKey,
         deliveryKey,
     };
-}
-
-async function assertOtpChannelReady(
-    db: Database,
-    channel: CustomerAuthOtpChannel,
-    input: Pick<SendOtpInput, "emailEnv" | "credentialEncryptionKey">,
-): Promise<void> {
-    if (channel === "email") {
-        const readiness = await getEmailProviderReadiness({
-            db,
-            env: input.emailEnv,
-            encryptionKey: input.credentialEncryptionKey,
-        });
-        if (!isReady(readiness)) {
-            console.error(`[CustomerAuth] Email transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
-            throw new ServiceUnavailableError("Email codes aren't available right now.");
-        }
-        return;
-    }
-    if (channel === "whatsapp") {
-        const whatsApp = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
-        if (!whatsApp.accessToken || !whatsApp.phoneNumberId) {
-            throw new ServiceUnavailableError("WhatsApp codes aren't available right now.");
-        }
-        return;
-    }
-    const readiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
-    if (!isReady(readiness)) {
-        console.error(`[CustomerAuth] SMS transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
-        throw new ServiceUnavailableError("Text message codes aren't available right now.");
-    }
 }
 
 /**
@@ -641,11 +603,10 @@ export async function verifyOtp(
     if (!input.code?.trim()) {
         throw new ValidationError("Enter the 6-digit code.");
     }
-    const { policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
-    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
-        ?? (input.method === "phone" && input.channel && PHONE_CODE_CHANNELS.includes(input.channel) ? input.channel : null)
-        ?? (input.method === "email" ? "email" : "sms");
+    const channel = resolveSignInChannel(identity.channels, input.method, input.channel);
+    if (!channel) throw new ValidationError("There's no active code. Send a new code.");
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
     const challengeInput = {
         otpKey,
@@ -665,7 +626,7 @@ export async function verifyOtp(
             throw new ValidationError("This account was closed. Contact the store to restore it.");
         }
         const latestOrder = await latestOrderForProvenContact(db, input.method, identifier);
-        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy, latestOrder);
+        newAccount = await prepareNewAccount(db, input, identifier, identity, phoneCountryPolicy, latestOrder);
         if (!newAccount) return { status: "needs_account_details", suggestion: suggestNewAccount(latestOrder) };
     }
     await claimCustomerAuthOtpChallenge(db, challengeInput);
@@ -687,31 +648,6 @@ export async function verifyOtp(
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row), isNewUser };
 }
 
-const PHONE_CODE_CHANNELS: readonly CustomerAuthOtpChannel[] = ["sms", "whatsapp"];
-
-/**
- * The phone channel a code can actually go out on: the store's chosen phone
- * channel first, then any text channel that is set up. Phone sign-in is
- * offered whenever SMS or WhatsApp works, whatever the sign-in settings say.
- */
-export async function readyPhoneCodeChannel(
-    db: Database,
-    policy: CustomerAuthPolicyConfig,
-    credentialEncryptionKey: string | undefined,
-): Promise<CustomerAuthOtpChannel | null> {
-    const preferred = resolveCustomerAuthChannelForRequest(policy, "phone");
-    const candidates = [...new Set([...(preferred ? [preferred] : []), ...PHONE_CODE_CHANNELS])];
-    for (const channel of candidates) {
-        try {
-            await assertOtpChannelReady(db, channel, { credentialEncryptionKey });
-            return channel;
-        } catch {
-            // Not set up; try the next channel.
-        }
-    }
-    return null;
-}
-
 /**
  * The account page's only prompt about phones: the buyer's OWN account phone,
  * unproven, when a code can reach it. It never mentions orders, counts or
@@ -725,8 +661,8 @@ export async function getAccountPhoneVerificationPrompt(
 ): Promise<{ phone: string } | null> {
     const account = await getActiveCustomerById(db, accountId);
     if (!account?.accountClaimedAt || account.phoneVerifiedAt || !account.phone) return null;
-    const { policy } = await getCustomerAuthRuntimePolicy(db);
-    return await readyPhoneCodeChannel(db, policy, credentialEncryptionKey) ? { phone: account.phone } : null;
+    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    return await phoneCodeChannel(db, identity, credentialEncryptionKey) ? { phone: account.phone } : null;
 }
 
 /** Sends a code to the signed-in account's own (unproven) phone. */
@@ -737,8 +673,8 @@ export async function sendAccountPhoneCode(
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
     if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
-    const { policy } = await getCustomerAuthRuntimePolicy(db);
-    const channel = await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey);
+    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey);
     if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
     const sent = await sendOtp(db, { ...input, method: "phone", identifier: account.phone, channel });
     return { ...sent, message: `We sent a code to ${formatAccountPhone(account.phone)}.` };
@@ -762,8 +698,9 @@ export async function verifyAccountPhoneCode(
     if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    const { policy } = await getCustomerAuthRuntimePolicy(db);
-    const channel = await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey ?? input.encryptionKey) ?? "sms";
+    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const channel = resolveSignInChannel(identity.channels, "phone");
+    if (!channel) throw new ValidationError("There's no active code. Send a new code.");
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, account.phone, input.encryptionKey);
     await claimCustomerAuthOtpChallenge(db, {
         otpKey,
@@ -883,8 +820,7 @@ async function prepareNewAccount(
     db: Database,
     input: VerifyOtpInput,
     identifier: string,
-    channel: CustomerAuthOtpChannel,
-    policy: CustomerAuthPolicyConfig,
+    identity: CustomerIdentitySettings,
     phoneCountryPolicy: PhoneCountryPolicy,
     latestOrder: LatestContactOrder | null,
 ): Promise<{ row: CustomerRow; write: SQLiteBatchItem } | null> {
@@ -895,7 +831,8 @@ async function prepareNewAccount(
     const email = input.method === "email"
         ? identifier
         : input.account.email?.trim() ? normalizeEmailOrThrow(input.account.email) : null;
-    if (!email && isContactFieldRequiredForAuthChannel(policy, channel, "email")) {
+    // Customer accounts decides whether a new account must give an email.
+    if (!email && identity.email === "required") {
         throw new ValidationError("Enter your email address.");
     }
     const phone = input.method === "phone"
