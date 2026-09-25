@@ -98,11 +98,13 @@ describe("homepage section rules", () => {
       .toEqual(["ab", "c", "de", "f", "g"]);
   });
 
-  it("counts a deal down only to an end still ahead", () => {
-    const deal = (endsAt: string | null) => section("deal-block", "d", { endsAt }) as never;
-    expect(dealEndsAt(deal("2030-01-01T00:00:00Z"), Date.parse("2029-12-31T00:00:00Z"))).toBe("2030-01-01T00:00:00Z");
-    expect(dealEndsAt(deal("2030-01-01T00:00:00Z"), Date.parse("2030-01-02T00:00:00Z"))).toBeNull();
-    expect(dealEndsAt(deal(null))).toBeNull();
+  it("counts a deal down only to its running promotion's end still ahead", () => {
+    const deal = (promotionId: string | null) => section("deal-block", "d", { promotionId }) as never;
+    const ends = { promotionEnds: new Map([["promo-1", "2030-01-01T00:00:00Z"]]) };
+    expect(dealEndsAt(deal("promo-1"), ends, Date.parse("2029-12-31T00:00:00Z"))).toBe("2030-01-01T00:00:00Z");
+    expect(dealEndsAt(deal("promo-1"), ends, Date.parse("2030-01-02T00:00:00Z"))).toBeNull();
+    expect(dealEndsAt(deal("promo-2"), ends, Date.parse("2029-12-31T00:00:00Z"))).toBeNull();
+    expect(dealEndsAt(deal(null), ends)).toBeNull();
   });
 
   it("reads long store copy as subheadings and paragraphs", () => {
