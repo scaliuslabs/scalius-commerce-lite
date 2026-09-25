@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./cache-deps": "./src/cache-deps/index.ts",
     "./errors": "./src/errors/index.ts",
     "./modules/agent-access": "./src/modules/agent-access/index.ts",
     "./modules/agent-storefront": "./src/modules/agent-storefront/index.ts",
