@@ -17,7 +17,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
-    applyBundleSavingsToDiscountAllocation,
+    resolveBundlePromotionInterplay,
     assertStorefrontLineFulfilment,
     resolveCartPaymentMethods,
     storefrontLinePropertiesHashes,
@@ -94,7 +94,7 @@ const taxQuoteResponseSchema = z.object({
     description: "Submitted codes that do not apply right now, with the reason. They add nothing to the totals.",
   }),
   bundleDiscountMinor: z.number().int().nonnegative().openapi({
-    description: "The quantity-bundle part of `discountMinor`; the rest is the discounts above.",
+    description: "Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).",
   }),
   bundleDiscountAmount: z.number().nonnegative(),
   bundles: z.array(z.object({
@@ -103,7 +103,7 @@ const taxQuoteResponseSchema = z.object({
     discountType: z.enum(["percentage", "fixed_price"]),
     label: z.string().nullable(),
   })).openapi({
-    description: "Products whose cart quantity reached a bundle tier. Bundles add to promotions, which are evaluated at catalog prices.",
+    description: "The bundle tiers that priced this quote (empty when promotions did).",
   }),
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
@@ -192,15 +192,15 @@ async function resolveAuthoritativeTaxQuote(
     },
   });
 
-  // Quantity bundles add to the promotion's line discounts (the same rule the order commits).
-  const bundleDiscount = applyBundleSavingsToDiscountAllocation(
+  // Promotions or quantity bundles price the order, never both (the rule the order commits).
+  const bundleDiscount = resolveBundlePromotionInterplay(
     cartValidation.items.map((item) => ({
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
     })),
-    discount.taxAllocation,
+    discount,
   );
   const quote = await calculateStorefrontTaxQuote(db, {
     // No address (pickup, service, digital): only store-wide rates apply.
@@ -224,7 +224,7 @@ async function resolveAuthoritativeTaxQuote(
     promotionDiscountAllocation: bundleDiscount.allocation,
     currency: { code: currencyCode, decimalPlaces },
   });
-  return { quote, discount, bundleDiscountMinor: bundleDiscount.bundleDiscountMinor };
+  return { quote, discount: bundleDiscount.discount, bundleDiscountMinor: bundleDiscount.bundleDiscountMinor };
 }
 
 app.openapi(taxQuoteRoute, async (c) => {
@@ -302,7 +302,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
     bundleDiscountMinor,
     bundleDiscountAmount: toAmount(bundleDiscountMinor),
-    bundles: (cartValidation.bundles ?? []).map((bundle) => ({
+    bundles: (bundleDiscountMinor > 0 ? cartValidation.bundles ?? [] : []).map((bundle) => ({
       productId: bundle.productId,
       quantity: bundle.quantity,
       discountType: bundle.discountType,
