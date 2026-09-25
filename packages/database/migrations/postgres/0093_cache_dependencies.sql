@@ -53,7 +53,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || NEW."id", 't:products']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || NEW."id", 'srch', 'lm:shape', 't:products']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -68,7 +68,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || OLD."id", 't:products']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || OLD."id", 'srch', 'lm:shape', 't:products']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -110,35 +110,37 @@ FOR EACH ROW
 WHEN ((OLD."name" IS DISTINCT FROM NEW."name" OR OLD."description" IS DISTINCT FROM NEW."description"))
 EXECUTE FUNCTION scalius_compat."cdep_products_srch_fn"();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_srch_ins_fn"()
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_shape_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch', 't:products']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:products']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_products_srch_ins"
-AFTER INSERT ON "products"
+CREATE CONSTRAINT TRIGGER "cdep_products_shape"
+AFTER UPDATE ON "products"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
-EXECUTE FUNCTION scalius_compat."cdep_products_srch_ins_fn"();
+WHEN ((OLD."is_active" IS DISTINCT FROM NEW."is_active" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
+EXECUTE FUNCTION scalius_compat."cdep_products_shape_fn"();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_srch_del_fn"()
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_lastmod_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch', 't:products']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:seo', 'p:' || NEW."id", 't:products']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_products_srch_del"
-AFTER DELETE ON "products"
+CREATE CONSTRAINT TRIGGER "cdep_products_lastmod"
+AFTER UPDATE ON "products"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
-EXECUTE FUNCTION scalius_compat."cdep_products_srch_del_fn"();
+WHEN ((OLD."updated_at" IS DISTINCT FROM NEW."updated_at"))
+EXECUTE FUNCTION scalius_compat."cdep_products_lastmod_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_name_order_fn"()
 RETURNS trigger
@@ -367,7 +369,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || NEW."product_id", 't:product_variants']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || NEW."product_id", 'lm:shape', 't:product_variants']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -382,7 +384,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || OLD."product_id", 't:product_variants']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || OLD."product_id", 'lm:shape', 't:product_variants']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -407,6 +409,22 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."product_id" IS DISTINCT FROM NEW."product_id" OR OLD."option_combination_key" IS DISTINCT FROM NEW."option_combination_key" OR OLD."image_id" IS DISTINCT FROM NEW."image_id" OR OLD."weight" IS DISTINCT FROM NEW."weight" OR OLD."sku" IS DISTINCT FROM NEW."sku" OR OLD."price_minor" IS DISTINCT FROM NEW."price_minor" OR OLD."preorder_stock" IS DISTINCT FROM NEW."preorder_stock" OR OLD."is_default" IS DISTINCT FROM NEW."is_default" OR OLD."track_inventory" IS DISTINCT FROM NEW."track_inventory" OR OLD."low_stock_threshold" IS DISTINCT FROM NEW."low_stock_threshold" OR OLD."allow_preorder" IS DISTINCT FROM NEW."allow_preorder" OR OLD."preorder_date" IS DISTINCT FROM NEW."preorder_date" OR OLD."preorder_message" IS DISTINCT FROM NEW."preorder_message" OR OLD."allow_backorder" IS DISTINCT FROM NEW."allow_backorder" OR OLD."backorder_limit" IS DISTINCT FROM NEW."backorder_limit" OR OLD."tax_class_id" IS DISTINCT FROM NEW."tax_class_id" OR OLD."discount_bps" IS DISTINCT FROM NEW."discount_bps" OR OLD."discount_type" IS DISTINCT FROM NEW."discount_type" OR OLD."discount_amount_minor" IS DISTINCT FROM NEW."discount_amount_minor" OR OLD."barcode" IS DISTINCT FROM NEW."barcode" OR OLD."barcode_type" IS DISTINCT FROM NEW."barcode_type" OR OLD."fulfillment_kind" IS DISTINCT FROM NEW."fulfillment_kind" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
 EXECUTE FUNCTION scalius_compat."cdep_product_variants_upd_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_variants_shape_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_variants']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_variants_shape"
+AFTER UPDATE ON "product_variants"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at" OR OLD."product_id" IS DISTINCT FROM NEW."product_id"))
+EXECUTE FUNCTION scalius_compat."cdep_product_variants_shape_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_variants_band_fn"()
 RETURNS trigger
@@ -953,6 +971,22 @@ FOR EACH ROW
 WHEN ((OLD."name" IS DISTINCT FROM NEW."name" OR OLD."description" IS DISTINCT FROM NEW."description"))
 EXECUTE FUNCTION scalius_compat."cdep_categories_srch_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_categories_lastmod_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:seo', 'c:' || NEW."id", 'c:*', 't:categories']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_categories_lastmod"
+AFTER UPDATE ON "categories"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."updated_at" IS DISTINCT FROM NEW."updated_at"))
+EXECUTE FUNCTION scalius_compat."cdep_categories_lastmod_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_category_closure_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1123,6 +1157,22 @@ FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."name" IS DISTINCT FROM NEW."name" OR OLD."slug" IS DISTINCT FROM NEW."slug" OR OLD."description" IS DISTINCT FROM NEW."description" OR OLD."logo_media_id" IS DISTINCT FROM NEW."logo_media_id" OR OLD."status" IS DISTINCT FROM NEW."status" OR OLD."sort_order" IS DISTINCT FROM NEW."sort_order" OR OLD."meta_title" IS DISTINCT FROM NEW."meta_title" OR OLD."meta_description" IS DISTINCT FROM NEW."meta_description" OR OLD."canonical_path" IS DISTINCT FROM NEW."canonical_path" OR OLD."no_index" IS DISTINCT FROM NEW."no_index" OR OLD."exclude_from_sitemap" IS DISTINCT FROM NEW."exclude_from_sitemap" OR OLD."listing_template" IS DISTINCT FROM NEW."listing_template" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
 EXECUTE FUNCTION scalius_compat."cdep_brands_upd_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_brands_lastmod_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:seo', 'b:' || NEW."id", 'b:*', 't:brands']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_brands_lastmod"
+AFTER UPDATE ON "brands"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."updated_at" IS DISTINCT FROM NEW."updated_at"))
+EXECUTE FUNCTION scalius_compat."cdep_brands_lastmod_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_collections_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1168,6 +1218,22 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."name" IS DISTINCT FROM NEW."name" OR OLD."description" IS DISTINCT FROM NEW."description" OR OLD."content" IS DISTINCT FROM NEW."content" OR OLD."presentation" IS DISTINCT FROM NEW."presentation" OR OLD."config" IS DISTINCT FROM NEW."config" OR OLD."sort_order" IS DISTINCT FROM NEW."sort_order" OR OLD."is_active" IS DISTINCT FROM NEW."is_active" OR OLD."meta_title" IS DISTINCT FROM NEW."meta_title" OR OLD."meta_description" IS DISTINCT FROM NEW."meta_description" OR OLD."canonical_path" IS DISTINCT FROM NEW."canonical_path" OR OLD."no_index" IS DISTINCT FROM NEW."no_index" OR OLD."exclude_from_sitemap" IS DISTINCT FROM NEW."exclude_from_sitemap" OR OLD."listing_template" IS DISTINCT FROM NEW."listing_template" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
 EXECUTE FUNCTION scalius_compat."cdep_collections_upd_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_collections_lastmod_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:seo', 'col:' || NEW."id", 'col:*', 't:collections']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_collections_lastmod"
+AFTER UPDATE ON "collections"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."updated_at" IS DISTINCT FROM NEW."updated_at"))
+EXECUTE FUNCTION scalius_compat."cdep_collections_lastmod_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_attributes_ins_fn"()
 RETURNS trigger
@@ -1414,6 +1480,22 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."content_type" IS DISTINCT FROM NEW."content_type" OR OLD."title" IS DISTINCT FROM NEW."title" OR OLD."slug" IS DISTINCT FROM NEW."slug" OR OLD."content" IS DISTINCT FROM NEW."content" OR OLD."excerpt" IS DISTINCT FROM NEW."excerpt" OR OLD."author" IS DISTINCT FROM NEW."author" OR OLD."tags" IS DISTINCT FROM NEW."tags" OR OLD."meta_title" IS DISTINCT FROM NEW."meta_title" OR OLD."meta_description" IS DISTINCT FROM NEW."meta_description" OR OLD."canonical_path" IS DISTINCT FROM NEW."canonical_path" OR OLD."no_index" IS DISTINCT FROM NEW."no_index" OR OLD."exclude_from_sitemap" IS DISTINCT FROM NEW."exclude_from_sitemap" OR OLD."is_published" IS DISTINCT FROM NEW."is_published" OR OLD."hide_header" IS DISTINCT FROM NEW."hide_header" OR OLD."hide_footer" IS DISTINCT FROM NEW."hide_footer" OR OLD."hide_title" IS DISTINCT FROM NEW."hide_title" OR OLD."featured_image" IS DISTINCT FROM NEW."featured_image" OR OLD."published_at" IS DISTINCT FROM NEW."published_at" OR OLD."sort_order" IS DISTINCT FROM NEW."sort_order" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
 EXECUTE FUNCTION scalius_compat."cdep_pages_upd_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_pages_lastmod_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:seo', 'pg:' || NEW."id", 'pg:*', 't:pages']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_pages_lastmod"
+AFTER UPDATE ON "pages"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."updated_at" IS DISTINCT FROM NEW."updated_at"))
+EXECUTE FUNCTION scalius_compat."cdep_pages_lastmod_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_hero_sliders_ins_fn"()
 RETURNS trigger
@@ -2470,4 +2552,4 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."cdep_promotion_redemptions_del_fn"();
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (93, '0093_cache_dependencies', 'afb584594ee30a569affa5a7e2ea266459c1ec99e6eff46120823e808289cbb2');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (93, '0093_cache_dependencies', '6ca686d4c8e16823cfc6233f7c6c99d6041e0057bb36d483491e635518fa4aeb');

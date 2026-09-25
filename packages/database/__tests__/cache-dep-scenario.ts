@@ -74,8 +74,17 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
   // Product text: page, search and the name order of its public scopes.
   expect(await bumped(driver, "UPDATE products SET name = 'One renamed' WHERE id = 'p1'"))
     .toEqual([...p1Scopes("lo:name"), "p:p1", "srch", "t:products"].sort());
-  // Revision and timestamp columns are noise.
-  expect(await bumped(driver, "UPDATE products SET aggregate_revision = aggregate_revision + 1, updated_at = updated_at + 1 WHERE id = 'p1'")).toEqual([]);
+  // The editor revision is noise; updated_at is the sitemap lastmod and feed updatedAt.
+  expect(await bumped(driver, "UPDATE products SET aggregate_revision = aggregate_revision + 1, tax_classification_version = tax_classification_version + 1 WHERE id = 'p1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE products SET updated_at = updated_at + 1 WHERE id = 'p1'"))
+    .toEqual(["lm:seo", "p:p1", "t:products"]);
+  // Store shape (the layout's counts): product activity and SKU existence, nothing else.
+  expect(await bumped(driver, "UPDATE products SET is_active = 0 WHERE id = 'p1'")).toEqual(["lm:shape", "p:p1", "t:products"]);
+  expect(await bumped(driver, "UPDATE products SET is_active = 1 WHERE id = 'p1'")).toEqual(["lm:shape", "p:p1", "t:products"]);
+  expect(await bumped(driver, "UPDATE product_variants SET deleted_at = 1700000000 WHERE id = 'v1'")).toEqual(["lm:shape", "p:p1", "t:product_variants"]);
+  expect(await bumped(driver, "UPDATE product_variants SET deleted_at = NULL WHERE id = 'v1'")).toEqual(["lm:shape", "p:p1", "t:product_variants"]);
+  // Stock writes set the SKU's updated_at with its counters: still inside the band, still nothing.
+  expect(await bumped(driver, "UPDATE product_variants SET updated_at = updated_at + 1, stock_version = stock_version + 1 WHERE id = 'v1'")).toEqual([]);
   expect(await bumped(driver, "UPDATE products SET no_index = 1 WHERE id = 'p1'"))
     .toEqual(["lm:seo", "p:p1", "t:products"]);
 

@@ -18,6 +18,7 @@ import { AppError, ConflictError, NotFoundError } from "@scalius/core/errors";
 import type { MoveCategoryInput } from "./categories.validation";
 import { assertCategoryClaimsCurrent } from "./categories.revision";
 import { publicCategoryConditions } from "./categories.publication";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 /** Links the storefront tree read serves at most (the header's link budget). */
 export const CATEGORY_TREE_LINK_LIMIT = 150;
@@ -141,11 +142,11 @@ export async function moveCategory(
     try {
         updated = await db
             .update(categories)
-            .set({
+            .set(truthfulUpdatedAt(categories, {
                 parentId: data.parentId,
                 revision: sql`${categories.revision} + 1`,
                 updatedAt: sql`unixepoch()`,
-            })
+            }))
             .where(and(
                 eq(categories.id, id),
                 eq(categories.revision, data.expectedRevision),
