@@ -545,7 +545,7 @@ describe("storefront theme render matrix", () => {
       for (const thumb of thumbs) {
         expect(thumb.getAttribute("loading")).toBe("lazy");
         expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage, rail).sizes);
-        expect(thumb.getAttribute("srcset")).toMatch(/\/160\.webp 160w, \S+\/320\.webp 320w$/);
+        expect(thumb.getAttribute("srcset")).toMatch(/\/160\.webp 160w, \S+\/240\.webp 240w, \S+\/320\.webp 320w$/);
       }
     }
     expect(duplicateIds(productPage)).toEqual([]);
@@ -775,9 +775,9 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(buyNow(soldOut)).toBeNull();
   if (card.quickBuy) expect(buyNow(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
 
-  // The discount badge sits on the photo or next to the price.
-  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge === "image");
-  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge === "price");
+  // The discount badge sits on the photo, next to the price, or both (Fabrilife).
+  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge !== "price");
+  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge !== "image");
   expect(soldOut.textContent).toContain("Sold out");
 }
 

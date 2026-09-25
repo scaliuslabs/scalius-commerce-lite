@@ -39,7 +39,7 @@ describe("responsiveImageSources", () => {
   it("serves renditions with the slot's srcset and sizes", () => {
     expect(responsiveImageSources(MASTER, slot)).toEqual({
       src: at(960),
-      srcset: [160, 320, 480, 640, 960, 1600]
+      srcset: [160, 240, 320, 400, 480, 640, 960, 1600]
         .map((width) => `${at(width)} ${width}w`)
         .join(", "),
       sizes: slot.sizes,
@@ -51,7 +51,7 @@ describe("responsiveImageSources", () => {
       responsiveImageSources(MASTER, { width: 160, sizes: "80px", maxWidth: 320 }),
     ).toEqual({
       src: at(160),
-      srcset: `${at(160)} 160w, ${at(320)} 320w`,
+      srcset: `${at(160)} 160w, ${at(240)} 240w, ${at(320)} 320w`,
       sizes: "80px",
     });
   });
@@ -62,7 +62,7 @@ describe("responsiveImageSources", () => {
       responsiveImageSources(small, { width: 480, sizes: "80px", maxWidth: 320 }),
     ).toEqual({
       src: small,
-      srcset: `https://cdn.example.test/media/icon.png/160.webp 160w, ${small} 300w`,
+      srcset: `https://cdn.example.test/media/icon.png/160.webp 160w, https://cdn.example.test/media/icon.png/240.webp 240w, ${small} 300w`,
       sizes: "80px",
     });
   });
