@@ -366,7 +366,7 @@ export type StorefrontThemeDocument = {
                     [key: string]: never;
                 };
             };
-            below: Array<'frequently-bought-together' | 'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'questions' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
+            below: Array<'frequently-bought-together' | 'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'questions' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
             sticky: {
                 phoneTop: 'none' | 'anchor-bar';
                 phoneBottom: 'none' | 'buy-bar';
@@ -16067,6 +16067,9 @@ export type GetApiV1ProductsBySlugResponses = {
                     name: string;
                     slug: string;
                     value: string;
+                    group: string | null;
+                    unit: string | null;
+                    keySpec: boolean;
                 }>;
                 additionalInfo: Array<{
                     id: string;
