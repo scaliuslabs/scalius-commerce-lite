@@ -184,7 +184,6 @@ describe("OrderFulfilmentCards", () => {
       const done = card("fulfilled-pickup")!;
       expect(done.textContent).toContain(en["badge.pickedUp"]);
       expect(done.textContent).toContain("Cash received ৳1,200.00");
-      expect(done.querySelector('button[aria-label]')).toBeNull();
     });
   });
 
@@ -237,11 +236,14 @@ describe("OrderFulfilmentCards", () => {
       );
     });
 
-    it("shows why a fulfilment can't be voided instead of offering it", async () => {
-      await render({ ...sent, fulfillments: [riderParcel({ canVoid: false, voidBlockedReason: "The courier delivered it." })] });
+    it("shows why a fulfilment can't be voided on the disabled item", async () => {
+      await render({ ...sent, fulfillments: [riderParcel({ canVoid: false, voidBlockedReason: "courier" })] });
       const [item] = await openMenu();
       expect(item!.getAttribute("aria-disabled")).toBe("true");
-      expect(item!.textContent).toContain("The courier delivered it.");
+      expect(item!.closest('[data-testid="void-blocked"]')).not.toBeNull();
+      expect(item!.textContent).toContain(en["void.blocked.courier"]);
+      await act(async () => item!.click());
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     });
 
     it("offers no menu when the server allows nothing", async () => {

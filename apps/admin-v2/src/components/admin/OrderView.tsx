@@ -231,7 +231,7 @@ export function OrderView({ order }: { order: Order }) {
                 Messages slot (S4): OrderConversationCard mounts here and replaces
                 OrderSupportRequestsCard above (thread, case banner, composer).
               */}
-              <div className="order-3 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} /></div>
+              <div className="order-3 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} onRecordPayment={() => setRequest({ action: "collectCod", id: Date.now() })} /></div>
               <div className="order-4 lg:order-none"><OrderSummaryCard order={order} /></div>
               {hasDeliveryCard(order) ? <div className="order-4 lg:order-none"><ShipmentCard order={order} /></div> : null}
               <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>

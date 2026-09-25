@@ -73,8 +73,8 @@ export interface OrderFulfillment {
   voidedAt: OrderTimestamp | null;
   /** The server allows voiding it now (an own-rider parcel that came back). */
   canVoid?: boolean;
-  /** Why it can't be voided, in the server's words. */
-  voidBlockedReason?: string | null;
+  /** Why it can't be voided: a code the dashboard words (`void.blocked.*`). */
+  voidBlockedReason?: "voided" | "courier" | "delivered" | "order_not_confirmed" | null;
 }
 
 export interface OrderRefundAttempt {

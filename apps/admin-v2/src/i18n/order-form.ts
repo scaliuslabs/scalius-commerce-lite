@@ -144,6 +144,7 @@ export const orderFormMessages = defineMessages({
     pickupAt: "Pickup at {address}",
     pickupNoAddress: "Picked up at your store: no address needed.",
     noDeliveryNoAddress: "Nothing in this order ships: no address needed.",
+    noDeliveryForGoods: "This order has no delivery method, so it can't take items that ship. Create a new order for them.",
   },
   bn: {
     createOrder: "অর্ডার তৈরি করুন",
@@ -286,6 +287,7 @@ export const orderFormMessages = defineMessages({
     pickupAt: "পিকআপ: {address}",
     pickupNoAddress: "দোকান থেকে নেবেন: ঠিকানা লাগবে না।",
     noDeliveryNoAddress: "এই অর্ডারে পাঠানোর কিছু নেই: ঠিকানা লাগবে না।",
+    noDeliveryForGoods: "এই অর্ডারে ডেলিভারির ধরন নেই, তাই পাঠানোর মতো প্রোডাক্ট যোগ করা যাবে না। এগুলোর জন্য নতুন অর্ডার করুন।",
   },
 });
 
