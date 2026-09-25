@@ -1,0 +1,33 @@
+---
+// Grid or list (Daraz), on computers. The choice is a per-browser
+// preference (lib/catalog-paging.ts), never a URL, so it adds no crawl
+// variant; CatalogResults applies it before the grid paints. It is in the
+// first paint (no layout shift when its script runs), and a `<noscript>`
+// style removes it where it could not work.
+import { LayoutGrid, List } from "lucide-react";
+
+interface Props {
+  defaultView: "grid" | "list";
+}
+
+const { defaultView } = Astro.props;
+const button =
+  "inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground";
+---
+
+<div
+  role="group"
+  aria-label="Show products as"
+  data-catalog-view-toggle
+  class="hidden items-center gap-0.5 rounded-lg border border-border bg-background p-0.5 lg:inline-flex"
+>
+  <button type="button" data-view="grid" aria-pressed={defaultView === "grid" ? "true" : "false"} class={button}>
+    <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+    <span class="sr-only">Grid</span>
+  </button>
+  <button type="button" data-view="list" aria-pressed={defaultView === "list" ? "true" : "false"} class={button}>
+    <List className="h-4 w-4" aria-hidden="true" />
+    <span class="sr-only">List</span>
+  </button>
+</div>
+<noscript><style>[data-catalog-view-toggle] { display: none !important; }</style></noscript>

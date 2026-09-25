@@ -47,6 +47,24 @@ describe("catalog sorting", () => {
     expect(window.location.search).toBe("?q=bag");
   });
 
+  it("changes the page size from page one, keeping sort and filters; the default size leaves the URL", () => {
+    document.body.innerHTML = `
+      <select name="limit" data-catalog-sort data-list-pathname="/categories/bags"
+        data-current-filters='{"color":["Red"],"sortBy":"price-asc","page":"4"}'>
+        <option value="20">20</option><option value="60" selected>60</option>
+      </select>
+    `;
+    setupCatalogSorts();
+    const select = document.querySelector("select")!;
+
+    select.dispatchEvent(new Event("change"));
+    expect(window.location.search).toBe("?color=Red&limit=60&sortBy=price-asc");
+
+    select.value = "20";
+    select.dispatchEvent(new Event("change"));
+    expect(window.location.search).toBe("?color=Red&sortBy=price-asc");
+  });
+
   it("binds each rendered select only once", () => {
     setupCatalogSorts();
     setupCatalogSorts();

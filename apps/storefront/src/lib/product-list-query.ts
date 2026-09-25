@@ -5,7 +5,18 @@ import {
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
 
-const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy"] as const;
+const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit"] as const;
+
+/**
+ * Products per page. The default stays out of URLs; any other size is a
+ * view of the same listing (like a sort), so it is `noindex,follow` and the
+ * canonical keeps pointing at the default-size page.
+ */
+export const PRODUCT_LIST_PAGE_SIZES = [20, 40, 60] as const;
+export type ProductListPageSize = (typeof PRODUCT_LIST_PAGE_SIZES)[number];
+export const DEFAULT_PRODUCT_LIST_PAGE_SIZE: ProductListPageSize = 20;
+/** Keys of the listing URL that choose a view (page, sort, page size), not a filter. */
+const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit"]);
 
 const PRODUCT_LIST_SORT_VALUES = [
   "relevance",
@@ -34,6 +45,8 @@ const FACET_KEY_PATTERN = /^(?:[a-z0-9][a-z0-9-]{0,79}|option\.[^\s&=#?]{1,80})$
 
 export interface ProductListQueryState {
   page: number;
+  /** Products per page (PRODUCT_LIST_PAGE_SIZES). */
+  limit: ProductListPageSize;
   sortBy: ProductListSort;
   /** The sort that stays out of URLs: "relevance" for search results, else "newest". */
   defaultSort: ProductListSort;
@@ -45,10 +58,10 @@ export interface ProductListQueryState {
 
 export type ProductListFilterState = Record<string, string | string[]>;
 
-/** Filters the buyer applied (search, price, switches, facet values), not page or sort. */
+/** Filters the buyer applied (search, price, switches, facet values), not page, sort or page size. */
 export function countActiveProductListFilters(currentFilters: ProductListFilterState): number {
   return Object.entries(currentFilters)
-    .filter(([key, value]) => key !== "page" && key !== "sortBy" && value)
+    .filter(([key, value]) => !PRODUCT_LIST_VIEW_KEYS.has(key) && value)
     .reduce((count, [, value]) => count + (Array.isArray(value) ? value.length : 1), 0);
 }
 
@@ -136,6 +149,7 @@ export function buildProductListHref({
     defaultParams: {
       page: 1,
       sortBy: defaultSort,
+      limit: DEFAULT_PRODUCT_LIST_PAGE_SIZE,
     },
   });
   return queryString ? `${pathname}?${queryString}` : pathname;
@@ -152,6 +166,16 @@ function normalizePage(value: string | null): {
     return { page: 1, changed: true };
   }
   return { page, changed: false };
+}
+
+function normalizePageSize(value: string | null): { limit: ProductListPageSize; changed: boolean } {
+  if (!value) return { limit: DEFAULT_PRODUCT_LIST_PAGE_SIZE, changed: false };
+  const limit = PRODUCT_LIST_PAGE_SIZES.find((size) => String(size) === value);
+  // The default size is never written, so `?limit=20` redirects to the clean URL.
+  if (!limit || limit === DEFAULT_PRODUCT_LIST_PAGE_SIZE) {
+    return { limit: DEFAULT_PRODUCT_LIST_PAGE_SIZE, changed: true };
+  }
+  return { limit, changed: false };
 }
 
 function normalizeSort(
@@ -245,16 +269,17 @@ export function resolveProductListQueryState({
     getLastParam(params, "sortBy"),
     defaultSort,
   );
+  const { limit, changed: limitChanged } = normalizePageSize(getLastParam(params, "limit"));
   const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(facets);
   const options: ProductListOptions = {
     page,
-    limit: 20,
+    limit,
     sort: sortBy,
   };
   const currentFilters: ProductListFilterState = {};
   let shouldRedirect =
-    pageChanged || sortChanged || hasRepeatedSingletonParams(params);
+    pageChanged || sortChanged || limitChanged || hasRepeatedSingletonParams(params);
 
   if (query) {
     options.search = query;
@@ -267,6 +292,9 @@ export function resolveProductListQueryState({
   }
   if (sortBy !== defaultSort) {
     currentFilters.sortBy = sortBy;
+  }
+  if (limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE) {
+    currentFilters.limit = String(limit);
   }
 
   const minPriceParam = latinDigits(getLastParam(params, "minPrice"));
@@ -351,11 +379,12 @@ export function resolveProductListQueryState({
   }
 
   if (!shouldRedirect) {
-    return { page, sortBy, defaultSort, query, options, currentFilters, redirectPath: null };
+    return { page, limit, sortBy, defaultSort, query, options, currentFilters, redirectPath: null };
   }
 
   return {
     page,
+    limit,
     sortBy,
     defaultSort,
     query,
