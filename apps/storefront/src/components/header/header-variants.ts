@@ -147,6 +147,64 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
   },
 };
 
+/**
+ * What changes height when the page scrolls, in rem. The sticky header
+ * condenses (a shorter bar; the phone search row and the classic dropdown
+ * row fold away), and the page under it must not move: the header keeps its
+ * expanded height in the flow as a bottom margin while condensed (CLS 0).
+ * The heights the CSS paints and the reserve both come from here.
+ */
+export const HEADER_GEOMETRY = {
+  /** Every phone bar: 56px, 48px once scrolled. */
+  phoneBar: { expanded: 3.5, condensed: 3 },
+  /** Composed headers' phone search row: a 44px field and 8px under it. */
+  phoneSearchRow: 3.25,
+  /** The classic header's main row on computers: 72px, 64px once scrolled. */
+  classicBar: { expanded: 4.5, condensed: 4 },
+  /** The classic header's dropdown row (it folds into the bar on scroll). */
+  classicMenuRow: 3.5625,
+} as const;
+
+export interface HeaderCondense {
+  /** Height the header loses on scroll below 64rem (rem). */
+  phone: number;
+  /** ...and from 64rem. */
+  desktop: number;
+}
+
+/**
+ * How much a header condenses on scroll: the reserve that keeps the page
+ * still. `spec` null is the classic header; `foldsMenuRow` its dropdown row
+ * folding into the bar.
+ */
+export function headerCondense(spec: HeaderSpec | null, options: { foldsMenuRow: boolean }): HeaderCondense {
+  const { phoneBar, phoneSearchRow, classicBar, classicMenuRow } = HEADER_GEOMETRY;
+  const bar = phoneBar.expanded - phoneBar.condensed;
+  if (!spec) {
+    return {
+      phone: bar,
+      desktop: classicBar.expanded - classicBar.condensed + (options.foldsMenuRow ? classicMenuRow : 0),
+    };
+  }
+  // Composed headers keep their computer rows as they are.
+  return { phone: bar + (spec.phoneSearch === "sticky" ? phoneSearchRow : 0), desktop: 0 };
+}
+
+/** The geometry and the reserve as CSS custom properties (on #site-header). */
+export function headerGeometryStyle(condense: HeaderCondense): string {
+  const { phoneBar, phoneSearchRow, classicBar, classicMenuRow } = HEADER_GEOMETRY;
+  return [
+    `--hdr-phone-bar: ${phoneBar.expanded}rem`,
+    `--hdr-phone-bar-condensed: ${phoneBar.condensed}rem`,
+    `--hdr-phone-search-row: ${phoneSearchRow}rem`,
+    `--hdr-classic-bar: ${classicBar.expanded}rem`,
+    `--hdr-classic-bar-condensed: ${classicBar.condensed}rem`,
+    `--hdr-classic-menu-row: ${classicMenuRow}rem`,
+    `--hdr-condense-phone: ${condense.phone}rem`,
+    `--hdr-condense-desktop: ${condense.desktop}rem`,
+  ].join("; ");
+}
+
 /** The spec for a composed header, with its settings applied (`cartTotal`). */
 export function headerSpec(variant: string, settings: Record<string, unknown>): HeaderSpec | null {
   const spec = HEADER_SPECS[variant as keyof typeof HEADER_SPECS];

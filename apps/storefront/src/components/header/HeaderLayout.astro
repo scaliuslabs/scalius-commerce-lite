@@ -78,6 +78,21 @@ const {
 }
 
 <style is:global>
+  /* The sticky header condenses on scroll, but the page under it must not
+     move (CLS 0): while condensed it keeps its expanded height in the flow
+     as a bottom margin. The reserve is the variant's data (header-variants
+     headerCondense, set on #site-header), and the heights it replaces snap
+     rather than animate, so the flow height is the same in every frame. */
+  #main-header.is-scrolled {
+    margin-bottom: var(--hdr-condense-phone, 0rem);
+  }
+
+  @media (min-width: 64rem) {
+    #main-header.is-scrolled {
+      margin-bottom: var(--hdr-condense-desktop, 0rem);
+    }
+  }
+
   /* Bottom tabs carry cart and account on phones (mix rule 5). */
   @media (max-width: 63.99rem) {
     #main-header[data-phone-drop~="account"] [data-header-account],

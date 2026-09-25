@@ -284,12 +284,13 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    height: 3.5rem;
-    transition: height 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* Heights from header-variants HEADER_GEOMETRY; they snap (no height
+       transition) so the scroll reserve matches them in every frame. */
+    height: var(--hdr-phone-bar, 3.5rem);
   }
 
   .hdr.is-scrolled .hdr-bar {
-    height: 3rem;
+    height: var(--hdr-phone-bar-condensed, 3rem);
   }
 
   .hdr-phone-start {
@@ -434,6 +435,12 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
      sticky stack stays under 120px (mix rule 6). */
   .hdr-phone-search {
     padding: 0 1rem 0.5rem;
+  }
+
+  /* The sticky row is exactly the height the scroll reserve holds. */
+  .hdr > .hdr-phone-search {
+    box-sizing: border-box;
+    height: var(--hdr-phone-search-row, 3.25rem);
   }
 
   .hdr-phone-search--page {
