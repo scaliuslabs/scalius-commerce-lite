@@ -68,6 +68,8 @@ import {
 } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
+import { orderDeliveryRow } from "@/lib/order-delivery-row";
+import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -321,13 +323,15 @@ const receiptDiscounts = receiptMoney
       discountText: copy.discountText,
     })
   : null;
-const receiptDeliveryLabel = order?.shippingMethodName
-  ? deliveryBlock?.mode === "pickup"
-    ? `${copy.orderPickupHeadingText} · ${order.shippingMethodName}`
-    : formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
-  : deliveryBlock?.mode === "pickup"
-    ? copy.orderPickupHeadingText
-    : copy.orderReceiptDeliveryText;
+const receiptDeliveryRow = receiptDiscounts && deliveryBlock
+  ? orderDeliveryRow({
+      mode: deliveryBlock.mode,
+      methodName: order?.shippingMethodName,
+      ...receiptDiscounts.delivery,
+    }, copy, formatReceiptAmount)
+  : null;
+// An order-level promotion is one line in the totals, never an "Item discount" on each line.
+const showsLineDiscounts = orderShowsLineDiscounts(order?.discounts);
 // Nothing to deliver and nothing charged: no delivery row and no "method not recorded" note.
 const showsReceiptDeliveryRow = !(deliveryBlock?.mode === "none"
   && !order?.shippingMethodName
@@ -589,7 +593,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentText}</span>
-            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy)}</span>
+            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order)}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</span>
@@ -604,13 +608,13 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 <span class="text-muted-foreground">{copy.subtotalText}</span>
                 <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
               </div>
-              {showsReceiptDeliveryRow && <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
+              {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4">
+                <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
                 <span class="text-right font-medium">
-                  {receiptDiscounts.delivery.charged < receiptDiscounts.delivery.fee && <s class="mr-1.5 font-normal text-muted-foreground">{formatReceiptAmount(receiptDiscounts.delivery.fee)}</s>}
-                  {receiptDiscounts.delivery.charged === 0 ? copy.freeText : formatReceiptAmount(receiptDiscounts.delivery.charged)}
-                  {receiptDiscounts.delivery.codes && (
-                    <span class="ml-1 font-normal text-muted-foreground">({receiptDiscounts.delivery.codes})</span>
+                  {receiptDeliveryRow.struck && <s class="mr-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
+                  {receiptDeliveryRow.value}
+                  {receiptDeliveryRow.codes && (
+                    <span class="ml-1 font-normal text-muted-foreground">({receiptDeliveryRow.codes})</span>
                   )}
                 </span>
               </div>}
@@ -773,7 +777,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         ? formatReceiptMinor(savedLine.unitPriceMinor)
                         : formatReceiptAmount(item.price)}
                     </p>
-                    {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
+                    {savedLine && savedMoneySummary && showsLineDiscounts && savedLine.discountMinor > 0 && (
                       <p class="mt-1 text-xs text-muted-foreground">
                         {formatCheckoutLanguageText(copy.orderReceiptItemDiscountText, {
                           amount: formatReceiptMinor(savedLine.discountMinor),
@@ -798,8 +802,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                   <div class="shrink-0 text-right">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
-                      {savedLine
-                        ? formatReceiptMinor(savedLine.totalMinor)
+                      {savedLine && savedMoneySummary
+                        ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts, savedMoneySummary.pricesIncludeTax))
                         : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>

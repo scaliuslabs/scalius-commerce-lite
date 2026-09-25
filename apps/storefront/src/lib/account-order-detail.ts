@@ -36,6 +36,8 @@ import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import { orderDeliveryRow } from "@/lib/order-delivery-row";
+import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -507,11 +509,17 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const places = order.currencyDecimalPlaces ?? 2;
   const minor = (value: number) => accountMoney(fromMinor(value, places), order.currencyCode);
   const items = byId("orderItems");
+  // An order-level promotion is one line in the summary, never a discount on each item.
+  const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
       const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
       const lineTotal = hasMinor
-        ? minor(item.lineSubtotalMinor! - (item.discountAmountMinor ?? 0) + (order.pricesIncludeTax ? 0 : item.taxAmountMinor ?? 0))
+        ? minor(presentedLineTotalMinor({
+            grossSubtotalMinor: item.lineSubtotalMinor!,
+            discountMinor: item.discountAmountMinor ?? 0,
+            taxMinor: item.taxAmountMinor ?? 0,
+          }, showsLineDiscounts, Boolean(order.pricesIncludeTax)))
         : accountMoney(item.lineTotal, order.currencyCode);
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || "Product");
@@ -524,7 +532,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
-          ${(item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
+          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
       </li>`;
@@ -561,17 +569,17 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       discountText: copy.discountText,
     });
     const deliveryMode = resolveOrderDeliveryBlock(order, copy).mode;
-    const deliveryWord = deliveryMode === "pickup" ? copy.orderPickupHeadingText : copy.orderReceiptDeliveryText;
     // Nothing to deliver and nothing charged: no delivery row.
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
+    const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     summary.innerHTML = [
       row("Subtotal", cell(minor(order.subtotalAmountMinor ?? 0))),
       !showsDeliveryRow ? "" : row(
-        order.shippingMethodName ? `${deliveryWord} (${order.shippingMethodName})` : deliveryWord,
+        deliveryRow.label,
         [
-          delivery.charged < delivery.fee ? `<s class="mr-1.5">${escapeHtml(money(delivery.fee))}</s>` : "",
-          cell(delivery.charged === 0 ? copy.freeText : money(delivery.charged), "text-foreground"),
-          delivery.codes ? ` ${cell(`(${delivery.codes})`)}` : "",
+          deliveryRow.struck ? `<s class="mr-1.5">${escapeHtml(deliveryRow.struck)}</s>` : "",
+          cell(deliveryRow.value, "text-foreground"),
+          deliveryRow.codes ? ` ${cell(`(${deliveryRow.codes})`)}` : "",
         ].join(""),
       ),
       ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
