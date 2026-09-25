@@ -93,11 +93,12 @@ describe("cache dependency write amplification", () => {
     it("a 90-product category move advances both subtrees", async () => {
         const result = await measure(() => bulkUpdateProducts(db, claims(), { categoryId: "cat_b" }));
         expect(result.keys.filter((key) => !key.startsWith("p:"))).toEqual([
-            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_b", "lm:cat:cat_root", "lm:seo", "t:product_buyer_state", "t:products",
+            "lm:all", "lm:brand:brd_amp00001", "lm:cat:cat_a", "lm:cat:cat_b", "lm:cat:cat_root", "lm:seo", "srch", "t:product_buyer_state", "t:products",
         ]);
-        // products row, its lastmod, and the buyer state's old and new images.
-        expect(result.clockWrites).toBe(4 * PRODUCTS);
-        expect(result.depWrites).toBeLessThanOrEqual(17 * PRODUCTS);
+        // products row, its search match (search matches the category name),
+        // its lastmod, and the buyer state's old and new images.
+        expect(result.clockWrites).toBe(5 * PRODUCTS);
+        expect(result.depWrites).toBeLessThanOrEqual(19 * PRODUCTS);
     });
 
     it("a refresh with no change (a save of unchanged facts) and a rebuild with no drift write nothing", async () => {

@@ -66,6 +66,7 @@ export class MutationCoverage {
       for (const column of table.columns) {
         if (column.pk > 0) continue;
         if (this.columns.has(`${table.name}.${column.name}`)) continue;
+        if (TRIGGER_OWNED_TABLES.has(table.name) || TRIGGER_OWNED_COLUMNS.has(`${table.name}.${column.name}`)) continue;
         columns.push(`${table.name}.${column.name}`);
         if (column.noise) noise.push(`${table.name}.${column.name}`);
       }
@@ -91,7 +92,22 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
   "promotion_redemptions:update": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
   "promotion_redemptions:delete": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
   "promotion_redemptions:insert": "needs a matching order_discount_allocations row, and a delete+insert is refused as immutable",
+  "category_closure:update": "trigger-owned: the category tree triggers only insert and delete closure rows",
 };
+
+/**
+ * State the database's own triggers keep from other columns: the category
+ * tree triggers derive `category_closure` and `categories.depth`/`path` from
+ * `categories.parent_id`. The generator never writes them directly (a raw
+ * clone or delete of a closure row is a store no write path can produce);
+ * they change only through parent_id writes, category inserts and deletes.
+ */
+export const TRIGGER_OWNED_TABLES: ReadonlySet<string> = new Set(["category_closure"]);
+export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set(["categories.depth", "categories.path"]);
+
+function writableByGenerator(table: string): boolean {
+  return !MACHINERY_TABLES.has(table) && !TRIGGER_OWNED_TABLES.has(table);
+}
 
 /** The cache's own clock tables: never mutated (they are the instrument, not the subject). */
 export const MACHINERY_TABLES: ReadonlySet<string> = new Set(["cache_clock", "cache_dep", "cache_generation"]);
@@ -111,7 +127,7 @@ export class RowMutator {
   tableWeights(): Array<readonly [number, TableModel]> {
     const weights: Array<readonly [number, TableModel]> = [];
     for (const table of this.model.values()) {
-      if (table.columns.length === 0 || MACHINERY_TABLES.has(table.name)) continue;
+      if (table.columns.length === 0 || !writableByGenerator(table.name)) continue;
       const weight = table.registered
         ? 10
         : table.exemptReason !== null
@@ -153,10 +169,11 @@ export class RowMutator {
   /** Update one row: one to three columns (or `column` alone when given). */
   update(tableName: string, column?: string, targetRow?: Row): Mutation | null {
     const table = this.model.get(tableName);
-    if (!table) return null;
+    if (!table || !writableByGenerator(tableName)) return null;
     const rows = targetRow ? [targetRow] : this.rows(tableName);
     if (rows.length === 0) return this.insert(tableName);
-    const writable = table.columns.filter((each) => each.pk === 0 || table.pkColumns.length > 1);
+    const writable = table.columns.filter((each) => (each.pk === 0 || table.pkColumns.length > 1)
+      && !TRIGGER_OWNED_COLUMNS.has(`${tableName}.${each.name}`));
     if (writable.length === 0) return null;
     let lastError = "";
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -214,7 +231,7 @@ export class RowMutator {
   /** Insert a clone of an existing row with fresh identity. */
   insert(tableName: string): Mutation | null {
     const table = this.model.get(tableName);
-    if (!table) return null;
+    if (!table || !writableByGenerator(tableName)) return null;
     const rows = this.rows(tableName);
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -291,12 +308,14 @@ export class RowMutator {
 
   delete(tableName: string): Mutation | null {
     const table = this.model.get(tableName);
-    if (!table) return null;
+    if (!table || !writableByGenerator(tableName)) return null;
     const rows = this.rows(tableName);
     // Keep at least one row of each table so later updates have a target.
     if (rows.length <= 1) return this.insert(tableName);
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const row = this.rng.pick(rows);
+    // Distinct rows in random order: a table whose rows are mostly still
+    // referenced (media, restricted by foreign keys) still finds the
+    // deletable one instead of retrying the same refused rows.
+    for (const row of this.rng.sample(rows, Math.min(rows.length, 3 * MAX_ATTEMPTS))) {
       const where = this.pkWhere(table, row);
       try {
         const changes = this.run(`DELETE FROM "${tableName}" WHERE ${where.sql}`, where.values);

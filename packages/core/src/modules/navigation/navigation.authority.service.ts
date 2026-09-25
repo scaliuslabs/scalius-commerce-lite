@@ -1354,15 +1354,13 @@ function publishedHierarchyToTargets(
 }
 
 /**
- * A published menu read depends on its own menu row and publication. The
- * publication-item triggers key a row by its new menu id only, so an item
- * moved to another menu would not advance the old menu's key; `nav:*`
- * (advanced by every publication change) covers that until the registry
- * derives those keys from both row images.
+ * A published menu read depends on its own menu row, publication and
+ * publication items: `nav:<menuId>`. The triggers advance it from both row
+ * images of every menu, publication, item and placement write, so an item
+ * moved out of this menu advances this menu too.
  */
 function declarePublishedMenu(menuId: string): void {
     deps.navigation(menuId);
-    deps.anyNavigation();
 }
 
 export async function getPublishedNavigationMenuTree(

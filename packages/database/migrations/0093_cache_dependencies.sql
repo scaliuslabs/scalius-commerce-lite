@@ -65,8 +65,18 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_products_upd_old` AFTER UPDATE ON `products`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`id`, 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_products_srch` AFTER UPDATE ON `products`
-WHEN (OLD.`name` IS NOT NEW.`name` OR OLD.`description` IS NOT NEW.`description`)
+WHEN (OLD.`name` IS NOT NEW.`name` OR OLD.`description` IS NOT NEW.`description` OR OLD.`category_id` IS NOT NEW.`category_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('srch', 't:products')) AS key_list) AS key_rows
@@ -95,11 +105,33 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_products_lastmod_old` AFTER UPDATE ON `products`
+WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'p:' || OLD.`id`, 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_products_name_order` AFTER UPDATE ON `products`
 WHEN (OLD.`name` IS NOT NEW.`name`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:products')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lo:name')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:products')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lo:name')) AS facet_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_products_name_order_old` AFTER UPDATE ON `products`
+WHEN (OLD.`name` IS NOT NEW.`name`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:products')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = OLD.`id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = OLD.`id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lo:name')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -115,11 +147,54 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_products_sale_ins` AFTER INSERT ON `products`
+WHEN EXISTS (SELECT 1 WHERE ((NEW.discount_type = 'flat' AND NEW.discount_amount_minor > 0) OR (NEW.discount_type = 'percentage' AND NEW.discount_bps > 0)) OR EXISTS (SELECT 1 FROM product_variants AS sale_sku WHERE sale_sku.product_id = NEW.id AND sale_sku.deleted_at IS NULL AND ((sale_sku.discount_type = 'flat' AND sale_sku.discount_amount_minor > 0) OR (sale_sku.discount_type = 'percentage' AND sale_sku.discount_bps > 0))))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_products_sale_del` AFTER DELETE ON `products`
+WHEN EXISTS (SELECT 1 WHERE ((OLD.discount_type = 'flat' AND OLD.discount_amount_minor > 0) OR (OLD.discount_type = 'percentage' AND OLD.discount_bps > 0)) OR EXISTS (SELECT 1 FROM product_variants AS sale_sku WHERE sale_sku.product_id = OLD.id AND sale_sku.deleted_at IS NULL AND ((sale_sku.discount_type = 'flat' AND sale_sku.discount_amount_minor > 0) OR (sale_sku.discount_type = 'percentage' AND sale_sku.discount_bps > 0))))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_products_sale_upd` AFTER UPDATE ON `products`
+WHEN (OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_amount_minor` IS NOT NEW.`discount_amount_minor` OR OLD.`discount_bps` IS NOT NEW.`discount_bps` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`is_active` IS NOT NEW.`is_active` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+  AND EXISTS (SELECT 1 WHERE ((NEW.discount_type = 'flat' AND NEW.discount_amount_minor > 0) OR (NEW.discount_type = 'percentage' AND NEW.discount_bps > 0)) OR EXISTS (SELECT 1 FROM product_variants AS sale_sku WHERE sale_sku.product_id = NEW.id AND sale_sku.deleted_at IS NULL AND ((sale_sku.discount_type = 'flat' AND sale_sku.discount_amount_minor > 0) OR (sale_sku.discount_type = 'percentage' AND sale_sku.discount_bps > 0))))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_products_sale_upd_old` AFTER UPDATE ON `products`
+WHEN (OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_amount_minor` IS NOT NEW.`discount_amount_minor` OR OLD.`discount_bps` IS NOT NEW.`discount_bps` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`is_active` IS NOT NEW.`is_active` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+  AND (OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_amount_minor` IS NOT NEW.`discount_amount_minor` OR OLD.`discount_bps` IS NOT NEW.`discount_bps` OR OLD.`id` IS NOT NEW.`id`)
+  AND EXISTS (SELECT 1 WHERE ((OLD.discount_type = 'flat' AND OLD.discount_amount_minor > 0) OR (OLD.discount_type = 'percentage' AND OLD.discount_bps > 0)) OR EXISTS (SELECT 1 FROM product_variants AS sale_sku WHERE sale_sku.product_id = OLD.id AND sale_sku.deleted_at IS NULL AND ((sale_sku.discount_type = 'flat' AND sale_sku.discount_amount_minor > 0) OR (sale_sku.discount_type = 'percentage' AND sale_sku.discount_bps > 0))))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:products')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_product_buyer_state_ins` AFTER INSERT ON `product_buyer_state`
 WHEN NEW.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`, 'cat:' || NEW.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -129,7 +204,18 @@ CREATE TRIGGER `cdep_product_buyer_state_del` AFTER DELETE ON `product_buyer_sta
 WHEN OLD.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`, 'cat:' || OLD.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_buyer_state_member` AFTER UPDATE ON `product_buyer_state`
+WHEN (OLD.`is_public` IS NOT NEW.`is_public` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`product_created_at` IS NOT NEW.`product_created_at`)
+  AND NEW.`is_public` = 1
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`, 'cat:' || NEW.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -137,21 +223,11 @@ END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_buyer_state_member_old` AFTER UPDATE ON `product_buyer_state`
 WHEN (OLD.`is_public` IS NOT NEW.`is_public` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`product_created_at` IS NOT NEW.`product_created_at`)
+  AND (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`is_public` IS NOT NEW.`is_public`)
   AND OLD.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
-  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
-  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
-  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
-END;
---> statement-breakpoint
-CREATE TRIGGER `cdep_product_buyer_state_member_new` AFTER UPDATE ON `product_buyer_state`
-WHEN (OLD.`is_public` IS NOT NEW.`is_public` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`product_created_at` IS NOT NEW.`product_created_at`)
-  AND NEW.`is_public` = 1
-BEGIN
-  INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`, 'cat:' || OLD.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lm')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -162,7 +238,19 @@ WHEN (OLD.`from_minor` IS NOT NEW.`from_minor` OR OLD.`to_minor` IS NOT NEW.`to_
   AND NEW.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:price')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`, 'cat:' || NEW.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:price')) AS facet_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_buyer_state_price_old` AFTER UPDATE ON `product_buyer_state`
+WHEN (OLD.`from_minor` IS NOT NEW.`from_minor` OR OLD.`to_minor` IS NOT NEW.`to_minor` OR OLD.`base_minor` IS NOT NEW.`base_minor`)
+  AND (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`is_public` IS NOT NEW.`is_public`)
+  AND OLD.`is_public` = 1
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`, 'cat:' || OLD.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lo:price')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -173,7 +261,19 @@ WHEN (OLD.`available_for_sale` IS NOT NEW.`available_for_sale` OR OLD.`availabil
   AND NEW.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:band')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`, 'cat:' || NEW.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:band')) AS facet_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_buyer_state_band_old` AFTER UPDATE ON `product_buyer_state`
+WHEN (OLD.`available_for_sale` IS NOT NEW.`available_for_sale` OR OLD.`availability_band` IS NOT NEW.`availability_band`)
+  AND (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`is_public` IS NOT NEW.`is_public`)
+  AND OLD.`is_public` = 1
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`, 'cat:' || OLD.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lo:band')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -184,7 +284,19 @@ WHEN (OLD.`has_discount` IS NOT NEW.`has_discount` OR OLD.`discount_depth_bps` I
   AND NEW.`is_public` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:disc')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || NEW.`brand_id`, 'cat:' || NEW.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = NEW.`category_id`) AS scope_rows, json_each(json_array('lo:disc')) AS facet_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_buyer_state_disc_old` AFTER UPDATE ON `product_buyer_state`
+WHEN (OLD.`has_discount` IS NOT NEW.`has_discount` OR OLD.`discount_depth_bps` IS NOT NEW.`discount_depth_bps`)
+  AND (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id` OR OLD.`is_public` IS NOT NEW.`is_public`)
+  AND OLD.`is_public` = 1
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM json_each(json_array('all', 'brand:' || OLD.`brand_id`, 'cat:' || OLD.`category_id`)) AS scope_list UNION ALL SELECT 'cat:' || `ancestor_id` FROM `category_closure` WHERE `descendant_id` = OLD.`category_id`) AS scope_rows, json_each(json_array('lo:disc')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -201,10 +313,22 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_product_buyer_state_card_old` AFTER UPDATE ON `product_buyer_state`
+WHEN (OLD.`sku_id` IS NOT NEW.`sku_id` OR OLD.`has_customer_options` IS NOT NEW.`has_customer_options`)
+  AND (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`is_public` IS NOT NEW.`is_public`)
+  AND OLD.`is_public` = 1
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_buyer_state')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_product_facet_values_ins` AFTER INSERT ON `product_facet_values`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -213,7 +337,7 @@ END;
 CREATE TRIGGER `cdep_product_facet_values_del` AFTER DELETE ON `product_facet_values`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`)) AS scope_list WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -223,17 +347,17 @@ CREATE TRIGGER `cdep_product_facet_values_upd` AFTER UPDATE ON `product_facet_va
 WHEN (OLD.`owner_id` IS NOT NEW.`owner_id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`variant_id` IS NOT NEW.`variant_id` OR OLD.`facet_kind` IS NOT NEW.`facet_kind` OR OLD.`facet_key` IS NOT NEW.`facet_key` OR OLD.`value_key` IS NOT NEW.`value_key` OR OLD.`value_label` IS NOT NEW.`value_label` OR OLD.`value_number` IS NOT NEW.`value_number` OR OLD.`sort_order` IS NOT NEW.`sort_order`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = NEW.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_facet_values_upd_old` AFTER UPDATE ON `product_facet_values`
-WHEN (OLD.`owner_id` IS NOT NEW.`owner_id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`variant_id` IS NOT NEW.`variant_id` OR OLD.`facet_kind` IS NOT NEW.`facet_kind` OR OLD.`facet_key` IS NOT NEW.`facet_key` OR OLD.`value_key` IS NOT NEW.`value_key` OR OLD.`value_label` IS NOT NEW.`value_label` OR OLD.`value_number` IS NOT NEW.`value_number` OR OLD.`sort_order` IS NOT NEW.`sort_order`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`)) AS scope_list WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('t:product_facet_values')) AS key_list UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM `product_buyer_state` AS scope_state, json_each(json_array('all', 'brand:' || scope_state.`brand_id`, 'cat:' || scope_state.`category_id`)) AS scope_list WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1 UNION ALL SELECT 'cat:' || scope_closure.`ancestor_id` FROM `product_buyer_state` AS scope_state JOIN `category_closure` AS scope_closure ON scope_closure.`descendant_id` = scope_state.`category_id` WHERE scope_state.`product_id` = OLD.`product_id` AND scope_state.`is_public` = 1) AS scope_rows, json_each(json_array('lf')) AS facet_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -267,6 +391,16 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_upd_old` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_product_variants_shape` AFTER UPDATE ON `product_variants`
 WHEN (OLD.`deleted_at` IS NOT NEW.`deleted_at` OR OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
@@ -283,6 +417,60 @@ WHEN (OLD.`stock` IS NOT NEW.`stock` OR OLD.`reserved_stock` IS NOT NEW.`reserve
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_band_old` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
+  AND (OLD.`stock` IS NOT NEW.`stock` OR OLD.`reserved_stock` IS NOT NEW.`reserved_stock` OR OLD.`track_inventory` IS NOT NEW.`track_inventory` OR OLD.`low_stock_threshold` IS NOT NEW.`low_stock_threshold`)
+  AND ((OLD.`track_inventory` = 0) * 3 + (OLD.`track_inventory` <> 0) * ((OLD.`stock` - OLD.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(OLD.`low_stock_threshold`, (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`))), 0) <= 0 OR (OLD.`stock` - OLD.`reserved_stock`) > COALESCE(OLD.`low_stock_threshold`, (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`)))))) <> ((NEW.`track_inventory` = 0) * 3 + (NEW.`track_inventory` <> 0) * ((NEW.`stock` - NEW.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(NEW.`low_stock_threshold`, (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`))), 0) <= 0 OR (NEW.`stock` - NEW.`reserved_stock`) > COALESCE(NEW.`low_stock_threshold`, (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`))))))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_sale_ins` AFTER INSERT ON `product_variants`
+WHEN EXISTS (SELECT 1 WHERE NEW.deleted_at IS NULL AND ((NEW.discount_type = 'flat' AND NEW.discount_amount_minor > 0) OR (NEW.discount_type = 'percentage' AND NEW.discount_bps > 0)))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_sale_del` AFTER DELETE ON `product_variants`
+WHEN EXISTS (SELECT 1 WHERE OLD.deleted_at IS NULL AND ((OLD.discount_type = 'flat' AND OLD.discount_amount_minor > 0) OR (OLD.discount_type = 'percentage' AND OLD.discount_bps > 0)))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_sale_upd` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_amount_minor` IS NOT NEW.`discount_amount_minor` OR OLD.`discount_bps` IS NOT NEW.`discount_bps` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`deleted_at` IS NOT NEW.`deleted_at` OR OLD.`product_id` IS NOT NEW.`product_id`)
+  AND EXISTS (SELECT 1 WHERE NEW.deleted_at IS NULL AND ((NEW.discount_type = 'flat' AND NEW.discount_amount_minor > 0) OR (NEW.discount_type = 'percentage' AND NEW.discount_bps > 0)))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_sale_upd_old` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`deleted_at` IS NOT NEW.`deleted_at` OR OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_amount_minor` IS NOT NEW.`discount_amount_minor` OR OLD.`discount_bps` IS NOT NEW.`discount_bps`)
+  AND EXISTS (SELECT 1 WHERE OLD.deleted_at IS NULL AND ((OLD.discount_type = 'flat' AND OLD.discount_amount_minor > 0) OR (OLD.discount_type = 'percentage' AND OLD.discount_bps > 0)))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lo:sale:all', 't:product_variants')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -317,7 +505,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_media_upd_old` AFTER UPDATE ON `product_media`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`media_id` IS NOT NEW.`media_id` OR OLD.`alt_text` IS NOT NEW.`alt_text` OR OLD.`is_primary` IS NOT NEW.`is_primary` OR OLD.`sort_order` IS NOT NEW.`sort_order`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_media')) AS key_list) AS key_rows
@@ -329,7 +517,7 @@ END;
 CREATE TRIGGER `cdep_product_option_definitions_ins` AFTER INSERT ON `product_option_definitions`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_option_definitions')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_option_definitions')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_definition_id = NEW.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -338,7 +526,7 @@ END;
 CREATE TRIGGER `cdep_product_option_definitions_del` AFTER DELETE ON `product_option_definitions`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_option_definitions')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_option_definitions')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_definition_id = OLD.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -348,17 +536,17 @@ CREATE TRIGGER `cdep_product_option_definitions_upd` AFTER UPDATE ON `product_op
 WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`name` IS NOT NEW.`name` OR OLD.`normalized_name` IS NOT NEW.`normalized_name` OR OLD.`position` IS NOT NEW.`position` OR OLD.`standard_mapping` IS NOT NEW.`standard_mapping` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_option_definitions')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_option_definitions')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_definition_id = NEW.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_option_definitions_upd_old` AFTER UPDATE ON `product_option_definitions`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`name` IS NOT NEW.`name` OR OLD.`normalized_name` IS NOT NEW.`normalized_name` OR OLD.`position` IS NOT NEW.`position` OR OLD.`standard_mapping` IS NOT NEW.`standard_mapping` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`id` IS NOT NEW.`id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_option_definitions')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_option_definitions')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_definition_id = OLD.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -367,7 +555,7 @@ END;
 CREATE TRIGGER `cdep_product_option_values_ins` AFTER INSERT ON `product_option_values`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = NEW.`option_definition_id`), 't:product_option_values')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = NEW.`option_definition_id`), 't:product_option_values')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_value_id = NEW.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -376,7 +564,7 @@ END;
 CREATE TRIGGER `cdep_product_option_values_del` AFTER DELETE ON `product_option_values`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = OLD.`option_definition_id`), 't:product_option_values')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = OLD.`option_definition_id`), 't:product_option_values')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_value_id = OLD.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -386,7 +574,17 @@ CREATE TRIGGER `cdep_product_option_values_upd` AFTER UPDATE ON `product_option_
 WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`option_definition_id` IS NOT NEW.`option_definition_id` OR OLD.`value` IS NOT NEW.`value` OR OLD.`normalized_value` IS NOT NEW.`normalized_value` OR OLD.`position` IS NOT NEW.`position` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = NEW.`option_definition_id`), 't:product_option_values')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = NEW.`option_definition_id`), 't:product_option_values')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_value_id = NEW.id) AS key_ref_1) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_option_values_upd_old` AFTER UPDATE ON `product_option_values`
+WHEN (OLD.`option_definition_id` IS NOT NEW.`option_definition_id` OR OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_option_definitions` WHERE `id` = OLD.`option_definition_id`), 't:product_option_values')) AS key_list UNION SELECT 'p:' || key_ref_1.ref FROM (SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.option_value_id = OLD.id) AS key_ref_1) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -415,6 +613,16 @@ WHEN (OLD.`variant_id` IS NOT NEW.`variant_id` OR OLD.`option_definition_id` IS 
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_variants` WHERE `id` = NEW.`variant_id`), 't:product_variant_option_values')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variant_option_values_upd_old` AFTER UPDATE ON `product_variant_option_values`
+WHEN (OLD.`variant_id` IS NOT NEW.`variant_id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || (SELECT `product_id` FROM `product_variants` WHERE `id` = OLD.`variant_id`), 't:product_variant_option_values')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -449,7 +657,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_attribute_values_upd_old` AFTER UPDATE ON `product_attribute_values`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`attribute_id` IS NOT NEW.`attribute_id` OR OLD.`value` IS NOT NEW.`value` OR OLD.`value_id` IS NOT NEW.`value_id` OR OLD.`value_number` IS NOT NEW.`value_number`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_attribute_values')) AS key_list) AS key_rows
@@ -487,7 +695,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_rich_content_upd_old` AFTER UPDATE ON `product_rich_content`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`title` IS NOT NEW.`title` OR OLD.`content` IS NOT NEW.`content` OR OLD.`sort_order` IS NOT NEW.`sort_order`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_rich_content')) AS key_list) AS key_rows
@@ -525,7 +733,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_content_blocks_upd_old` AFTER UPDATE ON `product_content_blocks`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`placement` IS NOT NEW.`placement` OR OLD.`position` IS NOT NEW.`position` OR OLD.`type` IS NOT NEW.`type` OR OLD.`version` IS NOT NEW.`version` OR OLD.`settings` IS NOT NEW.`settings`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_content_blocks')) AS key_list) AS key_rows
@@ -563,7 +771,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_product_bundles_upd_old` AFTER UPDATE ON `product_bundles`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`product_id` IS NOT NEW.`product_id` OR OLD.`quantity` IS NOT NEW.`quantity` OR OLD.`discount_type` IS NOT NEW.`discount_type` OR OLD.`discount_bps` IS NOT NEW.`discount_bps` OR OLD.`price_minor` IS NOT NEW.`price_minor` OR OLD.`label` IS NOT NEW.`label` OR OLD.`position` IS NOT NEW.`position` OR OLD.`is_active` IS NOT NEW.`is_active`)
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_bundles')) AS key_list) AS key_rows
@@ -600,6 +808,16 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_categories_upd_old` AFTER UPDATE ON `categories`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('c:' || OLD.`id`, 'c:*', 't:categories')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_categories_srch` AFTER UPDATE ON `categories`
 WHEN (OLD.`name` IS NOT NEW.`name` OR OLD.`description` IS NOT NEW.`description`)
 BEGIN
@@ -615,6 +833,17 @@ WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'c:' || NEW.`id`, 'c:*', 't:categories')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_categories_lastmod_old` AFTER UPDATE ON `categories`
+WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'c:' || OLD.`id`, 'c:*', 't:categories')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -649,7 +878,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_category_closure_upd_old` AFTER UPDATE ON `category_closure`
-WHEN (OLD.`ancestor_id` IS NOT NEW.`ancestor_id` OR OLD.`descendant_id` IS NOT NEW.`descendant_id` OR OLD.`depth` IS NOT NEW.`depth`)
+WHEN (OLD.`ancestor_id` IS NOT NEW.`ancestor_id` OR OLD.`descendant_id` IS NOT NEW.`descendant_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:cat:' || OLD.`ancestor_id`, 'c:' || OLD.`ancestor_id`, 'c:' || OLD.`descendant_id`, 'c:*', 't:category_closure')) AS key_list) AS key_rows
@@ -687,7 +916,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_category_attribute_sets_upd_old` AFTER UPDATE ON `category_attribute_sets`
-WHEN (OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`attribute_id` IS NOT NEW.`attribute_id` OR OLD.`sort_order` IS NOT NEW.`sort_order`)
+WHEN (OLD.`category_id` IS NOT NEW.`category_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('c:' || OLD.`category_id`, 't:category_attribute_sets')) AS key_list) AS key_rows
@@ -724,11 +953,32 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_brands_upd_old` AFTER UPDATE ON `brands`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('b:' || OLD.`id`, 'b:*', 't:brands')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_brands_lastmod` AFTER UPDATE ON `brands`
 WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'b:' || NEW.`id`, 'b:*', 't:brands')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_brands_lastmod_old` AFTER UPDATE ON `brands`
+WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'b:' || OLD.`id`, 'b:*', 't:brands')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -762,11 +1012,32 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_collections_upd_old` AFTER UPDATE ON `collections`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('col:' || OLD.`id`, 'col:*', 't:collections')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_collections_lastmod` AFTER UPDATE ON `collections`
 WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'col:' || NEW.`id`, 'col:*', 't:collections')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_collections_lastmod_old` AFTER UPDATE ON `collections`
+WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'col:' || OLD.`id`, 'col:*', 't:collections')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -795,6 +1066,16 @@ WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`name` IS NOT NEW.`name` OR OLD.`slug` IS 
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('attr:' || NEW.`id`, 'attr:*', 't:product_attributes')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_attributes_upd_old` AFTER UPDATE ON `product_attributes`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('attr:' || OLD.`id`, 'attr:*', 't:product_attributes')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -829,7 +1110,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_attribute_values_upd_old` AFTER UPDATE ON `attribute_values`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`attribute_id` IS NOT NEW.`attribute_id` OR OLD.`value` IS NOT NEW.`value` OR OLD.`normalized_value` IS NOT NEW.`normalized_value` OR OLD.`sort_order` IS NOT NEW.`sort_order` OR OLD.`swatch_hex` IS NOT NEW.`swatch_hex` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+WHEN (OLD.`attribute_id` IS NOT NEW.`attribute_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('attr:' || OLD.`attribute_id`, 'attr:*', 't:attribute_values')) AS key_list) AS key_rows
@@ -894,6 +1175,16 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_media_upd_old` AFTER UPDATE ON `media`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('m:' || OLD.`id`, 't:media')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_pages_ins` AFTER INSERT ON `pages`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -922,11 +1213,32 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_pages_upd_old` AFTER UPDATE ON `pages`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('pg:' || OLD.`id`, 'pg:*', 't:pages')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_pages_lastmod` AFTER UPDATE ON `pages`
 WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'pg:' || NEW.`id`, 'pg:*', 't:pages')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_pages_lastmod_old` AFTER UPDATE ON `pages`
+WHEN (OLD.`updated_at` IS NOT NEW.`updated_at`)
+  AND (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:seo', 'pg:' || OLD.`id`, 'pg:*', 't:pages')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -989,7 +1301,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_settings_upd_old` AFTER UPDATE ON `settings`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`key` IS NOT NEW.`key` OR OLD.`value` IS NOT NEW.`value` OR OLD.`type` IS NOT NEW.`type` OR OLD.`category` IS NOT NEW.`category` OR OLD.`expires_at` IS NOT NEW.`expires_at`)
+WHEN (OLD.`category` IS NOT NEW.`category` OR OLD.`key` IS NOT NEW.`key`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('set:' || OLD.`category` || ':' || OLD.`key`, 't:settings')) AS key_list) AS key_rows
@@ -1045,10 +1357,20 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_navigation_menus_upd` AFTER UPDATE ON `navigation_menus`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`name` IS NOT NEW.`name` OR OLD.`handle` IS NOT NEW.`handle` OR OLD.`revision` IS NOT NEW.`revision` OR OLD.`published_revision` IS NOT NEW.`published_revision` OR OLD.`dependency_revision` IS NOT NEW.`dependency_revision` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`name` IS NOT NEW.`name` OR OLD.`handle` IS NOT NEW.`handle` OR OLD.`published_revision` IS NOT NEW.`published_revision` OR OLD.`dependency_revision` IS NOT NEW.`dependency_revision` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || NEW.`id`, 'nav:*', 't:navigation_menus')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_navigation_menus_upd_old` AFTER UPDATE ON `navigation_menus`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || OLD.`id`, 'nav:*', 't:navigation_menus')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -1082,6 +1404,16 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_navigation_menu_publications_upd_old` AFTER UPDATE ON `navigation_menu_publications`
+WHEN (OLD.`menu_id` IS NOT NEW.`menu_id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || OLD.`menu_id`, 'nav:*', 't:navigation_menu_publications')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_navigation_menu_publication_items_ins` AFTER INSERT ON `navigation_menu_publication_items`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -1105,6 +1437,16 @@ WHEN (OLD.`menu_id` IS NOT NEW.`menu_id` OR OLD.`revision` IS NOT NEW.`revision`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || NEW.`menu_id`, 'nav:*', 't:navigation_menu_publication_items')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_navigation_menu_publication_items_upd_old` AFTER UPDATE ON `navigation_menu_publication_items`
+WHEN (OLD.`menu_id` IS NOT NEW.`menu_id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || OLD.`menu_id`, 'nav:*', 't:navigation_menu_publication_items')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -1139,7 +1481,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_navigation_placements_upd_old` AFTER UPDATE ON `navigation_placements`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`surface` IS NOT NEW.`surface` OR OLD.`slot` IS NOT NEW.`slot` OR OLD.`position` IS NOT NEW.`position` OR OLD.`menu_id` IS NOT NEW.`menu_id` OR OLD.`label_override` IS NOT NEW.`label_override` OR OLD.`is_enabled` IS NOT NEW.`is_enabled` OR OLD.`created_at` IS NOT NEW.`created_at`)
+WHEN (OLD.`menu_id` IS NOT NEW.`menu_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('nav:' || OLD.`menu_id`, 'nav:*', 't:navigation_placements')) AS key_list) AS key_rows
@@ -1428,6 +1770,16 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_promotions_upd_old` AFTER UPDATE ON `promotions`
+WHEN (OLD.`id` IS NOT NEW.`id`)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('promo:' || OLD.`id`, 'promo:*', 't:promotions')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_promotion_codes_ins` AFTER INSERT ON `promotion_codes`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -1457,7 +1809,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_promotion_codes_upd_old` AFTER UPDATE ON `promotion_codes`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`promotion_id` IS NOT NEW.`promotion_id` OR OLD.`code` IS NOT NEW.`code` OR OLD.`normalized_code` IS NOT NEW.`normalized_code` OR OLD.`is_active` IS NOT NEW.`is_active` OR OLD.`created_at` IS NOT NEW.`created_at`)
+WHEN (OLD.`promotion_id` IS NOT NEW.`promotion_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('promo:' || OLD.`promotion_id`, 'promo:*', 't:promotion_codes')) AS key_list) AS key_rows
@@ -1495,7 +1847,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_promotion_conditions_upd_old` AFTER UPDATE ON `promotion_conditions`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`promotion_id` IS NOT NEW.`promotion_id` OR OLD.`kind` IS NOT NEW.`kind` OR OLD.`config` IS NOT NEW.`config` OR OLD.`position` IS NOT NEW.`position` OR OLD.`created_at` IS NOT NEW.`created_at`)
+WHEN (OLD.`promotion_id` IS NOT NEW.`promotion_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('promo:' || OLD.`promotion_id`, 'promo:*', 't:promotion_conditions')) AS key_list) AS key_rows
@@ -1533,7 +1885,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_promotion_effects_upd_old` AFTER UPDATE ON `promotion_effects`
-WHEN (OLD.`id` IS NOT NEW.`id` OR OLD.`promotion_id` IS NOT NEW.`promotion_id` OR OLD.`kind` IS NOT NEW.`kind` OR OLD.`target` IS NOT NEW.`target` OR OLD.`allocation` IS NOT NEW.`allocation` OR OLD.`config` IS NOT NEW.`config` OR OLD.`position` IS NOT NEW.`position` OR OLD.`created_at` IS NOT NEW.`created_at` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)
+WHEN (OLD.`promotion_id` IS NOT NEW.`promotion_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
   SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('promo:' || OLD.`promotion_id`, 'promo:*', 't:promotion_effects')) AS key_list) AS key_rows
@@ -1563,6 +1915,17 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
+CREATE TRIGGER `cdep_promotion_redemptions_upd_old` AFTER UPDATE ON `promotion_redemptions`
+WHEN (OLD.`promotion_id` IS NOT NEW.`promotion_id`)
+  AND EXISTS (SELECT 1 FROM promotions WHERE promotions.id = OLD.promotion_id AND (promotions.max_redemptions IS NOT NULL OR promotions.max_discount_spend_minor IS NOT NULL))
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('promo:' || OLD.`promotion_id`, 't:promotion_redemptions')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_promotion_redemptions_del` AFTER DELETE ON `promotion_redemptions`
 WHEN EXISTS (SELECT 1 FROM promotions WHERE promotions.id = OLD.promotion_id AND (promotions.max_redemptions IS NOT NULL OR promotions.max_discount_spend_minor IS NOT NULL))
 BEGIN
@@ -1573,4 +1936,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (93, '0093_cache_dependencies', '6ca686d4c8e16823cfc6233f7c6c99d6041e0057bb36d483491e635518fa4aeb');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (93, '0093_cache_dependencies', '51f7590730c1bde196009d631bb0bbc48d75c7bdd1330d4f96e5f9de49b0d4bd');

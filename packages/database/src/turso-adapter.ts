@@ -236,7 +236,7 @@ export function createTursoDatabase(
   }
 
   const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
-    observeStatement(sql);
+    observeStatement(sql, params);
     const result = requireSingleResult(
       await retryTursoConflicts(
         () => executeRemoteBatch(
@@ -264,7 +264,7 @@ export function createTursoDatabase(
 
   const executeBatch: AsyncBatchRemoteCallback = async (statements) => {
     const batchStatements = statements.map(({ sql, params }) => {
-      observeStatement(sql);
+      observeStatement(sql, params);
       return { sql, args: params };
     });
     const batchMode = statements.every(({ sql }) => isReadOnlyBatchStatement(sql))
