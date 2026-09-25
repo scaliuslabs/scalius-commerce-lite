@@ -36,6 +36,9 @@ export interface Category {
   id: string;
   name: string;
   status: "draft" | "published" | "internal";
+  /** The category it sits under (null: top level), to name it by its path. */
+  parentId?: string | null;
+  depth?: number;
 }
 
 export const productFormSchema = z.object({

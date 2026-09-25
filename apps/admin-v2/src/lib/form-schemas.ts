@@ -112,6 +112,10 @@ export const categoryFormSchema = z
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     image: mediaFileFormSchema.nullable(),
+    /** The category it sits under; null is the top level (the server keeps depth and path). */
+    parentId: z.string().nullable().default(null),
+    /** A listing template id, or null for the theme's listing. */
+    listingTemplate: z.string().nullable().default(null),
   })
   .superRefine((value, context) => {
     requireSavedAddress(value, context);
