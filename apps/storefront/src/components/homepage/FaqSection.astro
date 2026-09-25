@@ -1,0 +1,33 @@
+---
+// Questions and answers as disclosures (no script): each question is a
+// 44px summary row, the answer plain text. No FAQPage JSON-LD: Google limits
+// it to authoritative sites, so it would claim a rich result the page does
+// not get (SYNTHESIS.md section 9).
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import { ChevronDown } from "lucide-react";
+
+interface Props {
+  section: StorefrontSectionOf<"faq">;
+}
+
+const { section } = Astro.props;
+const heading = section.settings.heading.trim() || "Questions and answers";
+const headingId = `home-${section.id}-title`;
+---
+
+<section class="home-section w-full" aria-labelledby={headingId}>
+  <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{heading}</h2>
+    <div class="divide-y divide-border rounded-xl border border-border bg-card">
+      {section.settings.items.map((item) => (
+        <details class="group">
+          <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-base font-semibold text-foreground [overflow-wrap:anywhere] md:px-5 [&::-webkit-details-marker]:hidden">
+            {item.question}
+            <span class="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true"><ChevronDown className="size-4" /></span>
+          </summary>
+          <p class="whitespace-pre-line px-4 pb-4 text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere] md:px-5">{item.answer}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
