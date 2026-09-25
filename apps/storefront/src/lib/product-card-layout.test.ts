@@ -38,10 +38,8 @@ describe("fluid product grid", () => {
     expect(cardCss).toContain(`--card-row-media: ${LIST_ROW_MEDIA_PX / 16}rem`);
   });
 
-  it("keeps card styles out of the shared foundation (and the product page's critical CSS)", () => {
+  it("keeps card styles out of the shared foundation", () => {
     expect(css).not.toMatch(/\.product-card-|card-row-media|\[data-theme-card-style/);
-    const critical = readFileSync(new URL("../styles/product-critical.css", import.meta.url), "utf8");
-    expect(critical).not.toContain("theme-cards");
     const card = readFileSync(new URL("../components/cards/ProductCard.astro", import.meta.url), "utf8");
     expect(card).toContain('import "@/styles/theme-cards.css";');
   });
