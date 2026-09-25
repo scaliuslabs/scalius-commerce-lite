@@ -201,7 +201,14 @@ function cardFactValues(
 
 export function productCardModel(
   product: ProductCardProduct,
-  options: { currencySymbol: string; currencyCode: string; hoverImage: boolean; quickBuy: boolean },
+  options: {
+    currencySymbol: string;
+    currencyCode: string;
+    hoverImage: boolean;
+    quickBuy: boolean;
+    /** False while the store has no published review or reviews are off (`hasReviews`): no card shows a rating. */
+    ratings?: boolean;
+  },
 ): ProductCardModel {
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode });
   const hasDiscount = product.discountedPrice < product.price;
@@ -241,7 +248,7 @@ export function productCardModel(
       ? `/buy/${encodeURIComponent(product.slug)}`
       : null,
     needsOptions: !soldOut && product.hasVariants,
-    facts: cardFactValues(product.cardFacts, product, money, saved),
+    facts: cardFactValues(product.cardFacts, options.ratings === false ? { ...product, rating: null } : product, money, saved),
   };
 }
 
