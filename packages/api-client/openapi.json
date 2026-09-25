@@ -17147,6 +17147,12 @@
                             },
                             "payAtServiceText": {
                               "type": "string"
+                            },
+                            "productBundleTierText": {
+                              "type": "string"
+                            },
+                            "productBundleSetPriceText": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -17178,7 +17184,9 @@
                             "updateCartItemText",
                             "pickupAvailableText",
                             "noDeliveryNeededBadgeText",
-                            "payAtServiceText"
+                            "payAtServiceText",
+                            "productBundleTierText",
+                            "productBundleSetPriceText"
                           ]
                         }
                       },

@@ -4468,6 +4468,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pickupAvailableText: string;
                 noDeliveryNeededBadgeText: string;
                 payAtServiceText: string;
+                productBundleTierText: string;
+                productBundleSetPriceText: string;
             };
         };
     };
