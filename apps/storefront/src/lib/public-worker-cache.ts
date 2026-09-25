@@ -7,6 +7,7 @@ import {
   PUBLIC_CACHE_MAX_AGE_SECONDS,
 } from "@scalius/shared/cache-generation";
 import {
+  isBuyerShellPathname,
   requestBypassesPublicStorefrontCache,
   toPublicCacheRequest,
 } from "@/lib/cache-policy";
@@ -98,10 +99,14 @@ function isCmsPagePath(pathname: string): boolean {
   );
 }
 
-/** Anonymous pages and discovery files; everything else is never cached. */
+/**
+ * Anonymous pages, discovery files and the cart shell (`isBuyerShellPathname`);
+ * everything else is never cached.
+ */
 function isPublicCachePath(pathname: string): boolean {
   return (
     pathname === "/" ||
+    isBuyerShellPathname(pathname) ||
     /^\/(?:products|categories|collections)\/[^/]+\/?$/.test(pathname) ||
     /^\/search\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
@@ -158,9 +163,11 @@ export function getPublicStorefrontCachePolicy(
   if (hasStorefrontProductVariantSelectionParams(url)) return null;
   if (!isPublicCachePath(url.pathname)) return null;
   const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
-  const canonicalCachePath = canonicalizeStorefrontHtmlCachePath(
-    `${normalizedPathname}${url.search}`,
-  );
+  // The cart shell reads no query parameter on the server, so every /cart URL
+  // shares one entry and a query can neither split nor poison it.
+  const canonicalCachePath = isBuyerShellPathname(normalizedPathname)
+    ? normalizedPathname
+    : canonicalizeStorefrontHtmlCachePath(`${normalizedPathname}${url.search}`);
   if (!canonicalCachePath) return null;
 
   return { canonicalUrl: new URL(canonicalCachePath, url.origin).toString() };
@@ -225,9 +232,9 @@ export interface PublicStorefrontCacheContext {
 }
 
 /**
- * Serves one storefront request. Private requests (checkout, cart, account,
- * a named session cookie, variant selections) always render. Public requests
- * render the canonical, cookie-less URL pinned to the page's generation, and
+ * Serves one storefront request. Private requests (checkout, account, a named
+ * session cookie, variant selections) always render. Public requests and the
+ * cart shell render the canonical, cookie-less URL pinned to the page's generation, and
  * a successful anonymous render is stored for the next visitor.
  */
 export async function servePublicStorefrontRequest(

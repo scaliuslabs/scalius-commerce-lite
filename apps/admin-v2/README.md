@@ -13,7 +13,9 @@ pnpm dev:admin   # from the repo root: API :8787 + dashboard :4323
 ```
 
 `pnpm dev` here runs Vite on :4323 and proxies `/api/v1`, `/api/auth`, and
-`/api/scanner-token` to the API Worker on :8787, so development and production
+`/api/scanner-token` to the API Worker on :8787 (`SCALIUS_DEV_ADMIN_PORT` and
+`SCALIUS_DEV_API_PORT` change both; see the root README "Parallel local
+stacks"), so development and production
 see the same same-origin paths. Run `pnpm dev:setup` first to create the API's
 `.dev.vars`, apply local D1 migrations, and create the default local admin.
 

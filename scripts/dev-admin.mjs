@@ -15,6 +15,7 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { devOrigins } from "./dev-ports.mjs";
 import {
   assertLocalUrl,
   assertPassword,
@@ -37,7 +38,7 @@ const command = positionalCommand || "create";
 const options = parseOptions(positionalCommand ? args.slice(1) : args);
 
 const defaults = {
-  apiBaseUrl: process.env.LOCAL_API_BASE_URL || "http://localhost:8787",
+  apiBaseUrl: process.env.LOCAL_API_BASE_URL || devOrigins().apiUrl,
   email: process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test",
   password: process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!",
   name: process.env.LOCAL_ADMIN_NAME || "Local Admin",
@@ -255,7 +256,7 @@ async function createAdmin({ allowExisting }) {
   });
 
   console.log("\nLocal admin ready:");
-  console.log(`  Admin URL: http://localhost:4323/admin`);
+  console.log(`  Admin URL: ${devOrigins().dashboardUrl}/admin`);
   console.log(`  Email:     ${config.email}`);
   console.log("  Password:  use the value supplied through --password or LOCAL_ADMIN_PASSWORD");
 }

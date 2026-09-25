@@ -6,13 +6,19 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function runDevSh(args = []) {
+function runDevSh(args = [], env = {}) {
+  const inherited = { ...process.env };
+  // The test decides the ports; a developer's exported slot must not leak in.
+  for (const name of ["SCALIUS_DEV_API_PORT", "SCALIUS_DEV_STOREFRONT_PORT", "SCALIUS_DEV_ADMIN_PORT", "SCALIUS_DEV_API_READY_URL"]) {
+    delete inherited[name];
+  }
   return spawnSync("bash", ["scripts/dev.sh", ...args], {
     cwd: root,
     env: {
-      ...process.env,
+      ...inherited,
       SCALIUS_DEV_DRY_RUN: "1",
       SCALIUS_DEV_API_READY_TIMEOUT_SECONDS: "1",
+      ...env,
     },
     encoding: "utf8",
   });
@@ -62,6 +68,49 @@ describe("dev.sh startup planning", () => {
     expect(waitIndex).toBeGreaterThan(apiIndex);
     expect(adminIndex).toBeGreaterThan(waitIndex);
     expect(storefrontIndex).toBeGreaterThan(adminIndex);
+  });
+
+  it("runs a parallel stack on the ports it is given, and points the local Platform settings at them", () => {
+    const result = runDevSh(["--api-port", "8931", "--storefront-port=4531", "--admin-port", "4532"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Starting API worker (port 8931)...");
+    expect(result.stdout).toContain("Waiting for API readiness at http://localhost:8931/api/v1/setup...");
+    expect(result.stdout).toContain("Starting admin dashboard (port 4532)...");
+    expect(result.stdout).toContain("Starting storefront (port 4531)...");
+    expect(result.stdout).toContain(
+      "[dry-run] node scripts/dev-ports.mjs sync-platform (api 8931, storefront 4531, admin 4532)",
+    );
+    expect(result.stdout.indexOf("Applying local D1 migrations")).toBeLessThan(
+      result.stdout.indexOf("Pointing local Platform settings"),
+    );
+    expect(result.stdout.indexOf("Pointing local Platform settings")).toBeLessThan(
+      result.stdout.indexOf("Starting API worker"),
+    );
+    expect(result.stdout).toContain("Storefront: http://localhost:4531");
+    expect(result.stdout).not.toMatch(/8787|4322|4323/);
+  });
+
+  it("takes the ports from SCALIUS_DEV_*_PORT and keeps --filter working beside the port flags", () => {
+    const result = runDevSh(["--filter=@scalius/api", "--api-port", "8941"], { SCALIUS_DEV_STOREFRONT_PORT: "4541" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Starting API worker (port 8941)...");
+    expect(result.stdout).toContain("(api 8941, storefront 4541, admin 4323)");
+    expect(result.stdout).not.toContain("Starting storefront");
+  });
+
+  it.each([
+    [["--api-port", "abc"], /API port .* must be a TCP port/],
+    [["--admin-port", "70000"], /Admin port .* must be a TCP port/],
+    [["--api-port", "4322"], /Local dev ports must differ/],
+    [["--api-port"], /Option --api-port requires a value/],
+  ])("refuses %j", (args, message) => {
+    const result = runDevSh(args);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(message);
+    expect(result.stdout).not.toContain("Starting API worker");
   });
 
   it("reports an occupied app port without terminating its owner", async () => {

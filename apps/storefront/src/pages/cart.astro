@@ -7,16 +7,19 @@ import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMetho
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
-import { getCities, processOrder } from "@/lib/cart/server";
+import { processOrder } from "@/lib/cart/server";
 import {
+  getCities,
   getShippingMethods,
   getLayoutData,
   type ShippingMethod,
   getActiveCheckoutLanguage,
   type CheckoutLanguageData,
   getCheckoutConfig,
+  isCheckoutConfigReadFailure,
   isCodOnly,
 } from "@/lib/api";
+import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import {
   createOrderReceiptCookieHeader,
@@ -32,10 +35,15 @@ import {
   checkoutLanguageBaseCode,
 } from "@scalius/shared/checkout-language";
 
+// The GET render is a buyer-agnostic shell that the edge caches under the
+// store's cache generation (lib/cache-policy.ts isBuyerShellPathname): it
+// reads only public, generation-cached settings and never a cookie, a query
+// parameter or the buyer's cart. The lines paint from localStorage and
+// everything buyer-specific comes from no-store APIs or the POST below.
 // Parallel fetch: layout + cities + shipping methods + checkout language + checkout config
 const [
   layoutData,
-  cities,
+  citiesResponse,
   shippingMethodsResponse,
   checkoutLanguageResponse,
   checkoutConfig,
@@ -46,7 +54,19 @@ const [
   getActiveCheckoutLanguage(),
   getCheckoutConfig(),
 ]);
+const cities = citiesResponse ?? [];
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
+// A failed read renders the fail-closed page (checkout unavailable, English
+// copy); that answer is for this request only, never the shared cache.
+if (
+  !layoutData ||
+  citiesResponse === null ||
+  shippingMethodsResponse === null ||
+  checkoutLanguageResponse === null ||
+  isCheckoutConfigReadFailure(checkoutConfig)
+) {
+  markRenderUncacheable(Astro.response.headers);
+}
 // Delivery or pickup, like Shopify's checkout: the switch shows only when the
 // store offers both; a pickup-only store never asks for an address.
 const hasPickupRates = shippingMethods.some((method) => method.kind === "pickup");
@@ -98,10 +118,6 @@ let codCartRepairState: {
   issues: CartValidationIssue[];
   createdAt: number;
 } | null = null;
-
-if (Astro.url.searchParams.get("quickBuyStorage") === "blocked") {
-  errorMessage = copy.quickBuyStorageBlockedText;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -356,6 +372,28 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         </div>
       )
     }
+    {/* Quick buy lands here with ?quickBuyStorage=blocked when the browser
+        refused session storage. The shell is shared by every buyer, so the
+        notice is revealed from the URL in the browser, before first paint. */}
+    <div
+      id="quickBuyStorageNotice"
+      class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      role="alert"
+      hidden
+    >
+      {copy.quickBuyStorageBlockedText}
+    </div>
+    <script is:inline>
+      (function () {
+        try {
+          if (new URLSearchParams(location.search).get("quickBuyStorage") === "blocked") {
+            document.getElementById("quickBuyStorageNotice").hidden = false;
+          }
+        } catch {
+          // An unreadable URL keeps the notice hidden.
+        }
+      })();
+    </script>
 
     <aside
       id="checkoutRecoveryNotice"

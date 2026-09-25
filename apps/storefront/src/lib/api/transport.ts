@@ -50,11 +50,19 @@ import {
 // isolate, before any request runtime is seeded. Order:
 // 1. SSR: per-request runtime seeded by the middleware from the layout payload
 // 2. Browser: window.__API_BASE_URL__ injected by Layout.astro from that runtime
-// 3. Local `astro dev` only: the fixed local API port
+// 3. Local `astro dev` only: the local API port (scripts/dev-ports.mjs)
 // Missing configuration fails loudly because storefront does not expose a
 // catch-all same-origin /api/v1 proxy.
 
-const LOCAL_DEVELOPMENT_API_URL = `${LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl}/api/v1`;
+/**
+ * The API origin `astro dev` calls: SCALIUS_DEV_API_PORT through the Vite
+ * define in astro.config.mjs, else the default local port (tests).
+ */
+function localDevelopmentApiOrigin(): string {
+  return typeof __SCALIUS_DEV_API_ORIGIN__ === "string" && __SCALIUS_DEV_API_ORIGIN__
+    ? __SCALIUS_DEV_API_ORIGIN__
+    : LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl;
+}
 
 function getApiBaseUrl(): string {
   if (import.meta.env.SSR) {
@@ -70,7 +78,7 @@ function getApiBaseUrl(): string {
     return window.__API_BASE_URL__;
   }
 
-  if (import.meta.env.DEV) return LOCAL_DEVELOPMENT_API_URL;
+  if (import.meta.env.DEV) return `${localDevelopmentApiOrigin()}/api/v1`;
 
   throw new Error(
     "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set the API URL in the dashboard under Settings -> System -> Platform.",
@@ -103,7 +111,7 @@ export interface BackendTarget {
  * Resolves where same-origin proxy routes send API requests.
  *
  * Production: the BACKEND_API service binding with the fixed internal origin.
- * Local `astro dev`: plain HTTP to the fixed local API port. There is no
+ * Local `astro dev`: plain HTTP to the local API port. There is no
  * public-URL fallback: a production Worker without the binding fails closed.
  */
 export function resolveBackendTarget(
@@ -113,7 +121,7 @@ export function resolveBackendTarget(
   const path = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
   if (import.meta.env.DEV) {
     return {
-      url: `${LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl}${path}`,
+      url: `${localDevelopmentApiOrigin()}${path}`,
       fetch: (input, init) => fetch(input, init),
       viaServiceBinding: false,
     };

@@ -11,6 +11,7 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
+import { devOrigins } from "./dev-ports.mjs";
 import {
   assertSafeLocalMutationUrl,
   assertStringOptions,
@@ -57,7 +58,7 @@ const paymentReadinessGateways = [
 ];
 
 const defaults = {
-  apiBaseUrl: process.env.LOCAL_API_BASE_URL || "http://localhost:8787",
+  apiBaseUrl: process.env.LOCAL_API_BASE_URL || devOrigins().apiUrl,
   wranglerState: resolveLocalStatePath(root, process.env.SCALIUS_WRANGLER_STATE),
   orders: 25,
   concurrency: 5,
@@ -224,7 +225,7 @@ function otpFixtureStatements() {
   };
 
   return [
-    patchSettingsDocument("platform", { storefrontUrl: "http://localhost:4322" }),
+    patchSettingsDocument("platform", { storefrontUrl: devOrigins().storefrontUrl }),
     patchSettingsDocument("checkout", {
       guestCheckoutEnabled: true,
       checkoutMode: "all",

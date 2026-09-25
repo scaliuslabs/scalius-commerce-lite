@@ -8,12 +8,16 @@ import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
+import { devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
 
 const persistStatePath =
   process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const buildAssetsDirectory = readBuildAssetsDirectory(
   new URL("./src/config/build-id.ts", import.meta.url),
 );
+// Local ports (scripts/dev-ports.mjs): `astro dev` listens on the storefront
+// port and calls the API on the API port. Dev tooling only, never a Worker var.
+const devPorts = readDevPorts();
 const reactSingletonDeps = [
   "react",
   "react-dom",
@@ -26,6 +30,8 @@ const reactSingletonDeps = [
 // https://astro.build/config
 export default defineConfig({
   devToolbar: { enabled: false },
+
+  server: { port: devPorts.storefront },
 
   // No `image.domains`: the Cloudflare adapter runs the passthrough image
   // service and nothing renders astro:assets <Image>/<Picture> or getImage(),
@@ -62,6 +68,11 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
+    define: {
+      // Read only under `import.meta.env.DEV` (src/lib/api/transport.ts), so
+      // a production build drops it with the dev branch.
+      __SCALIUS_DEV_API_ORIGIN__: JSON.stringify(devOrigins(devPorts).apiUrl),
+    },
     optimizeDeps: {
       // @astrojs/cloudflare misses these on cold Vite caches: withastro/astro#17788.
       include: ["astro/assets/services/noop", "astro/logger/json"],

@@ -105,7 +105,8 @@ flowchart TB
 The dashboard is a static single-page app (`apps/admin-v2/dist`) that the API
 Worker serves from its `ASSETS` binding on the dashboard hostname, together with
 Better Auth (`/api/auth/*`) and the API itself; in local development Vite serves
-it on :4323 and proxies those paths to `http://localhost:8787`. Every per-purpose
+it on :4323 and proxies those paths to `http://localhost:8787` (ports:
+[Parallel local stacks](#parallel-local-stacks)). Every per-purpose
 secret is HKDF derived from `SCALIUS_SECRET` at Worker entry. The storefront
 holds no database, provider, or URL configuration of its own: it calls the API
 through a Cloudflare Service Binding in production (over HTTP to
@@ -153,15 +154,16 @@ pnpm dev
 
 `pnpm dev:setup` generates the two secrets into the API and storefront `.dev.vars`
 (gitignored), applies local D1 migrations, and creates a default local admin
-through `/api/v1/setup`. It writes no URLs — local development falls back to
-fixed localhost ports in code.
+through `/api/v1/setup`. It writes no URLs. `pnpm dev` points the local
+Platform settings at the local ports (see [Parallel local stacks](#parallel-local-stacks)).
 
 Default local admin: `admin@local.scalius.test` / `ScaliusLocal123!`. Override
 with `--admin-email`, `--admin-password`, `--admin-name`, or the matching
 `LOCAL_ADMIN_*` environment variables.
 
 `pnpm dev` starts or reuses a loopback Mailpit inbox, applies pending local D1
-migrations, refuses to start when an app port is already taken, waits for
+migrations, points the local Platform settings at the local ports, refuses to
+start when an app port is already taken, waits for
 `/api/v1/setup` before starting the dashboard and storefront, and cleans up only
 the processes it started. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` to skip the
 migration check.
@@ -187,11 +189,49 @@ pnpm dev:reset --state /tmp/scalius-state
 SCALIUS_WRANGLER_STATE=/tmp/scalius-state pnpm dev:admin
 ```
 
+### Parallel local stacks
+
+The three ports are one dev-only setting, `scripts/dev-ports.mjs`, read from
+`SCALIUS_DEV_API_PORT`, `SCALIUS_DEV_STOREFRONT_PORT` and
+`SCALIUS_DEV_ADMIN_PORT` (default 8787, 4322, 4323). To run a second stack
+beside the first, give it its own ports and state:
+
+```bash
+pnpm dev --api-port 8931 --storefront-port 4531 --admin-port 4532 --state /tmp/slot/state
+pnpm dev:storefront --api-port 8931 --storefront-port 4531 --state /tmp/slot/state
+```
+
+`scripts/dev.sh` exports the variables for every app it starts: the API's
+`wrangler dev --port`, the storefront's `astro dev` port and the API origin it
+calls, and the dashboard's Vite port and API proxy target. Before the API
+starts it runs `node scripts/dev-ports.mjs sync-platform`. That points the
+local Platform settings document (Settings -> System -> Platform) at the same
+origins and drops its KV mirror. Only unset or loopback origins are replaced,
+so a tunnel or real URL saved in the dashboard stays. `pnpm dev:doctor` reads
+the same flags and variables (`--api-port` and so on), and warns when the local
+Platform origins point at another stack.
+
+To run an app on its own, export the variables, sync once while the API is
+stopped, then start each app:
+
+```bash
+export SCALIUS_DEV_API_PORT=8931 SCALIUS_DEV_STOREFRONT_PORT=4531 SCALIUS_DEV_ADMIN_PORT=4532
+export SCALIUS_WRANGLER_STATE=/tmp/slot/state
+node scripts/dev-ports.mjs sync-platform
+pnpm --dir apps/api dev        # :8931
+pnpm --dir apps/storefront dev # :4531, calls the API on :8931
+pnpm --dir apps/admin-v2 dev   # :4532, proxies to :8931
+```
+
+The ports are never Worker vars or Wrangler `vars` (`pnpm check:env` forbids
+both). Mailpit stays one shared inbox on `127.0.0.1:8025`.
+
 ## Commands
 
 ```bash
 # Development
 pnpm dev                  # API :8787 + dashboard :4323 + storefront :4322
+                          # (--api-port/--storefront-port/--admin-port/--state for a parallel stack)
 pnpm dev:api              # API only
 pnpm dev:admin            # API + dashboard
 pnpm dev:storefront       # API + storefront

@@ -121,7 +121,8 @@ describe("public storefront cache policy", () => {
 
   it.each([
     ["checkout", "/checkout", {}],
-    ["cart", "/cart", {}],
+    ["checkout step", "/checkout/payment", {}],
+    ["signed-in cart", "/cart", { Cookie: "cs_auth=1; cs_tok=private" }],
     ["account", "/account/orders", {}],
     ["receipt", "/order-success", {}],
     ["recovery", "/payment-recovery", {}],
@@ -132,6 +133,15 @@ describe("public storefront cache policy", () => {
     ["authorization", "/about", { Authorization: "Bearer private" }],
   ])("never caches a %s request", (_label, path, headers) => {
     expect(getPublicStorefrontCachePolicy(workerRequest(path, headers))).toBeNull();
+  });
+
+  it("caches the cart shell under one canonical URL whatever the query", () => {
+    for (const path of ["/cart", "/cart/", "/cart?quickBuyStorage=blocked", "/cart?checkoutIssues=1&utm_source=x"]) {
+      expect(getPublicStorefrontCachePolicy(workerRequest(path, { Cookie: "_fbp=fb.1.1" })), path)
+        .toEqual({ canonicalUrl: "https://shop.example/cart" });
+    }
+    expect(getPublicStorefrontCachePolicy(new Request("https://shop.example/cart", { method: "POST" }))).toBeNull();
+    expect(getPublicStorefrontCachePolicy(workerRequest("/cart/extra"))).toBeNull();
   });
 
   it("keeps tracking-cookie visitors on the shared cache lane", () => {
@@ -273,6 +283,74 @@ describe("servePublicStorefrontRequest", () => {
     await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
     expect(context.cache.put).not.toHaveBeenCalled();
   });
+});
+
+describe("the cart shell", () => {
+  const shell = () => renderedPage("<html>cart shell</html>", {
+    "Cache-Control": "private, no-cache, no-store, must-revalidate",
+  });
+
+  it("stores one buyer-agnostic entry and keeps the browser copy no-store", async () => {
+    const render = vi.fn(async (_request: Request) => shell());
+    const { context, store, settle } = createContext({ render });
+    const buyer = workerRequest("/cart?quickBuyStorage=blocked", {
+      Cookie: "_fbp=fb.1.1; order_receipt=proof; scalius_checkout=chk_x",
+      Accept: "text/html",
+    });
+
+    const first = await servePublicStorefrontRequest(buyer, context);
+    await settle();
+
+    // The render never sees the buyer's cookies or query.
+    const rendered = render.mock.calls[0]![0] as Request;
+    expect(rendered.url).toBe("https://shop.example/cart");
+    expect(rendered.headers.has("Cookie")).toBe(false);
+    expect(rendered.headers.get(GENERATION_HEADER)).toBe("gen1");
+    expect(first.headers.get("X-Cache-Status")).toBe("MISS");
+    expect([...store.keys()]).toEqual(["https://shop.example/__cache/build-a/ver-1/gen1/cart"]);
+
+    const hit = await servePublicStorefrontRequest(workerRequest("/cart"), context);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(hit.headers.get("X-Cache-Status")).toBe("HIT");
+    expect(hit.headers.get("Cache-Control")).toBe("private, no-cache, no-store, must-revalidate");
+    expect(hit.headers.has("Set-Cookie")).toBe(false);
+    expect(await hit.text()).toBe("<html>cart shell</html>");
+  });
+
+  it("renders a signed-in buyer's cart and a POST live, and never stores them", async () => {
+    const render = vi.fn(async (_request: Request) => shell());
+    const { context } = createContext({ render });
+
+    await servePublicStorefrontRequest(workerRequest("/cart", { Cookie: "cs_tok=secret" }), context);
+    await servePublicStorefrontRequest(
+      new Request("https://shop.example/cart", { method: "POST", body: "formIntent=checkout" }),
+      context,
+    );
+
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(context.readGeneration).not.toHaveBeenCalled();
+    expect(context.cache.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a cart that sets a cookie", { "Set-Cookie": "cs_auth=; Max-Age=0" }],
+    ["a cart rendered from a failed read", { "X-Cache-Status": "BYPASS_DEGRADED" }],
+  ])("never stores %s", async (_label, headers) => {
+    const { context } = createContext({ render: async () => renderedPage("x", headers) });
+    await servePublicStorefrontRequest(workerRequest("/cart"), context);
+    expect(context.cache.put).not.toHaveBeenCalled();
+  });
+
+  it.each(["/checkout", "/order-success?orderId=o1", "/payment-recovery", "/account", "/track-order"])(
+    "still renders %s for every request",
+    async (path) => {
+      const { context, render } = createContext();
+      await servePublicStorefrontRequest(workerRequest(path), context);
+      expect(render).toHaveBeenCalledTimes(1);
+      expect(context.cache.match).not.toHaveBeenCalled();
+      expect(context.cache.put).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("pages that batch their layout read", () => {

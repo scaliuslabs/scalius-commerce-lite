@@ -1,6 +1,13 @@
+import {
+  PRIVATE_NO_STORE_CACHE_CONTROL,
+  isBuyerShellPathname,
+} from "./cache-policy";
+
 // Public catalog HTML carries no personal data: browsers revalidate every
 // load but may keep the page for back/forward navigation (bfcache). Private
-// pages (cart, checkout, account, receipts) are set to no-store elsewhere.
+// pages (checkout, account, receipts) are set to no-store elsewhere. The cart
+// shell is stored at the edge but stays no-store in the browser: the buyer's
+// typed contact details and address live in that document.
 const HTML_BROWSER_CACHE_CONTROL = "no-cache";
 // The gateway owns edge storage (keyed by cache generation). Browser
 // copies must revalidate so crawlers never outlive the bounded edge policy.
@@ -57,6 +64,13 @@ export function applyBrowserCachePolicyForPublicResponse(
     response.headers.delete("set-cookie");
     response.headers.delete("Pragma");
     response.headers.delete("Expires");
+    return;
+  }
+
+  if (isBuyerShellPathname(pathname)) {
+    response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
     return;
   }
 
