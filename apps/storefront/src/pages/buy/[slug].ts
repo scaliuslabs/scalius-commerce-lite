@@ -24,6 +24,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 
 export const prerender = false;
 
@@ -335,6 +336,11 @@ async function quickBuy({
     const quickBuyStorageValue = serializeJsonForInlineScript(
       JSON.stringify(dataToStore),
     );
+    // Without JavaScript the line cannot reach the browser cart: it goes on
+    // in the body of a form to the no-JavaScript checkout instead.
+    const noScriptCheckout = quickBuyNoScriptForm(
+      { [`quick_buy:${cartItem.id}:${cartItem.variantId}`]: cartItem },
+    );
 
     const html = `
       <!DOCTYPE html>
@@ -362,6 +368,7 @@ async function quickBuy({
           <p class="product-name">${escapeHtml(cartItem.name)}</p>
           <p class="status-text" id="status-text">Adding to cart & preparing checkout...</p>
           <div class="loader"><div class="loader-bar"></div></div>
+          ${noScriptCheckout}
         </div>
 
         <script>
