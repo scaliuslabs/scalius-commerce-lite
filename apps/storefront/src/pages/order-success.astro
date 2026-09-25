@@ -23,6 +23,7 @@ import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/che
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
+  codDueText,
   getOrderSuccessNextSteps,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
@@ -647,7 +648,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           {
             visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText}</span>
+                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? codDueText(order, copy) : copy.orderReceiptBalanceDueText}</span>
                 <span class="font-medium">
                   {formatReceiptAmount(visibleBalanceDue)}
                 </span>
