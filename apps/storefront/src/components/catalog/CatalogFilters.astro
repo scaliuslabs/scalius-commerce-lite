@@ -1,18 +1,30 @@
 ---
 // Server-rendered listing filters: a plain GET form of native controls, so a
 // tap or Space works the moment the HTML arrives (no hydration) and filtering
-// works without JavaScript. `setupCatalogFilters()` adds instant apply in the
-// desktop sidebar and the live "Show N products" count in the phone sheet
-// and the filter drawer.
+// works without JavaScript. `setupCatalogFilters()` adds instant apply on
+// computers, the live "Show N products" count in the phone sheet and the
+// filter drawer, "See more" in place, the price slider and the bar's
+// dropdown behaviour.
 //
-// `presentation` is where the form sits: the sidebar (a bottom sheet on
-// phones) or a drawer at every width, whose apply bar stays inside it. Each
-// facet renders by its display type (lib/catalog-listing): checkboxes,
-// colour swatches, checkboxes with a search field for long lists, or a
-// From/To pair of number fields (`<slug>.min`, `<slug>.max`) for a range.
-// Values show their label and submit their URL value.
-import type { BuyerPriceRange, ProductFacet } from "@/lib/api";
+// One form, placed by the listing's filter style (lib/catalog-listing):
+// - `sidebar` (sidebar-dense, sidebar-comfortable): an open column of tight
+//   rows (Amazon, Daraz, Star Tech; Apple Gadgets for comfortable);
+// - `bar` (bar-dropdowns): on computers a one-line bar of facet dropdowns
+//   over the grid (Dawn), the rest behind "More filters";
+// - `drawer`: a panel behind a Filter button at every width (Target).
+// On phones every placement is a bottom sheet. The measured column width,
+// row pitch and label size arrive as CSS custom properties
+// (`presentation.styleVars`, catalog-listing.css).
+//
+// Groups: the category tree (links with counts), availability, price, then
+// the facets (brand first, then option axes and attributes in the category's
+// spec order, same-name facets merged). Each group sends at most
+// STOREFRONT_FILTER_VALUES_IN_HTML values; "See more" fetches the rest (or,
+// without JavaScript, `?showAll=<slug>` renders them).
+import type { BuyerPriceRange } from "@/lib/api";
 import {
+  PRODUCT_LIST_SHOW_ALL_PARAM,
+  buildProductListHref,
   productListRangeKey,
   type ProductListFilterState,
   type ProductListSort,
@@ -20,53 +32,60 @@ import {
 import {
   catalogApplyButton,
   showsCatalogPriceFilter,
-  visibleCatalogFacets,
+  type CatalogFacetGroup,
 } from "@/lib/catalog-filters";
-import { catalogFacetAnchor, catalogFacetDisplay } from "@/lib/catalog-listing";
+import {
+  CATALOG_FACET_SEARCH_MIN_VALUES,
+  catalogCategoryFacetLinks,
+  catalogFacetAnchor,
+  catalogFacetDisplay,
+  type CatalogFilterPresentation,
+} from "@/lib/catalog-listing";
 import { formatMoney } from "@/lib/currency";
 import { Search } from "lucide-react";
 
 interface Props {
-  facets: ProductFacet[];
+  groups: CatalogFacetGroup[];
   priceRange?: BuyerPriceRange;
   currentFilters: ProductListFilterState;
   query: string;
   sortBy: ProductListSort;
   defaultSort: ProductListSort;
   total: number;
+  pathname: string;
   resetPath: string;
   searchLabel: string;
   countEndpoint: string;
   currencySymbol: string;
   currencyCode: string;
-  presentation?: "sidebar" | "drawer";
-  /** Give each facet group an id, so aspect chips can open the form at it. */
-  facetAnchors?: boolean;
+  presentation: CatalogFilterPresentation;
+  /** Leave the category group out (the sub-category pills above the results carry it). */
+  withoutCategories?: boolean;
 }
 
 const {
-  facets,
+  groups,
   priceRange,
   currentFilters,
   query,
   sortBy,
   defaultSort,
   total,
+  pathname,
   resetPath,
   searchLabel,
   countEndpoint,
   currencySymbol,
   currencyCode,
-  presentation = "sidebar",
-  facetAnchors = false,
+  presentation,
+  withoutCategories = false,
 } = Astro.props;
 
-const drawer = presentation === "drawer";
+const placement = presentation.placement;
+const drawer = placement === "drawer";
+const bar = placement === "bar";
+const dense = presentation.style === "sidebar-dense";
 const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
-const shownFacets = visibleCatalogFacets(facets, currentFilters).map((facet) => ({
-  ...facet,
-  ...catalogFacetDisplay(facet),
-}));
 const applyButton = catalogApplyButton(total);
 const showPrice = showsCatalogPriceFilter(priceRange, currentFilters);
 const single = (key: string) => {
@@ -74,253 +93,313 @@ const single = (key: string) => {
   return Array.isArray(value) ? value.at(-1) : value;
 };
 // The search itself is removed from its chip; "Clear all" clears refinements.
-const hasActiveFilters = Object.keys(currentFilters).some((key) => !["page", "sortBy", "limit", "q"].includes(key));
+const hasActiveFilters = Object.keys(currentFilters).some((key) => !["page", "sortBy", "limit", "q", PRODUCT_LIST_SHOW_ALL_PARAM].includes(key));
 const pageSize = single("limit");
-const switches = [
+const availability = [
+  { name: "inStock", label: "Exclude out of stock" },
   { name: "hasDiscount", label: "On sale" },
   { name: "freeDelivery", label: "Free delivery" },
 ];
-const section = "rounded-lg border border-border bg-background";
-const summary =
-  "flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-foreground [&::-webkit-details-marker]:hidden";
-const chevron = "h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180";
-const priceInput =
-  "h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm";
-const anchor = (slug: string) => (facetAnchors ? catalogFacetAnchor(slug) : undefined);
+const availabilitySelected = availability.filter(({ name }) => single(name) === "true").length;
+// The in-listing search is a comfortable, drawer and phone-sheet field; the
+// dense column and the bar keep the header's search (Amazon, Daraz, Dawn).
+const searchField = !dense && !bar;
+
+type Section =
+  | { kind: "availability"; key: string; name: string; selectedCount: number }
+  | { kind: "price"; key: string; name: string; selectedCount: number }
+  | { kind: "group"; key: string; name: string; selectedCount: number; group: CatalogFacetGroup };
+const facetSections: Section[] = groups
+  .filter((group) => !(withoutCategories && group.kind === "category"))
+  .map((group) => ({ kind: "group", key: group.key, name: group.name, selectedCount: group.selectedCount, group }));
+const availabilitySection: Section = { kind: "availability", key: "availability", name: "Availability", selectedCount: availabilitySelected };
+const priceSection: Section | null = showPrice
+  ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
+  : null;
+// Daraz's order in a column (category, brand, then the shopping switches
+// and price, then specs); Dawn's in a bar (availability, price, then facets).
+const leading = facetSections.filter((section) => section.kind === "group" && (section.group.kind === "category" || section.group.facets[0]!.kind === "brand"));
+const rest = facetSections.filter((section) => !leading.includes(section));
+const sections: Section[] = bar
+  ? [availabilitySection, ...(priceSection ? [priceSection] : []), ...leading.filter((section) => section.kind === "group" && section.group.kind !== "category"), ...rest]
+  : [...leading, availabilitySection, ...(priceSection ? [priceSection] : []), ...rest];
+// A column opens its first groups (and any in use) so the page does not
+// start with a wall; a bar's dropdowns open on demand.
+const OPEN_GROUPS = 6;
+const isOpen = (section: Section, index: number) =>
+  !bar && (section.selectedCount > 0 || (presentation.openByDefault ? index < OPEN_GROUPS : index < 2));
+const barMore = bar ? Math.max(0, sections.length - presentation.barFacets) : 0;
+// A selection behind "More filters" keeps those groups in the bar.
+const barOpen = bar && sections.some((section, index) => index >= presentation.barFacets && section.selectedCount > 0);
+
+const anchorOf = (section: Section) => section.kind === "group" ? catalogFacetAnchor(section.key) : `catalog-facet-${section.key}`;
 const rangeBounds = [
   { bound: "min", label: "From" },
   { bound: "max", label: "To" },
 ] as const;
+const showAllHref = (key: string | null) => `${buildProductListHref({
+  pathname,
+  currentFilters,
+  overrides: { [PRODUCT_LIST_SHOW_ALL_PARAM]: key, page: null },
+  defaultSort,
+})}`;
+const priceStep = priceRange && priceRange.max > 0 ? Math.max(1, 10 ** Math.max(0, Math.floor(Math.log10(priceRange.max)) - 2)) : 1;
+const priceSlider = priceRange && priceRange.max > priceRange.min
+  ? { min: Math.floor(priceRange.min / priceStep) * priceStep, max: Math.ceil(priceRange.max / priceStep) * priceStep }
+  : null;
 ---
 
 <form
   id="filterForm"
   method="get"
+  action={pathname}
   autocomplete="off"
   data-catalog-filters
   data-count-endpoint={countEndpoint}
   data-catalog-apply={drawer ? "sheet" : undefined}
-  class="grow overflow-y-auto"
+  data-placement={placement}
+  data-filter-style={presentation.style}
+  data-bar-open={barOpen ? "" : undefined}
+  class="catalog-filter-form grow overflow-y-auto"
 >
   {sortBy !== defaultSort && <input type="hidden" name="sortBy" value={sortBy} />}
   {pageSize && <input type="hidden" name="limit" value={pageSize} />}
-  <div class:list={["space-y-3 p-4", drawer ? "lg:p-5" : "pb-28 lg:p-6 lg:pb-6"]}>
-    <div class="relative mb-6">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <label for="catalog-filter-search" class="sr-only">{searchLabel}</label>
-      <input
-        id="catalog-filter-search"
-        type="search"
-        name="q"
-        placeholder={`${searchLabel}…`}
-        value={query}
-        maxlength={120}
-        enterkeyhint="search"
-        class="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-4 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm"
-      />
-    </div>
-
-    <details open class:list={["group", section]}>
-      <summary class={summary}>
-        Shopping options
-        <svg class={chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-      </summary>
-      <div class="space-y-2 px-4 pb-4">
-        {switches.map(({ name, label }) => (
-          <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">
-            {label}
-            <input
-              type="checkbox"
-              role="switch"
-              name={name}
-              value="true"
-              checked={single(name) === "true"}
-              class="relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-input transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-background before:shadow before:transition-transform checked:bg-primary checked:before:translate-x-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:before:transition-none"
-            />
-          </label>
-        ))}
+  {!searchField && query && <input type="hidden" name="q" value={query} />}
+  <div class="catalog-filter-groups">
+    {searchField && (
+      <div class="catalog-filter-search relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <label for="catalog-filter-search" class="sr-only">{searchLabel}</label>
+        <input
+          id="catalog-filter-search"
+          type="search"
+          name="q"
+          placeholder={`${searchLabel}…`}
+          value={query}
+          maxlength={120}
+          enterkeyhint="search"
+          class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-4 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm"
+        />
       </div>
-    </details>
-
-    {showPrice && (
-      <details open id={facetAnchors ? "catalog-facet-price" : undefined} class:list={["group", section]}>
-        <summary class={summary}>
-          Price
-          <svg class={chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        </summary>
-        <div class="px-4 pb-4">
-          {priceRange && priceRange.max > 0 && (
-            <p class="mb-3 text-sm text-muted-foreground">The highest price is {money(priceRange.max)}</p>
-          )}
-          <div class="grid grid-cols-2 gap-3">
-            {[
-              { name: "minPrice", label: "From", placeholder: priceRange ? String(priceRange.min) : "0" },
-              { name: "maxPrice", label: "To", placeholder: priceRange ? String(priceRange.max) : "" },
-            ].map(({ name, label, placeholder }) => (
-              <div>
-                <label for={`catalog-${name}`} class="mb-1.5 block text-sm font-medium text-muted-foreground">{label}</label>
-                <div class="relative">
-                  <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">{currencySymbol}</span>
-                  <input
-                    id={`catalog-${name}`}
-                    type="text"
-                    inputmode="decimal"
-                    name={name}
-                    value={single(name) ?? ""}
-                    placeholder={placeholder}
-                    class={priceInput}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          {!drawer && (
-            <button
-              type="submit"
-              class="mt-3 hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:inline-flex"
-            >
-              Apply price
-            </button>
-          )}
-        </div>
-      </details>
     )}
 
-    {shownFacets.map((facet, index) => (
-      <details open={index < 3 || facet.selectedCount > 0} id={anchor(facet.slug)} class:list={["group", section]}>
-        <summary class={summary}>
-          {facet.name}
-          <svg class={chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        </summary>
-        {facet.display === "range" ? (
-          <fieldset class="px-4 pb-4" data-catalog-facet-display="range">
-            <legend class="sr-only">{facet.unit ? `${facet.name} (${facet.unit})` : facet.name}</legend>
-            <div class="grid grid-cols-2 gap-3">
-              {rangeBounds.map(({ bound, label }) => {
-                const id = `${catalogFacetAnchor(facet.slug)}-${bound}`;
-                return (
-                  <div>
-                    <label for={id} class="mb-1.5 block text-sm font-medium text-muted-foreground">{label}</label>
-                    <div class="flex items-center gap-2">
-                      {/* Plain text with a decimal keypad, like the price: Bangla digits are read as Latin. */}
+    {sections.map((section, index) => {
+      const group = section.kind === "group" ? section.group : null;
+      const display = group && group.kind === "values" ? catalogFacetDisplay({ ...group.facets[0]!, values: group.rows }) : null;
+      const totalValues = group ? group.rows.length + group.more : 0;
+      // The merchant's searchable list, or any long list (a brand's 300 values).
+      const searchable = group?.kind === "values" && display !== null
+        && (display.display === "search-list" || (display.display !== "swatch" && totalValues > CATALOG_FACET_SEARCH_MIN_VALUES));
+      const rangeFacet = group?.kind === "range" ? group.facets[0]! : null;
+      return (
+        <details
+          open={isOpen(section, index)}
+          id={anchorOf(section)}
+          data-catalog-dropdown={bar ? "" : undefined}
+          data-bar-overflow={bar && index >= presentation.barFacets ? "" : undefined}
+          class="catalog-facet group"
+        >
+          <summary class="catalog-facet-summary">
+            <span class="min-w-0 truncate">{section.name}</span>
+            {section.selectedCount > 0 && (
+              <span class="catalog-facet-selected tabular-nums">
+                <span aria-hidden="true">({section.selectedCount})</span>
+                <span class="sr-only">, {section.selectedCount} selected</span>
+              </span>
+            )}
+            <svg class="catalog-facet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </summary>
+
+          {section.kind === "availability" ? (
+            <fieldset class="catalog-facet-body">
+              <legend class="sr-only">Availability</legend>
+              {availability.map(({ name, label }) => (
+                <label class="catalog-facet-row">
+                  <input type="checkbox" name={name} value="true" checked={single(name) === "true"} class="catalog-facet-check" />
+                  <span class="catalog-facet-label">{label}</span>
+                </label>
+              ))}
+            </fieldset>
+          ) : section.kind === "price" ? (
+            <fieldset class="catalog-facet-body" data-catalog-price>
+              <legend class="sr-only">Price</legend>
+              {priceSlider && (
+                // Shown by JavaScript: two thumbs over one track, written into the fields below.
+                <div class="catalog-price-slider" data-catalog-price-slider hidden>
+                  <input type="range" aria-label="Minimum price" min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("minPrice") ?? priceSlider.min} data-catalog-price-thumb="min" />
+                  <input type="range" aria-label="Maximum price" min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("maxPrice") ?? priceSlider.max} data-catalog-price-thumb="max" />
+                </div>
+              )}
+              <div class="catalog-price-fields">
+                {[
+                  { name: "minPrice", label: "Min", placeholder: priceRange ? String(Math.floor(priceRange.min)) : "0" },
+                  { name: "maxPrice", label: "Max", placeholder: priceRange ? String(Math.ceil(priceRange.max)) : "" },
+                ].map(({ name, label, placeholder }) => (
+                  <div class="relative min-w-0">
+                    <label for={`catalog-${name}`} class="sr-only">{label} price</label>
+                    <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">{currencySymbol}</span>
+                    {/* Plain text with a decimal keypad: Bangla digits are read as Latin. */}
+                    <input
+                      id={`catalog-${name}`}
+                      type="text"
+                      inputmode="decimal"
+                      name={name}
+                      value={single(name) ?? ""}
+                      placeholder={placeholder}
+                      class="catalog-filter-input pl-6"
+                    />
+                  </div>
+                ))}
+                {!drawer && (
+                  <button type="submit" class="catalog-filter-go">Go<span class="sr-only"> (apply price)</span></button>
+                )}
+              </div>
+              {priceRange && priceRange.max > 0 && (
+                <p class="catalog-facet-note">Up to {money(priceRange.max)}</p>
+              )}
+            </fieldset>
+          ) : rangeFacet ? (
+            <fieldset class="catalog-facet-body" data-catalog-facet-display="range">
+              <legend class="sr-only">{rangeFacet.unit ? `${rangeFacet.name} (${rangeFacet.unit})` : rangeFacet.name}</legend>
+              <div class="catalog-price-fields">
+                {rangeBounds.map(({ bound, label }) => {
+                  const id = `${catalogFacetAnchor(rangeFacet.slug)}-${bound}`;
+                  return (
+                    <div class="min-w-0">
+                      <label for={id} class="sr-only">{label}</label>
                       <input
                         id={id}
                         type="text"
                         inputmode="decimal"
-                        name={productListRangeKey(facet.slug, bound)}
-                        value={facet.applied?.[bound] ?? ""}
-                        placeholder={facet.range ? String(facet.range[bound]) : ""}
+                        name={productListRangeKey(rangeFacet.slug, bound)}
+                        value={rangeFacet.applied?.[bound] ?? ""}
+                        placeholder={rangeFacet.range ? String(rangeFacet.range[bound]) : label}
                         data-catalog-range={bound}
-                        class="h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm"
+                        class="catalog-filter-input"
                       />
-                      {facet.unit && <span class="shrink-0 text-sm text-muted-foreground" aria-hidden="true">{facet.unit}</span>}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            {!drawer && (
-              <button
-                type="submit"
-                class="mt-3 hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:inline-flex"
-              >
-                Apply<span class="sr-only"> {facet.name}</span>
-              </button>
-            )}
-          </fieldset>
-        ) : facet.display === "swatch" ? (
-          <fieldset class="px-4 pb-4" data-catalog-facet-display="swatch">
-            <legend class="sr-only">{facet.name}</legend>
-            <div class="flex flex-wrap gap-2">
-              {[...facet.preview, ...facet.more].map(({ value, label, count, selected }) => (
-                <label class="catalog-swatch relative inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border border-border bg-background py-1.5 pl-1.5 pr-3 text-sm text-foreground transition-colors hover:border-foreground/40 has-checked:border-foreground has-checked:ring-1 has-checked:ring-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-40">
-                  <input
-                    type="checkbox"
-                    name={facet.slug}
-                    value={value}
-                    checked={selected}
-                    disabled={count === 0 && !selected}
-                    data-catalog-facet
-                    class="peer sr-only"
-                  />
-                  {/* A value with no known colour keeps an empty (muted) swatch beside its label. */}
-                  <span
-                    class:list={["h-7 w-7 shrink-0 rounded-full border border-foreground/15", !facet.swatches.has(value) && "bg-muted"]}
-                    style={facet.swatches.has(value) ? `background:${facet.swatches.get(value)}` : undefined}
-                    aria-hidden="true"
-                  ></span>
-                  <span class="min-w-0 truncate font-medium">{label}</span>
-                  <span class="tabular-nums text-muted-foreground" data-catalog-facet-count>{count}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ) : (
-          <fieldset class="space-y-1 px-4 pb-4" data-catalog-facet-list={facet.display === "search-list" ? "" : undefined}>
-            <legend class="sr-only">{facet.name}</legend>
-            {facet.display === "search-list" && (
-              // Shown by JavaScript: without it every value is listed (and
-              // the rest folded), so the field would do nothing.
-              <div class="relative mb-2" data-catalog-facet-search hidden>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                {/* No name: it narrows the list and is never submitted. */}
-                <input
-                  type="search"
-                  aria-label={`Search ${facet.name}`}
-                  placeholder={`Search ${facet.name}`}
-                  data-catalog-facet-query
-                  class="h-11 w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm"
-                />
-                <p class="px-2 pt-2 text-sm text-muted-foreground" data-catalog-facet-search-empty hidden>No matches</p>
+                  );
+                })}
+                {!drawer && (
+                  <button type="submit" class="catalog-filter-go">Go<span class="sr-only"> (apply {rangeFacet.name})</span></button>
+                )}
               </div>
-            )}
-            {[facet.preview, facet.more].map((values, group) => {
-              const options = values.map(({ value, label, count, selected }) => (
-                <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent">
+              {rangeFacet.unit && <p class="catalog-facet-note">{rangeFacet.unit}</p>}
+            </fieldset>
+          ) : group && group.kind === "category" ? (
+            <fieldset class="catalog-facet-body" data-catalog-facet-group data-facet-kind="category" data-facet-slugs={group.facets.map((facet) => facet.slug).join(" ")}>
+              <legend class="sr-only">{group.name}</legend>
+              <ul class="catalog-facet-links">
+                {catalogCategoryFacetLinks({ values: group.rows }, currentFilters).map((link) => (
+                  <li>
+                    {link.href ? (
+                      <a href={link.href} class="catalog-facet-row catalog-facet-link" data-catalog-facet-row>
+                        <span class="catalog-facet-label" data-catalog-facet-label>{link.label}</span>
+                        <span class="catalog-facet-count" data-catalog-facet-count>{link.count}</span>
+                      </a>
+                    ) : (
+                      <span class="catalog-facet-row catalog-facet-link opacity-50" data-catalog-facet-row>
+                        <span class="catalog-facet-label" data-catalog-facet-label>{link.label}</span>
+                        <span class="catalog-facet-count" data-catalog-facet-count>0</span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {(group.more > 0 || group.expanded) && (
+                <a
+                  href={showAllHref(group.expanded ? null : group.key)}
+                  class="catalog-facet-more"
+                  data-catalog-facet-more
+                  data-more-label={`See more (${group.more})`}
+                  data-less-label="See less"
+                  aria-expanded={group.expanded ? "true" : "false"}
+                >
+                  {group.expanded ? "See less" : `See more (${group.more})`}
+                </a>
+              )}
+            </fieldset>
+          ) : group && display ? (
+            <fieldset
+              class="catalog-facet-body"
+              data-catalog-facet-group
+              data-facet-kind="values"
+              data-catalog-facet-display={display.display}
+              data-facet-slugs={group.facets.map((facet) => facet.slug).join(" ")}
+              data-catalog-facet-list={searchable ? "" : undefined}
+            >
+              <legend class="sr-only">{group.name}</legend>
+              {searchable && (
+                // Shown by JavaScript (it fetches the values it searches).
+                <div class="catalog-facet-search relative" data-catalog-facet-search hidden>
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  {/* No name: it narrows the list and is never submitted. */}
                   <input
-                    type="checkbox"
-                    name={facet.slug}
-                    value={value}
-                    checked={selected}
-                    disabled={count === 0 && !selected}
-                    data-catalog-facet
-                    class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    type="search"
+                    aria-label={`Search ${group.name}`}
+                    placeholder={`Search ${group.name}`}
+                    data-catalog-facet-query
+                    class="catalog-filter-input pl-8"
                   />
-                  <span class="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
-                  <span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>{count}</span>
-                </label>
-              ));
-              return group === 0 ? options : values.length > 0 && (
-                <details open={values.some(({ selected }) => selected)} class="group/more">
-                  <summary class="flex min-h-11 cursor-pointer list-none items-center px-2 text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
-                    <span class="group-open/more:hidden">Show {values.length} more</span>
-                    <span class="hidden group-open/more:inline">Show less</span>
-                  </summary>
-                  {options}
-                </details>
-              );
-            })}
-          </fieldset>
-        )}
-      </details>
-    ))}
+                  <p class="catalog-facet-note" data-catalog-facet-search-empty hidden>No matches</p>
+                </div>
+              )}
+              <div class:list={["catalog-facet-values", display.display === "swatch" && "catalog-facet-values--swatch"]}>
+                {group.rows.map(({ slug, value, label, count, selected }) => (
+                  <label class:list={["catalog-facet-row", display.display === "swatch" && "catalog-swatch"]} data-catalog-facet-row>
+                    <input
+                      type="checkbox"
+                      name={slug}
+                      value={value}
+                      checked={selected}
+                      disabled={count === 0 && !selected}
+                      data-catalog-facet
+                      class={display.display === "swatch" ? "peer sr-only" : "catalog-facet-check"}
+                    />
+                    {display.display === "swatch" && (
+                      // A value with no known colour keeps an empty (muted) swatch beside its label.
+                      <span
+                        class:list={["catalog-swatch-dot", !display.swatches.has(value) && "bg-muted"]}
+                        style={display.swatches.has(value) ? `background:${display.swatches.get(value)}` : undefined}
+                        data-catalog-swatch
+                        aria-hidden="true"
+                      ></span>
+                    )}
+                    <span class="catalog-facet-label" data-catalog-facet-label>{label}</span>
+                    <span class="catalog-facet-count" data-catalog-facet-count>{count}</span>
+                  </label>
+                ))}
+              </div>
+              {(group.more > 0 || group.expanded) && (
+                <a
+                  href={showAllHref(group.expanded ? null : group.key)}
+                  class="catalog-facet-more"
+                  data-catalog-facet-more
+                  data-more-label={`See more (${group.more})`}
+                  data-less-label="See less"
+                  aria-expanded={group.expanded ? "true" : "false"}
+                >
+                  {group.expanded ? "See less" : `See more (${group.more})`}
+                </a>
+              )}
+            </fieldset>
+          ) : null}
+        </details>
+      );
+    })}
+
+    {bar && barMore > 0 && (
+      <button type="button" class="catalog-bar-more" data-catalog-bar-more aria-expanded={barOpen ? "true" : "false"}>
+        More filters ({barMore})
+      </button>
+    )}
 
     {hasActiveFilters && !drawer && (
-      <a
-        href={resetPath}
-        class="hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:flex"
-      >
-        Clear all
-      </a>
+      <a href={resetPath} class="catalog-filter-clear">Clear all</a>
     )}
     {!drawer && (
       <noscript>
-        <button
-          type="submit"
-          class="hidden min-h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground lg:flex"
-        >
-          Apply filters
-        </button>
+        <button type="submit" class="catalog-filter-clear">Apply filters</button>
       </noscript>
     )}
   </div>

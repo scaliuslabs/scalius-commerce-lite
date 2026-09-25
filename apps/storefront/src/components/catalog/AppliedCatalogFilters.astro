@@ -28,11 +28,12 @@ const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol
 const money = (amount: string) =>
   formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
 
-const navigationKeys = new Set(["page", "sortBy", "limit"]);
+const navigationKeys = new Set(["page", "sortBy", "limit", "showAll"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
 const booleanLabels: Record<string, string> = {
   hasDiscount: "On sale",
   freeDelivery: "Free delivery",
+  inStock: "In stock",
 };
 const facetsBySlug = new Map(facets.map((facet) => [facet.slug, facet]));
 const valueLabel = (key: string, value: string) =>
