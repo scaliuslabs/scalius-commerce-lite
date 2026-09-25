@@ -27,7 +27,7 @@ describe("resolveHomepageHero", () => {
 describe("heroImageCandidate", () => {
   it("offers every rendition to the banner so phones fetch a phone-sized file (R3-MOB-01)", () => {
     const candidate = heroImageCandidate("https://cdn.example/media/hero.webp/1080.webp", "mobile");
-    expect(candidate.srcset).toBe([160, 320, 480, 640, 960, 1080]
+    expect(candidate.srcset).toBe([160, 240, 320, 400, 480, 640, 960, 1080]
       .map((width) => `https://cdn.example/media/hero.webp/${width}.webp ${width}w`)
       .join(", "));
     // The home LCP: DPR 2.5+ phones are asked for about 2x pixels.
