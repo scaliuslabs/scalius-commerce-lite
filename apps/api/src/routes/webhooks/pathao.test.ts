@@ -26,7 +26,8 @@ vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {
   };
 });
 
-vi.mock("@scalius/core/modules/delivery/tracking", () => ({
+vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 

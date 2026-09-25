@@ -24,7 +24,7 @@ import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL, type
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
-import { orderMoneyAmounts, orderMoneySelection } from "../orders/order-money";
+import { orderMoneyAmounts, orderMoneySelection } from "../orders/money";
 import { customerKind } from "./customer-identity";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
@@ -1629,9 +1629,10 @@ export async function getCustomerOrderDetailForOrder(
             expectedDelivery: order.expectedDelivery,
             customerName: order.customerName,
             customerPhone: order.customerPhone,
-            shippingAddress: order.shippingAddress,
-            city: order.city,
-            zone: order.zone,
+            // Nullable from migration 0083; always present until the Wave A S3 contract.
+            shippingAddress: order.shippingAddress ?? "",
+            city: order.city ?? "",
+            zone: order.zone ?? "",
             area: order.area,
             cityName: order.cityName,
             zoneName: order.zoneName,

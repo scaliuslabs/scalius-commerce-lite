@@ -24,7 +24,7 @@ import {
 } from "@scalius/core/modules/collections";
 import { categories, products } from "@scalius/database/schema";
 import { isNull } from "drizzle-orm";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";

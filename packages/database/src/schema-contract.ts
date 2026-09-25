@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 82,
-  name: "0082_theme_document_v4",
+  version: 86,
+  name: "0086_notification_outbox",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -188,8 +188,28 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "d99b5418ee7a5a49a20ad5bfbeaec54e8c9f8df6fc9efeedf27a4604c574fe2f",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 82,
+    name: "0082_theme_document_v4",
     sourceSha256: "3edcdcf0fe41c442226db15d6f130d4f70517ed2a0527ae280943e07d4f40e4f",
+  },
+  {
+    version: 83,
+    name: "0083_order_line_fulfilment",
+    sourceSha256: "03d720537b4e7efef98e38074a3c474b2caeaf6b8cdc71c3ca84a63ac5024d19",
+  },
+  {
+    version: 84,
+    name: "0084_line_item_properties",
+    sourceSha256: "1f42c2521eea8cde9cf60290b46498b3f2e54099c8218dcd3781ee47c1da5aac",
+  },
+  {
+    version: 85,
+    name: "0085_conversations",
+    sourceSha256: "3fdfc007bc43f1c35b0f0590d72f7bd4b639cf4cd970dd4c25d14702894b62af",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "fb4be5e48fcf6535d7ef7334d7548415fc40eeb4438d9746e65cf9d00e35676f",
   },
 ] as const;
 

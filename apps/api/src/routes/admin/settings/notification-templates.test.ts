@@ -7,7 +7,7 @@ const transport = vi.hoisted(() => ({ sendEmail: vi.fn(), sendSms: vi.fn(), getA
 vi.mock("@scalius/core/integrations/email", () => ({ sendEmail: transport.sendEmail }));
 vi.mock("@scalius/core/integrations/sms", () => ({ getActiveSmsProvider: transport.getActiveSmsProvider }));
 
-import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/notification-templates";
+import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/browser";
 
 const DEFAULTS = defaultNotificationTemplates("en");
 import { notificationTemplatesRoutes } from "./notification-templates";

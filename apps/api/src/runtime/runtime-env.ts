@@ -9,7 +9,7 @@
 // those fields are filled here, once per invocation, never by Wrangler vars.
 
 import { getDb } from "@scalius/database/client";
-import { resolvePlatformConfig } from "@scalius/core/modules/settings/platform-settings.service";
+import { resolvePlatformConfig } from "@scalius/core/modules/platform";
 import {
   deriveRuntimeSecretsFromEnv,
   readMasterSecret,

@@ -1,25 +1,37 @@
 # Orders Module
 
-Full order lifecycle: storefront checkout, admin CRUD, state machine validation, fulfillment, COD tracking, synchronous storefront order commit, and notification dispatch.
+The order record and everything staff do to it: the dashboard list and detail, manual orders and COD amendments, detail edits, archive, the status lifecycle kernel, returns, invoices, buyer receipts, order lookup and payment recovery. Storefront checkout lives in [`../checkout`](../checkout/README.md); the actions that hand units over (parcels, courier bookings, delivery outcomes) live in [`../fulfilment`](../fulfilment/README.md).
+
+Public entries: `index.ts` (the server API) and `browser.ts` (types, the state machine, the archive policy, money helpers, search parsing and CSV export; safe for the dashboard).
 
 ## Files
 
-| File | Exports | Purpose |
+| Path | Exports | Purpose |
 |------|---------|---------|
-| `index.ts` | barrel re-exports | Public API surface |
-| `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `StorefrontOrderCommitPayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin and storefront order flows |
-| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `buildOrderEditReadiness()`, `previewManualOrderAmendment()`, `confirmManualOrderAmendment()`, `updateOrderDetails()`, `archiveOrders()`, `restoreOrder()` | Admin dashboard queries (tabs/views, order-number search, refund owed), order editing, and evidence-preserving write operations |
-| `order-number.ts` | `nextOrderNumberSql()`, `orderNumberSearchCondition()` | Sequential "#1001" order numbers allocated inside the order INSERT (unique index) |
-| `order-timeline.ts` | `recordOrderEvent()`, `addOrderComment()`, `listOrderTimeline()` | The order timeline: staff comments plus what happened, newest first |
-| `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
-| `cart-validation.ts` | `validateStorefrontCartItems()` | Batched buyer-cart freshness checks for active products, concrete variants, stock availability, and server-authoritative prices |
-| `checkout-attempts.ts` | `buildCheckoutAttemptIdentity()`, `resolveExistingCheckoutAttempt()`, `createAtomicCheckoutAttempt()`, `prepareAtomicCheckoutAttemptCommit()` | Database-backed storefront submit replay and atomic idempotency commit |
-| `admin-order-create-attempts.ts` | `buildAdminOrderCreateIdentity()`, `claimAdminOrderCreateAttempt()`, `commitAdminOrderCreateAttempt()`, `markAdminOrderCreateAttemptFailed()` | Actor-scoped D1 authority for manual-order submit replay and recovery |
-| `order-support-requests.ts` | `getCustomerOrderSupportRequestState()`, `createCustomerOrderSupportRequest()`, `getReceiptOrderSupportRequestState()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Shared account-owned and receipt-token guest cancellation/return/refund request ledger with admin resolution transitions |
-| `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
-| `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
-| `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
-| `order-list-views.ts` | `ORDER_STATUS_GROUPS`, `getOrderStatusGroupStatuses()` | Exhaustive merchant-facing lifecycle groups for the admin order list; exact status filtering remains available separately |
+| `index.ts` / `browser.ts` | re-exports | Public entries |
+| `types.ts` | `OrderListItem`, `OrderDetails`, `CreateStorefrontOrderInput`, `StorefrontOrderCommitPayload`, `StatusUpdateResult`, `OrderSupportRequestView`, ... | Shared order types |
+| `validation.ts` | `createOrderSchema`, `updateOrderDetailsSchema`, `bulkShipOrderSchema`, `MAX_ORDER_LINE_ITEMS`, ... | Zod schemas for order routes |
+| `admin/list.ts` | `listOrders()`, `loadOrderExportDetails()`, `ORDER_LIST_VIEWS` | Dashboard list: views, filters, order-number/phone search, refund owed, export rows |
+| `admin/detail.ts` | `getOrderDetails()` | Dashboard order detail |
+| `admin/quote.ts` | `quoteManualOrder()`, `resolveAdminOrderItemInventory()` | Manual-order SKU resolution, inventory facts and money |
+| `admin/create.ts` | `createOrder()` | Manual order: one guarded batch |
+| `admin/create-attempts.ts` | `buildAdminOrderCreateAttemptIdentity()`, `claimAdminOrderCreateAttempt()`, ... | Actor-scoped replay authority for manual-order submits |
+| `admin/amend.ts` | `previewManualOrderAmendment()`, `confirmManualOrderAmendment()` | COD line amendments under the order version |
+| `admin/edit.ts` | `updateOrderDetails()` | Customer and delivery details before shipment |
+| `admin/readiness.ts` | `buildOrderEditReadiness()`, `getOrderEditReadiness()` | What staff may still edit, and why not |
+| `admin/archive.ts` | `archiveOrders()`, `restoreOrder()` | Archive visibility (never a hard delete) |
+| `admin/recovery-link.ts` | `previewOrderPaymentRecoveryLink()`, `createOrderPaymentRecoveryLink()` | Merchant-sendable hosted-payment recovery links |
+| `admin/shared.ts` | -- | Helpers shared by the admin files (not exported) |
+| `status/lifecycle.ts` | `updateOrderStatus()`, `applyOrderStatusChange()`, `bulkConfirmOrders()`, `reconcileInventoryForStatus()`, ... | The status kernel: validated transitions, inventory reconciliation, COD gates, cancel guards, status notifications. Fulfilment actions call it. |
+| `status/state-machine.ts` | `canTransitionTo()`, `validateTransition()` | Order/payment/fulfilment transition maps |
+| `status/policy.ts` | `assertGenericAdminOrderStatusTransition()` | What the generic status editor may do (R3-ORD-01) |
+| `status/claim.ts` | `rollbackOrderStatusIfInventoryUnchanged()` | Status-claim rollback when inventory did not move |
+| `shipment-claim.ts` | `assertNoActiveShipmentClaim()`, `hasActiveShipmentClaim()` | The order-level lease a courier booking holds |
+| `returns/returns.ts`, `returns/validation.ts` | `createOrderReturn()`, `approveOrderReturn()`, `receiveOrderReturn()`, ... | Item-level returns and receipts |
+| `invoices/{service,snapshot,order-reader,printable-artifact}.ts` | `issueInvoice()`, `getInvoiceDocument()`, `renderPrintableInvoice()`, ... | Immutable invoice snapshots and printable artifacts |
+| `order-support-requests.ts` | `createCustomerOrderSupportRequest()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Buyer cancel/return/refund requests (moves to `conversations` in Wave A) |
+| `receipts.ts`, `lookup.ts`, `payment-recovery.ts` | receipt proof, order lookup OTP, buyer-verified payment recovery | Guest access to an order |
+| `timeline.ts`, `number.ts`, `money.ts`, `search.ts`, `csv-export.ts`, `archive-policy.ts`, `stale-incomplete.ts` | -- | Timeline, `#1001` numbers, money projections, search parsing, CSV, archive eligibility, stale hosted-payment cleanup |
 
 ## Order State Machine
 
@@ -78,21 +90,14 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 
 ## Data Flow
 
-### Storefront Order Creation (synchronous, idempotent)
+### Storefront Order Creation
 
-1. **Storefront cart freshness** -- The cart page revalidates persisted local cart items through `/api/v1/orders/cart-validation` on load, cart edits, and submit. The `/buy/{slug}` quick-buy route also validates the resolved SKU, quantity, price, and availability before writing `quickBuyData` to session storage or firing quick-buy analytics; if that storage write cannot be proven, cart renders a storage-specific error instead of silently showing an empty cart. Multi-gateway cart checkout must persist and read back the required `scalius_checkout_data` transfer before navigating to `/checkout`, while the optional gateway snapshot can fall back to fresh public checkout config. The checkout page revalidates the transferred snapshot on load and immediately before payment/order submit; stale results write a one-shot repair payload and send the buyer back to `/cart?checkoutIssues=1` so the existing row-level actions can repair the cart, while missing/unreadable transfer data shows an explicit Return to cart recovery state instead of a silent bounce. Deleted/inactive products, products without persisted inventory variants, literal legacy `default` variant ids, deleted variants, variant/product mismatches, non-default no-option SKUs, low stock, and price changes are returned per item with buyer actions (`remove`, `reduce_quantity`, `refresh_item`, or `select_variant`). If the freshness check itself cannot be read, the storefront fails closed with a top-of-cart retry message instead of clearing issues and allowing checkout. `validateStorefrontCartItems()` returns an in-memory proof marker; `createStorefrontOrder()` rejects forged prevalidated cart objects instead of trusting plain object literals.
-2. **Storefront POST /orders** -- The storefront sends a stable `checkoutRequestId` for the checkout session and includes cart line metadata (`cartKey`, product name, variant label) so late validation issues can map back to the exact local cart row. The API route builds a canonical request hash from the order input, does a read-only `checkout_attempts` lookup so committed or active legacy same-key retries return before mutable checkout policy or rate-limit checks, then runs `validateStorefrontCartItems()` and delivery preflight again for new/non-replay attempts. The API enforces the merchant include/exclude phone-country policy before gateway readiness, rate limits, or order writes. If a customer session token is present, the API resolves it even when guest checkout is enabled; the authenticated customer ID owns the order while the separately validated checkout phone remains the editable delivery, notification, and immutable order contact. An account missing its mandatory profile phone fails closed, and a stale session returns `CUSTOMER_SESSION_STALE` so the storefront proxy can clear stale customer cookies before the buyer retries as a real guest or signs in again.
-3. **Atomic attempt behavior** -- A new request creates its canonical `orderId`, private `chk_` receipt token, and derived non-bearer `cst_` status token in memory only. It does not acquire a preliminary database lease. A committed same-key/same-payload retry replays the stored response. A still-active legacy processing row returns `202` with only its `orderId` and `cst_` polling token; `chk_` proof never enters status URLs. A stale/failed legacy row reuses its original identities. Same-key/different-payload reuse is rejected as `409`. If two fresh requests race, their final transactions contend on the unique request key: exactly one can commit, and the loser rereads and returns the winner's durable response.
-4. **Order build** -- `createStorefrontOrder()` validates prices server-side from the prevalidated cart snapshot, verifies discounts, checks partial-payment rules, rejects inactive/deleted products, product/variant mismatches, and variantless buyer lines, resolves active city/zone/area names from the database, and builds the order payload using the in-memory attempt identities. Every checkout, including a product-level free-delivery waiver, requires one active selected shipping method; its ID, name, description, configured fee, effective fee, waiver state, and buyer-selected contact phone are bound into the reviewed quote/order facts. Order, receipt, account, admin, invoice, notification, and delivery reads use those order facts rather than mutable customer or shipping settings. A submitted code owned by the typed promotion authority is evaluated there even when inactive/ineligible; only a code absent from typed authority may enter the legacy compatibility path. The same private customer session is forwarded to tax quoting and final submit, so authenticated promotion identity cannot change when the buyer edits the delivery phone. Account ownership is carried only from that authoritative customer session identity; a guest checkout does not acquire account ownership merely because its submitted phone matches an existing profile. Delivery and checkout-policy snapshots carry unforgeable in-memory proof markers, avoiding duplicate reads while plain object forgeries fail closed.
-5. **One authoritative commit** -- `commitStorefrontOrderPayload()` performs read-only customer/inventory preparation, then one atomic database batch commits the checkout attempt and collision guard, inventory CAS plus ledger-v2 edges, customer/order/items/tax/COD facts, durable receipt, promotion/discount effects, and applicable outbox claims. Checkout/manual-order line counts are capped at 99, and multi-row order-item, tax-snapshot, and promotion-allocation inserts are chunked so every statement stays below D1's 100-bound-parameter ceiling without weakening the batch transaction. A new order's reservation generation is transactionally known to be one; legacy retry identities keep historical recovery reads. Authenticated payloads fresh-read the active claimed customer, while guest checkout creates or reuses only an unclaimed CRM profile and never gains account ownership by phone matching. Promotion/discount limits remain database-enforced. Any guard, stock, trigger, or order failure rolls back the entire attempt/order/inventory transaction, so no compensating reservation release or separate attempt finalization is needed. The buyer receives `201` only after all authoritative facts and the replay response exist.
-   Every new commit requires the prepared `checkoutAuthorityRevision` and guards it inside the final batch, including online payments, discounts, agent checkout, and reservation-replay recovery. A changed catalog/delivery/tax/checkout policy rolls back the whole commit and asks the buyer to review again; an already-committed order remains replayable after authority changes.
-6. **Post-commit work** -- The durable notification/Meta claims and initial COD state are already part of the authoritative commit when applicable. Queue relay, Meta dispatch, semantic product-availability cache invalidation, and hashed checkout-status/receipt KV hints run after commit through `executionCtx.waitUntil()` when available. Their failure cannot turn a committed checkout into a false `500`; durable claims or database fallback remain available for retry and repair.
-7. **Recovery and guest support** -- `GET /orders/status/:token` accepts only derived `cst_` status tokens and receipt validation accepts only private `chk_` receipt tokens. Both use KV as the fast path, then fall back to `checkout_attempts` plus the committed `orders` row. Fallbacks that prove a completed checkout schedule hashed KV repair through `waitUntil()`, so repeated polling returns to the fast path without storing raw receipt proof in URL paths or KV keys. `GET /orders/receipt/:id` returns buyer-safe receipt facts plus eligible support-request actions and reuses its receipt order projection for support-action eligibility instead of rereading the order. `POST /orders/receipt/:id/support-requests` accepts the private receipt token and creates a cancellation, return, or refund request in the same support-request ledger used by customer accounts. Its support-request `customerId` comes only from `orders.accountOwnerCustomerId`, never from the broader CRM link. It never directly mutates payment, shipment, inventory, COD, or order status.
+See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idempotent).
 
 ### Admin Order Creation (synchronous, idempotent, reserve until fulfillment)
 
 1. **Admin POST /admin/orders** -- the browser submits a UUID `requestKey`. It persists only a submitted opaque key in tab-local storage for lost-response recovery and clears it after success or explicit discard. Customer and order facts never enter the key or storage entry.
-2. **Claim before mutable validation** -- `buildAdminOrderCreateIdentity()` scopes the key to the authenticated actor and hashes a canonical request projection. `claimAdminOrderCreateAttempt()` owns one stable order ID and reservation identity. A committed same-payload retry replays before catalog, delivery, customer, currency, or inventory validation; stale or failed same-payload work reclaims the same identity.
+2. **Claim before mutable validation** -- `buildAdminOrderCreateAttemptIdentity()` scopes the key to the authenticated actor and hashes a canonical request projection. `claimAdminOrderCreateAttempt()` owns one stable order ID and reservation identity. A committed same-payload retry replays before catalog, delivery, customer, currency, or inventory validation; stale or failed same-payload work reclaims the same identity.
 3. **Changed-payload recovery** -- a key never silently changes meaning. If the earlier payload committed, the typed conflict returns its actor-scoped order ID so the dashboard opens that order instead of risking a duplicate. A fresh processing lease keeps the edited form and asks the operator to retry shortly. A failed lease permits exactly one browser-generated replacement key; an expired processing lease is first fenced to `failed` behind its old request hash so an overdue worker cannot commit after that replacement is authorized.
 4. **SKU authority** -- `resolveAdminOrderItemInventory()` requires every item to use a concrete SKU, joins it to its parent product, and rejects missing/deleted SKUs, product/SKU mismatches, inactive products, and soft-deleted products before any inventory or order write starts. The returned `inventoryTracked` flag is trusted only after this validation.
 5. **Reserve stock** -- calls `reserveStockBatch()` only for validated tracked SKUs, using the attempt's stable reservation key. Insufficient stock fails before the order write.
@@ -117,7 +122,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
 8. API route records the notification in `order_notification_outbox`, then relays it to `JOBS_QUEUE` when available
 
-**Notification Status Mapping** (`NOTIFICATION_STATUSES` in `orders.fulfillment.ts`):
+**Notification Status Mapping** (`NOTIFICATION_STATUSES` in `status/lifecycle.ts`):
 
 | Order Status | Notification Type |
 |-------------|-------------------|
@@ -133,49 +138,9 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 
 All 9 buyer-visible order statuses that trigger status notifications are covered; a partial refund sends `order_partially_refunded` from the refund path. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
 
-### Fulfillment Flow
+### Fulfilment, COD and bulk shipping
 
-1. `createFulfillmentShipment()` checks order is not cancelled/returned
-2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
-3. Claims the order with a version/status/fulfillment check, then creates a provider-less manual/own-courier `deliveryShipments` row at `in_transit` and updates item fulfillment statuses to `shipped`
-4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
-5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
-6. When the final manual shipment actually changes the buyer-visible order status to `shipped`, the core result returns a private `statusChange` fact and the API route records it through the durable order-notification outbox. The fulfillment aggregate is read-only outside shipment-owned commands; `order_completed` remains tied to the buyer-visible `completed` order status.
-7. A later delivered/completed command idempotently moves shipped items and only provider-less manual shipment rows to `delivered`. Carrier/provider shipment rows stay provider-owned and continue through provider sync/reconciliation.
-
-### COD Actions
-
-`processCodAction()` handles three actions with CAS protection on the order version:
-
-- Collection is valid only for `shipped | delivered` orders: cash changes hands at the door, so it never skips the shipment.
-- A failed delivery attempt is valid only for `shipped` orders; its reason and note are kept on `cod_tracking`.
-- Return-to-sender is valid only for `shipped | delivered` orders.
-
-The shared `canProcessOrderCodAction()` policy drives both the merchant UI and
-the core write guard. The server must reject a stale or direct request even
-when the dashboard has already hidden the action.
-
-- `collected`: CAS-updates the shipped order to `delivered`, records collection via `recordCODCollection()` before inventory movement, reconciles reserved inventory, synchronizes shipped-item and provider-less manual-shipment delivery evidence, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry/repair signal
-- `failed`: Records failure via `recordCODFailure()`
-- `returned`: records an approved return of every sent unit awaiting receipt, marks COD returned, and moves the order to `returned` at once (no cash is owed). Stock comes back only through the return receipt (good units restocked, damaged written off); a later `returned` status sync never restores stock on top of an open return.
-
-### Bulk Ship Orders
-
-`bulkShipOrders()` applies CAS protection per order:
-1. Validates one unique batch of 1–90 order IDs before provider readiness or
-   order reads. Provider options accept only bounded merchant choices; COD
-   amount, item count, and item description are derived from the fresh order
-   and line projection immediately before the provider call.
-2. Reads order status and version
-3. If the order is already `shipped`, treats the call as a retry and reconciles inventory without calling the provider again
-4. For unshipped orders: claims by version, calls the provider, CAS-updates status to `shipped`, then deducts inventory
-5. Provider-success/local-finalization failures leave the shipment `reconcile_required` and keep the matching order shipment claim until repair succeeds
-6. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
-
-Admin bulk-shipping UI must submit one `/bulk-ship` request with all selected
-order IDs and render the aggregate per-order result. Do not loop over
-`/:id/shipments` from the browser for selected rows, repeat an ID, exceed 90,
-or submit browser-authored order money/content as provider options.
+See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`.
 
 ### Archive Flow
 

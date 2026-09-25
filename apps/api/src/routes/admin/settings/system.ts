@@ -13,10 +13,7 @@ import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
 } from "@scalius/core/integrations/whatsapp";
-import {
-    getActivePaymentMethods,
-} from "@scalius/core/modules/payments/gateway-settings";
-import { filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments/gateways/registry";
+import { getActivePaymentMethods, filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments";
 import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
@@ -31,15 +28,11 @@ import {
 import {
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,
-} from "@scalius/core/modules/settings/checkout-flow-admin.service";
-import {
     SettingsRevisionConflictError,
     selectSettingsDocuments,
     writeSettingsDocuments,
     type SettingsDocumentWriteRequest,
-} from "@scalius/core/modules/settings/settings-store";
-import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
-import {
+    getCurrencySettings,
     customerAuthDocument,
     emailDocument,
     firebaseDocument,
@@ -48,16 +41,12 @@ import {
     type EmailSettings,
     type FirebaseSettings,
     type WhatsAppSettings,
-} from "@scalius/core/modules/settings/documents";
-import {
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
     getCheckoutReadiness,
     getCustomerSignInReadiness,
-} from "@scalius/core/modules/settings/checkout-readiness";
+} from "@scalius/core/modules/settings";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
-import {
-    buildClearNotificationProviderBlocksStatement,
-} from "@scalius/core/modules/notifications/notification-provider-health";
+import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/modules/notifications";
 import {
     normalizeMerchantCspSource,
     normalizePlatformOrigin,

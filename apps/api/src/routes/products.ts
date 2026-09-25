@@ -9,21 +9,17 @@ import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts,
-} from "@scalius/core/modules/products/products.storefront";
-import {
   DEFAULT_RECOMMENDATION_LIMIT,
   MAX_RECOMMENDATION_LIMIT,
   MAX_RECOMMENDATION_SOURCE_IDS,
   getStorefrontProductRecommendations,
   normalizeRecommendationSourceIds,
-} from "@scalius/core/modules/products/products.recommendations";
-import {
   STOREFRONT_PRODUCT_TEXT_CHUNK_MAX,
   getStorefrontProductSection,
   storefrontProductSectionQuerySchema,
   storefrontProductSectionSchema,
-} from "@scalius/core/modules/products/products.storefront-sections";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
+} from "@scalius/core/modules/catalog";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 

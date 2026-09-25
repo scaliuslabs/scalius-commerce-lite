@@ -25,7 +25,8 @@ vi.mock("../../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
-vi.mock("@scalius/core/modules/attributes/attributes.service", () => ({
+vi.mock("@scalius/core/modules/attributes", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/attributes")>()),
   listAttributes: mocks.listAttributes,
   listAttributeAgentSummaries: mocks.listAttributeAgentSummaries,
   createAttribute: mocks.createAttribute,

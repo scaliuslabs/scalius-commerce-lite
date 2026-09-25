@@ -44,8 +44,21 @@ export const products = sqliteTable(
         taxClassId: text("tax_class_id")
             .references(() => taxClasses.id, { onDelete: "set null" }),
         taxClassificationVersion: integer("tax_classification_version").notNull().default(1),
+        /** Gift-card product: every variant is a denomination fulfilled as `gift_card` (Wave B). */
+        isGiftCard: integer("is_gift_card", { mode: "boolean" }).notNull().default(false),
+        /**
+         * Buyer inputs asked on the product page (JSON, at most 4 KB). Validated by
+         * `@scalius/shared/line-properties`; part of the product aggregate and the
+         * checkout authority fence.
+         */
+        customizationSchema: text("customization_schema"),
     },
     (table) => [
+        check("products_is_gift_card_check", sql`${table.isGiftCard} IN (0, 1)`),
+        check(
+            "products_customization_schema_check",
+            sql`${table.customizationSchema} IS NULL OR (json_valid(${table.customizationSchema}) AND length(${table.customizationSchema}) <= 4096)`,
+        ),
         uniqueIndex("products_slug_idx").on(table.slug),
         index("products_category_id_idx").on(table.categoryId),
         index("products_active_idx").on(table.isActive, table.deletedAt),
@@ -194,6 +207,10 @@ export const productVariants = sqliteTable("product_variants", {
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     barcode: text("barcode"),
     barcodeType: text("barcode_type", { enum: ["ean13", "upc", "isbn", "gtin", "code128", "custom"] }),
+    /** What this SKU is: shipped or picked up, delivered digitally, or performed. */
+    fulfillmentKind: text("fulfillment_kind", { enum: ["physical", "digital", "service"] })
+        .notNull()
+        .default("physical"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -202,6 +219,7 @@ export const productVariants = sqliteTable("product_variants", {
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
+    check("product_variants_fulfillment_kind_check", sql`${table.fulfillmentKind} IN ('physical', 'digital', 'service')`),
     index("product_variants_product_id_idx").on(table.productId),
     uniqueIndex("product_variants_sku_identity_uidx")
         .on(sql`lower(trim(${table.sku}))`),

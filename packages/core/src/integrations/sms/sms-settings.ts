@@ -16,8 +16,8 @@ import { ValidationError } from "@scalius/core/errors";
 import {
   smsDocument,
   type SmsSettings,
-} from "@scalius/core/modules/settings/documents";
-import type { SettingsDocumentReadResult } from "@scalius/core/modules/settings/settings-store";
+} from "../../modules/settings/documents";
+import type { SettingsDocumentReadResult } from "../../modules/settings/settings-store";
 import { SMS_PROVIDER_IDS, type SmsProvider, type SmsProviderId } from "./provider";
 
 // ---------------------------------------------------------------------------

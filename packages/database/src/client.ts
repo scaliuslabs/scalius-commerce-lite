@@ -105,6 +105,7 @@ export function getDatabaseProviderForClient(
 export { schema };
 export {
   buildBatchGuard,
+  chunkRowsForD1,
   isBatchGuardError,
   safeBatch,
 } from "./batch-helper";

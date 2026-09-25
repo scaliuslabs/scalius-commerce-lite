@@ -23,4 +23,13 @@ describe("order COD action policy", () => {
     expect(canProcessOrderCodAction("cancelled", "returned")).toBe(false);
     expect(canProcessOrderCodAction("unknown", "returned")).toBe(false);
   });
+
+  it("collects cash from a confirmed order only when nothing ships (pickup counter or service)", () => {
+    expect(canProcessOrderCodAction("confirmed", "collected", { requiresShipping: false })).toBe(true);
+    expect(canProcessOrderCodAction("delivered", "collected", { requiresShipping: false })).toBe(true);
+    expect(canProcessOrderCodAction("confirmed", "collected", { requiresShipping: true })).toBe(false);
+    expect(canProcessOrderCodAction("pending", "collected", { requiresShipping: false })).toBe(false);
+    expect(canProcessOrderCodAction("confirmed", "failed", { requiresShipping: false })).toBe(false);
+    expect(canProcessOrderCodAction("confirmed", "returned", { requiresShipping: false })).toBe(false);
+  });
 });

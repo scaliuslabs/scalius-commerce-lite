@@ -22,7 +22,7 @@ import {
   revokeAllAgentGrants,
   rotateAgentCredential,
   updateAgentGrant,
-} from "@scalius/core/modules/agent-access/agent-access.service";
+} from "@scalius/core/modules/agent-access";
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";

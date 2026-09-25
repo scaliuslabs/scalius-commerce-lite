@@ -16,7 +16,7 @@ import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { and, asc, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import { collectionMembershipForConfig } from "../collections/collection-config";
-import { publicProductBaseConditions, publicProductHasCustomerOptions } from "../products/products.public-eligibility";
+import { publicProductBaseConditions, publicProductHasCustomerOptions } from "../products/public-eligibility";
 import type { TaxDiscountAllocationInput } from "../tax/types";
 import {
     discountClassOf,
@@ -30,22 +30,9 @@ import {
     type PromotionScope,
 } from "./promotions.evaluator";
 import { promotionCandidateRecord } from "./promotions.service";
+import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
 
-export type AppliedPromotion = NonNullable<PromotionEvaluationResult["applied"]>;
-
-type CheckoutLine = Omit<PromotionEvaluationCart["lines"][number], "collectionIds">;
-
-export interface StorefrontDiscountCart {
-    currencyCode: string;
-    lines: CheckoutLine[];
-    shippingAmountMinor: number;
-}
-
-/** What the order commit re-evaluates; present only when a discount applies. */
-export interface PromotionCheckoutSnapshot {
-    cart: StorefrontDiscountCart & { submittedCodes: string[] };
-    applied: AppliedPromotion;
-}
+type CheckoutLine = StorefrontDiscountCart["lines"][number];
 
 /** A product that completes a Buy X get Y offer, addable in one tap when it has one SKU. */
 export interface DiscountOfferProduct {

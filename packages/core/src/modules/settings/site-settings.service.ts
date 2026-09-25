@@ -59,7 +59,6 @@ import {
   type MediaOptimizationSettings,
   type SitePresentationSection,
 } from "./documents";
-import { getPlatformSettings, savePlatformSettings } from "./platform-settings.service";
 import type { SettingsDocument, SettingsDocumentWriteResult } from "./settings-store";
 
 const THEME_SETTINGS_ID = "default";
@@ -1045,23 +1044,6 @@ export async function saveSeoSettings(
       ? mergeSeoReturnPolicySettings(current.returnPolicy, data.returnPolicy)
       : undefined,
   }, {}, options);
-}
-
-// ─────────────────────────────────────────
-// Storefront URL (the platform document's storefront origin)
-// ─────────────────────────────────────────
-
-export async function getStorefrontUrlSetting(db: Database) {
-  return { storefrontUrl: (await getPlatformSettings(db)).storefrontUrl };
-}
-
-export async function saveStorefrontUrl(
-  db: Database,
-  url: string,
-  kv?: Parameters<typeof savePlatformSettings>[2],
-  options: SettingsSaveOptions = {},
-) {
-  return savePlatformSettings(db, { storefrontUrl: url }, kv, options);
 }
 
 // ─────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Link } from "@tanstack/react-router";
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { Checkbox } from "../../ui/checkbox";
 import { useCurrency } from "@/hooks/use-currency";

@@ -5,8 +5,8 @@ import {
     getPaymentGateway,
     isOnlinePaymentMethod,
 } from "../payments/gateways/registry";
+import type { CheckoutMode } from "./documents";
 
-export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
 /** A registered gateway id or "cod". */
 export type CheckoutPaymentMethodId = string;
 

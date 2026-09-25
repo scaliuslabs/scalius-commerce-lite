@@ -1,6 +1,6 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getShipment, deleteShipmentRecord } from "@scalius/core/modules/delivery/delivery.service";
+import { getShipment, deleteShipmentRecord } from "@scalius/core/modules/delivery";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
