@@ -218,6 +218,29 @@ describe("account order detail", () => {
     expect(document.getElementById("orderPaymentRecovery")?.classList.contains("hidden")).toBe(true);
   });
 
+  it("shows each gift card that paid part, the remainder method and the amount due (Wave B §4.3)", () => {
+    renderOrderDetail(detail(
+      { paymentMethod: "cod", paymentStatus: "partial", paidAmount: 400, balanceDue: 680 },
+      { giftCardTenders: [{ last4: "7K2Q", amount: 400, amountMinor: 40_000 }] } as Partial<AccountOrderDetail>,
+    ), null);
+    expect(text("orderPayment")).toBe("Gift card + Cash on delivery ৳680 due on delivery");
+    const summary = text("orderSummary");
+    expect(summary).toContain("Total ৳1,080");
+    expect(summary).toContain("Gift card •••• 7K2Q −৳400");
+    expect(summary).toContain("Due on delivery ৳680");
+    expect(summary.indexOf("Total")).toBeLessThan(summary.indexOf("Gift card"));
+  });
+
+  it("reads an order its gift cards paid in full as paid by gift card", () => {
+    renderOrderDetail(detail(
+      { paymentMethod: "gift_card", paymentStatus: "paid", paidAmount: 1080, balanceDue: 0 },
+      { giftCardTenders: [{ last4: "7K2Q", amount: 1080, amountMinor: 108_000 }] } as Partial<AccountOrderDetail>,
+    ), null);
+    expect(text("orderPayment")).toBe("Gift card Paid");
+    expect(text("orderSummary")).toContain("Gift card •••• 7K2Q −৳1,080");
+    expect(text("orderSummary")).not.toContain("due");
+  });
+
   it("shows each line's buyer inputs, escaped, with the surcharge only when it costs extra", () => {
     const order = detail();
     order.items = [{

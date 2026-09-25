@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
   quoteStorefrontDiscount: vi.fn(),
   previewStorefrontBundleSavings: vi.fn(),
+  selectStorefrontCartProductRows: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
   previewStorefrontBundleSavings: mocks.previewStorefrontBundleSavings,
+  selectStorefrontCartProductRows: mocks.selectStorefrontCartProductRows,
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -52,6 +54,27 @@ describe("public discount validation", () => {
     vi.clearAllMocks();
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", decimalPlaces: 2 });
     mocks.previewStorefrontBundleSavings.mockResolvedValue({ lineSavings: new Map(), bundles: [] });
+    mocks.selectStorefrontCartProductRows.mockResolvedValue([]);
+  });
+
+  it("marks gift-card lines so no promotion applies to them", async () => {
+    const { app } = createTestApp();
+    mocks.selectStorefrontCartProductRows.mockResolvedValue([
+      { id: "prod_gc", isGiftCard: true },
+      { id: "prod_1", isGiftCard: false },
+    ]);
+    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, discounts: [], offers: [], rejectedCodes: [] });
+    const response = await post(app, {
+      codes: ["SAVE10"],
+      items: [
+        { id: "prod_1", variantId: "var_1", price: 1500, quantity: 1 },
+        { id: "prod_gc", variantId: "var_gc", price: 1000, quantity: 1 },
+      ],
+    });
+    expect(response.status).toBe(200);
+    const lines = mocks.quoteStorefrontDiscount.mock.calls[0]![1].cart.lines;
+    expect(lines.find((line: { productId: string }) => line.productId === "prod_gc")).toMatchObject({ giftCard: true });
+    expect(lines.find((line: { productId: string }) => line.productId === "prod_1")).not.toHaveProperty("giftCard");
   });
 
   it("previews every applied code with the cart in minor units, one line per discount", async () => {

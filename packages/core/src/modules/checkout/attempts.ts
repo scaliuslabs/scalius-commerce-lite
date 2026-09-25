@@ -364,6 +364,15 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     shippingMethodId: input.shippingMethodId ?? null,
     paymentMethod: input.paymentMethod,
     inventoryPool: input.inventoryPool,
+    // Only with gift cards, so hashes of requests without them are unchanged.
+    // Handles keep the buyer's order: it decides which card is debited first,
+    // so the same cards in another order are a different request.
+    ...(input.giftCards && input.giftCards.length > 0
+      ? {
+        giftCards: input.giftCards.map((card) => card.handle.trim()),
+        expectedAmountDueMinor: input.expectedAmountDueMinor ?? null,
+      }
+      : {}),
   };
 }
 

@@ -1,6 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { PaymentPlanStatus, PaymentStatus, paymentPlans } from "@scalius/database/schema";
+import {
+    PaymentPlanStatus,
+    PaymentRecordStatus,
+    PaymentStatus,
+    orderPayments,
+    paymentPlans,
+} from "@scalius/database/schema";
+import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { checkoutDocument } from "@scalius/core/modules/settings";
 import { getUnpayableOrderReason, type PayableOrderState } from "@scalius/core/modules/payments";
 import {
@@ -86,6 +93,30 @@ async function getPaymentPlan(db: Database, orderId: string) {
     .get();
 }
 
+/**
+ * Whether the money already on a plan-less order is all gift-card tender
+ * (Wave B §4.3): every succeeded payment row is a gift card and they add up
+ * to the paid amount. Then a gateway charges the rest as a plan-less balance.
+ */
+async function isGiftCardTenderRemainder(
+    db: Database,
+    orderId: string,
+    paidAmountMinor: number,
+): Promise<boolean> {
+    const row = await db
+        .select({
+            giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
+            otherRows: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD} THEN 0 ELSE 1 END), 0)`,
+        })
+        .from(orderPayments)
+        .where(and(
+            eq(orderPayments.orderId, orderId),
+            eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
+        ))
+        .get();
+    return Number(row?.otherRows ?? 0) === 0 && Number(row?.giftCardMinor ?? 0) === paidAmountMinor;
+}
+
 export function assertPaymentSessionOrderPayable(order: PayableOrderState): void {
   const unpayableReason = getUnpayableOrderReason(order);
   if (unpayableReason) {
@@ -136,6 +167,24 @@ export async function resolvePaymentSessionPolicy(
   };
 
   const plan = await getPaymentPlan(db, order.id);
+
+  // Gift cards paid part of a plan-less order: the gateway charges the rest
+  // (the balance due) whatever the storefront asks for, and never a deposit.
+  if (!plan && paidAmountMinor > 0 && await isGiftCardTenderRemainder(db, order.id, paidAmountMinor)) {
+    if (requested.paymentType === "deposit" || requested.depositAmount !== undefined) {
+      throw new ValidationError("Gift cards paid part of this order; pay the amount left in full.");
+    }
+    const balanceDueMinor = assertPositiveMinor(order.balanceDueMinor, "Balance due");
+    if (order.paymentStatus !== PaymentStatus.PARTIAL || balanceDueMinor !== orderTotalMinor - paidAmountMinor) {
+      throw new ValidationError("The order balance does not match its payments");
+    }
+    return {
+      paymentType: "balance",
+      chargeAmount: present(balanceDueMinor),
+      chargeAmountMinor: balanceDueMinor,
+    };
+  }
+
   const assertPlanMatchesOrder = (saved: NonNullable<typeof plan>) => {
     const planTotal = assertPositiveMinor(saved.totalAmountMinor, "Payment plan total");
     const planDeposit = assertPositiveMinor(saved.depositAmountMinor, "Payment plan deposit");

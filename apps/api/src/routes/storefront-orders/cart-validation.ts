@@ -24,7 +24,20 @@ import {
   linePropertiesInputSchema,
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
-import { persistedStorefrontVariantIdSchema, storefrontShippingMethodSnapshotSchema } from "./shared";
+import {
+  giftCardHandlesSchema,
+  giftCardIssueSchema,
+  persistedStorefrontVariantIdSchema,
+  storefrontShippingMethodSnapshotSchema,
+} from "./shared";
+import {
+  GIFT_CARD_UNUSABLE_CODE,
+  GIFT_CARD_UNUSABLE_MESSAGE,
+  resolveGiftCardTenderCards,
+} from "@scalius/core/modules/gift-cards";
+import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import type { Database } from "@scalius/database/client";
+import type { StorefrontGiftCardIssue } from "@scalius/core/modules/orders";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -89,6 +102,7 @@ const cartValidationRoute = createRoute({
             area: z.string().optional().nullable(),
             /** A delivery or pickup rate. A pickup rate needs no city or zone. */
             shippingMethodId: z.string().optional().nullable(),
+            giftCards: giftCardHandlesSchema,
           }),
         },
       },
@@ -137,6 +151,8 @@ const cartValidationRoute = createRoute({
             /** Some line ships to an address (a delivery method was chosen for physical lines). */
             requiresShipping: z.boolean(),
             allowedPaymentMethods: allowedPaymentMethodsSchema,
+            /** Applied gift cards that can no longer pay (the tax quote prices the ones that can). */
+            giftCardIssues: z.array(giftCardIssueSchema),
             delivery: z.object({
               kind: deliveryMethodKindSchema,
               shippingCharge: z.number(),
@@ -157,6 +173,31 @@ const cartValidationRoute = createRoute({
   },
 });
 
+/**
+ * The buyer's applied gift cards that no longer name a usable card (spent,
+ * disabled, expired, expired handle) or repeat one: the uniform message, no
+ * detail. No handles, no read.
+ */
+async function giftCardHandleIssues(
+  db: Database,
+  handles: readonly string[],
+  masterSecret: string | null,
+  currencyCode: string,
+): Promise<StorefrontGiftCardIssue[]> {
+  if (handles.length === 0) return [];
+  const resolution = await resolveGiftCardTenderCards(db, { handles, masterSecret, currencyCode });
+  const usable = new Set(resolution.cards.map((card) => card.handle));
+  const unusable = new Set(resolution.unusableHandles);
+  return handles.flatMap((handle): StorefrontGiftCardIssue[] => {
+    if (unusable.has(handle)) {
+      return [{ handle, code: GIFT_CARD_UNUSABLE_CODE, message: GIFT_CARD_UNUSABLE_MESSAGE }];
+    }
+    return usable.has(handle)
+      ? []
+      : [{ handle, code: "GIFT_CARD_DUPLICATE", message: "This gift card is already applied." }];
+  });
+}
+
 app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
@@ -164,6 +205,12 @@ app.openapi(cartValidationRoute, async (c) => {
     getCurrencySettings(db),
     getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
   ]);
+  const giftCardIssues = await giftCardHandleIssues(
+    db,
+    (data.giftCards ?? []).map((card) => card.handle),
+    readMasterSecret(c.env),
+    currency.currencyCode,
+  );
   const decimalPlaces = getDecimalPlaces(currency.currencyCode);
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
@@ -179,6 +226,7 @@ app.openapi(cartValidationRoute, async (c) => {
     return ok(c, {
       ...presentStorefrontCartValidation(result, decimalPlaces, cartOnly, propertiesHashes),
       allowedPaymentMethods: cartOnlyPayment,
+      giftCardIssues,
     });
   }
 
@@ -196,6 +244,7 @@ app.openapi(cartValidationRoute, async (c) => {
   return ok(c, {
     ...presentStorefrontCartValidation(result, decimalPlaces, delivery.fulfilment, propertiesHashes),
     allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
+    giftCardIssues,
     ...(delivery.kind && delivery.shippingMethod
       ? {
         delivery: {

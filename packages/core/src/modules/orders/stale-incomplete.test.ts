@@ -54,7 +54,7 @@ type StaleOrder = {
     status: string;
     paymentMethod: string;
     paymentStatus: string;
-    paidAmount: number;
+    paidAmountMinor: number;
     deletedAt: number | null;
     version: number;
     shipmentClaimId: string | null;
@@ -71,7 +71,7 @@ function staleOrder(overrides: Partial<StaleOrder> = {}): StaleOrder {
         status: overrides.status ?? OrderStatus.INCOMPLETE,
         paymentMethod: overrides.paymentMethod ?? PaymentMethod.STRIPE,
         paymentStatus: overrides.paymentStatus ?? PaymentStatus.UNPAID,
-        paidAmount: overrides.paidAmount ?? 0,
+        paidAmountMinor: overrides.paidAmountMinor ?? 0,
         deletedAt: overrides.deletedAt ?? null,
         version: overrides.version ?? 7,
         shipmentClaimId: overrides.shipmentClaimId ?? null,
@@ -108,6 +108,14 @@ function createDbMock(staleOrders: StaleOrder[]) {
                 return {
                     where: () => ({
                         limit: async (limit: number) => staleOrders.slice(0, limit),
+                    }),
+                    // Held gift-card tenders: none in these fixtures.
+                    innerJoin: () => ({
+                        where: () => ({
+                            all: async () => [],
+                            // Cancelled orders still holding gift cards: none.
+                            groupBy: () => ({ limit: async () => [] }),
+                        }),
                     }),
                 };
             },
@@ -347,11 +355,11 @@ describe("archiveStaleIncompleteOrders", () => {
         expect(operations.some((entry) => entry.op === "update.set")).toBe(false);
     });
 
-    it("skips non-recoverable payment states returned by a stale query plan", async () => {
+    it("skips a partly paid order whose money is not gift-card tender (a stale query plan)", async () => {
         const { db, operations } = createDbMock([
             staleOrder({
                 paymentStatus: PaymentStatus.PARTIAL,
-                paidAmount: 100,
+                paidAmountMinor: 100,
             }),
         ]);
 

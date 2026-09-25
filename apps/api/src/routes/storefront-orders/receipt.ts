@@ -47,7 +47,13 @@ import {
 } from "../../schemas/responses";
 import { authMiddleware } from "../../middleware/auth";
 import { getTrustedClientIp } from "../../utils/client-ip";
-import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../shared/order-line-extras";
+import {
+  composeOrderLineExtras,
+  orderGiftCardTenderSchema,
+  orderLineExtrasShape,
+  presentOrderGiftCardTenders,
+  withOrderLineExtras,
+} from "../shared/order-line-extras";
 import {
   receiptSupportRequestSchema,
   receiptSupportRequestActionSchema,
@@ -120,6 +126,8 @@ const orderReceiptSchema = z.object({
   paymentStatus: z.string(),
   paidAmount: z.number(),
   balanceDue: z.number(),
+  /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
+  giftCardTenders: z.array(orderGiftCardTenderSchema),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
@@ -384,6 +392,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     audience: "buyer",
     currencyDecimalPlaces: order.currencyDecimalPlaces,
   });
+  const giftCardTenders = order.paidAmountMinor > 0
+    ? await presentOrderGiftCardTenders(db, id, order.currencyDecimalPlaces)
+    : [];
 
   const money = orderMoneyAmounts(order);
   return ok(c, {
@@ -431,6 +442,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentStatus: order.paymentStatus,
       paidAmount: money.paidAmount,
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
+      giftCardTenders,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: items.map(({

@@ -660,6 +660,8 @@ async function quoteAgentStorefrontDiscount(
         variantId: item.variantId,
         unitPriceMinor: item.unitPriceMinor,
         quantity: item.quantity,
+        // Gift-card lines are outside every promotion (Wave B §4.2).
+        ...(item.isGiftCard ? { giftCard: true } : {}),
       })),
       shippingAmountMinor: projection.delivery?.shippingMinor ?? 0,
     },
@@ -776,6 +778,8 @@ export async function quoteAgentStorefrontCheckout(
       unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
+      // A gift card is money, not a taxable sale (Wave B §4.2).
+      ...(item.isGiftCard ? { taxExempt: true } : {}),
     })),
     shippingMinor: delivery.shippingMinor,
     promotionDiscountAllocation: bundleDiscount.allocation,

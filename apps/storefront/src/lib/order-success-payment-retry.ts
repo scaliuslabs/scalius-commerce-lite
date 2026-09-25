@@ -1,7 +1,7 @@
 import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
-import { getOrderSuccessVisibleBalanceDue } from "./order-success-state";
+import { GIFT_CARD_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue } from "./order-success-state";
 import { getGatewayPresentation } from "./checkout/gateway-presentation";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
@@ -56,9 +56,15 @@ export function canRetryOrderSuccessPayment(
   return stateKind === "payment_pending" || stateKind === "payment_issue";
 }
 
+/**
+ * A gateway id that can be retried: never cash on delivery, and never
+ * `gift_card` (the order's cards paid in full at commit; nothing to collect).
+ */
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
   const method = normalize(value);
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" ? method : null;
+  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD
+    ? method
+    : null;
 }
 
 export function getOrderSuccessRetryOptions(

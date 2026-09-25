@@ -24,7 +24,8 @@ import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/che
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
-  codDueText,
+  getOrderPaymentPresentation,
+  receiptGiftCardTenderLabel,
   getOrderSuccessNextSteps,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
@@ -130,6 +131,7 @@ const hostedRecoveryPayment = requestedPayment
   && /^[a-z][a-z0-9_-]{0,63}$/.test(requestedPayment)
   && requestedPayment !== "stripe"
   && requestedPayment !== "cod"
+  && requestedPayment !== "gift_card"
   ? requestedPayment
   : null;
 
@@ -225,6 +227,9 @@ const orderLineGroups = order ? groupOrderLines(orderItemsFromApi, order, copy) 
 const showOrderLineGroupHeadings = showsOrderLineGroupHeadings(orderLineGroups);
 const deliveryBlock = order ? resolveOrderDeliveryBlock(order, copy) : null;
 const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
+// Gift cards that paid part of the order, and the words for what is left.
+const receiptPayment = order ? getOrderPaymentPresentation(order, copy) : null;
+const receiptGiftCardTenders = receiptPayment?.giftCardTenders ?? [];
 const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
 const configuredCurrencyCode = checkoutConfig.currency?.code
   ?? layoutData?.currency?.code
@@ -636,8 +641,14 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               </div>
             </div>
           )}
+          {receiptGiftCardTenders.map((tender) => (
+            <div class="flex justify-between gap-4" data-receipt-gift-card>
+              <span class="text-muted-foreground">{receiptGiftCardTenderLabel(tender, copy)}</span>
+              <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(tender.amount)}</span>
+            </div>
+          ))}
           {
-            order.paidAmount > 0 && visibleBalanceDue > 0 && (
+            order.paidAmount > 0 && visibleBalanceDue > 0 && receiptGiftCardTenders.length === 0 && (
               <div class="flex justify-between">
                 <span class="text-muted-foreground">{copy.orderReceiptPaidText}</span>
                 <span class="font-medium text-foreground">
@@ -649,7 +660,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           {
             visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? codDueText(order, copy) : copy.orderReceiptBalanceDueText}</span>
+                <span class="text-muted-foreground">{receiptPayment?.balanceLabel ?? copy.orderReceiptBalanceDueText}</span>
                 <span class="font-medium">
                   {formatReceiptAmount(visibleBalanceDue)}
                 </span>

@@ -9,6 +9,16 @@ import {
     calculateStorefrontTaxQuote,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
+import type { TaxQuote } from "../tax/types";
+import {
+    GIFT_CARD_PAYMENT_METHOD,
+    GIFT_CARD_UNUSABLE_CODE,
+    GIFT_CARD_UNUSABLE_MESSAGE,
+    GiftCardChangedError,
+    quoteGiftCardTender,
+} from "../gift-cards";
+import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
+import { getPaymentGateway } from "../payments/gateways/registry";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
 import { resolveBundlePromotionInterplay } from "./bundle-discounts";
 import {
@@ -27,6 +37,8 @@ import type {
     CreateStorefrontOrderIdentity,
     CreateStorefrontOrderInput,
     CreateStorefrontOrderResult,
+    StorefrontGiftCardIssue,
+    StorefrontGiftCardTenderSummary,
     StorefrontOrderShippingMethodSnapshot,
 } from "../orders/types";
 import {
@@ -286,6 +298,120 @@ export function assertStorefrontLineFulfilment(
     return types;
 }
 
+/** Refusal when a gift card leaves less than the gateway's minimum charge (§4.3). */
+export const GIFT_CARD_REMAINDER_TOO_SMALL_MESSAGE =
+    "The amount left is too small to pay by card; pay it cash on delivery or use less gift card balance.";
+
+const GIFT_CARD_DUPLICATE_MESSAGE = "This gift card is already applied.";
+const GIFT_CARD_NOT_NEEDED_MESSAGE = "Your order is already covered, so this gift card wasn't used.";
+const GIFT_CARD_NOT_ELIGIBLE_MESSAGE = "Gift cards can't pay for gift cards, so this one wasn't used.";
+
+/**
+ * Gift cards as a tender on a priced order (Wave B §4.3), shared by the tax
+ * quote and checkout so the amount a buyer reviews is the amount the order
+ * debits. A gift card never pays for gift-card lines; tender never changes
+ * taxes or discounts. No handles: no read, amount due = total.
+ */
+export async function quoteStorefrontGiftCardTender(
+    db: Database,
+    input: {
+        handles: readonly string[];
+        masterSecret: string | null;
+        taxQuote: Pick<TaxQuote, "currencyCode" | "totalMinor" | "lines">;
+        /** Tax allocation line ids of the gift-card lines. */
+        giftCardLineIds: ReadonlySet<string>;
+    },
+): Promise<StorefrontGiftCardTenderSummary> {
+    const giftCardLineTotalMinor = input.taxQuote.lines
+        .filter((line) => input.giftCardLineIds.has(line.lineId))
+        .reduce((total, line) => total + line.totalMinor, 0);
+    const handles = [...input.handles];
+    const none: StorefrontGiftCardTenderSummary = {
+        handles,
+        giftCardLineTotalMinor,
+        applied: [],
+        appliedTotalMinor: 0,
+        amountDueMinor: input.taxQuote.totalMinor,
+        unusableHandles: [],
+        issues: [],
+    };
+    if (handles.length === 0) return none;
+
+    const quote = await quoteGiftCardTender(db, {
+        handles,
+        masterSecret: input.masterSecret,
+        currencyCode: input.taxQuote.currencyCode,
+        totalMinor: input.taxQuote.totalMinor,
+        giftCardLineTotalMinor,
+        // A deposit plan is never made for an order with gift cards: the
+        // remainder is charged in full (plan-less balance) or collected as cash.
+        depositPlan: false,
+    });
+    const unusable = new Set(quote.unusableHandles);
+    const issues: StorefrontGiftCardIssue[] = quote.unusableHandles.map((handle) => ({
+        handle,
+        code: GIFT_CARD_UNUSABLE_CODE,
+        message: GIFT_CARD_UNUSABLE_MESSAGE,
+    }));
+    const resolvedHandles = new Set(quote.cards.map((card) => card.handle));
+    for (const handle of handles) {
+        // Another handle already named the same card (the resolver kept the first).
+        if (!unusable.has(handle) && !resolvedHandles.has(handle)) {
+            issues.push({ handle, code: "GIFT_CARD_DUPLICATE", message: GIFT_CARD_DUPLICATE_MESSAGE });
+        }
+    }
+    if (isGiftCardTenderBlocked(quote.tender)) {
+        return { ...none, unusableHandles: quote.unusableHandles, issues };
+    }
+    const cardById = new Map(quote.cards.map((card) => [card.giftCardId, card]));
+    for (const issue of quote.tender.issues) {
+        if (issue.code === "card_not_applied") {
+            // What is left is gift-card lines (anti-laundering), or nothing at all.
+            const giftCardLinesLeft = giftCardLineTotalMinor > 0;
+            issues.push({
+                handle: cardById.get(issue.id)?.handle ?? null,
+                code: giftCardLinesLeft ? "GIFT_CARD_NOT_ELIGIBLE" : "GIFT_CARD_NOT_NEEDED",
+                message: giftCardLinesLeft ? GIFT_CARD_NOT_ELIGIBLE_MESSAGE : GIFT_CARD_NOT_NEEDED_MESSAGE,
+            });
+        }
+    }
+    return {
+        handles,
+        giftCardLineTotalMinor,
+        applied: quote.tender.applied.map((application) => {
+            const card = cardById.get(application.id)!;
+            return {
+                giftCardId: application.id,
+                handle: card.handle,
+                last4: card.last4,
+                appliedMinor: application.appliedMinor,
+                balanceMinor: card.balanceMinor,
+            };
+        }),
+        appliedTotalMinor: quote.tender.appliedTotalMinor,
+        amountDueMinor: quote.tender.amountDueMinor,
+        unusableHandles: quote.unusableHandles,
+        issues,
+    };
+}
+
+/**
+ * The order the buyer reviewed is the order placed (checked after the quote
+ * fingerprint): every card still usable and the amount due unchanged, or
+ * `GiftCardChangedError` (409 `GIFT_CARD_CHANGED`) before anything is
+ * written. Requests without gift cards pass untouched.
+ */
+export function assertStorefrontGiftCardTenderReviewed(
+    tender: Pick<StorefrontGiftCardTenderSummary, "handles" | "unusableHandles" | "amountDueMinor">,
+    expectedAmountDueMinor: number | null | undefined,
+): void {
+    const expected = expectedAmountDueMinor ?? undefined;
+    if (tender.handles.length === 0 && expected === undefined) return;
+    if (tender.unusableHandles.length > 0 || expected !== tender.amountDueMinor) {
+        throw new GiftCardChangedError();
+    }
+}
+
 /**
  * Validates and prepares a storefront order for synchronous checkout commit.
  * Performs server-side price verification, discount validation, shipping verification,
@@ -309,6 +435,8 @@ export async function createStorefrontOrder(
     },
     checkoutPolicySnapshot?: StorefrontCheckoutPolicySnapshot,
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
+    /** SCALIUS_SECRET, which opens gift-card apply handles (null: every handle is unusable). */
+    giftCardAuthority: { masterSecret?: string | null } = {},
 ): Promise<CreateStorefrontOrderResult> {
     if (data.items.length > MAX_ORDER_LINE_ITEMS) {
         throw new ValidationError(
@@ -367,9 +495,14 @@ export async function createStorefrontOrder(
 
     const lineTypes = assertStorefrontLineFulfilment(cartValidation, deliveryPreflight);
     const { requiresShipping, allowsCashOnDelivery } = deliveryPreflight.fulfilment;
-    if (data.paymentMethod === PaymentMethod.COD && !allowsCashOnDelivery) {
-        throw new ValidationError("Cash on delivery isn't available for this order. Choose an online payment method.");
-    }
+    const giftCardHandles = (data.giftCards ?? []).map((card) => card.handle);
+    const assertCashOnDeliveryFits = (paymentMethod: string) => {
+        if (paymentMethod === PaymentMethod.COD && !allowsCashOnDelivery) {
+            throw new ValidationError("Cash on delivery isn't available for this order. Choose an online payment method.");
+        }
+    };
+    // With gift cards the method is settled once the amount due is known.
+    if (giftCardHandles.length === 0) assertCashOnDeliveryFits(data.paymentMethod);
     const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
     if (requiresShipping && !shippingAddress) {
         throw new ValidationError(
@@ -411,6 +544,7 @@ export async function createStorefrontOrder(
             quantity: validatedItem.quantity,
             unitPriceMinor: validatedItem.unitPriceMinor,
             baseUnitPriceMinor: validatedItem.baseUnitPriceMinor,
+            isGiftCard: validatedItem.isGiftCard === true,
             propertiesPriceMinor: validatedItem.propertiesPriceMinor,
             properties: serializeOrderLineProperties(validatedItem.properties),
             fulfillmentType: lineTypeByIndex.get(idx)!,
@@ -438,6 +572,8 @@ export async function createStorefrontOrder(
                 variantId: item.variantId,
                 unitPriceMinor: item.unitPriceMinor,
                 quantity: item.quantity,
+                // Gift-card lines are outside every promotion (§4.2).
+                ...(item.isGiftCard ? { giftCard: true } : {}),
             })),
             shippingAmountMinor: verifiedShippingMinor,
         },
@@ -471,6 +607,8 @@ export async function createStorefrontOrder(
             unitPriceMinor: item.unitPriceMinor,
             quantity: item.quantity,
             taxClassId: item.taxClassId,
+            // A gift card is money, not a taxable sale (§4.2).
+            ...(item.isGiftCard ? { taxExempt: true } : {}),
         })),
         shippingMinor: verifiedShippingMinor,
         promotionDiscountAllocation: bundleDiscount.allocation,
@@ -486,8 +624,44 @@ export async function createStorefrontOrder(
     const isPartialEnabled = checkoutPolicySnapshot?.partialPaymentEnabled
         ?? fallbackSettings?.partialPaymentEnabled
         ?? false;
-    if (isPartialEnabled && data.paymentMethod === PaymentMethod.COD) {
-        throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
+
+    // ------------------------------------------------------------------
+    // GIFT CARDS AS A TENDER (§4.3): the debit at commit is the hold.
+    // ------------------------------------------------------------------
+    const giftCardTender = await quoteStorefrontGiftCardTender(storefrontDb, {
+        handles: giftCardHandles,
+        masterSecret: giftCardAuthority.masterSecret ?? null,
+        taxQuote,
+        giftCardLineIds: new Set(preparedItems
+            .filter((item) => item.isGiftCard)
+            .map((item) => item.taxAllocationLineId)),
+    });
+    const giftCardsApplied = giftCardTender.appliedTotalMinor > 0;
+    const coveredByGiftCards = giftCardsApplied && giftCardTender.amountDueMinor === 0;
+    // Fully covered: the order is paid by gift card whatever method was sent.
+    const paymentMethod = coveredByGiftCards ? GIFT_CARD_PAYMENT_METHOD : data.paymentMethod;
+    if (paymentMethod === GIFT_CARD_PAYMENT_METHOD && !coveredByGiftCards) {
+        // The buyer saw the cards cover the order; they no longer do.
+        if (giftCardHandles.length > 0) throw new GiftCardChangedError();
+        throw new ValidationError("Choose how to pay for this order.");
+    }
+    if (giftCardHandles.length > 0) assertCashOnDeliveryFits(paymentMethod);
+
+    if (isPartialEnabled && paymentMethod === PaymentMethod.COD) {
+        throw new ValidationError(giftCardsApplied
+            ? "This store takes an advance payment online. Pay the rest online, or cover the whole order with gift cards."
+            : "Advance deposit is required. COD cannot be selected for the full amount directly.");
+    }
+    if (giftCardsApplied) {
+        // A gateway charges the remainder: below its minimum it cannot.
+        const limits = getPaymentGateway(paymentMethod)?.amountLimits;
+        if (
+            limits
+            && limits.currency === taxQuote.currencyCode.toUpperCase()
+            && giftCardTender.amountDueMinor < limits.minMinor
+        ) {
+            throw new ValidationError(GIFT_CARD_REMAINDER_TOO_SMALL_MESSAGE, { reason: "gift_card_remainder_too_small" });
+        }
     }
 
     // ------------------------------------------------------------------
@@ -536,11 +710,16 @@ export async function createStorefrontOrder(
             totalAmountMinor: taxQuote.totalMinor,
             taxLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
-            status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
-            paymentMethod: data.paymentMethod,
-            paymentStatus: PaymentStatus.UNPAID,
-            paidAmountMinor: 0,
-            balanceDueMinor: taxQuote.totalMinor,
+            // Cash and fully-covered orders are placed; a gateway order waits for its payment.
+            status: paymentMethod === PaymentMethod.COD || paymentMethod === GIFT_CARD_PAYMENT_METHOD
+                ? OrderStatus.PENDING
+                : OrderStatus.INCOMPLETE,
+            paymentMethod,
+            paymentStatus: !giftCardsApplied
+                ? PaymentStatus.UNPAID
+                : coveredByGiftCards ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
+            paidAmountMinor: giftCardTender.appliedTotalMinor,
+            balanceDueMinor: giftCardTender.amountDueMinor,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: cartValidation.items.some(item => item.inventoryTracked) ? "reserved" : "none",
@@ -577,6 +756,14 @@ export async function createStorefrontOrder(
             };
         }),
         promotion: bundleDiscount.discount.snapshot,
+        ...(giftCardsApplied
+            ? {
+                giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor }) => ({
+                    giftCardId,
+                    appliedMinor,
+                })),
+            }
+            : {}),
         requestUrl,
         taxQuote,
     };
@@ -584,11 +771,12 @@ export async function createStorefrontOrder(
     return {
         checkoutToken,
         orderId,
-        paymentMethod: data.paymentMethod,
+        paymentMethod,
         taxQuote,
         commitPayload,
         requiresShipping,
         linePropertiesHashes: await storefrontLinePropertiesHashes(cartValidation),
+        giftCardTender,
     };
 }
 
