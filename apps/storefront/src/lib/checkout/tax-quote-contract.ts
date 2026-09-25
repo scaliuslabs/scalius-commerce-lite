@@ -498,6 +498,10 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
   }
 
   const discountFacts = parseDiscountFacts(data);
+  // Quantity-bundle savings are part of `discountMinor` but are not a
+  // promotion line; without their own line the summary would not add up.
+  const bundleLine = parseBundleDiscountLine(data, decimalPlaces);
+  if (bundleLine) discountFacts.discounts = [...discountFacts.discounts, bundleLine];
 
   if (!Array.isArray(data.items) || data.items.length === 0) fail();
   if (data.items.length > TAX_QUOTE_MAX_ITEMS) fail();
@@ -563,6 +567,38 @@ function parseOffer(value: unknown): CheckoutDiscountOffer {
         price: product.price === null ? null : nonNegativeAmount(product.price),
       };
     }),
+  };
+}
+
+/** Stands in for a promotion id on the quantity-bundle discount line. */
+export const BUNDLE_DISCOUNT_LINE_ID = "bundle";
+
+/**
+ * The quote's quantity-bundle saving as one discount line named by its tier
+ * labels ("Discount · Pair"), or null when no bundle applies (or the API
+ * predates bundles).
+ */
+function parseBundleDiscountLine(
+  data: Record<string, unknown>,
+  decimalPlaces: number,
+): CheckoutDiscountLine | null {
+  if (data.bundleDiscountMinor === undefined || data.bundleDiscountMinor === null) return null;
+  const minor = nonNegativeSafeInteger(data.bundleDiscountMinor);
+  const amount = nonNegativeAmount(data.bundleDiscountAmount);
+  assertAmountMatchesMinor(amount, minor, decimalPlaces);
+  if (minor === 0) return null;
+  const bundles = data.bundles ?? [];
+  if (!Array.isArray(bundles) || bundles.length > TAX_QUOTE_MAX_ITEMS) fail();
+  const labels = [...new Set(bundles.flatMap((bundle) =>
+    isRecord(bundle) && typeof bundle.label === "string" && bundle.label.trim()
+      ? [requiredString(bundle.label, 60)]
+      : []))];
+  return {
+    promotionId: BUNDLE_DISCOUNT_LINE_ID,
+    title: labels.join(", "),
+    code: null,
+    amount,
+    shippingAmount: 0,
   };
 }
 
