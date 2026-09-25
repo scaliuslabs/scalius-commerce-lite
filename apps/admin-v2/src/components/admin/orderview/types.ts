@@ -3,6 +3,8 @@ import type {
 } from "~/lib/api-query-options/delivery";
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
 import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/browser";
+import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
+import type { CustomizationFieldType } from "@scalius/shared/line-properties";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -17,14 +19,62 @@ export interface OrderItem {
   productImage: string | null;
   variantLabel: string | null;
   fulfillmentStatus?: string | null;
-  /** Units already handed to a courier. */
+  /** Pre-ledger compatibility: units handed to a courier. Read `fulfilledQuantity`. */
   shippedQuantity?: number;
+  /** How the line reaches the buyer, frozen when the order was placed. */
+  fulfillmentType?: FulfillmentType;
+  /** Units handed over so far (sent, picked up, performed or delivered digitally). */
+  fulfilledQuantity?: number;
+  /** Buyer inputs frozen on the line ("Engraving: Rahim"). */
+  properties?: OrderLineProperty[];
+  propertiesPriceMinor?: number;
   inventoryTracked?: boolean;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;
   taxableAmountMinor?: number | null;
   taxAmountMinor?: number | null;
+}
+
+export interface OrderLineProperty {
+  key: string;
+  type: CustomizationFieldType;
+  label: string;
+  value: string;
+  displayValue: string;
+  /** Surcharge per unit, major units. */
+  price: number;
+  priceMinor: number;
+}
+
+export interface OrderPickup {
+  address: string | null;
+  hours: string | null;
+  readyAt: string | null;
+}
+
+/** One ledger fulfilment: a real hand-over of some units (voided ones stay listed). */
+export interface OrderFulfillment {
+  id: string;
+  kind: FulfillmentType;
+  createdAt: string | null;
+  lines: Array<{ orderItemId: string; quantity: number }>;
+  tracking: {
+    shipmentId: string;
+    courierName: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+    status: string;
+  } | null;
+  status: FulfillmentRecordStatus;
+  actorType: "admin" | "system";
+  /** Cash taken at the counter or the service in the same action, major units. */
+  cashCollected: number | null;
+  voidedAt: OrderTimestamp | null;
+  /** The server allows voiding it now (an own-rider parcel that came back). */
+  canVoid?: boolean;
+  /** Why it can't be voided: a code the dashboard words (`void.blocked.*`). */
+  voidBlockedReason?: "voided" | "courier" | "delivered" | "order_not_confirmed" | null;
 }
 
 export interface OrderRefundAttempt {
@@ -162,6 +212,15 @@ export interface Order {
   zoneName?: string;
   areaName?: string | null;
   shipments?: OrderShipment[];
+  /** Some line ships, so the order has a delivery address. */
+  requiresShipping?: boolean;
+  /** The order's one delivery method; null when nothing physical was bought. */
+  shippingMethodKind?: DeliveryMethodKind | null;
+  pickup?: OrderPickup | null;
+  pickupReadyAt?: OrderTimestamp | null;
+  fulfillments?: OrderFulfillment[];
+  /** The order's message thread (S4 mounts its card here). */
+  conversation?: { id: string; unread: boolean } | null;
   deliveryProviders?: DeliveryProviderRecord[];
   operationalReads?: {
     shipments: OrderOperationalReadState;

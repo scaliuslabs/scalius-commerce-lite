@@ -2,9 +2,19 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canSendWithOwnCourier, remainingToSend } from "./ManualFulfillmentDialog";
+import { canHandOver, fulfilledUnits, isReadyForPickup, lineFulfillmentType, unitsLeft } from "./fulfilment-groups";
 import type { Order, OrderSupportRequest } from "./types";
 
-export type OrderPrimaryAction = "confirm" | "bookCourier" | "sendOwnCourier" | "collectCod" | "markDelivered" | "reviewCancellation";
+export type OrderPrimaryAction =
+  | "confirm"
+  | "bookCourier"
+  | "sendOwnCourier"
+  | "markReadyForPickup"
+  | "markPickedUp"
+  | "markServiceDone"
+  | "collectCod"
+  | "markDelivered"
+  | "reviewCancellation";
 /** The next step asked of a card; a new `id` repeats the request. */
 export type OrderActionRequest = { action: OrderPrimaryAction | "refund"; id: number };
 
@@ -15,10 +25,11 @@ export function openCancellationRequest(order: Pick<Order, "supportRequests">): 
   return order.supportRequests?.find((request) => request.active && request.type === "cancel_pre_shipment") ?? null;
 }
 
-/** Units not handed to a courier yet, once part of the order has gone out; 0 otherwise. */
+/** Ship units not handed to a courier yet, once part of them has gone out; 0 otherwise. */
 export function unitsLeftToSend(order: Pick<Order, "items">): number {
-  if (!order.items.some((item) => (item.shippedQuantity ?? 0) > 0)) return 0;
-  return order.items.reduce((sum, item) => sum + remainingToSend(item), 0);
+  const shipLines = order.items.filter((item) => lineFulfillmentType(item) === "ship");
+  if (!shipLines.some((item) => fulfilledUnits(item) > 0)) return 0;
+  return shipLines.reduce((sum, item) => sum + remainingToSend(item), 0);
 }
 
 /** Part of the order is with the courier and the rest isn't sent yet. */
@@ -33,12 +44,13 @@ export function isPartSent(order: Pick<Order, "status" | "items">): boolean {
 export function canMarkDelivered(
   order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">,
 ): boolean {
+  const shipLines = order.items.filter((item) => lineFulfillmentType(item) === "ship");
   return order.status.toLowerCase() === "shipped"
     && order.paymentMethod !== "cod"
     && ["paid", "partially_refunded"].includes(order.paymentStatus ?? "")
     && !(Number(order.balanceDue ?? 0) > 0)
-    && order.items.length > 0
-    && order.items.every((item) => (item.shippedQuantity ?? 0) >= item.quantity)
+    && shipLines.length > 0
+    && shipLines.every((item) => fulfilledUnits(item) >= item.quantity)
     && !order.archivedAt
     && !order.activeRefundOperation?.active
     && order.shipmentRecovery?.activeLock !== true;
@@ -46,11 +58,11 @@ export function canMarkDelivered(
 
 /**
  * The one next step of an order (header on desktop, bottom bar on phones):
- * confirm → send (book a courier, or your own rider when none is connected;
- * then the rest of a partly sent order) → collect the cash, or mark a paid
- * order delivered. An open
- * cancellation request comes first. Every card still applies its own guards;
- * this only picks which card flow to start.
+ * confirm → hand over (book a courier or your own rider for ship lines; mark
+ * a pickup order ready, then picked up; mark a service done) → collect the
+ * cash, or mark a paid order delivered. An open cancellation request comes
+ * first. Every card still applies its own guards; this only picks which card
+ * flow to start.
  */
 export function resolveOrderPrimaryAction(
   order: Order,
@@ -72,26 +84,30 @@ export function resolveOrderPrimaryAction(
       : null;
   }
 
-  if (status === "confirmed") {
+  if (status === "confirmed" && unitsLeft(order, "ship") > 0) {
     const reads = order.operationalReads;
     const known = (reads?.shipments.status ?? "ready") === "ready"
       && (reads?.deliveryProviders.status ?? "ready") === "ready";
     const hasActiveShipment = (order.shipments ?? []).some(
       (shipment) => !CLOSED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()),
     );
-    if (!actions.canManageOrderShipments || !known || hasActiveShipment
-      || order.items.length === 0 || order.fulfillmentStatus === "complete") {
+    if (!actions.canManageOrderShipments || !known || hasActiveShipment || order.fulfillmentStatus === "complete") {
       return null;
     }
     return (order.deliveryProviders ?? []).length > 0 ? "bookCourier" : "sendOwnCourier";
   }
 
+  if (actions.canManageOrderShipments && canHandOver(order)) {
+    if (unitsLeft(order, "pickup") > 0) return isReadyForPickup(order) ? "markPickedUp" : "markReadyForPickup";
+    if (unitsLeft(order, "service") > 0) return "markServiceDone";
+  }
+
   if (
-    (status === "shipped" || status === "delivered")
+    ["shipped", "delivered", "confirmed"].includes(status)
     && order.paymentMethod === "cod"
     && Number(order.balanceDue ?? 0) > 0
     && actions.canUpdateOrderCod
-    && canProcessOrderCodAction(status, "collected")
+    && canProcessOrderCodAction(status, "collected", { requiresShipping: order.requiresShipping })
   ) {
     return "collectCod";
   }

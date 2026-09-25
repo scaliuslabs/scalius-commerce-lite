@@ -42,6 +42,9 @@ import { AdvancedSkuFields, InventoryQuantityInput, VariantImagePicker, type Iss
 
 /** Phone: select, photo, name, menu (price and quantity below). Wider: one line with every column. */
 const ROW_GRID = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_2.25rem]";
+/** The same rows with a Fulfilment column, shown only while variants differ (physical vs service). */
+const ROW_GRID_KIND = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_7.5rem_2.25rem]";
+type EditableKind = "physical" | "service";
 
 type Money = ReturnType<typeof useCurrency> & {
   /** "৳12,692": a customer-facing amount without paisa when the currency is paid in whole units. */
@@ -77,6 +80,8 @@ export type VariantTableProps = {
   committedByVariantId: ReadonlyMap<string, number>;
   /** Labels print only for saved variants with nothing unsaved. */
   printingDisabled: boolean;
+  /** Variants differ in what they are (physical or service): each row picks its own. */
+  fulfilmentColumn?: boolean;
 };
 
 /** The latest function behind a stable identity, so memoised rows never re-render for it. */
@@ -116,6 +121,8 @@ export function VariantTable(props: VariantTableProps) {
     whole: (amount: number) => (requiresWholeCashAmounts(code) ? `${symbol}${formatNumber(Math.round(amount))}` : fmt(amount)),
   }) as Money, [code, symbol, fmt, salePrice]);
 
+  const kindColumn = Boolean(props.fulfilmentColumn);
+  const grid = kindColumn ? ROW_GRID_KIND : ROW_GRID;
   const [query, setQuery] = React.useState("");
   const [view, setView] = React.useState<"all" | "notForSale">("all");
   const [groupAxis, setGroupAxis] = React.useState(0);
@@ -217,6 +224,7 @@ export function VariantTable(props: VariantTableProps) {
       money={money}
       canRemove={canRemoveAny}
       printable={!props.printingDisabled && variant.id.startsWith("var_")}
+      kindColumn={kindColumn}
       onChange={onChange}
       onSelect={onSelect}
       onToggleExpand={onToggleExpand}
@@ -280,7 +288,7 @@ export function VariantTable(props: VariantTableProps) {
       ) : (
         <div ref={tableRef} onKeyDown={moveBetweenRows}>
           {/* The header turns into the bulk bar while rows are selected, so the table never shifts. */}
-          <div className={cn(ROW_GRID, "min-h-11 border-y bg-muted/50 text-body text-muted-foreground")}>
+          <div className={cn(grid, "min-h-11 border-y bg-muted/50 text-body text-muted-foreground")}>
             <div className="flex justify-center">
               <Checkbox
                 checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
@@ -294,6 +302,7 @@ export function VariantTable(props: VariantTableProps) {
                 allSelected={selectedCount >= variants.length}
                 printableIds={props.printingDisabled ? [] : [...selected].filter((id) => id.startsWith("var_"))}
                 printingDisabled={props.printingDisabled}
+                wide={kindColumn}
                 panel={panel}
                 onPanel={setPanel}
                 onClear={() => setSelected(new Set())}
@@ -310,7 +319,8 @@ export function VariantTable(props: VariantTableProps) {
                 <span className="font-medium">{t("variant")}</span>
                 <span className="hidden font-medium md:block">{t("price")}</span>
                 <span className="hidden font-medium md:block">{t("quantity")}</span>
-                <span className="col-start-4 md:col-start-6"><span className="sr-only">{r("actions")}</span></span>
+                {kindColumn ? <span className="hidden font-medium md:block">{t("fulfilment")}</span> : null}
+                <span className={kindColumn ? "col-start-4 md:col-start-7" : "col-start-4 md:col-start-6"}><span className="sr-only">{r("actions")}</span></span>
               </>
             )}
           </div>
@@ -344,6 +354,7 @@ export function VariantTable(props: VariantTableProps) {
                       images={props.images}
                       money={money}
                       selectedCount={group.variants.filter((variant) => selected.has(variant.id)).length}
+                      kindColumn={kindColumn}
                       onToggle={onToggleGroup}
                       onSelect={onSelect}
                       onChangeMany={props.onChangeMany}
@@ -373,6 +384,7 @@ type VariantRowProps = {
   money: Money;
   canRemove: boolean;
   printable: boolean;
+  kindColumn: boolean;
   onChange: (id: string, patch: Partial<DraftVariant>) => void;
   onSelect: (ids: readonly string[], checked: boolean) => void;
   onToggleExpand: (id: string) => void;
@@ -381,7 +393,7 @@ type VariantRowProps = {
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, images, money, canRemove, printable,
+  variant, name, label, depth, selected, expanded, issue, committed, images, money, canRemove, printable, kindColumn,
   onChange, onSelect, onToggleExpand, onRemove, onPrint,
 }: VariantRowProps) {
   const t = useMessages(productMessages);
@@ -400,7 +412,7 @@ const VariantRow = React.memo(function VariantRow({
   ], [canRemove, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
 
   return (
-    <div data-variant-row={variant.id} className={cn(ROW_GRID, "border-b py-1.5", selected && "bg-muted/50")}>
+    <div data-variant-row={variant.id} className={cn(kindColumn ? ROW_GRID_KIND : ROW_GRID, "border-b py-1.5", selected && "bg-muted/50")}>
       <div className="flex justify-center">
         <Checkbox checked={selected} onCheckedChange={(checked) => onSelect([variant.id], checked === true)} aria-label={r("select", { name })} />
       </div>
@@ -467,8 +479,18 @@ const VariantRow = React.memo(function VariantRow({
           )}
           {stockError ? <p className="text-body text-destructive">{stockError}</p> : null}
         </div>
+        {kindColumn ? (
+          <div className="col-span-2 min-w-0 md:col-span-1">
+            <span className="block text-body text-muted-foreground md:hidden">{t("fulfilment")}</span>
+            <KindSelect
+              value={variant.fulfillmentKind === "service" ? "service" : "physical"}
+              label={t("fulfilmentFor", { name })}
+              onChange={(fulfillmentKind) => change({ fulfillmentKind })}
+            />
+          </div>
+        ) : null}
       </div>
-      <div className="col-start-4 row-start-1 flex justify-end md:col-start-6">
+      <div className={cn("col-start-4 row-start-1 flex justify-end", kindColumn ? "md:col-start-7" : "md:col-start-6")}>
         <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} />
       </div>
       {expanded ? (
@@ -486,6 +508,7 @@ type GroupRowProps = {
   images: ProductSkuImageChoice[];
   money: Money;
   selectedCount: number;
+  kindColumn: boolean;
   onToggle: (valueId: string) => void;
   onSelect: (ids: readonly string[], checked: boolean) => void;
   onChangeMany: VariantTableProps["onChangeMany"];
@@ -497,13 +520,14 @@ function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
     && previous.images === next.images
     && previous.money === next.money
     && previous.selectedCount === next.selectedCount
+    && previous.kindColumn === next.kindColumn
     && previous.onChangeMany === next.onChangeMany
     && previous.group.label === next.group.label
     && previous.group.variants.length === next.group.variants.length
     && previous.group.variants.every((variant, index) => variant === next.group.variants[index]);
 }
 
-const GroupRow = React.memo(function GroupRow({ group, open, images, money, selectedCount, onToggle, onSelect, onChangeMany }: GroupRowProps) {
+const GroupRow = React.memo(function GroupRow({ group, open, images, money, selectedCount, kindColumn, onToggle, onSelect, onChangeMany }: GroupRowProps) {
   const t = useMessages(productMessages);
   const ids = group.variants.map((variant) => variant.id);
   const tracked = group.variants.filter((variant) => variant.trackInventory);
@@ -516,7 +540,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
   const range = prices.length ? `${formatNumber(Math.min(...prices))}–${formatNumber(Math.max(...prices))}` : undefined;
   const allSelected = selectedCount === ids.length;
   return (
-    <div className={cn(ROW_GRID, "border-b bg-muted/30 py-2")}>
+    <div className={cn(kindColumn ? ROW_GRID_KIND : ROW_GRID, "border-b bg-muted/30 py-2")}>
       <div className="flex justify-center">
         <Checkbox
           checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
@@ -569,13 +593,46 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
         ) : (
           <p className="py-2 text-body text-muted-foreground">{t("notTracked")}</p>
         )}
+        {kindColumn ? (
+          <div className="col-span-2 min-w-0 md:col-span-1">
+            <KindSelect
+              value={same(group.variants.map((variant): EditableKind => (variant.fulfillmentKind === "service" ? "service" : "physical")))}
+              label={t("fulfilmentForGroup", { name: group.label })}
+              onChange={(fulfillmentKind) => onChangeMany(new Set(ids), { fulfillmentKind })}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }, sameGroupRow);
 
-function BulkBar({ count, allSelected, printableIds, printingDisabled, panel, onPanel, onClear, onPrint, onRemove }: {
+/** Physical (ship or pickup) or a service, for one row or a whole group ("Mixed" until chosen). */
+function KindSelect({ value, label, onChange }: {
+  value: EditableKind | undefined;
+  label: string;
+  onChange: (kind: EditableKind) => void;
+}) {
+  const t = useMessages(productMessages);
+  return (
+    <NativeSelect
+      value={value ?? ""}
+      aria-label={label}
+      onValueChange={(next) => {
+        if (next === "physical" || next === "service") onChange(next);
+      }}
+    >
+      {value === undefined ? <option value="" disabled>{t("mixedValues")}</option> : null}
+      <option value="physical">{t("fulfilmentPhysicalShort")}</option>
+      <option value="service">{t("fulfilmentServiceShort")}</option>
+    </NativeSelect>
+  );
+}
+
+function BulkBar({ count, allSelected, printableIds, printingDisabled, wide, panel, onPanel, onClear, onPrint, onRemove }: {
   count: number;
+  /** The table has a Fulfilment column. */
+  wide: boolean;
   allSelected: boolean;
   printableIds: string[];
   printingDisabled: boolean;
@@ -589,7 +646,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, panel, on
   const r = useMessages(resourceMessages);
   const toggle = (next: BulkPanel) => onPanel(panel === next ? null : next);
   return (
-    <div className="col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1 md:col-span-5">
+    <div className={cn("col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1", wide ? "md:col-span-6" : "md:col-span-5")}>
       <strong className="font-medium text-foreground">{r("selected", { count })}</strong>
       <Button type="button" variant="link" size="sm" onClick={onClear}>{t("clearSelection")}</Button>
       <Button type="button" variant={panel === "price" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "price"} onClick={() => toggle("price")}>

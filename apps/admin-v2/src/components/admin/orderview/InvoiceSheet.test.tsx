@@ -50,6 +50,30 @@ describe("InvoiceSheet", () => {
     expect(totals).toContain(`${en["invoice.netPaid"]}880`);
   });
 
+  it("prints each line's buyer inputs with their surcharges", async () => {
+    const engraved = {
+      ...document_,
+      order: {
+        ...document_.order,
+        currencyCode: "BDT", currencyDecimalPlaces: 2, taxLabel: "Tax", pricesIncludeTax: false,
+        subtotalAmountMinor: 120_000, shippingAmountMinor: 8_000, discountAmountMinor: 0, taxAmountMinor: 0, totalAmountMinor: 128_000,
+        items: [{
+          id: "i1", productName: "Lighter", variantLabel: null, quantity: 1, price: 1200,
+          properties: [
+            { label: "Engraving", displayValue: "Rahim", priceMinor: 20000 },
+            { label: "Gift wrap", displayValue: "Yes", priceMinor: 0 },
+          ],
+        }],
+      },
+    } as unknown as InvoiceDocument;
+    await act(async () => root.render(<InvoiceSheet document={engraved} />));
+    const cell = host.querySelector("td")!.textContent!;
+    expect(cell).toContain("Engraving: Rahim (+");
+    expect(cell).toContain("200");
+    expect(cell).toContain("Gift wrap: Yes");
+    expect(cell).not.toContain("Gift wrap: Yes (+");
+  });
+
   it("keeps an issued invoice as issued and adds refunds made after it (R3-ORD-07)", async () => {
     const issued = {
       ...document_,
