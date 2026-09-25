@@ -8,7 +8,7 @@ import {
     orderFulfillmentLines,
     orderFulfillments,
 } from "@scalius/database/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
 import { fulfilmentVoidBlockedReason } from "./line-presentation";
@@ -44,7 +44,8 @@ async function readOrderFulfilments(db: Database, orderId: string, activeOnly: b
             providerId: deliveryShipments.providerId,
             trackingId: deliveryShipments.trackingId,
             trackingUrl: deliveryShipments.trackingUrl,
-            shipmentStatus: deliveryShipments.status,
+            // Aliased: two `status` columns in one join collide by name.
+            shipmentStatus: sql<string | null>`${deliveryShipments.status}`.as("shipment_status"),
         })
             .from(orderFulfillments)
             .leftJoin(deliveryShipments, eq(deliveryShipments.id, orderFulfillments.shipmentId))

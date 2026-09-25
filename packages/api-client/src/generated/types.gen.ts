@@ -11132,6 +11132,7 @@ export type GetApiV1ProductsFeedResponses = {
                 freeDelivery: boolean;
                 categoryId: string | null;
                 excludeFromProductFeed: boolean;
+                requiresCustomization: boolean;
                 productCondition: 'new' | 'refurbished' | 'used' | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
@@ -42096,6 +42097,11 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
                     returnedQuantity?: number;
+                    properties?: Array<{
+                        label: string;
+                        displayValue: string;
+                        priceMinor: number;
+                    }>;
                 }>;
             };
             invoiceNumber: string | null;
@@ -42312,6 +42318,11 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
                     returnedQuantity?: number;
+                    properties?: Array<{
+                        label: string;
+                        displayValue: string;
+                        priceMinor: number;
+                    }>;
                 }>;
             };
             invoiceNumber: string | null;

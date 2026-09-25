@@ -189,6 +189,8 @@ const storefrontFeedProductSchema = z.object({
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   excludeFromProductFeed: z.boolean(),
+  /** A buyer input is required: an agent (variant + quantity) cart can't buy it; send the buyer to the product page. */
+  requiresCustomization: z.boolean(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
