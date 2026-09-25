@@ -214,20 +214,37 @@ export function quickCheckoutQuoteInput(
 }
 
 /**
- * The order form `processOrder` reads, built from the reviewed state: only
- * the codes the quote applied go to the order.
+ * The carried lines at the unit prices of the reviewed quote. The line was
+ * priced when the buyer pressed Buy now; the buyer has since reviewed the
+ * quote's prices, and those are what the order is checked against.
+ */
+export function repriceQuickCheckoutLines(
+  cartItems: string,
+  quote: Pick<CheckoutTaxQuote, "items">,
+): string {
+  const prices = new Map(quote.items.map((item) => [item.cartKey, item.unitPrice]));
+  const lines = JSON.parse(cartItems) as Record<string, Record<string, unknown>>;
+  return JSON.stringify(Object.fromEntries(Object.entries(lines).map(([cartKey, line]) => [
+    cartKey,
+    prices.has(cartKey) ? { ...line, price: prices.get(cartKey) } : line,
+  ])));
+}
+
+/**
+ * The order form `processOrder` reads, built from the reviewed state: the
+ * quote's prices and only the codes the quote applied go to the order.
  */
 export function quickCheckoutOrderForm(
   form: QuickCheckoutForm,
   mode: QuickCheckoutMode,
   rateId: string,
-  quote: Pick<CheckoutTaxQuote, "discounts">,
+  quote: Pick<CheckoutTaxQuote, "discounts" | "items">,
 ): FormData {
   const data = new FormData();
   const codes = quote.discounts.flatMap(({ code }) => (code ? [code] : []));
   const values: Record<string, string> = {
     formIntent: "checkout",
-    cartItems: form.cartItems,
+    cartItems: repriceQuickCheckoutLines(form.cartItems, quote),
     checkoutId: form.checkoutId,
     expectedQuoteFingerprint: form.expectedQuoteFingerprint,
     customerName: form.customerName,
