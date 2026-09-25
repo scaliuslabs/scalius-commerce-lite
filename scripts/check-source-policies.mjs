@@ -84,12 +84,13 @@ export const policies = [
     sample: "const productJsonLd = JSON.stringify(schema);",
   },
   {
-    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery) submit with method=post",
-    why: "phone, OTP, cart, discount, and payment values must not enter URLs before hydration or without JavaScript",
+    rule: "sensitive storefront forms (auth OTP, cart checkout, payment recovery, product buyer inputs) submit with method=post",
+    why: "phone, OTP, cart, discount, payment and buyer-input values must not enter URLs before hydration or without JavaScript",
     paths: [
       `${storefront}/components/AuthModal.tsx`,
       `${storefront}/pages/cart.astro`,
       `${storefront}/pages/payment-recovery.astro`,
+      `${storefront}/components/product/ProductBuyerInputs.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
