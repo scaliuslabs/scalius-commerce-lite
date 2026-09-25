@@ -40,6 +40,7 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { pageSchema } from "../schemas/entities";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const storefrontProductCardSchema = z.object({
@@ -60,6 +61,7 @@ const storefrontProductCardSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
 });
 const storefrontCategoryCardSchema = z.object({
   id: z.string(),

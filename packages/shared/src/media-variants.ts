@@ -90,3 +90,21 @@ export function mediaOriginalUrl(url: string | null | undefined): string {
   const parsed = url ? parseVariantUrl(url) : null;
   return parsed ? `${parsed.base}${parsed.suffix}` : url ?? "";
 }
+
+/** A raster file anywhere under a `media/` path segment (`media/<id>.<ext>`, older nested keys too). */
+const MEDIA_RASTER_ORIGINAL = /(?:^|\/)media\/(?:[^?#]*\/)?[^/?#]+\.(?:avif|bmp|gif|jpe?g|png|tiff?|webp)$/i;
+
+/**
+ * A raster upload of our own media store served as uploaded (a legacy or
+ * failed-rendition image, up to 2400px and ~1MB): a `media/` object with no
+ * rendition suffix. Small slots (cards) show their placeholder instead while
+ * the public read queues its render job. External URLs and vector files
+ * (SVG) are not ours to resize and return false.
+ */
+export function isUnrenderedMediaOriginal(url: string | null | undefined): boolean {
+  if (!url || parseVariantUrl(url)) return false;
+  const suffixIndex = url.search(/[?#]/);
+  const path = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  // A rendition-shaped path outside the ladder is not an original either.
+  return MEDIA_RASTER_ORIGINAL.test(path) && !/\.[A-Za-z0-9]{1,10}\/\d+\.webp$/.test(path);
+}

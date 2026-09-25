@@ -19,7 +19,8 @@ import {
 } from "../products/money";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
-import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
+import { resolveProductCardImages } from "../products/media";
+import { loadCatalogCardData } from "./card-facts";
 import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
@@ -279,7 +280,6 @@ async function readStorefrontCatalogResults(
     const shopAllFacetsLive = unscoped
         && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
 
-    const productIds = productsList.map((product) => product.id);
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
     const categoryIds = [...new Set(
@@ -293,8 +293,9 @@ async function readStorefrontCatalogResults(
         ? scope.categoryFacet.parentId
         : null;
     type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
-    const [mediaMap, categoriesData, facetRows] = await Promise.all([
-        loadProductMediaProjections(db, productIds),
+    // Card media and card facts share one batch (card-facts.ts).
+    const [cardData, categoriesData, facetRows] = await Promise.all([
+        loadCatalogCardData(db, productsList, decimalPlaces),
         categoryIds.length > 0
             ? db
                 .select({
@@ -339,7 +340,8 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
+            ...resolveProductCardImages(cardData.media.get(product.id) ?? []),
+            cardFacts: cardData.facts(product.id),
             category,
             ...(subtreeParentId
                 ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }

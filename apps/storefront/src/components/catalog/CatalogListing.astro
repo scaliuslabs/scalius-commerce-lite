@@ -363,6 +363,7 @@ const breadcrumbVisible = piece("breadcrumb");
           results={presentation.results}
           phoneLayout={presentation.phoneLayout}
           context={catalogCardContext(presentation, showFilters)}
+          filterColumnPx={presentation.filters.columnPx}
           restoreView={showViewToggle}
           marked={showViewToggle || paging !== "numbered"}
           currencySymbol={currencySymbol}
