@@ -262,6 +262,14 @@ metric-matched fallback faces (`<Family> Fallback`, with size-adjust and
 ascent/descent overrides), so it never shifts layout. Only the heading face's
 Latin subset is preloaded.
 
+The dashboard's Theme page offers them in a Typography card (pairing, type
+scale, heading case; the template's values marked, with a reset). Its
+previews draw each pairing in the same files under `Preview <Family>` names,
+registered only when the picker opens
+(`apps/admin-v2/src/components/admin/online-store/type-preview-fonts.ts`,
+keyed by the same font keys as `apps/storefront/src/lib/theme-fonts.ts`, so a
+new family fails the type check until both have its file).
+
 | Pairing | Heading | Body | Bangla | Heading weight / tracking / leading | Body leading | Labels (uppercase) |
 |---|---|---|---|---|---|---|
 | retail | Inter | Inter | Noto Sans Bengali | 650 / −0.02em / 1.15 | 1.6 | 0.06em |
