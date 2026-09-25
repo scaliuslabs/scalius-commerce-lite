@@ -79,7 +79,7 @@ export interface HomepageProductList {
     Product,
     | "id" | "name" | "slug" | "price" | "discountType" | "discountPercentage" | "discountAmount"
     | "discountedPrice" | "priceVaries" | "availableForSale" | "freeDelivery" | "categoryId"
-    | "hasVariants" | "imageUrl" | "imageAlt"
+    | "hasVariants" | "imageUrl" | "imageAlt" | "cardFacts"
   > & { imageMediaId: string | null; secondaryImageUrl: string | null }>;
   category: { id: string; name: string; slug: string; canonicalPath: string | null } | null;
   collection: { id: string; title: string } | null;

@@ -719,35 +719,42 @@ function assertFooter(page: Document, variant: string, options: { business: bool
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
   const { layout, resolved } = requestThemeFor(theme, STORE_SHAPE);
   const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
-  const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
-  const firstRow = productGridFirstRow(grid, containerWidth);
   const card = layout.productCard;
+  // The standard card takes the theme's photo token; every other card its own look.
+  const grid = productGridSpec(layout.grid, card.imageRatio);
+  const firstRow = productGridFirstRow(grid, containerWidth);
+  const photoHeight = resolved.blocks.card.variant === "standard"
+    ? CARD_IMAGE_DIMENSIONS[card.imageRatio].height
+    : Math.round(400 / card.look.image.ratio);
   const cards = Array.from(document.querySelectorAll('[data-theme-component="product-card"]'));
   expect(cards).toHaveLength(Object.keys(CARD_PRODUCTS).length);
   const [onSale, withOptions, soldOut, plain] = cards as [Element, Element, Element, Element];
 
   cards.forEach((element, index) => {
-    // The resolved card variant, in the theme's photo ratio (a token).
+    // The resolved card variant, in its photo ratio (nearest token).
     expect(element.getAttribute("data-card-variant")).toBe(resolved.blocks.card.variant);
-    expect(element.getAttribute("data-card-ratio")).toBe(theme.tokens.imageRatio);
+    expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
     const media = element.querySelector(".product-card-media")!;
     const photo = media.querySelector("img")!;
     // `sizes` follows the density's fluid grid within the container cap.
     expect(photo.getAttribute("sizes")).toBe(productCardImageSizes(grid, containerWidth));
     expect(photo.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
-    expect(photo.getAttribute("height")).toBe(String(CARD_IMAGE_DIMENSIONS[theme.tokens.imageRatio].height));
+    expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
     expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : "auto");
-    // One link per card (the stretched title link) plus at most Buy now.
+    // One link per card (the stretched title link) plus at most Buy now (and Compare).
     const links = element.querySelectorAll("a");
-    expect(links.length).toBeLessThanOrEqual(2);
+    expect(links.length).toBeLessThanOrEqual(card.compare ? 3 : 2);
   });
 
-  // Hover photo only where the card shows one (and only with a second photo).
-  expect(Boolean(onSale.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
-  expect(Boolean(withOptions.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
-  expect(plain.querySelector(".product-card-hover-image")).toBeNull();
+  // Hover photo only where the card shows one (and only with a second
+  // photo): named on the photo box, fetched on intent, never in the HTML.
+  const hover = (element: Element) => element.querySelector(".product-card-media")!.hasAttribute("data-hover-src");
+  expect(hover(onSale)).toBe(card.hoverImage);
+  expect(hover(withOptions)).toBe(card.hoverImage);
+  expect(hover(plain)).toBe(false);
+  expect(onSale.querySelector(".product-card-hover-image")).toBeNull();
 
   // A buy action only on cards with one, only in stock without options; it
   // sits above the stretched card link. The card matrix

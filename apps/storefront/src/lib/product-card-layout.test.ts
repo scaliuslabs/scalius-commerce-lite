@@ -8,7 +8,9 @@ import {
   buildStorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
 import {
+  FILTER_COLUMN_GAP_PX,
   LIST_ROW_MEDIA_PX,
+  listingFilterColumnPx,
   PRODUCT_GRID_STEPS_REM,
   productGridSpec,
   productCardImageLoading,
@@ -54,13 +56,13 @@ describe("fluid product grid", () => {
     // Actions keep 44px touch targets; only a mouse gets the density's height.
     expect(cardCss).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
     expect(cardCss).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
-    expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card-action \{\s*min-height: var\(--theme-control-height/);
+    expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card \.product-card-action \{\s*min-height: var\(--pc-action-h, var\(--theme-control-height/);
     // Card corners follow the radius token; soft corners stop at 20px.
     expect(cardCss).toMatch(/\[data-theme-component="product-card"\] \{\s*min-width: 0;\s*border-radius: calc\(var\(--radius\) \* 1\.5\);/);
     expect(cardCss).toMatch(/\.site-root\[data-theme-radius="soft"\] \[data-theme-component="product-card"\] \{\s*border-radius: 1\.25rem;/);
-    // Card titles never drop below 14px, and long words break inside the card.
-    expect(cardCss).toContain("--card-title-size: 0.875rem;");
-    expect(cardCss).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
+    // Card titles never drop below 14px on phones (each look's phone size is
+    // at least 14, blocks.ts), and long words break inside the card.
+    expect(cardCss).toContain("--pc-title: var(--pc-title-m, 0.875rem);");
     expect(cardCss).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
     // Every card's name link, the standard card's included (found in Chrome:
     // a name without spaces was cut at the card edge).
@@ -185,6 +187,33 @@ describe("productCardImageSizes", () => {
           expect(declared, `${viewport}px`).toBe(evaluateSizes(productCardImageSizes(grid, containerWidth, "beside-filters"), viewport));
         }
       }
+    }
+  });
+
+  it("takes the filter column from the listing's filter style", () => {
+    expect(listingFilterColumnPx("sidebar-dense")).toBe(240);
+    expect(listingFilterColumnPx("sidebar-comfortable")).toBe(270);
+    expect(listingFilterColumnPx("bar-dropdowns")).toBe(0);
+    expect(listingFilterColumnPx("drawer")).toBe(0);
+    expect(listingFilterColumnPx(null)).toBe(0);
+    const containerMax = px("90rem");
+    // From 1024px the grid loses the column and its 24px gap; below, it is page wide.
+    expect(productGridWidth(1440, containerMax, "beside-filters", 240)).toBe(productGridWidth(1440, containerMax, "grid") - 240 - FILTER_COLUMN_GAP_PX);
+    expect(productGridWidth(1440, containerMax, "beside-filters", 270)).toBe(productGridWidth(1440, containerMax, "grid") - 270 - FILTER_COLUMN_GAP_PX);
+    expect(productGridWidth(1000, containerMax, "beside-filters", 240)).toBe(productGridWidth(1000, containerMax, "grid"));
+    // Without a sidebar the helper sizes the page-wide grid.
+    expect(productGridWidth(1440, containerMax, "beside-filters")).toBe(productGridWidth(1440, containerMax, "grid"));
+    const grid = STOREFRONT_DENSITY_SPECS.compact;
+    const dense = productCardImageSizes(grid, "90rem", "beside-filters", "grid", Infinity, 240);
+    const comfortable = productCardImageSizes(grid, "90rem", "beside-filters", "grid", Infinity, 270);
+    expect(dense).not.toBe(comfortable);
+    for (let viewport = 1024; viewport <= 1920; viewport += 11) {
+      const width = productGridWidth(viewport, containerMax, "beside-filters", 240);
+      const columns = productGridColumnCount(grid, width);
+      // The declared width is never smaller than the card the browser lays out.
+      expect(evaluateSizes(dense, viewport), `${viewport}px`).toBeGreaterThanOrEqual(
+        Math.floor((width - productGridGap(grid, width) * (columns - 1)) / columns) - 1,
+      );
     }
   });
 
