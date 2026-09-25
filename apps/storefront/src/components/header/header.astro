@@ -24,7 +24,7 @@ import type {
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { headerSpec } from "./header-variants";
+import { headerCondense, headerGeometryStyle, headerSpec } from "./header-variants";
 import {
   navigationLinkShare,
   navigationShortcuts,
@@ -125,9 +125,11 @@ const menuPlacement: "inline" | "row" =
   !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
 const stickyMenuRow =
   Boolean(spec) && desktopMenu && menuPlacement === "row" && (header.variant === "spec-two-row" || desktopKind === "sticky-category-bar");
+// Heights and the scroll reserve, from the variant data (HeaderLayout's CSS).
+const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }));
 ---
 
-<header id="site-header" class="contents" data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant}>
+<header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant}>
   <TopBar
     variant={headerData.topBar.isEnabled ? topBar.variant : "none"}
     text={headerData.topBar.text}

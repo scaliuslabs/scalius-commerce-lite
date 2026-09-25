@@ -52,7 +52,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- ROW 1 -->
     <div
-      class="header-row flex items-center justify-between h-14 lg:h-18 group-[.is-scrolled]/header:lg:h-16 gap-4 relative z-20 transition-[height] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
+      class="header-row flex items-center justify-between gap-4 relative z-20"
     >
       <div class="flex items-center shrink-0 lg:hidden z-30 gap-2">
         <button
@@ -293,25 +293,55 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 40ms;
   }
 
+  /* Row heights from header-variants HEADER_GEOMETRY. They ease with the
+     same transition as the scroll reserve under the header (HeaderLayout),
+     so the two sum to the same flow height in every frame. */
+  .header-row {
+    height: var(--hdr-phone-bar, 3.5rem);
+    transition: height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease);
+  }
+
+  @media (max-width: 63.99rem) {
+    #main-header.is-scrolled .header-row {
+      height: var(--hdr-phone-bar-condensed, 3rem);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .header-row {
+      height: var(--hdr-classic-bar, 4.5rem);
+    }
+
+    #main-header.is-scrolled .header-row {
+      height: var(--hdr-classic-bar-condensed, 4rem);
+    }
+  }
+
   .header-full-nav-row {
-    max-height: 4rem;
+    box-sizing: border-box;
     overflow: visible;
     border-top-width: 1px;
     opacity: 1;
     transition:
-      max-height 300ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease),
       opacity 120ms ease,
-      border-top-width 120ms ease,
       border-color 120ms ease;
   }
 
+  /* A row that folds has the height the scroll reserve holds: its border,
+     its padding and a menu link (the same --nav-link-height DesktopNav
+     paints with), never a measured number. */
+  #main-header[data-header-condense] .header-full-nav-row {
+    height: var(--hdr-classic-menu-row);
+  }
+
   #main-header[data-header-condense].is-scrolled .header-full-nav-row {
-    max-height: 0;
+    height: 0;
     overflow: hidden;
     border-top-width: 0;
     border-color: transparent;
     opacity: 0;
-    transition-delay: 0ms, 0ms, 0ms, 0ms;
+    transition-delay: 0ms, 0ms, 0ms;
   }
 
   .header-action-morph {
@@ -403,18 +433,9 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     }
   }
 
-  /* Phones and tablets condense on scroll (the same is-scrolled state as the
-     desktop header): a shorter bar. Tap targets stay 44px. */
-  @media (max-width: 63.99rem) {
-    #main-header.is-scrolled .header-row {
-      height: 3rem;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .header-expanded-center,
     .header-compact-center,
-    .header-full-nav-row,
     .header-action-morph,
     .header-expanded-actions,
     .header-scroll-search {
