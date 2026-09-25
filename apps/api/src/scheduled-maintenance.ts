@@ -24,7 +24,11 @@ import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 import { bumpCacheGeneration, syncCacheGenerationMirror } from "./utils/cache-generation";
-import { isNightlyCatalogTick, runNightlyCatalogMaintenance } from "./scheduled/catalog-projections";
+import {
+  isNightlyCatalogTick,
+  queuePostDeployProjectionRebuild,
+  runNightlyCatalogMaintenance,
+} from "./scheduled/catalog-projections";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -454,6 +458,12 @@ async function runScheduledMaintenanceInner(
   if (handoffEventsPruned > 0) {
     console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
   }
+
+  // The first tick of a new API version heals writes the previous version
+  // committed after the migration (scheduled/catalog-projections.ts).
+  const postDeployRebuild = await timed("post_deploy_projection_rebuild", () =>
+    queuePostDeployProjectionRebuild(env)).catch(() => false);
+  if (postDeployRebuild) console.log("[scheduled] Queued the post-deploy catalogue projection rebuild");
 
   // Once a day: sales stats, the queued projection rebuild and a bounded
   // recommendation refresh (scheduled/catalog-projections.ts).

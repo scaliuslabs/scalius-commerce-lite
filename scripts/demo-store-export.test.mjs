@@ -482,6 +482,12 @@ describe("demo store export bundle", () => {
       .prepare("SELECT c.slug AS slug FROM categories_fts f JOIN categories c ON c.rowid = f.rowid WHERE categories_fts MATCH 'Lighting'")
       .all();
     expect(matchedCategories.map((row) => row.slug)).toEqual(["lighting"]);
+    // The seed ends by filling the catalogue projections (migration 0091's
+    // statements), so the listings of a freshly seeded store are not empty.
+    expect(target.prepare("SELECT count(*) AS total FROM product_buyer_state").get().total)
+      .toBe(target.prepare("SELECT count(*) AS total FROM products").get().total);
+    expect(target.prepare("SELECT is_public AS isPublic, brand_id AS brandId FROM product_buyer_state WHERE product_id = 'prod_halo'").get())
+      .toEqual({ isPublic: 1, brandId: "brd_halo_lighting" });
     target.close();
   });
 });
@@ -573,17 +579,17 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0090_something_else' WHERE version = 90");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0091_something_else' WHERE version = 91");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 90\/0090_something_else .* can only be exported at revision 90\/0090_catalogue_schema/su);
+      .rejects.toThrow(/is at schema revision 91\/0091_something_else .* can only be exported at revision 91\/0091_catalogue_projection_fill/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 90`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 91`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
