@@ -83,7 +83,7 @@ function asDate(value: number | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 const publishedDate = asDate(article.publishedAt);
-const updatedDate = asDate(article.updatedAt);
+const updatedDate = asDate(article.updatedAt ?? null);
 const displayDate = publishedDate
   ? new Intl.DateTimeFormat("en", {
       dateStyle: "long",

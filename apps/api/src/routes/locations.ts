@@ -1,10 +1,16 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { deps } from "@scalius/core/cache-deps";
 
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, asc, like, count } from "drizzle-orm";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+// Every read here is of delivery locations: one key covers them all.
+app.use("*", async (_c, next) => {
+  deps.locations();
+  await next();
+});
 
 const publicDeliveryLocationSchema = z.object({
   id: z.string().max(128),

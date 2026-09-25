@@ -26,6 +26,7 @@ import {
 } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
+import { deps } from "../../cache-deps";
 import {
     AppError,
     ConflictError,
@@ -1357,6 +1358,7 @@ export async function getPublishedNavigationMenuTree(
     menuId: string,
     input: { maxItems?: number } = {},
 ) {
+    deps.navigation(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
@@ -1519,6 +1521,7 @@ export async function listPublishedNavigationMenuItems(
         cursor?: NavigationItemCursor;
     } = {},
 ) {
+    deps.navigation(menuId);
     const menu = await getNavigationMenuAuthority(db, menuId);
     if (menu.deletedAt || menu.publishedRevision == null) {
         throw new NotFoundError("Published menu not found.");
@@ -1740,6 +1743,8 @@ export async function saveNavigationPlacement(
 }
 
 export async function getNavigationPlacementManifest(db: Database) {
+    // Every enabled placement and its menu's published revision.
+    deps.anyNavigation();
     const rows = await db
         .select({
             id: navigationPlacements.id,

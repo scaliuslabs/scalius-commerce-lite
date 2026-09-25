@@ -2297,7 +2297,6 @@ export type GetApiV1HeroSlidersResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             } | null;
             mobile?: {
                 id: string;
@@ -2316,7 +2315,6 @@ export type GetApiV1HeroSlidersResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             } | null;
             slider?: {
                 id: string;
@@ -2416,7 +2414,6 @@ export type GetApiV1HeroSlidersByIdResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             };
         };
     };
@@ -3123,9 +3120,7 @@ export type GetApiV1PagesResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             }>;
             pagination: {
@@ -3228,9 +3223,7 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -3316,9 +3309,7 @@ export type GetApiV1PagesByIdResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -4076,9 +4067,7 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -12091,6 +12080,9 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
     200: {
         success: true;
         data: {
+            /**
+             * Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees.
+             */
             language: {
                 id: string;
                 name: string;
@@ -12108,9 +12100,6 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: NullableTimestamp;
             };
         };
     };
@@ -12718,7 +12707,6 @@ export type GetApiV1ShippingMethodsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
         };
     };
@@ -65624,6 +65612,9 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
     200: {
         success: true;
         data: {
+            /**
+             * Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees.
+             */
             language: {
                 id: string;
                 name: string;
@@ -65641,9 +65632,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: NullableTimestamp;
             };
         };
     };

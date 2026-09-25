@@ -495,7 +495,8 @@ export interface Page {
   publishedAt: number | null;
   sortOrder: number;
   createdAt: number;
-  updatedAt: number;
+  /** Articles only: CMS page reads leave it out. */
+  updatedAt?: number;
   deletedAt: number | null;
 }
 
@@ -799,7 +800,6 @@ export interface ShippingMethod {
   isActive: boolean;
   sortOrder: number;
   createdAt: string | null;
-  updatedAt: string | null;
 }
 
 export interface AnalyticsConfig {

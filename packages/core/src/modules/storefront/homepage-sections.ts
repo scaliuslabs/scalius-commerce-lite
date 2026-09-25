@@ -7,6 +7,7 @@ import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
 import { and, notInArray, sql } from "drizzle-orm";
 import { getCurrentMediaUrl } from "../../integrations/storage";
+import { deps } from "../../cache-deps";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
 
@@ -24,6 +25,7 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     resolve(results: readonly unknown[], offset: number): HomeMediaAsset[];
 } {
     if (mediaIds.length === 0) return { statements: [], resolve: () => [] };
+    deps.mediaItems(mediaIds);
     // Only the id set is an indexable condition: with `kind = 'image'` in the
     // WHERE, SQLite drives the lookup from the kind index and reads every
     // image in the library (75k rows at 30k products). Kind is checked on the

@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
+import { withTrackedPlatformEnv } from "./runtime-env";
 import {
   getRequestCorrelation,
   requestCorrelationMiddleware,
@@ -55,7 +56,12 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
   app.use("*", requestCorrelationMiddleware);
 
   app.use("*", async (c, next) => {
-    c.set("db", getDb(c.env));
+    const db = getDb(c.env);
+    c.set("db", db);
+    // A public render inside a dependency scope reads the platform origins
+    // (media URL, store URL, CORS) from the tracked settings row, never the
+    // KV hint composed at Worker entry. Outside a scope nothing changes.
+    c.env = await withTrackedPlatformEnv(c.env as Env, db, c.req.url);
     await withPublicMediaUrl(
       getR2PublicUrl(c.env, c.req.url),
       () => next(),
