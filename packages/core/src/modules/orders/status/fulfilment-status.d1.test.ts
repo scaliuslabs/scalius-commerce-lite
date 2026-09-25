@@ -16,7 +16,7 @@ import { updateOrderStatusFromShipment } from "../../delivery/tracking";
 import { bulkConfirmOrders, updateOrderStatus } from "./lifecycle";
 import { bulkFulfillOrders } from "../../fulfilment/bulk";
 import { createFulfillmentShipment } from "../../fulfilment/shipments";
-import { markParcelReturned } from "../../fulfilment/ledger";
+import { markParcelReturned, recordOrderFulfilment } from "../../fulfilment/ledger";
 import { markOrderDelivered, processCodAction } from "../../fulfilment/delivery-outcomes";
 
 /**
@@ -207,5 +207,102 @@ describe("fulfilment status only follows real parcels", () => {
         const { version } = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id);
         await archiveOrders(db, [{ id, expectedVersion: version }]);
         expect(one<{ archived_at: number | null }>("SELECT archived_at FROM orders WHERE id = ?", id).archived_at).not.toBeNull();
+    });
+});
+
+/**
+ * Wave A (F6, F7, F8, F12): pickup and service orders reach delivered only
+ * through their real action with money settled, never ship, and can't be
+ * cancelled once handed over; returns come only from handed-over physical
+ * lines.
+ */
+describe("fulfilment status for pickup and service lines", () => {
+    let sqlite: DatabaseSync;
+    let db: Database;
+
+    beforeEach(() => {
+        ({ sqlite, db } = createSqliteD1Database());
+        sqlite.exec(`
+            INSERT INTO products (id, name, slug, price_minor, is_active) VALUES
+              ('product_1', 'Kurta', 'kurta', 80000, 1), ('product_svc', 'Fitting', 'fitting', 30000, 1);
+            INSERT INTO product_variants
+              (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
+            VALUES ('variant_1', 'product_1', 'KURTA-M', 80000, 5, 0, 0, 1, 1, 'physical'),
+                   ('variant_svc', 'product_svc', 'FIT-1', 30000, 0, 0, 0, 1, 0, 'service');
+            INSERT INTO shipping_methods (id, name, fee_minor, kind, pickup_address, pickup_hours)
+            VALUES ('pickup', 'Collect in store', 0, 'pickup', 'Shop 4, Gulshan 1', '10am-8pm');
+            INSERT INTO user (id, name, email) VALUES ('admin_1', 'Nadia', 'nadia@example.test');
+        `);
+    });
+
+    afterEach(() => sqlite.close());
+
+    const one = <T = Record<string, unknown>>(query: string, ...params: Array<string | number>) =>
+        sqlite.prepare(query).get(...params) as T;
+
+    async function order(items: Array<{ productId: string; variantId: string; quantity: number }>, pickup = false) {
+        const { id } = await createOrder(db, {
+            requestKey: crypto.randomUUID(),
+            customerName: "Rahim Uddin",
+            customerPhone: "+8801712345601",
+            customerEmail: null,
+            ...(pickup ? { shippingMethodId: "pickup" } : {}),
+            notes: null,
+            items,
+            discountAmount: null,
+            shippingCharge: 0,
+        } as never, "admin_1");
+        return id;
+    }
+
+    it("never ships an order that ships nothing, and delivers it only by the real action (F6, F7)", async () => {
+        const id = await order([{ productId: "product_svc", variantId: "variant_svc", quantity: 1 }]);
+        await expect(updateOrderStatus(db, id, "shipped")).rejects.toThrow();
+        await expect(markOrderDelivered(db, id)).rejects.toThrow("Send the order first.");
+        await expect(updateOrderStatus(db, id, "delivered")).rejects.toThrow();
+        const done = await recordOrderFulfilment(db, id, { requestKey: "svc", kind: "service" }, { type: "admin", id: "admin_1" });
+        expect(done).toMatchObject({ orderStatus: "confirmed", awaitingPayment: true });
+        await processCodAction(db, id, { action: "collected", collectedBy: "Technician", collectedAmount: 300 });
+        expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id)).toEqual({ status: "delivered", fulfillment_status: "complete" });
+    });
+
+    it("refuses cancel once a pickup was handed over and returns only what was collected (F8, F12)", async () => {
+        const id = await order([
+            { productId: "product_1", variantId: "variant_1", quantity: 2 },
+            { productId: "product_svc", variantId: "variant_svc", quantity: 1 },
+        ], true);
+        const lines = sqlite.prepare("SELECT id, fulfillment_type FROM order_items WHERE order_id = ? ORDER BY fulfillment_type").all(id) as Array<{ id: string; fulfillment_type: string }>;
+        expect(lines.map((line) => line.fulfillment_type)).toEqual(["pickup", "service"]);
+        await recordOrderFulfilment(db, id, { requestKey: "pick", kind: "pickup" }, { type: "admin", id: "admin_1" });
+        await expect(updateOrderStatus(db, id, "cancelled")).rejects.toThrow("picked up");
+
+        await recordOrderFulfilment(db, id, { requestKey: "svc", kind: "service", cashReceived: 1900 }, { type: "admin", id: "admin_1" });
+        expect(one("SELECT status FROM orders WHERE id = ?", id)).toEqual({ status: "delivered" });
+        const { version } = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id);
+        const [pickupLine, serviceLine] = lines;
+        await expect(createOrderReturn(db, id, {
+            commandKey: "ret-svc",
+            expectedOrderVersion: version,
+            reason: "Not needed",
+            notes: null,
+            lines: [{ orderItemId: serviceLine!.id, quantity: 1, reason: "Not needed" }],
+        }, { type: "admin", id: "admin_1" })).rejects.toThrow("can't be returned");
+        await expect(createOrderReturn(db, id, {
+            commandKey: "ret-many",
+            expectedOrderVersion: version,
+            reason: "Too big",
+            notes: null,
+            lines: [{ orderItemId: pickupLine!.id, quantity: 3, reason: "Too big" }],
+        }, { type: "admin", id: "admin_1" })).rejects.toThrow("more than was sent");
+        const created = await createOrderReturn(db, id, {
+            commandKey: "ret-pickup",
+            expectedOrderVersion: version,
+            reason: "Too big",
+            notes: null,
+            lines: [{ orderItemId: pickupLine!.id, quantity: 2, reason: "Too big" }],
+        }, { type: "admin", id: "admin_1" });
+        expect(created.returnId).toEqual(expect.any(String));
+        // A returned item stays fulfilled (Shopify): the ledger is untouched.
+        expect(one("SELECT fulfilled_quantity FROM order_items WHERE id = ?", pickupLine!.id)).toEqual({ fulfilled_quantity: 2 });
     });
 });

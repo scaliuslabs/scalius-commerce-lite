@@ -35,6 +35,17 @@ const orderItemSchema = z.object({
   returnedQuantity: z.number().int().nonnegative().optional(),
 });
 
+/** One invoice line as frozen in the invoice snapshot. */
+const invoiceItemSchema = orderItemSchema.extend({
+  /** Buyer inputs printed under the line; absent on invoices issued before Wave A. */
+  properties: z.array(z.object({
+    label: z.string(),
+    displayValue: z.string(),
+    /** Surcharge per unit in minor units; 0 when free. */
+    priceMinor: z.number().int(),
+  })).optional(),
+});
+
 const invoiceOrderSchema = z.object({
   id: z.string(),
   orderNumber: z.number().int().nullable().optional(),
@@ -85,7 +96,7 @@ const invoiceOrderSchema = z.object({
   })).optional(),
   createdAt: z.union([z.string(), z.number()]),
   updatedAt: z.union([z.string(), z.number()]),
-  items: z.array(orderItemSchema),
+  items: z.array(invoiceItemSchema),
 });
 
 const businessInfoSchema = z.object({
