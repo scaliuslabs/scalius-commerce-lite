@@ -21,7 +21,7 @@ function order(overrides: Partial<OrderEditSource> = {}): OrderEditSource {
         hasInvoiceHistory: false,
         hasPaymentPlan: false,
         hasPromotionAllocation: false,
-        hasNonPendingItem: false,
+        hasHandedOverItem: false,
         hasCleanCodTracking: true,
         ...overrides,
     };

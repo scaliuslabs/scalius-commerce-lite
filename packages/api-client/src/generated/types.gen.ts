@@ -9623,7 +9623,6 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 discountAmountMinor: number | null;
                 taxableAmountMinor: number | null;
                 taxAmountMinor: number;
-                fulfillmentStatus: string;
                 /**
                  * How the order line reaches the buyer, frozen when the order is placed.
                  */
@@ -9737,7 +9736,6 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
                 createdAt: NullableTimestamp;
@@ -9953,7 +9951,6 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
                 createdAt: NullableTimestamp;
@@ -9970,7 +9967,6 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
                 createdAt: NullableTimestamp;
@@ -14559,7 +14555,6 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     label: string;
                     actionLabel: string;
                     reason: string;
-                    message: string | null;
                     submittedAt: string | null;
                     resolvedAt: string | null;
                     createdAt: string | null;
@@ -14804,7 +14799,6 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 submittedAt: string | null;
                 resolvedAt: string | null;
                 createdAt: string | null;
@@ -14821,7 +14815,6 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 submittedAt: string | null;
                 resolvedAt: string | null;
                 createdAt: string | null;
@@ -28732,7 +28725,6 @@ export type GetApiV1AdminShipmentsByIdResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: NullableTimestamp;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -28812,7 +28804,6 @@ export type PostApiV1AdminShipmentsByIdCheckStatusResponses = {
                 note: string | null;
                 metadata: string | null;
                 lastChecked: string;
-                shipmentItems: string | null;
                 shipmentAmount: number | null;
                 isFinalShipment: boolean | null;
                 createdAt: string | number;
@@ -42500,93 +42491,6 @@ export type PostApiV1AdminOrdersByIdMarkDeliveredResponses = {
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredResponse = PostApiV1AdminOrdersByIdMarkDeliveredResponses[keyof PostApiV1AdminOrdersByIdMarkDeliveredResponses];
 
-export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedData = {
-    body?: never;
-    path: {
-        id: string;
-        shipmentId: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned';
-};
-
-export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors];
-
-export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses = {
-    /**
-     * Parcel back; its items can be sent again or the order cancelled
-     */
-    200: {
-        success: true;
-        data: {
-            orderId: string;
-            shipmentId: string;
-            quantity: number;
-            replayed: boolean;
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses];
-
 export type GetApiV1AdminOrdersByIdCodData = {
     body?: never;
     path: {
@@ -42718,145 +42622,6 @@ export type PostApiV1AdminOrdersByIdCodResponses = {
 
 export type PostApiV1AdminOrdersByIdCodResponse = PostApiV1AdminOrdersByIdCodResponses[keyof PostApiV1AdminOrdersByIdCodResponses];
 
-export type GetApiV1AdminOrdersByIdFulfillData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/fulfill';
-};
-
-export type GetApiV1AdminOrdersByIdFulfillResponses = {
-    /**
-     * Order shipments
-     */
-    200: {
-        success: true;
-        data: {
-            shipments: Array<{
-                id: string;
-                orderId: string;
-                providerId: string | null;
-                providerType: string | null;
-                status: string;
-                rawStatus: string | null;
-                externalId: string | null;
-                trackingId: string | null;
-                trackingUrl: string | null;
-                courierName: string | null;
-                note: string | null;
-                metadata: string | null;
-                lastChecked: NullableTimestamp;
-                shipmentItems: string | null;
-                shipmentAmount: number | null;
-                isFinalShipment: boolean | null;
-                createdAt: string | number;
-                updatedAt: string | number;
-            }>;
-        };
-    };
-};
-
-export type GetApiV1AdminOrdersByIdFulfillResponse = GetApiV1AdminOrdersByIdFulfillResponses[keyof GetApiV1AdminOrdersByIdFulfillResponses];
-
-export type PostApiV1AdminOrdersByIdFulfillData = {
-    body: {
-        requestKey?: string;
-        items?: Array<{
-            itemId: string;
-            quantity: number;
-        }>;
-        itemIds?: Array<string>;
-        trackingId?: string;
-        trackingUrl?: string;
-        courierName?: string;
-        note?: string;
-        shipmentAmount?: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/fulfill';
-};
-
-export type PostApiV1AdminOrdersByIdFulfillErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdFulfillError = PostApiV1AdminOrdersByIdFulfillErrors[keyof PostApiV1AdminOrdersByIdFulfillErrors];
-
-export type PostApiV1AdminOrdersByIdFulfillResponses = {
-    /**
-     * Fulfillment created
-     */
-    201: {
-        success: true;
-        data: {
-            shipmentId: string;
-            isFinalShipment: boolean;
-            fulfillmentStatus: string;
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdFulfillResponse = PostApiV1AdminOrdersByIdFulfillResponses[keyof PostApiV1AdminOrdersByIdFulfillResponses];
-
 export type GetApiV1AdminOrdersByIdShipmentsData = {
     body?: never;
     path: {
@@ -42886,7 +42651,6 @@ export type GetApiV1AdminOrdersByIdShipmentsResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: NullableTimestamp;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -42985,7 +42749,6 @@ export type PostApiV1AdminOrdersByIdShipmentsResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: NullableTimestamp;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -43128,7 +42891,6 @@ export type GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: NullableTimestamp;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -43240,7 +43002,6 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: string;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -43356,7 +43117,6 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses = {
             note: string | null;
             metadata: string | null;
             lastChecked: string;
-            shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
@@ -44069,7 +43829,6 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     price: number;
                     productName: string | null;
                     variantLabel: string | null;
-                    fulfillmentStatus: string | null;
                     unitPriceMinor: number | null;
                     lineSubtotalMinor: number | null;
                     discountAmountMinor: number | null;
@@ -44290,7 +44049,6 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     price: number;
                     productName: string | null;
                     variantLabel: string | null;
-                    fulfillmentStatus: string | null;
                     unitPriceMinor: number | null;
                     lineSubtotalMinor: number | null;
                     discountAmountMinor: number | null;
@@ -44572,7 +44330,6 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 returnId: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
@@ -44590,7 +44347,6 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 returnId: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
@@ -47580,8 +47336,6 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 productName: string | null;
                 productImage: string | null;
                 variantLabel: string | null;
-                fulfillmentStatus: string;
-                shippedQuantity: number;
                 inventoryTracked: boolean;
                 unitPriceMinor: number | null;
                 lineSubtotalMinor: number | null;
@@ -47725,7 +47479,6 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 label: string;
                 actionLabel: string;
                 reason: string;
-                message: string | null;
                 returnId: string | null;
                 submittedAt: NullableTimestamp;
                 resolvedAt: NullableTimestamp;
@@ -47986,8 +47739,6 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             productName: string | null;
             productImage: string | null;
             variantLabel: string | null;
-            fulfillmentStatus: string;
-            shippedQuantity: number;
             inventoryTracked: boolean;
             unitPriceMinor: number | null;
             lineSubtotalMinor: number | null;

@@ -69,14 +69,6 @@ describe("fulfilment groups", () => {
     expect(groups.map((group) => [group.type, group.units])).toEqual([["ship", 2], ["service", 1], ["gift_card", 1]]);
   });
 
-  it("treats lines placed before the ledger as shipped lines", () => {
-    const legacy = { ...line("k1", "Kurta", { quantity: 2 }), fulfillmentType: undefined, fulfilledQuantity: undefined, shippedQuantity: 2 };
-    expect(unfulfilledGroups(order({ items: [legacy] }))).toEqual([]);
-    const done = fulfilledGroups(order({ items: [legacy] }));
-    expect(done).toHaveLength(1);
-    expect(done[0]).toMatchObject({ fulfillment: null, type: "ship", units: 2 });
-  });
-
   it("lists active fulfilments oldest first and leaves voided ones out", () => {
     const groups = fulfilledGroups(order({
       items: [line("k1", "Kurta", { quantity: 2, fulfilledQuantity: 2 })],

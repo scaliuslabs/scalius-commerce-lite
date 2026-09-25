@@ -21,7 +21,6 @@ import {
     PaymentMethod,
     PaymentStatus,
     FulfillmentStatus,
-    ItemFulfillmentStatus,
 } from "@scalius/database/schema";
 import {
     prepareStockReservationBatch,
@@ -245,8 +244,7 @@ function amendmentCommitGuard(orderId: string, expectedVersion: number) {
           AND NOT EXISTS (
             SELECT 1 FROM ${orderItems}
             WHERE ${orderItems.orderId} = ${orderId}
-              AND (${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}
-                OR ${orderItems.fulfilledQuantity} > 0)
+              AND ${orderItems.fulfilledQuantity} > 0
           )
     )`;
 }
@@ -528,7 +526,6 @@ export async function confirmManualOrderAmendment(
             discountAmountMinor: preparedItem.lineTax.discountMinor,
             taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
             taxAmountMinor: preparedItem.lineTax.taxMinor,
-            fulfillmentStatus: ItemFulfillmentStatus.PENDING,
         };
         if (preparedItem.retained) {
             statements.push(

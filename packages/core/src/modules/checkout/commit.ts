@@ -441,8 +441,6 @@ function buildOrderWriteBatch(
             // multi-row insert binds every defaulted column otherwise, and
             // 18 bound values a row keep 5 rows a statement (D1 allows 100).
             // The ledger alone moves fulfilled_quantity afterwards.
-            fulfillmentStatus: sql`'pending'`,
-            shippedQuantity: sql`0`,
             fulfilledQuantity: sql`0`,
             fulfillmentType: item.fulfillmentType ?? "ship",
             properties: item.properties ?? null,

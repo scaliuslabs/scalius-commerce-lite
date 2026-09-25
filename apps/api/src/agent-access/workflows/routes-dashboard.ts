@@ -809,8 +809,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     tags: ["orders", "fulfillment", "tracking"],
     operationIds: [
       "dashboard.orders.get",
-      "dashboard.orders.fulfill",
-      "dashboard.orders.fulfillment_get",
+      "dashboard.orders.fulfillment_create",
     ],
     requiresFacts: true,
     requiresConfirmation: true,
@@ -818,7 +817,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     rules: [
       "Read the exact order and current fulfillment state first.",
       "Require merchant-supplied shipment and tracking facts.",
-      "Confirm fulfillment and verify the resulting shipment record.",
+      "Confirm fulfillment and verify the order's fulfillments and shipment record.",
     ],
   },
   {

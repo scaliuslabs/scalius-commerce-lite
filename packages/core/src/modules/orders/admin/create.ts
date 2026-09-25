@@ -12,7 +12,6 @@ import {
     OrderStatus,
     PaymentMethod,
     FulfillmentStatus,
-    ItemFulfillmentStatus,
 } from "@scalius/database/schema";
 import { prepareStockReservationBatch } from "../../inventory";
 import type { ReservationEntry } from "../../inventory";
@@ -311,7 +310,6 @@ export async function createOrder(
             discountAmountMinor: lineTax.discountMinor,
             taxableAmountMinor: lineTax.taxableAmountMinor,
             taxAmountMinor: lineTax.taxMinor,
-            fulfillmentStatus: ItemFulfillmentStatus.PENDING,
             fulfillmentType: item.fulfillmentType,
             properties: item.properties,
             propertiesPriceMinor: item.propertiesPriceMinor,

@@ -23,8 +23,8 @@ const en = orderDetailMessages.en;
 
 const item = {
   id: "item_1", productId: "p1", variantId: "v1", quantity: 3, price: 500,
-  productName: "Shirt", productImage: null, variantLabel: "M", fulfillmentStatus: "delivered",
-} as OrderItem;
+  productName: "Shirt", productImage: null, variantLabel: "M", fulfillmentType: "ship", fulfilledQuantity: 3,
+} satisfies OrderItem;
 const orderReturn = {
   id: "ret_1", orderId: "ord_1", version: 4, status: "approved", reason: "Wrong size",
   lines: [{

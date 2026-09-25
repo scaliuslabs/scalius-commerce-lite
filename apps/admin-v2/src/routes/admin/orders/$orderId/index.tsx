@@ -56,7 +56,6 @@ function toOrderShipment(shipment: OrderShipmentDto, fallbackTimestamp: OrderTim
     metadata: typeof metadata === "string" || (metadata && typeof metadata === "object" && !Array.isArray(metadata))
       ? metadata as OrderShipment["metadata"]
       : null,
-    shipmentItems: typeof raw.shipmentItems === "string" ? raw.shipmentItems : null,
     shipmentAmount: typeof raw.shipmentAmount === "number" ? raw.shipmentAmount : null,
     isFinalShipment: typeof raw.isFinalShipment === "boolean" ? raw.isFinalShipment : null,
     createdAt,

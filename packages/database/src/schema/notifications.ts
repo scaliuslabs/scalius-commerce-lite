@@ -2,8 +2,7 @@
 // (an order, a conversation; Wave B adds gift cards and digital deliveries)
 // and audience. It is written in the same batch as the fact it announces;
 // queue messages carry only the outbox id, and recipients are resolved at
-// send time. Replaces order_notification_outbox and its receipts, which stay
-// until the Wave A contract migration.
+// send time.
 
 import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";

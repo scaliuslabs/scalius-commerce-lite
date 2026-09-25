@@ -572,7 +572,6 @@ export interface OrderReceiptSupportRequest {
   label: string;
   actionLabel: string;
   reason: string;
-  message: string | null;
   submittedAt: string | null;
   resolvedAt: string | null;
   createdAt: string | null;

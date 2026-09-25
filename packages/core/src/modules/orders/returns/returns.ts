@@ -295,26 +295,21 @@ const returnReceiptFields = {
 
 /**
  * Units of a line that physically reached the buyer and can come back
- * (F12): the ledger's handed-over quantity for ship and pickup lines. A line
- * the previous API marked shipped counts in full until the contract
- * migration, exactly as the return triggers bound it.
+ * (F12): the ledger's handed-over quantity for ship and pickup lines, exactly
+ * as the return triggers bound it.
  */
 const returnableLineColumns = {
   fulfilledQuantity: orderItems.fulfilledQuantity,
   fulfillmentType: orderItems.fulfillmentType,
   quantity: orderItems.quantity,
-  legacyStatus: orderItems.fulfillmentStatus,
 };
 
 function handedOverQuantity(item: {
   fulfilledQuantity: number;
   fulfillmentType: string;
-  quantity: number;
-  legacyStatus: string;
 }): number {
   if (item.fulfillmentType !== "ship" && item.fulfillmentType !== "pickup") return 0;
-  const legacy = item.legacyStatus === "shipped" || item.legacyStatus === "delivered" ? item.quantity : 0;
-  return Math.max(item.fulfilledQuantity, legacy);
+  return item.fulfilledQuantity;
 }
 
 async function loadRemainingReturnableByItem(

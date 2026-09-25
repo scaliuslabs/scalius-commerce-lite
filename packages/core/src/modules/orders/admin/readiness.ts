@@ -36,7 +36,7 @@ export interface OrderEditSource {
     hasInvoiceHistory: number | boolean;
     hasPaymentPlan: number | boolean;
     hasPromotionAllocation: number | boolean;
-    hasNonPendingItem: number | boolean;
+    hasHandedOverItem: number | boolean;
     hasCleanCodTracking: number | boolean;
 }
 
@@ -59,7 +59,7 @@ export function buildOrderEditReadiness(order: OrderEditSource): OrderEditReadin
                 ? "closed"
                 : order.fulfillmentStatus !== FulfillmentStatus.PENDING
                     || Boolean(order.hasShipmentHistory)
-                    || Boolean(order.hasNonPendingItem)
+                    || Boolean(order.hasHandedOverItem)
                     ? "shipped"
                     : order.shipmentClaimId
                         ? "busy"

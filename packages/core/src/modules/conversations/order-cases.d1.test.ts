@@ -34,9 +34,9 @@ describe("support requests as cases on the order thread", () => {
     });
     const thread = await readOrderThread(db, "order_1");
     expect(result.conversationId).toBe(thread?.id);
-    expect(sqlite.prepare("SELECT conversation_id, message FROM order_support_requests").get())
-      .toEqual({ conversation_id: thread?.id, message: null });
-    expect(sqlite.prepare("SELECT count(*) AS n FROM order_support_request_events").get()).toEqual({ n: 0 });
+    // The buyer's words live on the thread only.
+    expect(sqlite.prepare("SELECT conversation_id FROM order_support_requests").get())
+      .toEqual({ conversation_id: thread?.id });
 
     const buyerView = await getBuyerThread(db, thread!);
     expect(buyerView.messages.map((message) => [message.kind, message.from, message.eventKind, message.body])).toEqual([

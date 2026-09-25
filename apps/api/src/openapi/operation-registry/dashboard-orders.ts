@@ -66,11 +66,6 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     },
   },
   "dashboard.orders.form_data": {},
-  "dashboard.orders.fulfill": {
-    openWorld: true,
-    batch: "forbidden",
-  },
-  "dashboard.orders.fulfillment_get": {},
   "dashboard.orders.fulfillment_create": {
     idempotency: "required",
     batch: "forbidden",
@@ -205,9 +200,6 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.mark_delivered": {
     openWorld: true,
-    batch: "forbidden",
-  },
-  "dashboard.orders.parcel_returned": {
     batch: "forbidden",
   },
   "dashboard.shipments.delete": {

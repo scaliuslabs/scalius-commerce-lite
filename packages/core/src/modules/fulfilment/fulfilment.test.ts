@@ -6,7 +6,6 @@ import {
   paymentSessionAttempts,
   refundAttempts,
   CodStatus,
-  ItemFulfillmentStatus,
   OrderStatus,
   PaymentMethod,
   PaymentRecordStatus,
@@ -649,13 +648,10 @@ describe("orders fulfillment side-effect ordering", () => {
     );
     expect(updates).toContainEqual(expect.objectContaining({ inventoryAction: "deducted" }));
     expect(updates).toContainEqual(expect.objectContaining({
-      fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
       status: ShipmentStatus.DELIVERED,
       rawStatus: ShipmentStatus.DELIVERED,
     }));
-    expect(batches).toHaveLength(1);
+    expect(batches).toHaveLength(0);
   });
 
   it("rolls back the delivered claim when COD collection recording fails", async () => {
@@ -849,16 +845,13 @@ describe("orders fulfillment side-effect ordering", () => {
       collectedAmount: 100,
     });
 
-    expect(updates).toHaveLength(3);
+    expect(updates).toHaveLength(2);
     expect(updates).toContainEqual(expect.objectContaining({ inventoryAction: "deducted" }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
-    }));
     expect(updates).toContainEqual(expect.objectContaining({
       status: ShipmentStatus.DELIVERED,
       rawStatus: ShipmentStatus.DELIVERED,
     }));
-    expect(batches).toHaveLength(1);
+    expect(batches).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
     expect(mocks.recordCODCollection).toHaveBeenCalled();
   });

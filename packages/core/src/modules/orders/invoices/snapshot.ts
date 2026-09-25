@@ -25,7 +25,6 @@ export interface InvoiceOrderItemSnapshot {
   price: number;
   productName: string | null;
   variantLabel: string | null;
-  fulfillmentStatus: string | null;
   unitPriceMinor: number | null;
   lineSubtotalMinor: number | null;
   discountAmountMinor: number | null;
@@ -221,7 +220,6 @@ export function snapshotInvoiceOrder(
       price: item.price,
       productName: item.productName,
       variantLabel: item.variantLabel,
-      fulfillmentStatus: item.fulfillmentStatus ?? null,
       unitPriceMinor: item.unitPriceMinor ?? null,
       lineSubtotalMinor: item.lineSubtotalMinor ?? null,
       discountAmountMinor: item.discountAmountMinor ?? null,

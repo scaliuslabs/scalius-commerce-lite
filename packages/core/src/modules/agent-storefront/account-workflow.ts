@@ -673,11 +673,11 @@ export async function createAgentStorefrontOrderSupportRequest(
   const state = await getReceiptOrderSupportRequestStateForOrder(db, order);
   const normalizedReason = input.reason.trim();
   const normalizedMessage = input.message?.trim() || null;
+  // The buyer's words go to the order thread; the case itself is its type and reason.
   const replay = state.supportRequests.find((request) => (
     request.active
     && request.type === input.type
     && request.reason === normalizedReason
-    && (request.message?.trim() || null) === normalizedMessage
   ));
   if (replay) {
     return {

@@ -98,7 +98,6 @@ export async function readInvoiceOrderSource(
       quantity: orderItems.quantity,
       productName: orderItems.productName,
       variantLabel: orderItems.variantLabel,
-      fulfillmentStatus: orderItems.fulfillmentStatus,
       unitPriceMinor: orderItems.unitPriceMinor,
       lineSubtotalMinor: orderItems.lineSubtotalMinor,
       discountAmountMinor: orderItems.discountAmountMinor,

@@ -7,21 +7,18 @@ export const FULFILMENT_GROUP_ORDER: readonly FulfillmentType[] = ["ship", "pick
 /** Order statuses where units can be handed over. */
 const HANDOVER_ORDER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
 
-/**
- * How a line reaches the buyer. Lines placed before Wave A carry no type:
- * they shipped (every order used to).
- */
+/** How a line reaches the buyer, frozen when the order was placed. */
 export function lineFulfillmentType(item: Pick<OrderItem, "fulfillmentType">): FulfillmentType {
-  return item.fulfillmentType ?? "ship";
+  return item.fulfillmentType;
 }
 
-/** Units of a line handed over so far (the ledger projection; the courier count before it). */
-export function fulfilledUnits(item: Pick<OrderItem, "fulfilledQuantity" | "shippedQuantity">): number {
-  return Math.max(0, item.fulfilledQuantity ?? item.shippedQuantity ?? 0);
+/** Units of a line handed over so far (the ledger projection). */
+export function fulfilledUnits(item: Pick<OrderItem, "fulfilledQuantity">): number {
+  return Math.max(0, item.fulfilledQuantity);
 }
 
 /** Units of a line not handed over yet. */
-export function unfulfilledUnits(item: Pick<OrderItem, "quantity" | "fulfilledQuantity" | "shippedQuantity">): number {
+export function unfulfilledUnits(item: Pick<OrderItem, "quantity" | "fulfilledQuantity">): number {
   return Math.max(0, item.quantity - fulfilledUnits(item));
 }
 
