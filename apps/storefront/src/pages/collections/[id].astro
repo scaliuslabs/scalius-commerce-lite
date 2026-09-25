@@ -1,9 +1,8 @@
 ---
 import Layout from "@/layouts/Layout.astro";
-import CatalogListing from "@/components/catalog/CatalogListing.astro";
-import CatalogDescription from "@/components/catalog/CatalogDescription.astro";
+import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
-import RichContent from "@/components/RichContent.astro";
+import { catalogCategoryLinks } from "@/lib/catalog-listing";
 import { getCollectionByIdResult } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
@@ -16,10 +15,7 @@ import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import {
-  hasRenderableHtmlContent,
-  htmlToPlainText,
-} from "@scalius/shared/html-sanitize";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
@@ -28,7 +24,6 @@ import {
   productListMetaDescription,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
-import { ArrowLeft, Tags } from "lucide-react";
 
 const { id } = Astro.params;
 if (!id) {
@@ -171,111 +166,40 @@ const collectionJsonLd =
     }
   </Fragment>
 
-  <div class="min-h-screen bg-muted/30">
-    <section
-      class="border-b border-border bg-linear-to-b from-muted/30 to-background"
-    >
-      <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <nav class="mb-4 text-sm">
-          <ol class="flex items-center gap-2">
-            <li>
-              <a
-                href="/"
-                class="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Home
-              </a>
-            </li>
-            <li class="text-muted-foreground/50" aria-hidden="true">/</li>
-            <li>
-              <span class="font-medium text-foreground">{collection.name}</span>
-            </li>
-          </ol>
-        </nav>
-
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div class="max-w-2xl space-y-2">
-            <h1
-              class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
-            >
-              {collection.name}
-            </h1>
-            {
-              collectionDescription &&
-                hasRenderableHtmlContent(collectionDescription) &&
-                pagination.page === 1 && <CatalogDescription content={collectionDescription} />
-            }
-            {
-              categories.length > 0 && (
-                <div class="flex flex-wrap gap-2 pt-2">
-                  {categories.map((category) => (
-                    <a
-                      href={`/categories/${category.slug}`}
-                      class="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
-                    >
-                      {category.name}
-                    </a>
-                  ))}
-                </div>
-              )
-            }
-          </div>
-
-          <div
-            class="hidden items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-sm lg:flex"
-          >
-            <Tags className="h-4 w-4 text-muted-foreground" />
-            <span class="text-sm font-medium text-foreground">
-              {pagination.total} {pagination.total === 1 ? "product" : "products"}
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <CatalogListing
-        products={products}
-        pagination={pagination}
-        facets={facets}
-        priceRange={collection.priceRange}
-        queryState={queryState}
-        pathname={collectionPath}
-        resetPath={collectionPath}
-        searchLabel="Search this collection"
-        newestLabel={categories.length > 0 ? "Latest" : "Featured"}
-        countEndpoint={collectionPath}
-        currencySymbol={currencySymbol}
-        currencyCode={currencyCode}
-      >
-        <CatalogEmptyState
-          slot="empty"
-          title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
-          description={activeFilterCount > 0
-            ? "Try fewer filters or a different search."
-            : "Explore the rest of the catalog."}
-          actionHref={activeFilterCount > 0 ? collectionPath : "/search"}
-          actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
-        />
-      </CatalogListing>
-
-      {
-        collectionContent &&
-          hasRenderableHtmlContent(collectionContent) &&
-          !hasListingQuery && (
-            <section
-              class="mx-auto mt-10 max-w-4xl border-t border-border pt-8 sm:mt-12 sm:pt-10"
-              aria-label={`${collection.name} guide`}
-            >
-              <RichContent
-                content={collectionContent}
-                className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
-                processShortcodes={false}
-              />
-            </section>
-          )
-      }
-    </section>
-  </div>
+  <CatalogListingPage
+    kind="collection"
+    hero={{
+      title: collection.name,
+      description: pagination.page === 1 ? collectionDescription : null,
+      count: pagination.total,
+      links: categories.map((category) => ({ label: category.name, href: `/categories/${category.slug}` })),
+    }}
+    listing={{
+      products,
+      pagination,
+      facets,
+      priceRange: collection.priceRange,
+      queryState,
+      pathname: collectionPath,
+      resetPath: collectionPath,
+      searchLabel: "Search this collection",
+      newestLabel: categories.length > 0 ? "Latest" : "Featured",
+      countEndpoint: collectionPath,
+      currencySymbol,
+      currencyCode,
+      listingName: collection.name,
+      subListings: catalogCategoryLinks(categories),
+    }}
+    content={!hasListingQuery && collectionContent ? { html: collectionContent, label: `${collection.name} guide` } : null}
+  >
+    <CatalogEmptyState
+      slot="empty"
+      title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
+      description={activeFilterCount > 0
+        ? "Try fewer filters or a different search."
+        : "Explore the rest of the catalog."}
+      actionHref={activeFilterCount > 0 ? collectionPath : "/search"}
+      actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
+    />
+  </CatalogListingPage>
 </Layout>

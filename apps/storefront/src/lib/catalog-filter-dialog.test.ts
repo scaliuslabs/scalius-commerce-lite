@@ -154,6 +154,58 @@ describe("catalog filter dialog", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
+  it("opens a filter drawer at every width from any of its buttons and returns focus to the one used", () => {
+    const queries: string[] = [];
+    vi.stubGlobal("matchMedia", (query: string) => {
+      queries.push(query);
+      return { matches: query === "all", media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    });
+    document.querySelector("#filter-section")!.setAttribute("data-catalog-dialog", "drawer");
+    document.querySelector("main")!.insertAdjacentHTML(
+      "afterbegin",
+      '<button data-catalog-filter-toggle aria-controls="filter-section" aria-expanded="false">Filter</button>',
+    );
+    setupCatalogFilterDialog();
+    expect(queries).toEqual(["all"]);
+
+    const barToggle = document.querySelector<HTMLButtonElement>("[data-catalog-filter-toggle]")!;
+    const dialog = document.querySelector<HTMLElement>("#filter-section")!;
+    barToggle.click();
+    expect(dialog.classList.contains("hidden")).toBe(false);
+    expect(barToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector("#mobile-filter-toggle")!.getAttribute("aria-expanded")).toBe("true");
+
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(dialog.classList.contains("hidden")).toBe(true);
+    expect(document.activeElement).toBe(barToggle);
+  });
+
+  it("opens at a facet from an aspect chip", () => {
+    const dialog = document.querySelector<HTMLElement>("#filter-section")!;
+    dialog.insertAdjacentHTML(
+      "beforeend",
+      '<details id="catalog-facet-size"><summary>Size</summary><label><input type="checkbox"> M</label></details>',
+    );
+    document.querySelector("main")!.insertAdjacentHTML(
+      "afterbegin",
+      '<nav><a href="#catalog-facet-size" data-catalog-aspect>Size</a></nav>',
+    );
+    setupCatalogFilterDialog();
+
+    const chip = document.querySelector<HTMLAnchorElement>("a[data-catalog-aspect]")!;
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    chip.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(dialog.classList.contains("hidden")).toBe(false);
+    const group = document.querySelector<HTMLDetailsElement>("#catalog-facet-size")!;
+    expect(group.open).toBe(true);
+    expect(document.activeElement).toBe(group.querySelector("summary"));
+
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(chip);
+  });
+
   it("removes global listeners before rebinding after Astro navigation", () => {
     setupCatalogFilterDialog();
     const firstCleanup = (

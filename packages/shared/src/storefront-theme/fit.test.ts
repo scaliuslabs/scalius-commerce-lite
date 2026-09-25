@@ -130,6 +130,10 @@ describe("fallback resolution", () => {
     const resolvedSpec = resolve(spec);
     expect(resolvedSpec.blocks.product.below).toEqual(["description", "related"]);
     expect(resolvedSpec.blocks.listing.toolbar).not.toContain("subcategory-pills");
+    // Aspect chips read today's facets (the storefront omits them without a
+    // multi-value facet); the default listing has no per-page control.
+    expect(resolve(storefrontTemplateTheme("marketplace")).blocks.listing.toolbar).toContain("aspect-chips");
+    expect(resolve(base).blocks.listing.toolbar).toEqual(["breadcrumb", "result-count", "sort"]);
     // Sections whose data is missing are dropped (category tiles need two categories).
     expect(resolvedSpec.pages.home.map((section) => section.type)).not.toContain("category-tiles");
     expect(resolve(storefrontTemplateTheme("marketplace")).pages.home.map((section) => section.type)).toEqual(["hero", "deal-block"]);

@@ -1,0 +1,40 @@
+---
+// eBay's phone aspect chips: one chip per filterable facet under the phone
+// bar. A tap opens the filter sheet at that facet (lib/catalog-filter-dialog);
+// without JavaScript the chip is an in-page link to the same facet, which
+// the filter form then shows inline.
+import type { CatalogAspectChip } from "@/lib/catalog-listing";
+
+interface Props {
+  chips: CatalogAspectChip[];
+}
+
+const { chips } = Astro.props;
+---
+
+{chips.length > 0 && (
+  <nav aria-label="Filter by" class="catalog-chip-row -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
+    {chips.map((chip) => (
+      <a
+        href={`#${chip.anchor}`}
+        data-catalog-aspect
+        aria-haspopup="dialog"
+        class:list={[
+          "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium",
+          chip.selectedCount > 0
+            ? "border-foreground bg-foreground text-background"
+            : "border-border bg-background text-foreground",
+        ]}
+      >
+        <span class="max-w-[12rem] truncate">{chip.label}</span>
+        {chip.selectedCount > 0 && (
+          <span class="tabular-nums">
+            <span aria-hidden="true">({chip.selectedCount})</span>
+            <span class="sr-only">, {chip.selectedCount} selected</span>
+          </span>
+        )}
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </a>
+    ))}
+  </nav>
+)}
