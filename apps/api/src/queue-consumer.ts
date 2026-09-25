@@ -15,11 +15,13 @@
 //   notification     → ./queue-notifications.ts (outbox id only; order.notification is the legacy shape)
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
 //   media.render_variants → core media renderMissingMediaVariants (delayed after upload)
+//   catalog.recommendations.refresh / catalog.projections.rebuild → ./utils/catalog-jobs.ts
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@scalius/database/client";
+import { processCatalogQueueMessage, type CatalogQueueMessage } from "./utils/catalog-jobs";
 import {
   customerAuthOtpChallenges,
   orderPaymentRecoveryChallenges,
@@ -732,6 +734,15 @@ async function processQueueMessage(
       break;
     }
 
+    // ── Catalogue projections and recommendations ─────────────────────────
+    // Idempotent recomputations from their sources; a retry is harmless.
+
+    case "catalog.recommendations.refresh":
+    case "catalog.projections.rebuild": {
+      await processCatalogQueueMessage(payload, db, env, executionCtx);
+      break;
+    }
+
     default: {
       const messageType = (payload as Record<string, unknown>).type;
       console.warn("[Queue] Unsupported message type:", messageType);
@@ -750,6 +761,7 @@ export type QueueBody =
   | OrderNotificationQueueMessage
   | NotificationQueueMessage
   | MediaVariantsQueueMessage
+  | CatalogQueueMessage
   | OrderAutoFulfilQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 

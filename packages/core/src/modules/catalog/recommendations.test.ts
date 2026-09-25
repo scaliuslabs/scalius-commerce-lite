@@ -9,6 +9,8 @@ import {
     MAX_RECOMMENDATION_SOURCE_IDS,
 } from "./recommendations";
 import { getStorefrontProductBySlug } from "./product-page";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { refreshProductRecommendations } from "./recommendation-refresh";
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -84,6 +86,8 @@ function attribute(productId: string, attributeId: string, value: string): void 
 }
 
 async function recommend(productIds: string[], limit = 12) {
+    // Seeded with raw SQL: fill the stored buyer state as a release does.
+    await rebuildCatalogProjections(db);
     statements = [];
     statementParams = [];
     return getStorefrontProductRecommendations(db, { productIds, limit });
@@ -147,7 +151,8 @@ describe("product recommendations", () => {
             imageAlt: "Photo 0",
             secondaryImageUrl: null,
         });
-        expect(statements).toHaveLength(2);
+        // Never computed: the stored-list read, then the live ranking and card media.
+        expect(statements).toHaveLength(3);
     });
 
     it("treats products in the same dynamic collection as related, but only through published categories", async () => {
@@ -274,10 +279,58 @@ describe("product recommendations", () => {
         expect(plan.join("\n")).toMatch(/SEARCH rec_source_line USING INDEX order_items_product_id_idx/);
     });
 
+    it("stores the live ranking's top rows with a reason each, and reads them by primary key", async () => {
+        product({ id: "source", categoryId: "cat_shirts", priceMinor: 100_000 });
+        product({ id: "twin", categoryId: "cat_shirts", priceMinor: 100_000, createdAt: NOW - 50 });
+        product({ id: "cousin", categoryId: "cat_trousers", priceMinor: 900_000, createdAt: NOW - 40 });
+        product({ id: "later_sold_out", categoryId: "cat_shirts", priceMinor: 100_000, createdAt: NOW - 30 });
+        order("01711000001", ["source", "cousin"]);
+        order("01711000002", ["source", "cousin"]);
+        const live = await recommend(["source"]);
+        await refreshProductRecommendations(db, ["source"]);
+
+        expect(sqlite.prepare(
+            "SELECT recommended_product_id AS id, reason FROM product_recommendations WHERE product_id = 'source' ORDER BY position",
+        ).all()).toEqual([
+            { id: "cousin", reason: "also_bought" },
+            { id: "later_sold_out", reason: "similar" },
+            { id: "twin", reason: "similar" },
+        ]);
+        expect(ids(live)).toEqual(["cousin", "later_sold_out", "twin"]);
+
+        // A recommended product that sells out keeps its stored row; the read
+        // drops it by its current buyer state.
+        sqlite.exec("UPDATE product_variants SET stock = 0 WHERE product_id = 'later_sold_out'");
+        const stored = await recommend(["source"]);
+        expect(ids(stored)).toEqual(["cousin", "twin"]);
+        expect(stored.reason).toBe("also_bought"); // one of the two shown is a co-purchase
+        expect(statements).toHaveLength(2); // the stored rows, then card media
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[0]}`)
+            .all(...statementParams[0]!)
+            .map((step) => String(step.detail))
+            .join("\n");
+        expect(plan).toMatch(/SEARCH product_recommendations USING (INDEX sqlite_autoindex_product_recommendations_1|PRIMARY KEY) \(product_id=\?\)/);
+        expect(plan).not.toMatch(/SCAN /);
+    });
+
+    it("clears a hidden product's stored list and leaves a trashed source to the live fallback", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_shirts" });
+        await rebuildCatalogProjections(db);
+        await refreshProductRecommendations(db, ["source"]);
+        expect(sqlite.prepare("SELECT count(*) AS n FROM product_recommendations").get()).toEqual({ n: 1 });
+
+        sqlite.exec("UPDATE products SET is_active = 0 WHERE id = 'source'");
+        await rebuildCatalogProjections(db);
+        await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 0, cleared: 1 });
+        expect(sqlite.prepare("SELECT count(*) AS n FROM product_recommendations").get()).toEqual({ n: 0 });
+    });
+
     it("ships ranked recommendations on the product page payload", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "neighbour", categoryId: "cat_shirts", photos: 2 });
 
+        await rebuildCatalogProjections(db);
         const detail = await getStorefrontProductBySlug(db, "source");
 
         expect(detail?.recommendations.reason).toBe("similar");

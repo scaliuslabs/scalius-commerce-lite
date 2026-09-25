@@ -18,3 +18,4 @@ export * from "./buyer-projection";
 export * from "./variant-identity";
 export * from "./aggregate-revision";
 export * from "./customization";
+export * from "./catalog-projections";

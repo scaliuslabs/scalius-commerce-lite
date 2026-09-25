@@ -49,6 +49,7 @@ import {
     selectedProductOptionSchema,
 } from "../../schemas/entities";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
+import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -104,6 +105,7 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
             price: z.number(),
             categoryId: z.string().nullable(),
             categoryName: z.string().nullable(),
+            brandId: z.string().nullable(),
             slug: z.string(),
             canonicalPath: z.string().nullable(),
             noIndex: z.boolean(),
@@ -512,6 +514,7 @@ app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
     const result = await createProduct(db, c.req.valid("json"));
     await bumpCacheGeneration(c);
+    scheduleRecommendationRefreshAfterWrite(c, db, [result.id]);
     return created(c, result);
 });
 
@@ -600,7 +603,10 @@ app.openapi(bulkUpdateRoute, async (c) => {
     const db = c.get("db");
     const { products, ...changes } = c.req.valid("json");
     const result = await bulkUpdateProducts(db, products, changes);
-    if (result.products.length > 0) await bumpCacheGeneration(c);
+    if (result.products.length > 0) {
+        await bumpCacheGeneration(c);
+        scheduleRecommendationRefreshAfterWrite(c, db, result.products.map((product) => product.id));
+    }
     return ok(c, result);
 });
 
@@ -734,6 +740,7 @@ app.openapi(updateProductSectionRoute, async (c) => {
         const result = await updateProductSemanticSection(db, id, patch);
         if (!result) throw new NotFoundError("Product not found");
         await bumpCacheGeneration(c);
+        scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -800,6 +807,7 @@ app.openapi(updateProductRoute, async (c) => {
     try {
         const result = await updateProduct(db, id, data);
         await bumpCacheGeneration(c);
+        scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -868,6 +876,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await restoreProduct(db, id, expectedAggregateRevision);
     await bumpCacheGeneration(c);
+    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
     return ok(c, result);
 });
 
@@ -1068,6 +1077,7 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const user = c.get("user");
     const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
     await bumpCacheGeneration(c);
+    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
     return ok(c, result);
 });
 

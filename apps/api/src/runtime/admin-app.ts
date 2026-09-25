@@ -8,7 +8,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
   if (["dashboard", "analytics", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup"].includes(segment)) {
     return "dashboard";
   }
-  if (["categories", "collections", "media", "inventory", "products", "attributes"].includes(segment)) {
+  if (["categories", "collections", "media", "inventory", "products", "attributes", "catalog"].includes(segment)) {
     return "catalog";
   }
   if (["customers", "discounts", "shipments", "orders", "conversations", "taxes"].includes(segment)) {
