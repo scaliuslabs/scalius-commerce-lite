@@ -14,12 +14,16 @@
  * as "first" (miss or hit, whatever the edge had) and the rest as hits.
  * Pages default to home, the first category and product linked from home,
  * a search, and the cart. Exit code 1 when any budget is exceeded.
+ * Against a local base it first checks that the storefront renders its own
+ * canonical origin, i.e. that it reached this stack's API
+ * (`--media-url <origin>` also checks media; `--no-binding-check` skips it).
  */
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { verifyStorefrontBinding } from "./dev-ports.mjs";
 
 /** Budgets (ms) the check enforces. Miss budgets hold for a local stack. */
 export const DEFAULT_BUDGETS = Object.freeze({
@@ -87,7 +91,7 @@ export function discoverPaths(homeHtml) {
 }
 
 function parseArgs(argv) {
-  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, kvExplorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false };
+  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, kvExplorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false, mediaUrl: null, bindingCheck: true };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const next = () => argv[++i];
@@ -95,6 +99,8 @@ function parseArgs(argv) {
     else if (flag === "--runs") args.runs = Math.max(1, Number(next()) || 3);
     else if (flag === "--json") args.json = true;
     else if (flag === "--no-browser") args.noBrowser = true;
+    else if (flag === "--media-url") args.mediaUrl = next().replace(/\/$/, "");
+    else if (flag === "--no-binding-check") args.bindingCheck = false;
     else if (flag === "--profiles") args.profiles = next().split(",").filter((p) => p in PROFILES);
     else if (flag === "--paths") args.paths = next().split(",").filter(Boolean);
     else if (flag === "--kv-explorer") args.kvExplorer = next().replace(/\/$/, "");
@@ -218,8 +224,22 @@ async function measureInBrowser(port, url, profileName) {
   }
 }
 
+/**
+ * What the local binding check compares, or null when it does not apply: a
+ * local storefront must render its own canonical origin (and, with
+ * --media-url, that media origin). Wrangler's dev registry is machine-wide,
+ * so a built storefront can otherwise be measuring another stack's API
+ * (scripts/dev-ports.mjs verifyStorefrontBinding).
+ */
+export function bindingCheckTarget({ base, mediaUrl = null, bindingCheck = true }) {
+  if (!bindingCheck || !isLocalBase(base)) return null;
+  return { storefrontUrl: base, ...(mediaUrl ? { mediaUrl } : {}) };
+}
+
 export async function runStorefrontPerf(options) {
   const { base, runs, kvExplorer, cdpPort, profiles, noBrowser } = options;
+  const target = bindingCheckTarget(options);
+  if (target) await verifyStorefrontBinding(target);
   const paths = options.paths ?? discoverPaths(await (await fetch(`${base}/`)).text());
   const stopChrome = noBrowser ? null : await launchChrome(cdpPort);
   const rows = [];
