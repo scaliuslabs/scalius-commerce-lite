@@ -24,7 +24,7 @@ import {
   getProductActionsPresentation,
   type ProductActionCopy,
 } from "./lib/product-actions";
-import { describeBuyGetOffer } from "./lib/product-offers";
+import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 
 interface Props {
@@ -116,6 +116,10 @@ const pricePresentation = getBuyerVariantPricePresentation(productPricing, prici
 const showsStartingPrice =
   shouldShowStartingVariantPrice(options.length > 0, stockVariant) && pricePresentation.isStartingAt;
 const pricing = pricePresentation.pricing;
+// Quantity tiers beside the price, worded from the tier alone ("Buy 2, save
+// 10%", "Buy 3 for ৳600") so they hold for every SKU; checkout prices them.
+const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);
+const bundleListLabel = bundleTiers.map((tier) => [tier.label, tier.text].filter(Boolean).join(": ")).join("; ");
 const discountBadge = pricing.hasDiscount
   ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
   : null;
@@ -180,6 +184,16 @@ function optionAriaLabel(
         </s>
         <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
       </div>
+      {bundleTiers.length > 0 ? (
+        <ul class="mt-2 flex flex-wrap gap-1.5" data-product-bundles aria-label={bundleListLabel}>
+          {bundleTiers.map((tier) => (
+            <li class="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-sm text-foreground" data-bundle-quantity={tier.quantity}>
+              {tier.label ? <span class="font-semibold text-primary">{tier.label}</span> : null}
+              <span>{tier.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <slot name="after-price" />
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">

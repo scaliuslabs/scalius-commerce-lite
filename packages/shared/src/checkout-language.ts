@@ -26,6 +26,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   discountText: "Discount",
   discountBundleBetterText: "Bundle saving applied: better than {code}.",
   productBundleTierText: "Buy {quantity}, save {saving}",
+  productBundleSetPriceText: "Buy {quantity} for {price}",
   totalText: "Total",
   discountCodePlaceholder: "Discount code",
   applyDiscountText: "Apply",
@@ -544,6 +545,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   discountText: "ছাড়",
   discountBundleBetterText: "বান্ডেল ছাড় দেওয়া হয়েছে: {code}-এর চেয়ে বেশি সাশ্রয়।",
   productBundleTierText: "{quantity}টি কিনলে {saving} সাশ্রয়",
+  productBundleSetPriceText: "{quantity}টি {price}-এ",
   totalText: "সর্বমোট",
   discountCodePlaceholder: "ডিসকাউন্ট কোড",
   applyDiscountText: "প্রয়োগ করুন",
@@ -1063,6 +1065,8 @@ export const PRODUCT_PAGE_COPY_KEYS = [
   "pickupAvailableText",
   "noDeliveryNeededBadgeText",
   "payAtServiceText",
+  "productBundleTierText",
+  "productBundleSetPriceText",
 ] as const satisfies readonly CheckoutLanguageKey[];
 
 export type ProductPageCopyKey = (typeof PRODUCT_PAGE_COPY_KEYS)[number];
