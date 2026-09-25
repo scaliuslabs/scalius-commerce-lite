@@ -1132,6 +1132,16 @@ export async function renderCartItems() {
   syncCartPagePresentation(true);
 }
 
+/**
+ * Re-reads the page's payment facts after the cart page changes them (the
+ * buyer chose the gift-card step, so a cart cash cannot pay is no longer
+ * blocked here: the payment step prices it).
+ */
+export function refreshCartBlockingState() {
+  updateCartValidationMessage();
+  updateCheckoutButtonState();
+}
+
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
