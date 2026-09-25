@@ -6,6 +6,7 @@ import {
     productVariants,
     productAttributeValues,
     productAttributes,
+    brands,
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
@@ -34,6 +35,7 @@ import {
 } from "../products/money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { publicBrandJoinCondition } from "../brands/brands.storefront";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
 
 /** A required (or unreadable) buyer-input schema: an agent cart can't buy the product. */
@@ -359,11 +361,17 @@ export async function getStorefrontFeedProducts(
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
             customizationSchema: products.customizationSchema,
+            // The published brand record only; a LEFT JOIN on its key, so the
+            // page keeps its newest-first index seek.
+            brandId: brands.id,
+            brandName: brands.name,
+            brandSlug: brands.slug,
             createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
         })
         .from(products)
+        .leftJoin(brands, publicBrandJoinCondition(products.brandId))
         .where(and(...conditions));
 
     // The public eligibility conditions already guarantee a buyer SKU, so the
@@ -414,7 +422,7 @@ export async function getStorefrontFeedProducts(
 
     const variantMap = feedVariants.variants;
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, customizationSchema, ...productRow }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, customizationSchema, brandId, brandName, brandSlug, ...productRow }) => {
         const pricing = pricingByProduct.get(productRow.id);
         // The buyer projection counts every SKU. When a product also sells a
         // service, its feed availability comes from its physical SKUs only.
@@ -455,6 +463,7 @@ export async function getStorefrontFeedProducts(
             imageMediaId: imgData?.mediaId ?? null,
             imageAlt: imgData?.alt || null,
             category,
+            brand: brandId && brandName && brandSlug ? { id: brandId, name: brandName, slug: brandSlug } : null,
             attributes: attributeMap.get(product.id) ?? [],
             variants: variantMap.get(product.id) ?? [],
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,

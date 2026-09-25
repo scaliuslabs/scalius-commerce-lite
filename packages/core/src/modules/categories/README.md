@@ -11,7 +11,8 @@ Product category CRUD with explicit publication authority, revision-guarded writ
 | `categories.publication.ts` | Public predicate and publish readiness (informational: an empty published category is allowed) |
 | `categories.revision.ts` | Single/bulk revision guards and typed conflicts |
 | `categories.service.ts` | Admin DB queries and mutations (9 exported functions) |
-| `categories.storefront.ts` | Public/storefront queries (4 exported functions) |
+| `categories.storefront.ts` | Public/storefront queries; the category page read carries its children and breadcrumb in the same batch |
+| `categories.tree.ts` | The tree: placement pre-check, move, trash rules, admin and storefront tree reads |
 
 ## Schema (Zod)
 
@@ -36,7 +37,7 @@ Shared content fields:
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `listCategories` | `(db, { page?, limit?, search?, status?, showTrashed?, sort?, order? })` | Paginated FTS5 list with status, revision, product count, and publish readiness |
+| `listCategories` | `(db, { page?, limit?, search?, status?, showTrashed?, sort?, order? })` | Paginated FTS5 list with status, revision, parent, depth, product count, and publish readiness |
 | `getCategoryBySlug` | `(db, slug)` | Single active category by slug (excludes soft-deleted) |
 | `getCategoryById` | `(db, id)` | Single category by ID (includes updatedAt, does not filter on deletedAt) |
 
@@ -59,6 +60,32 @@ Shared content fields:
 | `getPublicCategories` | `(db)` | Published, non-trashed categories ordered by name |
 | `getPublicCategoryBySlug` | `(db, slug)` | Published category by slug; draft/internal/deleted return null |
 | `getPublicCategoryById` | `(db, id)` | Published category by ID; draft/internal/deleted return null |
+
+## Tree (migration 0090)
+
+The application writes only `categories.parent_id` (and the revision).
+Triggers keep `depth` (0-3), the id `path` (`/root/child/`) and
+`category_closure` exact, and refuse cycles, a fifth level and trashed or
+missing parents: they are the authority. `categoryPlacementRefusal` runs the
+same checks first (one indexed read) so the service can explain a refusal;
+a refusal that only the trigger sees (a race) is translated to the same
+`CATEGORY_PLACEMENT_REFUSED` error (`reason`: `cycle`, `too_deep`,
+`parent_unavailable`).
+
+- **Parent picker writes:** `parentId` on create and edit (omitted keeps the
+  current parent); `moveCategory` moves a whole subtree under the revision.
+- **Trash rules (service):** a category with live children cannot be trashed
+  unless they are trashed in the same selection; a category whose parent is in
+  trash cannot be restored unless the parent is restored with it; a permanent
+  delete must include every child (live or trashed), and deletes deepest first
+  because `parent_id` is ON DELETE RESTRICT. A trashed category keeps its place.
+- **Reads:** `listCategoryChildren` and `getCategoryAncestors` (dashboard);
+  `getPublicCategoryTree` (≤ 150 published nodes whose every ancestor is
+  published, top levels first, flat with `parentId`, for automatic menus),
+  `getPublicCategoryChildren`, `getPublicCategoryBreadcrumb` (≤ 4 rows, one
+  closure read), and `publicCategorySubtreeCondition` (a category plus its
+  published descendants, for listings).
+- **`listingTemplate`:** a theme listing template id or null (theme default).
 
 ## Features
 

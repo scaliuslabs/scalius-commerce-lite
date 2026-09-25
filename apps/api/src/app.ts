@@ -4,6 +4,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
+import { brandRoutes } from "./routes/brands";
 import { collectionRoutes } from "./routes/collections";
 import { attributeRoutes } from "./routes/attributes";
 import { heroRoutes } from "./routes/hero";
@@ -59,6 +60,7 @@ import {
 import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
+import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
 import { adminPageRoutes } from "./routes/admin/pages";
@@ -115,6 +117,7 @@ app.route("/agent-auth", agentAuthRoutes);
 app.route("/agent-artifacts", agentArtifactRoutes);
 app.route("/attributes", attributeRoutes);
 app.route("/collections", collectionRoutes);
+app.route("/brands", brandRoutes);
 app.route("/hero", heroRoutes);
 app.route("/search", searchRoutes);
 app.route("/header", headerRoutes);
@@ -218,6 +221,7 @@ app.use("/admin/*", adminAuthMiddleware);
 
 // Register Admin routes
 app.route("/admin/categories", adminCategoryRoutes);
+app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
 app.route("/admin/customers", adminCustomerRoutes);
 app.route("/admin/pages", adminPageRoutes);

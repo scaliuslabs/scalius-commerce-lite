@@ -42,6 +42,12 @@ export const CATALOG_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PATCH: { permission: PERMISSIONS.CATEGORIES_EDIT },
     DELETE: { permission: PERMISSIONS.CATEGORIES_DELETE },
   },
+  "/api/v1/admin/categories/*/ancestors": {
+    GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
+  "/api/v1/admin/categories/*/parent": {
+    PATCH: { permission: PERMISSIONS.CATEGORIES_EDIT },
+  },
   "/api/v1/admin/categories/*/restore": {
     POST: { permission: PERMISSIONS.CATEGORIES_RESTORE },
   },

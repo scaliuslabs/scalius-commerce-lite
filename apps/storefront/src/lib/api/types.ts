@@ -169,6 +169,8 @@ export interface Product {
   features?: string[];
   additionalInfo?: ProductRichContent[];
   attributes?: Array<{ name: string; value: string; slug: string }>;
+  /** The published brand record (product page, feeds); never a free-text attribute. */
+  brand?: ProductBrand | null;
   categoryId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -299,8 +301,59 @@ export interface Category {
   canonicalPath?: string | null;
   noIndex?: boolean;
   excludeFromSitemap?: boolean;
+  /** Tree placement (catalogue 1a): the parent category and the 0-3 depth. */
+  parentId?: string | null;
+  depth?: number;
+  /** Category detail only: a theme listing template id, or null for the theme default. */
+  listingTemplate?: string | null;
+  /** Category detail only: published sub-categories (sub-category pills and shelves). */
+  children?: CategoryTreeLink[];
+  /** Category detail only: published ancestors, root first, ending with this category. */
+  breadcrumb?: Array<CategoryTreeLink & { depth: number }>;
   createdAt: string | null;
   updatedAt?: string | null;
+}
+
+export interface CategoryTreeLink {
+  id: string;
+  name: string;
+  slug: string;
+  canonicalPath: string | null;
+  imageUrl?: string | null;
+}
+
+export interface ProductBrand {
+  id: string;
+  name: string;
+  slug: string;
+  canonicalPath?: string | null;
+}
+
+export interface BrandLogo {
+  mediaId: string;
+  url: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+}
+
+/** A published brand (`/brands/<slug>`). */
+export interface Brand extends ProductBrand {
+  canonicalPath: string | null;
+  logo: BrandLogo | null;
+  description: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
+  listingTemplate: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface BrandProductsResponse extends PaginatedResponse<Product> {
+  brand: Brand | null;
+  brandNotFound?: boolean;
 }
 
 export interface CategorySummary {

@@ -18,6 +18,7 @@
     "analytics -> settings",
     "attributes -> catalog",
     "attributes -> products",
+    "catalog -> brands",
     "catalog -> categories",
     "catalog -> inventory",
     "catalog -> products",
