@@ -107,10 +107,72 @@ export const STOREFRONT_SECTION_REGISTRY = {
     }).strict(),
     defaults: { title: "", source: { kind: "newest" }, columns: 4, rows: 2 },
   }),
+  /**
+   * Daraz's flash sale: a product row whose countdown counts to the end of a
+   * real promotion (`promotionId`, an active discount with an end time),
+   * never to a typed-in date. Without one, or once it has ended, the row has
+   * no countdown.
+   */
   "deal-block": section({
     type: "deal-block",
-    settings: z.object({ title, source: storefrontProductSourceSchema, endsAt: z.iso.datetime().nullable() }).strict(),
-    defaults: { title: "", source: { kind: "on-sale" }, endsAt: null },
+    settings: z.object({
+      title,
+      source: storefrontProductSourceSchema,
+      promotionId: recordId.nullable().optional(),
+      /** Retired: never read (the countdown is the promotion's end). Dropped at the next document version. */
+      endsAt: z.iso.datetime().nullable().optional(),
+    }).strict(),
+    defaults: { title: "", source: { kind: "on-sale" }, promotionId: null },
+  }),
+  /**
+   * Multi-list tabs (Game Ghor, Walmart, Chaldal): one heading and 2 to 4
+   * tabs, each a product source. Works without script (radio tabs); each tab
+   * shows its first `limit` products.
+   */
+  "product-tabs": section({
+    type: "product-tabs",
+    settings: z.object({
+      title,
+      tabs: z.array(z.object({ label: z.string().trim().max(40), source: storefrontProductSourceSchema }).strict()).min(2).max(4),
+      limit: z.number().int().min(4).max(12),
+    }).strict(),
+    defaults: {
+      title: "",
+      tabs: [
+        { label: "", source: { kind: "newest" } },
+        { label: "", source: { kind: "on-sale" } },
+        { label: "", source: { kind: "popular" } },
+      ],
+      limit: 8,
+    },
+  }),
+  /**
+   * "Shop by" image cards (Target's and Walmart's occasion cards, Amazon's
+   * quad cards): the merchant's photos, each with a label and a link.
+   */
+  "shop-by": section({
+    type: "shop-by",
+    settings: z.object({
+      title,
+      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), href }).strict()).max(8),
+    }).strict(),
+    defaults: { title: "", cards: [] },
+  }),
+  /**
+   * A promo banner mosaic (Daraz, Aarong, Walmart): one large tile beside up
+   * to four smaller ones, each an image with its link.
+   */
+  "banner-mosaic": section({
+    type: "banner-mosaic",
+    settings: z.object({
+      tiles: z.array(z.object({
+        mediaId: recordId,
+        /** What the image shows (its alt text). */
+        alt: z.string().trim().max(160),
+        href: href.nullable(),
+      }).strict()).max(5),
+    }).strict(),
+    defaults: { tiles: [] },
   }),
   lookbook: section({
     type: "lookbook",
@@ -243,11 +305,7 @@ export function storefrontSectionDefault<Type extends StorefrontSectionType>(typ
   } as StorefrontSectionOf<Type>;
 }
 
-/**
- * Section types the storefront renders. The rest wait for their data:
- * brand-wall for the brand entity, recently-viewed for product pages that
- * record views, newsletter for a subscriber list.
- */
+/** Section types the storefront renders. The newsletter waits for a subscriber list. */
 export const STOREFRONT_SECTION_RENDERERS = [
   "hero",
   "usp-strip",
@@ -256,13 +314,18 @@ export const STOREFRONT_SECTION_RENDERERS = [
   "product-rail",
   "product-grid",
   "deal-block",
+  "product-tabs",
   "lookbook",
   "banner",
+  "shop-by",
+  "banner-mosaic",
+  "brand-wall",
   "editorial",
   "faq",
   "utility-cards",
   "endless-grid",
   "seo-text",
+  "recently-viewed",
 ] as const satisfies readonly StorefrontSectionType[];
 export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
 
@@ -271,4 +334,48 @@ export function storefrontSectionRenderer(each: StorefrontSection): StorefrontSe
   return (STOREFRONT_SECTION_RENDERERS as readonly string[]).includes(each.type)
     ? each.type as StorefrontSectionRenderer
     : null;
+}
+
+function filled(...values: Array<string | null | undefined>): boolean {
+  return values.some((value) => Boolean(value?.trim()));
+}
+
+/**
+ * Whether a section's own settings leave it nothing to show: merchant words
+ * or photos it needs and does not have. The dashboard flags these and the
+ * storefront never renders them. Sections that show store data (products,
+ * categories, brands, delivery facts) are judged on that data instead.
+ */
+export function storefrontSectionNeedsContent(each: StorefrontSection): boolean {
+  switch (each.type) {
+    case "usp-strip":
+      return each.settings.source.kind === "custom" && each.settings.source.items.length === 0;
+    case "banner":
+      return each.settings.mediaId === null && !filled(each.settings.heading, each.settings.text);
+    case "shop-by":
+      return each.settings.cards.length === 0;
+    case "banner-mosaic":
+      return each.settings.tiles.length === 0;
+    case "editorial":
+      switch (each.settings.layout) {
+        case "rich-text":
+          return !filled(each.settings.heading, each.settings.body);
+        case "image-with-text":
+          return each.settings.mediaId === null && !filled(each.settings.heading, each.settings.body);
+        case "multicolumn":
+          return !each.settings.columns.some((column) => filled(column.title, column.text));
+        case "testimonial":
+          return each.settings.quotes.length === 0;
+        default:
+          return true;
+      }
+    case "faq":
+      return each.settings.items.length === 0;
+    case "utility-cards":
+      return each.settings.cards.length === 0;
+    case "seo-text":
+      return !filled(each.settings.body);
+    default:
+      return false;
+  }
 }
