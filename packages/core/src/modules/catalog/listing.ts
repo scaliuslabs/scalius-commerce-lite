@@ -159,6 +159,11 @@ async function readStorefrontCatalogPage(
 }
 
 /** At most `limit + 1` public products: enough to tell "more than limit" apart. */
+/** The category's closure ancestors (itself included), comma-joined; ids never contain commas. */
+function categoryAncestorIdsSql(categoryId: string): SQL<string | null> {
+    return sql<string | null>`(SELECT group_concat("category_closure"."ancestor_id", ',') FROM "category_closure" WHERE "category_closure"."descendant_id" = ${categoryId})`;
+}
+
 function boundedPublicCatalogueSizeSql(limit: number): SQL<number> {
     return sql<number>`(
         SELECT count(*) FROM (
@@ -232,6 +237,7 @@ async function readStorefrontCatalogResults(
     // Without a price filter the price range reads exactly the count's rows,
     // so one statement answers both.
     const hasPriceFilter = priceBounds.minPriceMinor !== undefined || priceBounds.maxPriceMinor !== undefined;
+    const ancestorsCategoryId = scope.fixedCategory?.id && deps.active() ? scope.fixedCategory.id : null;
     let countQuery = db
         .select({
             count: sql<number>`count(*)`,
@@ -241,6 +247,10 @@ async function readStorefrontCatalogResults(
             publicCatalogueSize: unscoped
                 ? boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT)
                 : sql<number>`0`,
+            // Inside a dependency scope: the fixed category's ancestors (its
+            // facets' attribute sets are its own and its ancestors'), read
+            // with the count instead of by a statement of their own.
+            ...(ancestorsCategoryId ? { categoryAncestors: categoryAncestorIdsSql(ancestorsCategoryId) } : {}),
         })
         .from(buyerState)
         .$dynamic();
@@ -265,6 +275,7 @@ async function readStorefrontCatalogResults(
         needsProducts: countNeedsProducts,
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
+        categoryAncestorsDeclared: ancestorsCategoryId !== null,
         brandFacet: !scope.withoutBrandFacet,
     });
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
@@ -318,6 +329,10 @@ async function readStorefrontCatalogResults(
     }
     // The category of each card (published state, name, slug).
     deps.categories(categoryIds);
+    if (ancestorsCategoryId) {
+        const ancestors = (totalCount as { categoryAncestors?: string | null } | undefined)?.categoryAncestors;
+        deps.categories(ancestors ? ancestors.split(",") : []);
+    }
     deps.category(scope.fixedCategory?.id);
     const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
     const productsWithImages = productsList.map(({

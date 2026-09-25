@@ -27,8 +27,15 @@ import type { DatabaseSync } from "node:sqlite";
 import { createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { CACHE_DEP_TABLES } from "@scalius/shared/cache-deps";
 import { DvcHarness, type DvcHarnessConfig } from "./testing/cache-dvc/harness";
-import { scopeRecorder, type ScopeRecorderStats } from "./testing/cache-dvc/harness-adapters";
+import {
+  s4Adapters,
+  scopeRecorder,
+  type S4AdapterOptions,
+  type S4Adapters,
+  type ScopeRecorderStats,
+} from "./testing/cache-dvc/harness-adapters";
 import { referencePartValidator } from "./testing/cache-dvc/validators";
+import { Rng } from "./testing/cache-dvc/rng";
 import { STRUCTURAL_OP_GAPS } from "./testing/cache-dvc/mutations";
 import { registryColumnsMissingFromSchema, registryTablesMissingFromSchema } from "./testing/cache-dvc/schema-model";
 
@@ -67,12 +74,32 @@ const SEEDS = process.env.DVC_SEED
   : Array.from({ length: Number(process.env.DVC_SEEDS ?? 1) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
 const TIMEOUT = MODE === "long" ? 24 * 3600_000 : 240_000;
 
-const RECORDER = process.env.DVC_RECORDER === "coarse" ? "coarse" : "scope";
+/**
+ * `s4` (default): S4's production part cache end to end (the part reader's
+ * recording with a deliberately stale clock snapshot, its one-statement
+ * validator, its frontier delta and the shared frontier rule). `scope`: S2's
+ * recorder with the reference validator and frontier. `coarse`: table keys only.
+ */
+const RECORDER = process.env.DVC_RECORDER === "coarse" ? "coarse" : process.env.DVC_RECORDER === "scope" ? "scope" : "s4";
 const scopeStats: ScopeRecorderStats = { coarse: new Map(), unobserved: new Map() };
+const s4Runs: Array<S4Adapters["stats"]> = [];
 
-function harnessConfig(seed: string): DvcHarnessConfig {
+function harnessConfig(seed: string, s4Options: S4AdapterOptions = {}): DvcHarnessConfig {
+  const s4 = RECORDER === "s4"
+    ? s4Adapters({
+      snapshotRefreshRate: Number(process.env.DVC_SNAPSHOT_REFRESH ?? 0.5),
+      random: (() => {
+        const rng = new Rng(`s4-snapshot:${seed}`);
+        return () => rng.next();
+      })(),
+      ...(PROVIDER === "turso" ? { database: (sqlite: DatabaseSync) => createSqliteTursoDatabase(sqlite) } : {}),
+      ...s4Options,
+    })
+    : null;
+  if (s4) s4Runs.push(s4.stats);
   return {
     ...(RECORDER === "scope" ? { recorder: ({ model }) => scopeRecorder(scopeStats, new Set(model.keys())) } : {}),
+    ...(s4 ? { recorder: s4.recorder(scopeStats), partValidator: (clock) => s4.partValidator(clock), frontierModel: s4.frontierModel } : {}),
     seed,
     provider: PROVIDER,
     clock: CLOCK,
@@ -111,22 +138,28 @@ describe("DVC registry", () => {
   }, 60_000);
 });
 
+const PRODUCT_KEYS = /^(?:p:|t:products$|t:product_variants$|t:product_buyer_state$)/;
+
 describe("DVC property harness has teeth", () => {
   it("catches a validator that ignores the product keys", async () => {
     const harness = await DvcHarness.create({
-      ...harnessConfig("teeth"),
+      ...(RECORDER === "s4"
+        ? harnessConfig("teeth", { blindTo: PRODUCT_KEYS })
+        : {
+          ...harnessConfig("teeth"),
+          partValidator: (clock) => {
+            const inner = referencePartValidator(clock);
+            return {
+              name: "blind-to-products",
+              validate: (entries, now) => inner.validate(entries.map((entry) => ({
+                ...entry,
+                deps: entry.deps.filter((dep) => !PRODUCT_KEYS.test(dep)),
+              })), now),
+            };
+          },
+        } satisfies DvcHarnessConfig),
       collect: true,
       raceRate: 0,
-      partValidator: (clock) => {
-        const inner = referencePartValidator(clock);
-        return {
-          name: "blind-to-products",
-          validate: (entries, now) => inner.validate(entries.map((entry) => ({
-            ...entry,
-            deps: entry.deps.filter((dep) => !/^(?:p:|t:products$|t:product_variants$|t:product_buyer_state$)/.test(dep)),
-          })), now),
-        };
-      },
     });
     try {
       await harness.warm();
@@ -142,6 +175,7 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
   for (const seed of SEEDS) {
     it(`never serves a stale entry as valid: ${seed}`, async () => {
       const harness = await DvcHarness.create(harnessConfig(seed));
+      const s4Stats = RECORDER === "s4" ? s4Runs[s4Runs.length - 1]! : null;
       const started = performance.now();
       let nonOk: string[] = [];
       let failure: unknown = null;
@@ -172,7 +206,8 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
         console.info(`[DVC] findings:\n${[...harness.findings.values()].map((finding) => `- (${finding.count}x) ${finding.signature}`).join("\n") || "none"}`);
         console.info(`[DVC] coverage gaps:\n  ops: ${gaps.ops.join(" ")}\n  noise columns: ${gaps.noise.join(" ") || "none"}\n  columns: ${gaps.columns.join(" ")}\n[DVC] refusals:\n${[...harness.coverage.refusals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => `  ${count}x ${key}`).join("\n")}`);
         console.info(`[DVC] ${harness.summary()}\nnon-200 parts: ${nonOk.join(" ") || "none"}\nwall ${((performance.now() - started) / 1000).toFixed(1)}s`);
-        if (RECORDER === "scope") {
+        if (RECORDER === "s4") console.info(`[DVC] s4 snapshot: ${JSON.stringify(s4Runs[s4Runs.length - 1])}`);
+        if (RECORDER !== "coarse") {
           const top = (map: Map<string, number>) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([key, count]) => `  ${count}x ${key}`).join("\n") || "  none";
           console.info(`[DVC] coarse fallbacks (route table):\n${top(scopeStats.coarse)}\n[DVC] tables the harness saw but S2 did not report:\n${top(scopeStats.unobserved)}`);
         }
@@ -183,6 +218,8 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
         const gaps = harness.coverage.gaps(harness.model);
         expect(gaps.noise, "noise columns the run never changed").toEqual([]);
         expect(gaps.ops.filter((op) => !(op in STRUCTURAL_OP_GAPS)), "registered table operations the run never performed").toEqual([]);
+        // The reader's s0 came from a snapshot older than the clock (a lower bound) on real renders.
+        if (s4Stats) expect(s4Stats.staleSnapshotRenders, "renders from a stale clock snapshot").toBeGreaterThan(0);
       }
       harness.assertNoFindings();
     }, TIMEOUT);

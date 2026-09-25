@@ -11,6 +11,7 @@
 import { getDb, type Database } from "@scalius/database/client";
 import { deps } from "@scalius/core/cache-deps";
 import { getPlatformSettings, resolvePlatformConfig } from "@scalius/core/modules/platform";
+import { preloadedPlatformSettings } from "./public-render-context";
 import {
   deriveRuntimeSecretsFromEnv,
   readMasterSecret,
@@ -89,6 +90,12 @@ export async function withTrackedPlatformEnv(
   requestUrl: string,
 ): Promise<Env> {
   if (!deps.active()) return env;
+  // The part reader read the row with its clock statement (public-render-context.ts).
+  const preloaded = preloadedPlatformSettings();
+  if (preloaded) {
+    deps.settings("platform", "document");
+    return { ...env, ...platformEnvFields(preloaded, requestUrl) } as Env;
+  }
   try {
     const stored = await getPlatformSettings(db);
     return { ...env, ...platformEnvFields(stored, requestUrl) } as Env;

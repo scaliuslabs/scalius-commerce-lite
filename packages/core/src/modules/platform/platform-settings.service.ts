@@ -30,6 +30,19 @@ export async function getPlatformSettings(db: Database): Promise<PlatformConfig>
   return (await getPlatformSettingsDocument(db)).value;
 }
 
+/**
+ * The platform configuration of a settings row another statement already
+ * read (`category = 'platform'`, `key = 'document'`), resolved exactly as
+ * `getPlatformSettings` resolves it; null when the row is unreadable. The
+ * public part reader reads the row with its cache clock (apps/api).
+ */
+export async function platformSettingsFromRow(
+  row: { value: string; revision: number } | null,
+): Promise<PlatformConfig | null> {
+  const result = await platformDocument.fromRows(row ? [{ category: platformDocument.key, ...row }] : []);
+  return result.invalid ? null : result.value;
+}
+
 /** The stored origins and the revision a save must send back. */
 export async function getPlatformSettingsDocument(
   db: Database,

@@ -21,7 +21,7 @@ import "@hono/zod-openapi";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { DvcHarness } from "./testing/cache-dvc/harness";
-import { scopeRecorder } from "./testing/cache-dvc/harness-adapters";
+import { s4Adapters, scopeRecorder, type S4AdapterOptions } from "./testing/cache-dvc/harness-adapters";
 import { dvcPageCatalogue, dvcPartCatalogue } from "./testing/cache-dvc/routes";
 
 vi.mock("nanoid", async (importOriginal) => {
@@ -45,13 +45,30 @@ afterAll(() => {
   vi.useRealTimers();
 });
 
-async function harness(seed: string, raceRate = 0, lateClockRead = false): Promise<DvcHarness> {
+/**
+ * S4's production part cache (its reader's recording, validator and
+ * frontier); `lateClockRead` is the harness's own negative control and runs
+ * on S2's recorder, whose s0 the harness reads itself.
+ */
+async function harness(seed: string, raceRate = 0, lateClockRead = false, s4Options: S4AdapterOptions = {}): Promise<DvcHarness> {
+  const stats = { coarse: new Map<string, number>(), unobserved: new Map<string, number>() };
+  if (lateClockRead) {
+    return DvcHarness.create({
+      seed,
+      raceRate,
+      lateClockRead,
+      setSystemTime: (ms) => vi.setSystemTime(ms),
+      recorder: ({ model }) => scopeRecorder(stats, new Set(model.keys())),
+    });
+  }
+  const s4 = s4Adapters(s4Options);
   return DvcHarness.create({
     seed,
     raceRate,
-    lateClockRead,
     setSystemTime: (ms) => vi.setSystemTime(ms),
-    recorder: ({ model }) => scopeRecorder({ coarse: new Map(), unobserved: new Map() }, new Set(model.keys())),
+    recorder: s4.recorder(stats),
+    partValidator: (clock) => s4.partValidator(clock),
+    frontierModel: s4.frontierModel,
   });
 }
 
@@ -113,6 +130,44 @@ describe("DVC render/commit races", () => {
     }
     expect(caught, "the ordering bug went unnoticed").toBeGreaterThan(0);
   }, 120_000);
+
+  it("has teeth: S4's reader taking its s0 from a clock read after the render is caught serving stale", async () => {
+    const { path, write } = CASES[0]!;
+    let caught = 0;
+    for (const at of [0, 3, 6]) {
+      const run = await harness(`race-s4-late-${at}`, 0, false, { clockAfterRender: true });
+      try {
+        await run.renderWithCommit(path, at, write);
+        const verdict = await run.checkPart(path);
+        if (verdict.valid && !verdict.equal) caught += 1;
+      } finally {
+        run.close();
+      }
+    }
+    expect(caught, "the ordering bug went unnoticed").toBeGreaterThan(0);
+  }, 120_000);
+
+  it("keeps the guarantee when renders take s0 from a clock snapshot older than every write since", async () => {
+    // The snapshot is read once and never refreshed: every entry's s0 lags the
+    // clock by all writes before it, the extreme of the data center snapshot.
+    let checked = 0;
+    for (const { path, write } of CASES) {
+      const run = await harness(`race-s4-old-${path}`, 0, false, { snapshotRefreshRate: 0 });
+      try {
+        await run.renderWithCommit("/api/v1/storefront/layout", Number.MAX_SAFE_INTEGER, () => undefined);
+        for (let round = 0; round < 3; round += 1) {
+          await run.renderWithCommit(path, round, write);
+          const verdict = await run.checkPart(path);
+          if (!verdict.cached) continue;
+          expect(verdict.valid && !verdict.equal, `${path} round ${round}: stale entry validated`).toBe(false);
+          checked += 1;
+        }
+      } finally {
+        run.close();
+      }
+    }
+    expect(checked).toBeGreaterThan(CASES.length);
+  }, 600_000);
 
   it("keeps the guarantee with concurrent fills and writes interleaved between their statements", async () => {
     const parts = dvcPartCatalogue();
