@@ -162,7 +162,7 @@ describe("hero route cache policy", () => {
       data?: {
         slider?: {
           createdAt: string | null;
-          updatedAt: string | null;
+          updatedAt?: string | null;
         } | null;
       };
     };
@@ -170,7 +170,8 @@ describe("hero route cache policy", () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.data?.slider?.createdAt).toBeNull();
-    expect(body.data?.slider?.updatedAt).toBeNull();
+    // Public hero payloads carry no update time (it changes without a buyer-visible change).
+    expect(body.data?.slider).not.toHaveProperty("updatedAt");
   });
 
   it("fails closed instead of exposing an unsafe saved destination", async () => {

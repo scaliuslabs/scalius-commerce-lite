@@ -3386,7 +3386,6 @@ export type GetApiV1ArticlesResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
@@ -3491,7 +3490,6 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;

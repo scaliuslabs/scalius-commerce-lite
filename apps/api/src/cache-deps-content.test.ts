@@ -116,6 +116,9 @@ const NO_INTERNAL_FIELD_ROUTES = [
   "/api/v1/shipping-methods",
 ];
 
+/** Articles keep `updatedAt` (the blog's dateModified, advanced by its own rule) but no revision. */
+const NO_REVISION_ROUTES = ["/api/v1/articles", "/api/v1/articles/slug/post"];
+
 let sqlite: DatabaseSync;
 let db: Database;
 let env: Env;
@@ -317,6 +320,11 @@ describe("public content payloads", () => {
       const { status, body } = await render(route);
       expect(status, route).toBe(200);
       expect(internalFieldPaths(JSON.parse(body)), route).toEqual([]);
+    }
+    for (const route of NO_REVISION_ROUTES) {
+      const { status, body } = await render(route);
+      expect(status, route).toBe(200);
+      expect(internalFieldPaths(JSON.parse(body)).filter((path) => path.endsWith(".revision")), route).toEqual([]);
     }
   });
 });
