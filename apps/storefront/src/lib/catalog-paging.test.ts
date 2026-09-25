@@ -117,13 +117,12 @@ describe("grid/list toggle", () => {
 
   it("switches the results and remembers the choice", () => {
     document.body.innerHTML = `
-      <div data-catalog-view-toggle hidden>
+      <div data-catalog-view-toggle>
         <button data-view="grid" aria-pressed="true"></button><button data-view="list" aria-pressed="false"></button>
       </div>
       <div class="product-grid-frame" data-catalog-results="grid"></div>`;
     setupCatalogViewToggle();
     const toggle = document.querySelector<HTMLElement>("[data-catalog-view-toggle]")!;
-    expect(toggle.hidden).toBe(false);
     toggle.querySelector<HTMLButtonElement>("[data-view='list']")!.click();
     expect(document.querySelector<HTMLElement>("[data-catalog-results]")!.dataset.catalogResults).toBe("list");
     expect(localStorage.getItem(CATALOG_VIEW_STORAGE_KEY)).toBe("list");

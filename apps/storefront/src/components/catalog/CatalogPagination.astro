@@ -51,15 +51,17 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
               "inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors",
               page === item
                 ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                : "border-border text-foreground hover:bg-muted",
+                : "border-border text-foreground hover:bg-muted max-[389px]:hidden",
             ]}
           >
             {item}
           </a>
         ) : (
-          <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center text-sm text-muted-foreground">{item}</span>
+          <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center text-sm text-muted-foreground max-[389px]:hidden">{item}</span>
         ),
       )}
+      {/* Narrow phones (320-389px) cannot fit seven page links: they show "3 of 33" between the arrows. */}
+      <span class="hidden items-center px-1 text-sm text-muted-foreground max-[389px]:inline-flex">of {totalPages}</span>
 
       {page < totalPages ? (
         <a
