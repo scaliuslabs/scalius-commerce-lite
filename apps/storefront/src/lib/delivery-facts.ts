@@ -29,6 +29,8 @@ export interface DeliveryFactsInput {
   fulfilment?: ProductFulfilment;
   /** Cash-on-delivery wording for a service ("Pay when the service is done"). */
   payAtServiceText?: string;
+  /** The pickup fact's title ("Pickup available"), from the checkout language. */
+  pickupAvailableText?: string;
 }
 
 /** How a product reaches the buyer, for what the page may claim about delivery. */
@@ -138,6 +140,7 @@ function pickupFact(
   rates: DeliveryRateSplit,
   formatMoney: (amount: number) => string,
   freeDelivery: boolean,
+  title = "Pickup available",
 ): DeliveryFact | null {
   const { pickup } = rates;
   if (pickup.length === 0) return null;
@@ -148,7 +151,7 @@ function pickupFact(
   const first = pickup[0]!;
   return {
     kind: "pickup",
-    title: ["Pickup available", price].filter(Boolean).join(" · "),
+    title: [title, price].filter(Boolean).join(" · "),
     detail: pickup.length === 1
       ? first.pickupAddress?.trim() || first.name
       : `${pickup.length} pickup points`,
@@ -200,7 +203,9 @@ export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
   const physical = fulfilment === "physical";
   return [
     physical ? deliveryFact(rates, input.formatMoney, freeDelivery) : null,
-    physical ? pickupFact(rates, input.formatMoney, freeDelivery) : null,
+    physical
+      ? pickupFact(rates, input.formatMoney, freeDelivery, input.pickupAvailableText?.trim() || undefined)
+      : null,
     // Nothing is handed over for a digital item, so there is no cash on delivery.
     fulfilment === "digital"
       ? null

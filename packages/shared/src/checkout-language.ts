@@ -467,6 +467,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customizationChoosePlaceholderText: "Choose…",
   customizationUnavailableText: "This product can't be ordered right now.",
   customizationNeededText: "Fill in your details below, then add it to your cart.",
+  customizationInvalidText: "Some of your details can't be used. Check them below, then add it to your cart.",
   pickupAvailableText: "Pickup available",
   noDeliveryNeededBadgeText: "No delivery needed",
   // Receipt, account order and tracking: lines grouped by how they reach the buyer.
@@ -488,6 +489,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderPickupNotReadyText: "We'll let you know when your order is ready to collect.",
   orderPickupHoursLabelText: "Hours",
   orderNoDeliveryText: "No delivery needed",
+  orderReceiptPickedUpTitleText: "Order picked up",
   orderReceiptPickedUpMessageText: "Order #{orderId} has been picked up.",
   orderReceiptFulfilledMessageText: "Order #{orderId} is complete.",
 } as const;
@@ -963,6 +965,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customizationChoosePlaceholderText: "বেছে নিন…",
   customizationUnavailableText: "এই পণ্যটি এখন অর্ডার করা যাচ্ছে না।",
   customizationNeededText: "নিচে আপনার তথ্য দিন, তারপর কার্টে যোগ করুন।",
+  customizationInvalidText: "আপনার দেওয়া কিছু তথ্য গ্রহণ করা যাচ্ছে না। নিচে দেখে নিন, তারপর কার্টে যোগ করুন।",
   pickupAvailableText: "দোকান থেকে সংগ্রহ করা যাবে",
   noDeliveryNeededBadgeText: "ডেলিভারির প্রয়োজন নেই",
   orderLineGroupShipText: "ডেলিভারি",
@@ -983,6 +986,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderPickupNotReadyText: "অর্ডার সংগ্রহের জন্য প্রস্তুত হলে আমরা জানাব।",
   orderPickupHoursLabelText: "সময়",
   orderNoDeliveryText: "ডেলিভারির প্রয়োজন নেই",
+  orderReceiptPickedUpTitleText: "অর্ডার সংগ্রহ করা হয়েছে",
   orderReceiptPickedUpMessageText: "অর্ডার #{orderId} সংগ্রহ করা হয়েছে।",
   orderReceiptFulfilledMessageText: "অর্ডার #{orderId} সম্পন্ন হয়েছে।",
 };
@@ -991,7 +995,60 @@ export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(
   /* @__PURE__ */ Object.keys(ENGLISH_CHECKOUT_LANGUAGE_DATA) as CheckoutLanguageKey[],
 );
 
-export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = /* @__PURE__ */ new Set<CheckoutLanguageKey>([
+/**
+ * The checkout-language copy the product page uses, delivered with the
+ * layout (`storefrontCopy`) so merchant edits reach cached product pages
+ * without a second read: buy buttons and offers, buyer inputs (Wave A §3)
+ * and the fulfilment facts beside the buy box. One list for the core
+ * resolver, the API contract and the storefront type.
+ */
+export const PRODUCT_PAGE_COPY_KEYS = [
+  "addToCartText",
+  "buyNowText",
+  "unavailableText",
+  "chooseOptionText",
+  "fromPriceText",
+  "quantityLabelText",
+  "quantityLimitText",
+  "saleOfferText",
+  "saleOfferSpendText",
+  "saleOfferGetText",
+  "saleOfferGetSpendText",
+  "freeBenefitText",
+  "percentBenefitText",
+  "customizationRequiredText",
+  "customizationRequiredChoiceText",
+  "customizationRequiredCheckText",
+  "customizationTooLongText",
+  "customizationCounterText",
+  "customizationSurchargeText",
+  "customizationOptionalText",
+  "customizationChoosePlaceholderText",
+  "customizationUnavailableText",
+  "customizationNeededText",
+  "customizationInvalidText",
+  "updateCartItemText",
+  "pickupAvailableText",
+  "noDeliveryNeededBadgeText",
+  "payAtServiceText",
+] as const satisfies readonly CheckoutLanguageKey[];
+
+export type ProductPageCopyKey = (typeof PRODUCT_PAGE_COPY_KEYS)[number];
+export type ProductPageCopy = Pick<CheckoutLanguageData, ProductPageCopyKey> & {
+  /** Base code of the active checkout language ("en", "bn"). */
+  languageCode: string;
+};
+
+/** The product page's copy from a resolved checkout language. */
+export function pickProductPageCopy(code: unknown, copy: CheckoutLanguageData): ProductPageCopy {
+  const picked = Object.fromEntries(PRODUCT_PAGE_COPY_KEYS.map((key) => [key, copy[key]])) as Pick<
+    CheckoutLanguageData,
+    ProductPageCopyKey
+  >;
+  return { languageCode: checkoutLanguageBaseCode(code), ...picked };
+}
+
+export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutLanguageKey>([
   "termsText",
   "emptyCartDescriptionText",
   "paymentRecoveryMessageText",

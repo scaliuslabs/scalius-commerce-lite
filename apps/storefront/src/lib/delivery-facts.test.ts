@@ -135,6 +135,14 @@ describe("buildDeliveryFacts", () => {
       returnPolicy: null,
       formatMoney,
     })).toEqual([{ kind: "pickup", title: "Pickup available · from ৳30", detail: "2 pickup points" }]);
+    // The store's own wording from its checkout language.
+    expect(buildDeliveryFacts({
+      shippingMethods: [collectionPoint],
+      checkoutConfig: null,
+      returnPolicy: null,
+      formatMoney,
+      pickupAvailableText: "দোকান থেকে সংগ্রহ করা যাবে",
+    })).toEqual([{ kind: "pickup", title: "দোকান থেকে সংগ্রহ করা যাবে · ৳50", detail: "Gulshan 1 kiosk" }]);
   });
 
   it("claims nothing it cannot prove", () => {

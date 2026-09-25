@@ -238,7 +238,7 @@ export function orderCompletionWording(
   if (mode === "pickup") {
     return {
       statusLabel: copy.orderLinePickedUpText,
-      title: copy.orderLinePickedUpText,
+      title: copy.orderReceiptPickedUpTitleText,
       messageTemplate: copy.orderReceiptPickedUpMessageText,
     };
   }
