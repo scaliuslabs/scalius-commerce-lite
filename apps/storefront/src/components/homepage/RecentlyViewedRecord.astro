@@ -1,0 +1,16 @@
+---
+// Records a product view for the homepage's "Recently viewed" row, in this
+// browser only (lib/recently-viewed.ts). Nothing leaves the browser.
+import { recentlyViewedRecordScript } from "@/lib/recently-viewed";
+
+interface Props {
+  slug: string;
+  name: string;
+  /** A card-sized photo URL, or null. */
+  image: string | null;
+}
+
+const { slug, name, image } = Astro.props;
+---
+
+<script is:inline set:html={recentlyViewedRecordScript({ slug, name, image })} />

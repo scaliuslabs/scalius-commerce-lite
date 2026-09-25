@@ -94,9 +94,26 @@ export interface HomepageMediaAsset {
   height: number | null;
 }
 
+/** A brand-wall brand: published, live, with a public product. */
+export interface HomepageBrand {
+  id: string;
+  name: string;
+  slug: string;
+  canonicalPath: string | null;
+  logo: { mediaId: string; url: string; alt: string; width: number | null; height: number | null } | null;
+}
+
+/** A deal countdown's promotion: running, ending at `endsAt`. */
+export interface HomepagePromotionEnd {
+  id: string;
+  endsAt: string;
+}
+
 export interface HomepageSectionData {
   lists: HomepageProductList[];
   media: HomepageMediaAsset[];
+  brands: HomepageBrand[];
+  promotions: HomepagePromotionEnd[];
 }
 
 // =============================================

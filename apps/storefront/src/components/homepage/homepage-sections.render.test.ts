@@ -199,7 +199,16 @@ function store(size: "tiny" | "large"): HomepageContent {
       list("category:cat-sarees", { category: { id: "cat-sarees", name: "Sarees", slug: "sarees", canonicalPath: null } }),
       list("collection:col-eid", { collection: { id: "col-eid", title: "Eid edit" } }),
     ]) as unknown as HomepageContent["lists"],
-    media: new Map(["m-banner", "m-banner-2", "m-look", "m-story", "m-side-1", "m-side-2"].map((id) => [id, media(id)])),
+    media: new Map(["m-banner", "m-banner-2", "m-look", "m-story", "m-side-1", "m-side-2", "m-card-1", "m-card-2", "m-tile-1", "m-tile-2", "m-tile-3"]
+      .map((id) => [id, media(id)])),
+    brands: Array.from({ length: size === "tiny" ? 2 : 6 }, (_, index) => ({
+      id: `brd_${index}`,
+      name: index === 1 ? BANGLA : `Brand ${index}`,
+      slug: `brand-${index}`,
+      canonicalPath: null,
+      logo: index % 2 === 0 ? { mediaId: `m-logo-${index}`, url: image(`logo-${index}`), alt: "", width: 240, height: 120 } : null,
+    })),
+    promotionEnds: new Map([["promo-eid", new Date(Date.now() + 86_400_000 * 2).toISOString()]]),
   };
 }
 
@@ -210,6 +219,8 @@ const EMPTY: HomepageContent = {
   deliveryFacts: [],
   lists: new Map(),
   media: new Map(),
+  brands: [],
+  promotionEnds: new Map(),
 };
 
 const section = <Type extends StorefrontSectionType>(type: Type, id: string, settings: Record<string, unknown> = {}) =>
@@ -223,8 +234,25 @@ const EVERY_SECTION: StorefrontSection[] = [
   section("collections", "collections"),
   section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 }),
   section("product-grid", "grid", { title: BANGLA, source: { kind: "category", categoryId: "cat-sarees" }, columns: 4, rows: 2 }),
-  section("deal-block", "deal", { title: "Flash sale", source: { kind: "on-sale" }, endsAt: new Date(Date.now() + 86_400_000 * 2).toISOString() }),
+  section("deal-block", "deal", { title: "Flash sale", source: { kind: "on-sale" }, promotionId: "promo-eid" }),
+  section("product-tabs", "tabs", { title: "", limit: 8, tabs: [
+    { label: "", source: { kind: "newest" } },
+    { label: BANGLA, source: { kind: "popular" } },
+    { label: "Sarees", source: { kind: "category", categoryId: "cat-sarees" } },
+  ] }),
   section("lookbook", "look", { title: "Eid looks", mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } }),
+  section("shop-by", "shop-by", { title: "Shop by occasion", cards: [
+    { mediaId: "m-card-1", title: "Eid", href: "/collections/eid" },
+    { mediaId: "m-card-2", title: BANGLA, href: "/categories/sarees" },
+    { mediaId: "m-missing", title: "Gone", href: "/gone" },
+  ] }),
+  section("banner-mosaic", "mosaic", { tiles: [
+    { mediaId: "m-tile-1", alt: "Eid sale", href: "/sale" },
+    { mediaId: "m-tile-2", alt: "", href: "/new" },
+    { mediaId: "m-tile-3", alt: "Sarees", href: null },
+  ] }),
+  section("brand-wall", "brands", { title: "", style: "rail" }),
+  section("recently-viewed", "recent", { title: "" }),
   section("banner", "banner-1", { layout: "two-up", heading: "Eid sale", text: BANGLA, mediaId: "m-banner", cta: { label: "Shop", href: "/sale" } }),
   section("banner", "banner-2", { layout: "two-up", heading: "", text: "", mediaId: "m-banner-2", cta: null }),
   { id: "story", type: "editorial", version: 1, settings: { layout: "image-with-text", heading: "Our story", body: BANGLA, mediaId: "m-story", imageSide: "end" } },
@@ -276,9 +304,13 @@ describe("homepage section library", () => {
   it("renders nothing for sections without data", async () => {
     const page = await render(EVERY_SECTION, EMPTY);
     // Only the merchant's own words remain: a banner with a heading (the
-    // photo-only one is gone), the story, the FAQ, the cards and the copy.
+    // photo-only one is gone), the story, the FAQ, the cards and the copy,
+    // plus the recently-viewed island, which ships hidden and fills itself
+    // from the buyer's own browser.
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-section-id")))
-      .toEqual(["banner-1", "story", "faq", "utility", "seo"]);
+      .toEqual(["recent", "banner-1", "story", "faq", "utility", "seo"].sort((a, b) =>
+        EVERY_SECTION.findIndex((each) => each.id === a) - EVERY_SECTION.findIndex((each) => each.id === b)));
+    expect(page.querySelector("[data-recently-viewed]")!.hasAttribute("hidden")).toBe(true);
     // No placeholders: no product grid, no rail, no hero, no empty list.
     expect(page.querySelector(".product-grid, [data-product-rail], [data-hero-layout], .desktop-carousel")).toBeNull();
     // Words alone never lead: there is no photo to load early.

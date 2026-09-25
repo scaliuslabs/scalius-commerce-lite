@@ -16,6 +16,7 @@ import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductPageLayout from "@/components/product/ProductPageLayout.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
+import RecentlyViewedRecord from "@/components/homepage/RecentlyViewedRecord.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
 import ProductEmiLine from "@/components/product/ProductEmiLine.astro";
 import DigitalPromise from "@/components/product/DigitalPromise.astro";
@@ -679,6 +680,12 @@ const productCategoryAnalytics = productCategory
       currencyCode={currencyCode}
     />
   </div>
+
+  <RecentlyViewedRecord
+    slug={product.slug}
+    name={product.name}
+    image={hasProductImage(primaryImageUrl) ? getProductImageUrl(primaryImageUrl, 320) : null}
+  />
 
   {/* Product discovery data stays server-rendered but follows visible buyer
       content so it cannot delay parser discovery of the product UI. */}
