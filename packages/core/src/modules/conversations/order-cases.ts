@@ -216,6 +216,7 @@ async function createVerifiedOrderSupportRequest(
         hasActiveRefundOperation: state.hasActiveRefundOperation,
         activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
       }),
+      { order },
     ),
     supportRequestIntro: state.supportRequestIntro,
     conversationId: thread.id,

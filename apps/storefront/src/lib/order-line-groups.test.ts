@@ -15,6 +15,7 @@ import {
   relabelOrderTimeline,
   resolveOrderDeliveryBlock,
   showsOrderLineGroupHeadings,
+  supportActionDescription,
   withOrderCompletionWording,
   type OrderFulfilmentView,
 } from "./order-line-groups";
@@ -247,5 +248,23 @@ describe("finished-order wording", () => {
     expect(relabelOrderTimeline(timeline, pickupOrder, copy).map((event) => event.label)).toEqual(["Picked up", "Payment received"]);
     expect(relabelOrderTimeline(timeline, serviceOrder, copy)[0]!.label).toBe("Completed");
     expect(relabelOrderTimeline(timeline, shipOrder, copy)[0]!.label).toBe("Delivered");
+  });
+});
+
+describe("support request wording", () => {
+  const cancel = { type: "cancel_pre_shipment", description: "Ask the store to review this order before it ships." };
+
+  it.each([
+    ["delivery", { requiresShipping: true, shippingMethodKind: "delivery" as const }, "before it ships.", "পাঠানোর আগে"],
+    ["pickup", { requiresShipping: false, shippingMethodKind: "pickup" as const }, "before it's collected.", "সংগ্রহের আগে"],
+    ["service", { requiresShipping: false, shippingMethodKind: null }, "before the service is done.", "সেবা সম্পন্ন হওয়ার আগে"],
+  ])("names the %s deadline for a cancellation, in English and Bangla", (_label, order, english, bangla) => {
+    expect(supportActionDescription(cancel, order, copy)).toBe(`Ask the store to review this order ${english}`);
+    expect(supportActionDescription(cancel, order, BANGLA_CHECKOUT_LANGUAGE_DATA)).toContain(bangla);
+  });
+
+  it("keeps other requests in the store's own words", () => {
+    const refund = { type: "refund", description: "Ask the store to review a payment refund." };
+    expect(supportActionDescription(refund, { shippingMethodKind: "pickup", requiresShipping: false }, copy)).toBe(refund.description);
   });
 });

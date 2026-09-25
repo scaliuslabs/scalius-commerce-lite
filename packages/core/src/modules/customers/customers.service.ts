@@ -1631,6 +1631,7 @@ export async function getCustomerOrderDetailForOrder(
             hasActiveRefundOperation: Boolean(activeRefundOperation),
             activeRequestTypes: getActiveSupportRequestTypes(supportRequests),
         }),
+        { order },
     );
 
     const { progress, timeline } = buildCustomerOrderTracking({
