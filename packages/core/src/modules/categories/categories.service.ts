@@ -52,6 +52,7 @@ import {
     rethrowCategoryTreeRefusal,
     type CategoryTreeBlocker,
 } from "./categories.tree";
+import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 export const CATEGORY_TEXT_CHUNK_SIZE = 12_000;
 export const categorySectionValues = ["summary", "text"] as const;
@@ -735,7 +736,7 @@ export async function updateCategory(
     try {
         const updated = await db
             .update(categories)
-            .set({
+            .set(truthfulUpdatedAt(categories, {
                 name: data.name,
                 description: data.description,
                 content: data.content,
@@ -751,7 +752,7 @@ export async function updateCategory(
                 ...(data.listingTemplate !== undefined ? { listingTemplate: data.listingTemplate } : {}),
                 revision: sql`${categories.revision} + 1`,
                 updatedAt: sql`unixepoch()`,
-            })
+            }))
             .where(and(
                 eq(categories.id, id),
                 eq(categories.revision, data.expectedRevision),
@@ -804,11 +805,11 @@ export async function updateCategoryStatus(
     const lifecycleCondition = await unpublishLifecycleCondition(db, data.status, claims);
 
     const updated = await db.update(categories)
-        .set({
+        .set(truthfulUpdatedAt(categories, {
             status: data.status,
             revision: sql`${categories.revision} + 1`,
             updatedAt: sql`unixepoch()`,
-        })
+        }))
         .where(and(
             eq(categories.id, id),
             eq(categories.revision, data.expectedRevision),
@@ -1022,12 +1023,12 @@ export async function bulkDeleteCategories(
         await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
         const updated = await db
             .update(categories)
-            .set({
+            .set(truthfulUpdatedAt(categories, {
                 status: "draft",
                 revision: sql`${categories.revision} + 1`,
                 deletedAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
-            })
+            }))
             .where(and(
                 categoryClaimIdsCondition(claims),
                 isNull(categories.deletedAt),
@@ -1077,12 +1078,12 @@ export async function restoreCategories(
             buildBatchGuard(db, categoriesHaveRestorableParentsCondition(claimsJson), "CATEGORY_RESTORE_PARENT_TRASHED"),
             db
                 .update(categories)
-                .set({
+                .set(truthfulUpdatedAt(categories, {
                     status: "draft",
                     revision: sql`${categories.revision} + 1`,
                     deletedAt: null,
                     updatedAt: sql`unixepoch()`,
-                })
+                }))
                 .where(and(
                     categoryClaimIdsCondition(claims),
                     isNotNull(categories.deletedAt),
