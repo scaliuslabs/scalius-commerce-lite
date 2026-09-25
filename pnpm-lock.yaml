@@ -125,11 +125,32 @@ importers:
       '@firebase/messaging':
         specifier: ^0.13.2
         version: 0.13.2(@firebase/app@0.16.1)
+      '@fontsource-variable/cormorant-garamond':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/dm-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource-variable/noto-sans-bengali':
         specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/noto-serif-bengali':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/nunito-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/dm-serif-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/hind-siliguri':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/instrument-serif':
+        specifier: ^5.3.0
         version: 5.3.0
       '@hookform/resolvers':
         specifier: ^5.9.1
