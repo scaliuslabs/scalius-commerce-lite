@@ -266,7 +266,7 @@ border or a shadow, never both on the same element.
 
 | Token | retail | marketplace | boutique | fresh | beauty | heritage | midnight |
 |---|---|---|---|---|---|---|---|
-| background | #fbfaf7 | #ffffff | #f6f4ef | #ffffff | #ffffff | #faf6ef | #0a0a0b |
+| background | #ffffff | #ffffff | #f6f4ef | #ffffff | #ffffff | #faf6ef | #0a0a0b |
 | foreground (ink) | #1d1c1a | #0f1111 | #242220 | #15231b | #1a1718 | #2a2018 | #f4f4f5 |
 | card | #ffffff | #ffffff | #f6f4ef | #ffffff | #ffffff | #fffdf8 | #141416 |
 | primary (actions) | #1d1c1a | #c2410c | #242220 | #0b7a3e | #1a1718 | #8a3b1e | #f4f4f5 |
