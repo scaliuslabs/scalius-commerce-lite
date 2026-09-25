@@ -26,6 +26,17 @@ export interface AutoFulfilContext {
     orderId: string;
     fulfillmentId: string;
     lines: readonly AutoFulfilLine[];
+    /**
+     * The installed CREDENTIAL_ENCRYPTION_KEY, for fulfillers that seal
+     * durable secrets (gift-card codes). Absent: such a fulfiller throws and
+     * the lines stay owed (fail closed; the job or sweep retries).
+     */
+    credentialEncryptionKey?: string;
+}
+
+/** Runtime inputs the Worker hands to automatic fulfilment. */
+export interface AutoFulfilRuntime {
+    credentialEncryptionKey?: string;
 }
 
 /**

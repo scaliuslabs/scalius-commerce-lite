@@ -12,7 +12,7 @@ import {
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { nanoid } from "nanoid";
-import { autoFulfillerFor, FULFILLER_REGISTRY, type FulfillerRegistry } from "./registry";
+import { autoFulfillerFor, FULFILLER_REGISTRY, type AutoFulfilRuntime, type FulfillerRegistry } from "./registry";
 import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./ledger";
 import { applyOrderStatusChange } from "../orders/status/lifecycle";
 import { checkoutDocument, type AutoFulfilMode } from "../settings/documents";
@@ -74,6 +74,7 @@ export async function autoFulfilOrder(
     db: Database,
     orderId: string,
     registry: FulfillerRegistry = FULFILLER_REGISTRY,
+    runtime: AutoFulfilRuntime = {},
 ): Promise<AutoFulfilResult> {
     const result: AutoFulfilResult = { orderId, fulfilledTypes: [], unavailableTypes: [], skipped: null, delivered: false };
     const order = await db.select({
@@ -123,6 +124,7 @@ export async function autoFulfilOrder(
         const context = {
             orderId,
             fulfillmentId,
+            credentialEncryptionKey: runtime.credentialEncryptionKey,
             lines: lines.map((item) => ({
                 orderItemId: item.id,
                 productId: item.productId,
@@ -229,6 +231,7 @@ export async function listOrdersAwaitingAutoFulfil(
 export async function sweepAutoFulfilment(
     db: Database,
     registry: FulfillerRegistry = FULFILLER_REGISTRY,
+    runtime: AutoFulfilRuntime = {},
 ): Promise<{ scanned: number; fulfilled: number; failed: number }> {
     // Nothing can be handed over without a registered automatic fulfiller.
     if (!AUTO_FULFILLMENT_TYPES.some((type) => autoFulfillerFor(type, registry))) {
@@ -239,7 +242,7 @@ export async function sweepAutoFulfilment(
     let failed = 0;
     for (const orderId of orderIds) {
         try {
-            const result = await autoFulfilOrder(db, orderId, registry);
+            const result = await autoFulfilOrder(db, orderId, registry, runtime);
             if (result.fulfilledTypes.length > 0) fulfilled += 1;
         } catch (error) {
             failed += 1;
