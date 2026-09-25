@@ -97,6 +97,17 @@ export const policies = [
     sample: '<form action="/cart" class="x">',
   },
   {
+    rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
+    why: "engraving text, notes and gift messages are buyer content; they must never reach pixels, tag managers or the Conversions API (Wave A P6)",
+    paths: [
+      `${storefront}/lib/analytics.ts`,
+      `${storefront}/lib/tracking/meta-capi.ts`,
+      `${storefront}/components/product/lib/product-analytics.ts`,
+    ],
+    forbid: [/\bproperties\b/],
+    sample: "contents: items.map((item) => ({ id: item.id, properties: item.properties })),",
+  },
+  {
     rule: "the agent continuation page renders without the storefront Layout",
     why: "a bearer-bound continuation page must not load merchant analytics or third-party head/body scripts",
     paths: [`${storefront}/pages/agent/continue/[continuationId].astro`],

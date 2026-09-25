@@ -621,4 +621,40 @@ describe("storefront analytics", () => {
     );
     warnSpy.mockRestore();
   });
+
+  it("never sends a cart line's buyer inputs to any pixel, tag manager or CAPI (Wave A P6)", () => {
+    // A caller passing whole cart lines, buyer inputs and all.
+    const buyerInputs = [{ key: "engraving", value: "SECRET-ENGRAVING", label: "Engraving", displayValue: "SECRET-ENGRAVING", priceMinor: 20_000 }];
+    const leakyLine = { id: "sku_1", quantity: 1, item_price: 450, properties: buyerInputs, note: "SECRET-NOTE" };
+    const leaky = {
+      content_ids: ["sku_1"],
+      content_name: "Engraved pen",
+      content_type: "product" as const,
+      contents: [leakyLine],
+      currency: "BDT",
+      num_items: 1,
+      value: 450,
+      properties: buyerInputs,
+    };
+
+    trackFbViewContent(leaky);
+    trackFbAddToCart(leaky);
+    trackFbInitiateCheckout(leaky);
+    trackFbAddPaymentInfo(leaky);
+    trackFbPurchase({ ...leaky, order_id: "order_1" }, { ph: "+8801712345678" });
+    trackStorefrontAddPaymentInfoOnce({ checkoutId: "chk_1", paymentMethod: "cod", ...leaky });
+
+    const sent = JSON.stringify([
+      vi.mocked(window.fbq!).mock.calls,
+      vi.mocked(window.ttq!.track!).mock.calls,
+      vi.mocked(window.zaraz!.ecommerce!).mock.calls,
+      window.dataLayer,
+      sendServerEventMock.mock.calls,
+    ]);
+    expect(sent).toContain("sku_1");
+    expect(sent).toContain("450");
+    expect(sent).not.toContain("SECRET-ENGRAVING");
+    expect(sent).not.toContain("SECRET-NOTE");
+    expect(sent).not.toContain("engraving");
+  });
 });
