@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 89,
-  name: "0089_wave_a_contract_columns",
+  version: 90,
+  name: "0090_catalogue_schema",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -223,8 +223,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "e7d67648b6beea33bc539e988256fc0e1b378be208b42b27272e8560c4b495a2",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 89,
+    name: "0089_wave_a_contract_columns",
     sourceSha256: "8fecfe8de769120f1d525cb7cd0ec5595246074dd46f623e55bd7f3a6f63dc79",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "0c4e0fe4d503aaeda11d492acb521f8740e64073427df0c2d2e2ed9802bf0ecf",
   },
 ] as const;
 

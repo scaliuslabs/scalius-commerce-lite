@@ -631,6 +631,13 @@
       "when": 1790300020000,
       "tag": "0089_wave_a_contract_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1790300021000,
+      "tag": "0090_catalogue_schema",
+      "breakpoints": true
     }
   ]
 }

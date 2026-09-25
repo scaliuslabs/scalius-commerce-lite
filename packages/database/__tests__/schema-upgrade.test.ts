@@ -341,6 +341,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 90,
+        name: "0090_catalogue_schema",
+        sqliteStatements: 77,
+        postgresStatements: 97,
+      },
     ]);
   });
 
@@ -479,6 +485,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 87, name: "0087_on_sale_indexes" },
           { version: 88, name: "0088_wave_a_contract" },
           { version: 89, name: "0089_wave_a_contract_columns" },
+          { version: 90, name: "0090_catalogue_schema" },
         ],
       });
     } finally {

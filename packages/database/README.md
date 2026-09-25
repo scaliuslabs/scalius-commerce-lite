@@ -144,14 +144,17 @@ the schema declarations are the source of truth.
 
 | Table | Purpose |
 |-------|---------|
-| `products` | Core product. `slug`, `categoryId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery` |
+| `products` | Core product. `slug`, `categoryId` FK, `brandId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery`, `pageTemplate` (theme product configuration, NULL = default), `emiEligible` |
 | `productMedia` | Ordered product association to global `media`; immutable asset identity, unique dense order, and exactly one featured row for non-empty galleries |
 | `productVariants` | SKU-level sellable identities with normalized merchant option assignments, optional exact `productMedia` image association, stock pools, CAS versions, discounts, and barcode identity |
-| `categories` | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription` |
-| `collections` | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder` |
-| `productAttributes` | Filterable attribute definitions. `name` (unique), `slug` (unique), `options` (JSON array) |
-| `productAttributeValues` | Product-attribute assignments. Unique on `(productId, attributeId)` |
-| `productRichContent` | Product detail sections (tabs). `title`, `content`, `sortOrder` |
+| `categories` | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription`, `listingTemplate`. Tree (0088): write only `parentId`; triggers keep `depth` (0-3, four levels), the id `path` (`/root/child/`) and `category_closure` exact and refuse cycles, trashed parents and a fifth level |
+| `collections` | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder`, `listingTemplate` |
+| `brands` | Brand entity (0088): unique `slug`, optional `logoMediaId` (restrict), SEO fields, `status` draft/published, `listingTemplate`, `revision` |
+| `productAttributes` | Attribute definitions. `name` (unique), `slug` (unique), `options` (legacy JSON array), typed spec fields (0088): `groupId`, `valueType` (text/number/boolean/enum), `unit`, `sortOrder`, `keySpec`, `highlight`, `facetDisplay` (range only for numbers, swatch only for enums) |
+| `attributeGroups` | Spec-table groups, unique live name |
+| `attributeValues` | Normalised values of an attribute (`normalizedValue` = lower(trim(value)), unique per live attribute), optional `swatchHex` |
+| `productAttributeValues` | Product-attribute assignments. Unique on `(productId, attributeId)`. `value` is the display text; enums also set `valueId`, numbers and booleans `valueNumber` (triggers refuse a value that does not match the type) |
+| `productRichContent` | Legacy product tabs. `title`, `content`, `sortOrder`. 0088 mirrors every write into `productContentBlocks`; dropped once its readers move |
 | `mediaFolders` | Flat, versioned media folders with case-insensitive active-name uniqueness |
 | `media` | Versioned image/video metadata keyed by immutable R2 `objectKey`; poster, readiness, and trash/delete lifecycle |
 | `mediaUploadSessions` | Durable multipart intent and completion/expiry recovery state |
@@ -208,6 +211,19 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 |-------|---------|
 | `metaConversionsLogs` | CAPI event log. Event identity, status, request/response JSON |
 
+### `catalog.ts` -- Catalogue projections and content (0088)
+
+| Table | Purpose |
+|-------|---------|
+| `categoryClosure` | Every (ancestor, descendant, depth) pair of the category tree, self rows included. Trigger-maintained |
+| `categoryAttributeSets` | The specs a category uses, in order (a category inherits its ancestors' sets) |
+| `productFacetValues` | Facet projection: product-level attribute rows and SKU-level option-axis rows, keyed `(ownerId, facetKey)`. Rewritten with the product aggregate's writes; counts join it to `productBuyerState` |
+| `productBuyerState` | One row per product: public flag, category, brand, card SKU, integer price range, availability band. Written in the same batch as every write that changes it; a rebuild recomputes it |
+| `productRecommendations` | Precomputed recommendations, positions 0-23 per product, with a reason |
+| `productSalesStats` | Units sold in the last 30 days, refreshed on a schedule |
+| `productContentBlocks` | Typed, versioned content blocks per product and placement; settings follow `@scalius/shared/product-content-blocks` |
+| `productBundles` | Quantity tiers (percentage or fixed set price); every change bumps the checkout authority |
+
 ### `content.ts` -- Content Domain
 
 | Table | Purpose |
@@ -215,7 +231,6 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `pages` | CMS pages. Slug, content, published flags/timestamps, featured image, SEO fields |
 | `heroSections` | Legacy hero config. Type and JSON config |
 | `heroSliders` | Revision-guarded desktop/mobile homepage hero documents with one current row per viewport |
-| `pageTemplates` | Page template definitions. Type and JSON config |
 
 ### `system.ts` -- System Domain
 
@@ -238,7 +253,7 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 | `productAttributes.options` | `string[]` (declared via Drizzle `mode: "json"`) |
 | `heroSliders.images` | `{ id: string, url: credential-free HTTPS URL, title: string, link: safe internal/HTTPS destination or "" }[]` (maximum 12, unique IDs) |
 | `heroSections.config` | `string` (JSON, provider-specific hero configuration) |
-| `pageTemplates.config` | `string` (JSON, template-specific configuration) |
+| `productContentBlocks.settings` | Strict per-type object (`@scalius/shared/product-content-blocks`), at most 256 KB |
 | `analytics.config` | `string` (raw HTML `<script>` content, may include Partytown attributes) |
 | `deliveryLocations.externalIds` | `{ pathao?: string\|number, steadfast?: string\|number }` (provider name -> external numeric ID) |
 | `deliveryLocations.metadata` | `Record<string, unknown>` (provider-specific location metadata) |
@@ -266,6 +281,11 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | `var_` | Product variant | `productVariants` |
 | `cat_` | Category | `categories` |
 | `prc_` | Rich content section | `productRichContent` |
+| `brd_` | Brand | `brands` |
+| `atg_` | Attribute group | `attributeGroups` |
+| `atv_` | Normalised attribute value | `attributeValues` |
+| `pcb_` | Product content block | `productContentBlocks` |
+| `pbd_` | Product quantity bundle | `productBundles` |
 | `val_` | Attribute value | `productAttributeValues` |
 | `attr_` | Attribute definition | `productAttributes` |
 | `cust_` | Customer | `customers` |
@@ -337,7 +357,7 @@ ledger. Every migration from 0050 onward must:
 - be listed in the runtime release manifest used by `/readyz`.
 
 The current release is the one `CURRENT_DATABASE_SCHEMA` names in
-`src/schema-contract.ts` (`0086_notification_outbox` at this writing). The release chain also
+`src/schema-contract.ts` (`0090_catalogue_schema` at this writing). The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54
