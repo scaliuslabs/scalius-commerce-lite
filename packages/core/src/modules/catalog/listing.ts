@@ -35,6 +35,7 @@ import {
     getPagination,
     normalizeMinRating,
     presentCardRating,
+    reviewStatsJoin,
     productMinRatingCondition,
     reviewStats,
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
@@ -242,7 +243,7 @@ async function readStorefrontCatalogResults(
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
         // The card rating (and the `rating` order): the page's rows by primary key.
-        .leftJoin(reviewStats, eq(reviewStats.productId, buyerState.productId))
+        .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
         .where(and(...conditions))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search

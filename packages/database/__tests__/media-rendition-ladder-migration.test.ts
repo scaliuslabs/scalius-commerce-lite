@@ -20,7 +20,7 @@ describe(MIGRATION, () => {
     it.each(["d1", "turso"] as const)("sends every rendered image back to its original on %s", (provider) => {
         const sqlite = createMigratedSqlite({ provider, beforeMigration: "0094_" });
         sqlite.exec(SEED);
-        sqlite.exec(compiledMigrationSql(provider, undefined, "0094_"));
+        sqlite.exec(compiledMigrationSql(provider, "0095_", "0094_"));
         expect(sqlite.prepare("SELECT id, variant_width, version, updated_at FROM media ORDER BY id").all()).toEqual([
             { id: "med_original01", variant_width: null, version: 1, updated_at: 1000 },
             { id: "med_rendered01", variant_width: null, version: 3, updated_at: 1000 },

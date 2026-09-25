@@ -204,4 +204,19 @@ describe("review ratings on buyer listings", () => {
             prod_f: null,
         });
     });
+
+    // Last: it turns reviews off for the shared store.
+    it("publishes no card rating, rating facet or rating order while reviews are off", async () => {
+        const { db, sqlite } = harness;
+        sqlite.prepare(`INSERT INTO settings (id, category, key, type, value) VALUES ('set_reviews_off', 'reviews', 'document', 'json', ?)`)
+            .run(JSON.stringify({ enabled: false, moderation: "auto", requestsEnabled: true, requestDelayDays: 7, blockWords: [] }));
+        const result = await getStorefrontCategoryProducts(db, CATEGORY, { page: 1, limit: 20 });
+        expect(result.products.every((product) => product.rating === null)).toBe(true);
+        expect(result.ratingFacet).toEqual([]);
+        const home = await getHomepageData(db, {
+            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [] },
+            sectionsOnly: true,
+        });
+        expect((home.sections.lists[0]?.products ?? []).every((card) => card.rating === null)).toBe(true);
+    });
 });

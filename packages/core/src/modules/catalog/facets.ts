@@ -31,6 +31,7 @@ import type { CatalogFacetFilter } from "../products/types";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { buildStorefrontBuyerStateConditions, reviewStats } from "./shared";
+import { reviewsEnabledSql } from "../settings/documents";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
@@ -560,7 +561,7 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
         : sql`${buyerState}`;
     // A left join by primary key after the scope's own index: it never drives.
     const scopeFrom = readsRating
-        ? sql`${scopeProducts} LEFT JOIN ${reviewStats} AS facet_rating ON facet_rating.product_id = ${buyerState.productId}`
+        ? sql`${scopeProducts} LEFT JOIN ${reviewStats} AS facet_rating ON facet_rating.product_id = ${buyerState.productId} AND ${reviewsEnabledSql()} = 1`
         : scopeProducts;
     const categorySet = input.categoryId
         ? sql`(

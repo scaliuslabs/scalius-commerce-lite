@@ -17,7 +17,7 @@ import {
     type ProductCardImages,
     type ProductMediaProjection,
 } from "../products/media";
-import { presentCardRating, reviewStats, type CardRating } from "./shared";
+import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
 
 /** The card columns of a product row joined to a buyer pricing projection. */
@@ -34,10 +34,10 @@ export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingPr
     // The card rating: primary-key probes of the stats projection per card
     // row (no join, so every caller keeps its own statement shape).
     ratingAvgCenti: sql<number | null>`(
-        SELECT ${reviewStats.ratingAvgCenti} FROM ${reviewStats} WHERE ${reviewStats.productId} = ${products.id}
+        SELECT ${reviewStats.ratingAvgCenti} FROM ${reviewStats} WHERE ${reviewStatsJoin(products.id)}
     )`.as("card_rating_avg_centi"),
     reviewCount: sql<number | null>`(
-        SELECT ${reviewStats.reviewCount} FROM ${reviewStats} WHERE ${reviewStats.productId} = ${products.id}
+        SELECT ${reviewStats.reviewCount} FROM ${reviewStats} WHERE ${reviewStatsJoin(products.id)}
     )`.as("card_review_count"),
 });
 

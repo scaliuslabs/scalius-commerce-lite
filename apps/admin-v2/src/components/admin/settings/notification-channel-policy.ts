@@ -70,7 +70,7 @@ export const CUSTOMER_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   ...ORDER_EVENT_GROUPS,
   { key: "groupConversations", events: ["conversation_reply"] },
   { key: "groupReviews", events: ["review_request"] },
-  { key: "groupDigitalGiftCards", events: ["order_digital_delivered", "gift_card_issued"] },
+  { key: "groupDigitalGiftCards", events: ["order_digital_delivered", "gift_card_issued", "gift_card_sent"] },
 ];
 
 /**

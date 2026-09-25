@@ -45,7 +45,7 @@ const V1_THEME = JSON.stringify({
 
 /** A version 3 document (layout choices and fixed homepage blocks, no template or blocks). */
 const V3_THEME = JSON.stringify({"version": 3, "mode": "configured", "tokens": {"typography": "retail", "radius": "subtle", "buttonShape": "radius", "containerWidth": "wide", "components": {"buttons": "solid", "inputs": "outlined", "cards": "bordered"}, "colors": {"popover": "#ffffff", "popover-foreground": "#1d1c1a", "ring": "#1d1c1a", "background": "#fbfaf7", "foreground": "#1d1c1a", "card": "#ffffff", "card-foreground": "#1d1c1a", "primary": "#1d1c1a", "primary-foreground": "#fbfaf7", "secondary": "#f1eee8", "secondary-foreground": "#1d1c1a", "muted": "#f1eee8", "muted-foreground": "#5d5850", "accent": "#e9e3d8", "accent-foreground": "#1d1c1a", "destructive": "#b42318", "destructive-foreground": "#ffffff", "border": "#e5e0d6", "input": "#d3ccbf"}}, "layout": {"header": "classic", "footer": "columns", "card": "standard", "density": "compact", "productPage": "gallery", "navigation": "menu", "mobileNavigation": "drawer"}, "sections": [{"id": "hero", "type": "hero", "version": 1, "settings": {}}, {"id": "collections", "type": "collections", "version": 1, "settings": {}}, {"id": "categories", "type": "categories", "version": 1, "settings": {}}, {"id": "delivery", "type": "delivery", "version": 1, "settings": {}}]});
-/** A version 4 document (the shape before 0097): the template with the old version. */
+/** A version 4 document (the shape before 0093): the template with the old version. */
 const V4_THEME = JSON.stringify({ ...storefrontTemplateTheme("boutique"), version: 4 });
 
 describe("versioned storefront theme settings", () => {
@@ -316,9 +316,9 @@ describe("versioned storefront theme settings", () => {
   });
 });
 
-describe("migration 0097 resets theme documents that are not version 5", () => {
-  function seedBefore0097(published: string, draft: string, history: string) {
-    const sqlite = createMigratedSqlite({ beforeMigration: "0097_" });
+describe("migration 0093 resets theme documents that are not version 5", () => {
+  function seedBefore0093(published: string, draft: string, history: string) {
+    const sqlite = createMigratedSqlite({ beforeMigration: "0093_" });
     sqlite.prepare(`
       INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
       VALUES ('default', ?, 3, 1, 1)
@@ -338,7 +338,7 @@ describe("migration 0097 resets theme documents that are not version 5", () => {
         token_hash, theme, draft_revision, base_published_revision, expires_at, created_by, created_at
       ) VALUES ('hash_old', ?, 4, 3, 4102444800, NULL, 1)
     `).run(history);
-    sqlite.exec(compiledMigrationSql("d1", undefined, "0097_"));
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0093_"));
     return createSqliteD1Database({ sqlite });
   }
 
@@ -351,7 +351,7 @@ describe("migration 0097 resets theme documents that are not version 5", () => {
     ["version 3", V3_THEME, V1_THEME],
     ["version 4", V4_THEME, V3_THEME],
   ])("lets the Theme page read the defaults at revision zero after migrating a %s theme", async (_label, published, history) => {
-    const { sqlite, db } = seedBefore0097(published, published, history);
+    const { sqlite, db } = seedBefore0093(published, published, history);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: DEFAULT_STOREFRONT_THEME,
@@ -375,7 +375,7 @@ describe("migration 0097 resets theme documents that are not version 5", () => {
   it("keeps a version 5 published theme and drops only its older history", async () => {
     const currentTheme = storefrontTemplateTheme("boutique");
     const serialized = JSON.stringify(currentTheme);
-    const { sqlite, db } = seedBefore0097(serialized, serialized, V3_THEME);
+    const { sqlite, db } = seedBefore0093(serialized, serialized, V3_THEME);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: currentTheme,

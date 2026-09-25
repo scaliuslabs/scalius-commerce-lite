@@ -148,7 +148,10 @@ export function safeConversationReturnPath(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const raw = value.trim();
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || raw.length > 512) return null;
-  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  for (let i = 0; i < raw.length; i += 1) {
+    const code = raw.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return null;
+  }
   let url: URL;
   try {
     url = new URL(raw, "https://storefront.invalid");
