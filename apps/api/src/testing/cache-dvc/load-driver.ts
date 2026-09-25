@@ -14,7 +14,7 @@ import * as inventory from "@scalius/core/modules/inventory";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
 import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
-import { renderPublicRead } from "../../public-read";
+import { createPublicPartReader, renderPublicRead } from "../../public-read";
 
 /** Drizzle over a (metered) D1 binding, as the API builds it. */
 export function d1Database(binding: D1Database): Database {
@@ -43,6 +43,14 @@ export interface LoadOptions {
   readonly reads: number;
   readonly readsPerWrite: number;
   readonly seed: number;
+  /**
+   * The part cache under load:
+   * - `model` (default): the driver's own model of §6.6;
+   * - `strict`: S4's production reader (`createPublicPartReader`, strict),
+   *   one batch per page view, over an in-memory Cache API;
+   * - `generation`: today's store-wide generation (every write empties it).
+   */
+  readonly mode?: "model" | "strict" | "generation";
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +157,88 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
     };
   };
 
+  const mode = options.mode ?? "model";
+  const partCache = new Map<string, Response>();
+  const generationCache = new Map<string, { status: number; body: string }>();
+  const memoryCache = {
+    async match(key: RequestInfo | URL) {
+      return partCache.get(String(key))?.clone();
+    },
+    async put(key: RequestInfo | URL, response: Response) {
+      partCache.set(String(key), new Response(await response.arrayBuffer(), { status: response.status, headers: response.headers }));
+    },
+    async delete(key: RequestInfo | URL) {
+      return partCache.delete(String(key));
+    },
+  };
+  const loadEnv = { ...(context.env as unknown as Record<string, unknown>), CF_VERSION_METADATA: { id: "dvc-load", tag: "", timestamp: "" } } as unknown as Env;
+
+  /** One page view through S4's strict reader: one batch, one validation statement at most. */
+  const strictView = async (page: { type: string; parts: string[] }, stats: { parts: number; hits: number; misses: number }) => {
+    const started = performance.now();
+    const waits: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (promise: Promise<unknown>) => void waits.push(promise.catch(() => undefined)), passThroughOnException: () => undefined } as unknown as ExecutionContext;
+    let summary: { hits: number; misses: number; refreshes: number; validationMs: number | null } | null = null;
+    context.setPhase(`strict:${page.type}`);
+    const reader = createPublicPartReader({
+      mode: "strict",
+      env: loadEnv,
+      cache: memoryCache,
+      db: () => context.db,
+      render: (part) => renderPublicRead(part, loadEnv, ctx),
+      waitUntil: (promise) => void waits.push(promise.catch(() => undefined)),
+      maxConcurrentRenders: 4,
+      now: () => now,
+      random: () => 1,
+      log: () => undefined,
+      onSummary: (each) => {
+        summary = { ...each };
+      },
+    });
+    const settled = await reader.readParts(page.parts.map((path) => new Request(`https://api.internal${path}`, { headers: { Accept: "application/json" } })), null);
+    for (const result of settled) if (result.status === "fulfilled") await result.value.response.text();
+    const elapsed = performance.now() - started;
+    await Promise.all(waits);
+    const done = summary as { hits: number; misses: number; refreshes: number; validationMs: number | null } | null;
+    stats.parts += page.parts.length;
+    stats.hits += done?.hits ?? 0;
+    stats.misses += page.parts.length - (done?.hits ?? 0);
+    if (done?.validationMs !== null && done?.validationMs !== undefined) validateMs.push(done.validationMs);
+    if (done && done.hits === page.parts.length) hitPageMs.push(elapsed);
+    else (missMs[page.type] ??= []).push(elapsed);
+  };
+
+  /** Today: parts keyed by one store-wide generation, which every buyer-visible write replaces. */
+  const generationView = async (page: { type: string; parts: string[] }, stats: { parts: number; hits: number; misses: number }) => {
+    const started = performance.now();
+    let missed = false;
+    context.setPhase(`generation:${page.type}`);
+    await Promise.all(page.parts.map(async (path) => {
+      stats.parts += 1;
+      if (generationCache.has(path)) {
+        stats.hits += 1;
+        return;
+      }
+      missed = true;
+      stats.misses += 1;
+      const waits: Promise<unknown>[] = [];
+      const ctx = { waitUntil: (promise: Promise<unknown>) => void waits.push(promise.catch(() => undefined)), passThroughOnException: () => undefined } as unknown as ExecutionContext;
+      const response = await renderPublicRead(new Request(`https://api.internal${path}`, { headers: { Accept: "application/json" } }), context.env, ctx);
+      const body = await response.text();
+      await Promise.all(waits);
+      if (response.status === 200) generationCache.set(path, { status: 200, body });
+    }));
+    if (!missed) hitPageMs.push(performance.now() - started);
+    else (missMs[page.type] ??= []).push(performance.now() - started);
+  };
+
   const view = async () => {
+    if (mode !== "model") {
+      const page = pageParts();
+      const stats = (byType[page.type] ??= { views: 0, parts: 0, hits: 0, misses: 0 });
+      stats.views += 1;
+      return mode === "strict" ? strictView(page, stats) : generationView(page, stats);
+    }
     const page = pageParts();
     const stats = (byType[page.type] ??= { views: 0, parts: 0, hits: 0, misses: 0 });
     stats.views += 1;
@@ -232,6 +321,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       );
     }
     const ms = performance.now() - began;
+    generationCache.clear();
     context.setPhase("harness");
     const keys = Number((await context.sql("SELECT count(*) AS n FROM cache_dep WHERE seq > ?", [before]))[0]!.n);
     const after = writeMeterRef;
@@ -285,6 +375,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
 
   const report = {
     provider: context.provider,
+    mode,
     catalogue: { publicProducts: productRows.length, categories: categoryRows.length, trackedSkus: variantRows.length },
     workload: { pageViews: options.reads, readsPerWrite: options.readsPerWrite, simulatedSeconds: options.reads / 100 },
     wallSeconds: Math.round((performance.now() - wallStarted) / 100) / 10,

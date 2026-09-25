@@ -390,6 +390,8 @@ export interface PublicPartReaderDeps {
   now?(): number;
   random?(): number;
   log?(line: string): void;
+  /** Strict mode: each batch's hit, miss and refresh counts and validation time (metrics, load tests). */
+  onSummary?(summary: Readonly<BatchCacheSummary>): void;
 }
 
 export interface PublicPartRead {
@@ -672,6 +674,7 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
         const summary: BatchCacheSummary = { hits: 0, misses: 0, refreshes: 0, uncached: 0, stale: 0, validationMs: null };
         const results = await Promise.allSettled(await readStrictParts(parts, summary, true));
         logSummary("[CacheDVC]", summary);
+        deps.onSummary?.(summary);
         return results.map((result) => (result.status === "fulfilled" ? { status: "fulfilled", value: toPublic(result.value) } : result));
       }
       const statuses: boolean[] = parts.map(() => false);
