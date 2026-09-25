@@ -20,6 +20,16 @@ vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 
+// The courier ledger sync is proven on the real schema in
+// packages/core/src/modules/fulfilment/courier-booking.d1.test.ts.
+const courierLedger = vi.hoisted(() => ({
+  sync: vi.fn(async () => ({ recorded: false, voided: false })),
+}));
+vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/fulfilment")>()),
+  syncCourierFulfilmentFromShipment: courierLedger.sync,
+}));
+
 vi.mock("@scalius/core/modules/payments", () => ({
   assertNoActiveRefundAttempt: mocks.assertNoActiveRefundAttempt,
   assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,

@@ -173,8 +173,10 @@ export function normalizeAgentStorefrontDeliverySelection(
   if (!selection.zoneId && selection.areaId) {
     throw new ValidationError("Select a zone before selecting an area.");
   }
-  if (selection.shippingMethodId && (!selection.cityId || !selection.zoneId)) {
-    throw new ValidationError("Select a city and zone before selecting a shipping method.");
+  // A method alone is valid: a pickup rate needs no address. The delivery
+  // preflight refuses a delivery rate without its city and zone.
+  if (selection.shippingMethodId && selection.cityId && !selection.zoneId) {
+    throw new ValidationError("Select a zone for this city, or clear the city to collect at a pickup point.");
   }
   return selection;
 }

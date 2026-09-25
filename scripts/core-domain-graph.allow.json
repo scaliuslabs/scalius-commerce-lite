@@ -46,6 +46,7 @@
     "delivery -> payments",
     "delivery -> settings",
     "fulfilment -> delivery",
+    "fulfilment -> notifications",
     "fulfilment -> orders",
     "fulfilment -> payments",
     "fulfilment -> settings",

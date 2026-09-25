@@ -6,6 +6,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SendEmailOptions } from "../../integrations/email/provider";
 import { sendOrderNotificationEmail, sendStaffOrderEmails } from "./notifications.service";
 import type { OrderNotificationType } from "./notification-types";
+import { composeOrderSms, readOrderMessageContext } from "./order-email";
 
 const transport = vi.hoisted(() => ({ sendEmail: vi.fn() }));
 vi.mock("../../integrations/email", () => ({ sendEmail: transport.sendEmail }));
@@ -495,6 +496,28 @@ describe("customer order email composition and delivery", () => {
     sqlite.exec("UPDATE orders SET status = 'partially_refunded', payment_status = 'partially_refunded'");
     await send("order_partially_refunded", { data: { amount: 120 } });
     expect(message().text).toContain("A partial refund for this order has been processed.\nRefund: ৳120");
+  });
+
+  it("carries each line's frozen buyer inputs in the email facts and never in SMS variables", async () => {
+    // The snapshot is immutable: the line is written with its properties.
+    sqlite.exec("DELETE FROM order_items");
+    sqlite.prepare(`INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor,
+      line_subtotal_minor, properties) VALUES ('item', 'order_email', 'product', 2, 'Saved cotton shirt', 10000, 20000, ?)`).run(JSON.stringify([
+      { key: "engraving", type: "text", label: "Engraving", value: "<b>Anika</b>", displayValue: "<b>Anika</b>", priceMinor: 20000 },
+      { key: "fit", type: "select", label: "Fit", value: "slim", displayValue: "Slim", priceMinor: 0 },
+      { broken: true },
+    ]));
+    const context = await readOrderMessageContext({ orderId: "order_email", type: "order_confirmed" }, db);
+    const [item] = context.facts.items as Array<(typeof context.facts.items)[number] & { properties: string[] }>;
+    // Plain text: the template escapes it where it renders.
+    expect(item?.properties).toEqual(["Engraving: <b>Anika</b> (+৳200)", "Fit: Slim"]);
+    expect(JSON.stringify(context.variables)).not.toMatch(/Anika|Engraving/);
+    expect(composeOrderSms(context, "{{order_number}} {{order_total}}")).not.toMatch(/Anika|Engraving/);
+  });
+
+  it("gives lines without buyer inputs an empty list", async () => {
+    const context = await readOrderMessageContext({ orderId: "order_email", type: "order_confirmed" }, db);
+    expect((context.facts.items[0] as { properties?: string[] }).properties).toEqual([]);
   });
 
   it("sends no staff email for other events or when nobody is listed", async () => {

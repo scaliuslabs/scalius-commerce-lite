@@ -42,6 +42,7 @@ import {
 } from "../../errors";
 import { createAgentStorefrontBootstrap } from "./bootstrap";
 import { parseAgentStorefrontCartJson } from "./state";
+import { presentAgentStorefrontCartIssues } from "./service";
 import {
   assertAgentStorefrontCheckoutQuoteFingerprint,
   buildAgentStorefrontCheckoutQuoteFingerprint,
@@ -79,7 +80,8 @@ export interface AgentStorefrontCheckoutSubmitInput {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
-  shippingAddress: string;
+  /** Required only when a line ships (not for pickup or a cart with nothing physical). */
+  shippingAddress?: string | null;
   notes: string | null;
   paymentMethod: string;
 }
@@ -146,7 +148,7 @@ export async function buildAgentStorefrontCheckoutRequestHash(
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
-    shippingAddress: input.shippingAddress.trim(),
+    shippingAddress: input.shippingAddress?.trim() || null,
     notes: input.notes?.trim() || null,
     paymentMethod: input.paymentMethod,
   });
@@ -319,27 +321,35 @@ export async function submitAgentStorefrontCheckout(
   const replay = await replayCommittedCheckout(db, contextId, requestKey, requestHash);
   if (replay) return { response: replay, postCommitPayload: null, availabilityVariantIds: [] };
   assertActiveContext(owned, input.expectedRevision, now);
-  if (!owned.cityId || !owned.zoneId || !owned.shippingMethodId) {
-    throw new ValidationError("Select a city, zone, and shipping method before checkout.");
-  }
-  const { cityId, zoneId, shippingMethodId } = owned;
 
   const cart = await resolveContextCartIdentities(db, owned);
+  // The same rule as storefront checkout: the delivery preflight in the
+  // authority read decides whether a method and an address are needed (a
+  // pickup rate needs no address; a cart with nothing physical needs neither).
   const authority = await withCheckoutStage("AGENT_CHECKOUT_AUTHORITY", () =>
     loadStorefrontCheckoutAuthority(db, {
       items: cart,
       inventoryPool: InventoryPool.REGULAR,
-      city: cityId,
-      zone: zoneId,
+      city: owned.cityId,
+      zone: owned.zoneId,
       area: owned.areaId,
-      shippingMethodId,
+      shippingMethodId: owned.shippingMethodId,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
     }, options.credentialEncryptionKey));
   if (!authority.cartValidation.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
-      itemIssues: authority.cartValidation.issues,
+      itemIssues: presentAgentStorefrontCartIssues(authority.cartValidation.issues),
     });
+  }
+  const delivery = authority.deliveryPreflight;
+  const shippingMethodId = delivery.shippingMethod?.id ?? null;
+  if (delivery.fulfilment.requiresDeliveryMethod && !shippingMethodId) {
+    throw new ValidationError("Select a delivery or pickup method before checkout.");
+  }
+  const shippingAddress = input.shippingAddress?.trim() || null;
+  if (delivery.fulfilment.requiresShipping && !shippingAddress) {
+    throw new ValidationError("Enter the delivery address, or choose a pickup method.");
   }
 
   const customer = await liveContextCustomer(db, owned);
@@ -363,13 +373,14 @@ export async function submitAgentStorefrontCheckout(
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
-    shippingAddress: input.shippingAddress.trim(),
-    city: cityId,
-    zone: zoneId,
-    area: owned.areaId,
-    cityName: authority.deliveryPreflight.cityName,
-    zoneName: authority.deliveryPreflight.zoneName,
-    areaName: authority.deliveryPreflight.areaName,
+    // Address, city and zone are stored only when a line ships.
+    shippingAddress: delivery.fulfilment.requiresShipping ? shippingAddress : null,
+    city: delivery.address?.city ?? null,
+    zone: delivery.address?.zone ?? null,
+    area: delivery.address?.area ?? null,
+    cityName: delivery.cityName,
+    zoneName: delivery.zoneName,
+    areaName: delivery.areaName,
     notes: input.notes?.trim() || null,
     items: authority.cartValidation.items.map((item) => ({
       productId: item.productId,
@@ -380,7 +391,7 @@ export async function submitAgentStorefrontCheckout(
       variantLabel: item.variantLabel,
     })),
     discountCodes: owned.discountCode ? [owned.discountCode] : [],
-    shippingCharge: fromMinor(authority.deliveryPreflight.shippingMinor, storeDecimalPlaces),
+    shippingCharge: fromMinor(delivery.shippingMinor, storeDecimalPlaces),
     shippingMethodId,
     paymentMethod: input.paymentMethod,
     inventoryPool: InventoryPool.REGULAR,

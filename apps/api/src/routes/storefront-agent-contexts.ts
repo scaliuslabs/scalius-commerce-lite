@@ -86,7 +86,9 @@ const cartIssueSchema = z.object({
   cartKey: z.string().nullable().optional(),
   productId: z.string(),
   variantId: z.string().nullable(),
-  code: z.string(),
+  code: z.string().openapi({
+    description: "needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.",
+  }),
   action: z.string(),
   message: z.string(),
   productName: z.string().nullable(),
@@ -204,7 +206,9 @@ const checkoutSubmitSchema = z.object({
   customerName: z.string().trim().min(3).max(100),
   customerPhone: agentCustomerPhoneSchema,
   customerEmail: z.email().nullable(),
-  shippingAddress: z.string().trim().min(10).max(500),
+  shippingAddress: z.string().trim().min(10).max(500).nullable().optional().openapi({
+    description: "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).",
+  }),
   notes: z.string().trim().max(500).nullable(),
   paymentMethod: z.enum(listPaymentMethodIds() as [string, ...string[]]).openapi({
     description: "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.",

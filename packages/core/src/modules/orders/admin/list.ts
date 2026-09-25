@@ -23,6 +23,7 @@ import type { OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types"
 import { orderNumberSearchCondition } from "../number";
 import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
+import { formatOrderCsvLineProperties } from "../csv-export";
 import {
     resolveActiveRefundOperationsForOrders,
     selectActiveRefundAttemptRowsForOrders,
@@ -639,6 +640,8 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             quantity: number;
             unitPrice: number;
             lineTotal: number;
+            /** Buyer inputs as "Engraving: Anika (+৳200)". */
+            properties: string[];
         }>;
     }>();
     for (const chunk of chunkIds(orderIds)) {
@@ -647,6 +650,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 id: orders.id,
                 shippingAddress: orders.shippingAddress,
                 notes: orders.notes,
+                currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
             }).from(orders).where(inArray(orders.id, chunk)).all(),
             db.select({
@@ -656,6 +660,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 quantity: orderItems.quantity,
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
+                properties: orderItems.properties,
             }).from(orderItems).where(inArray(orderItems.orderId, chunk)).orderBy(orderItems.createdAt, orderItems.id).all(),
             db.select({
                 orderId: deliveryShipments.orderId,
@@ -670,7 +675,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 .orderBy(deliveryShipments.createdAt, deliveryShipments.id)
                 .all(),
         ]);
-        const places = new Map(orderRows.map((row) => [row.id, row.currencyDecimalPlaces]));
+        const currencies = new Map(orderRows.map((row) => [row.id, row]));
         const parcels = new Map<string, { couriers: Set<string>; tracking: Set<string> }>();
         for (const shipment of shipmentRows) {
             if (shipment.status === ShipmentStatus.CANCELLED || shipment.status === ShipmentStatus.FAILED) continue;
@@ -692,13 +697,15 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             });
         }
         for (const item of itemRows) {
-            const decimals = places.get(item.orderId) ?? 2;
+            const currency = currencies.get(item.orderId);
+            const decimals = currency?.currencyDecimalPlaces ?? 2;
             details.get(item.orderId)?.lines.push({
                 productName: item.productName,
                 variantLabel: item.variantLabel,
                 quantity: item.quantity,
                 unitPrice: fromMinor(item.unitPriceMinor, decimals),
                 lineTotal: fromMinor(item.lineSubtotalMinor, decimals),
+                properties: formatOrderCsvLineProperties(item.properties, currency?.currencyCode ?? "BDT", decimals),
             });
         }
     }

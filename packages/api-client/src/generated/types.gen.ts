@@ -4217,6 +4217,9 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -4363,6 +4366,9 @@ export type GetApiV1StorefrontAgentContextsByContextIdCartResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -4523,6 +4529,9 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -4684,6 +4693,9 @@ export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -4845,6 +4857,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -5004,6 +5019,9 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -5165,6 +5183,9 @@ export type PutApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -5328,6 +5349,9 @@ export type PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -5490,6 +5514,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
+                /**
+                 * needs_customization: the product asks for buyer inputs an agent cart cannot carry; remove it or send the buyer to its product page.
+                 */
                 code: string;
                 action: string;
                 message: string;
@@ -5672,7 +5699,10 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
          */
         customerPhone: string;
         customerEmail: string | null;
-        shippingAddress: string;
+        /**
+         * Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).
+         */
+        shippingAddress?: string | null;
         notes: string | null;
         /**
          * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
@@ -32037,14 +32067,14 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 skippedRows: number;
             };
             reasons: Array<{
-                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
+                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'non_physical_excluded' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 products: number;
                 rows: number;
                 samples: Array<{
                     id: string;
                     name: string;
                     slug: string;
-                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
+                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'non_physical_excluded' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
         };
@@ -32960,7 +32990,7 @@ export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses = {
                 variantId: string | null;
                 sku: string | null;
                 status: 'omitted';
-                reason: 'excluded_from_product_feed' | 'inactive_product' | 'unavailable_product' | 'unavailable_variant' | 'unresolved_variant_shape' | 'missing_image' | 'non_positive_price' | 'input_bounds_exceeded' | 'product_not_found' | 'sku_not_found' | 'sku_ambiguous' | 'feed_disabled' | 'storefront_url_unavailable';
+                reason: 'excluded_from_product_feed' | 'inactive_product' | 'unavailable_product' | 'unavailable_variant' | 'unresolved_variant_shape' | 'missing_image' | 'non_positive_price' | 'input_bounds_exceeded' | 'product_not_found' | 'sku_not_found' | 'sku_ambiguous' | 'feed_disabled' | 'storefront_url_unavailable' | 'non_physical_product';
             } | {
                 productId: string;
                 variantId: string | null;
@@ -43574,6 +43604,28 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                  * Units buyers can still order across active SKUs; null when a SKU has no stock limit.
                  */
                 availableStock: number | null;
+                requiresCustomization: boolean;
+                /**
+                 * Buyer inputs asked on the product page, in schema order.
+                 */
+                customization: {
+                    fields: Array<{
+                        key: string;
+                        label: string;
+                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        required: boolean;
+                        help: string | null;
+                        maxLength: number | null;
+                        price: number;
+                        priceMinor: number;
+                        options: Array<{
+                            value: string;
+                            label: string;
+                            price: number;
+                            priceMinor: number;
+                        }>;
+                    }>;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -45717,6 +45769,8 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 actorType: 'admin' | 'system';
                 cashCollected: number | null;
                 voidedAt: NullableTimestamp;
+                canVoid: boolean;
+                voidBlockedReason: 'voided' | 'courier' | 'delivered' | 'order_not_confirmed' | null;
             }>;
             conversation: {
                 id: string;
@@ -46248,10 +46302,16 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 customerName: string;
                 customerPhone: string;
                 customerEmail: string | null;
-                shippingAddress: string;
-                city: string;
-                zone: string;
+                shippingAddress: string | null;
+                city: string | null;
+                zone: string | null;
                 area: string | null;
+                requiresShipping: boolean;
+                shippingMethodId: string | null;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
@@ -46282,6 +46342,28 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 discountPercentage: number | null;
                 discountType: string | null;
                 discountAmount: number | null;
+                /**
+                 * Buyer inputs asked on the product page, in schema order.
+                 */
+                customizationSchema: {
+                    fields: Array<{
+                        key: string;
+                        label: string;
+                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        required: boolean;
+                        help: string | null;
+                        maxLength: number | null;
+                        price: number;
+                        priceMinor: number;
+                        options: Array<{
+                            value: string;
+                            label: string;
+                            price: number;
+                            priceMinor: number;
+                        }>;
+                    }>;
+                } | null;
+                requiresCustomization: boolean;
                 variants: Array<{
                     id: string;
                     productId: string;
@@ -46334,10 +46416,16 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 customerName: string;
                 customerPhone: string;
                 customerEmail: string | null;
-                shippingAddress: string;
-                city: string;
-                zone: string;
+                shippingAddress: string | null;
+                city: string | null;
+                zone: string | null;
                 area: string | null;
+                requiresShipping: boolean;
+                shippingMethodId: string | null;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                shippingMethodKind: 'delivery' | 'pickup' | null;
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
@@ -46353,6 +46441,19 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     variantId: string | null;
                     quantity: number;
                     price: number;
+                    /**
+                     * How the order line reaches the buyer, frozen when the order is placed.
+                     */
+                    fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+                    properties: Array<{
+                        key: string;
+                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        label: string;
+                        value: string;
+                        displayValue: string;
+                        price: number;
+                        priceMinor: number;
+                    }>;
                 }>;
                 [key: string]: unknown;
             };
@@ -46493,6 +46594,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponses = {
             orderStatus: string;
             fulfillmentStatus: string;
             replayed: boolean;
+            awaitingPayment: boolean;
         };
     };
 };

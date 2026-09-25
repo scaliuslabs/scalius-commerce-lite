@@ -15,7 +15,8 @@ import { saveBusinessSettings } from "../../settings/business-settings.service";
 import { updateOrderStatusFromShipment } from "../../delivery/tracking";
 import { bulkConfirmOrders, updateOrderStatus } from "./lifecycle";
 import { bulkFulfillOrders } from "../../fulfilment/bulk";
-import { createFulfillmentShipment, markParcelReturned } from "../../fulfilment/shipments";
+import { createFulfillmentShipment } from "../../fulfilment/shipments";
+import { markParcelReturned } from "../../fulfilment/ledger";
 import { markOrderDelivered, processCodAction } from "../../fulfilment/delivery-outcomes";
 
 /**
