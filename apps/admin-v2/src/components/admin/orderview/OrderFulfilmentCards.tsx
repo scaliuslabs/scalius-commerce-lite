@@ -447,7 +447,7 @@ export function VoidFulfillmentDialog({ order, fulfillment, units, open, onOpenC
           <AlertDialogDescription>
             {ship
               ? units === 1 ? t("shipments.cameBackOne") : t("shipments.cameBackMany", { count: units })
-              : t("void.body", { count: units })}
+              : units === 1 ? t("void.bodyOne") : t("void.body", { count: units })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {mutation.isError ? <p role="alert" className="text-body text-destructive">{orderErrorMessage(mutation.error)}</p> : null}

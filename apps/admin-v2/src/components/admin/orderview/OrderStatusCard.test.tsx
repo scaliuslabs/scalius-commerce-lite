@@ -125,7 +125,7 @@ describe("OrderStatusCard", () => {
   it("links a part-sent order's blocked cancel to the parcel action it names", async () => {
     const partSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={partSent} />));
-    const link = host.querySelector<HTMLAnchorElement>('a[href="#order-shipments"]');
+    const link = host.querySelector<HTMLAnchorElement>('a[href="#order-fulfilment"]');
     expect(link?.textContent).toBe(t["shipments.cameBack"]);
     expect(link?.parentElement?.textContent).toContain(t["cancel.shippedOne"].replace("{count}", "1"));
   });
