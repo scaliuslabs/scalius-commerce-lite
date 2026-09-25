@@ -991,6 +991,26 @@ describe("initCartFunctionality", () => {
   const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+  it("checks availability once when the quote refuses an unfixed line, never in a loop", async () => {
+    withAddress();
+    const { TaxQuoteCartChangedError } = await import("../checkout/tax-quote-client");
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteCartChangedError([]));
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    const cartChecks = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("validate-cart")).length;
+    // One check on load and one for the refusal; the re-render that follows quotes
+    // again but does not start another check while the lines are unchanged.
+    expect(cartChecks()).toBeLessThanOrEqual(2);
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote.mock.calls.length).toBeLessThanOrEqual(4);
+
+    // A change to the lines is checked again.
+    cartStore.set({ ...cartState, items: { [CART_LINE_KEY]: { ...CART_ITEM, quantity: 2 } }, totalItems: 2, totalAmount: 200 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(cartChecks()).toBeGreaterThan(2);
+    expect(cartChecks()).toBeLessThanOrEqual(4);
+  });
+
   it("re-reads the delivery options instead of reporting a failed total when the quote refuses the rate", async () => {
     withAddress();
     const rejected = vi.fn();
