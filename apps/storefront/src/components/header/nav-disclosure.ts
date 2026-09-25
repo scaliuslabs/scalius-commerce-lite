@@ -111,7 +111,11 @@ export function fitNavOverflow(list: HTMLElement): void {
   more.hidden = false;
 
   const available = list.clientWidth;
-  if (available <= 0) return;
+  if (available <= 0) {
+    // Not laid out (a hidden row): everything stays in it, "More" only for the extras.
+    more.hidden = !extras;
+    return;
+  }
   const view = list.ownerDocument.defaultView;
   const gap = view ? Number.parseFloat(view.getComputedStyle(list).columnGap) || 0 : 0;
   const moreWidth = more.offsetWidth;

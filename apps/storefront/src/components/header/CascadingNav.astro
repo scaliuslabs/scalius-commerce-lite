@@ -12,6 +12,7 @@
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import FlyoutList from "./FlyoutList.astro";
+import { navigationPanelKey } from "./nav-tree";
 import {
   ariaCurrent,
   navigationChildren,
@@ -30,9 +31,11 @@ interface Props {
   extras?: NavigationItem[];
   /** "More" ends with "All categories" (/categories). */
   allCategories?: boolean;
+  /** The columns here are cut to the link budget; this URL serves them whole (filled on intent, nav-panels.ts). */
+  panelsSrc?: string;
 }
 
-const { navigation = [], id, layout, flyouts, label = "Main navigation", extras = [], allCategories = false } = Astro.props;
+const { navigation = [], id, layout, flyouts, label = "Main navigation", extras = [], allCategories = false, panelsSrc } = Astro.props;
 const items = navigation.filter((item) => item?.title);
 const hasExtras = extras.length > 0 || allCategories;
 const link = (item: NavigationItem) => ({
@@ -43,16 +46,16 @@ const link = (item: NavigationItem) => ({
 });
 ---
 
-<nav id={id} class="cnav" data-cnav-layout={layout} aria-label={label} data-menu-root>
+<nav id={id} class="cnav" data-cnav-layout={layout} aria-label={label} data-menu-root data-nav-panels={panelsSrc}>
   <ul class="cnav-bar" data-menu-bar data-nav-overflow data-nav-pending>
     {
       items.map((item, index) => {
         const children = navigationChildren(item);
         return (
-          <li class="cnav-item" data-nav-index={index}>
+          <li class="cnav-item" data-nav-index={index} data-nav-key={panelsSrc && children.length > 0 ? navigationPanelKey(item) : undefined}>
             {item.href ? (
-              <a class="cnav-link" data-menu-top-link {...link(item)}>
-                {item.title}
+              <a class="cnav-link" data-menu-top-link title={item.title.length > 24 ? item.title : undefined} {...link(item)}>
+                <span class="nav-label">{item.title}</span>
               </a>
             ) : (
               children.length === 0 && <span class="cnav-link">{item.title}</span>
@@ -206,6 +209,18 @@ const link = (item: NavigationItem) => ({
   .cnav[data-cnav-layout="bar"] .fly-link {
     min-height: 2rem;
     padding-block: 0.25rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] .fly-toggle {
+    height: 2rem;
+  }
+
+  @media (pointer: coarse) {
+    .cnav[data-cnav-layout="bar"] .fly-link,
+    .cnav[data-cnav-layout="bar"] .fly-toggle {
+      min-height: 2.75rem;
+      height: auto;
+    }
   }
 
   .cnav-link:hover,
