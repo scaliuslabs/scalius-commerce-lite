@@ -147,6 +147,85 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
   },
 };
 
+/**
+ * What changes height when the page scrolls. The sticky header condenses (a
+ * shorter bar; the phone search row and the classic dropdown row fold
+ * away), and the page under it must not move: while condensed the header
+ * keeps its expanded height in the flow as a bottom margin (CLS 0). The rows
+ * paint with these lengths and the reserve is built from the same custom
+ * properties, so the two can never drift apart; rows and reserve animate
+ * with one shared transition, so their sum is the same in every frame.
+ */
+export const HEADER_GEOMETRY = {
+  /** The one transition every condensing height and the reserve use. */
+  condense: { duration: "300ms", easing: "cubic-bezier(0.25, 0.1, 0.25, 1)" },
+  /** Every phone bar: 56px, 48px once scrolled. */
+  phoneBar: { expanded: "3.5rem", condensed: "3rem" },
+  /** A header search field (HeaderSearch), and the space under the phone search row. */
+  searchField: "2.75rem",
+  phoneSearchGap: "0.5rem",
+  /** The classic header's main row on computers: 72px, 64px once scrolled. */
+  classicBar: { expanded: "4.5rem", condensed: "4rem" },
+  /**
+   * The classic header's dropdown row, which folds into the bar on scroll:
+   * its top border, 0.5rem above and below the menu, and a menu link's
+   * height (DesktopNav; touch screens keep 44px targets).
+   */
+  classicMenuRow: { border: "1px", padding: "0.5rem", link: { fine: "2.5rem", coarse: "2.75rem" } },
+} as const;
+
+export interface HeaderCondense {
+  /** The height the header loses on scroll below 64rem, as a CSS length. */
+  phone: string;
+  /** ...and from 64rem. */
+  desktop: string;
+}
+
+/**
+ * How much a header condenses on scroll: the reserve that keeps the page
+ * still. `spec` null is the classic header; `foldsMenuRow` its dropdown row
+ * folding into the bar.
+ */
+export function headerCondense(spec: HeaderSpec | null, options: { foldsMenuRow: boolean }): HeaderCondense {
+  const bar = "var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed)";
+  if (!spec) {
+    const classicBar = "var(--hdr-classic-bar) - var(--hdr-classic-bar-condensed)";
+    return {
+      phone: `calc(${bar})`,
+      desktop: options.foldsMenuRow ? `calc(${classicBar} + var(--hdr-classic-menu-row))` : `calc(${classicBar})`,
+    };
+  }
+  // Composed headers keep their computer rows as they are.
+  return {
+    phone: spec.phoneSearch === "sticky" ? `calc(${bar} + var(--hdr-phone-search-row))` : `calc(${bar})`,
+    desktop: "0rem",
+  };
+}
+
+/**
+ * The geometry and the reserve as custom properties on #site-header.
+ * HeaderLayout's CSS chooses `--nav-link-height` (fine or coarse pointer)
+ * and `--hdr-condense-duration` (0s under reduced motion).
+ */
+export function headerGeometryStyle(condense: HeaderCondense): string {
+  const { condense: motion, phoneBar, searchField, phoneSearchGap, classicBar, classicMenuRow } = HEADER_GEOMETRY;
+  return [
+    `--hdr-condense-motion: ${motion.duration}`,
+    `--hdr-condense-easing: ${motion.easing}`,
+    `--hdr-phone-bar: ${phoneBar.expanded}`,
+    `--hdr-phone-bar-condensed: ${phoneBar.condensed}`,
+    `--hdr-search-field: ${searchField}`,
+    `--hdr-phone-search-row: calc(var(--hdr-search-field) + ${phoneSearchGap})`,
+    `--hdr-classic-bar: ${classicBar.expanded}`,
+    `--hdr-classic-bar-condensed: ${classicBar.condensed}`,
+    `--nav-link-height-fine: ${classicMenuRow.link.fine}`,
+    `--nav-link-height-coarse: ${classicMenuRow.link.coarse}`,
+    `--hdr-classic-menu-row: calc(${classicMenuRow.border} + 2 * ${classicMenuRow.padding} + var(--nav-link-height))`,
+    `--hdr-condense-phone: ${condense.phone}`,
+    `--hdr-condense-desktop: ${condense.desktop}`,
+  ].join("; ");
+}
+
 /** The spec for a composed header, with its settings applied (`cartTotal`). */
 export function headerSpec(variant: string, settings: Record<string, unknown>): HeaderSpec | null {
   const spec = HEADER_SPECS[variant as keyof typeof HEADER_SPECS];

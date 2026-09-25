@@ -78,6 +78,47 @@ const {
 }
 
 <style is:global>
+  /* The sticky header condenses on scroll, but the page under it must not
+     move (CLS 0): while condensed it keeps its expanded height in the flow
+     as a bottom margin. The reserve is the variant's data (header-variants
+     headerCondense, set on #site-header), and it animates with the same
+     transition as the heights it replaces, so the flow height is the same in
+     every frame while the bar still eases. */
+  #main-header {
+    transition-property: margin-bottom, box-shadow, background-color, border-color;
+    transition-duration: var(--hdr-condense-duration, 300ms);
+    transition-timing-function: var(--hdr-condense-easing, cubic-bezier(0.25, 0.1, 0.25, 1));
+  }
+
+  #main-header.is-scrolled {
+    margin-bottom: var(--hdr-condense-phone, 0rem);
+  }
+
+  /* Menu links keep 44px targets on touch screens (DesktopNav). Under
+     reduced motion the rows and the reserve snap together. */
+  #site-header {
+    --nav-link-height: var(--nav-link-height-fine, 2.5rem);
+    --hdr-condense-duration: var(--hdr-condense-motion, 300ms);
+  }
+
+  @media (pointer: coarse) {
+    #site-header {
+      --nav-link-height: var(--nav-link-height-coarse, 2.75rem);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #site-header {
+      --hdr-condense-duration: 0s;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    #main-header.is-scrolled {
+      margin-bottom: var(--hdr-condense-desktop, 0rem);
+    }
+  }
+
   /* Bottom tabs carry cart and account on phones (mix rule 5). */
   @media (max-width: 63.99rem) {
     #main-header[data-phone-drop~="account"] [data-header-account],
