@@ -13,6 +13,15 @@ const validateOrderSearch = (search: Record<string, unknown>) =>
 const base = validateOrderSearch({});
 
 describe("order list search", () => {
+  it("filters by delivery method and counts it, dropping unknown methods", () => {
+    const search = validateOrderSearch({ deliveryMethod: "pickup" });
+    expect(search.deliveryMethod).toBe("pickup");
+    expect(orderListQuery(search, "").deliveryMethod).toBe("pickup");
+    expect(countOrderFilters(search)).toBe(1);
+    expect(validateOrderSearch({ deliveryMethod: "drone" }).deliveryMethod).toBeUndefined();
+    expect(orderViewUpdates("ready_for_pickup")).toMatchObject({ view: "ready_for_pickup", deliveryMethod: undefined });
+  });
+
   it("defaults to newest first and keeps unknown tabs, filters and any search term out", () => {
     const search = validateOrderSearch({
       view: "everything",
@@ -34,7 +43,7 @@ describe("order list search", () => {
   });
 
   it("accepts every server-side tab and the partially refunded payment filter", () => {
-    for (const view of ["unfulfilled", "unpaid", "cod_to_collect", "delivery_failed", "returned"]) {
+    for (const view of ["unfulfilled", "ready_for_pickup", "unpaid", "cod_to_collect", "delivery_failed", "returned"]) {
       expect(validateOrderSearch({ view }).view).toBe(view);
     }
     expect(validateOrderSearch({ paymentStatus: "partially_refunded" }).paymentStatus).toBe("partially_refunded");

@@ -104,6 +104,30 @@ describe("order list delivery state", () => {
     expect(card.textContent).toContain("Delivery failed · attempt 1");
   });
 
+  it("marks pickup and no-delivery orders, and a pickup order ready to collect", async () => {
+    const pickup = await render(<FulfillmentCell row={order({
+      status: "confirmed", fulfillmentStatus: "pending", latestShipment: null, shippingMethodKind: "pickup", requiresShipping: false,
+    })} />);
+    expect(pickup.textContent).toContain("Unfulfilled");
+    expect(pickup.textContent).toContain("Pickup");
+    act(() => root.unmount());
+    host.remove();
+
+    const ready = await render(<FulfillmentCell row={order({
+      status: "confirmed", fulfillmentStatus: "pending", latestShipment: null, shippingMethodKind: "pickup",
+      requiresShipping: false, pickupReadyAt: new Date("2026-09-25T09:00:00Z"),
+    })} />);
+    expect(ready.textContent).toContain("Ready for pickup");
+    expect(ready.textContent).not.toContain("Unfulfilled");
+    act(() => root.unmount());
+    host.remove();
+
+    const service = await render(<FulfillmentCell row={order({
+      status: "confirmed", fulfillmentStatus: "pending", latestShipment: null, shippingMethodKind: null, requiresShipping: false,
+    })} />);
+    expect(service.textContent).toContain("No delivery");
+  });
+
   it("keeps the courier status while the parcel is simply on its way", async () => {
     const view = await render(<FulfillmentCell row={order({})} />);
     expect(view.textContent).toContain("In transit");
