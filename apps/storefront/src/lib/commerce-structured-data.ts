@@ -1,5 +1,7 @@
 import type { ProductVariant, ShippingMethod } from "@/lib/api/types";
 import { productFulfilment, splitDeliveryRates } from "@/lib/delivery-facts";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 
 export interface StorefrontBusinessInfo {
   companyName?: string | null;
@@ -466,4 +468,107 @@ export function gtinJsonLdForVariant(
   const value = cleanString(barcode);
   const property = gtinPropertyForBarcodeType(barcodeType);
   return value && property ? { [property]: value } : {};
+}
+
+/** The product page's Product/ProductGroup script never exceeds this. */
+export const PRODUCT_JSON_LD_MAX_BYTES = 20 * 1024;
+/** Plain-text description kept in Product JSON-LD (an excerpt, never per variant). */
+export const PRODUCT_JSON_LD_DESCRIPTION_MAX_CHARS = 1_000;
+
+/**
+ * The description schema.org sees: the rich description flattened to plain
+ * text (entities decoded, whitespace collapsed) and cut at a word boundary
+ * after `maxChars`, so a long rich description cannot dominate the page.
+ */
+export function productSchemaDescription(
+  html: string | null | undefined,
+  fallback: string,
+  maxChars = PRODUCT_JSON_LD_DESCRIPTION_MAX_CHARS,
+): string {
+  const text = htmlToPlainText(html) || fallback.trim();
+  if (text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+export interface ProductGroupVariantSchema {
+  name: string;
+  url: string;
+  sku: string;
+  /** The SKU's own photo; the group's first photo when it has none. */
+  image: string | null;
+  /** GTIN and standard option properties (size, color, material, pattern). */
+  properties: Record<string, string>;
+  /** A complete Offer for this SKU. */
+  offer: Record<string, unknown>;
+}
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+/**
+ * ProductGroup JSON-LD for an optioned product. Facts shared by every SKU
+ * (description, brand, the photo list) are stated once on the group, which
+ * its variants inherit; each variant carries only what differs: its name,
+ * URL, SKU, identifiers, one photo and its Offer. When the variants would
+ * push the script past `maxBytes`, the variants that fit are listed, in
+ * order, and the rest are left out rather than cut short: every listed SKU
+ * stays complete and true, and the page itself still offers every SKU.
+ */
+export function buildProductGroupJsonLd({
+  name,
+  url,
+  description,
+  images,
+  productGroupID,
+  brandName,
+  variesBy,
+  variants,
+  maxBytes = PRODUCT_JSON_LD_MAX_BYTES,
+}: {
+  name: string;
+  url: string;
+  description: string;
+  images: string[];
+  productGroupID: string;
+  brandName: string | null;
+  variesBy: string[];
+  variants: ProductGroupVariantSchema[];
+  maxBytes?: number;
+}) {
+  const group = {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    name,
+    url,
+    ...(description ? { description } : {}),
+    ...(images.length > 0 ? { image: images } : {}),
+    productGroupID,
+    ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
+    ...(variesBy.length > 0 ? { variesBy } : {}),
+  };
+  const nodes = variants.map((variant) => {
+    const image = variant.image ?? images[0] ?? null;
+    return {
+      "@type": "Product",
+      name: variant.name,
+      url: variant.url,
+      ...(image ? { image } : {}),
+      sku: variant.sku,
+      ...variant.properties,
+      offers: variant.offer,
+    };
+  });
+  // The group with an empty `hasVariant`, then each node plus its comma.
+  let used = utf8Bytes(serializeJsonForInlineScript({ ...group, hasVariant: [] }));
+  const hasVariant: typeof nodes = [];
+  for (const node of nodes) {
+    const size = utf8Bytes(serializeJsonForInlineScript(node)) + (hasVariant.length > 0 ? 1 : 0);
+    if (hasVariant.length > 0 && used + size > maxBytes) break;
+    hasVariant.push(node);
+    used += size;
+  }
+  return { ...group, hasVariant };
 }
