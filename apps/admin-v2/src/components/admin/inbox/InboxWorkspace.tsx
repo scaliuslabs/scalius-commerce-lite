@@ -7,7 +7,7 @@ import { inboxMessages } from "~/i18n/inbox";
 import { ContextRail } from "./ContextRail";
 import { ConversationPane, NoConversationSelected } from "./ConversationPane";
 import { InboxList } from "./InboxList";
-import type { StaffThread } from "./inbox-api";
+import type { StaffThread } from "~/lib/api-query-options/inbox";
 import type { InboxSearch } from "./inbox-search";
 
 /**

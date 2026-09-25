@@ -33,10 +33,13 @@ export const CONVERSATION_NOTIFICATION_TYPES = [
 
 export type ConversationNotificationType = (typeof CONVERSATION_NOTIFICATION_TYPES)[number];
 
-export const NOTIFICATION_TYPES = [
+// Bundlers treat a top-level spread as a possible side effect, and one would
+// keep the whole browser entry (templates, message copy) in the dashboard's
+// always-loaded code; the pure initializer keeps this module tree-shakeable.
+export const NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
     ...ORDER_NOTIFICATION_TYPES,
     ...CONVERSATION_NOTIFICATION_TYPES,
-] as const;
+] as const)();
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -64,12 +67,6 @@ export const ORDER_NOTIFICATION_LABELS: Record<OrderNotificationType, string> = 
     payment_balance_paid: "Balance Paid",
     support_request_submitted: "Support Request Submitted",
     support_request_status_updated: "Support Request Updated",
-};
-
-export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
-    ...ORDER_NOTIFICATION_LABELS,
-    conversation_reply: "New Reply",
-    conversation_message: "New Customer Message",
 };
 
 /**

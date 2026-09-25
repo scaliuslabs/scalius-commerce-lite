@@ -8,12 +8,12 @@ import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { getServerFnError } from "~/lib/api-helpers";
+import type { StaffThread } from "~/lib/api-query-options/inbox";
 import { MAX_BODY_LENGTH, MAX_IMAGES, acceptImages } from "./conversation-format";
 import {
   newRequestKey,
   uploadConversationImage,
   usePostMessage,
-  type StaffThread,
   type UploadedImage,
 } from "./inbox-api";
 

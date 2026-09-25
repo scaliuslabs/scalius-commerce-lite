@@ -16,7 +16,7 @@ import { apiData } from "~/lib/api";
 import { getApiV1AdminConversations } from "@scalius/api-client/sdk";
 import { formatOrderTimestamp } from "../orderview/formatters";
 import { threadPreview, threadTitle } from "./conversation-format";
-import { inboxKeys, type InboxItem, type InboxQuery } from "./inbox-api";
+import { inboxKeys, type InboxItem, type InboxQuery } from "~/lib/api-query-options/inbox";
 import type { InboxSearch } from "./inbox-search";
 
 const STATUSES = ["open", "pending", "closed"] as const;

@@ -1,80 +1,19 @@
-// Inbox data: query options, mutations and the image upload. The SDK carries
-// JSON; image uploads stay on a same-origin multipart fetch (the SDK transport
-// sends text bodies only, as the media library does).
-import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+// Inbox writes: replies and notes, thread updates, read marks and the image
+// upload. The SDK carries JSON; image uploads stay on a same-origin multipart
+// fetch (the SDK transport sends text bodies only, as the media library does).
+// Reads live in lib/api-query-options/inbox.ts, which loads with the shell.
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import {
-  getApiV1AdminConversations,
-  getApiV1AdminConversationsById,
-  getApiV1AdminConversationsOrderByOrderId,
-  getApiV1AdminConversationsSummary,
   patchApiV1AdminConversationsById,
   postApiV1AdminConversationsByIdMessages,
   postApiV1AdminConversationsByIdRead,
   postApiV1AdminConversationsOrderByOrderIdMessages,
 } from "@scalius/api-client/sdk";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import { apiData, type ApiQuery, type ApiResult } from "~/lib/api";
+import { apiData } from "~/lib/api";
+import { inboxKeys, type StaffThread } from "~/lib/api-query-options/inbox";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
-
-export type InboxQuery = ApiQuery<typeof getApiV1AdminConversations>;
-export type InboxPage = ApiResult<typeof getApiV1AdminConversations>;
-export type InboxItem = InboxPage["items"][number];
-export type StaffThread = ApiResult<typeof getApiV1AdminConversationsById>["conversation"];
-export type StaffMessage = StaffThread["messages"][number];
-export type StaffAttachment = StaffMessage["attachments"][number];
-export type InboxSummary = ApiResult<typeof getApiV1AdminConversationsSummary>;
-
-export const inboxKeys = {
-  all: ["conversations"] as const,
-  lists: () => [...inboxKeys.all, "list"] as const,
-  list: (query: InboxQuery) => [...inboxKeys.lists(), query] as const,
-  summary: () => [...inboxKeys.all, "summary"] as const,
-  thread: (id: string) => [...inboxKeys.all, "thread", id] as const,
-  order: (orderId: string) => [...inboxKeys.all, "order", orderId] as const,
-};
-
-/** Keep an open inbox current without a socket: short polls while visible. */
-const THREAD_POLL_MS = 20_000;
-const LIST_POLL_MS = 30_000;
-const SUMMARY_POLL_MS = 60_000;
-
-export const inboxListQueryOptions = (query: InboxQuery) =>
-  queryOptions({
-    queryKey: inboxKeys.list(query),
-    queryFn: () => apiData(getApiV1AdminConversations({ query })),
-    refetchInterval: LIST_POLL_MS,
-    staleTime: 5_000,
-  });
-
-export const inboxSummaryQueryOptions = () =>
-  queryOptions({
-    queryKey: inboxKeys.summary(),
-    queryFn: () => apiData(getApiV1AdminConversationsSummary()),
-    refetchInterval: SUMMARY_POLL_MS,
-    staleTime: 30_000,
-  });
-
-export const threadQueryOptions = (id: string) =>
-  queryOptions({
-    queryKey: inboxKeys.thread(id),
-    queryFn: async () => (await apiData(getApiV1AdminConversationsById({ path: { id } }))).conversation,
-    refetchInterval: THREAD_POLL_MS,
-    staleTime: 0,
-  });
-
-export const orderThreadQueryOptions = (orderId: string) =>
-  queryOptions({
-    queryKey: inboxKeys.order(orderId),
-    queryFn: async () => (await apiData(getApiV1AdminConversationsOrderByOrderId({ path: { orderId } }))).conversation,
-    refetchInterval: THREAD_POLL_MS,
-    staleTime: 0,
-  });
-
-/** Earlier messages of a thread, for "Show earlier messages". */
-export async function fetchOlderMessages(id: string, beforeSeq: number): Promise<StaffThread> {
-  return (await apiData(getApiV1AdminConversationsById({ path: { id }, query: { beforeSeq } }))).conversation;
-}
 
 /** Where an attachment image loads from (same origin, session cookie, never cached). */
 export function attachmentUrl(conversationId: string, attachmentId: string): string {

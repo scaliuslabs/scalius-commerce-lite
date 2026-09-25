@@ -17,7 +17,8 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { ConversationComposer } from "./ConversationComposer";
 import { ConversationMessages } from "./ConversationMessages";
 import { threadTitle } from "./conversation-format";
-import { threadQueryOptions, useMarkRead, useUpdateThread, type StaffThread } from "./inbox-api";
+import { threadQueryOptions, type StaffThread } from "~/lib/api-query-options/inbox";
+import { useMarkRead, useUpdateThread } from "./inbox-api";
 import type { InboxSearch } from "./inbox-search";
 
 const STATUS_BADGE: Record<string, BadgeVariant> = { open: "attention", pending: "info", closed: "secondary" };

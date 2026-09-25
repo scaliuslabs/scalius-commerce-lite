@@ -35,7 +35,7 @@ import { ConversationComposer } from "./ConversationComposer";
 import { ConversationMessages } from "./ConversationMessages";
 import { ConversationPane } from "./ConversationPane";
 import { InboxList } from "./InboxList";
-import type { StaffThread } from "./inbox-api";
+import type { StaffThread } from "~/lib/api-query-options/inbox";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = inboxMessages.en;

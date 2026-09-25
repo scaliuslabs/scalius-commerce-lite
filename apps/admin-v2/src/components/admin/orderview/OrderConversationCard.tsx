@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MessagesSquare } from "lucide-react";
@@ -39,9 +39,23 @@ import { restockedUnits, shippedCancelReason } from "./OrderStatusCard";
 import { openCancellationRequest, type OrderActionRequest } from "./primary-action";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
-import { ConversationComposer } from "../inbox/ConversationComposer";
-import { ConversationMessages } from "../inbox/ConversationMessages";
-import { inboxKeys, orderThreadQueryOptions, useMarkRead } from "../inbox/inbox-api";
+import { inboxKeys, orderThreadQueryOptions } from "~/lib/api-query-options/inbox";
+import { useMarkRead } from "../inbox/inbox-api";
+
+// The thread and the reply box are not in the order page's first download:
+// the card sits low on the page and its thread is a read of its own. Their
+// code is fetched as soon as the page's code runs (warming the order page
+// fetches it too), beside the order's data rather than after the card renders.
+const loadConversationMessages = () => import("../inbox/ConversationMessages");
+const loadConversationComposer = () => import("../inbox/ConversationComposer");
+void loadConversationMessages().catch(() => {});
+void loadConversationComposer().catch(() => {});
+const ConversationMessages = lazy(() =>
+  loadConversationMessages().then((module) => ({ default: module.ConversationMessages })),
+);
+const ConversationComposer = lazy(() =>
+  loadConversationComposer().then((module) => ({ default: module.ConversationComposer })),
+);
 
 type Resolution = "under_review" | "approved" | "rejected" | "completed";
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
@@ -334,11 +348,13 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
               <Button type="button" size="sm" variant="outline" onClick={() => void thread.refetch()}>{tr("retry")}</Button>
             </div>
           ) : conversation && conversation.messages.length > 0 ? (
-            <ConversationMessages
-              thread={conversation}
-              currentUserId={null}
-              className="max-h-96 overflow-y-auto"
-            />
+            <Suspense fallback={<p className="text-body text-muted-foreground">{t("read.loading")}</p>}>
+              <ConversationMessages
+                thread={conversation}
+                currentUserId={null}
+                className="max-h-96 overflow-y-auto"
+              />
+            </Suspense>
           ) : (
             <div className="flex items-start gap-3">
               <MessagesSquare aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
@@ -350,9 +366,11 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
           )
         ) : null}
         {canRead && canReply ? (
-          <div className="border-t pt-4">
-            <ConversationComposer conversationId={conversation?.id ?? null} orderId={order.id} />
-          </div>
+          <Suspense fallback={null}>
+            <div className="border-t pt-4">
+              <ConversationComposer conversationId={conversation?.id ?? null} orderId={order.id} />
+            </div>
+          </Suspense>
         ) : null}
       </CardContent>
       <ResolveDialog order={order} request={selected} open={open} onOpenChange={setOpen} />

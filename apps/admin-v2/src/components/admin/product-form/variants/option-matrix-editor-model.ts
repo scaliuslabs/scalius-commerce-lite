@@ -19,6 +19,7 @@ import type {
 } from "../../../../lib/api-query-options/products";
 import { formatNumber, translate } from "../../../../i18n";
 import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
+import type { ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
 const issue = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
@@ -34,20 +35,7 @@ export type DraftOption = {
 /** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
 export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "stock"> & { stock: number };
 
-/**
- * What the product's SKUs are, from the product's Fulfilment select: all
- * physical, all services, or set per variant ("mixed", a Fulfilment column).
- */
-export type ProductFulfilmentMode = "physical" | "service" | "mixed";
-type EditableKind = Exclude<ProductFulfilmentMode, "mixed">;
-
-/** The mode the saved SKUs are in; digital SKUs (Wave B) are left as they are. */
-export function fulfilmentModeOf(variants: ReadonlyArray<Pick<ProductVariant, "fulfillmentKind" | "deletedAt">>): ProductFulfilmentMode {
-  const kinds = new Set(variants.filter((variant) => !variant.deletedAt).map((variant) => variant.fulfillmentKind ?? "physical"));
-  if (kinds.size === 0) return "physical";
-  if (kinds.size === 1 && (kinds.has("physical") || kinds.has("service"))) return [...kinds][0] as EditableKind;
-  return "mixed";
-}
+export { fulfilmentModeOf, type ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** The lowest and highest variant price while the product has options. */
 export type VariantPriceRange = { min: number; max: number };

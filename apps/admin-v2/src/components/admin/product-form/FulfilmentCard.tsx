@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
-import type { ProductFulfilmentMode } from "./variants/option-matrix-editor-model";
+import type { ProductFulfilmentMode } from "./fulfilment-mode";
 import type { ProductFormValues } from "./types";
 
 const HELP = {
