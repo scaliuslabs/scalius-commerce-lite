@@ -13,7 +13,10 @@ import { normalizeProductOptionIdentity } from "@scalius/shared/product-options"
 import { and, sql, eq, isNull, type SQL } from "drizzle-orm";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
-import type { BuyerCatalogPricingProjection } from "../products/buyer-projection";
+import type { buyerState } from "./buyer-state";
+
+/** The public set a facet count joins: the stored buyer state (catalog/buyer-state.ts). */
+type PublicBuyerSet = typeof buyerState;
 
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
 
@@ -126,7 +129,7 @@ export function buildOptionFilterCondition(optionFilters: AttributeFilter[]): SQ
 
 export function buildResultScopedOptionFacetQuery(
     db: Database,
-    buyerPricing: BuyerCatalogPricingProjection,
+    publicSet: PublicBuyerSet,
     baseConditions: SQL[],
     attributeFilters: AttributeFilter[],
     optionFilters: AttributeFilter[],
@@ -157,7 +160,7 @@ export function buildResultScopedOptionFacetQuery(
             END)`,
         })
         .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .innerJoin(publicSet, eq(publicSet.productId, products.id))
         .innerJoin(facetSku, and(eq(facetSku.productId, products.id), isNull(facetSku.deletedAt)))
         .innerJoin(facetAssignment, eq(facetAssignment.variantId, facetSku.id))
         .innerJoin(facetAxis, and(
@@ -179,7 +182,7 @@ export function buildResultScopedOptionFacetQuery(
 
 export function buildResultScopedFacetQuery(
     db: Database,
-    buyerPricing: BuyerCatalogPricingProjection,
+    publicSet: PublicBuyerSet,
     baseConditions: SQL[],
     attributeFilters: AttributeFilter[],
     optionCondition: SQL | undefined,
@@ -225,7 +228,7 @@ export function buildResultScopedFacetQuery(
             eq(productAttributeValues.attributeId, productAttributes.id),
         )
         .innerJoin(products, eq(productAttributeValues.productId, products.id))
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .innerJoin(publicSet, eq(publicSet.productId, products.id))
         .where(and(
             eq(productAttributes.filterable, true),
             isNull(productAttributes.deletedAt),

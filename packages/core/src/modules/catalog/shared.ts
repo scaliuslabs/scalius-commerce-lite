@@ -1,6 +1,6 @@
 // Helpers shared by the catalogue reads. Not exported from the domain entry.
 import { products, categories } from "@scalius/database/schema";
-import { and, sql, eq, or, type SQL } from "drizzle-orm";
+import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { productCategoryNameMatch } from "../../search/relevance";
 import type { StorefrontProductFilterInput } from "../products/types";
@@ -13,6 +13,7 @@ import {
 import { storeDecimalToMinorSql } from "../products/money";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { resolveProductImageRepresentation, type ProductMediaProjection } from "../products/media";
+import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 
 type StorefrontProductConditionOptions = {
     includeLookupHandles?: boolean;
@@ -46,8 +47,8 @@ export function publishedCategoryIdSet(where: SQL): SQL {
     )`;
 }
 
-function buildCategoryLookupCondition(category: string): SQL {
-    return sql`${products.categoryId} IN ${publishedCategoryIdSet(
+function buildCategoryLookupCondition(category: string, column: SQL | AnyColumn = products.categoryId): SQL {
+    return sql`${column} IN ${publishedCategoryIdSet(
         sql`(${categories.id} = ${category} OR ${categories.slug} = ${category})`,
     )}`;
 }
@@ -55,6 +56,7 @@ function buildCategoryLookupCondition(category: string): SQL {
 function buildProductLookupCondition(
     lookupTokens: string[],
     options: StorefrontProductConditionOptions = {},
+    column: SQL | AnyColumn = products.id,
 ): SQL {
     const lookupBranches: SQL[] = [sql`SELECT value FROM public_lookup`];
 
@@ -86,7 +88,7 @@ function buildProductLookupCondition(
         `);
     }
 
-    return sql`${products.id} IN (
+    return sql`${column} IN (
         WITH public_lookup(value) AS (
             SELECT CAST(value AS TEXT)
             FROM json_each(${JSON.stringify(lookupTokens)})
@@ -146,6 +148,52 @@ export function buildStorefrontProductConditions(
     }
 
     return conditions.filter((condition): condition is SQL => Boolean(condition));
+}
+
+/**
+ * Listing conditions over the stored buyer state (`product_buyer_state`
+ * joined to `products`): the public set, the request's category, search,
+ * id, price, free-delivery and discount filters. `needsProducts` is false
+ * when every condition reads the buyer state alone, so a count can skip
+ * the `products` join.
+ */
+export function buildStorefrontBuyerStateConditions(
+    db: Database,
+    params: Omit<StorefrontProductFilterInput, "minPrice" | "maxPrice"> & {
+        minPriceMinor?: SQL<number>;
+        maxPriceMinor?: SQL<number>;
+    },
+    options: { drivenByIdSet?: boolean } = {},
+): { conditions: SQL[]; needsProducts: boolean } {
+    const drivenByIdSet = Boolean(options.drivenByIdSet)
+        || (parsePublicLookupTokens(params.ids).length > 0 && !params.search && !params.category);
+    const conditions: SQL[] = [publicBuyerStateCondition({ drivenByIdSet })];
+    let needsProducts = false;
+    if (params.category) conditions.push(buildCategoryLookupCondition(params.category, buyerState.categoryId));
+    if (params.search) {
+        needsProducts = true;
+        conditions.push(
+            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(db, params.search))
+                ?? sql`0 = 1`,
+        );
+    }
+    if (params.ids) {
+        const lookupTokens = parsePublicLookupTokens(params.ids);
+        if (lookupTokens.length > 0) {
+            conditions.push(buildProductLookupCondition(lookupTokens, {}, buyerState.productId));
+        }
+    }
+    if (params.minPriceMinor !== undefined || params.maxPriceMinor !== undefined) {
+        needsProducts = true;
+        conditions.push(buyerCatalogHasSkuInPriceRange(params.minPriceMinor, params.maxPriceMinor));
+    }
+    if (params.freeDelivery === "true" || params.freeDelivery === "false") {
+        needsProducts = true;
+        conditions.push(eq(products.freeDelivery, params.freeDelivery === "true"));
+    }
+    if (params.hasDiscount === "true") conditions.push(sql`${buyerState.hasDiscount} = 1`);
+    else if (params.hasDiscount === "false") conditions.push(sql`${buyerState.hasDiscount} = 0`);
+    return { conditions, needsProducts };
 }
 
 /**

@@ -80,6 +80,7 @@ import {
   authSetupRoutes,
 } from "./routes/admin/auth-management";
 import { adminAttributesRoutes } from "./routes/admin/attributes";
+import { adminCatalogProjectionRoutes } from "./routes/admin/catalog-projections";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
@@ -236,6 +237,7 @@ app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/products", adminProductsRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
+app.route("/admin/catalog", adminCatalogProjectionRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
 app.route("/admin/agent-access", adminAgentAccessRoutes);
 app.route("/admin", adminSystemUtilsRoutes);

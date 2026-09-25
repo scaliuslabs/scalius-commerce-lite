@@ -5,7 +5,23 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getStorefrontFeedProducts } from "./feed";
-import { getStorefrontCollectionProducts, getStorefrontProducts } from "./listing";
+import {
+    getStorefrontCollectionProducts as readStorefrontCollectionProducts,
+    getStorefrontProducts as readStorefrontProducts,
+} from "./listing";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
+
+// Rows are seeded with raw SQL: each listing read first fills the stored buyer
+// state (products/catalog-projections.ts), as a release's rebuild does.
+async function withProjections<T>(db: Parameters<typeof rebuildCatalogProjections>[0], read: () => Promise<T>): Promise<T> {
+    await rebuildCatalogProjections(db);
+    return read();
+}
+
+const getStorefrontProducts: typeof readStorefrontProducts = (db, params) =>
+    withProjections(db, () => readStorefrontProducts(db, params));
+const getStorefrontCollectionProducts: typeof readStorefrontCollectionProducts = (db, membership, params) =>
+    withProjections(db, () => readStorefrontCollectionProducts(db, membership, params));
 import { searchStorefrontProducts } from "./search";
 import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
 import { search as searchCatalog } from "../../search";

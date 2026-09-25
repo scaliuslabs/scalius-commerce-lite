@@ -452,6 +452,7 @@ export async function getProductDetails(
             description: products.description,
             priceMinor: products.priceMinor,
             categoryId: products.categoryId,
+            brandId: products.brandId,
             slug: products.slug,
             metaTitle: products.metaTitle,
             metaDescription: products.metaDescription,

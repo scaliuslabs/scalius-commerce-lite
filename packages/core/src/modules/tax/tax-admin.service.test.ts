@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+
+// The fake database carries no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../products/catalog-projections", () => ({ catalogProjectionRefreshStatements: () => [] }));
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { products } from "@scalius/database/schema";
 import {

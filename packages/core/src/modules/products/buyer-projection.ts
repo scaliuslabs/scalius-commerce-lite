@@ -5,6 +5,36 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./money";
 
+type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
+
+/**
+ * The discount a buyer card shows for one SKU: a valid SKU discount overrides
+ * the product discount (checkout and the product page resolve it the same
+ * way). Shared by the pricing projection and the stored buyer state's card
+ * SKU, so the rule has one copy.
+ */
+export function resolvedBuyerDiscountSql(sku: DiscountColumns, product: DiscountColumns) {
+    const skuHasDiscount = sql<number>`CASE
+        WHEN ${sku.discountType} = 'flat' AND ${sku.discountAmountMinor} > 0 THEN 1
+        WHEN ${sku.discountType} = 'percentage' AND ${sku.discountBps} > 0 THEN 1
+        ELSE 0
+    END`;
+    return {
+        discountType: sql<string | null>`CASE
+            WHEN ${skuHasDiscount} = 1 THEN ${sku.discountType}
+            ELSE ${product.discountType}
+        END`,
+        discountBps: sql<number>`CASE
+            WHEN ${skuHasDiscount} = 1 THEN ${sku.discountBps}
+            ELSE ${product.discountBps}
+        END`,
+        discountAmountMinor: sql<number>`CASE
+            WHEN ${skuHasDiscount} = 1 THEN ${sku.discountAmountMinor}
+            ELSE ${product.discountAmountMinor}
+        END`,
+    };
+}
+
 /**
  * Builds the one-row-per-product pricing projection used by buyer catalog lists.
  *
@@ -42,11 +72,6 @@ export function buildBuyerCatalogPricingProjection(
           OR ${availableStock} > 0
         THEN 1 ELSE 0
     END`;
-    const skuHasDiscount = sql<number>`CASE
-        WHEN ${pricingSku.discountType} = 'flat' AND ${pricingSku.discountAmountMinor} > 0 THEN 1
-        WHEN ${pricingSku.discountType} = 'percentage' AND ${pricingSku.discountBps} > 0 THEN 1
-        ELSE 0
-    END`;
     const effectivePrice = effectivePriceMinorSql({
         priceMinor: sql`${pricingSku.priceMinor}`,
         discountType: sql`${pricingSku.discountType}`,
@@ -57,18 +82,19 @@ export function buildBuyerCatalogPricingProjection(
         discountBps: sql`${pricingProduct.discountBps}`,
         discountAmountMinor: sql`${pricingProduct.discountAmountMinor}`,
     });
-    const resolvedDiscountType = sql<string | null>`CASE
-        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountType}
-        ELSE ${pricingProduct.discountType}
-    END`;
-    const resolvedDiscountBps = sql<number>`CASE
-        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountBps}
-        ELSE ${pricingProduct.discountBps}
-    END`;
-    const resolvedDiscountAmountMinor = sql<number>`CASE
-        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountAmountMinor}
-        ELSE ${pricingProduct.discountAmountMinor}
-    END`;
+    const {
+        discountType: resolvedDiscountType,
+        discountBps: resolvedDiscountBps,
+        discountAmountMinor: resolvedDiscountAmountMinor,
+    } = resolvedBuyerDiscountSql({
+        discountType: sql`${pricingSku.discountType}`,
+        discountBps: sql`${pricingSku.discountBps}`,
+        discountAmountMinor: sql`${pricingSku.discountAmountMinor}`,
+    }, {
+        discountType: sql`${pricingProduct.discountType}`,
+        discountBps: sql`${pricingProduct.discountBps}`,
+        discountAmountMinor: sql`${pricingProduct.discountAmountMinor}`,
+    });
 
     const rankedSkus = db
         .select({

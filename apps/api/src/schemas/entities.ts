@@ -166,6 +166,8 @@ export const productDetailSchema = z.object({
   description: z.string().nullable(),
   price: z.number(),
   categoryId: z.string().nullable(),
+  /** The product's brand (brd_…), or null. */
+  brandId: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
   canonicalPath: z.string().nullable(),

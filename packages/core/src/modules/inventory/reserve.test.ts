@@ -8,6 +8,9 @@ import {
   reserveStockBatch,
 } from "./reserve";
 
+// The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
+
 function createReservationReadDb(rows: unknown[]): Database {
   return {
     select: vi.fn(() => ({
