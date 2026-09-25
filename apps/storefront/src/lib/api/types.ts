@@ -171,6 +171,27 @@ export interface SelectedProductOption {
   standardMapping: ProductOptionStandardMapping;
 }
 
+/**
+ * What a card can say beyond title, price and photo, all from stored data
+ * (`cardFacts` on listing and homepage products; the API's ProductCardFacts).
+ */
+export interface ProductCardFacts {
+  brand: { name: string; slug: string } | null;
+  /** Up to four "Name: value" lines, in spec-table order. */
+  keySpecs: string[];
+  /** Option axes with two or more values sold on a live SKU. */
+  options: Array<{
+    name: string;
+    kind: "color" | "size" | "other";
+    count: number;
+    swatches: Array<{ label: string; hex: string | null }>;
+  }>;
+  /** Units sold in the last 30 days; null below 10. */
+  soldLast30Days: number | null;
+  packSize: string | null;
+  delivery: { free: true } | { free: false; feeFrom: number } | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -204,6 +225,8 @@ export interface Product {
   imageAlt?: string | null;
   /** Listing cards only: the next gallery photo, shown on hover. Never a video. */
   secondaryImageUrl?: string | null;
+  /** Listing and homepage cards only: stored facts a card can show (core catalog/card-facts.ts). */
+  cardFacts?: ProductCardFacts;
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;

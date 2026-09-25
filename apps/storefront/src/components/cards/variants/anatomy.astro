@@ -1,25 +1,37 @@
 ---
 // Every card variant except `standard`, rendered from its measured anatomy
 // in the shared registry (STOREFRONT_CARD_VARIANTS[...].renders): the body
-// order, title emphasis, price tone, discount wording, facts and buy action
-// are data; sizes, radius, surface, photo ratio and fit are the theme's
-// tokens (theme-foundation.css). Facts without data render nothing.
+// order, discount wording, facts, buy action and Compare are data; the
+// look (photo ratio and fit, radius, surface, title and price type) is the
+// card's own (`layout.productCard.look`), drawn per variant by
+// theme-cards.css so each card reads as its reference (Dawn, Aarong,
+// Fabrilife, Star Tech, Apple Gadgets, Target, Daraz, Chaldal, Amazon).
+// Facts without data render nothing.
 import type { ResolvedStorefrontCard, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
 import CardMedia from "../parts/CardMedia.astro";
-import { cardDiscountLabel, cardFactPresent, type ProductCardModel } from "../card-model";
+import CompareTray from "@/components/compare/CompareTray.astro";
+import {
+  boughtInPastMonth,
+  cardDiscountLabel,
+  cardFactPresent,
+  type ProductCardModel,
+} from "../card-model";
 
 interface Props {
   variant: string;
   anatomy: ResolvedStorefrontCard;
   model: ProductCardModel;
   ratio: StorefrontImageRatio;
+  dimensions: { width: number; height: number };
   sizes: string;
   loading: ProductCardImageLoading;
   headingLevel: "h2" | "h3";
+  /** The product id, for Compare. */
+  productId: string;
 }
 
-const { variant, anatomy, model, ratio, sizes, loading, headingLevel } = Astro.props;
+const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId } = Astro.props;
 const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
@@ -28,39 +40,71 @@ const parts = anatomy.body.filter((part) => part === "title" || part === "price"
 // row: the price when it follows the title, else the action.
 const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
+const roundAction = anatomy.quickBuy && anatomy.action === "round";
+// Fabrilife's round cart sits beside the price; Chaldal's "+" overlaps the photo.
+const roundInBody = variant === "fashion-value";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
-const roundAction = anatomy.quickBuy && anatomy.action === "round" ? model.quickBuyHref : null;
+const titleClamp = { 1: "line-clamp-1", 2: "line-clamp-2", 3: "line-clamp-3" }[anatomy.titleLines];
 const titleWeight = { regular: "font-normal", medium: "font-medium", strong: "font-semibold" }[anatomy.titleWeight];
 const priceTone = anatomy.priceTone === "primary"
   ? "text-primary"
   : anatomy.priceTone === "sale" && model.price.regular ? "text-destructive" : "text-foreground";
+const superscriptPrice = variant === "detailed";
+const soldText = facts.sold === null
+  ? ""
+  : variant === "detailed" ? `${boughtInPastMonth(facts.sold)} bought in past month` : `${facts.sold} sold in 30 days`;
+// The card's own look as custom properties; theme-cards.css draws with them.
+const { look } = anatomy;
+const lookStyle = [
+  `--pc-ratio:${look.image.ratio}`,
+  `--pc-fit:${look.image.fit}`,
+  `--pc-radius:${look.radius}px`,
+  look.title && `--pc-title-d:${look.title.size.desktop}px;--pc-title-m:${look.title.size.phone}px;--pc-title-w:${look.title.weight}`,
+  look.price && `--pc-price-d:${look.price.size.desktop}px;--pc-price-m:${look.price.size.phone}px;--pc-price-w:${look.price.weight}`,
+].filter(Boolean).join(";");
+const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2M9.5 20.5h.01M17.5 20.5h.01";
 ---
 
-{/* One link per card (the stretched title link) plus at most the buy action,
-    which sits above it as its own control. */}
+{/* One link per card (the stretched title link) plus at most the buy action
+    and, on the spec card, Compare: each sits above the card link as its own
+    control. */}
 <div
   data-theme-component="product-card"
   data-card-variant={variant}
   data-card-ratio={ratio}
   data-card-badge={anatomy.badge}
-  class="group relative flex flex-col h-full bg-card overflow-hidden"
+  data-card-fit={look.image.fit}
+  style={lookStyle}
+  class="product-card group relative flex flex-col h-full overflow-hidden"
 >
   <CardMedia
     model={model}
-    ratio={ratio}
+    dimensions={dimensions}
     sizes={sizes}
     loading={loading}
     badge={anatomy.badge === "image" ? discount : null}
+    class="product-card-well"
   >
     {
-      roundAction && (
+      /* Chaldal's "+" on every tile: a product with options gets the same
+         button under the card link (its options are chosen on its page). */
+      roundAction && !roundInBody && !model.quickBuyHref && model.needsOptions && (
+        <span aria-hidden="true" data-card-action-hint class="product-card-round-action pointer-events-none absolute inline-flex items-center justify-center rounded-full">
+          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </span>
+      )
+    }
+    {
+      roundAction && !roundInBody && model.quickBuyHref && (
         <a
-          href={roundAction}
+          href={model.quickBuyHref}
           data-astro-prefetch="false"
           rel="nofollow"
-          class="product-card-round-action absolute right-2 bottom-2 z-10 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          class="product-card-round-action absolute z-10 inline-flex items-center justify-center rounded-full"
         >
-          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
           <span class="sr-only">{actionText}: {model.name}</span>
@@ -76,9 +120,9 @@ const priceTone = anatomy.priceTone === "primary"
           return (
             <TitleTag
               class:list={[
-                "product-card-name text-foreground [font-family:var(--theme-font-body)] [letter-spacing:0]",
+                "product-card-name pc-title text-foreground [font-family:var(--theme-font-body)]",
                 titleWeight,
-                anatomy.titleLines === 1 ? "line-clamp-1" : "line-clamp-2 min-h-[2.8em]",
+                titleClamp,
               ]}
             >
               <a href={model.href} class="product-card-link after:absolute after:inset-0 after:content-['']">
@@ -91,68 +135,127 @@ const priceTone = anatomy.priceTone === "primary"
           return (
             <p
               class:list={[
-                "product-card-price-row flex flex-wrap items-baseline gap-x-2 gap-y-0.5",
-                priceFollowsTitle && "mt-auto",
+                "product-card-price-row pc-price flex flex-wrap items-baseline",
+                priceFollowsTitle && "product-card-push mt-auto",
               ]}
             >
-              <span class:list={["product-card-price", priceTone]}>
-                <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}</span>
-                {model.price.prefix}{model.price.current}
-              </span>
+              {superscriptPrice ? (
+                <span class="product-card-price pc-price-super text-foreground">
+                  <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}{model.price.prefix}{model.price.current}</span>
+                  <span aria-hidden="true">
+                    {model.price.prefix && <span class="pc-price-from">{model.price.prefix}</span>}
+                    {model.price.parts.symbol && <span class="pc-price-symbol">{model.price.parts.symbol}</span>}
+                    <span class="pc-price-whole">{model.price.parts.whole}</span>
+                    {model.price.parts.fraction && <span class="pc-price-fraction">{model.price.parts.fraction}</span>}
+                  </span>
+                </span>
+              ) : (
+                <span class:list={["product-card-price", priceTone]}>
+                  <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}</span>
+                  {model.price.prefix}{model.price.current}
+                </span>
+              )}
               {model.price.regular && (
-                <span class="product-card-meta text-muted-foreground">
+                <span class="product-card-meta pc-price-regular text-muted-foreground">
+                  {superscriptPrice ? <span aria-hidden="true">List: </span> : null}
                   <span class="sr-only">Regular price </span><s>{model.price.regular}</s>
                 </span>
               )}
               {anatomy.badge === "price" && discount && (
                 anatomy.discount === "off" ? (
-                  <span data-card-discount class="product-card-meta rounded-full bg-accent px-2 font-semibold text-accent-foreground">{discount}</span>
+                  <span data-card-discount class="product-card-meta pc-discount-chip rounded-full px-2 font-semibold">{discount}</span>
                 ) : (
-                  <span data-card-discount class="product-card-meta font-semibold text-destructive">{discount}</span>
+                  <span data-card-discount class="product-card-meta pc-discount font-semibold text-destructive">{discount}</span>
                 )
               )}
             </p>
           );
         }
         if (part === "brand") {
-          return <p class="product-card-meta line-clamp-1 font-bold text-foreground" data-card-fact="brand">{facts.brand}</p>;
+          return <p class="product-card-meta pc-brand line-clamp-1 font-bold text-foreground" data-card-fact="brand">{facts.brand}</p>;
         }
         if (part === "key-specs") {
           return (
-            <ul class="product-card-meta list-disc space-y-0.5 ps-4 text-muted-foreground" data-card-fact="key-specs">
-              {facts.keySpecs.map((spec) => <li class="line-clamp-1">{spec}</li>)}
+            <ul class="product-card-meta pc-specs text-muted-foreground" data-card-fact="key-specs">
+              {facts.keySpecs.map((spec) => <li>{spec}</li>)}
             </ul>
           );
         }
         if (part === "rating" && facts.rating) {
           return (
-            <p class="product-card-meta text-foreground" data-card-fact="rating">
+            <p class="product-card-meta pc-rating text-foreground" data-card-fact="rating">
               <span aria-hidden="true">★ {facts.rating.average} <span class="text-muted-foreground">({facts.rating.count})</span></span>
               <span class="sr-only">Rated {facts.rating.average} out of 5 from {facts.rating.count} reviews</span>
             </p>
           );
         }
         if (part === "sold") {
-          return <p class="product-card-meta text-muted-foreground" data-card-fact="sold">{facts.sold} sold</p>;
+          return <p class="product-card-meta pc-sold text-muted-foreground" data-card-fact="sold">{soldText}</p>;
         }
         if (part === "savings") {
-          return <p class="product-card-meta font-semibold text-destructive" data-card-fact="savings">{facts.savings}</p>;
+          return (
+            <p class="product-card-meta pc-savings" data-card-fact="savings">
+              <span class="pc-savings-chip font-semibold">{facts.savings}</span>
+            </p>
+          );
         }
         if (part === "pack-size") {
-          return <p class="product-card-meta line-clamp-1 text-muted-foreground" data-card-fact="pack-size">{facts.packSize}</p>;
+          return <p class="product-card-meta pc-pack line-clamp-1 text-muted-foreground" data-card-fact="pack-size">{facts.packSize}</p>;
         }
-        if (part === "delivery") {
+        if (part === "delivery" && facts.delivery) {
           return (
-            <p class="product-card-meta" data-card-fact="delivery">
-              <span class="inline-flex rounded-full bg-accent px-2 font-semibold text-accent-foreground">Free delivery</span>
+            <p class="product-card-meta pc-delivery" data-card-fact="delivery">
+              <span class="pc-delivery-text">
+                {facts.delivery.free ? <><strong>Free</strong> delivery</> : <>Delivery from <strong>{facts.delivery.fee}</strong></>}
+              </span>
             </p>
           );
         }
         if (part === "emi") {
-          return <p class="product-card-meta text-muted-foreground" data-card-fact="emi">{facts.emi}</p>;
+          return <p class="product-card-meta pc-emi text-muted-foreground" data-card-fact="emi">{facts.emi}</p>;
+        }
+        if (part === "swatches") {
+          return (
+            <p class="pc-swatches" data-card-fact="swatches">
+              {facts.swatches.map((swatch) => (
+                <span class="pc-swatch" style={`--swatch:${swatch.colour}`} title={swatch.label}></span>
+              ))}
+              <span class="sr-only">Colours: {facts.swatches.map((swatch) => swatch.label).join(", ")}</span>
+            </p>
+          );
+        }
+        if (part === "options" && facts.options) {
+          return (
+            <p class="product-card-meta pc-options text-foreground" data-card-fact="options">
+              {facts.options.label} <span class="pc-options-count">{facts.options.count} {facts.options.noun}</span>
+            </p>
+          );
         }
         return null;
       })
+    }
+
+    {
+      roundAction && roundInBody && (model.quickBuyHref ? (
+        <a
+          href={model.quickBuyHref}
+          data-astro-prefetch="false"
+          rel="nofollow"
+          class="product-card-round-action pc-round-body relative z-10 inline-flex items-center justify-center rounded-full"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d={cartIcon} />
+          </svg>
+          <span class="sr-only">{actionText}: {model.name}</span>
+        </a>
+      ) : model.needsOptions ? (
+        /* Options are chosen on the product page: the same button, under the card link. */
+        <span aria-hidden="true" data-card-action-hint class="product-card-round-action pc-round-body pointer-events-none inline-flex items-center justify-center rounded-full">
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d={cartIcon} />
+          </svg>
+        </span>
+      ) : null)
     }
 
     {
@@ -162,13 +265,14 @@ const priceTone = anatomy.priceTone === "primary"
           data-astro-prefetch="false"
           rel="nofollow"
           class:list={[
-            "product-card-action relative z-10 inline-flex w-full items-center justify-center px-3 text-sm font-semibold transition-colors",
-            priceFollowsTitle ? "mt-1.5" : "mt-auto",
-            anatomy.action === "outline"
-              ? "border border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-              : "bg-primary text-primary-foreground hover:bg-primary/90",
+            "product-card-action relative z-10 inline-flex w-full items-center justify-center gap-2 px-3 text-sm font-semibold transition-colors",
+            !priceFollowsTitle && "product-card-push mt-auto",
+            anatomy.action === "outline" ? "pc-action-outline" : "pc-action-solid",
           ]}
         >
+          {variant === "spec" && (
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={cartIcon} /></svg>
+          )}
           {/* The name starts with the visible words (WCAG 2.5.3). */}
           {actionText}<span class="sr-only">: {model.name}</span>
         </a>
@@ -182,19 +286,45 @@ const priceTone = anatomy.priceTone === "primary"
           aria-hidden="true"
           data-card-action-hint
           class:list={[
-            "product-card-action pointer-events-none inline-flex w-full items-center justify-center border border-border px-3 text-sm font-semibold text-foreground",
-            priceFollowsTitle ? "mt-1.5" : "mt-auto",
+            "product-card-action pointer-events-none inline-flex w-full items-center justify-center gap-2 px-3 text-sm font-semibold",
+            !priceFollowsTitle && "product-card-push mt-auto",
+            variant === "spec" ? "pc-action-solid" : "pc-action-hint",
           ]}
         >
-          Choose options
+          {variant === "spec" ? (
+            <>
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={cartIcon} /></svg>
+              {actionText}
+            </>
+          ) : "Choose options"}
         </span>
       )
     }
     {
       /* Sold out keeps the action's space, so prices line up across a row. */
       bodyAction && !model.quickBuyHref && !model.needsOptions && (
-        <span aria-hidden="true" data-quick-buy-spacer class:list={["product-card-action block", priceFollowsTitle ? "mt-1.5" : "mt-auto"]}></span>
+        <span aria-hidden="true" data-quick-buy-spacer class:list={["product-card-action block", !priceFollowsTitle && "product-card-push mt-auto"]}></span>
+      )
+    }
+    {
+      /* Star Tech's "Add to Compare". Without JavaScript it opens the
+         comparison with this product; the compare script turns it into a
+         toggle for the floating tray. */
+      anatomy.compare && (
+        <a
+          href={`/compare?ids=${encodeURIComponent(productId)}`}
+          rel="nofollow"
+          data-astro-prefetch="false"
+          data-compare-toggle={productId}
+          class="pc-compare relative z-10 inline-flex items-center justify-center gap-1.5"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h10M4 12h16M4 18h10M18 4v4M16 6h4" />
+          </svg>
+          <span data-compare-label>Add to Compare</span><span class="sr-only">: {model.name}</span>
+        </a>
       )
     }
   </div>
 </div>
+{anatomy.compare && <CompareTray />}

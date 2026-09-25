@@ -1,4 +1,9 @@
-import type { ResolvedStorefrontThemeLayout, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import {
+  STOREFRONT_LISTING_FILTER_SPECS,
+  type ResolvedStorefrontThemeLayout,
+  type StorefrontImageRatio,
+  type StorefrontListingFilterStyle,
+} from "@scalius/shared/storefront-theme";
 
 /**
  * The fluid product grid (theme-foundation.css `.product-grid`), modelled in
@@ -47,8 +52,20 @@ const PAGE_GUTTER_PX = [
   { from: 640, px: 24 },
   { from: 1024, px: 32 },
 ] as const;
-/** The catalog filter sidebar (lg:w-80) and its gap (gap-6), from 1024px. */
-const FILTER_SIDEBAR_PX = 320 + 24;
+/** The gap between the filter column and the grid (gap-6), from 1024px. */
+export const FILTER_COLUMN_GAP_PX = 24;
+
+/**
+ * The filter column beside a listing grid, in px, from the listing's filter
+ * style (`STOREFRONT_LISTING_FILTER_SPECS[style].column`: 240 dense, 270
+ * comfortable); 0 when the facets live in a bar or a drawer. Pass it to the
+ * sizes helper so card images follow the grid the sidebar leaves.
+ */
+export function listingFilterColumnPx(style: StorefrontListingFilterStyle | null | undefined): number {
+  if (!style) return 0;
+  const spec = STOREFRONT_LISTING_FILTER_SPECS[style];
+  return spec.placement === "sidebar" && spec.column ? spec.column : 0;
+}
 
 function remToPx(value: string): number {
   const match = /^(\d+(?:\.\d+)?)rem$/.exec(value);
@@ -165,17 +182,20 @@ function pageGutter(viewport: number): number {
 
 /**
  * The grid container width (px) at a viewport width: the page content (capped
- * by the theme's container width) minus the gutters, minus the filter
- * sidebar beside it from 1024px.
+ * by the theme's container width) minus the gutters, minus the filter column
+ * (`filterColumnPx`, see listingFilterColumnPx) and its gap beside it from 1024px.
  */
 export function productGridWidth(
   viewport: number,
   containerMaxPx: number,
   context: Exclude<ProductGridContext, "rail" | "shelf">,
+  filterColumnPx = 0,
 ): number {
   const gutter = pageGutter(viewport);
   const content = Math.min(viewport, containerMaxPx) - 2 * gutter;
-  return context === "beside-filters" && viewport >= 1024 ? content - FILTER_SIDEBAR_PX : content;
+  return context === "beside-filters" && viewport >= 1024 && filterColumnPx > 0
+    ? content - filterColumnPx - FILTER_COLUMN_GAP_PX
+    : content;
 }
 
 const sizesCache = new Map<string, string>();
@@ -195,19 +215,20 @@ export function productCardImageSizes(
   context: ProductGridContext = "grid",
   phoneLayout: ProductGridPhoneLayout = "grid",
   maxColumns = Infinity,
+  filterColumnPx = 0,
 ): string {
   if (context === "rail") {
     return "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw";
   }
   if (context === "shelf") return SHELF_CARD_SIZES;
-  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}|${maxColumns}`;
+  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}|${maxColumns}|${filterColumnPx}`;
   const cached = sizesCache.get(key);
   if (cached) return cached;
 
   const containerMaxPx = remToPx(containerWidth);
   const ranges: Array<{ signature: string; until: number; size: string }> = [];
   for (let viewport = 320; viewport <= containerMaxPx; viewport += 1) {
-    const width = productGridWidth(viewport, containerMaxPx, context);
+    const width = productGridWidth(viewport, containerMaxPx, context, filterColumnPx);
     const rows = phoneLayout === "list-row" && width < PRODUCT_GRID_STEPS_REM.tablet * PX_PER_REM;
     const columns = productGridColumnCount(grid, width, maxColumns);
     const fixed = viewport - width;
