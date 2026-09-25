@@ -62,6 +62,30 @@ const TEXT_FIELDS = [
   "placeOrderText",
   "processingText",
 ] as const;
+/** Gift cards as a tender (Wave B §4.3): the payment step's field, chips, messages and amount due. */
+export const GIFT_CARD_TEXT_FIELDS = [
+  "giftCardTitleText",
+  "giftCardCodeLabelText",
+  "giftCardEnterCodeText",
+  "giftCardApplyText",
+  "giftCardApplyingText",
+  "giftCardRemoveText",
+  "giftCardAppliedText",
+  "giftCardRemovedText",
+  "giftCardUnusableText",
+  "giftCardDuplicateText",
+  "giftCardNotNeededText",
+  "giftCardLimitText",
+  "giftCardChangedText",
+  "giftCardRateLimitedText",
+  "giftCardUnavailableText",
+  "giftCardLineText",
+  "amountDueText",
+  "paidWithGiftCardText",
+  "paidWithGiftCardDescriptionText",
+  "giftCardPayOnDeliveryText",
+  "giftCardCheckoutStepText",
+] as const;
 /** The agreement line's link placeholders; the storefront links each to its policy page. */
 const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;
 
@@ -299,6 +323,19 @@ function LanguageForm({ language }: { language: Language | null }) {
           </SettingsField>
         ))}
       </div>
+      <section aria-labelledby="language-gift-cards" className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-1">
+          <h3 id="language-gift-cards" className="text-heading-sm">{t("giftCardTextTitle")}</h3>
+          <p className="text-body text-muted-foreground">{t("giftCardTextHelp")}</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {GIFT_CARD_TEXT_FIELDS.map((key) => (
+            <SettingsField key={key} id={`language-${key}`} label={t(key)}>
+              <Input id={`language-${key}`} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
+            </SettingsField>
+          ))}
+        </div>
+      </section>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
