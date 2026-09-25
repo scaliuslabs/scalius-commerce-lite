@@ -14,6 +14,10 @@ import {
   readApplicationTableNames,
   readFinalTriggerDefinitions,
 } from "./sqlite-provider-schema";
+import {
+  CACHE_DEP_POSTGRES_BUMP_FUNCTION,
+  cacheDepPostgresTrigger,
+} from "./cache-dep-triggers";
 
 export const POSTGRES_SCHEMA_BUNDLE_VERSION =
   "scalius-postgres-schema/v1" as const;
@@ -403,6 +407,18 @@ export async function compileCanonicalPostgresSchema(
     const indexObjects = objects.filter((object) =>
       object.type === "index" && applicationTables.has(object.tableName));
     const triggerDefinitions = readFinalTriggerDefinitions(database);
+    // Cache dependency triggers have their own PostgreSQL form (deferred
+    // constraint triggers that lock the clock at commit), generated from the
+    // same registry as the SQLite ones; the SQLite clock triggers have none.
+    const cacheDepFunction = triggerDefinitions.some((definition) =>
+      typeof cacheDepPostgresTrigger(definition.name) === "string")
+      ? [`${CACHE_DEP_POSTGRES_BUMP_FUNCTION};`]
+      : [];
+    const compiledTriggers = triggerDefinitions.flatMap((definition) => {
+      const cacheDep = cacheDepPostgresTrigger(definition.name);
+      if (cacheDep === null) return [];
+      return [cacheDep ?? compileSqliteTriggerForPostgres(definition)];
+    });
     const preDataSql = [
       "BEGIN;",
       POSTGRES_SQLITE_PROFILE_BOOTSTRAP_SQL.trim(),
@@ -413,7 +429,8 @@ export async function compileCanonicalPostgresSchema(
     const postDataSql = [
       "BEGIN;",
       ...indexObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
-      ...triggerDefinitions.map(compileSqliteTriggerForPostgres),
+      ...cacheDepFunction,
+      ...compiledTriggers,
       "COMMIT;",
       "",
     ].join("\n\n");
@@ -426,7 +443,7 @@ export async function compileCanonicalPostgresSchema(
       sha256: createHash("sha256").update(sql).digest("hex"),
       applicationTables: tableObjects.length,
       indexes: indexObjects.length,
-      triggers: triggerDefinitions.length,
+      triggers: compiledTriggers.length,
     };
   } finally {
     database.close();

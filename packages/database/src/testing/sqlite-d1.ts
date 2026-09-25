@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/d1";
 
 import { compileSqliteMigrationForProvider } from "../migration-artifacts";
+import { observeD1Prepare } from "../read-observer";
 import * as schema from "../schema";
 import { createTursoDatabase } from "../turso-adapter";
 import type { Database } from "../types";
@@ -269,5 +270,6 @@ export function createSqliteD1Database(
 ): SqliteTestDatabase {
   const sqlite = options.sqlite ?? createMigratedSqlite(options);
   const binding = createSqliteD1Binding(sqlite, options);
-  return { sqlite, binding, db: drizzle(binding, { schema }) as unknown as Database };
+  // Observed like the production D1 request client, so read capture works in tests.
+  return { sqlite, binding, db: drizzle(observeD1Prepare(binding), { schema }) as unknown as Database };
 }

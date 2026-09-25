@@ -1,0 +1,107 @@
+/**
+ * Provider-neutral trigger scenario for migration 0093: plain SQL writes and
+ * the keys each one must (and must not) advance. The D1, Turso (node:sqlite
+ * and the real Turso engine) and PostgreSQL tests run the same steps.
+ */
+import { expect } from "vitest";
+
+export interface CacheDepDriver {
+  exec(sql: string): Promise<void>;
+  rows(sql: string): Promise<Array<Record<string, unknown>>>;
+}
+
+export const CACHE_DEP_SEED = [
+  "INSERT INTO categories (id, name, slug, status) VALUES ('cat_root', 'Root', 'root', 'published')",
+  "INSERT INTO categories (id, name, slug, status, parent_id) VALUES ('cat_leaf', 'Leaf', 'leaf', 'published', 'cat_root')",
+  "INSERT INTO categories (id, name, slug, status) VALUES ('cat_other', 'Other', 'other', 'published')",
+  "INSERT INTO brands (id, name, slug, status) VALUES ('brd_xbrand01', 'X', 'x', 'published')",
+  "INSERT INTO settings (id, key, value, type, category) VALUES ('set_inventory', 'document', '{\"defaultLowStockThreshold\":2}', 'json', 'inventory')",
+  "INSERT INTO products (id, name, price_minor, slug, category_id, brand_id, is_active, created_at) VALUES ('p1', 'One', 100, 'one', 'cat_leaf', 'brd_xbrand01', 1, 1700000000)",
+  "INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES ('v1', 'p1', 'CD-1', 100, 5, 0, 1, 1)",
+  "INSERT INTO product_buyer_state (product_id, is_public, category_id, brand_id, product_created_at, sku_id, from_minor, to_minor, base_minor, availability_band, available_for_sale) VALUES ('p1', 1, 'cat_leaf', 'brd_xbrand01', 1700000000, 'v1', 100, 100, 100, 'in_stock', 1)",
+];
+
+async function clock(driver: CacheDepDriver): Promise<number> {
+  const [row] = await driver.rows("SELECT seq FROM cache_clock WHERE id = 1");
+  return Number(row!.seq);
+}
+
+/** The keys advanced by `write`, and the clock invariants around it. */
+export async function bumped(driver: CacheDepDriver, write: string | string[]): Promise<string[]> {
+  const before = await clock(driver);
+  for (const statement of Array.isArray(write) ? write : [write]) await driver.exec(statement);
+  const after = await clock(driver);
+  const keys = await driver.rows(`SELECT dep, seq FROM cache_dep WHERE seq > ${before} ORDER BY dep`);
+  const [max] = await driver.rows("SELECT max(seq) AS seq FROM cache_dep");
+  // The clock is the newest key: a reader of `after` sees every key it covers.
+  expect(Number(max!.seq ?? 0)).toBe(after);
+  if (keys.length === 0) expect(after).toBe(before);
+  for (const key of keys) expect(Number(key.seq)).toBeGreaterThan(before);
+  return keys.map((key) => String(key.dep));
+}
+
+const p1Scopes = (facet: string) => [`${facet}:all`, `${facet}:brand:brd_xbrand01`, `${facet}:cat:cat_leaf`, `${facet}:cat:cat_root`];
+
+/** Every step of the scenario; `postgres` skips the steps whose SQL differs. */
+export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void> {
+  for (const statement of CACHE_DEP_SEED) await driver.exec(statement);
+  expect(await clock(driver)).toBeGreaterThan(0);
+
+  // Stock inside its band advances nothing (5 -> 4 -> 3: in stock, level 2).
+  expect(await bumped(driver, "UPDATE product_variants SET stock = 4 WHERE id = 'v1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE product_variants SET stock = 3, stock_version = stock_version + 1, version = version + 1 WHERE id = 'v1'")).toEqual([]);
+  // Crossing into low stock (3 - 1 reserved = 2 <= 2) advances the product.
+  expect(await bumped(driver, "UPDATE product_variants SET reserved_stock = 1 WHERE id = 'v1'"))
+    .toEqual(["p:p1", "t:product_variants"]);
+  // Still low: nothing. Sold out: the product again.
+  expect(await bumped(driver, "UPDATE product_variants SET stock = 2 WHERE id = 'v1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE product_variants SET reserved_stock = 2 WHERE id = 'v1'"))
+    .toEqual(["p:p1", "t:product_variants"]);
+  // A store default change moves the band of every SKU that uses it: the settings key.
+  expect(await bumped(driver, "UPDATE settings SET value = '{\"defaultLowStockThreshold\":0}', revision = revision + 1 WHERE id = 'set_inventory'"))
+    .toEqual(["set:inventory:document", "t:settings"]);
+  // A visible SKU fact.
+  expect(await bumped(driver, "UPDATE product_variants SET price_minor = 120 WHERE id = 'v1'"))
+    .toEqual(["p:p1", "t:product_variants"]);
+
+  // Buyer state: a rewrite with equal facts (the refresh upsert) advances nothing.
+  expect(await bumped(driver, "UPDATE product_buyer_state SET refreshed_at = refreshed_at + 1 WHERE product_id = 'p1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE product_buyer_state SET from_minor = 90, to_minor = 90, base_minor = 100, has_discount = 1, discount_depth_bps = 1000 WHERE product_id = 'p1'"))
+    .toEqual([...p1Scopes("lo:disc"), ...p1Scopes("lo:price"), "p:p1", "t:product_buyer_state"].sort());
+  expect(await bumped(driver, "UPDATE product_buyer_state SET availability_band = 'low_stock' WHERE product_id = 'p1'"))
+    .toEqual([...p1Scopes("lo:band"), "p:p1", "t:product_buyer_state"].sort());
+
+  // Product text: page, search and the name order of its public scopes.
+  expect(await bumped(driver, "UPDATE products SET name = 'One renamed' WHERE id = 'p1'"))
+    .toEqual([...p1Scopes("lo:name"), "p:p1", "srch", "t:products"].sort());
+  // Revision and timestamp columns are noise.
+  expect(await bumped(driver, "UPDATE products SET aggregate_revision = aggregate_revision + 1, updated_at = updated_at + 1 WHERE id = 'p1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE products SET no_index = 1 WHERE id = 'p1'"))
+    .toEqual(["lm:seo", "p:p1", "t:products"]);
+
+  // A category move is a membership change of both the old and the new subtree.
+  expect(await bumped(driver, "UPDATE product_buyer_state SET category_id = 'cat_other' WHERE product_id = 'p1'"))
+    .toEqual([...p1Scopes("lm"), "lm:cat:cat_other", "p:p1", "t:product_buyer_state"].sort());
+  // Unpublish: the old scopes only.
+  expect(await bumped(driver, "UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'p1'"))
+    .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "p:p1", "t:product_buyer_state"]);
+  // Facts of a non-public product move no listing.
+  expect(await bumped(driver, "UPDATE product_buyer_state SET from_minor = 80, to_minor = 80 WHERE product_id = 'p1'")).toEqual([]);
+
+  // A tree move: every closure link of the moved subtree.
+  const move = await bumped(driver, "UPDATE categories SET parent_id = 'cat_other' WHERE id = 'cat_leaf'");
+  expect(move).toEqual(expect.arrayContaining(["c:cat_leaf", "c:cat_other", "c:cat_root", "c:*", "lm:cat:cat_other", "lm:cat:cat_root"]));
+
+  // Coarse (a rebuild batch): only `store`.
+  expect(await bumped(driver, [
+    "UPDATE cache_clock SET coarse = 1 WHERE id = 1",
+    "UPDATE products SET name = 'Coarse' WHERE id = 'p1'",
+    "UPDATE product_variants SET price_minor = 130 WHERE id = 'v1'",
+    "UPDATE cache_clock SET coarse = 0 WHERE id = 1",
+  ])).toEqual(["store"]);
+
+  // Delete cascades advance the product and its parts.
+  const removed = await bumped(driver, "DELETE FROM products WHERE id = 'p1'");
+  expect(removed).toEqual(expect.arrayContaining(["p:p1", "srch", "t:products", "t:product_variants"]));
+  expect(removed).not.toContain("t:product_buyer_state"); // it was no longer public
+}

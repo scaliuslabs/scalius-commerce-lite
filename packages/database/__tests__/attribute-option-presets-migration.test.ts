@@ -60,7 +60,7 @@ describe(MIGRATION, () => {
         sqlite.exec(SEED);
         const projections = sqlite.prepare(PROJECTIONS).all();
 
-        sqlite.exec(compiledMigrationSql(provider, undefined, "0092_"));
+        sqlite.exec(compiledMigrationSql(provider, "0093_", "0092_"));
 
         expect(sqlite.prepare(VALUES).all()).toEqual(EXPECTED);
         for (const row of sqlite.prepare("SELECT id FROM attribute_values WHERE id NOT IN ('atv_existing01', 'atv_trashed001')").all()) {
