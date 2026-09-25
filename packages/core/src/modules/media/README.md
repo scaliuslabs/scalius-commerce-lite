@@ -48,14 +48,24 @@ length and part-1 signature checks finish before the storage side effect.
   job). A failure only touches `updated_at`, so a broken image leaves the run
   and next time goes behind every other candidate. Each commerce sweep before
   it is isolated, so a sweep that keeps failing no longer starves the backfill;
-  the run still fails with the first error after the backfill ran.
+  the run still fails with the first error after the backfill ran. With the
+  jobs queue, `enqueueMediaVariantsBacklog` first sends up to 1,000
+  candidates to it (`sendBatch` of 100, no delay) and the run renders nothing
+  inline: consumers render them in parallel, so a large backlog (after
+  migration 0094, every image) clears in minutes, not one 240-image run per
+  15 minutes. Inline rendering is the fallback without a queue.
 - Self-healing on read (`apps/api/src/utils/media-rendition-hints.ts`): when a
   public read renders (a cache miss) and its body still publishes a still
-  original (`media/<id>.<jpg|png|webp|avif>`), up to 8 ids per read get the
-  same delayed `media.render_variants` job, deduplicated by a 15-minute KV
-  marker `media:rendition-hint:<id>`, with one masked log line per enqueue.
-  Buyers keep seeing the original until the job renders and bumps the
+  original (`media/<id>.<jpg|png|webp|avif>`), up to 24 ids per read (a
+  listing page's cards) get the `media.render_variants` job with no delay,
+  deduplicated by a 15-minute KV marker `media:rendition-hint:<id>`, with one
+  masked log line per read. Cards show their placeholder (never an original)
+  and the product page the original until the job renders and bumps the
   generation.
+- The rendition ladder (`MEDIA_VARIANT_WIDTHS`, @scalius/shared) is read from
+  the published URL alone, so changing it needs a migration that sends every
+  rendered image back to its original (0094 added 240 and 400); the read
+  hints and the backlog fan-out then re-render them under the same keys.
 - Usage (`media.usage.ts`) is the one list of places that can show a file:
   product photos, video covers, and media URLs saved in product descriptions
   and extra sections, categories, collections, pages/blog posts, homepage
