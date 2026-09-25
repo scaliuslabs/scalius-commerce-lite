@@ -6,7 +6,7 @@ import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getLayoutData } from "../storefront/storefront.service";
 import { readStoreShape } from "../storefront/store-shape";
 import { STORE_SHAPE_PRODUCTS, STORE_SHAPE_TREE } from "../storefront/store-shape.fixture";
-import { categoryNavigationFromRows, readCategoryNavigation, selectCategoryNavigationRows } from "./navigation.categories";
+import { categoryNavigationFromRows, readCategoryNavigation, selectCategoryNavigationRows, trimCategoryNavigation } from "./navigation.categories";
 
 async function seeded() {
   const { sqlite, db } = createSqliteD1Database();
@@ -53,6 +53,18 @@ describe("category navigation", () => {
     const tree = categoryNavigationFromRows(await selectCategoryNavigationRows(db, 3), 3);
     expect(tree).toMatchObject({ truncated: true });
     expect(tree.nodes.map((node) => node.id)).toEqual(["A", "F", "A1"]);
+  });
+
+  it("gives the header every root first, then each root's first children", () => {
+    const nodes = [
+      ...["a", "b", "c"].map((id) => ({ id, name: id, slug: id, parentId: null, canonicalPath: null, imageUrl: null })),
+      ...["a", "b", "c"].flatMap((parent) =>
+        [1, 2, 3].map((n) => ({ id: `${parent}${n}`, name: `${parent}${n}`, slug: `${parent}${n}`, parentId: parent, canonicalPath: null, imageUrl: null }))),
+    ];
+    const cut = trimCategoryNavigation({ nodes, truncated: false }, 7);
+    expect(cut.truncated).toBe(true);
+    expect(cut.nodes.map((node) => node.id)).toEqual(["a", "b", "c", "a1", "a2", "b1", "c1"]);
+    expect(trimCategoryNavigation({ nodes, truncated: false }, 50).nodes).toHaveLength(12);
   });
 
   it("rides the layout batch", async () => {
