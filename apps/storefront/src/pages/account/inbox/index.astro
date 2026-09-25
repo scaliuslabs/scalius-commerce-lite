@@ -4,6 +4,7 @@
 // "Message the store" for verified accounts. Server-rendered from the session
 // cookie, so it works without JavaScript; the form is a plain POST.
 import Layout from "@/layouts/Layout.astro";
+import AccountTabs from "@/components/account/AccountTabs.astro";
 import { getLayoutData } from "@/lib/api";
 import {
   CONVERSATION_COPY as copy,
@@ -15,10 +16,15 @@ import {
   renderInboxItems,
 } from "@/lib/account-inbox";
 import { readInbox } from "@/lib/account-inbox-server";
+import { readAccountSummaryForRequest } from "@/lib/account-tabs-server";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 const cursor = readInboxCursor(Astro.url.searchParams.get("cursor"));
-const [layoutData, inbox] = await Promise.all([getLayoutData(), readInbox(Astro.request, cursor)]);
+const [layoutData, inbox, summary] = await Promise.all([
+  getLayoutData(),
+  readInbox(Astro.request, cursor),
+  readAccountSummaryForRequest(Astro.request),
+]);
 const flag = readConversationStatusFlag(Astro.url);
 const status = flag ? conversationStatusMessage(flag) : null;
 const startFailed = Boolean(flag && status?.tone === "error");
@@ -32,16 +38,12 @@ const olderHref = inbox.ok && inbox.data.nextCursor
   : null;
 const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20";
 const label = "mb-1.5 block text-sm font-medium text-foreground";
-const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium";
 ---
 
 <Layout title={copy.inboxTitle} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section class="container mx-auto max-w-3xl px-4 py-8" data-account-inbox>
-    <nav aria-label="Account" class="mb-6 flex gap-1 border-b border-border">
-      <a href="/account" data-astro-prefetch={accountPrefetch} class={`${tab} border-transparent text-muted-foreground hover:text-foreground`}>{copy.accountTab}</a>
-      <a href="/account/inbox" aria-current="page" data-astro-prefetch="false" class={`${tab} border-primary text-foreground`}>{copy.inboxTitle}</a>
-    </nav>
+    <AccountTabs current="inbox" summary={summary} />
 
     {!inbox.ok && inbox.reason === "signed_out" && (
       <div class="mx-auto max-w-md py-12 text-center">

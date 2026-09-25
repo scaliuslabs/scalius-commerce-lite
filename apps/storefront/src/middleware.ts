@@ -111,7 +111,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  const securedResponse = isBrowserContinuationRelayPathname(url.pathname)
+  // A purchased file streams as a sandboxed attachment: keep its own policy.
+  const securedResponse = isBrowserContinuationRelayPathname(url.pathname) || isDigitalDownloadPathname(url.pathname)
     ? response
     : setPageCspHeader(
         response,
@@ -132,6 +133,11 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
 // build-time env, and nothing is retained across requests.
+/** The cookie-bound download streams (`/api/downloads/account|order/…`), never HTML. */
+function isDigitalDownloadPathname(pathname: string): boolean {
+  return /^\/api\/downloads\/(?:account|order)\//.test(pathname);
+}
+
 const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
   runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
@@ -147,11 +153,13 @@ const transportSecurityMiddleware = defineMiddleware(
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
+    const pathname = new URL(request.url).pathname;
+    const privateRelay = isBrowserContinuationRelayPathname(pathname);
+    const privateDownload = isDigitalDownloadPathname(pathname);
     const response = applyBaselineSecurityHeaders(request, await next(), {
-      frameProtection: privateRelay ? "deny" : "same-origin",
+      frameProtection: privateRelay || privateDownload ? "deny" : "same-origin",
     });
-    if (privateRelay) response.headers.set("Referrer-Policy", "no-referrer");
+    if (privateRelay || privateDownload) response.headers.set("Referrer-Policy", "no-referrer");
     return response;
   },
 );
