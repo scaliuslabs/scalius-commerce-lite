@@ -17,6 +17,32 @@ import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 
 const databasePath = process.env.CACHE_DEP_NOISE_AUDIT_DB?.trim();
 
+/**
+ * One row for each registered table a small local store often lacks, so
+ * every table's noise columns are exercised. Each insert runs only when the
+ * table is empty; ids are fixed and constraint-valid (foreign keys are off).
+ */
+const AUDIT_FILL_ROWS: ReadonlyArray<{ table: string; sql: string; present?: string }> = [
+  { table: "brands", sql: "INSERT INTO brands (id, name, slug, status) VALUES ('brd_noiseaudit', 'Noise Audit', 'noise-audit', 'published')" },
+  { table: "attribute_groups", sql: "INSERT INTO attribute_groups (id, name) VALUES ('atg_noiseaudit', 'Noise audit')" },
+  { table: "analytics", sql: "INSERT INTO analytics (id, name, type, is_active, use_partytown, config, location) VALUES ('analytics_noiseaudit', 'Noise audit', 'custom', 1, 0, '<script>window.noiseAudit=1</script>', 'head')" },
+  {
+    // Articles share the pages table; their payload keeps updatedAt.
+    table: "pages",
+    present: "SELECT 1 FROM pages WHERE content_type = 'article' AND is_published = 1 AND deleted_at IS NULL LIMIT 1",
+    sql: "INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES ('article_noiseaudit', 'article', 'Noise audit', 'noise-audit-article', '<p>x</p>', 1)",
+  },
+  { table: "delivery_zones", sql: "INSERT INTO delivery_zones (id, name) VALUES ('dz_noiseaudit', 'Noise audit zone')" },
+  {
+    table: "product_content_blocks",
+    sql: "INSERT INTO product_content_blocks (id, product_id, placement, type, settings) SELECT 'pcb_noiseaudit', id, 'after-description', 'rich-text', '{\"title\":\"Care\",\"html\":\"<p>Hand wash.</p>\"}' FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
+  },
+  {
+    table: "product_bundles",
+    sql: "INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps) SELECT 'pbd_noiseaudit', id, 2, 'percentage', 1000 FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
+  },
+];
+
 const STATIC_URLS = [
   "/api/v1/products?page=1&limit=50",
   "/api/v1/products?page=1&limit=50&sort=price-asc",
@@ -38,6 +64,7 @@ const STATIC_URLS = [
   "/api/v1/articles",
   "/api/v1/hero/sliders?type=desktop",
   "/api/v1/hero/sliders?type=mobile",
+  "/api/v1/analytics/configurations",
   "/api/v1/seo",
   "/api/v1/header",
   "/api/v1/navigation",
@@ -67,6 +94,9 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
       sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
         .run(JSON.stringify(storefrontTemplateTheme("department-mall")));
     }
+    for (const fill of AUDIT_FILL_ROWS) {
+      if (!sqlite.prepare(fill.present ?? `SELECT 1 FROM "${fill.table}" LIMIT 1`).get()) sqlite.exec(fill.sql);
+    }
     const { binding } = createSqliteD1Database({ sqlite });
     const env = {
       DB: binding,
@@ -88,6 +118,8 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
       ...pick("SELECT id AS v FROM collections WHERE deleted_at IS NULL ORDER BY id LIMIT 2").map((id) => `/api/v1/collections/${id}`),
       ...pick("SELECT slug AS v FROM pages WHERE is_published = 1 AND deleted_at IS NULL AND content_type = 'page' ORDER BY id LIMIT 1")
         .flatMap((slug) => [`/api/v1/pages/slug/${slug}`, `/api/v1/storefront/pages/slug/${slug}`]),
+      ...pick("SELECT slug AS v FROM pages WHERE is_published = 1 AND deleted_at IS NULL AND content_type = 'article' ORDER BY id LIMIT 1")
+        .map((slug) => `/api/v1/articles/slug/${slug}`),
     ];
     const render = async () => {
       const bodies = new Map<string, unknown>();
@@ -137,9 +169,6 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
     // there (the source fix), per the cache lead's ruling.
     const pendingSourceFix = [
       "product_variants.updated_at ", // S3a: public catalogue payloads drop variant updatedAt
-      "hero_sliders.revision ", "hero_sliders.updated_at ", // S3b
-      "checkout_languages.revision ", "checkout_languages.updated_at ", // S3b
-      "shipping_methods.updated_at ", // S3b: /shipping-methods drops updatedAt
     ];
     expect(findings.filter((finding) =>
       !finding.endsWith("no rows to test") && !pendingSourceFix.some((prefix) => finding.startsWith(prefix)))).toEqual([]);
