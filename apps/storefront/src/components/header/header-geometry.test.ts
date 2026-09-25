@@ -80,7 +80,7 @@ describe("header scroll geometry", () => {
     expect(layout).toMatch(/@media \(pointer: coarse\) \{\s*#site-header \{\s*--nav-link-height: var\(--nav-link-height-coarse, 2\.75rem\);/);
   });
 
-  it("paints the rows that condense from the same data, and never animates their height", () => {
+  it("paints the rows that condense from the same data, easing only with the reserve's transition", () => {
     // Composed headers: the bar and the sticky search row.
     const composed = "./variants/ComposedHeader.astro";
     const bar = rulesFor(composed, "hdr-bar").join("\n");
@@ -94,9 +94,13 @@ describe("header scroll geometry", () => {
       expect(row).toContain(`var(${token},`);
     }
     expect(rulesFor(classic, "header-full-nav-row").join("\n")).toContain("height: var(--hdr-classic-menu-row);");
-    // A height that animates while the reserve snaps would move the page for
-    // a few frames: no transition of a flow size on these rows.
-    const flowSize = /transition[^;]*\b(?:height|max-height|min-height|margin|padding)\b/;
+    // A height that eased on its own timing while the reserve used another
+    // would move the page for a few frames: every transition of a flow size
+    // on these rows uses the shared condense duration and easing.
+    const flowSize = /^(?:height|max-height|min-height|margin[\w-]*|padding[\w-]*)\s/;
+    const sharedTiming = /\svar\(--hdr-condense-duration, [^)]*\)\s+var\(--hdr-condense-easing, /;
+    const seen = new Set<string>();
+    const checked: string[] = [];
     for (const [file, name] of [
       [composed, "hdr-bar"],
       [composed, "hdr-phone-search"],
@@ -104,8 +108,21 @@ describe("header scroll geometry", () => {
       [classic, "header-row"],
       [classic, "header-full-nav-row"],
     ] as const) {
-      for (const rule of rulesFor(file, name)) expect(rule, `${file} ${rule}`).not.toMatch(flowSize);
+      for (const rule of rulesFor(file, name)) {
+        if (seen.has(rule)) continue;
+        seen.add(rule);
+        const transition = /transition:([^;]*);/.exec(rule)?.[1];
+        if (!transition) continue;
+        // Top-level entries (commas inside var(...) and cubic-bezier(...) stay).
+        for (const entry of transition.split(/,(?![^(]*\))/).map((part) => part.trim())) {
+          if (!flowSize.test(entry)) continue;
+          checked.push(entry.split(/\s/)[0]!);
+          expect(entry, `${file} ${rule}`).toMatch(sharedTiming);
+        }
+      }
     }
+    // The composed bar and search row, the classic bar and dropdown row.
+    expect(checked).toEqual(["height", "height", "padding-bottom", "height", "height"]);
     const classicRow = source(classic).match(/class="header-row[^"]*"/)![0];
     expect(classicRow).not.toMatch(/transition|\bh-\d|lg:h-/);
   });
@@ -114,5 +131,11 @@ describe("header scroll geometry", () => {
     const css = source("./HeaderLayout.astro");
     expect(css).toMatch(/#main-header\.is-scrolled \{\s*margin-bottom: var\(--hdr-condense-phone, 0rem\);/);
     expect(css).toMatch(/@media \(min-width: 64rem\) \{\s*#main-header\.is-scrolled \{\s*margin-bottom: var\(--hdr-condense-desktop, 0rem\);/);
+    // The reserve eases with the rows (0s for everything under reduced motion).
+    expect(css).toMatch(/#main-header \{\s*transition-property: margin-bottom[^;]*;\s*transition-duration: var\(--hdr-condense-duration, 300ms\);\s*transition-timing-function: var\(--hdr-condense-easing,/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*#site-header \{\s*--hdr-condense-duration: 0s;/);
+    expect(headerGeometryStyle(headerCondense(null, { foldsMenuRow: false }))).toContain(
+      `--hdr-condense-motion: ${HEADER_GEOMETRY.condense.duration}; --hdr-condense-easing: ${HEADER_GEOMETRY.condense.easing}`,
+    );
   });
 });

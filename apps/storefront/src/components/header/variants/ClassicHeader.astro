@@ -293,11 +293,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 40ms;
   }
 
-  /* Row heights from header-variants HEADER_GEOMETRY. They snap on scroll
-     (no height transition), so the scroll reserve under the header
-     (HeaderLayout) matches them in every frame and the page never moves. */
+  /* Row heights from header-variants HEADER_GEOMETRY. They ease with the
+     same transition as the scroll reserve under the header (HeaderLayout),
+     so the two sum to the same flow height in every frame. */
   .header-row {
     height: var(--hdr-phone-bar, 3.5rem);
+    transition: height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease);
   }
 
   @media (max-width: 63.99rem) {
@@ -322,6 +323,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     border-top-width: 1px;
     opacity: 1;
     transition:
+      height var(--hdr-condense-duration, 300ms) var(--hdr-condense-easing, ease),
       opacity 120ms ease,
       border-color 120ms ease;
   }
@@ -339,7 +341,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     border-top-width: 0;
     border-color: transparent;
     opacity: 0;
-    transition-delay: 0ms, 0ms;
+    transition-delay: 0ms, 0ms, 0ms;
   }
 
   .header-action-morph {
@@ -434,7 +436,6 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   @media (prefers-reduced-motion: reduce) {
     .header-expanded-center,
     .header-compact-center,
-    .header-full-nav-row,
     .header-action-morph,
     .header-expanded-actions,
     .header-scroll-search {
