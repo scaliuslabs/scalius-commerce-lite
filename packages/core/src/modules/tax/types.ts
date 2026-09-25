@@ -1,8 +1,13 @@
 export type TaxJurisdictionType = "all" | "city" | "zone" | "area";
 
+/**
+ * Where the order is taxed. An order that ships nothing (pickup, service,
+ * digital) has no address: city and zone are null, and only store-wide
+ * (`all`) rates apply.
+ */
 export interface TaxDestination {
-    city: string;
-    zone: string;
+    city: string | null;
+    zone: string | null;
     area: string | null;
     cityName?: string | null;
     zoneName?: string | null;

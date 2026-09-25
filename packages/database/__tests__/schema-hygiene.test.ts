@@ -17,7 +17,7 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(115);
+      expect(d1Tables).toHaveLength(122);
       expect(d1Tables).toContain("scalius_schema_migrations");
       expect(d1Tables).toContain("cache_generation");
       expect(d1Tables).toContain("agent_grants");
@@ -27,6 +27,13 @@ describe("canonical schema hygiene", () => {
       expect(d1Tables).toContain("order_amendments");
       expect(d1Tables).toContain("order_events");
       expect(d1Tables).toContain("admin_identity_handoff_events");
+      expect(d1Tables).toContain("order_fulfillments");
+      expect(d1Tables).toContain("order_fulfillment_lines");
+      expect(d1Tables).toContain("conversations");
+      expect(d1Tables).toContain("conversation_messages");
+      expect(d1Tables).toContain("conversation_attachments");
+      expect(d1Tables).toContain("notification_outbox");
+      expect(d1Tables).toContain("notification_delivery_receipts");
       expect(retired).toEqual([]);
     } finally {
       d1.close();

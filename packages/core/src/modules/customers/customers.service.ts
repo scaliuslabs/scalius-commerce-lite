@@ -1629,9 +1629,10 @@ export async function getCustomerOrderDetailForOrder(
             expectedDelivery: order.expectedDelivery,
             customerName: order.customerName,
             customerPhone: order.customerPhone,
-            shippingAddress: order.shippingAddress,
-            city: order.city,
-            zone: order.zone,
+            // Nullable from migration 0083; always present until the Wave A S3 contract.
+            shippingAddress: order.shippingAddress ?? "",
+            city: order.city ?? "",
+            zone: order.zone ?? "",
             area: order.area,
             cityName: order.cityName,
             zoneName: order.zoneName,

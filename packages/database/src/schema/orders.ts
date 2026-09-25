@@ -3,6 +3,8 @@
 // orderSupportRequests, orderSupportRequestEvents, paymentPlans,
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
+// The fulfilment ledger lives in fulfilment.ts, threads in conversations.ts
+// and the generic outbox in notifications.ts.
 
 import { sqliteTable, text, integer, unique, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -13,6 +15,7 @@ import { media } from "./media";
 import { inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
+import { conversations } from "./conversations";
 import {
     OrderStatus,
     PaymentMethod,
@@ -36,9 +39,13 @@ export const orders = sqliteTable("orders", {
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull(),
     customerEmail: text("customer_email"),
-    shippingAddress: text("shipping_address").notNull(),
-    city: text("city").notNull(),
-    zone: text("zone").notNull(),
+    /**
+     * Present exactly when something ships (`requiresShipping`); pickup,
+     * service-only and digital orders carry no address. A trigger enforces it.
+     */
+    shippingAddress: text("shipping_address"),
+    city: text("city"),
+    zone: text("zone"),
     area: text("area"),
     cityName: text("city_name"),
     zoneName: text("zone_name"),
@@ -57,6 +64,15 @@ export const orders = sqliteTable("orders", {
     shippingMethodDescription: text("shipping_method_description"),
     shippingMethodBaseAmountMinor: integer("shipping_method_base_amount_minor"),
     shippingFeeWaived: integer("shipping_fee_waived", { mode: "boolean" }),
+    /** Snapshot of `shipping_methods.kind`; null for historical orders and orders with nothing physical. */
+    shippingMethodKind: text("shipping_method_kind", { enum: ["delivery", "pickup"] }),
+    /** Pickup location and hours shown to the buyer, frozen at checkout. */
+    pickupAddress: text("pickup_address"),
+    pickupHours: text("pickup_hours"),
+    /** Staff marked a pickup order ready; a notification-only fact. */
+    pickupReadyAt: integer("pickup_ready_at", { mode: "timestamp" }),
+    /** Some line has fulfilment type `ship`, so the order needs an address. */
+    requiresShipping: integer("requires_shipping", { mode: "boolean" }).notNull().default(true),
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
     totalAmountMinor: integer("total_amount_minor").notNull().default(0),
@@ -95,6 +111,13 @@ export const orders = sqliteTable("orders", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     invoiceNumber: integer("invoice_number"),
 }, (table) => [
+    check("orders_requires_shipping_check", sql`${table.requiresShipping} IN (0, 1)`),
+    check(
+        "orders_shipping_method_kind_check",
+        sql`${table.shippingMethodKind} IS NULL OR ${table.shippingMethodKind} IN ('delivery', 'pickup')`,
+    ),
+    // Triggers orders_shipping_address_required_{insert,update} require the
+    // address, city and zone whenever requires_shipping = 1.
     uniqueIndex("orders_order_number_unique").on(table.orderNumber),
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
@@ -287,13 +310,42 @@ export const orderItems = sqliteTable("order_items", {
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     taxableAmountMinor: integer("taxable_amount_minor").notNull().default(0),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
+    /** Legacy per-line status; dropped by the Wave A contract migration. Read `fulfilledQuantity`. */
     fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
-    /** Units handed to a courier so far; the line is "shipped" once this equals quantity. */
+    /** Legacy sent-unit counter; dropped by the Wave A contract migration. Read `fulfilledQuantity`. */
     shippedQuantity: integer("shipped_quantity").notNull().default(0),
+    /** How this line reaches the buyer; frozen at commit (trigger-enforced). */
+    fulfillmentType: text("fulfillment_type", { enum: ["ship", "pickup", "digital", "gift_card", "service"] })
+        .notNull()
+        .default("ship"),
+    /**
+     * Units handed over: a trigger projection of active `order_fulfillment_lines`.
+     * Only the ledger moves it; never write it directly.
+     */
+    fulfilledQuantity: integer("fulfilled_quantity").notNull().default(0),
+    /** Frozen buyer inputs `[{key,type,label,value,displayValue,priceMinor}]` (JSON); immutable. */
+    properties: text("properties"),
+    /** Sum of the property surcharges in `unitPriceMinor`; immutable. */
+    propertiesPriceMinor: integer("properties_price_minor").notNull().default(0),
+    /** Unit price before surcharges (the product/variant sale applies to it only). */
+    baseUnitPriceMinor: integer("base_unit_price_minor"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
 }, (table) => [
+    check(
+        "order_items_fulfillment_type_check",
+        sql`${table.fulfillmentType} IN ('ship', 'pickup', 'digital', 'gift_card', 'service')`,
+    ),
+    check(
+        "order_items_fulfilled_quantity_bounds",
+        sql`${table.fulfilledQuantity} >= 0 AND ${table.fulfilledQuantity} <= ${table.quantity}`,
+    ),
+    check(
+        "order_items_properties_check",
+        sql`${table.properties} IS NULL OR (json_valid(${table.properties}) AND length(${table.properties}) <= 65536)`,
+    ),
+    check("order_items_properties_price_nonnegative", sql`${table.propertiesPriceMinor} >= 0`),
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_product_id_idx").on(table.productId),
     index("order_items_variant_id_idx").on(table.variantId),
@@ -676,6 +728,9 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     activeKey: text("active_key"),
     returnId: text("return_id")
         .references(() => orderReturns.id, { onDelete: "set null" }),
+    /** The order thread this case lives on (always set by the service from Wave A). */
+    conversationId: text("conversation_id")
+        .references(() => conversations.id, { onDelete: "restrict" }),
     submittedAt: integer("submitted_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -693,6 +748,7 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     index("order_support_requests_status_created_idx").on(table.status, table.createdAt),
     index("order_support_requests_type_status_idx").on(table.type, table.status),
     index("order_support_requests_return_id_idx").on(table.returnId),
+    index("order_support_requests_conversation_idx").on(table.conversationId),
 ]);
 
 export const orderSupportRequestEvents = sqliteTable("order_support_request_events", {
