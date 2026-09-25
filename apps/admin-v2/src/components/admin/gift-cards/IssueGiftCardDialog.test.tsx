@@ -104,6 +104,29 @@ describe("IssueGiftCardDialog", () => {
     expect(mocks.issue.mock.calls[2]![0].body.requestKey).not.toBe(first.requestKey);
   });
 
+  it("shows the API's refusal of a recipient phone at the contact field", async () => {
+    mocks.issue.mockResolvedValueOnce({
+      error: { success: false, error: { code: "VALIDATION_ERROR", message: "Enter a valid recipient phone number.", details: { field: "recipient.phone" } } },
+      response: { status: 400 },
+    });
+    await render(true);
+    await act(async () => setValue(document.querySelector<HTMLInputElement>("#gift-card-amount")!, "500"));
+    const deliverBy = document.querySelector<HTMLSelectElement>("#gift-card-deliver-by")!;
+    await act(async () => {
+      deliverBy.value = "sms";
+      deliverBy.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => setValue(document.querySelector<HTMLInputElement>("#gift-card-contact")!, "+8801712345678"));
+    await act(async () => {
+      document.querySelector("form#issue-gift-card")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(mocks.issue.mock.calls[0]![0].body.recipient).toEqual({ phone: "+8801712345678" });
+    expect(document.querySelector("#gift-card-contact-error")?.textContent).toBe("Enter a valid recipient phone number.");
+    expect(document.querySelector("#gift-card-contact")?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector('[data-slot="alert"]')).toBeNull();
+  });
+
   it("asks where to send the card when there is no customer or recipient", async () => {
     await render(true);
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#gift-card-amount")!, "500"));
