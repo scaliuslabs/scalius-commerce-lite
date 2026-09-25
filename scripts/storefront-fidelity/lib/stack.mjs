@@ -1,13 +1,17 @@
 // The measured stack: the API under `wrangler dev` (local D1/KV/R2 on the
 // harness state) and the BUILT storefront (`astro build` output) under
-// `wrangler dev`, bound to that API through a private dev registry so another
-// local stack's `scalius-api-local` can never answer for it. Secrets are fresh
-// random values in a temp env file, so no `.dev.vars` is read.
+// `wrangler dev`. Wrangler's dev registry is machine-wide, so the API gets the
+// port-derived name from scripts/dev-ports.mjs (`scalius-api-local-9001`), the
+// storefront's BACKEND_API binding targets that name, both use a private
+// registry, and start() fails fast unless the storefront renders this stack's
+// origins. Secrets are fresh random values in a temp env file, so no
+// `.dev.vars` is read.
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { API_DIR, STOREFRONT_DIR, assertLocalDatabase, assertOwnedState, childEnv, kvValueUrl, wranglerBin } from "./context.mjs";
+import { devApiWorkerName, localStorefrontWorkerConfig, verifyStorefrontBinding } from "../../dev-ports.mjs";
+import { API_DIR, STOREFRONT_DIR, assertLocalDatabase, assertOwnedState, childEnv, kvValueUrl, origins, wranglerBin } from "./context.mjs";
 import { killTree, startGroup, waitForUrl } from "./proc.mjs";
 
 export const STOREFRONT_CONFIG = join(STOREFRONT_DIR, "dist", "server", "wrangler.fidelity.json");
@@ -34,12 +38,15 @@ export function storefrontBuilt() {
   return existsSync(join(STOREFRONT_DIR, "dist", "server", "wrangler.json")) && existsSync(join(STOREFRONT_DIR, "dist", "server", "entry.mjs"));
 }
 
-/** The built Worker's config, rebound to the local API and this run's ports. */
+/** The API worker name of a harness stack (scripts/dev-ports.mjs). */
+export function apiWorkerName(ports) {
+  return devApiWorkerName({ api: ports.api });
+}
+
+/** The built Worker's config, rebound to this run's API worker and ports. */
 export function writeStorefrontConfig(ports) {
-  const config = JSON.parse(readFileSync(join(STOREFRONT_DIR, "dist", "server", "wrangler.json"), "utf8"));
-  delete config.routes;
-  config.services = (config.services ?? []).map((s) => (s.binding === "BACKEND_API" ? { ...s, service: "scalius-api-local" } : s));
-  config.dev = { ...(config.dev ?? {}), port: ports.storefront, inspector_port: ports.storefrontInspector, enable_containers: false };
+  const built = JSON.parse(readFileSync(join(STOREFRONT_DIR, "dist", "server", "wrangler.json"), "utf8"));
+  const config = localStorefrontWorkerConfig(built, { apiWorkerName: apiWorkerName(ports), port: ports.storefront, inspectorPort: ports.storefrontInspector });
   writeFileSync(STOREFRONT_CONFIG, JSON.stringify(config, null, 1));
   return STOREFRONT_CONFIG;
 }
@@ -98,7 +105,7 @@ export class Stack {
     if (!existsSync(this.secrets)) writeSecretsFile(this.secrets);
     const wrangler = wranglerBin();
     this.api = startGroup("api", process.execPath, [
-      wrangler, "dev", "--config", "wrangler.local.jsonc", "--local", "--port", String(this.ports.api),
+      wrangler, "dev", "--config", "wrangler.local.jsonc", "--local", "--name", apiWorkerName(this.ports), "--port", String(this.ports.api),
       "--inspector-port", String(this.ports.apiInspector), "--persist-to", this.stateDir,
       "--env-file", this.secrets, "--show-interactive-dev-session=false",
     ], { cwd: API_DIR, env: this.env(), logFile: join(this.runDir, "api.log") });
@@ -111,6 +118,9 @@ export class Stack {
     await waitForUrl(`http://localhost:${this.ports.storefront}/favicon.svg`, { timeoutMs: 180000, child: this.storefront });
     // The Platform KV mirror is a hint the API rebuilds from D1 (dev-ports.mjs).
     await fetch(kvValueUrl(this.ports, "settings:platform"), { method: "DELETE" }).catch(() => {});
+    // Fail fast when the storefront's BACKEND_API reached another stack's API.
+    const o = origins(this.ports);
+    await verifyStorefrontBinding({ storefrontUrl: o.storefrontUrl, mediaUrl: o.mediaUrl });
   }
 
   async kvPut(key, value) {
