@@ -139387,12 +139387,45 @@
                         },
                         "storeShape": {
                           "$ref": "#/components/schemas/StorefrontStoreShape"
+                        },
+                        "sectionMedia": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "theme",
                         "revision",
-                        "storeShape"
+                        "storeShape",
+                        "sectionMedia"
                       ],
                       "additionalProperties": {}
                     }

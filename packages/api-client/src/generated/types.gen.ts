@@ -38604,6 +38604,13 @@ export type GetApiV1AdminSettingsThemeResponses = {
             theme: StorefrontThemeDocument;
             revision: number;
             storeShape: StorefrontStoreShape;
+            sectionMedia: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
             [key: string]: unknown;
         };
     };

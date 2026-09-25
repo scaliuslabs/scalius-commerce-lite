@@ -72,7 +72,7 @@ import {
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
-import { readStoreShape } from "@scalius/core/modules/storefront";
+import { readHomeSectionMedia, readStoreShape } from "@scalius/core/modules/storefront";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -529,6 +529,14 @@ const getThemeRoute = createRoute({
                 revision: z.number().int().nonnegative(),
                 /** What the theme's fit rules read, as the storefront reads it. */
                 storeShape: storeShapeApiSchema,
+                /** The images the homepage sections name, for the section editor's previews. */
+                sectionMedia: z.array(z.object({
+                  id: z.string(),
+                  url: z.string(),
+                  alt: z.string(),
+                  width: z.number().int().nullable(),
+                  height: z.number().int().nullable(),
+                })),
               })
               .passthrough(),
           ),
@@ -541,8 +549,11 @@ const getThemeRoute = createRoute({
 
 app.openapi(getThemeRoute, async (c) => {
   const db = c.get("db");
-  const [result, storeShape] = await Promise.all([getThemeSettings(db), readStoreShape(db)]);
-  return ok(c, { ...result, storeShape });
+  const [[result, sectionMedia], storeShape] = await Promise.all([
+    getThemeSettings(db).then(async (theme) => [theme, await readHomeSectionMedia(db, theme.theme.pages.home)] as const),
+    readStoreShape(db),
+  ]);
+  return ok(c, { ...result, storeShape, sectionMedia });
 });
 
 const saveThemeSchema = z.object({
