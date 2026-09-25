@@ -350,7 +350,9 @@ async function runScheduledMaintenanceInner(
     // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
     // or gift-card lines were not handed over. A no-op until Wave B registers
     // an automatic fulfiller.
-    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db));
+    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
+      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    }));
     if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
       console.log(
         `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +

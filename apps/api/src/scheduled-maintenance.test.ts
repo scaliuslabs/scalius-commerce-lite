@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     sweepReviewRequests: vi.fn(),
     reviewsChangedSince: vi.fn(),
     sweepDigitalUploads: vi.fn(),
+    sweepAutoFulfilment: vi.fn(),
     getDb: vi.fn(() => db),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
@@ -66,6 +67,11 @@ vi.mock("@scalius/core/modules/reviews", () => ({
 
 vi.mock("@scalius/core/modules/digital", () => ({
   sweepDigitalUploads: mocks.sweepDigitalUploads,
+}));
+
+// The real fulfillers are registered (Wave B); the sweep itself has its own D1 tests.
+vi.mock("@scalius/core/modules/fulfilment", () => ({
+  sweepAutoFulfilment: mocks.sweepAutoFulfilment,
 }));
 
 vi.mock("@scalius/core/modules/conversations", () => ({
@@ -271,6 +277,7 @@ describe("runScheduledMaintenance", () => {
     mocks.sweepReviewRequests.mockResolvedValue({ queued: 0, skipped: 0 });
     mocks.reviewsChangedSince.mockResolvedValue(false);
     mocks.sweepDigitalUploads.mockResolvedValue({ aborted: 0 });
+    mocks.sweepAutoFulfilment.mockResolvedValue({ scanned: 0, fulfilled: 0, failed: 0 });
     mocks.cacheGenerationRow.current = { updatedAt: 1_750_000_000 };
   });
 

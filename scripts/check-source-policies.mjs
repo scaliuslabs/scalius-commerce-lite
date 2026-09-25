@@ -101,6 +101,7 @@ export const policies = [
       `${storefront}/components/product/ProductBuyerInputs.astro`,
       `${storefront}/components/conversation/ConversationReplyForm.astro`,
       `${storefront}/pages/account/inbox/index.astro`,
+      `${storefront}/lib/account-downloads.ts`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],

@@ -57,6 +57,12 @@ vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   listOrderDiscountLines: mocks.listOrderDiscountLines,
 }));
 
+// Per-line digital extras read D1; this suite's database is a stub.
+vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/digital")>()),
+  listLineDeliveries: vi.fn(async () => new Map()),
+}));
+
 vi.mock("../utils/order-receipt-token", () => ({
   validateReceiptToken: mocks.validateReceiptToken,
 }));
