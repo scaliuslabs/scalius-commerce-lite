@@ -3,10 +3,7 @@ import {
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
   HOME_PRODUCT_LIST_LIMIT,
-  homeSectionRequestParams,
   homeSectionRequests,
-  parseHomeSectionRequestParams,
-  parseStorefrontProductSourceKey,
   storefrontProductSourceKey,
 } from "./home-data";
 import {
@@ -23,20 +20,15 @@ import { storefrontThemeDocumentSchema } from "./document";
 const section = (value: object) => value as StorefrontSection;
 
 describe("homepage section data requests", () => {
-  it("keys every product source and reads each key back", () => {
-    const sources = [
+  it("keys every product source", () => {
+    expect([
       { kind: "newest" },
       { kind: "on-sale" },
       { kind: "popular" },
-      { kind: "collection", collectionId: "col_a:b" },
+      { kind: "collection", collectionId: "col_a" },
       { kind: "category", categoryId: "cat_1" },
-    ] as const;
-    for (const source of sources) {
-      expect(parseStorefrontProductSourceKey(storefrontProductSourceKey(source))).toEqual(source);
-    }
-    expect(parseStorefrontProductSourceKey("brand:x")).toBeNull();
-    expect(parseStorefrontProductSourceKey("category:")).toBeNull();
-    expect(parseStorefrontProductSourceKey("category:has space")).toBeNull();
+    ].map((source) => storefrontProductSourceKey(source as never)))
+      .toEqual(["newest", "on-sale", "popular", "collection:col_a", "category:cat_1"]);
   });
 
   it("reads each source once at the largest limit, and each image once", () => {
@@ -68,25 +60,6 @@ describe("homepage section data requests", () => {
     expect(requests.lists).toHaveLength(HOME_MAX_PRODUCT_LISTS);
     expect(requests.mediaIds).toHaveLength(HOME_MAX_MEDIA);
     expect(requests.lists.every((list) => list.limit <= HOME_PRODUCT_LIST_LIMIT)).toBe(true);
-  });
-
-  it("round-trips requests through the homepage query", () => {
-    const requests = homeSectionRequests(storefrontTemplateTheme("fashion-value").pages.home);
-    const params = homeSectionRequestParams(requests);
-    const parsed = parseHomeSectionRequestParams(
-      params.filter(([name]) => name === "product").map(([, value]) => value),
-      params.filter(([name]) => name === "media").map(([, value]) => value),
-    );
-    expect(parsed?.lists.map((list) => [list.key, list.limit]).sort())
-      .toEqual(requests.lists.map((list) => [list.key, list.limit]).sort());
-    expect(parseHomeSectionRequestParams(["37~newest"], [])).toBeNull();
-    expect(parseHomeSectionRequestParams(["0~newest"], [])).toBeNull();
-    expect(parseHomeSectionRequestParams(["8~brand:x"], [])).toBeNull();
-    expect(parseHomeSectionRequestParams([], ["bad id"])).toBeNull();
-    expect(parseHomeSectionRequestParams(Array.from({ length: 9 }, (_, index) => `8~category:c${index}`), [])).toBeNull();
-    // Equal requests give equal queries (one cache entry).
-    expect(homeSectionRequestParams({ lists: [...requests.lists].reverse(), mediaIds: [] }))
-      .toEqual(homeSectionRequestParams({ lists: requests.lists, mediaIds: [] }));
   });
 
   it("renders every section type whose data exists today", () => {

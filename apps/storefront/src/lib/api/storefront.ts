@@ -18,12 +18,6 @@ import type {
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { HeroSlide } from "@scalius/shared/hero-slider";
-import {
-  HOME_MEDIA_PARAM,
-  HOME_PRODUCT_LIST_PARAM,
-  homeSectionRequestParams,
-  type HomeSectionRequests,
-} from "@scalius/shared/storefront-theme";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -215,32 +209,6 @@ export async function getHomepageData(): Promise<HomepageData | null> {
   );
 }
 
-/**
- * The section data of a theme preview's draft: the homepage read with the
- * draft's own product lists and images named in the query (a second read,
- * made only under a dashboard preview; the published page is one batch).
- */
-export async function getHomepageSectionData(requests: HomeSectionRequests): Promise<HomepageSectionData | null> {
-  const params = homeSectionRequestParams(requests);
-  const values = (name: string) => params.filter(([key]) => key === name).map(([, value]) => value);
-  return withEdgeCache(
-    `storefront_homepage_sections_${BUILD_ID}_${new URLSearchParams(params).toString()}`,
-    async () => {
-      try {
-        const { data } = await getApiV1StorefrontHomepage({
-          client: getConfiguredSdkClient(),
-          query: { [HOME_PRODUCT_LIST_PARAM]: values(HOME_PRODUCT_LIST_PARAM), [HOME_MEDIA_PARAM]: values(HOME_MEDIA_PARAM) },
-        });
-        return unwrapEnvelope<HomepageData>(data)?.sections ?? null;
-      } catch (error: unknown) {
-        console.error("Error fetching homepage section data:", error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.AVAILABILITY },
-  );
-}
-
 async function fetchLayoutData(): Promise<LayoutData | null> {
   try {
     const { data } = await getApiV1StorefrontLayout({
@@ -269,6 +237,38 @@ export function getLayoutData(): Promise<LayoutData | null> {
     return layout;
   });
   return runtime.layout;
+}
+
+/**
+ * The homepage section data of a theme preview's draft: the API reads what
+ * the stored draft's sections name, behind the preview token (private, never
+ * cached). Only rendered under a live dashboard preview cookie; the
+ * published homepage comes from its one batch part.
+ */
+export async function getThemePreviewHomepageSections(
+  token: string,
+): Promise<HomepageSectionData | null> {
+  const normalizedToken = token.trim();
+  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
+  try {
+    const response = await apiFetch(
+      "/storefront/theme-preview/homepage",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: normalizedToken }),
+        cache: "no-store",
+      },
+      { retries: 0, timeout: 4_000, auth: false },
+    );
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    return unwrapEnvelope<HomepageSectionData>(await response.json() as unknown);
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveThemePreview(

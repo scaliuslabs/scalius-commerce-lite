@@ -10,11 +10,8 @@ import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
-  HOME_MEDIA_PARAM,
   HOME_PRODUCT_LIST_LIMIT,
-  HOME_PRODUCT_LIST_PARAM,
-  parseHomeSectionRequestParams,
-  type HomeSectionRequests,
+  homeSectionRequests,
 } from "@scalius/shared/storefront-theme";
 import {
   CACHE_GENERATION_HEADER,
@@ -153,7 +150,6 @@ const homepageDataSchema = z.object({
   }),
 });
 type HomepageData = z.infer<typeof homepageDataSchema>;
-const repeatedParam = z.union([z.string().max(80), z.array(z.string().max(80)).max(HOME_MAX_MEDIA)]).optional();
 
 const navigationLeafSchema = z.object({
   id: z.string().optional(),
@@ -301,13 +297,7 @@ const homepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)",
   description:
-    `Without \`${HOME_PRODUCT_LIST_PARAM}\` or \`${HOME_MEDIA_PARAM}\`, the section lists and images are the published theme's. A theme preview names its draft's instead: \`${HOME_PRODUCT_LIST_PARAM}=<limit>~<source key>\` per product list and \`${HOME_MEDIA_PARAM}=<media id>\` per image.`,
-  request: {
-    query: z.object({
-      [HOME_PRODUCT_LIST_PARAM]: repeatedParam.openapi({ description: "A product list to read: <limit>~<source key>, repeated" }),
-      [HOME_MEDIA_PARAM]: repeatedParam.openapi({ description: "A section image to read by media id, repeated" }),
-    }),
-  },
+    "Takes no parameters: a query string is rejected, so the generation-cached read has exactly one cache entry and callers cannot choose which products it reads.",
   responses: {
     200: {
       description: "Homepage data",
@@ -319,15 +309,9 @@ const homepageRoute = createRoute({
 });
 
 app.openapi(homepageRoute, async (c) => {
+  if (new URL(c.req.url).search) throw new ValidationError("The homepage read takes no query parameters");
   const db = c.get("db");
-  const products = c.req.queries(HOME_PRODUCT_LIST_PARAM) ?? [];
-  const media = c.req.queries(HOME_MEDIA_PARAM) ?? [];
-  let requests: HomeSectionRequests | undefined;
-  if (products.length > 0 || media.length > 0) {
-    requests = parseHomeSectionRequestParams(products, media) ?? undefined;
-    if (!requests) throw new ValidationError("Invalid homepage section reads");
-  }
-  const data = await getHomepageData(db, { requests }) as unknown as HomepageData;
+  const data = await getHomepageData(db) as unknown as HomepageData;
   return ok(c, data);
 });
 
@@ -498,6 +482,49 @@ app.openapi(resolveThemePreviewRoute, async (c) => {
   );
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
   return ok(c, preview);
+});
+
+// POST /storefront/theme-preview/homepage — the draft's homepage section data
+const themePreviewHomepageRoute = createRoute({
+  method: "post",
+  path: "/theme-preview/homepage",
+  tags: ["Storefront"],
+  summary: "Read the homepage section data of a theme preview's draft",
+  description:
+    "The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+  operationId: "system.storefront_theme_preview.homepage",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The draft's homepage section data",
+      content: { "application/json": { schema: successEnvelope(homepageDataSchema.shape.sections) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(themePreviewHomepageRoute, async (c) => {
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Referrer-Policy", "no-referrer");
+  const db = c.get("db");
+  const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
+  if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
+  const requests = homeSectionRequests(preview.theme.pages.home);
+  const data = requests.lists.length > 0 || requests.mediaIds.length > 0
+    ? (await getHomepageData(db, { requests })).sections
+    : { lists: [], media: [] };
+  return ok(c, data as unknown as HomepageData["sections"]);
 });
 
 export { app as storefrontRoutes };

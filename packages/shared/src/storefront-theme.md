@@ -85,9 +85,11 @@ numbers come from the storefront study
   the Theme page says so. `home-data.ts` derives what the sections read
   (`homeSectionRequests`: one product list per source at the largest limit
   any section asks, capped at 8 lists of 36, and at most 24 images). The
-  API reads exactly those in the homepage batch part, from the published
-  theme or from a preview's `product=`/`media=` query, and the storefront
-  looks each section's data up by the same keys. A section without data
+  API reads exactly those: for the published theme in the homepage batch
+  part (a fixed read that rejects any query string), and for a preview's
+  stored draft on the token-verified `POST /storefront/theme-preview/homepage`
+  (private, never cached). Callers never name reads. The storefront looks
+  each section's data up by the same keys. A section without data
   renders nothing (no placeholder). Consecutive `banner` sections with the
   same `two-up` or `four-up` layout share one row. The hero's optional
   `sideBanners` show only with `contained-banners`.
