@@ -101,6 +101,11 @@ export interface DvcHarnessConfig {
    * the first. `assertNoFindings()` fails with the whole list.
    */
   readonly collect?: boolean;
+  /**
+   * Negative control only: read the clock after the render instead of first,
+   * the ordering bug §6.8 L2 rules out. The race test proves it is caught.
+   */
+  readonly lateClockRead?: boolean;
   readonly log?: (line: string) => void;
 }
 
@@ -210,11 +215,12 @@ export class DvcHarness {
   /** Page bodies at each frontier's S (ground truth for G1). */
   private readonly truthAtS = new Map<number, Map<string, string>>();
   private readonly truthParts = new Map<string, { body: string; status: number; tables: ReadonlySet<string>; logPos: number; validUntil: number | null }>();
-  private readonly capture = new AsyncLocalStorage<Set<string>>();
+  /** Per-render context: the tables it touched and whether writes may race it. */
+  private readonly capture = new AsyncLocalStorage<{ tables: Set<string>; race: boolean }>();
+  /** Per-render randomness (a render that mints an id stays a pure function). */
+  private readonly randomScope = new AsyncLocalStorage<Rng>();
   private suppressCapture = false;
   private injecting = false;
-  /** Only renders that fill the cache race with writes; verification renders never do. */
-  private raceAllowed = false;
   /** The stream behind Math.random and crypto.getRandomValues inside the application. */
   private appRandom: Rng;
   private restoreRandomness: () => void = () => undefined;
@@ -304,13 +310,19 @@ export class DvcHarness {
     const original = sqlite.prepare.bind(sqlite);
     const tableNames = this.tableNames;
     sqlite.prepare = ((query: string) => {
-      const observed = this.suppressCapture ? undefined : this.capture.getStore();
+      const context = this.suppressCapture ? undefined : this.capture.getStore();
+      const observed = context?.tables;
+      if (observed && this.injectPlan && !this.injecting) {
+        const plan = this.injectPlan;
+        if (!plan.done && plan.count === plan.at) this.runInjected(plan);
+        plan.count += 1;
+      }
       if (observed) {
         for (const match of query.matchAll(/"([^"]+)"|`([^`]+)`|\b([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
           const name = (match[1] ?? match[2] ?? match[3] ?? "").toLowerCase();
           if (tableNames.has(name)) observed.add(name);
         }
-        if (this.raceAllowed && !this.injecting && (this.config.raceRate ?? 0) > 0 && !sqlite.isTransaction && this.rng.chance(this.config.raceRate!)) {
+        if (context!.race && !this.injecting && (this.config.raceRate ?? 0) > 0 && !sqlite.isTransaction && this.rng.chance(this.config.raceRate!)) {
           this.injectRaceWrite();
         }
       }
@@ -329,13 +341,14 @@ export class DvcHarness {
     const cryptoObject = globalThis.crypto as Crypto & { getRandomValues: Crypto["getRandomValues"]; randomUUID: Crypto["randomUUID"] };
     const getRandomValues = cryptoObject.getRandomValues;
     const randomUUID = cryptoObject.randomUUID;
-    Math.random = () => this.appRandom.next();
+    const stream = () => this.randomScope.getStore() ?? this.appRandom;
+    Math.random = () => stream().next();
     cryptoObject.getRandomValues = (<T extends ArrayBufferView | null>(array: T): T => {
-      if (array) this.appRandom.fill(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
+      if (array) stream().fill(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
       return array;
     }) as Crypto["getRandomValues"];
     cryptoObject.randomUUID = (() => {
-      const hex = Array.from({ length: 32 }, () => Math.floor(this.appRandom.next() * 16).toString(16)).join("");
+      const hex = Array.from({ length: 32 }, () => Math.floor(stream().next() * 16).toString(16)).join("");
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
     }) as Crypto["randomUUID"];
     this.restoreRandomness = () => {
@@ -343,6 +356,63 @@ export class DvcHarness {
       cryptoObject.getRandomValues = getRandomValues;
       cryptoObject.randomUUID = randomUUID;
     };
+  }
+
+  private injectPlan: { at: number; count: number; done: boolean; write: (sqlite: DatabaseSync) => void } | null = null;
+
+  private runInjected(plan: NonNullable<DvcHarness["injectPlan"]>): void {
+    this.injecting = true;
+    this.suppressCapture = true;
+    try {
+      plan.write(this.sqlite);
+      plan.done = true;
+    } finally {
+      this.suppressCapture = false;
+      this.injecting = false;
+    }
+  }
+
+  /**
+   * Race test primitive (§7 item 4): render `path` and commit `write` after
+   * the render's clock read, just before its statement number `at` (0 = before
+   * the first data read). An `at` past the last statement commits between the
+   * render and the cache put. The result is stored as a miss would be.
+   */
+  async renderWithCommit(path: string, at: number, write: (sqlite: DatabaseSync) => void): Promise<{ statements: number; injected: boolean }> {
+    const plan = { at, count: 0, done: false, write };
+    this.injectPlan = plan;
+    let result: RenderResult;
+    try {
+      result = await this.render(path);
+    } finally {
+      this.injectPlan = null;
+    }
+    const statements = plan.count;
+    if (!plan.done) this.runInjected(plan);
+    this.store(result);
+    return { statements, injected: plan.done };
+  }
+
+  /** Validate one cached part now: the verdict, and whether its body equals a fresh render. */
+  async checkPart(path: string): Promise<{ cached: boolean; valid: boolean; equal: boolean }> {
+    const entry = this.partCache.get(path);
+    if (!entry) return { cached: false, valid: false, equal: false };
+    const [verdict] = await this.validator.validate([entry.meta], this.now);
+    const fresh = await this.render(path);
+    return { cached: true, valid: verdict!.valid, equal: fresh.body === entry.body && fresh.status === entry.status };
+  }
+
+  /** Fill the part cache with these reads concurrently (race mode interleaves writes). */
+  async readPartsConcurrently(paths: readonly string[]): Promise<void> {
+    await Promise.all(paths.map(async (path) => {
+      const result = await this.render(path, true);
+      this.store(result);
+    }));
+  }
+
+  /** Advance simulated time without verifying. */
+  tick(ms: number): void {
+    this.now += ms;
   }
 
   private injectRaceWrite(): void {
@@ -379,14 +449,9 @@ export class DvcHarness {
     const observed = new Set<string>();
     const { ctx, settle } = this.ctx();
     const request = new Request(`${RENDER_HOST}${path}`, { headers: { Accept: "application/json" } });
-    this.raceAllowed = allowRace;
-    const walkRandom = this.appRandom;
-    this.appRandom = new Rng(`render:${path}`);
-    let recordedRender: Awaited<ReturnType<DependencyRecorder["record"]>>;
-    try {
-      recordedRender = await this.recorder.record(
+    const recordedRender = await this.randomScope.run(new Rng(`render:${path}`), () => this.recorder.record(
         path,
-        () => this.capture.run(observed, async () => {
+        () => this.capture.run({ tables: observed, race: allowRace }, async () => {
           const rendered = await renderPublicRead(request, this.env, ctx);
           // Read the body before settling waitUntil work: that work reads a tee of it.
           const text = await rendered.text();
@@ -394,12 +459,9 @@ export class DvcHarness {
           return new Response(text, { status: rendered.status, headers: rendered.headers });
         }),
         observed,
-      );
-    } finally {
-      this.raceAllowed = false;
-      this.appRandom = walkRandom;
-    }
+      ));
     const { response, dependencies } = recordedRender;
+    const s0Used = this.config.lateClockRead ? await this.clock.current() : s0;
     const body = await response.text();
     const fromHeaders = headerDependencies(response);
     const recorded: RecordedDependencies = fromHeaders ?? dependencies;
@@ -415,7 +477,7 @@ export class DvcHarness {
       body,
       storable,
       meta: {
-        s0: recorded.s0 ?? s0,
+        s0: recorded.s0 ?? s0Used,
         deps: recorded.deps.includes("store") ? recorded.deps : [...recorded.deps, "store"],
         validUntil: recorded.validUntil,
         softMaxAgeSeconds: recorded.softMaxAgeSeconds,
@@ -580,17 +642,12 @@ export class DvcHarness {
     delete (env as unknown as Record<string, unknown>).__DVC_DB;
     const { ctx, settle } = this.ctx();
     this.config.setSystemTime(this.now);
-    const walkRandom = this.appRandom;
-    this.appRandom = new Rng(`render:${path}`);
-    let body: string;
-    let response: Response;
-    try {
-      response = await renderPublicRead(new Request(`${RENDER_HOST}${path}`, { headers: { Accept: "application/json" } }), env, ctx);
-      body = await response.text();
+    const { response, body } = await this.randomScope.run(new Rng(`render:${path}`), async () => {
+      const rendered = await renderPublicRead(new Request(`${RENDER_HOST}${path}`, { headers: { Accept: "application/json" } }), env, ctx);
+      const text = await rendered.text();
       await settle();
-    } finally {
-      this.appRandom = walkRandom;
-    }
+      return { response: rendered, body: text };
+    });
     copy.close();
     return { status: response.status, body };
   }
