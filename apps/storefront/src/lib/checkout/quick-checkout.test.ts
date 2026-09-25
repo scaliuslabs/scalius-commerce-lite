@@ -86,17 +86,26 @@ describe("checkout without JavaScript", () => {
     expect(quickCheckoutFieldErrors({ ...form, customerName: "STAB Buyer", customerPhone: "01700000000", customerEmail: "" }, "pickup", 10)).toEqual([]);
   });
 
+  const quoteItems = [{
+    cartKey: "quick_buy:prod_1:var_1", productId: "prod_1", variantId: "var_1", quantity: 2, unitPrice: 550,
+    productName: "Tee", variantLabel: null, fulfillmentType: "ship" as const, properties: [], propertiesPriceMinor: 5000, propertiesHash: null,
+  }];
+
   it("orders exactly the reviewed state: the quote's applied codes, no address for pickup", () => {
     const form = { ...readQuickCheckoutForm(posted({ cartItems: line(), customerName: "STAB Buyer", customerPhone: "01700000000", shippingAddress: "House 1, Road 2", city: "dhaka", zone: "mirpur", discountCode: "NOPE", expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv" })) };
-    const delivery = quickCheckoutOrderForm(form, "delivery", "rate_1", { discounts: [{ promotionId: "p", title: "EID", code: "EID10", amount: 5, shippingAmount: 0 }, { promotionId: "bundle", title: "Pair", code: null, amount: 5, shippingAmount: 0 }] });
+    const delivery = quickCheckoutOrderForm(form, "delivery", "rate_1", { items: quoteItems, discounts: [{ promotionId: "p", title: "EID", code: "EID10", amount: 5, shippingAmount: 0 }, { promotionId: "bundle", title: "Pair", code: null, amount: 5, shippingAmount: 0 }] });
     expect(delivery.get("discountCodes")).toBe('["EID10"]');
     expect(delivery.get("shippingLocation")).toBe("rate_1");
     expect(delivery.get("city")).toBe("dhaka");
     expect(delivery.get("expectedQuoteFingerprint")).toBe("taxq_abcdefghijklmnopqrstuv");
-    const pickup = quickCheckoutOrderForm(form, "pickup", "pick_1", { discounts: [] });
+    // A line priced before a price change is ordered at the reviewed price, with its inputs intact.
+    const ordered = JSON.parse(String(delivery.get("cartItems")))["quick_buy:prod_1:var_1"];
+    expect(ordered.price).toBe(550);
+    expect(ordered.properties[0].value).toBe("A&B");
+    const pickup = quickCheckoutOrderForm(form, "pickup", "pick_1", { items: quoteItems, discounts: [] });
     expect(pickup.get("deliveryMode")).toBe("pickup");
     expect(pickup.get("shippingAddress")).toBeNull();
     expect(pickup.get("discountCodes")).toBe("");
-    expect(quickCheckoutOrderForm(form, "none", "", { discounts: [] }).get("shippingLocation")).toBeNull();
+    expect(quickCheckoutOrderForm(form, "none", "", { items: quoteItems, discounts: [] }).get("shippingLocation")).toBeNull();
   });
 });

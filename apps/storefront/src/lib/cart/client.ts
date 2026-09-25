@@ -125,6 +125,12 @@ let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
+/**
+ * The cart lines a refused quote already sent back to the availability check.
+ * That check re-renders the totals, which quote again: without this, a line
+ * the buyer has not fixed yet (sold out, too many) re-checks forever.
+ */
+let quoteRefusalRecheckedLines: string | null = null;
 let discountValidationSequence = 0;
 let pendingDiscountValidation: number | null = null;
 /** The latest server discount facts, for the applied-code list. */
@@ -1019,7 +1025,13 @@ export async function updateTotals() {
     const cartChanged = error instanceof TaxQuoteCartChangedError;
     const rateRefused = error instanceof TaxQuoteDeliveryRateError;
     const locationGone = error instanceof TaxQuoteDeliveryLocationError;
-    if (cartChanged) scheduleCartValidation();
+    if (cartChanged) {
+      const lines = JSON.stringify(cartStore.get().items);
+      if (lines !== quoteRefusalRecheckedLines) {
+        quoteRefusalRecheckedLines = lines;
+        scheduleCartValidation();
+      }
+    }
     if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
     if (locationGone) rejectDeliveryLocation(error.field);
     await renderEstimate(cartChanged || rateRefused || locationGone ? "" : activeCheckoutCopy().taxVerificationFailedText);
@@ -1302,6 +1314,7 @@ function removeLineWithUndo(cartKey: string): void {
 // --- Initialization ---
 export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
+  quoteRefusalRecheckedLines = null;
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   reconcileHostedPaymentRecoveryWithCart();
