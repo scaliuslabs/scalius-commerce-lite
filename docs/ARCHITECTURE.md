@@ -103,6 +103,10 @@ two public entries:
 | `customers` | Customer records, account auth and OTP, identity, order claims | index, browser |
 | `notifications` | Order notification outbox, delivery receipts, templates, provider health | index, browser |
 | `conversations` | Buyer↔store threads (empty until Wave A) | index, browser |
+| `reviews` | Verified-purchase reviews of delivered lines, moderation, replies, the rating projection, review requests (stubs until Wave B B1) | index, browser |
+| `digital` | Private-R2 files, licence-key pools that are the variant's stock, entitlements, cookie-bound download tickets (stubs until B3) | index, browser |
+| `gift-cards` | Codes, the append-only balance ledger, issue, redemption as a tender, release and refund credit (stubs until B4); a leaf domain that imports no other domain | index, browser |
+| `warranty` | Revisioned warranty policies, per-fulfilment-line warranty records, claims backed by threads (stubs until B5) | index, browser |
 | `settings` | Typed settings documents, their store, and the settings services | index, browser |
 | `platform` | Public origins, CORS and identity handoff for the Worker entry | index |
 | `media`, `pages`, `navigation`, `hero-sliders`, `storefront`, `analytics`, `fraud-checker` | Their records and reads | index (browser where listed in `package.json`) |
@@ -141,7 +145,7 @@ defined. The public-file rule keeps the same boundary without that hazard.
 
 ### The dependency graph
 
-The allowlist has 88 directed edges. Fifteen domains form one cycle group
+The allowlist has 93 directed edges. Fifteen domains form one cycle group
 (catalog, categories, collections, customers, delivery, inventory, media,
 notifications, orders, pages, payments, products, promotions, settings, tax);
 the reciprocal pairs are the debt to pay down first:
@@ -193,6 +197,13 @@ edit the same file:
 - Conversation seams: the `conversations` domain entries, and empty routers
   mounted once (`routes/customer-auth/conversations.ts`,
   `routes/storefront-orders/conversation.ts`, `routes/admin/conversations.ts`).
+- Order-line extras: `apps/api/src/routes/shared/order-line-extras.ts` composes
+  each item's review, downloads, licence keys, gift cards and warranty from the
+  four Wave B domains at the API layer (never inside `orders`, which would make
+  cycles) for the receipt, the account order and the admin order.
+- Automatic fulfilment: `apps/api/src/utils/auto-fulfil-queue.ts` sends
+  `order.auto_fulfil` after every commit that settles payment; it never throws,
+  and the 15-minute sweep is the backstop.
 
 ## Runtime Configuration Boundary
 

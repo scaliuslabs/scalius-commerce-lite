@@ -3343,6 +3343,238 @@
         ],
         "additionalProperties": false
       },
+      "OrderLineExtras": {
+        "type": "object",
+        "properties": {
+          "review": {
+            "$ref": "#/components/schemas/OrderLineReviewExtra"
+          },
+          "downloads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineDownloadExtra"
+            }
+          },
+          "licenceKeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineLicenceKeyExtra"
+            }
+          },
+          "giftCards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineGiftCardExtra"
+            }
+          },
+          "warranty": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineWarrantyExtra"
+            }
+          }
+        }
+      },
+      "OrderLineReviewExtra": {
+        "type": "object",
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "review": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "rating": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "rating",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "eligible",
+          "review"
+        ]
+      },
+      "OrderLineDownloadExtra": {
+        "type": "object",
+        "properties": {
+          "entitlementId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "downloadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "downloadLimit": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entitlementId",
+          "displayName",
+          "downloadCount",
+          "downloadLimit",
+          "expiresAt",
+          "revoked"
+        ]
+      },
+      "OrderLineLicenceKeyExtra": {
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyId",
+          "last4"
+        ]
+      },
+      "OrderLineGiftCardExtra": {
+        "type": "object",
+        "properties": {
+          "giftCardId": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          },
+          "initialAmount": {
+            "type": "number"
+          },
+          "initialAmountMinor": {
+            "type": "integer"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "sentTo": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "giftCardId",
+          "last4",
+          "initialAmount",
+          "initialAmountMinor",
+          "currencyCode",
+          "sentTo"
+        ]
+      },
+      "OrderLineWarrantyExtra": {
+        "type": "object",
+        "properties": {
+          "warrantyId": {
+            "type": "string"
+          },
+          "policyName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "replacementUntil": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "voided": {
+            "type": "boolean"
+          },
+          "openClaimId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "warrantyId",
+          "policyName",
+          "provider",
+          "quantity",
+          "startsAt",
+          "expiresAt",
+          "replacementUntil",
+          "voided",
+          "openClaimId"
+        ]
+      },
+      "CustomerAccountSummary": {
+        "type": "object",
+        "properties": {
+          "unreadInbox": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reviewsToWrite": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "downloads": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "giftCards": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeWarranties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unreadInbox",
+          "reviewsToWrite",
+          "downloads",
+          "giftCards",
+          "activeWarranties"
+        ]
+      },
       "ProductPageContentBlock": {
         "oneOf": [
           {
@@ -37847,6 +38079,9 @@
                                 "type": "integer",
                                 "nullable": true
                               },
+                              "extras": {
+                                "$ref": "#/components/schemas/OrderLineExtras"
+                              },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               }
@@ -44390,6 +44625,292 @@
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Buyer-to-store messages and images are the buyer's own words, sent from the hosted account or receipt page; agents never read or write them."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/account-summary": {
+      "get": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Counts behind the account tabs (inbox, reviews, downloads, gift cards, warranties)",
+        "responses": {
+          "200": {
+            "description": "Account summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerAccountSummary"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "storefront.customer_auth_account_summary.get_account_summary",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Customer-cookie counts that only decide which hosted account tabs show; agents read the underlying records through their own reviewed operations."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -57585,6 +58106,9 @@
                                   "baseUnitPriceMinor": {
                                     "type": "integer",
                                     "nullable": true
+                                  },
+                                  "extras": {
+                                    "$ref": "#/components/schemas/OrderLineExtras"
                                   }
                                 },
                                 "required": [
@@ -125097,6 +125621,8 @@
             "discounts.edit",
             "discounts.toggle_status",
             "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -125122,6 +125648,8 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "reviews.moderate",
+            "reviews.view",
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
@@ -132110,6 +132638,8 @@
             "discounts.edit",
             "discounts.toggle_status",
             "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -132135,6 +132665,8 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "reviews.moderate",
+            "reviews.view",
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
@@ -133871,6 +134403,8 @@
             "discounts.edit",
             "discounts.toggle_status",
             "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -133896,6 +134430,8 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "reviews.moderate",
+            "reviews.view",
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
@@ -140988,6 +141524,13 @@
                         "partialPaymentAmount": {
                           "type": "number"
                         },
+                        "autoFulfilMode": {
+                          "type": "string",
+                          "enum": [
+                            "after_payment",
+                            "after_confirmation"
+                          ]
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -140998,6 +141541,7 @@
                         "checkoutMode",
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
+                        "autoFulfilMode",
                         "revision"
                       ]
                     }
@@ -141299,6 +141843,13 @@
                   "partialPaymentAmount": {
                     "type": "number"
                   },
+                  "autoFulfilMode": {
+                    "type": "string",
+                    "enum": [
+                      "after_payment",
+                      "after_confirmation"
+                    ]
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -141350,6 +141901,13 @@
                         "partialPaymentAmount": {
                           "type": "number"
                         },
+                        "autoFulfilMode": {
+                          "type": "string",
+                          "enum": [
+                            "after_payment",
+                            "after_confirmation"
+                          ]
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -141360,6 +141918,7 @@
                         "checkoutMode",
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
+                        "autoFulfilMode",
                         "revision"
                       ]
                     }
@@ -182839,6 +183398,9 @@
                               },
                               "taxAmountMinor": {
                                 "type": "integer"
+                              },
+                              "extras": {
+                                "$ref": "#/components/schemas/OrderLineExtras"
                               }
                             },
                             "required": [
@@ -194524,9 +195086,22 @@
                     "type": "string",
                     "enum": [
                       "physical",
+                      "digital",
                       "service"
                     ],
-                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                    "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                  },
+                  "isGiftCard": {
+                    "type": "boolean",
+                    "description": "Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep."
+                  },
+                  "warrantyPolicyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$/u",
+                    "description": "A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."
                   },
                   "optionMatrix": {
                     "type": "object",
@@ -194686,9 +195261,10 @@
                               "type": "string",
                               "enum": [
                                 "physical",
+                                "digital",
                                 "service"
                               ],
-                              "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                              "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                             }
                           },
                           "required": [
@@ -194763,9 +195339,10 @@
                         "type": "string",
                         "enum": [
                           "physical",
+                          "digital",
                           "service"
                         ],
-                        "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                        "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                       }
                     },
                     "required": [
@@ -200721,6 +201298,10 @@
                               "value"
                             ]
                           }
+                        },
+                        "warrantyPolicyId": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -200755,7 +201336,8 @@
                         "variants",
                         "media",
                         "additionalInfo",
-                        "attributes"
+                        "attributes",
+                        "warrantyPolicyId"
                       ]
                     }
                   },
@@ -201124,9 +201706,22 @@
                     "type": "string",
                     "enum": [
                       "physical",
+                      "digital",
                       "service"
                     ],
-                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                    "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                  },
+                  "isGiftCard": {
+                    "type": "boolean",
+                    "description": "Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep."
+                  },
+                  "warrantyPolicyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$/u",
+                    "description": "A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."
                   },
                   "id": {
                     "type": "string"
@@ -203187,9 +203782,10 @@
                     "type": "string",
                     "enum": [
                       "physical",
+                      "digital",
                       "service"
                     ],
-                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                    "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                   },
                   "expectedAggregateRevision": {
                     "type": "integer",
@@ -204622,9 +205218,10 @@
                     "type": "string",
                     "enum": [
                       "physical",
+                      "digital",
                       "service"
                     ],
-                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                    "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                   },
                   "expectedStockVersion": {
                     "type": "integer",
@@ -205966,9 +206563,10 @@
                           "type": "string",
                           "enum": [
                             "physical",
+                            "digital",
                             "service"
                           ],
-                          "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                          "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                         }
                       },
                       "required": [

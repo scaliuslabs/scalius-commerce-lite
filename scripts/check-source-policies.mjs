@@ -149,6 +149,9 @@ export const policies = [
     paths: [
       "packages/core/src/modules/orders/order-support-requests.ts",
       "packages/core/src/modules/conversations",
+      // Warranty claims are records plus a thread (Wave B W5); remedies go
+      // through returns, refunds or manual orders in their own domains.
+      "packages/core/src/modules/warranty",
     ],
     forbid: [
       /from\s+["']\.\.\/(?:inventory|delivery|fulfillment|fulfilment|checkout)(?:\/|["'])/,
@@ -173,6 +176,30 @@ export const policies = [
     paths: ["packages/core/src/modules/conversations"],
     forbid: [/\.(?:insert|update|delete)\(\s*(?:customers|orders|customerHistory)\s*\)/],
     sample: "await db.update(customers).set({ email });",
+  },
+  {
+    rule: "review stats and gift-card balances move only through their trigger projections",
+    why: "product_review_stats is a projection of published reviews (Wave B R3) and gift_cards.balance_minor of the append-only transaction ledger (G1); a direct write desynchronises them",
+    paths: ["apps/api/src", "packages/core/src"],
+    forbid: [
+      /\.(?:insert|update|delete)\(\s*productReviewStats\s*\)/,
+      /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+[`"]?product_review_stats\b/i,
+      /\.set\(\s*\{[^}]*\bbalanceMinor\s*:/,
+      /\bSET\s+[^;`]*\bbalance_minor\s*=/i,
+    ],
+    sample: "await db.update(productReviewStats).set({ reviewCount: 0 });",
+  },
+  {
+    rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
+    why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
+    paths: [
+      "packages/core/src/modules/gift-cards",
+      "packages/core/src/modules/digital",
+      "packages/core/src/modules/reviews",
+      "apps/api/src/notification-content",
+    ],
+    forbid: [/\bconsole\.\w+\s*\([^)]*\b(?:code|codes|licenceKey|licenceKeys|keyPlaintext|plaintext|body|title)\b/],
+    sample: 'console.warn("gift card redeem failed", code);',
   },
   {
     rule: "production code never calls the legacy multi-SKU stock helpers",

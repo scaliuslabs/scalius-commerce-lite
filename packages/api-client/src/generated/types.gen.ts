@@ -598,6 +598,66 @@ export type StorefrontStoreShape = {
     hasContentBlocks: boolean;
 };
 
+export type OrderLineExtras = {
+    review?: OrderLineReviewExtra;
+    downloads?: Array<OrderLineDownloadExtra>;
+    licenceKeys?: Array<OrderLineLicenceKeyExtra>;
+    giftCards?: Array<OrderLineGiftCardExtra>;
+    warranty?: Array<OrderLineWarrantyExtra>;
+};
+
+export type OrderLineReviewExtra = {
+    eligible: boolean;
+    review: {
+        id: string;
+        rating: number;
+        status: string;
+    } | null;
+};
+
+export type OrderLineDownloadExtra = {
+    entitlementId: string;
+    displayName: string;
+    downloadCount: number;
+    downloadLimit: number | null;
+    expiresAt: string | null;
+    revoked: boolean;
+};
+
+export type OrderLineLicenceKeyExtra = {
+    keyId: string;
+    last4: string;
+};
+
+export type OrderLineGiftCardExtra = {
+    giftCardId: string;
+    last4: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    currencyCode: string;
+    sentTo: string | null;
+};
+
+export type OrderLineWarrantyExtra = {
+    warrantyId: string;
+    policyName: string;
+    provider: string;
+    quantity: number;
+    startsAt: string;
+    expiresAt: string;
+    replacementUntil: string | null;
+    voided: boolean;
+    openClaimId: string | null;
+};
+
+export type CustomerAccountSummary = {
+    unreadInbox: number;
+    reviewsToWrite: number;
+    downloads: number;
+    giftCards: number;
+    activeWarranties: number;
+};
+
 export type ProductPageContentBlock = {
     type: 'rich-text';
     version: 1;
@@ -10300,6 +10360,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
                 baseUnitPriceMinor: number | null;
+                extras?: OrderLineExtras;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
@@ -12005,6 +12066,96 @@ export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponse = GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses[keyof GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses];
+
+export type GetApiV1CustomerAuthAccountSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/account-summary';
+};
+
+export type GetApiV1CustomerAuthAccountSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthAccountSummaryError = GetApiV1CustomerAuthAccountSummaryErrors[keyof GetApiV1CustomerAuthAccountSummaryErrors];
+
+export type GetApiV1CustomerAuthAccountSummaryResponses = {
+    /**
+     * Account summary
+     */
+    200: {
+        success: true;
+        data: CustomerAccountSummary;
+    };
+};
+
+export type GetApiV1CustomerAuthAccountSummaryResponse = GetApiV1CustomerAuthAccountSummaryResponses[keyof GetApiV1CustomerAuthAccountSummaryResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
@@ -15657,6 +15808,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
                     baseUnitPriceMinor: number | null;
+                    extras?: OrderLineExtras;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -38857,6 +39009,7 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
+            autoFulfilMode: 'after_payment' | 'after_confirmation';
             revision: number;
         };
     };
@@ -38870,6 +39023,7 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
         partialPaymentEnabled: boolean;
         partialPaymentAmount: number;
+        autoFulfilMode?: 'after_payment' | 'after_confirmation';
         expectedRevision: number;
     };
     path?: never;
@@ -38970,6 +39124,7 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
+            autoFulfilMode: 'after_payment' | 'after_confirmation';
             revision: number;
         };
     };
@@ -50155,6 +50310,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 discountAmountMinor: number | null;
                 taxableAmountMinor: number | null;
                 taxAmountMinor: number;
+                extras?: OrderLineExtras;
             }>;
             latestShipment: {
                 id: string;
@@ -53153,9 +53309,17 @@ export type PostApiV1AdminProductsData = {
             }>;
         } | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
+        /**
+         * Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep.
+         */
+        isGiftCard?: boolean;
+        /**
+         * A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it.
+         */
+        warrantyPolicyId?: string | null;
         optionMatrix?: {
             options: Array<{
                 id: string;
@@ -53191,9 +53355,9 @@ export type PostApiV1AdminProductsData = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
                 /**
-                 * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+                 * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
                  */
-                fulfillmentKind?: 'physical' | 'service';
+                fulfillmentKind?: 'physical' | 'digital' | 'service';
             }>;
         };
         /**
@@ -53219,9 +53383,9 @@ export type PostApiV1AdminProductsData = {
              */
             weight?: number | null;
             /**
-             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
-            fulfillmentKind?: 'physical' | 'service';
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
         };
     };
     path?: never;
@@ -54800,6 +54964,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 attributeId: string;
                 value: string;
             }>;
+            warrantyPolicyId: string | null;
         };
     };
 };
@@ -54871,9 +55036,17 @@ export type PutApiV1AdminProductsByIdData = {
             }>;
         } | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
+        /**
+         * Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep.
+         */
+        isGiftCard?: boolean;
+        /**
+         * A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it.
+         */
+        warrantyPolicyId?: string | null;
         id: string;
         expectedAggregateRevision: number;
         acknowledgedSkuImageRemovalIds?: Array<string>;
@@ -55455,9 +55628,9 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         discountPercentage?: number | null;
         discountAmount?: number | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
         expectedAggregateRevision: number;
     };
     path: {
@@ -55783,9 +55956,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         discountPercentage?: number | null;
         discountAmount?: number | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
         /**
          * The SKU stockVersion the new quantity was based on. Required with stock.
          */
@@ -55998,9 +56171,9 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             discountPercentage: number | null;
             discountAmount: number | null;
             /**
-             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
-            fulfillmentKind?: 'physical' | 'service';
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
         }>;
         expectedAggregateRevision: number;
     };
