@@ -255,7 +255,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                       name={name}
                       value={single(name) ?? ""}
                       placeholder={placeholder}
-                      class="catalog-filter-input pl-6"
+                      class="catalog-filter-input catalog-filter-input--lead"
                     />
                   </div>
                 ))}
@@ -348,7 +348,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                     aria-label={`Search ${group.name}`}
                     placeholder={`Search ${group.name}`}
                     data-catalog-facet-query
-                    class="catalog-filter-input pl-8"
+                    class="catalog-filter-input catalog-filter-input--icon"
                   />
                   <p class="catalog-facet-note" data-catalog-facet-search-empty hidden>No matches</p>
                 </div>

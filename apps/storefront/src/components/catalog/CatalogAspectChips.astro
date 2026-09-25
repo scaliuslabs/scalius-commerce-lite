@@ -7,13 +7,15 @@ import type { CatalogAspectChip } from "@/lib/catalog-listing";
 
 interface Props {
   chips: CatalogAspectChip[];
+  /** Inside the phone bar's scrolling row (after Filters and sort), not a row of its own. */
+  inline?: boolean;
 }
 
-const { chips } = Astro.props;
+const { chips, inline = false } = Astro.props;
 ---
 
 {chips.length > 0 && (
-  <nav aria-label="Filter by" class="catalog-chip-row -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
+  <nav aria-label="Filter by" class={inline ? "flex shrink-0 gap-2" : "catalog-chip-row -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden"}>
     {chips.map((chip) => (
       <a
         href={`#${chip.anchor}`}
