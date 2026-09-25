@@ -99,19 +99,6 @@ export interface VisibleNavItem {
   badge?: NavBadge;
 }
 
-/** Shopify-style sequences: G then the letter, within a second. */
-export const GO_SHORTCUTS: Readonly<Record<string, string>> = {
-  h: "/admin",
-  o: "/admin/orders",
-  i: "/admin/inbox",
-  p: "/admin/products",
-  c: "/admin/customers",
-  d: "/admin/discounts",
-  t: "/admin/pages",
-  w: "/admin/online-store/theme",
-  s: "/admin/settings",
-};
-
 export function visibleNav(canOpen: (path: string) => boolean): VisibleNavItem[] {
   return ADMIN_NAV.flatMap((item) => {
     const children = (item.children ?? []).filter((child) => canOpen(child.to));

@@ -9,6 +9,7 @@ wrappers over the documents.
 
 - `settings-store.ts` -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows
 - `documents.ts` -- every document definition (key, zod schema, defaults, secret fields, optional KV mirror)
+- `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
 - `../platform/platform-settings.service.ts` (the platform domain) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
 - `site-settings.service.ts` -- currency, header/footer/homepage presentation (CAS), published theme/draft workflow, media delivery, SEO, storefront URL, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()` and notification channel preferences

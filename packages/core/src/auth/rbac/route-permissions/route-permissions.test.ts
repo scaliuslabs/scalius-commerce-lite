@@ -350,6 +350,13 @@ describe("route permissions", () => {
     expect(allowed([PERMISSIONS.ORDERS_VIEW], "/api/v1/admin/settings/delivery-providers")).toBe(false);
   });
 
+  it("lets any signed-in staff member read and save their own keyboard shortcuts", () => {
+    expect(getRoutePermission("/api/v1/admin/auth/shortcuts", "GET")).toEqual({ allowAnyAdmin: true });
+    expect(getRoutePermission("/api/v1/admin/auth/shortcuts", "PUT")).toEqual({ allowAnyAdmin: true });
+    expect(allowed([PERMISSIONS.ORDERS_VIEW], "/api/v1/admin/auth/shortcuts", "PUT")).toBe(true);
+    expect(allowed([], "/api/v1/admin/auth/shortcuts", "PUT")).toBe(false);
+  });
+
   it("gates removing staff behind staff management", () => {
     expect(allowed([PERMISSIONS.TEAM_MANAGE], "/api/v1/admin/auth/users/user_2/remove", "POST")).toBe(true);
     expect(allowed([PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES], "/api/v1/admin/auth/users/user_2/remove", "POST"))

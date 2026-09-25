@@ -25,6 +25,11 @@ export const DASHBOARD_STAFF_OPERATIONS = {
     batch: "forbidden",
     limits: { response: 16_384 },
   },
+  "dashboard.account.shortcuts.get": { limits: { response: 16_384 } },
+  "dashboard.account.shortcuts.update": {
+    revision: "required",
+    limits: { request: 16_384, response: 16_384 },
+  },
   "dashboard.account.two_factor.get": { limits: { response: 16_384 } },
   "dashboard.account.two_factor.method_challenge": {
     exposure: "device",

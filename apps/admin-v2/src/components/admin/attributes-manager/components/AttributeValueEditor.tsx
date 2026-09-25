@@ -167,6 +167,13 @@ export function AttributeValueEditor({
         <DialogContent
           className="sm:max-w-2xl"
           showCloseButton={!pending}
+          // Esc cancels an open add or rename first; only the next Esc closes the dialog.
+          onEscapeKeyDown={(event) => {
+            if (!isAddingNew && editingValue === null) return;
+            event.preventDefault();
+            cancelAdd();
+            cancelRename();
+          }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             const row = Array.from(document.querySelectorAll<HTMLElement>("[data-attribute-values-opener]"))
@@ -211,7 +218,6 @@ export function AttributeValueEditor({
                         event.preventDefault();
                         addValue();
                       }
-                      if (event.key === "Escape") cancelAdd();
                     }}
                   />
                   <Button
@@ -281,7 +287,6 @@ export function AttributeValueEditor({
                                     event.preventDefault();
                                     saveRename();
                                   }
-                                  if (event.key === "Escape") cancelRename();
                                 }}
                               />
                               <Button

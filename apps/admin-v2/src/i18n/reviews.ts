@@ -117,7 +117,7 @@ export const reviewsMessages = defineMessages({
     delayInvalid: "Enter a whole number of days from 1 to 60.",
     save: "Save",
     settingsSaved: "Settings saved",
-    settingsConflict: "Someone else changed these settings. The latest version is loaded; make your changes again.",
+    settingsConflict: "Someone else changed these settings. The latest version is loaded and your changes are kept; check them and save again.",
     saveFailed: "Couldn't save the settings",
   },
   bn: {
@@ -235,7 +235,7 @@ export const reviewsMessages = defineMessages({
     delayInvalid: "১ থেকে ৬০-এর মধ্যে পূর্ণ সংখ্যায় দিন লিখুন।",
     save: "সেভ করুন",
     settingsSaved: "সেটিংস সেভ হয়েছে",
-    settingsConflict: "অন্য কেউ এই সেটিংস বদলেছেন। সর্বশেষ সংস্করণ লোড করা হয়েছে; আপনার পরিবর্তন আবার করুন।",
+    settingsConflict: "অন্য কেউ এই সেটিংস বদলেছেন। সর্বশেষ সংস্করণ লোড হয়েছে, আপনার পরিবর্তন রাখা আছে; দেখে নিয়ে আবার সেভ করুন।",
     saveFailed: "সেটিংস সেভ করা যায়নি",
   },
 });
