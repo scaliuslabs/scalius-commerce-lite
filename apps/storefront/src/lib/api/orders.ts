@@ -1,7 +1,12 @@
 // src/lib/api/orders.ts
 
 import { apiFetch } from "./transport";
-import type { OrderReceipt, CreateOrderPayload } from "./types";
+import type { OrderLineProperty, OrderReceipt, CreateOrderPayload } from "./types";
+import type {
+  DeliveryMethodKind,
+  FulfillmentKind,
+  FulfillmentType,
+} from "@scalius/shared/fulfilment";
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
@@ -36,8 +41,11 @@ export type CartValidationIssue = {
     | "VARIANT_UNAVAILABLE"
     | "VARIANT_MISMATCH"
     | "QUANTITY_UNAVAILABLE"
-    | "PRICE_CHANGED";
-  action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item";
+    | "PRICE_CHANGED"
+    | "PROPERTIES_REQUIRED"
+    | "PROPERTIES_INVALID"
+    | "FULFILMENT_UNAVAILABLE";
+  action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item" | "edit_properties";
   message: string;
   productName: string | null;
   variantLabel: string | null;
@@ -45,6 +53,8 @@ export type CartValidationIssue = {
   availableQuantity?: number;
   submittedPrice?: number;
   currentPrice?: number;
+  /** The buyer input a PROPERTIES_* issue is about, when it is one field. */
+  propertyKey?: string | null;
 };
 
 export type CartValidationRequestItem = {
@@ -52,31 +62,57 @@ export type CartValidationRequestItem = {
   productId: string;
   variantId: string;
   quantity: number;
+  /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
   price: number;
   productName?: string | null;
   variantLabel?: string | null;
+  /** Buyer inputs, body only (never a URL). */
+  properties?: Array<{ key: string; value: string }>;
+};
+
+export type CartValidationItem = {
+  index: number;
+  cartKey?: string | null;
+  productId: string;
+  variantId: string;
+  quantity: number;
+  /** One unit: base plus surcharges. */
+  unitPrice: number;
+  /** One unit before the surcharges of its buyer inputs. */
+  baseUnitPrice?: number;
+  propertiesPrice?: number;
+  propertiesPriceMinor?: number;
+  /** The inputs as the order will keep them (labels frozen). */
+  properties?: OrderLineProperty[];
+  /** Canonical inputs hash for the v3 line key; "none" without inputs. */
+  propertiesHash?: string;
+  fulfillmentKind?: FulfillmentKind;
+  /** Null for a physical line until a delivery or pickup method is chosen. */
+  fulfillmentType?: FulfillmentType | null;
+  productName: string;
+  variantLabel: string | null;
+  freeDelivery: boolean;
+  availableQuantity: number | null;
+  productImageMediaId: string | null;
+  productImage: string | null;
 };
 
 export type CartValidationResult = {
   valid: boolean;
   issues: CartValidationIssue[];
-  items: Array<{
-    index: number;
-    cartKey?: string | null;
-    productId: string;
-    variantId: string;
-    quantity: number;
-    unitPrice: number;
-    productName: string;
-    variantLabel: string | null;
-    freeDelivery: boolean;
-    availableQuantity: number | null;
-    productImageMediaId: string | null;
-    productImage: string | null;
-  }>;
+  items: CartValidationItem[];
   subtotal: number;
   hasFreeDeliveryProduct: boolean;
+  /** Some line is physical: the buyer chooses delivery or pickup. */
+  requiresDeliveryMethod?: boolean;
+  /** The chosen method's kind; null until one is chosen or when nothing is physical. */
+  deliveryMethodKind?: DeliveryMethodKind | null;
+  /** Some line ships to an address. */
+  requiresShipping?: boolean;
+  /** Payment methods this cart may use (no cash on delivery when nothing is handed over). */
+  allowedPaymentMethods?: string[];
   delivery?: {
+    kind?: DeliveryMethodKind;
     shippingCharge: number;
     shippingMethod: {
       id: string;
@@ -85,9 +121,11 @@ export type CartValidationResult = {
       baseAmountMinor: number;
       feeWaived: boolean;
     };
-    cityName: string;
-    zoneName: string;
+    /** Null for pickup. */
+    cityName: string | null;
+    zoneName: string | null;
     areaName: string | null;
+    pickup?: { address: string | null; hours: string | null } | null;
   };
 };
 
