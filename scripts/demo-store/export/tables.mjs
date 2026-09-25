@@ -3,7 +3,7 @@
  *
  * A seed bundle is the catalog a fresh deployment needs in order to look like
  * the demo store, and nothing else. The allow-list below is the whole contract:
- * the exporter reads these sixteen tables in this exact order and never opens
+ * the exporter reads these eighteen tables in this exact order and never opens
  * any other table for export. Orders, customers, users, sessions, accounts,
  * settings, discounts, promotions, inventory ledgers, checkout state and the
  * FTS shadow tables are therefore unreachable by construction rather than by a
@@ -60,6 +60,8 @@ export const EXPORTED_TABLES = Object.freeze([
   "product_variant_option_values",
   "product_attribute_values",
   "product_rich_content",
+  "product_content_blocks",
+  "product_bundles",
   "hero_sections",
   "hero_sliders",
 ]);
@@ -72,6 +74,10 @@ export const EXPORTED_TABLES = Object.freeze([
  */
 export const EXPORT_ROW_FILTERS = Object.freeze({
   media: "\"status\" = 'ready'",
+  // A legacy tab's block is recreated by the product_rich_content mirror
+  // trigger when the tab loads, so only the blocks of their own are exported.
+  product_content_blocks: "NOT EXISTS (SELECT 1 FROM \"product_rich_content\" AS \"legacy_tab\" "
+    + "WHERE 'pcb_' || \"legacy_tab\".\"id\" = \"product_content_blocks\".\"id\")",
 });
 
 /**
