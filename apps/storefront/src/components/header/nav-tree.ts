@@ -364,8 +364,10 @@ export interface HeaderNavigationPlan {
   drawer: NavigationItem[];
   /** Roots past `maxTopItems`, childless, for a row's "More" list. */
   extras: NavigationItem[];
-  /** Surfaces end with "All categories" (/categories): some of the tree is not in the header. */
+  /** Desktop surfaces end with "All categories" (/categories): some of the tree is not in them. */
   allCategories: boolean;
+  /** Drawers end with "All categories" whenever the store has categories (a phone reaches every one). */
+  drawerAllCategories: boolean;
 }
 
 /**
@@ -391,17 +393,19 @@ export function planHeaderNavigation(
     : [];
   const allCategories = options.index === "always" || (options.index === "overflow" && tree.length > roots.length);
   const index = allCategories ? 1 : 0;
+  const drawerIndex = indexed ? 1 : 0;
   const desktopLinks = countNavigationLinks(roots.map(bare));
   const drawerLinks = countNavigationLinks(drawerRoots.map(bare));
   // A desktop row also carries its extras, "All categories" in "More" and its no-script twin.
   const desktopRoots = surfaces.desktop ? desktopLinks + extras.length + index * (surfaces.desktopRow ? 2 : 1) : 0;
-  const free = Math.max(0, options.linkBudget - surfaces.reserved - (drawerLinks + index) - desktopRoots);
+  const free = Math.max(0, options.linkBudget - surfaces.reserved - (drawerLinks + drawerIndex) - desktopRoots);
   const desktopFree = surfaces.desktop ? Math.floor(free * surfaces.desktopWeight) : 0;
   return {
     desktop: surfaces.desktop ? pruneNavigation(roots, desktopLinks + desktopFree, { allLinks: surfaces.desktopAllLinks }) : [],
     drawer: pruneNavigation(drawerRoots, drawerLinks + free - desktopFree, { allLinks: surfaces.drawerAllLinks }),
     extras,
     allCategories,
+    drawerAllCategories: indexed,
   };
 }
 

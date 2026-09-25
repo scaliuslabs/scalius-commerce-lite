@@ -219,8 +219,12 @@ describe("header link plan", () => {
     expect(plan.extras).toHaveLength(24);
     expect(plan.drawer).toHaveLength(30);
     expect(plan.allCategories).toBe(false);
+    expect(plan.drawerAllCategories).toBe(false);
     expect(navigationIndexMode(false, true)).toBe("overflow");
-    expect(planHeaderNavigation(menu.slice(0, 5), { maxTopItems: 6, linkBudget: 150, index: "overflow" }, surfaces).allCategories).toBe(false);
+    // A short menu over a store with categories: no "More" for it, but the drawer still reaches them all.
+    const short = planHeaderNavigation(menu.slice(0, 5), { maxTopItems: 6, linkBudget: 150, index: "overflow" }, surfaces);
+    expect(short.allCategories).toBe(false);
+    expect(short.drawerAllCategories).toBe(true);
   });
 
   it("estimates a row's fit conservatively, wide scripts counted wide", () => {

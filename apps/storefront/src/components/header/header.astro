@@ -275,7 +275,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     tree={phoneTree}
     screens={sharedDrawer ? "all" : "phone"}
     title={drawerTitle}
-    allCategories={plan.allCategories}
+    allCategories={plan.drawerAllCategories}
   />
 
   {
@@ -287,7 +287,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
         tree="drill"
         screens="all"
         title={drawerTitle}
-        allCategories={plan.allCategories}
+        allCategories={plan.drawerAllCategories}
       />
     )
   }
