@@ -54,6 +54,12 @@ import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-job
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+/** The editor's product detail, with the Wave B warranty reference. */
+const adminProductDetailSchema = productDetailSchema.extend({
+    /** The product's warranty policy (wrp_…), or null. Checkout freezes its current revision onto order lines. */
+    warrantyPolicyId: z.string().nullable(),
+});
+
 const productPickerSummarySchema = z.object({
     id: z.string(),
     name: z.string(),
@@ -776,7 +782,7 @@ const getByIdRoute = createRoute({
     responses: {
         200: {
             description: "Product details",
-            content: { "application/json": { schema: successEnvelope(productDetailSchema) } },
+            content: { "application/json": { schema: successEnvelope(adminProductDetailSchema) } },
         },
         404: errorResponses[404],
     }

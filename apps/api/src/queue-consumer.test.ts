@@ -507,6 +507,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
       storefrontUrl: undefined,
       encryptionKey: "credential-key",
     });
+    // Settled: automatic fulfilment is enqueued after the payment commit.
+    expect(notificationQueue.send).toHaveBeenCalledWith({ type: "order.auto_fulfil", orderId: "order-stripe" });
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 

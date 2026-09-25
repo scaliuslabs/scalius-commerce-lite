@@ -1,7 +1,7 @@
 // Checkout: the idempotent storefront order commit.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
-import { PaymentMethod, InventoryPool } from "@scalius/database/schema";
+import { PaymentMethod, PaymentStatus, InventoryPool } from "@scalius/database/schema";
 import { discountCodesSchema } from "../../schemas/storefront-discounts";
 import {
     getCheckoutGatewayPrecommitIssue,
@@ -32,6 +32,7 @@ import {
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
 import { bumpCacheGeneration, getOptionalExecutionContext } from "../../utils/cache-generation";
+import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
 import { AppError, ValidationError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { getClientIp } from "@scalius/shared/rate-limit";
@@ -528,6 +529,10 @@ app.openapi(createOrderRoute, async (c) => {
     const postCommit = Promise.all([
       availabilityTransitionVariantIds.length > 0 ? bumpCacheGeneration(c) : null,
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
+      // An order fully paid at commit (e.g. covered by gift cards) is settled now.
+      result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
+        ? enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, result.orderId, "checkout-commit")
+        : null,
     ]);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(postCommit);

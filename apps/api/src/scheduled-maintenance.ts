@@ -1,5 +1,9 @@
-import { getDb } from "@scalius/database/client";
+import { getDb, type Database } from "@scalius/database/client";
+import { cacheGeneration } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { reviewsChangedSince, sweepReviewRequests } from "@scalius/core/modules/reviews";
+import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
@@ -36,7 +40,10 @@ export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
 export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
-export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 25;
+/** Due outbox rows per run, sent by `sendBatch` (Wave B §11.3): 19,200/day at the 15-minute cron. */
+export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 200;
+/** Due review requests turned into outbox rows per run (Wave B §2.3). */
+export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
@@ -113,6 +120,19 @@ async function timedScheduledOperation<T>(
     );
     throw error;
   }
+}
+
+/**
+ * When the store's public cache generation last moved (0 before the first
+ * bump). The coalesced review bump compares review changes against it.
+ */
+async function readCacheGenerationUpdatedAt(db: Database): Promise<number> {
+  const row = await db
+    .select({ updatedAt: cacheGeneration.updatedAt })
+    .from(cacheGeneration)
+    .where(eq(cacheGeneration.id, "default"))
+    .get();
+  return row?.updatedAt ?? 0;
 }
 
 async function enqueueReconciledRefundNotifications(
@@ -266,6 +286,31 @@ async function runScheduledMaintenanceInner(
   });
 
   await isolated(async () => {
+    // Due review requests become outbox rows before the flush below sends them.
+    const reviewRequests = await timed("review_request_sweep", () =>
+      sweepReviewRequests(db, { limit: REVIEW_REQUEST_SWEEP_LIMIT }),
+    );
+    if (reviewRequests.queued > 0 || reviewRequests.skipped > 0) {
+      console.log(
+        `[scheduled] Review request sweep: queued=${reviewRequests.queued}, skipped=${reviewRequests.skipped}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
+    // Buyer reviews that auto-publish do not bump the cache generation inline
+    // (Wave B §2.5): one store-wide bump here when any published review
+    // changed since the generation last moved, at most four an hour.
+    const generationUpdatedAt = await timed("review_cache_generation_read", () =>
+      readCacheGenerationUpdatedAt(db),
+    );
+    if (await timed("review_changes_check", () => reviewsChangedSince(db, generationUpdatedAt))) {
+      await timed("review_cache_generation", () => bumpCacheGeneration({ env, executionCtx }));
+      console.log("[scheduled] Review changes reached the public cache generation");
+    }
+  });
+
+  await isolated(async () => {
     const notificationOutbox = await timed("notification_outbox_flush", () =>
       flushPendingNotificationOutbox({
         db,
@@ -308,6 +353,16 @@ async function runScheduledMaintenanceInner(
       console.log(
         `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
       );
+    }
+  });
+
+  await isolated(async () => {
+    // Digital file uploads abandoned for 24 hours (Wave B §3.1).
+    const digitalUploads = await timed("digital_upload_sweep", () =>
+      sweepDigitalUploads(db, env.BUCKET),
+    );
+    if (digitalUploads.aborted > 0) {
+      console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
     }
   });
 
