@@ -15,7 +15,7 @@
 
 import { DatabaseSync } from "node:sqlite";
 
-import { EXPORT_ROW_FILTERS, SCHEMA_LEDGER_TABLE } from "./tables.mjs";
+import { EXPORT_ROW_FILTERS, EXPORT_ROW_ORDER, SCHEMA_LEDGER_TABLE } from "./tables.mjs";
 
 /** SQLite's default parameter ceiling is far higher; 500 keeps statements readable. */
 const IN_CLAUSE_CHUNK = 500;
@@ -105,9 +105,10 @@ export function readExportableRows(database, table, columns) {
   const projection = columns.map((column) => quoteIdentifier(column.name)).join(", ");
   const clauses = rowFilterFor(table, columns);
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "";
-  const order = primaryKeyColumns(table, columns)
-    .map((column) => quoteIdentifier(column.name))
-    .join(", ");
+  const order = [
+    ...(EXPORT_ROW_ORDER[table] ? [EXPORT_ROW_ORDER[table]] : []),
+    ...primaryKeyColumns(table, columns).map((column) => quoteIdentifier(column.name)),
+  ].join(", ");
   return database
     .prepare(`SELECT ${projection} FROM ${quoteIdentifier(table)}${where} ORDER BY ${order}`)
     .all();

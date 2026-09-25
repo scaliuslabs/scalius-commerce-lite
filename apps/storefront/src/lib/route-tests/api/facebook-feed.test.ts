@@ -412,6 +412,7 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/shirt.jpg",
           attributes: [
+            // A free-text "Brand" attribute is never promoted to <g:brand>.
             { name: "Brand", slug: "brand", value: "Acme" },
             { name: "Color", slug: "color", value: "Catalog color" },
             { name: "Size", slug: "size", value: "Catalog size" },
@@ -718,6 +719,7 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:availability>in stock</g:availability>");
     expect(body).toContain("<g:identifier_exists>no</g:identifier_exists>");
     expect(body).not.toContain("<g:brand>Generic</g:brand>");
+    expect(body).not.toContain("<g:brand>");
   });
 
   it("keeps an expanded product variant group atomic within one product continuation", async () => {
@@ -1712,8 +1714,8 @@ describe("Facebook product feed route", () => {
           slug: "electronics",
           name: "Electronics",
         },
+        brand: { id: "brd_harbor01", name: "Harbor", slug: "harbor" },
         attributes: [
-          { name: "Brand", slug: "brand", value: "Harbor" },
           { name: "Material", slug: "material", value: "Cotton" },
           { name: "Pattern", slug: "pattern", value: "Oxford" },
           { name: "Gender", slug: "gender", value: "unisex" },

@@ -77,6 +77,17 @@ function seedDemoCatalog(database) {
      VALUES (?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 'published', 1, ?, ?)`,
     "cat_bags", "Bags", "bags", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
+  // A child whose id sorts before its parent's: the export must load parents first.
+  run(
+    `INSERT INTO categories (id, name, slug, parent_id, status, revision, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'published', 1, ?, ?)`,
+    "cat_desk", "Desk lamps", "desk-lamps", "cat_lighting", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+  );
+  run(
+    `INSERT INTO brands (id, name, slug, logo_media_id, status, revision, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'published', 1, ?, ?)`,
+    "brd_halo_lighting", "Halo Lighting", "halo-lighting", "med_b1", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+  );
   run(
     `INSERT INTO collections (id, name, description, content, presentation, config, sort_order, is_active,
       version, meta_title, meta_description, canonical_path, no_index, exclude_from_sitemap, created_at, updated_at)
@@ -98,6 +109,7 @@ function seedDemoCatalog(database) {
     id, name, `A ${name} you'll like`, Math.round(price * 100), categoryId, slug, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
   insertProduct("prod_halo", "Halo Arc Table Lamp", "halo-arc-table-lamp", 149.5, "cat_lighting");
+  run("UPDATE products SET brand_id = 'brd_halo_lighting' WHERE id = 'prod_halo'");
   insertProduct("prod_basin", "Basin Weekend Tote", "basin-weekend-tote", 89, "cat_bags");
 
   const insertProductMedia = (id, productId, mediaId, isPrimary, sortOrder) => run(
@@ -348,8 +360,9 @@ describe("demo store export bundle", () => {
     expect(Object.fromEntries(bundle.tables.map((entry) => [entry.table, entry.rows]))).toEqual({
       media_folders: 1,
       media: 5,
-      categories: 2,
+      categories: 3,
       collections: 1,
+      brands: 1,
       product_attributes: 1,
       products: 2,
       product_media: 4,
@@ -362,7 +375,7 @@ describe("demo store export bundle", () => {
       hero_sections: 1,
       hero_sliders: 1,
     });
-    expect(bundle.rowTotal).toBe(33);
+    expect(bundle.rowTotal).toBe(35);
     expect(bundle.media).toMatchObject({ count: 5, bytesIncluded: false, directory: null });
     expect(bundle.demoStoreContract.matches).toBe(false);
     expect(bundle.artifacts.seedSql.sha256).toBe(sha256File(path.join(testCase.exportDir, "seed.sql")));
@@ -452,6 +465,12 @@ describe("demo store export bundle", () => {
     expect(target.prepare("SELECT description FROM categories WHERE id = 'cat_lighting'").get().description)
       .toBe("Lamps and it's fixtures");
     expect(target.prepare("SELECT count(*) AS total FROM media WHERE id = 'med_trashed'").get().total).toBe(0);
+    // Parents load first; the tree triggers rebuild depth, path and the closure.
+    expect(target.prepare("SELECT parent_id AS parentId, depth, path FROM categories WHERE id = 'cat_desk'").get())
+      .toEqual({ parentId: "cat_lighting", depth: 1, path: "/cat_lighting/cat_desk/" });
+    expect(target.prepare("SELECT count(*) AS total FROM category_closure").get().total).toBe(4);
+    expect(target.prepare("SELECT brand_id AS brandId FROM products WHERE id = 'prod_halo'").get())
+      .toEqual({ brandId: "brd_halo_lighting" });
 
     // The AFTER INSERT triggers in the migrated schema repopulate the FTS
     // shadow tables as the seed loads, which is why the bundle never carries them.

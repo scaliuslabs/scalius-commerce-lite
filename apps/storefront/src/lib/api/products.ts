@@ -269,7 +269,7 @@ export interface FeedProductPage {
   };
 }
 
-function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
+export function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
   if (!value || typeof value !== "object") return undefined;
   const { min, max } = value as { min?: unknown; max?: unknown };
   if (
@@ -285,7 +285,7 @@ function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
   return { min, max };
 }
 
-function normalizeProductFacets(value: unknown): ProductFacet[] {
+export function normalizeProductFacets(value: unknown): ProductFacet[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate) => {
     if (!candidate || typeof candidate !== "object") return [];
@@ -323,7 +323,7 @@ type OptionalFeedProductsSdk = {
   }) => Promise<{ data?: unknown; error?: unknown }>;
 };
 
-function emptyProductPagination(
+export function emptyProductPagination(
   options: ProductListOptions = {},
 ): PaginatedResponse<Product>["pagination"] {
   return {
@@ -334,7 +334,7 @@ function emptyProductPagination(
   };
 }
 
-function normalizeProductListOptions(
+export function normalizeProductListOptions(
   options: ProductListOptions = {},
 ): ProductListOptions {
   const normalized: ProductListOptions = { ...options };
