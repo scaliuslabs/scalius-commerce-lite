@@ -14,11 +14,21 @@ import {
 
 export { brandScope, categoryScope, deps };
 
+/**
+ * A product without a gallery depends on no media row: a file joins it only
+ * through a new `product_media` row (its `p:` key). The media read still names
+ * the `media` table, and coverage is decided per table and key kind, so the
+ * read declares this `m:` key, which no row can advance (`~` is never in a
+ * media id), instead of falling back to the whole table's key.
+ */
+const NO_MEDIA_ROW = "m:~";
+
 /** One card: its product and the media rows its images come from. */
 export function declareProductCard(productId: string, gallery: readonly ProductMediaProjection[] | undefined): void {
     if (!deps.active()) return;
     deps.product(productId);
     if (gallery && gallery.length > 0) deps.mediaItems(productCardImageMediaIds(gallery));
+    else deps.key(NO_MEDIA_ROW);
 }
 
 /** Cards for these products, their images from `mediaByProductId`. */
@@ -47,6 +57,7 @@ export function declareProductGallery(productId: string, gallery: readonly Produ
     if (!deps.active()) return;
     deps.product(productId);
     if (gallery && gallery.length > 0) deps.mediaItems(productGalleryMediaIds(gallery));
+    else deps.key(NO_MEDIA_ROW);
 }
 
 /**
