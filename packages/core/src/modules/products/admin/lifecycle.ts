@@ -21,6 +21,7 @@ import {
     type ProductAggregateRevisionResult,
 } from "../aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
+import { catalogProjectionRefreshStatements } from "../catalog-projections";
 
 /**
  * Soft-deletes a product by setting deletedAt.
@@ -42,6 +43,7 @@ export async function deleteProduct(
                 })
                 .where(eq(products.id, id))
                 .returning({ aggregateRevision: products.aggregateRevision }),
+            ...catalogProjectionRefreshStatements(db, [id]),
         ] as never) as unknown[];
         return readProductAggregateRevisionResult(results[1]);
     } catch (error) {
@@ -119,6 +121,8 @@ export async function restoreProduct(
             statements.push(db.insert(productVariants).values(defaultVariantValues(id, product.priceMinor)));
         }
     }
+
+    statements.push(...catalogProjectionRefreshStatements(db, [id]));
 
     try {
         const results = await safeBatch(db, statements) as unknown[];
@@ -419,6 +423,7 @@ export async function bulkDeleteProducts(
                 .where(eq(products.id, claim.id))
                 .returning({ aggregateRevision: products.aggregateRevision }),
         ]);
+        statements.push(...catalogProjectionRefreshStatements(db, productIds));
         try {
             const results = await safeBatch(db, statements as never) as unknown[];
             const revisions = productClaims.map((_, index) =>
@@ -519,6 +524,7 @@ export async function bulkUpdateProducts(
             .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
             .returning({ aggregateRevision: products.aggregateRevision }),
     ]);
+    statements.push(...catalogProjectionRefreshStatements(db, applied.map((claim) => claim.id)));
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
         return {

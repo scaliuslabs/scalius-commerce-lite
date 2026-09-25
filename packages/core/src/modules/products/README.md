@@ -93,6 +93,7 @@ Storefront category ([slug].astro)
 | `aggregate-revision.ts` | The product editor's revision claim and bump. |
 | `public-eligibility.ts` | Shared public catalogue predicates and default simple-SKU values. Every buyer-facing surface uses these instead of checking only `products.isActive` and `products.deletedAt`. |
 | `buyer-projection.ts`, `money.ts` | Integer buyer pricing and availability projections, store-currency helpers. |
+| `catalog-projections.ts` | `catalogProjectionRefreshStatements()` (both projections, per product) and `catalogBuyerStateRefreshStatementsForSkus()` (buyer state, per SKU, for stock writes): statements every product, SKU, stock and checkout batch appends after its ledger edge and CAS, at most 90 products each through one `json_each` parameter; `rebuildCatalogProjections()` recomputes them in keyset pages. Single-sourced from the buyer pricing projection and the public eligibility predicate. `catalog-projections.d1.test.ts` is the drift test. |
 | `semantic-sections.ts` | Named product-editor sections (details, media, SEO, ...) saved under the aggregate revision. |
 
 ## API Endpoints

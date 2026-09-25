@@ -1,20 +1,18 @@
 // Buyer product listings: the shop, category and collection pages.
+//
+// Every statement reads the stored buyer state (`product_buyer_state`, see
+// buyer-state.ts): the public set, the card SKU's prices, discount depth and
+// availability are indexed columns, so a listing never evaluates the public
+// eligibility predicate or ranks SKUs per request.
 import { products, categories } from "@scalius/database/schema";
-import { and, sql, desc, eq, type SQL } from "drizzle-orm";
+import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "../../search/correct";
 import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
-import { publicProductBaseConditions } from "../products/public-eligibility";
 import {
-    buildBuyerCatalogPricingProjection,
-    type BuyerCatalogPricingProjection,
-} from "../products/buyer-projection";
-import {
-    buyerPricingSelection,
-    effectivePriceMinorSql,
     presentBuyerPricing,
     storeCurrencyCodeSql,
     storeDecimalPlacesFromCode,
@@ -33,14 +31,30 @@ import {
 } from "./facets";
 import {
     priceFilterBoundsMinor,
-    storefrontProductSetConditions,
-    buildStorefrontProductConditions,
+    buildStorefrontBuyerStateConditions,
     getPagination,
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
     publishedCategoryIdSet,
 } from "./shared";
+import {
+    buyerState,
+    buyerStateCardSku,
+    buyerStatePricingSelection,
+    publicBuyerStateCondition,
+} from "./buyer-state";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
+
+/**
+ * Facet counts over the unscoped "shop all" set (no category, collection,
+ * search or id lookup) are computed live only while the whole public
+ * catalogue holds at most this many products. Above it a live count reads
+ * every attribute and option row in the store (397k rows at 30k products),
+ * so large stores filter inside a category, where counts stay bounded by
+ * the category's own products. Decided in Scale-A (CATALOG-SCALE Design D):
+ * a cap, not a per-category count cache.
+ */
+export const SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT = 2_000;
 
 type StorefrontProductListRow = {
     id: string;
@@ -59,8 +73,8 @@ type StorefrontProductListRow = {
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
-    hasCustomerOptions: number;
-    availableForSale: number;
+    hasCustomerOptions: number | boolean;
+    availableForSale: number | boolean;
 };
 
 export interface StorefrontCategoryProductCategory {
@@ -78,52 +92,24 @@ export interface StorefrontCategoryProductCategory {
     updatedAt: string | null;
 }
 
-/** A pricing-projection scope from the given set conditions, or none. */
-function storefrontPricingScope(conditions: Array<SQL | undefined>): SQL | undefined {
-    const present = conditions.filter((condition): condition is SQL => Boolean(condition));
-    return present.length > 0 ? and(...present) : undefined;
-}
-
-function getStorefrontProductOrderBy(
-    sort: StorefrontProductSort = "newest",
-    buyerPricing?: BuyerCatalogPricingProjection,
-) {
-    const productDiscount = {
-        discountType: sql`${products.discountType}`,
-        discountBps: sql`${products.discountBps}`,
-        discountAmountMinor: sql`${products.discountAmountMinor}`,
-    };
-    const effectivePriceSql = buyerPricing
-        ? sql`${buyerPricing.effectivePriceMinor}`
-        : effectivePriceMinorSql({ priceMinor: sql`${products.priceMinor}`, ...productDiscount }, productDiscount);
-
-    if (sort === "price-asc") {
-        return effectivePriceSql;
-    }
-    if (sort === "price-desc") {
-        return desc(effectivePriceSql);
-    }
-    if (sort === "name-asc") {
-        return products.name;
-    }
-    if (sort === "name-desc") {
-        return desc(products.name);
-    }
-    if (sort === "discount") {
-        if (buyerPricing) {
-            return desc(sql`CASE
-                WHEN ${buyerPricing.basePriceMinor} > 0
-                    THEN (${buyerPricing.basePriceMinor} - ${buyerPricing.effectivePriceMinor}) * 10000 / ${buyerPricing.basePriceMinor}
-                ELSE 0
-            END`);
-        }
-        return desc(sql`CASE
-            WHEN ${products.priceMinor} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmountMinor} > 0 THEN ${products.discountAmountMinor} * 10000 / ${products.priceMinor}
-            WHEN ${products.discountBps} > 0 THEN ${products.discountBps}
-            ELSE 0
-        END`);
-    }
-    return desc(products.createdAt);
+/**
+ * The listing order over the buyer state. Newest, price and discount orders
+ * are the buyer state's own indexed columns; ties break by product id.
+ *
+ * `sortAfterScope`: the scope is a set of categories, read through the
+ * category index and then sorted. SQLite has no statistics on D1, so a
+ * sortable index (newest, price) would otherwise win and walk every public
+ * row filtering by the set; the unary `+` keeps the order from choosing it,
+ * which bounds the read by the scope's own size.
+ */
+function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sortAfterScope = false): SQL {
+    const column = (value: SQLWrapper) => sortAfterScope ? sql`+${value}` : sql`${value}`;
+    if (sort === "price-asc") return column(buyerState.fromMinor);
+    if (sort === "price-desc") return sql`${column(buyerState.fromMinor)} DESC`;
+    if (sort === "name-asc") return sql`${products.name}`;
+    if (sort === "name-desc") return desc(products.name);
+    if (sort === "discount") return sql`${column(buyerState.discountDepthBps)} DESC`;
+    return sql`${column(buyerState.productCreatedAt)} DESC`;
 }
 
 // ─────────────────────────────────────────
@@ -131,8 +117,15 @@ function getStorefrontProductOrderBy(
 // ─────────────────────────────────────────
 
 type StorefrontCatalogScope = {
+    /** A condition on the buyer state (or on `products` with `needsProducts`). */
     condition?: SQL;
-    orderBy?: SQL | ((buyerPricing: ReturnType<typeof buildBuyerCatalogPricingProjection>) => SQL);
+    /** The scope condition reads `products` columns. */
+    needsProducts?: boolean;
+    /** The scope is a small id set that should drive the read by primary key. */
+    drivenByIdSet?: boolean;
+    /** The scope is a category set read through the category index, then sorted. */
+    sortAfterScope?: boolean;
+    orderBy?: SQL;
     fixedCategory?: StorefrontCategoryProductCategory;
 };
 
@@ -156,6 +149,15 @@ async function readStorefrontCatalogPage(
         : { ...result, correctedQuery: null };
 }
 
+/** At most `limit + 1` public products: enough to tell "more than limit" apart. */
+function boundedPublicCatalogueSizeSql(limit: number): SQL<number> {
+    return sql<number>`(
+        SELECT count(*) FROM (
+            SELECT 1 FROM ${buyerState} WHERE ${publicBuyerStateCondition()} LIMIT ${sql.raw(String(limit + 1))}
+        ) AS public_catalogue_probe
+    )`;
+}
+
 async function readStorefrontCatalogResults(
     db: Database,
     params: StorefrontProductFilterInput,
@@ -170,13 +172,14 @@ async function readStorefrontCatalogResults(
     const optionFilters = (params.attributeFilters ?? []).filter(isOptionFilter);
     const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
-        productScope: storefrontPricingScope([scope.condition, ...storefrontProductSetConditions(db, params)]),
-    });
+    const unscoped = !scope.condition && !params.category && !params.search && !params.ids;
     // Facet counts apply every selection except their own facet's, so they
     // read the scope conditions before the option filter is applied.
-    const unfilteredOptionConditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
-    const priceRangeConditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
+    const setOptions = { drivenByIdSet: scope.drivenByIdSet };
+    const unfiltered = buildStorefrontBuyerStateConditions(db, { ...params, ...priceBounds }, setOptions);
+    const priceRange = buildStorefrontBuyerStateConditions(db, params, setOptions);
+    const unfilteredOptionConditions = unfiltered.conditions;
+    const priceRangeConditions = priceRange.conditions;
     if (scope.condition) {
         unfilteredOptionConditions.push(scope.condition);
         priceRangeConditions.push(scope.condition);
@@ -184,38 +187,42 @@ async function readStorefrontCatalogResults(
     const optionCondition = buildOptionFilterCondition(optionFilters);
     const conditions = optionCondition ? [...unfilteredOptionConditions, optionCondition] : unfilteredOptionConditions;
     if (optionCondition) priceRangeConditions.push(optionCondition);
-    const orderBy = typeof scope.orderBy === "function"
-        ? [scope.orderBy(buyerPricing)]
-        : scope.orderBy
-            ? [scope.orderBy]
-            : sort === "relevance" && search
-                ? [...productSearchRelevanceOrder(db, search), desc(products.createdAt)]
-                : [getStorefrontProductOrderBy(sort, buyerPricing)];
+    // The count and price range join `products` only when a condition reads it.
+    const countNeedsProducts = unfiltered.needsProducts || Boolean(optionCondition) || Boolean(scope.needsProducts);
+    const priceRangeNeedsProducts = priceRange.needsProducts || Boolean(optionCondition) || Boolean(scope.needsProducts);
+    const orderBy = scope.orderBy
+        ? [scope.orderBy]
+        : sort === "relevance" && search
+            ? [...productSearchRelevanceOrder(db, search), desc(buyerState.productCreatedAt)]
+            : [getStorefrontProductOrderBy(sort, scope.sortAfterScope)];
     const offset = (page - 1) * limit;
 
+    const cardSku = buyerStateCardSku();
     let query = db
         .select({
             id: products.id,
             name: products.name,
-            ...buyerPricingSelection(buyerPricing),
+            ...buyerStatePricingSelection(cardSku),
             slug: products.slug,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-            hasCustomerOptions: buyerPricing.hasCustomerOptions,
-            availableForSale: buyerPricing.availableForSale,
+            hasCustomerOptions: buyerState.hasCustomerOptions,
+            availableForSale: buyerState.availableForSale,
         })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...conditions));
+        .from(buyerState)
+        .innerJoin(products, eq(products.id, buyerState.productId))
+        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .where(and(...conditions))
+        .$dynamic();
     const attributeSubquery = buildAttributeProductSubquery(
         db,
         attributeFilters,
         "catalog_filtered_products",
     );
     if (attributeSubquery) {
-        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
+        query = query.innerJoin(attributeSubquery, eq(buyerState.productId, attributeSubquery.productId));
     }
     const rankJoin = !scope.orderBy && sort === "relevance" && search
         ? productSearchRankJoin(db, search)
@@ -223,36 +230,42 @@ async function readStorefrontCatalogResults(
     if (rankJoin) query = query.leftJoin(rankJoin.table, rankJoin.on);
 
     // Without a price filter the price range reads exactly the count's rows,
-    // so one statement answers both instead of evaluating the catalogue's
-    // eligibility and pricing twice.
+    // so one statement answers both.
     const hasPriceFilter = priceBounds.minPriceMinor !== undefined || priceBounds.maxPriceMinor !== undefined;
     let countQuery = db
         .select({
             count: sql<number>`count(*)`,
             storeCurrencyCode: storeCurrencyCodeSql(),
-            min: sql<number | null>`MIN(${buyerPricing.effectivePriceMinor})`,
-            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPriceMinor})`,
+            min: sql<number | null>`MIN(${buyerState.fromMinor})`,
+            max: sql<number | null>`MAX(${buyerState.toMinor})`,
+            publicCatalogueSize: unscoped
+                ? boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT)
+                : sql<number>`0`,
         })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...conditions));
+        .from(buyerState)
+        .$dynamic();
+    if (countNeedsProducts) countQuery = countQuery.innerJoin(products, eq(products.id, buyerState.productId));
+    countQuery = countQuery.where(and(...conditions));
     const countSubquery = buildAttributeProductSubquery(
         db,
         attributeFilters,
         "catalog_count_filtered_products",
     );
     if (countSubquery) {
-        countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
+        countQuery = countQuery.innerJoin(countSubquery, eq(buyerState.productId, countSubquery.productId));
     }
 
     let priceRangeQuery = db
         .select({
-            min: sql<number | null>`MIN(${buyerPricing.effectivePriceMinor})`,
-            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPriceMinor})`,
+            min: sql<number | null>`MIN(${buyerState.fromMinor})`,
+            max: sql<number | null>`MAX(${buyerState.toMinor})`,
         })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...priceRangeConditions));
+        .from(buyerState)
+        .$dynamic();
+    if (priceRangeNeedsProducts) {
+        priceRangeQuery = priceRangeQuery.innerJoin(products, eq(products.id, buyerState.productId));
+    }
+    priceRangeQuery = priceRangeQuery.where(and(...priceRangeConditions));
     const priceRangeSubquery = buildAttributeProductSubquery(
         db,
         attributeFilters,
@@ -261,33 +274,39 @@ async function readStorefrontCatalogResults(
     if (priceRangeSubquery) {
         priceRangeQuery = priceRangeQuery.innerJoin(
             priceRangeSubquery,
-            eq(products.id, priceRangeSubquery.productId),
+            eq(buyerState.productId, priceRangeSubquery.productId),
         );
     }
 
-    const facetQuery = buildResultScopedFacetQuery(
-        db,
-        buyerPricing,
-        unfilteredOptionConditions,
-        attributeFilters,
-        optionCondition,
-    );
-    const optionFacetQuery = buildResultScopedOptionFacetQuery(
-        db,
-        buyerPricing,
-        unfilteredOptionConditions,
-        attributeFilters,
-        optionFilters,
-    );
-    const [productsList, totalCount, filteredPriceRange, facetRows, optionFacetRows] = await Promise.all([
-        query.orderBy(...orderBy, products.id).limit(limit).offset(offset).all(),
+    const facetReads = () => Promise.all([
+        buildResultScopedFacetQuery(
+            db,
+            buyerState,
+            unfilteredOptionConditions,
+            attributeFilters,
+            optionCondition,
+        ).all() as Promise<PublicProductFacetRow[]>,
+        buildResultScopedOptionFacetQuery(
+            db,
+            buyerState,
+            unfilteredOptionConditions,
+            attributeFilters,
+            optionFilters,
+        ).all() as Promise<PublicProductFacetRow[]>,
+    ]);
+    const noFacets = Promise.resolve([[], []] as [PublicProductFacetRow[], PublicProductFacetRow[]]);
+    // A scoped listing counts its facets in the first wave; the unscoped one
+    // learns the catalogue size from its count first (see the limit above).
+    const [productsList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
+        query.orderBy(...orderBy, buyerState.productId).limit(limit).offset(offset).all() as Promise<StorefrontProductListRowWithVariants[]>,
         countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
-        facetQuery.all() as Promise<PublicProductFacetRow[]>,
-        optionFacetQuery.all() as Promise<PublicProductFacetRow[]>,
+        unscoped ? noFacets : facetReads(),
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
+    const shopAllFacetsLive = unscoped
+        && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
 
     const productIds = productsList.map((product) => product.id);
     // A fixed category names every row in it; a subtree listing still reads
@@ -297,7 +316,7 @@ async function readStorefrontCatalogResults(
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
-    const [mediaMap, categoriesData] = await Promise.all([
+    const [mediaMap, categoriesData, [facetRows, optionFacetRows]] = await Promise.all([
         loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
             ? db
@@ -311,13 +330,14 @@ async function readStorefrontCatalogResults(
                 ))
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+        shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
     const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
         ...product
-    }: StorefrontProductListRowWithVariants) => {
+    }) => {
         const category = scope.fixedCategory && product.categoryId === scope.fixedCategory.id
             ? scope.fixedCategory
             : product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
@@ -367,9 +387,11 @@ export async function getStorefrontCategoryProducts(
     options: StorefrontCategoryListingOptions = {},
 ) {
     return readStorefrontCatalogPage(db, params, {
+        // The buyer state's category index: (is_public, category_id, newest).
         condition: options.includeDescendants
-            ? publicCategorySubtreeCondition(products.categoryId, category.id)
-            : eq(products.categoryId, category.id),
+            ? publicCategorySubtreeCondition(buyerState.categoryId, category.id)
+            : eq(buyerState.categoryId, category.id),
+        sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
     });
 }
@@ -393,7 +415,8 @@ export async function getStorefrontBrandProducts(
     params: StorefrontProductFilterInput,
 ) {
     return readStorefrontCatalogPage(db, params, {
-        condition: eq(products.brandId, brand.id),
+        // The buyer state's brand index: (is_public, brand_id, newest).
+        condition: eq(buyerState.brandId, brand.id),
     });
 }
 
@@ -417,21 +440,26 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
         ...categoryIds.map((id) => ({ kind: "category", id })),
     ];
     const membershipJson = JSON.stringify(membershipEntries);
-    // Two index-driven sets rather than one json_each probe per product: the
-    // probe tested every public product against every member (11-17 s for a
-    // 90-product collection on a 30k-product catalogue).
+    // One member-id set probed by primary key, rather than a json_each probe
+    // per product (11-17 s for a 90-product collection on a 30k-product
+    // catalogue) or an OR of two sets (which SQLite answers by walking every
+    // public row): the picked ids, plus the public products of the
+    // collection's published categories through the category index.
     const branches: SQL[] = [];
     if (productIds.length > 0) {
-        branches.push(sql`${products.id} IN (
-            SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})
-        )`);
+        branches.push(sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})`);
     }
     if (categoryIds.length > 0) {
-        branches.push(sql`${products.categoryId} IN ${publishedCategoryIdSet(sql`${categories.id} IN (
-            SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
-        )`)}`);
+        branches.push(sql`SELECT collection_member.product_id
+            FROM ${buyerState} AS collection_member
+            WHERE collection_member.is_public = 1
+              AND collection_member.category_id IN ${publishedCategoryIdSet(sql`${categories.id} IN (
+                  SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
+              )`)}`);
     }
-    const condition = branches.length > 0 ? sql`(${sql.join(branches, sql` OR `)})` : sql`0 = 1`;
+    const condition = branches.length > 0
+        ? sql`${buyerState.productId} IN (${sql.join(branches, sql` UNION `)})`
+        : sql`0 = 1`;
     return { productIds, membershipJson, condition };
 }
 
@@ -441,12 +469,10 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
  */
 export function storefrontCollectionVisibleCountQuery(db: Database, membership: StorefrontCollectionMembership) {
     const { condition } = storefrontCollectionMembership(membership);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db, { productScope: condition });
     return db
         .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...publicProductBaseConditions(), condition));
+        .from(buyerState)
+        .where(and(publicBuyerStateCondition({ drivenByIdSet: true }), condition));
 }
 
 export async function getStorefrontCollectionProducts(
@@ -458,13 +484,14 @@ export async function getStorefrontCollectionProducts(
 
     return readStorefrontCatalogPage(db, params, {
         condition,
+        drivenByIdSet: true,
         orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")
-            ? (buyerPricing) => sql`COALESCE((
+            ? sql`COALESCE((
                 SELECT CAST(key AS INTEGER)
                 FROM json_each(${membershipJson}) AS curated_membership
                 WHERE json_extract(curated_membership.value, '$.kind') = 'product'
-                    AND json_extract(curated_membership.value, '$.id') = ${products.id}
-            ), 2147483647), ${getStorefrontProductOrderBy(params.sort ?? "newest", buyerPricing)}`
+                    AND json_extract(curated_membership.value, '$.id') = ${buyerState.productId}
+            ), 2147483647), ${getStorefrontProductOrderBy(params.sort ?? "newest")}`
             : undefined,
     });
 }

@@ -24,6 +24,7 @@ import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 import { bumpCacheGeneration, syncCacheGenerationMirror } from "./utils/cache-generation";
+import { isNightlyCatalogTick, runNightlyCatalogMaintenance } from "./scheduled/catalog-projections";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -66,6 +67,7 @@ type ScheduledRunContext = {
   startedAt: number;
   cron: string;
   scheduledTime: string;
+  scheduledAt: number | undefined;
 };
 
 function createScheduledRunContext(metadata: ScheduledMaintenanceMetadata): ScheduledRunContext {
@@ -82,6 +84,7 @@ function createScheduledRunContext(metadata: ScheduledMaintenanceMetadata): Sche
     startedAt,
     cron: metadata.cron ?? "unknown",
     scheduledTime,
+    scheduledAt: typeof metadata.scheduledTime === "number" ? metadata.scheduledTime : undefined,
   };
 }
 
@@ -450,6 +453,21 @@ async function runScheduledMaintenanceInner(
   );
   if (handoffEventsPruned > 0) {
     console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
+  }
+
+  // Once a day: sales stats, the queued projection rebuild and a bounded
+  // recommendation refresh (scheduled/catalog-projections.ts).
+  if (isNightlyCatalogTick(runContext.scheduledAt)) {
+    // Logged by `timed`; a failure must not block the media backfill below.
+    const nightly = await timed("nightly_catalog_maintenance", () =>
+      runNightlyCatalogMaintenance(db, env, runContext.scheduledAt!),
+    ).catch(() => null);
+    if (nightly) {
+      console.log(
+        `[scheduled] Nightly catalogue: salesStatsProducts=${nightly.salesStatsProducts}, ` +
+          `recommendationMessages=${nightly.recommendationMessages}, rebuildQueued=${nightly.rebuildQueued}`,
+      );
+    }
   }
 
   // Images that still publish only their original get WebP renditions until

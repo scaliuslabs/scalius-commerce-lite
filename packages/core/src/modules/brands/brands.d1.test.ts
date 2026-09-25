@@ -21,6 +21,7 @@ import {
 } from "./brands.service";
 import { getPublicBrandBySlug, getPublicBrandSitemapEntries, listPublicBrands } from "./brands.storefront";
 import { getStorefrontBrandProducts } from "../catalog/listing";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getStorefrontProductBySlug } from "../catalog/product-page";
 import { getStorefrontFeedProducts } from "../catalog/feed";
 
@@ -164,6 +165,8 @@ describe("brand buyer reads", () => {
                 ('pmed_drft1', 'prod_draft', 'med_draft', 1, 0),
                 ('pmed_none1', 'prod_none', 'med_none', 1, 0);
         `);
+        // Seeded with raw SQL: fill the stored buyer state as a release does.
+        await rebuildCatalogProjections(db);
         return { walton, draft, hidden, trashed };
     }
 

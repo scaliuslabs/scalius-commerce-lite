@@ -3,6 +3,7 @@ import "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import publicCatalogApp from "../runtime/public-catalog-app";
+import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 
 const SEED = `
   INSERT INTO categories (id, name, slug, status) VALUES ('cat_electronics', 'Electronics', 'electronics', 'published');
@@ -21,9 +22,11 @@ const SEED = `
     ('var_leaf', 'prod_leaf', 'SKU-LEAF', 200000, 3, 1, 1);
 `;
 
-function request(path: string) {
-  const { sqlite, binding } = createSqliteD1Database();
+async function request(path: string) {
+  const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
+  // Seeded with raw SQL: fill the stored buyer state as a release does.
+  await rebuildCatalogProjections(db);
   return publicCatalogApp.request(`https://api.example.test/api/v1${path}`, {}, {
     DB: binding,
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },

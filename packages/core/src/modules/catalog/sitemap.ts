@@ -1,10 +1,12 @@
-// Product sitemap rows.
+// Product sitemap rows: public products (the stored buyer state's public
+// set, buyer-state.ts) without noIndex or a sitemap exclusion, newest first.
 import { products } from "@scalius/database/schema";
 import { and, sql, desc, eq } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
-import { buildStorefrontProductConditions, getPagination } from "./shared";
+import { getPagination } from "./shared";
+import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 
 type StorefrontSitemapProductRow = {
     slug: string;
@@ -21,7 +23,7 @@ export async function getStorefrontSitemapProducts(
         limit = 100,
     } = params;
     const conditions = [
-        ...buildStorefrontProductConditions(db, {}),
+        publicBuyerStateCondition(),
         eq(products.noIndex, false),
         eq(products.excludeFromSitemap, false),
     ];
@@ -34,15 +36,17 @@ export async function getStorefrontSitemapProducts(
                 canonicalPath: products.canonicalPath,
                 updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             })
-            .from(products)
+            .from(buyerState)
+            .innerJoin(products, eq(products.id, buyerState.productId))
             .where(and(...conditions))
-            .orderBy(desc(products.createdAt), products.id)
+            .orderBy(desc(buyerState.productCreatedAt), buyerState.productId)
             .limit(limit)
             .offset(offset)
             .all() as Promise<StorefrontSitemapProductRow[]>,
         db
             .select({ count: sql<number>`count(*)` })
-            .from(products)
+            .from(buyerState)
+            .innerJoin(products, eq(products.id, buyerState.productId))
             .where(and(...conditions))
             .get(),
     ]);

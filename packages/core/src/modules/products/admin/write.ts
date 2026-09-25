@@ -1,5 +1,6 @@
 // Creating, updating and duplicating products under the aggregate revision.
 import {
+    brands,
     products,
     productVariants,
     productMedia,
@@ -47,6 +48,7 @@ import {
     readableDefaultSku,
 } from "../variants";
 import { buildStockMovementClaim } from "../../inventory/stock-movement-claims";
+import { catalogProjectionRefreshStatements } from "../catalog-projections";
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
@@ -63,6 +65,19 @@ export type SQLiteBatchItem = BatchItem<"sqlite">;
 const PRODUCT_AGGREGATE_INSERT_CHUNK = 18;
 const PRODUCT_MEDIA_INSERT_CHUNK = 12;
 const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
+
+/** A brand a product may point at: it exists and is not in trash (draft is fine). */
+async function assertLiveBrand(db: Database, brandId: string | null | undefined): Promise<void> {
+    if (!brandId) return;
+    const brand = await db
+        .select({ id: brands.id })
+        .from(brands)
+        .where(and(eq(brands.id, brandId), isNull(brands.deletedAt)))
+        .get();
+    if (!brand) {
+        throw new ValidationError("That brand is unavailable or in trash. Choose another brand.", { field: "brandId" });
+    }
+}
 
 async function assertActiveAttributeAssignments(
     db: Database,
@@ -410,6 +425,7 @@ export async function createProduct(
     }
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
+    await assertLiveBrand(db, data.brandId);
 
     await assertSkusFree(db, data.optionMatrix
         ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
@@ -442,6 +458,7 @@ export async function createProduct(
             description: data.description || null,
             priceMinor,
             categoryId: data.categoryId,
+            brandId: data.brandId ?? null,
             slug,
             metaTitle: data.metaTitle || null,
             metaDescription: data.metaDescription,
@@ -631,7 +648,11 @@ export async function createProduct(
     }
 
     const insertWithSlug = async (slug: string) => {
-        await db.batch([productInsert(slug), ...batchOps]);
+        await db.batch([
+            productInsert(slug),
+            ...batchOps,
+            ...catalogProjectionRefreshStatements(db, [productId]),
+        ] as never);
     };
     try {
         if (data.slug) await insertWithSlug(data.slug);
@@ -686,6 +707,7 @@ export async function updateProduct(
     }
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
+    await assertLiveBrand(db, data.brandId);
     const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
     const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
     const productPrice = catalogPriceColumns(data, currency);
@@ -743,6 +765,8 @@ export async function updateProduct(
                 description: data.description,
                 priceMinor: productPriceMinorSql(id, priceMinor),
                 categoryId: data.categoryId,
+                // Omitted keeps the stored brand; null removes it.
+                ...(data.brandId !== undefined ? { brandId: data.brandId } : {}),
                 slug: data.slug,
                 metaTitle: data.metaTitle,
                 metaDescription: data.metaDescription,
@@ -818,6 +842,9 @@ export async function updateProduct(
                 sql`${productVariants.fulfillmentKind} <> ${data.fulfillmentKind}`,
             )));
     }
+
+    // The catalogue projections read this batch's own writes.
+    batchOps.push(...catalogProjectionRefreshStatements(db, [id]));
 
     try {
         const results = await safeBatch(db, batchOps as never) as unknown[];
@@ -956,6 +983,7 @@ export async function duplicateProduct(
         description: source.description,
         price: source.price,
         categoryId: source.categoryId,
+        brandId: source.brandId,
         isActive: false,
         discountType: source.discountType === "flat" ? "flat" : "percentage",
         discountPercentage: source.discountPercentage,

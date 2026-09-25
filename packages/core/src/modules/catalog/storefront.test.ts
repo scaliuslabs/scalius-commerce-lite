@@ -1,7 +1,18 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import { getStorefrontProductBySlug } from "./product-page";
-import { getStorefrontProducts } from "./listing";
+import { getStorefrontProducts as readStorefrontProducts } from "./listing";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
+
+// Rows are seeded with raw SQL: each listing read first fills the stored buyer
+// state (products/catalog-projections.ts), as a release's rebuild does.
+async function withProjections<T>(db: Parameters<typeof rebuildCatalogProjections>[0], read: () => Promise<T>): Promise<T> {
+    await rebuildCatalogProjections(db);
+    return read();
+}
+
+const getStorefrontProducts: typeof readStorefrontProducts = (db, params) =>
+    withProjections(db, () => readStorefrontProducts(db, params));
 
 function setup() {
     const harness = createSqliteD1Database();

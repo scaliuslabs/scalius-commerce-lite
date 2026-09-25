@@ -3,6 +3,9 @@ import type { Database } from "@scalius/database/client";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
 import { applyClaimedInventoryEntryBatch } from "./inventory-transitions";
 
+// The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
+
 const alertMocks = vi.hoisted(() => ({
     checkAndAlertLowStock: vi.fn(async () => undefined),
 }));

@@ -4,7 +4,8 @@
 
 import { eq, and, ne, isNull, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { effectiveLowStockThresholdSql, inventorySettingsDocument, isLowStockThresholdEnabled } from "./low-stock-policy";
 import { lowStockThresholdSchema } from "./inventory.validation";
@@ -246,20 +247,24 @@ export async function setLowStockThreshold(
       field: "lowStockThreshold",
     });
   }
-  const updated = await db
-    .update(productVariants)
-    .set({ lowStockThreshold: parsed.data, updatedAt: sql`unixepoch()` })
-    .where(and(
-      eq(productVariants.id, variantId),
-      eq(productVariants.trackInventory, true),
-      isNull(productVariants.deletedAt),
-      sql`EXISTS (
-        SELECT 1 FROM products
-        WHERE products.id = ${productVariants.productId} AND products.deleted_at IS NULL
-      )`,
-      operationalSkuRowPredicate(),
-    ))
-    .returning({ id: productVariants.id });
+  const [updated] = await safeBatch(db, [
+    db
+      .update(productVariants)
+      .set({ lowStockThreshold: parsed.data, updatedAt: sql`unixepoch()` })
+      .where(and(
+        eq(productVariants.id, variantId),
+        eq(productVariants.trackInventory, true),
+        isNull(productVariants.deletedAt),
+        sql`EXISTS (
+          SELECT 1 FROM products
+          WHERE products.id = ${productVariants.productId} AND products.deleted_at IS NULL
+        )`,
+        operationalSkuRowPredicate(),
+      ))
+      .returning({ id: productVariants.id }),
+    // The level shapes the card SKU's availability band.
+    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+  ] as never) as [Array<{ id: string }>];
   if (updated.length !== 1) throw new NotFoundError("Variant not found");
   await checkAndAlertLowStock(db, variantId);
   return { variantId, lowStockThreshold: parsed.data };

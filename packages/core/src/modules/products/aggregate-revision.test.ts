@@ -6,6 +6,11 @@ import {
     ProductStateConflictError,
 } from "./aggregate-revision";
 
+// Projection SQL is covered by catalog-projections.d1.test.ts; here it is one marker statement.
+vi.mock("./catalog-projections", () => ({
+    catalogProjectionRefreshStatements: () => [{ kind: "projection" }],
+}));
+
 function createDb(options: {
     stale?: boolean;
     currentRevision?: number;
@@ -77,6 +82,7 @@ describe("product aggregate revision batches", () => {
             "guard",
             "mutation",
             "revision",
+            "projection",
         ]);
         expect(result).toEqual({
             mutationResults: [[{ id: "changed" }]],
