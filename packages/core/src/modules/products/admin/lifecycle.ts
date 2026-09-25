@@ -511,6 +511,14 @@ export async function bulkUpdateProducts(
     const applied = claims.filter((claim) => !skippedIds.has(claim.id));
     const skippedRows = skipped.map((row) => ({ ...row, reason: "needs_price" as const }));
     if (applied.length === 0) return { products: [], skipped: skippedRows };
+    // A product that already has the requested values is left untouched: its
+    // revision and `updated_at` (the sitemap lastmod and feed `updatedAt`)
+    // move only when a value really changes.
+    const differs = [
+        ...(changes.isActive !== undefined ? [sql`${products.isActive} IS NOT ${changes.isActive ? 1 : 0}`] : []),
+        ...(changes.categoryId !== undefined ? [sql`${products.categoryId} IS NOT ${changes.categoryId}`] : []),
+    ];
+    const changed = sql`(${sql.join(differs, sql` OR `)})`;
     const statements = applied.flatMap((claim) => [
         buildProductAggregateRevisionGuard(db, claim.id, claim.expectedAggregateRevision),
         db
@@ -518,8 +526,8 @@ export async function bulkUpdateProducts(
             .set({
                 ...(changes.isActive !== undefined ? { isActive: changes.isActive } : {}),
                 ...(changes.categoryId !== undefined ? { categoryId: changes.categoryId } : {}),
-                aggregateRevision: sql`${products.aggregateRevision} + 1`,
-                updatedAt: sql`unixepoch()`,
+                aggregateRevision: sql`CASE WHEN ${changed} THEN ${products.aggregateRevision} + 1 ELSE ${products.aggregateRevision} END`,
+                updatedAt: sql`CASE WHEN ${changed} THEN unixepoch() ELSE ${products.updatedAt} END`,
             })
             .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
             .returning({ aggregateRevision: products.aggregateRevision }),
