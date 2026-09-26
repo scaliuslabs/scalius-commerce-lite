@@ -1,0 +1,835 @@
+/**
+ * Dependency keys of the dependency-validated public cache (DVC), and the one
+ * registry that says which committed row change advances which key.
+ *
+ * - The database triggers are generated from `CACHE_DEP_TABLES`
+ *   (`packages/database/scripts/cache-dep-triggers.ts`); a test keeps the
+ *   checked-in migration equal to that output.
+ * - Read recording declares keys with `cacheDep.*` and checks, per table a
+ *   scope read, that a declared key of one of `cacheDepKindsForTable(table)`
+ *   covers it; otherwise it falls back to `cacheDep.table(table)`.
+ * - Tables that public reads may touch but that never need a key are listed in
+ *   `CACHE_DEP_EXEMPT_TABLES` with the reason.
+ *
+ * Grammar: `kind:id[:facet]`, or a bare constant (`srch`, `theme`, `store`).
+ * Keys are opaque ASCII; ids are the row ids the database already uses.
+ *
+ * Invariants the triggers keep (audit/rewrite-2026-09-23/CACHE-DESIGN.md §6):
+ * - every buyer-visible committed change of a registered row advances every
+ *   key its rule derives, from the old and the new row image, in the same
+ *   transaction as the change (an update rule written for the new image gets
+ *   a derived old-image companion, `withOldImageCompanions`, whenever a
+ *   column its keys or guard read can change: a move out of a menu, category,
+ *   brand, product or promotion advances the one it left);
+ * - stock that stays inside its availability band advances nothing;
+ * - every change of a registered table also advances `t:<table>`, the
+ *   coarse fallback key;
+ * - while `cache_clock.coarse = 1` (a catalogue-wide rebuild batch), every
+ *   trigger advances `store` instead of its keys.
+ */
+
+// ---------------------------------------------------------------------------
+// Keys
+// ---------------------------------------------------------------------------
+
+/** Every key kind, the part before the first `:` (or the whole constant key). */
+export const CACHE_DEP_KINDS = [
+  /** `p:<productId>`: any buyer-visible fact of one product (page, card, JSON-LD, feed row). */
+  "p",
+  /** `lm:<scope>`: membership (and newest order) of a public product set; `lm:seo` the sitemap/feed flags and lastmods; `lm:shape` the store-shape counts. */
+  "lm",
+  /** `lo:<facet>:<scope>`: an ordering/filter fact of a member (price, band, discount, name). */
+  "lo",
+  /** `lf:<scope>`: the facet values of a member (facet counts). */
+  "lf",
+  /** `srch`: searchable text of any product or category. */
+  "srch",
+  /** `c:<categoryId>`, `c:*`: one category row (or any), its closure and filter set. */
+  "c",
+  /** `b:<brandId>`, `b:*`. */
+  "b",
+  /** `col:<collectionId>`, `col:*`. */
+  "col",
+  /** `pg:<pageId>`, `pg:*`: CMS pages and articles. */
+  "pg",
+  /** `m:<mediaId>`. */
+  "m",
+  /** `attr:<attributeId>`, `attr:*`: attribute definitions, values and groups. */
+  "attr",
+  /** `set:<category>:<key>`: one settings document row. */
+  "set",
+  /** `theme`: the published theme. */
+  "theme",
+  /** `nav:<menuId>`, `nav:*`: published menus and placements. */
+  "nav",
+  /** `hero`: hero sliders. */
+  "hero",
+  /** `ship`: shipping methods and delivery zones. */
+  "ship",
+  /** `loc`: delivery locations. */
+  "loc",
+  /** `tax`: tax classes, rates and settings. */
+  "tax",
+  /** `lang`: checkout languages. */
+  "lang",
+  /** `promo:<promotionId>`, `promo:*`. */
+  "promo",
+  /** `an`: analytics snippets. */
+  "an",
+  /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
+  "t",
+  /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
+  "store",
+] as const;
+
+export type CacheDepKind = (typeof CACHE_DEP_KINDS)[number];
+
+/** A listing scope: the whole public catalogue, a category subtree or a brand. */
+export type CacheDepScope = "all" | `cat:${string}` | `brand:${string}`;
+
+/**
+ * Ordering and filter facts of a listing member, each its own key per scope.
+ * `sale` is only ever `lo:sale:all`: the set of discount-marked products and
+ * live SKUs (and their newest order) that the on-sale home list takes its
+ * candidate window from. `rating` is a member's published-review rating
+ * (the rating facet and the `rating` order).
+ */
+export const CACHE_DEP_LIST_ORDER_FACETS = ["price", "band", "disc", "name", "sale", "rating"] as const;
+export type CacheDepListOrderFacet = (typeof CACHE_DEP_LIST_ORDER_FACETS)[number];
+
+/** Suffix of the "any row of this kind" key (`c:*`, `b:*`, ...). */
+export const CACHE_DEP_ANY = "*";
+
+/** An entry holding more keys than this collapses each kind to its coarse `t:` keys. */
+export const CACHE_DEP_ENTRY_KEY_BUDGET = 256;
+
+/** Soft-ordering staleness bound (owner decision 4), seconds. */
+export const CACHE_DEP_SOFT_MAX_AGE_SECONDS = 600;
+
+export const cacheDep = {
+  product: (productId: string) => `p:${productId}`,
+  listMembership: (scope: CacheDepScope) => `lm:${scope}`,
+  /** Sitemap and product-feed facts: noindex/exclusion flags and every sitemap lastmod. */
+  discoveryMembership: () => "lm:seo",
+  /** The layout's store-shape counts: active products and their live SKUs. */
+  storeShape: () => "lm:shape",
+  listOrder: (facet: CacheDepListOrderFacet, scope: CacheDepScope) => `lo:${facet}:${scope}`,
+  listFacets: (scope: CacheDepScope) => `lf:${scope}`,
+  search: () => "srch",
+  category: (categoryId: string) => `c:${categoryId}`,
+  anyCategory: () => `c:${CACHE_DEP_ANY}`,
+  brand: (brandId: string) => `b:${brandId}`,
+  anyBrand: () => `b:${CACHE_DEP_ANY}`,
+  collection: (collectionId: string) => `col:${collectionId}`,
+  anyCollection: () => `col:${CACHE_DEP_ANY}`,
+  page: (pageId: string) => `pg:${pageId}`,
+  anyPage: () => `pg:${CACHE_DEP_ANY}`,
+  media: (mediaId: string) => `m:${mediaId}`,
+  attribute: (attributeId: string) => `attr:${attributeId}`,
+  anyAttribute: () => `attr:${CACHE_DEP_ANY}`,
+  settings: (category: string, key: string) => `set:${category}:${key}`,
+  theme: () => "theme",
+  navigation: (menuId: string) => `nav:${menuId}`,
+  anyNavigation: () => `nav:${CACHE_DEP_ANY}`,
+  hero: () => "hero",
+  shipping: () => "ship",
+  locations: () => "loc",
+  tax: () => "tax",
+  checkoutLanguages: () => "lang",
+  promotion: (promotionId: string) => `promo:${promotionId}`,
+  anyPromotion: () => `promo:${CACHE_DEP_ANY}`,
+  analytics: () => "an",
+  table: (table: string) => `t:${table}`,
+  store: () => "store",
+} as const;
+
+export const categoryScope = (categoryId: string): CacheDepScope => `cat:${categoryId}`;
+export const brandScope = (brandId: string): CacheDepScope => `brand:${brandId}`;
+
+/** The kind of a key, or null when it is not a registered kind. */
+export function cacheDepKind(dep: string): CacheDepKind | null {
+  const colon = dep.indexOf(":");
+  const kind = colon === -1 ? dep : dep.slice(0, colon);
+  return (CACHE_DEP_KINDS as readonly string[]).includes(kind) ? (kind as CacheDepKind) : null;
+}
+
+const KEY_PATTERN = /^[\x21-\x7e]{1,512}$/;
+
+/** Whether a string is a well-formed key of a registered kind. */
+export function isCacheDep(dep: string): boolean {
+  const kind = cacheDepKind(dep);
+  if (kind === null || !KEY_PATTERN.test(dep)) return false;
+  const constant = kind === "srch" || kind === "theme" || kind === "hero" || kind === "ship"
+    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "store";
+  return constant ? dep === kind : dep.length > kind.length + 1;
+}
+
+// ---------------------------------------------------------------------------
+// Registry: which row change advances which key
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a rule reads the row: the new image (insert, update) or the old one
+ * (delete, update).
+ */
+export type CacheDepImage = "new" | "old";
+
+/**
+ * One key a rule derives from a row image `R` (`NEW` or `OLD`). A key whose
+ * expression is NULL (a NULL column) is skipped.
+ */
+export type CacheDepKeyTemplate =
+  /** A constant key. */
+  | { readonly dep: string }
+  /** `prefix || R.col1 [|| ':' || R.col2 ...]`. */
+  | { readonly prefix: string; readonly columns: readonly string[] }
+  /** `prefix || (SELECT <select> FROM <table> WHERE <key> = R.<column>)`: a parent id one lookup away. */
+  | {
+      readonly prefix: string;
+      readonly lookup: { readonly table: string; readonly select: string; readonly key: string; readonly column: string };
+    }
+  /**
+   * `prefix || ref` for every row of `rows`, a query (in the SQL both SQLite
+   * and PostgreSQL accept, `R.` for the row image) whose one column is `ref`:
+   * the ids of every other row that references this one, whatever parent the
+   * row itself names.
+   */
+  | { readonly prefix: string; readonly rows: string }
+  /**
+   * Listing scope keys `<facet>:<scope>` of a product: `all`, `cat:<a>` for the
+   * category and each ancestor (via `category_closure`), and `brand:<id>`.
+   * `row` reads is_public/category_id/brand_id from R itself (the
+   * `product_buyer_state` row); `product` looks up the public buyer state of
+   * the product id in `R.<column>`.
+   */
+  | {
+      readonly scopes: "lm" | `lo:${CacheDepListOrderFacet}` | "lf";
+      readonly from: { readonly row: true } | { readonly product: string };
+    };
+
+export type CacheDepEvent = "insert" | "update" | "delete";
+
+export interface CacheDepRule {
+  /** Trigger name suffix, unique per table. */
+  readonly name: string;
+  readonly event: CacheDepEvent;
+  /** The row image the keys (and `where`) read. */
+  readonly image: CacheDepImage;
+  /**
+   * Update rules: fire only when one of these columns changed (`IS NOT`).
+   * `"visible"` means any column not in the table's `noise` list.
+   */
+  readonly changed?: readonly string[] | "visible";
+  /**
+   * Update rules on `product_variants`: also fire when the SKU's buyer
+   * availability band changed (stock inside a band never fires).
+   */
+  readonly bandChanged?: true;
+  /**
+   * Extra guard over the row image, as `column = value` pairs (ANDed) and an
+   * optional EXISTS subquery written in the SQL both SQLite and PostgreSQL
+   * accept (`R.` stands for the row image).
+   */
+  readonly where?: { readonly equals?: Readonly<Record<string, number | string>>; readonly exists?: string };
+  readonly keys: readonly CacheDepKeyTemplate[];
+  /**
+   * Set only on a derived old-image companion (`withOldImageCompanions`): the
+   * rule it mirrors, and the key-bearing columns of which at least one must
+   * have changed for the old image's keys to differ from the new image's.
+   */
+  readonly companionOf?: string;
+  readonly keyColumnsChanged?: readonly string[];
+}
+
+export interface CacheDepTableSpec {
+  /** Key kinds a change of this table advances; a read of it is covered by a declared key of any of them. */
+  readonly kinds: readonly CacheDepKind[];
+  /** Columns whose change is never buyer-visible (revisions, timestamps, raw stock). */
+  readonly noise: readonly string[];
+  readonly rules: readonly CacheDepRule[];
+  /** Why the keys are what they are, when it is not obvious. */
+  readonly note?: string;
+}
+
+const p = (column: string): CacheDepKeyTemplate => ({ prefix: "p:", columns: [column] });
+const own = (kind: string, column = "id"): CacheDepKeyTemplate[] => [
+  { prefix: `${kind}:`, columns: [column] },
+  { dep: `${kind}:${CACHE_DEP_ANY}` },
+];
+
+/**
+ * insert (new image), delete (old image) and update of any visible column
+ * (new image; its old-image companion is derived, see `withOldImageCompanions`).
+ */
+function everyChange(keys: readonly CacheDepKeyTemplate[]): CacheDepRule[] {
+  return [
+    { name: "ins", event: "insert", image: "new", keys },
+    { name: "del", event: "delete", image: "old", keys },
+    { name: "upd", event: "update", image: "new", changed: "visible", keys },
+  ];
+}
+
+/** Row-image columns a key template reads (`R.<column>`). */
+function templateColumns(template: CacheDepKeyTemplate): string[] {
+  if ("dep" in template) return [];
+  if ("columns" in template) return [...template.columns];
+  if ("lookup" in template) return [template.lookup.column];
+  if ("rows" in template) return [...template.rows.matchAll(/\bR\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]!);
+  return "row" in template.from ? ["category_id", "brand_id"] : [template.from.product];
+}
+
+/**
+ * Every row-image column an update rule's keys and guard read: when none of
+ * them changed, the old image derives exactly the new image's keys (lookups
+ * and scopes are read from the same committed state), so the companion only
+ * needs to fire when one did.
+ */
+export function cacheDepKeyBearingColumns(rule: CacheDepRule): string[] {
+  const columns = new Set<string>();
+  for (const template of rule.keys) for (const column of templateColumns(template)) columns.add(column);
+  for (const column of Object.keys(rule.where?.equals ?? {})) columns.add(column);
+  for (const match of (rule.where?.exists ?? "").matchAll(/\bR\.([A-Za-z_][A-Za-z0-9_]*)/g)) columns.add(match[1]!);
+  return [...columns];
+}
+
+/**
+ * Every update rule written for the new row image, plus its old-image
+ * companion `<name>_old` when a key-bearing column can change: the same
+ * guard and keys over OLD, firing only when one of those columns changed. A
+ * row moved out of a menu, category, brand, product or promotion therefore
+ * advances the scope it left as well as the one it joined.
+ */
+export function withOldImageCompanions(rules: readonly CacheDepRule[]): CacheDepRule[] {
+  const expanded: CacheDepRule[] = [];
+  for (const rule of rules) {
+    expanded.push(rule);
+    if (rule.event !== "update" || rule.image !== "new" || rule.companionOf !== undefined) continue;
+    const keyColumns = cacheDepKeyBearingColumns(rule);
+    if (keyColumns.length === 0) continue;
+    expanded.push({ ...rule, name: `${rule.name}_old`, image: "old", companionOf: rule.name, keyColumnsChanged: keyColumns });
+  }
+  return expanded;
+}
+
+const TIMESTAMPS = ["created_at", "updated_at"] as const;
+
+const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_created_at"] as const;
+const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
+
+/**
+ * A sitemap `<lastmod>` (and the product feed's `updatedAt`): the one public
+ * output of `updated_at`. List and detail payloads do not output it, so it is
+ * noise for the entity's generic rule, and this rule advances the discovery
+ * key and the entity's own keys when it moves. Writes that change nothing do
+ * not touch `updated_at`, so the lastmod stays truthful.
+ */
+function lastmod(keys: readonly CacheDepKeyTemplate[]): CacheDepRule {
+  return { name: "lastmod", event: "update", image: "new", changed: ["updated_at"], keys: [{ dep: "lm:seo" }, ...keys] };
+}
+
+/** The products whose SKUs assign this option definition or value (`R.id`). */
+const SKUS_ASSIGNING = (column: "option_definition_id" | "option_value_id") =>
+  `SELECT assigning_sku.product_id AS ref FROM product_variant_option_values AS assignment JOIN product_variants AS assigning_sku ON assigning_sku.id = assignment.variant_id WHERE assignment.${column} = R.id`;
+
+/** Products and SKUs whose existence or activity the layout's store-shape counts read. */
+const SHAPE = { dep: "lm:shape" } as const;
+
+/**
+ * The on-sale home list's candidate window (catalog/home-lists.ts): the
+ * newest public discount-marked products and the products of the newest
+ * live discount-marked SKUs. A row enters or leaves that window, or moves in
+ * its order, only through a write to a marked row (or a product with a
+ * marked SKU), which advances `lo:sale:all`; the candidates themselves are
+ * each read's own `p:` keys. The marker is the partial indexes' predicate
+ * (`ON_SALE_DISCOUNT_SQL` in the database schema).
+ */
+const SALE = { dep: "lo:sale:all" } as const;
+const saleMarked = (row: string) =>
+  `((${row}.discount_type = 'flat' AND ${row}.discount_amount_minor > 0) OR (${row}.discount_type = 'percentage' AND ${row}.discount_bps > 0))`;
+const SALE_PRODUCT = {
+  exists: `SELECT 1 WHERE ${saleMarked("R")} OR EXISTS (SELECT 1 FROM product_variants AS sale_sku WHERE sale_sku.product_id = R.id AND sale_sku.deleted_at IS NULL AND ${saleMarked("sale_sku")})`,
+} as const;
+const SALE_SKU = { exists: `SELECT 1 WHERE R.deleted_at IS NULL AND ${saleMarked("R")}` } as const;
+const SALE_DISCOUNT = ["discount_type", "discount_amount_minor", "discount_bps"] as const;
+
+/**
+ * Every buyer-visible table. Columns in `noise` are never buyer-visible; any
+ * other column is (a new column is visible until someone lists it as noise).
+ * A column is noise only when no public payload outputs it (the opt-in audit
+ * apps/api/src/cache-deps-noise-audit.test.ts renders every cached route while
+ * changing each noise column) and it churns on writes a buyer cannot see.
+ */
+const CACHE_DEP_TABLE_RULES = {
+  // --- Catalogue: products and their parts ---------------------------------
+  products: {
+    kinds: ["p", "lo", "lm", "srch"],
+    noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
+    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch. `lm:shape`: the layout's count of active products and their SKUs.",
+    rules: [
+      { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
+      { name: "del", event: "delete", image: "old", keys: [p("id"), { dep: "srch" }, SHAPE] },
+      { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("id")] },
+      // Search matches a product by its text and by its category's name or slug
+      // (`productCategoryNameMatch` reads products.category_id).
+      { name: "srch", event: "update", image: "new", changed: ["name", "description", "category_id"], keys: [{ dep: "srch" }] },
+      { name: "shape", event: "update", image: "new", changed: ["is_active", "deleted_at"], keys: [SHAPE] },
+      lastmod([p("id")]),
+      {
+        name: "name_order", event: "update", image: "new", changed: ["name"],
+        keys: [{ scopes: "lo:name", from: { product: "id" } }],
+      },
+      {
+        name: "seo", event: "update", image: "new",
+        changed: ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+        keys: [{ dep: "lm:seo" }],
+      },
+      { name: "sale_ins", event: "insert", image: "new", where: SALE_PRODUCT, keys: [SALE] },
+      { name: "sale_del", event: "delete", image: "old", where: SALE_PRODUCT, keys: [SALE] },
+      {
+        name: "sale_upd", event: "update", image: "new", where: SALE_PRODUCT,
+        changed: [...SALE_DISCOUNT, "created_at", "is_active", "deleted_at"], keys: [SALE],
+      },
+    ],
+  },
+  product_buyer_state: {
+    kinds: ["p", "lm", "lo"],
+    noise: ["refreshed_at"],
+    note: "Only public rows are in listings; a flip of is_public or a category/brand move is a membership change of both images (the old image through the derived companions).",
+    rules: [
+      { name: "ins", event: "insert", image: "new", where: PUBLIC_ROW, keys: [p("product_id"), { scopes: "lm", from: { row: true } }] },
+      { name: "del", event: "delete", image: "old", where: PUBLIC_ROW, keys: [p("product_id"), { scopes: "lm", from: { row: true } }] },
+      {
+        name: "member", event: "update", image: "new", changed: BUYER_MEMBERSHIP, where: PUBLIC_ROW,
+        keys: [p("product_id"), { scopes: "lm", from: { row: true } }],
+      },
+      {
+        name: "price", event: "update", image: "new", changed: ["from_minor", "to_minor", "base_minor"], where: PUBLIC_ROW,
+        keys: [p("product_id"), { scopes: "lo:price", from: { row: true } }],
+      },
+      {
+        name: "band", event: "update", image: "new", changed: ["available_for_sale", "availability_band"], where: PUBLIC_ROW,
+        keys: [p("product_id"), { scopes: "lo:band", from: { row: true } }],
+      },
+      {
+        name: "disc", event: "update", image: "new", changed: ["has_discount", "discount_depth_bps"], where: PUBLIC_ROW,
+        keys: [p("product_id"), { scopes: "lo:disc", from: { row: true } }],
+      },
+      {
+        name: "card", event: "update", image: "new", changed: ["sku_id", "has_customer_options"], where: PUBLIC_ROW,
+        keys: [p("product_id")],
+      },
+      // The layout's store shape: which categories and brands hold a public product.
+      { name: "shape_ins", event: "insert", image: "new", where: PUBLIC_ROW, keys: [SHAPE] },
+      { name: "shape_del", event: "delete", image: "old", where: PUBLIC_ROW, keys: [SHAPE] },
+      { name: "shape", event: "update", image: "new", changed: ["is_public", "category_id", "brand_id"], keys: [SHAPE] },
+    ],
+  },
+  product_facet_values: {
+    kinds: ["lf"],
+    noise: [],
+    note: "Facet counts of the product's public scopes. The per-write refresh rewrites only rows that differ.",
+    rules: everyChange([{ scopes: "lf", from: { product: "product_id" } }]),
+  },
+  product_variants: {
+    kinds: ["p", "lm", "lo"],
+    noise: ["stock", "reserved_stock", "stock_version", "version", "updated_at", "tax_classification_version"],
+    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. `lm:shape`: SKU existence for the layout's store-shape counts.",
+    rules: [
+      { name: "ins", event: "insert", image: "new", keys: [p("product_id"), SHAPE] },
+      { name: "del", event: "delete", image: "old", keys: [p("product_id"), SHAPE] },
+      { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("product_id")] },
+      { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id", "fulfillment_kind"], keys: [SHAPE] },
+      { name: "band", event: "update", image: "new", bandChanged: true, keys: [p("product_id")] },
+      { name: "sale_ins", event: "insert", image: "new", where: SALE_SKU, keys: [SALE] },
+      { name: "sale_del", event: "delete", image: "old", where: SALE_SKU, keys: [SALE] },
+      {
+        name: "sale_upd", event: "update", image: "new", where: SALE_SKU,
+        changed: [...SALE_DISCOUNT, "created_at", "deleted_at", "product_id"], keys: [SALE],
+      },
+    ],
+  },
+  product_media: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  product_option_definitions: {
+    kinds: ["p"],
+    noise: [...TIMESTAMPS],
+    note: "A product's option topology is read through its SKUs' option assignments, so a definition also advances every product whose SKUs reference it (a definition moved to another product keeps the SKUs that still point at it).",
+    rules: everyChange([p("product_id"), { prefix: "p:", rows: SKUS_ASSIGNING("option_definition_id") }]),
+  },
+  product_option_values: {
+    kinds: ["p"],
+    noise: [...TIMESTAMPS],
+    rules: everyChange([
+      {
+        prefix: "p:",
+        lookup: { table: "product_option_definitions", select: "product_id", key: "id", column: "option_definition_id" },
+      },
+      { prefix: "p:", rows: SKUS_ASSIGNING("option_value_id") },
+    ]),
+  },
+  product_variant_option_values: {
+    kinds: ["p"],
+    noise: [],
+    rules: everyChange([{
+      prefix: "p:",
+      lookup: { table: "product_variants", select: "product_id", key: "id", column: "variant_id" },
+    }]),
+  },
+  product_attribute_values: {
+    kinds: ["p", "lm"],
+    noise: ["created_at"],
+    note: "`lm:shape`: the layout asks whether any public product has a key-spec value, so a value of a key-spec attribute advances it (the attribute's own flag is `attr:*`).",
+    rules: [
+      ...everyChange([p("product_id")]),
+      ...everyChange([SHAPE]).map((rule): CacheDepRule => ({
+        ...rule,
+        name: `spec_${rule.name}`,
+        where: { exists: "SELECT 1 FROM product_attributes AS spec_attribute WHERE spec_attribute.id = R.attribute_id AND spec_attribute.key_spec = 1" },
+      })),
+    ],
+  },
+  product_rich_content: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  product_content_blocks: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  product_bundles: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  product_reviews: {
+    kinds: ["p"],
+    noise: ["updated_at", "version", "edit_count_day", "edit_day", "check_flags", "moderation_reason", "reply_user_id", "reviewer_key"],
+    note: "Published reviews on the product page and its review pages. A review exists only on a real order line, so no key is shared across products.",
+    rules: everyChange([p("product_id")]),
+  },
+  product_review_stats: {
+    kinds: ["p", "lo", "lm"],
+    noise: ["updated_at"],
+    note: "The review projection (triggers on product_reviews keep it): the product's summary and card rating, and the rating facet and order of its scopes. Every review write that changes a published count advances the keys at commit, so reviews need no scheduled bump.",
+    rules: [
+      ...everyChange([p("product_id"), { scopes: "lo:rating", from: { product: "product_id" } }]),
+      // `lm:shape`: the layout asks whether any product has a published
+      // review. Only a rank appearing or disappearing changes that; the
+      // update rule's old-image companion covers null -> rated.
+      { name: "shape_ins", event: "insert", image: "new", where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NOT NULL" }, keys: [SHAPE] },
+      { name: "shape_del", event: "delete", image: "old", where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NOT NULL" }, keys: [SHAPE] },
+      {
+        name: "shape", event: "update", image: "new", changed: ["rating_rank_milli"],
+        where: { exists: "SELECT 1 WHERE R.rating_rank_milli IS NULL" }, keys: [SHAPE],
+      },
+    ],
+  },
+  warranty_policies: {
+    kinds: ["p"],
+    noise: ["version", "current_revision_id", ...TIMESTAMPS],
+    note: "The product page shows its live policy's current terms; a policy edit advances every product that points at it (policy edits are rare).",
+    rules: everyChange([{ prefix: "p:", rows: "SELECT warranty_product.id AS ref FROM products AS warranty_product WHERE warranty_product.warranty_policy_id = R.id" }]),
+  },
+
+  // --- Catalogue structure ------------------------------------------------------
+  categories: {
+    kinds: ["c", "srch", "lm"],
+    noise: ["revision", "updated_at"],
+    rules: [
+      ...everyChange(own("c")),
+      { name: "srch", event: "update", image: "new", changed: ["name", "description"], keys: [{ dep: "srch" }] },
+      lastmod(own("c")),
+    ],
+  },
+  category_closure: {
+    kinds: ["c", "lm"],
+    noise: [],
+    note: "A tree move changes which ancestor subtrees list the moved products, and every descendant's breadcrumb.",
+    rules: everyChange([
+      { prefix: "lm:cat:", columns: ["ancestor_id"] },
+      { prefix: "c:", columns: ["ancestor_id"] },
+      { prefix: "c:", columns: ["descendant_id"] },
+      { dep: "c:*" },
+    ]),
+  },
+  category_attribute_sets: {
+    kinds: ["c"],
+    noise: [],
+    rules: everyChange([{ prefix: "c:", columns: ["category_id"] }]),
+  },
+  brands: { kinds: ["b", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("b")), lastmod(own("b"))] },
+  collections: { kinds: ["col", "lm"], noise: ["version", "updated_at"], rules: [...everyChange(own("col")), lastmod(own("col"))] },
+  product_attributes: { kinds: ["attr"], noise: [...TIMESTAMPS], rules: everyChange(own("attr")) },
+  attribute_values: {
+    kinds: ["attr"],
+    noise: [...TIMESTAMPS],
+    rules: everyChange([{ prefix: "attr:", columns: ["attribute_id"] }, { dep: "attr:*" }]),
+  },
+  attribute_groups: { kinds: ["attr"], noise: [...TIMESTAMPS], rules: everyChange([{ dep: "attr:*" }]) },
+  media: {
+    kinds: ["m"],
+    noise: ["version", "updated_at", "folder_id"],
+    rules: everyChange([{ prefix: "m:", columns: ["id"] }]),
+  },
+
+  // --- Content, layout and settings ---------------------------------------------
+  pages: { kinds: ["pg", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("pg")), lastmod(own("pg"))] },
+  hero_sliders: { kinds: ["hero"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "hero" }]) },
+  settings: {
+    kinds: ["set"],
+    noise: ["revision", "updated_at"],
+    rules: everyChange([{ prefix: "set:", columns: ["category", "key"] }]),
+  },
+  theme_settings: { kinds: ["theme"], noise: ["revision", ...TIMESTAMPS], rules: everyChange([{ dep: "theme" }]) },
+  navigation_menus: {
+    kinds: ["nav"],
+    noise: ["revision", "updated_at"],
+    note: "`revision` counts draft edits; public reads show the published revision (published_revision, dependency_revision), so a draft edit invalidates nothing.",
+    rules: everyChange(own("nav")),
+  },
+  navigation_menu_publications: {
+    kinds: ["nav"],
+    noise: [],
+    rules: everyChange([{ prefix: "nav:", columns: ["menu_id"] }, { dep: "nav:*" }]),
+  },
+  navigation_menu_publication_items: {
+    kinds: ["nav"],
+    noise: [],
+    rules: everyChange([{ prefix: "nav:", columns: ["menu_id"] }, { dep: "nav:*" }]),
+  },
+  navigation_placements: {
+    kinds: ["nav"],
+    noise: ["revision", "updated_at"],
+    rules: everyChange([{ prefix: "nav:", columns: ["menu_id"] }, { dep: "nav:*" }]),
+  },
+  analytics: { kinds: ["an"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "an" }]) },
+  checkout_languages: { kinds: ["lang"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "lang" }]) },
+
+  // --- Shipping, locations, tax, promotions ---------------------------------------
+  shipping_methods: { kinds: ["ship"], noise: ["updated_at"], rules: everyChange([{ dep: "ship" }]) },
+  delivery_zones: { kinds: ["ship"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "ship" }]) },
+  delivery_zone_locations: { kinds: ["ship"], noise: [], rules: everyChange([{ dep: "ship" }]) },
+  delivery_locations: { kinds: ["loc"], noise: ["updated_at"], rules: everyChange([{ dep: "loc" }]) },
+  tax_classes: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
+  tax_rates: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
+  tax_settings: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
+  promotions: { kinds: ["promo"], noise: ["revision", "updated_at"], rules: everyChange(own("promo")) },
+  promotion_codes: {
+    kinds: ["promo"],
+    noise: [],
+    rules: everyChange([{ prefix: "promo:", columns: ["promotion_id"] }, { dep: "promo:*" }]),
+  },
+  promotion_conditions: {
+    kinds: ["promo"],
+    noise: [],
+    rules: everyChange([{ prefix: "promo:", columns: ["promotion_id"] }, { dep: "promo:*" }]),
+  },
+  promotion_effects: {
+    kinds: ["promo"],
+    noise: [],
+    rules: everyChange([{ prefix: "promo:", columns: ["promotion_id"] }, { dep: "promo:*" }]),
+  },
+  promotion_redemptions: {
+    kinds: ["promo"],
+    noise: [],
+    note: "Redemptions change what a buyer sees only for a promotion with a redemption or spend limit; unlimited promotions never advance a key at checkout.",
+    rules: (["insert", "update", "delete"] as const).map((event): CacheDepRule => ({
+      name: event.slice(0, 3),
+      event,
+      image: event === "delete" ? "old" : "new",
+      ...(event === "update" ? { changed: "visible" as const } : {}),
+      where: {
+        exists: "SELECT 1 FROM promotions WHERE promotions.id = R.promotion_id AND (promotions.max_redemptions IS NOT NULL OR promotions.max_discount_spend_minor IS NOT NULL)",
+      },
+      keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
+    })),
+  },
+} as const satisfies Record<string, CacheDepTableSpec>;
+
+export type CacheDepTable = keyof typeof CACHE_DEP_TABLE_RULES;
+
+/**
+ * Every buyer-visible table and its rules, with the derived old-image
+ * companion of every update rule whose keys or guard read a column an update
+ * can change (`withOldImageCompanions`). The triggers are generated from this.
+ */
+export const CACHE_DEP_TABLES: Readonly<Record<CacheDepTable, CacheDepTableSpec>> = Object.fromEntries(
+  (Object.entries(CACHE_DEP_TABLE_RULES) as Array<[CacheDepTable, CacheDepTableSpec]>)
+    .map(([table, spec]) => [table, { ...spec, rules: withOldImageCompanions(spec.rules) }]),
+) as unknown as Record<CacheDepTable, CacheDepTableSpec>;
+
+// ---------------------------------------------------------------------------
+// Tables that never need a key
+// ---------------------------------------------------------------------------
+
+const PRIVATE = "Private or operational: never read by a public cached route.";
+const SOFT = `Soft ordering only (owner decision 4): recommendation and popularity order may lag up to ${CACHE_DEP_SOFT_MAX_AGE_SECONDS / 60} minutes; every card shown is its own hard p: key. Readers bound it with a soft max age, not a trigger.`;
+const DERIVED_STOCK = "Stock ledger: its buyer-visible effect is the SKU band on product_variants and product_buyer_state, which are registered.";
+const DRAFTS = "Dashboard drafts, history or sessions: public reads use the published row, which is registered.";
+const MACHINERY = "Cache machinery itself.";
+const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
+
+/**
+ * Soft-ordering tables (owner decision 4): a read of them never gets a hard
+ * key or the `t:` fallback; the reader bounds its staleness with
+ * `CACHE_DEP_SOFT_MAX_AGE_SECONDS`. Each is also in `CACHE_DEP_EXEMPT_TABLES`.
+ */
+export const CACHE_DEP_SOFT_TABLES = [
+  "product_recommendations",
+  "product_sales_stats",
+  "orders",
+  "order_items",
+] as const;
+
+export type CacheDepSoftTable = (typeof CACHE_DEP_SOFT_TABLES)[number];
+
+export function isCacheDepSoftTable(table: string): table is CacheDepSoftTable {
+  return (CACHE_DEP_SOFT_TABLES as readonly string[]).includes(table);
+}
+
+/** Tables a public read may touch (or that exist) without a key of their own, with the reason. */
+export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
+  // Soft ordering.
+  product_recommendations: SOFT,
+  product_sales_stats: SOFT,
+  orders: `${SOFT} (also-bought fallback reads orders).`,
+  order_items: `${SOFT} (also-bought fallback reads order lines).`,
+  // Derived or machinery.
+  products_fts: FTS,
+  categories_fts: FTS,
+  cache_clock: MACHINERY,
+  cache_dep: MACHINERY,
+  cache_generation: MACHINERY,
+  scalius_schema_migrations: "Schema ledger; a release changes the Worker version, which is in every cache key.",
+  inventory_movements: DERIVED_STOCK,
+  inventory_operations: DERIVED_STOCK,
+  product_low_stock_alerts: DERIVED_STOCK,
+  // Drafts and history.
+  theme_settings_drafts: DRAFTS,
+  theme_settings_versions: DRAFTS,
+  theme_preview_sessions: DRAFTS,
+  navigation_menu_items: DRAFTS,
+  hero_sections: "Legacy hero configuration; public reads use hero_sliders.",
+  media_folders: "Dashboard organisation of media; never shown to buyers.",
+  media_upload_sessions: PRIVATE,
+  media_upload_parts: PRIVATE,
+  // Private and operational.
+  checkout_authority: "Checkout fence revision; cart and checkout are never cached.",
+  delivery_providers: PRIVATE,
+  delivery_shipments: PRIVATE,
+  order_discount_allocations: PRIVATE,
+  admin_fcm_tokens: PRIVATE,
+  abandoned_checkouts: PRIVATE,
+  checkout_attempts: PRIVATE,
+  admin_order_create_attempts: PRIVATE,
+  order_amendments: PRIVATE,
+  order_receipts: PRIVATE,
+  order_payment_recovery_challenges: PRIVATE,
+  invoice_sequences: PRIVATE,
+  order_invoices: PRIVATE,
+  invoice_issue_commands: PRIVATE,
+  order_returns: PRIVATE,
+  order_return_lines: PRIVATE,
+  order_return_commands: PRIVATE,
+  order_return_receipt_lines: PRIVATE,
+  order_tax_snapshots: PRIVATE,
+  order_item_tax_snapshots: PRIVATE,
+  order_payments: PRIVATE,
+  refund_attempts: PRIVATE,
+  order_support_requests: PRIVATE,
+  order_events: PRIVATE,
+  payment_session_attempts: PRIVATE,
+  payment_plans: PRIVATE,
+  cod_tracking: PRIVATE,
+  webhook_events: PRIVATE,
+  order_fulfillments: PRIVATE,
+  order_fulfillment_lines: PRIVATE,
+  customers: PRIVATE,
+  customer_history: PRIVATE,
+  customer_auth_otp_challenges: PRIVATE,
+  customer_sessions: PRIVATE,
+  customer_auth_otp_rate_limits: PRIVATE,
+  auth_otp_delivery_receipts: PRIVATE,
+  conversations: PRIVATE,
+  conversation_messages: PRIVATE,
+  conversation_attachments: PRIVATE,
+  meta_conversions_logs: PRIVATE,
+  meta_capi_purchase_outbox: PRIVATE,
+  notification_outbox: PRIVATE,
+  notification_delivery_receipts: PRIVATE,
+  user: PRIVATE,
+  session: PRIVATE,
+  account: PRIVATE,
+  verification: PRIVATE,
+  two_factor: PRIVATE,
+  rate_limit: PRIVATE,
+  admin_setup_claims: PRIVATE,
+  admin_setup_rate_limits: PRIVATE,
+  admin_invitations: PRIVATE,
+  scanner_token_claims: PRIVATE,
+  admin_identity_handoff_events: PRIVATE,
+  permissions: PRIVATE,
+  roles: PRIVATE,
+  role_permissions: PRIVATE,
+  user_roles: PRIVATE,
+  user_permissions: PRIVATE,
+  agent_grants: PRIVATE,
+  agent_credentials: PRIVATE,
+  agent_artifact_handles: PRIVATE,
+  agent_browser_handoffs: PRIVATE,
+  agent_authorization_requests: PRIVATE,
+  agent_device_authorizations: PRIVATE,
+  agent_audit_events: PRIVATE,
+  agent_storefront_contexts: PRIVATE,
+  agent_storefront_order_grants: PRIVATE,
+  agent_storefront_continuations: PRIVATE,
+  order_review_requests: PRIVATE,
+  digital_assets: PRIVATE,
+  digital_asset_uploads: PRIVATE,
+  digital_entitlements: PRIVATE,
+  digital_licence_keys: PRIVATE,
+  gift_cards: PRIVATE,
+  gift_card_transactions: PRIVATE,
+  warranty_policy_revisions: "Frozen onto order lines at checkout; public reads show the live policy row (warranty_policies), which is registered.",
+  order_item_warranties: PRIVATE,
+  warranty_claims: PRIVATE,
+};
+
+export function isCacheDepTable(table: string): table is CacheDepTable {
+  return Object.prototype.hasOwnProperty.call(CACHE_DEP_TABLES, table);
+}
+
+/**
+ * Registered tables whose reads are covered by the rows a statement reads,
+ * not by key kind: every public render declares some `set:` key (the
+ * Platform section), so a kind check would count any settings read as
+ * covered. Each `settings` source of a statement must pin `category` and
+ * `key` (`=` or `IN` against literals or bound values), and the key of every
+ * document it can match, `set:<category>:<key>`, must be declared; any other
+ * settings read falls back to `t:settings`. `columns` are the key's parts in
+ * order after the kind.
+ */
+export const CACHE_DEP_ROW_KEYED_TABLES: Readonly<Record<string, { readonly kind: CacheDepKind; readonly columns: readonly string[] }>> = {
+  settings: { kind: "set", columns: ["category", "key"] },
+};
+
+/**
+ * Whether one source's pinned values (column -> values, null when not
+ * pinned) read only rows whose keys are declared.
+ */
+export function cacheDepPinnedRowsCovered(
+  table: string,
+  pinned: Readonly<Record<string, readonly string[] | null>>,
+  declared: ReadonlySet<string>,
+): boolean {
+  const spec = CACHE_DEP_ROW_KEYED_TABLES[table];
+  if (spec === undefined) return false;
+  let keys = [spec.kind as string];
+  for (const column of spec.columns) {
+    const values = pinned[column];
+    if (!values || values.length === 0) return false;
+    keys = keys.flatMap((prefix) => values.map((value) => `${prefix}:${value}`));
+  }
+  return keys.every((key) => declared.has(key));
+}
+
+/** Key kinds that cover a read of this table, or null for an unregistered table. */
+export function cacheDepKindsForTable(table: string): readonly CacheDepKind[] | null {
+  return isCacheDepTable(table) ? CACHE_DEP_TABLES[table].kinds : null;
+}
+
+/** The exemption reason of a table, or null. */
+export function cacheDepExemptReason(table: string): string | null {
+  return Object.prototype.hasOwnProperty.call(CACHE_DEP_EXEMPT_TABLES, table)
+    ? CACHE_DEP_EXEMPT_TABLES[table]!
+    : null;
+}

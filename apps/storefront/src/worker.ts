@@ -2,7 +2,13 @@ import { handle } from "@astrojs/cloudflare/handler";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
 import { readCacheGenerationHint, readWorkerVersion } from "@scalius/shared/cache-generation";
-import { servePublicStorefrontRequest } from "./lib/public-worker-cache";
+import {
+  STOREFRONT_PAGE_CACHE_MODE,
+  servePublicStorefrontRequest,
+} from "./lib/public-worker-cache";
+import { createCacheFrontierClient, type CacheFrontierClient } from "./lib/cache-frontier";
+import { CACHE_FRONTIER_SECRET_PURPOSE } from "@scalius/shared/cache-frontier";
+import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
 import { BUILD_ID } from "./config/build-id";
 import {
@@ -33,6 +39,23 @@ async function resolveFrontProxy(request: Request, env: Env): Promise<Request> {
   return stripped;
 }
 
+/**
+ * The frontier API over the service binding (frontier mode only). The key is
+ * derived once per request that needs it; without the binding or the master
+ * secret there is no client and pages render uncached.
+ */
+function frontierClient(env: Env): CacheFrontierClient | null {
+  const backend = env.BACKEND_API;
+  const master = readMasterSecret(env);
+  if (STOREFRONT_PAGE_CACHE_MODE !== "frontier" || !backend || !master) return null;
+  let key: Promise<string> | null = null;
+  return createCacheFrontierClient(
+    (request) => backend.fetch(request),
+    INTERNAL_SERVICE_ORIGIN,
+    () => (key ??= deriveRuntimeSecret(master, CACHE_FRONTIER_SECRET_PURPOSE)),
+  );
+}
+
 export default class StorefrontGateway extends WorkerEntrypoint<Env> {
   async fetch(incoming: Request): Promise<Response> {
     const request = await resolveFrontProxy(incoming, this.env);
@@ -45,6 +68,7 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       workerVersion: readWorkerVersion(this.env),
       render: (renderRequest) => handle(renderRequest, this.env, this.ctx),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
+      frontier: frontierClient(this.env),
     });
   }
 }

@@ -23,6 +23,7 @@
 
 import {
   MAX_STOREFRONT_BATCH_PARTS,
+  STOREFRONT_BATCH_PATH,
   storefrontBatchPart,
   storefrontBatchPath,
   type StorefrontBatchResponse,
@@ -38,6 +39,7 @@ import {
   type StorefrontRuntime,
 } from "./runtime";
 import { CACHE_GENERATION_HEADER } from "@scalius/shared/cache-generation";
+import { markPageUnproven, recordPagePart } from "../page-dependencies";
 import { createClient, createConfig } from "@scalius/api-client/factory";
 import type { Client } from "@scalius/api-client/factory";
 import {
@@ -328,6 +330,9 @@ export async function apiFetch(
     const batched = joinReadBatch(url, options, policy);
     if (batched) return batched;
   }
+  // Only batch parts carry a dependency proof; a page that read anything
+  // else is never stored under a dependency-validated key.
+  if (import.meta.env.SSR && !isReadBatchUrl(url)) markPageUnproven(getRuntime()?.pageDependencies);
 
   let usedServiceBinding = false;
   try {
@@ -510,20 +515,35 @@ function joinReadBatch(
   if (!part) return null;
 
   if (runtime.readBatch && runtime.readBatch.origin !== parsed.origin) return null;
-  let batch = runtime.readBatch;
-  if (!batch) {
-    batch = { origin: parsed.origin, reads: [] };
-    runtime.readBatch = batch;
-    const scheduled = batch;
-    setTimeout(() => {
-      requestRuntime.run(runtime, () => void flushReadBatch(runtime, scheduled));
-    }, 0);
+  let batch = runtime.readBatch ?? openReadBatch(runtime, parsed.origin);
+  if (batch.reads.length >= MAX_STOREFRONT_BATCH_PARTS) {
+    // A page whose proof is collected never reads outside a batch: a full
+    // batch starts the next one instead.
+    if (!runtime.pageDependencies) return null;
+    batch = openReadBatch(runtime, parsed.origin);
   }
-  if (batch.reads.length >= MAX_STOREFRONT_BATCH_PARTS) return null;
   const read = batch.reads;
   return new Promise<Response>((resolve, reject) => {
     read.push({ url, options, policy, part, resolve, reject });
   });
+}
+
+/** A new pending batch, flushed once the current task yields. */
+function openReadBatch(runtime: StorefrontRuntime, origin: string): PendingReadBatch {
+  const batch: PendingReadBatch = { origin, reads: [] };
+  runtime.readBatch = batch;
+  setTimeout(() => {
+    requestRuntime.run(runtime, () => void flushReadBatch(runtime, batch));
+  }, 0);
+  return batch;
+}
+
+function isReadBatchUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname === STOREFRONT_BATCH_PATH;
+  } catch {
+    return false;
+  }
 }
 
 function sendAlone(read: BatchedRead): void {
@@ -536,7 +556,10 @@ async function flushReadBatch(
 ): Promise<void> {
   if (runtime.readBatch === batch) runtime.readBatch = null;
   const { reads } = batch;
-  if (reads.length === 1) {
+  const dependencies = runtime.pageDependencies;
+  // A lone read is sent as itself, unless the page's proof is collected: only
+  // a batch part carries one.
+  if (reads.length === 1 && !dependencies) {
     sendAlone(reads[0]!);
     return;
   }
@@ -555,10 +578,12 @@ async function flushReadBatch(
       await response.body?.cancel();
     }
   } catch (error: unknown) {
+    markPageUnproven(dependencies);
     for (const read of reads) read.reject(error);
     return;
   }
   if (!payload) {
+    markPageUnproven(dependencies);
     // An API without the batch route (mid-deploy): send each read itself.
     for (const read of reads) sendAlone(read);
     return;
@@ -566,6 +591,7 @@ async function flushReadBatch(
   const byPart = new Map(parts.map((part, index) => [part, payload!.parts[index]!]));
   for (const read of reads) {
     const result = byPart.get(read.part)!;
+    recordPagePart(dependencies, result.cache);
     read.resolve(new Response(result.body, {
       status: result.status,
       headers: { "Content-Type": result.contentType },

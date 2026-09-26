@@ -12,7 +12,7 @@ function method(
   isActive = true,
   extra: Partial<ShippingMethod> = {},
 ): ShippingMethod {
-  return { id: name, name, fee, description: null, isActive, sortOrder, createdAt: null, updatedAt: null, kind: "delivery", everywhereElse: true, ...extra };
+  return { id: name, name, fee, description: null, isActive, sortOrder, createdAt: null, kind: "delivery", everywhereElse: true, ...extra };
 }
 const zoneRate = (name: string, fee: number, sortOrder: number, extra: Partial<ShippingMethod> = {}) =>
   method(name, fee, sortOrder, true, { everywhereElse: false, ...extra });

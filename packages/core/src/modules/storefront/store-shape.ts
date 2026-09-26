@@ -19,6 +19,8 @@ import {
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { cacheDep } from "@scalius/shared/cache-deps";
+import { deps } from "../../cache-deps";
 import { reviewsEnabledSql } from "../settings/documents";
 
 const cap = STORE_SHAPE_COUNT_CAP;
@@ -47,6 +49,17 @@ const holdsPublicProduct = (alias: string) => sql.raw(`EXISTS (
  * raw subquery unqualified, which is ambiguous across the joins.
  */
 export function selectStoreShapeCounts(db: Database) {
+  // `lm:shape`: the set of active products and their SKUs (insert, delete,
+  // is_active, deleted_at or fulfilment kind), which categories and brands
+  // hold a public product, key-spec values and whether a review is
+  // published; not every product edit. Category, brand, attribute,
+  // collection and shipping rows count through their "any row" keys.
+  deps.key(cacheDep.storeShape());
+  deps.anyCategory();
+  deps.anyBrand();
+  deps.anyAttribute();
+  deps.anyCollection();
+  deps.shipping();
   return db
     .select({
       productCount: sql<number>`(SELECT count(*) FROM (

@@ -17,12 +17,14 @@ import {
 import { loadVariantSelectedOptions, type SelectedProductOption } from "../products/option-model";
 import { loadProductMediaProjections } from "../products/media";
 import { productImageMapFromMedia, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";
+import { declareProductCards, deps } from "./declare-deps";
 
 async function readPrimaryProductImageMap(
     db: Database,
     productIds: string[],
 ): Promise<Map<string, { mediaId: string; url: string; alt: string | null }>> {
     const mediaMap = await loadProductMediaProjections(db, productIds);
+    declareProductCards(productIds, mediaMap);
     return productImageMapFromMedia(mediaMap);
 }
 
@@ -114,6 +116,12 @@ export async function searchStorefrontProducts(
 ) {
     const { search, page, limit } = params;
     const offset = (page - 1) * limit;
+    // Hits are ordered by products.updated_at, a column every write touches
+    // but no dependency key tracks (it is registry noise): no key set can
+    // prove a stored page current, so this legacy read is never cached.
+    deps.uncacheable("order-by-untracked-column");
+    deps.search();
+    deps.listMembership("all");
 
     const conditions: SQL[] = publicProductBaseConditions();
     const searchCondition = search ? ftsMatch(db, "products_fts", "products", search) : null;

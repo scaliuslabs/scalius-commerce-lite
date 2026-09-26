@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 99,
-  name: "0099_customer_whatsapp",
+  version: 100,
+  name: "0100_cache_dependencies",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -273,8 +273,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "14c9d0b08f87f5ad5cd87ec3e57fe5dc119008f3923975f400af5d54ecf3e2d7",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 99,
+    name: "0099_customer_whatsapp",
     sourceSha256: "50e207ecaf45d21cf0b12fad93cd0a7ac24f8e3b8e1b21d8255ca9be3cf31ecf",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "e1654d5c5f1dda04ab9e11576496980eccdaffd323df70bb0e8a8726a4a78a1f",
   },
 ] as const;
 

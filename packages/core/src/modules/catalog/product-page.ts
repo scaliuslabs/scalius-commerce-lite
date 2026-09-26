@@ -59,6 +59,7 @@ import {
     getStorefrontProductRecommendations,
     type ProductRecommendations,
 } from "./recommendations";
+import { declareProductGallery, deps } from "./declare-deps";
 
 // ─────────────────────────────────────────
 // Private helpers
@@ -88,6 +89,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             description: products.description,
             priceMinor: products.priceMinor,
             categoryId: products.categoryId,
+            productBrandId: products.brandId,
             slug: products.slug,
             metaTitle: products.metaTitle,
             metaDescription: products.metaDescription,
@@ -109,7 +111,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             storeCurrencyCode: storeCurrencyCodeSql(),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
-            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
             category: {
                 id: categories.id,
                 name: categories.name,
@@ -162,8 +163,14 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         ))
         .get();
 
-    if (!productRow) return null;
+    if (!productRow) {
+        // Any product can take this slug or become public under it.
+        deps.listMembership("all");
+        deps.table("products");
+        return null;
+    }
     const {
+        productBrandId,
         category,
         brand,
         storeCurrencyCode,
@@ -183,6 +190,15 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         count5,
         ...product
     } = productRow;
+    // The product (row, SKUs, options, attributes, content, bundles) and the
+    // category and brand rows it joins, published or not.
+    deps.product(product.id);
+    // Without a category or brand the joined table's rows cannot change the
+    // page (the product row would); only its "any row" key covers the read.
+    if (product.categoryId) deps.category(product.categoryId);
+    else deps.anyCategory();
+    if (productBrandId) deps.brand(productBrandId);
+    else deps.anyBrand();
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
@@ -207,7 +223,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         discountAmountMinor: productVariants.discountAmountMinor,
         fulfillmentKind: productVariants.fulfillmentKind,
         createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
-        updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
         deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
     }).from(productVariants)
         .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
@@ -318,8 +333,13 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const recommendations = results.find((r) => r.type === "recommendations")!.data as ProductRecommendations;
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
+    // Gallery and SKU images, the files content blocks show, and attribute
+    // names (any definition can be renamed, trashed or restored).
+    declareProductGallery(product.id, mediaItems);
+    deps.mediaItems(content.blocks.mediaIds);
+    deps.anyAttribute();
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
@@ -353,7 +373,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             imageMediaId: variantImage?.mediaId ?? null,
             selectedOptions: selectedOptionMap.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
     });
@@ -367,7 +386,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             imageMediaId: productImage?.mediaId ?? null,
             imageAlt: productImage?.altText ?? null,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
             options: optionMap.get(product.id) ?? [],
             discountType: product.discountType || "percentage",

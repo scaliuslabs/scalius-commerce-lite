@@ -67,6 +67,47 @@ export function withCacheIdentity(canonicalUrl: string, generation: string, vers
   return url.toString();
 }
 
+/**
+ * How public API reads are cached (CACHE-DESIGN §8). One code-level switch,
+ * deliberately not an env var (AGENTS.md: no env var without an
+ * architecture decision); a change ships as a deploy, and the Worker version
+ * in every key isolates the entries of one mode from the other's.
+ *
+ * - `generation`: the cache generation is the only freshness authority
+ *   (PublicApi for direct reads, the batch reader for storefront parts).
+ * - `shadow` (P1): serves exactly as `generation`; after each batch answers,
+ *   the dependency-validated cache evaluates the same parts in the
+ *   background under its own keys and logs, masked, every entry it would have
+ *   served that differs from a fresh render (`[CacheShadow]`).
+ * - `strict` (P2): parts are keyed without the generation and served only
+ *   after one validation read proves none of their dependencies changed;
+ *   direct reads use the same reader in the default entrypoint (PublicApi is
+ *   not called). Before switching, remove `exports.PublicApi.cache` from
+ *   wrangler.jsonc.
+ */
+export type ApiPartCacheMode = "generation" | "shadow" | "strict";
+export const API_PART_CACHE_MODE: ApiPartCacheMode = "shadow";
+
+/**
+ * The dependency-validated key of a public read: the canonical URL and the
+ * Worker version, without the generation (the entry carries its own proof).
+ */
+export function withDvcIdentity(canonicalUrl: string, version: string): string {
+  const url = new URL(canonicalUrl);
+  url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
+  return url.toString();
+}
+
+/**
+ * The data center's snapshot of the store clock and the Platform settings
+ * row, as last read by a validation statement (public-read.ts).
+ */
+export function dvcSnapshotKey(origin: string, version: string): string {
+  const url = new URL("/__scalius/dvc-snapshot", origin);
+  url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
+  return url.toString();
+}
+
 /** Removes the generation and version before the request reaches the application. */
 export function withoutCacheIdentity(request: Request): Request {
   const url = new URL(request.url);

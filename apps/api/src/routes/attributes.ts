@@ -17,6 +17,7 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { normalizePublicFtsSearchQuery } from "../utils/public-search-query";
 import { getPublicCategoryById } from "@scalius/core/modules/categories";
+import { deps } from "@scalius/core/cache-deps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const filterResponseSchema = successEnvelope(z.object({ facets: z.array(productFacetSchema).max(20) }));
@@ -85,7 +86,8 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
   const db = c.get("db");
   const { categorySlug } = c.req.valid("param");
 
-  // Resolve slug to ID
+  // Resolve slug to ID (any category can take the slug or be published).
+  deps.anyCategory();
   const category = await db
     .select({ id: categories.id })
     .from(categories)

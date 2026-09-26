@@ -193,7 +193,7 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", () => {
         expect(cheapest.products.map((product) => product.id)).toEqual([optioned.id, simple.id]);
         const category = await getStorefrontCategoryProducts(db, {
             id: "cat_a", name: "Shirts", slug: "shirts", description: null, imageUrl: null, metaTitle: null,
-            metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null, updatedAt: null,
+            metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null,
         }, { page: 1, limit: 10, attributeFilters: [{ kind: "option", id: "option.size", name: "Size", slug: "option.size", values: ["m"], keys: ["m"] }] });
         expect(category.products.map((product) => product.id)).toEqual([optioned.id]);
         // Typed facet filters and counts (catalog/facets.ts) compile and agree on PostgreSQL.

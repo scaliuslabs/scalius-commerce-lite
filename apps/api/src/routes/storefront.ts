@@ -27,7 +27,14 @@ import {
   STOREFRONT_BATCH_PART_PARAM,
 } from "@scalius/shared/public-api-cache-routes";
 import { serveStorefrontBatch } from "../storefront-batch";
-import { createLocalPublicReader, renderPublicRead } from "../public-read";
+import { createPublicPartReader, renderPublicRead } from "../public-read";
+import { API_PART_CACHE_MODE } from "../public-cache-policy";
+import { checkHashedDependencies, hasFrontierKey, readFrontierDelta } from "../cache-frontier";
+import {
+  CACHE_FRONTIER_CHECK_MAX_DEPS,
+  CACHE_FRONTIER_MAX_CHANGES,
+  isCacheDepHash,
+} from "@scalius/shared/cache-frontier";
 
 /**
  * Parts of one batch rendered at once: every part of a page (layout, page
@@ -41,7 +48,7 @@ import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { pageSchema } from "../schemas/entities";
+import { publicPageSchema } from "../schemas/entities";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -374,7 +381,7 @@ const pageBySlugRoute = createRoute({
     200: {
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: pageSchema,
+        page: publicPageSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -428,6 +435,16 @@ const batchPartSchema = z.object({
   status: z.number().int(),
   contentType: z.string(),
   body: z.string().openapi({ description: "The part's response body, exactly as its own GET returns it" }),
+  cache: z.object({
+    status: z.enum(["hit", "miss", "refresh"]),
+    s0: z.number().int(),
+    deps: z.array(z.string()),
+    validUntil: z.number().nullable(),
+    softMaxAgeSeconds: z.number().nullable(),
+    renderedAt: z.number(),
+  }).optional().openapi({
+    description: "Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof.",
+  }),
 });
 const batchRoute = createRoute({
   method: "get",
@@ -463,13 +480,14 @@ app.openapi(batchRoute, async (c) => {
   } catch {
     ctx = undefined;
   }
-  // Parts are served inside this invocation: the data center's Cache API
-  // under the key the PublicApi cache uses (publicReadCacheKey), else
-  // rendered here exactly as PublicApi renders them (renderPublicRead). A
-  // PublicApi miss would instead wait for a separate, usually cold, isolate.
-  const readPart = createLocalPublicReader({
+  // Parts are served inside this invocation: the data center's Cache API,
+  // else rendered here exactly as PublicApi renders them (renderPublicRead).
+  // A PublicApi miss would instead wait for a separate, usually cold, isolate.
+  const reader = createPublicPartReader({
+    mode: API_PART_CACHE_MODE,
     env: c.env,
     cache: typeof caches === "undefined" ? null : caches.default,
+    db: () => c.get("db"),
     render: (part) => renderPublicRead(part, c.env, ctx as ExecutionContext),
     waitUntil: (promise) => ctx?.waitUntil(promise),
     maxConcurrentRenders: MAX_BATCH_PART_RENDERS,
@@ -477,12 +495,46 @@ app.openapi(batchRoute, async (c) => {
   const response = await serveStorefrontBatch(request, {
     // A render pins its reads to its page's generation. Generations are
     // unguessable, so a caller-supplied one can only select existing entries.
-    readGeneration: async () =>
-      normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
-      ?? await readCacheGeneration(c.env, ctx),
-    fetchPart: readPart,
+    readGeneration: async () => API_PART_CACHE_MODE === "strict"
+      ? null
+      : normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
+        ?? await readCacheGeneration(c.env, ctx),
+    readParts: (parts, generation) => reader.readParts(parts, generation),
   });
   return response as never;
+});
+
+// GET /storefront/frontier and POST /storefront/frontier/check: the
+// dependency-validated cache's change frontier for the storefront page cache
+// (CACHE-DESIGN §6.7). Internal: authenticated with the storefront's frontier
+// key (HKDF of SCALIUS_SECRET), never cached, not part of the public contract.
+const frontierHeaders = { "Cache-Control": "private, no-store" } as const;
+const frontierDenied = () => Response.json({ success: false, error: "Not found" }, { status: 404, headers: frontierHeaders });
+const nonNegativeInteger = (value: unknown): number | null =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+app.get("/frontier", async (c) => {
+  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const url = new URL(c.req.url);
+  const since = url.searchParams.has("since") ? nonNegativeInteger(Number(url.searchParams.get("since"))) : null;
+  if (url.searchParams.has("since") && since === null) {
+    return Response.json({ success: false, error: "since must be a clock value" }, { status: 400, headers: frontierHeaders });
+  }
+  const limit = nonNegativeInteger(Number(url.searchParams.get("limit") ?? CACHE_FRONTIER_MAX_CHANGES)) ?? CACHE_FRONTIER_MAX_CHANGES;
+  const delta = await readFrontierDelta(c.get("db"), since, Math.max(1, limit));
+  return Response.json({ success: true, data: delta }, { headers: frontierHeaders });
+});
+
+app.post("/frontier/check", async (c) => {
+  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const input = await c.req.json().catch(() => null) as { s0?: unknown; deps?: unknown } | null;
+  const s0 = nonNegativeInteger(input?.s0);
+  const hashes = Array.isArray(input?.deps) ? input!.deps as unknown[] : null;
+  if (s0 === null || !hashes || hashes.length > CACHE_FRONTIER_CHECK_MAX_DEPS || !hashes.every(isCacheDepHash)) {
+    return Response.json({ success: false, error: "Invalid frontier check" }, { status: 400, headers: frontierHeaders });
+  }
+  const result = await checkHashedDependencies(c.get("db"), s0, hashes as string[]);
+  return Response.json({ success: true, data: result }, { headers: frontierHeaders });
 });
 
 const resolveThemePreviewRoute = createRoute({

@@ -195,7 +195,7 @@ function PanelTop({ onClose }: { onClose?: () => void }) {
 function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; showSettings: boolean; onClose?: () => void }) {
   const t = useMessages(shellMessages);
   const path = useLocation({ select: (location) => location.pathname });
-  const { storefrontUrl } = useStorefrontUrl();
+  const { storefrontUrl, buildStorefrontPath } = useStorefrontUrl();
   const ungrouped = nav.filter((item) => !item.group);
   const groups = [...new Set(nav.flatMap((item) => (item.group ? [item.group] : [])))];
 
@@ -218,7 +218,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
         {/* Shopify's eye on the Online store row: the storefront in a new tab (always shown on touch). */}
         {item.key === "onlineStore" && storefrontUrl ? (
           <a
-            href={storefrontUrl}
+            href={buildStorefrontPath("/") ?? storefrontUrl}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t("viewStore")}

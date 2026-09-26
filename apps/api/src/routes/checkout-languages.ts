@@ -16,6 +16,7 @@ import {
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { SettingsRevisionConflictError } from "@scalius/core/modules/settings";
+import { deps } from "@scalius/core/cache-deps";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
@@ -113,9 +114,8 @@ const publicCheckoutLanguageSchema = z.object({
   fieldVisibility: checkoutLanguageFieldVisibilitySchema,
   isActive: z.boolean(),
   isDefault: z.boolean(),
-  createdAt: optionalTimestampSchema,
-  updatedAt: optionalTimestampSchema,
-  deletedAt: optionalNullableTimestampSchema,
+}).openapi({
+  description: "Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees.",
 });
 
 const defaultFieldVisibility = {
@@ -242,6 +242,7 @@ const adminGetActiveRoute = createRoute({
 });
 
 async function getActiveCheckoutLanguage(db: Database) {
+  deps.checkoutLanguages();
   let language = await db
       .select()
       .from(checkoutLanguages)
@@ -286,7 +287,11 @@ async function getActiveCheckoutLanguage(db: Database) {
   }
 
   const parsedLanguage = {
-    ...language,
+    id: language.id,
+    name: language.name,
+    code: language.code,
+    isActive: language.isActive,
+    isDefault: language.isDefault,
     ...publicCheckoutLanguageProjection(
       language.code,
       language.languageData,
