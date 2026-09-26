@@ -15,12 +15,13 @@ import { searchListingMessages } from "~/i18n/search-listing";
 export const SEARCH_TITLE_LENGTH = 70;
 export const SEARCH_DESCRIPTION_LENGTH = 160;
 
-export type SearchListingResource = "product" | "collection" | "category" | "page" | "blogPost";
+export type SearchListingResource = "product" | "collection" | "category" | "brand" | "page" | "blogPost";
 
 const PATH_PREFIX: Record<SearchListingResource, string> = {
   product: "/products/",
   collection: "/collections/",
   category: "/categories/",
+  brand: "/brands/",
   page: "/",
   blogPost: "/blog/",
 };

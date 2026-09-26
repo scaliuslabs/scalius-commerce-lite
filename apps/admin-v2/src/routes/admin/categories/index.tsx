@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { FolderTree } from "lucide-react";
 import {
   postApiV1AdminCategoriesBulkDelete,
@@ -16,7 +17,14 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
-import { categoriesQueryOptions, type CategoryListItem } from "~/lib/api-query-options/categories";
+import {
+  categoriesQueryOptions,
+  categoryFormOptionsQueryOptions,
+  type CategoryListItem,
+} from "~/lib/api-query-options/categories";
+import { categoryPathLabel, indexCategories } from "~/lib/category-tree";
+import { MoveCategoryDialog, type MoveTarget } from "~/components/admin/catalog/MoveCategoryDialog";
+import { categoryFormMessages } from "~/i18n/category-form";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { Button } from "~/components/ui/button";
@@ -50,7 +58,11 @@ function listQuery(search: ReturnType<typeof validateCategorySearch>, term: stri
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("categories", deps, "status"), deps.q))),
+  loader: ({ context: { queryClient }, deps }) => Promise.all([
+    warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("categories", deps, "status"), deps.q))),
+    // Rows name their parents (the stored path) from the lookup list.
+    queryClient.ensureQueryData(categoryFormOptionsQueryOptions()).catch(() => null),
+  ]),
   head: () => pageHead("categories"),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
@@ -65,6 +77,11 @@ function CategoriesPage() {
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: can } = useCatalogActionPermissions();
   const editTo = (row: CategoryListItem) => (can.canEdit ? `/admin/categories/${row.id}/edit` : undefined);
+  const { data: lookup } = useQuery(categoryFormOptionsQueryOptions());
+  const f = useMessages(categoryFormMessages);
+  // The dialog stays mounted; each opening gets a fresh picker by bumping its key.
+  const [moving, setMoving] = useState<{ key: number; target: MoveTarget | null }>({ key: 0, target: null });
+  const byId = useMemo(() => indexCategories(lookup?.categories ?? []), [lookup]);
 
   const columns = useMemo<ColumnDef<CategoryListItem, unknown>[]>(() => [
     {
@@ -74,7 +91,12 @@ function CategoriesPage() {
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
           <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
-          <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>
+          <div className="min-w-0">
+            <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>
+            {row.original.parentId && byId.has(row.original.parentId) ? (
+              <p className="truncate text-body text-muted-foreground">{categoryPathLabel(row.original.parentId, byId)}</p>
+            ) : null}
+          </div>
         </div>
       ),
     },
@@ -114,9 +136,10 @@ function CategoriesPage() {
       cell: ({ row }) => <DateText value={row.original.updatedAt} />,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, search.trashed, can.canEdit]);
+  ], [t, search.trashed, can.canEdit, byId]);
 
   return (
+    <>
     <ResourceListPage<CategoryListItem>
       title={t("categories")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
@@ -135,6 +158,13 @@ function CategoriesPage() {
         { value: "internal", label: t("hidden") },
       ] }}
       rowTo={editTo}
+      rowActions={(row) => (can.canEdit && !search.trashed ? [{
+        label: f("moveCategory"),
+        onClick: () => setMoving((current) => ({
+          key: current.key + 1,
+          target: { id: row.id, name: row.name, parentId: row.parentId, revision: row.revision },
+        })),
+      }] : [])}
       rowLabel={(row) => row.name}
       viewUrl={(row) => (row.status === "published" ? getStorefrontPath(`/categories/${row.slug}`) : undefined)}
       lifecycle={{
@@ -147,5 +177,7 @@ function CategoriesPage() {
             : apiData(postApiV1AdminCategoriesBulkDelete({ body: { categories: claims(rows), permanent: action === "delete" } })),
       }}
     />
+    <MoveCategoryDialog key={moving.key} target={moving.target} onClose={() => setMoving((current) => ({ ...current, target: null }))} />
+    </>
   );
 }

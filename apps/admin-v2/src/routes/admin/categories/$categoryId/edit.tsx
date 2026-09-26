@@ -1,13 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
-import { categoryQueryOptions } from "~/lib/api-query-options/categories";
+import { categoryFormOptionsQueryOptions, categoryQueryOptions } from "~/lib/api-query-options/categories";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
+    // The parent picker names categories by their path.
+    void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     const category = await queryClient
       .ensureQueryData({
         ...categoryQueryOptions(params.categoryId),

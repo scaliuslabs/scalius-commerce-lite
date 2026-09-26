@@ -57,6 +57,14 @@ export const queryKeys = {
     formOptions: () => ["categories", "form-options"] as const,
   },
 
+  // ── Brands ───────────────────────────────────────────────────────
+  brands: {
+    all: ["brands"] as const,
+    list: (params?: Record<string, unknown>) => listKey("brands", params),
+    detail: (id: string) => ["brands", "detail", id] as const,
+    formOptions: () => ["brands", "form-options"] as const,
+  },
+
   // ── Collections ──────────────────────────────────────────────────
   collections: {
     all: ["collections"] as const,

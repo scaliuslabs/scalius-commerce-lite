@@ -4,6 +4,8 @@ import {
   PaymentOptionsCard,
 } from "~/components/admin/settings/PaymentsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { EmiPlansCard } from "~/components/admin/settings/EmiPlansCard";
+import { emiSettingsQuery } from "~/lib/api-query-options/emi";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/admin/settings/payments")({
       queryClient.ensureQueryData(platformQuery),
       queryClient.ensureQueryData(gatewayQuery("sslcommerz")),
       queryClient.ensureQueryData(gatewayQuery("stripe")),
+      queryClient.ensureQueryData(emiSettingsQuery),
     ]),
   head: () => settingsHead("payments"),
   errorComponent: RouteErrorComponent,
@@ -37,6 +40,7 @@ function PaymentsPage() {
     <SettingsPage page="payments" readOnly={!canEdit}>
       <PaymentMethodsCard />
       <PaymentOptionsCard />
+      <EmiPlansCard />
     </SettingsPage>
   );
 }

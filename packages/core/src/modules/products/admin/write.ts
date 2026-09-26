@@ -56,6 +56,8 @@ import {
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
+import { buildProductContentBlockCopyStatements } from "../content-blocks";
+import { buildProductBundleCopyStatements } from "../bundles";
 import {
     GIFT_CARD_PRODUCT_RULES_MESSAGE,
     buildGiftCardProductRulesGuard,
@@ -1139,7 +1141,8 @@ function customizationInputFromView(view: CustomizationView | null): Customizati
 
 /**
  * Copies a product as a new draft: text, pricing, media, attributes, extra
- * sections, buyer inputs and its options with every live variant. Copies start with no
+ * sections, content blocks, quantity bundles, the page template, buyer inputs
+ * and its options with every live variant. Copies start with no
  * stock, new SKUs (…-COPY) and fresh generated barcodes, because stock,
  * SKU and barcode identities belong to one sellable item only.
  */
@@ -1253,5 +1256,22 @@ export async function duplicateProduct(
             field: issue?.path.join("."),
         });
     }
-    return createProduct(db, parsed.data);
+    const copy = await createProduct(db, parsed.data);
+    // Blocks, bundles and the template are sections of their own: one more guarded
+    // aggregate write on the new draft (nobody else has it open yet).
+    const [blocks, bundles, template] = await Promise.all([
+        buildProductContentBlockCopyStatements(db, id, copy.id),
+        buildProductBundleCopyStatements(db, id, copy.id),
+        db.select({ pageTemplate: products.pageTemplate }).from(products).where(eq(products.id, id)).get(),
+    ]);
+    const statements: BatchItem<"sqlite">[] = [
+        ...blocks,
+        ...bundles,
+        ...(template?.pageTemplate
+            ? [db.update(products).set({ pageTemplate: template.pageTemplate }).where(eq(products.id, copy.id))]
+            : []),
+    ];
+    if (statements.length === 0) return copy;
+    const result = await executeProductAggregateMutationBatch(db, copy.id, copy.aggregateRevision, statements);
+    return { id: copy.id, aggregateRevision: result.aggregateRevision };
 }

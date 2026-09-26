@@ -66,6 +66,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/categories": { permission: PERMISSIONS.CATEGORIES_VIEW },
   "/admin/categories/new": { permission: PERMISSIONS.CATEGORIES_CREATE },
 
+  // Brands (catalogue taxonomy beside categories: the category permissions)
+  "/admin/brands": { permission: PERMISSIONS.CATEGORIES_VIEW },
+  "/admin/brands/new": { permission: PERMISSIONS.CATEGORIES_CREATE },
+
   // Attributes
   "/admin/attributes": { permission: PERMISSIONS.ATTRIBUTES_VIEW },
 
@@ -170,6 +174,10 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   // needs the edit permission.
   {
     pattern: /^\/admin\/categories\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
+  {
+    pattern: /^\/admin\/brands\/[^/]+\/edit$/,
     config: { permission: PERMISSIONS.CATEGORIES_VIEW },
   },
   {

@@ -7,6 +7,7 @@ import { bulkUpdateProducts } from "./lifecycle";
 import { createProduct, duplicateProduct, updateProduct } from "./write";
 import { getProductsByIds, listProducts } from "./read";
 import { saveProductOptionMatrix } from "../option-matrix";
+import { updateProductSemanticSection } from "../semantic-sections";
 import { updateVariantSchema } from "../types";
 import { createProductSchema, updateProductSchema } from "../validation";
 import { deleteVariant, SkuTakenError, updateVariant } from "../variants";
@@ -156,6 +157,39 @@ describe("catalog actions on D1 storage", () => {
       ]);
     expect(sqlite.prepare("SELECT sku FROM product_variants WHERE product_id = ? ORDER BY sku").all(again.id))
       .toEqual([{ sku: "PANJABI-L-COPY-2" }, { sku: "PANJABI-M-COPY-2" }]);
+  });
+
+  it("copies content blocks, quantity bundles and the page template with the product", async () => {
+    const source = await create({
+      name: "Serum", slug: "serum",
+      additionalInfo: [{ id: "prc_tab_one", title: "How to use", content: "<p>Twice a day</p>", sortOrder: 0 }],
+    });
+    const blocks = await updateProductSemanticSection(db, source.id, {
+      section: "content_blocks",
+      expectedAggregateRevision: source.aggregateRevision,
+      blocks: [
+        { placement: "tabs", type: "faq", version: 1, settings: { heading: "", items: [{ question: "Vegan?", answer: "Yes" }] } },
+        { placement: "after-description", type: "statement", version: 1, settings: { text: "Glow in 7 days", accent: "7 days" } },
+      ],
+    });
+    await updateProductSemanticSection(db, source.id, {
+      section: "bundles",
+      expectedAggregateRevision: blocks!.aggregateRevision,
+      tiers: [{ quantity: 2, discountType: "percentage", discountPercentage: 10, label: "Pair", isActive: true }],
+    });
+    sqlite.prepare("UPDATE products SET page_template = 'landing' WHERE id = ?").run(source.id);
+
+    const copy = await duplicateProduct(db, source.id, "Copy of Serum");
+
+    const blockRows = (id: string) => sqlite.prepare(
+      "SELECT placement, position, type, settings FROM product_content_blocks WHERE product_id = ? ORDER BY placement, position",
+    ).all(id);
+    expect(blockRows(copy.id)).toEqual(blockRows(source.id));
+    expect(blockRows(copy.id)).toHaveLength(3);
+    expect(sqlite.prepare("SELECT quantity, discount_type, discount_bps, label, is_active FROM product_bundles WHERE product_id = ?").all(copy.id))
+      .toEqual([{ quantity: 2, discount_type: "percentage", discount_bps: 1000, label: "Pair", is_active: 1 }]);
+    expect(sqlite.prepare("SELECT page_template, aggregate_revision FROM products WHERE id = ?").get(copy.id))
+      .toEqual({ page_template: "landing", aggregate_revision: copy.aggregateRevision });
   });
 
   it("copies only the option values a live SKU sells, and refuses an uncopyable product with a 400", async () => {
