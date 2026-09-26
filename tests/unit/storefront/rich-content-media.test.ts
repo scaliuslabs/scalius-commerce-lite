@@ -11,8 +11,8 @@ describe("rich content images", () => {
   it("serves renditions with srcset for optimized images", () => {
     const optimized = optimizeRichContentImages(`<img src="${photo}" alt="Freeform">`);
 
-    expect(optimized).toContain('src="https://cloud.scalius.com/media/media_photo123.png/640.webp"');
-    expect(optimized).toContain("media_photo123.png/160.webp 160w");
+    expect(optimized).toContain('src="https://cloud.scalius.com/media/media_photo123.png/735.webp"');
+    expect(optimized).toContain("media_photo123.png/144.webp 144w");
     expect(optimized).toContain("media_photo123.png/1200.webp 1200w");
     expect(optimized).toContain('loading="lazy"');
     expect(optimized).toContain('alt="Freeform"');
@@ -32,13 +32,15 @@ describe("rich content images", () => {
     expect(optimized).toContain('loading="lazy"');
   });
 
-  it("leaves images without renditions untouched", () => {
-    for (const html of [
-      '<img src="https://cloud.scalius.com/media/legacy.jpg" alt="Legacy">',
-      '<img src="https://cloud.scalius.com/cms/logo.svg" alt="Logo">',
-      '<img src="https://images.example.org/photo.jpg" alt="External">',
+  it("keeps the source of images without renditions and only loads them lazily", () => {
+    for (const [src, alt] of [
+      ["https://cloud.scalius.com/media/legacy.jpg", "Legacy"],
+      ["https://cloud.scalius.com/cms/logo.svg", "Logo"],
+      ["https://images.example.org/photo.jpg", "External"],
     ]) {
-      expect(optimizeRichContentImages(html)).toBe(html);
+      expect(optimizeRichContentImages(`<img src="${src}" alt="${alt}">`)).toBe(
+        `<img alt="${alt}" src="${src}" loading="lazy" decoding="async">`,
+      );
     }
   });
 
