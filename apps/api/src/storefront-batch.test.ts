@@ -64,7 +64,7 @@ describe("storefront read batch", () => {
   });
 
   it("carries each part's dependency proof when the reader has one", async () => {
-    const proof: StorefrontBatchPartCache = { status: "hit", s0: 7, deps: ["0123456789ab"], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 };
+    const proof: StorefrontBatchPartCache = { apiVersion: "api-test", status: "hit", s0: 7, deps: ["0123456789ab"], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 };
     const response = await serveStorefrontBatch(
       new Request(batchUrl(["/api/v1/storefront/layout", "/api/v1/checkout/config"])),
       {

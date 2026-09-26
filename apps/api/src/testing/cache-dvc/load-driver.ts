@@ -6,6 +6,7 @@
  * amplification (CACHE-DESIGN §4, §7 item 8). Lives here so it resolves the
  * API's own dependencies.
  */
+import { DVC_API_VERSION } from "./validators";
 import { eq, sql as drizzleSql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { withDependencyScope } from "@scalius/core/cache-deps";
@@ -94,7 +95,7 @@ const percentile = (values: number[], p: number) => {
   return Math.round(sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)]! * 100) / 100;
 };
 
-interface Entry { body: string; s0: number; deps: readonly string[]; validUntil: number | null; softMaxAgeSeconds: number | null; renderedAt: number }
+interface Entry { apiVersion: string; body: string; s0: number; deps: readonly string[]; validUntil: number | null; softMaxAgeSeconds: number | null; renderedAt: number }
 
 export async function runDvcLoad(context: LoadContext, options: LoadOptions): Promise<Record<string, unknown>> {
   const random = rng(options.seed);
@@ -153,7 +154,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
     await Promise.all(waits);
     return {
       status: value.status,
-      entry: { body: value.text, s0, deps: dependencies.keys, validUntil: dependencies.validUntil, softMaxAgeSeconds: dependencies.softMaxAgeSeconds, renderedAt: now },
+      entry: { apiVersion: DVC_API_VERSION, body: value.text, s0, deps: dependencies.keys, validUntil: dependencies.validUntil, softMaxAgeSeconds: dependencies.softMaxAgeSeconds, renderedAt: now },
     };
   };
 
@@ -171,7 +172,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       return partCache.delete(String(key));
     },
   };
-  const loadEnv = { ...(context.env as unknown as Record<string, unknown>), CF_VERSION_METADATA: { id: "dvc-load", tag: "", timestamp: "" } } as unknown as Env;
+  const loadEnv = { ...(context.env as unknown as Record<string, unknown>), CF_VERSION_METADATA: { id: DVC_API_VERSION, tag: "", timestamp: "" } } as unknown as Env;
 
   /** One page view through S4's strict reader: one batch, one validation statement at most. */
   const strictView = async (page: { type: string; parts: string[] }, stats: { parts: number; hits: number; misses: number }) => {

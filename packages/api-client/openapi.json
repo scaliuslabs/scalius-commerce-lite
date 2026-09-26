@@ -20686,7 +20686,7 @@
           "Storefront"
         ],
         "summary": "Read several public storefront resources in one request",
-        "description": "Answers each `r` part (the /api/v1 path and query of a public, generation-cached read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same generation-keyed cache. At most 8 parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.",
+        "description": "Answers each `r` part (the /api/v1 path and query of a public, dependency-validated read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same dependency-validated cache. At most 8 parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.",
         "parameters": [
           {
             "schema": {
@@ -20747,6 +20747,10 @@
                               "cache": {
                                 "type": "object",
                                 "properties": {
+                                  "apiVersion": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
                                   "status": {
                                     "type": "string",
                                     "enum": [
@@ -20777,6 +20781,7 @@
                                   }
                                 },
                                 "required": [
+                                  "apiVersion",
                                   "status",
                                   "s0",
                                   "deps",
@@ -65343,11 +65348,11 @@
           "Cache"
         ],
         "summary": "Refresh the storefront",
-        "description": "Starts a new public cache generation. Saves already do this; use it only after changing data outside the dashboard.",
+        "description": "Invalidates all public pages through the store dependency clock. Normal writes invalidate their affected data automatically.",
         "operationId": "dashboard.cache.purge_all",
         "responses": {
           "200": {
-            "description": "New public cache generation started",
+            "description": "Public store dependency advanced",
             "content": {
               "application/json": {
                 "schema": {
@@ -242089,7 +242094,7 @@
           "Admin - Catalog"
         ],
         "summary": "Rebuild the catalogue listing projections",
-        "description": "Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the public cache generation is bumped once the last product is covered. Stock and checkout are unaffected.",
+        "description": "Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the database triggers invalidate rebuilt rows. Stock and checkout are unaffected.",
         "requestBody": {
           "required": true,
           "content": {

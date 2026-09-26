@@ -12,7 +12,7 @@ import { ok } from "../utils/api-response";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { getOptionalExecutionContext } from "../utils/cache-generation";
+import { getOptionalExecutionContext } from "../utils/execution-context";
 import { isWithinRateLimit } from "../utils/rate-limit";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 export const META_CAPI_BROWSER_CIRCUIT_KEY =

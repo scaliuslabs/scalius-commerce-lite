@@ -5,14 +5,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { saveAllowedCountries } from "@scalius/core/modules/settings";
 import { businessSettingsRoutes } from "./business";
 
@@ -54,7 +46,7 @@ function businessInfo(): Record<string, string> | null {
 describe("Business email route boundary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   });
 
   it("rejects a malformed email and a junk phone together, each against its field, without writing", async () => {
@@ -64,7 +56,7 @@ describe("Business email route boundary", () => {
     expect(response.status).toBe(400);
     expect(body.error?.details?.issues?.map((issue) => issue.path.join("."))).toEqual(["email", "phone"]);
     expect(businessInfo()).toBeNull();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([
@@ -110,7 +102,7 @@ describe("Business email route boundary", () => {
 
     expect(response.status).toBe(200);
     expect(businessInfo()).toMatchObject({ email: expectedEmail, companyName: "" });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+
   });
 
   it("keeps omitted fields when saving others", async () => {

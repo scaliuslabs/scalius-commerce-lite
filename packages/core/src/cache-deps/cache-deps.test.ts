@@ -11,7 +11,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   CACHE_DEP_ENTRY_KEY_BUDGET,
   CACHE_DEP_EXEMPT_TABLES,
-  CACHE_DEP_SOFT_MAX_AGE_SECONDS,
   CACHE_DEP_TABLES,
   cacheDep,
   categoryScope,
@@ -229,14 +228,15 @@ describe("coverage fallback", { timeout: 30_000 }, () => {
     expect(resolution.keys).toEqual(["store", "t:hero_sliders"]);
   });
 
-  it("exempt tables need no key; soft tables bound the soft max age", async () => {
+  it("projection reads require hard keys and never impose an age limit", async () => {
     const { db } = createSqliteD1Database();
     const { dependencies } = await withDependencyScope(async () => {
       await db.select({ id: productRecommendations.recommendedProductId }).from(productRecommendations).all();
+      deps.recommendations("source");
       deps.products(["prod_a", null, "prod_b", undefined, ""]);
     }, silent);
-    expect(dependencies.keys).toEqual(["p:prod_a", "p:prod_b", "store"]);
-    expect(dependencies.softMaxAgeSeconds).toBe(CACHE_DEP_SOFT_MAX_AGE_SECONDS);
+    expect(dependencies.keys).toEqual(["p:prod_a", "p:prod_b", "rec:source", "store"]);
+    expect(dependencies.softMaxAgeSeconds).toBeNull();
     expect(dependencies.coarseTables).toEqual([]);
 
     const privateOnly = resolveCacheDependencies({ declared: [], tables: ["customers", "cache_clock"] });

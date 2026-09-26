@@ -5,7 +5,7 @@ import { getEmiSettings, saveEmiSettings } from "@scalius/core/modules/settings"
 import { EMI_MAX_FEE_BPS, EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "@scalius/shared/emi";
 
 import { ok } from "../../../utils/api-response";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -69,7 +69,7 @@ app.openapi(saveEmiRoute, async (c) => {
   const { expectedRevision, ...input } = c.req.valid("json");
   const saved = await saveEmiSettings(c.get("db"), input, expectedRevision);
   // Product pages show the EMI line.
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 

@@ -22,7 +22,6 @@ import { NotFoundError, ConflictError } from "../utils/api-error";
 import { ok, created, noContent } from "../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../schemas/responses";
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
-import { bumpCacheGeneration } from "../utils/cache-generation";
 
 /** The batch guard for an update: the language still exists at the revision the editor loaded. */
 const CHECKOUT_LANGUAGE_REVISION_GUARD = "CHECKOUT_LANGUAGE_REVISION_GUARD";
@@ -473,7 +472,6 @@ adminApp.openapi(createRoute2, async (c) => {
     rethrowCheckoutLanguageConstraint(error);
   }
 
-  await bumpCacheGeneration(c);
   return created(c, {
     language: insertedLanguage
       ? {
@@ -633,7 +631,7 @@ adminApp.openapi(updateRoute, async (c) => {
     if (!current) throw new NotFoundError("Not found");
     throw conflict(current.revision);
   }
-  await bumpCacheGeneration(c);
+
   return ok(c, {
     language: {
       ...updated,
@@ -675,7 +673,7 @@ adminApp.openapi(softDeleteRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!trashed) throw new NotFoundError("Not found");
-  await bumpCacheGeneration(c);
+
   return ok(c, {});
 });
 
@@ -704,7 +702,7 @@ adminApp.openapi(hardDeleteRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!deleted) throw new NotFoundError("Not found");
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -737,7 +735,7 @@ adminApp.openapi(restoreRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!restored) throw new NotFoundError("Not found");
-  await bumpCacheGeneration(c);
+
   return ok(c, {});
 });
 

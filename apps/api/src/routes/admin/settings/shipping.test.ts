@@ -4,12 +4,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn() }));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { shippingMethodsSettingsRoutes } from "./shipping";
 import { shippingMethodRoutes } from "../../shipping-methods";
 
@@ -22,7 +16,7 @@ function createTestApp() {
       ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1);
   `);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -50,11 +44,10 @@ const insideDhaka = {
 describe("delivery zone settings API", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("saves a zone, bumps the cache generation and returns it in major units", async () => {
+  it("saves a zone, returns it in major units", async () => {
     const { send } = createTestApp();
     const created = await send("POST", "/admin/settings/shipping-methods", insideDhaka);
     expect(created.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
 
     const list = await (await send("GET", "/admin/settings/shipping-methods")).json() as {
       data: { zones: Array<{ name: string; locations: Array<{ id: string }>; rates: Array<{ fee: number; freeOver: number }> }> };
@@ -74,7 +67,7 @@ describe("delivery zone settings API", () => {
     const body = JSON.stringify(await response.json());
     expect(body).toContain("Taka amounts are whole numbers.");
     expect(body).toContain("fee");
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("answers a huge charge with a 400 naming the field, never a 500", async () => {
@@ -85,7 +78,7 @@ describe("delivery zone settings API", () => {
     });
     expect(response.status).toBe(400);
     expect(JSON.stringify(await response.json())).toContain("Enter a charge up to 1,00,000.");
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("rejects a stale zone save with 409", async () => {

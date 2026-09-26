@@ -36,6 +36,14 @@
 export const CACHE_DEP_KINDS = [
   /** `p:<productId>`: any buyer-visible fact of one product (page, card, JSON-LD, feed row). */
   "p",
+  /** Stored recommendation ordering of one source product. */
+  "rec",
+  /** Visible sold count of one product, independent of its card identity. */
+  "sold",
+  /** Popular home-list membership and ordering. */
+  "popular",
+  /** Private order signals used only by the live recommendation fallback. */
+  "recommendation-signals",
   /** `lm:<scope>`: membership (and newest order) of a public product set; `lm:seo` the sitemap/feed flags and lastmods; `lm:shape` the store-shape counts. */
   "lm",
   /** `lo:<facet>:<scope>`: an ordering/filter fact of a member (price, band, discount, name). */
@@ -103,11 +111,12 @@ export const CACHE_DEP_ANY = "*";
 /** An entry holding more keys than this collapses each kind to its coarse `t:` keys. */
 export const CACHE_DEP_ENTRY_KEY_BUDGET = 256;
 
-/** Soft-ordering staleness bound (owner decision 4), seconds. */
-export const CACHE_DEP_SOFT_MAX_AGE_SECONDS = 600;
-
 export const cacheDep = {
   product: (productId: string) => `p:${productId}`,
+  recommendations: (productId: string) => `rec:${productId}`,
+  sold: (productId: string) => `sold:${productId}`,
+  popular: () => "popular",
+  recommendationSignals: () => "recommendation-signals",
   listMembership: (scope: CacheDepScope) => `lm:${scope}`,
   /** Sitemap and product-feed facts: noindex/exclusion flags and every sitemap lastmod. */
   discoveryMembership: () => "lm:seo",
@@ -160,7 +169,8 @@ export function isCacheDep(dep: string): boolean {
   const kind = cacheDepKind(dep);
   if (kind === null || !KEY_PATTERN.test(dep)) return false;
   const constant = kind === "srch" || kind === "theme" || kind === "hero" || kind === "ship"
-    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "store";
+    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "store"
+    || kind === "popular" || kind === "recommendation-signals";
   return constant ? dep === kind : dep.length > kind.length + 1;
 }
 
@@ -629,6 +639,39 @@ const CACHE_DEP_TABLE_RULES = {
       keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
     })),
   },
+  product_recommendations: {
+    kinds: ["rec"], noise: ["computed_at"],
+    rules: everyChange([{ prefix: "rec:", columns: ["product_id"] }]),
+  },
+  product_sales_stats: {
+    kinds: ["sold", "popular"], noise: ["computed_at"],
+    // Match card-facts.CARD_SOLD_MIN (10) and home-lists.MIN_POPULAR_UNITS (2).
+    // A hidden count changing below a threshold does not affect that surface.
+    rules: [
+      ...everyChange([{ prefix: "sold:", columns: ["product_id"] }]).map((rule) => ({
+        ...rule, name: `sold_${rule.name}`, where: { exists: "SELECT 1 WHERE R.sold_30d >= 10" },
+      })),
+      ...everyChange([{ dep: "popular" }]).map((rule) => ({
+        ...rule, name: `popular_${rule.name}`, where: { exists: "SELECT 1 WHERE R.sold_30d >= 2" },
+      })),
+    ],
+  },
+  orders: {
+    kinds: ["recommendation-signals"], noise: [],
+    note: "Only live fallback ranking reads private order signals; no order or buyer identifier enters a dependency key.",
+    rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
+      ...rule,
+      ...(rule.event === "update" ? { changed: ["id", "status", "customer_phone", "created_at", "deleted_at"] } : {}),
+      where: { exists: "SELECT 1 WHERE R.deleted_at IS NULL AND R.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')" },
+    })),
+  },
+  order_items: {
+    kinds: ["recommendation-signals"], noise: [],
+    rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
+      ...rule,
+      ...(rule.event === "update" ? { changed: ["product_id", "order_id"] } : {}),
+    })),
+  },
 } as const satisfies Record<string, CacheDepTableSpec>;
 
 export type CacheDepTable = keyof typeof CACHE_DEP_TABLE_RULES;
@@ -648,37 +691,18 @@ export const CACHE_DEP_TABLES: Readonly<Record<CacheDepTable, CacheDepTableSpec>
 // ---------------------------------------------------------------------------
 
 const PRIVATE = "Private or operational: never read by a public cached route.";
-const SOFT = `Soft ordering only (owner decision 4): recommendation and popularity order may lag up to ${CACHE_DEP_SOFT_MAX_AGE_SECONDS / 60} minutes; every card shown is its own hard p: key. Readers bound it with a soft max age, not a trigger.`;
 const DERIVED_STOCK = "Stock ledger: its buyer-visible effect is the SKU band on product_variants and product_buyer_state, which are registered.";
 const DRAFTS = "Dashboard drafts, history or sessions: public reads use the published row, which is registered.";
 const MACHINERY = "Cache machinery itself.";
 const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
 
-/**
- * Soft-ordering tables (owner decision 4): a read of them never gets a hard
- * key or the `t:` fallback; the reader bounds its staleness with
- * `CACHE_DEP_SOFT_MAX_AGE_SECONDS`. Each is also in `CACHE_DEP_EXEMPT_TABLES`.
- */
-export const CACHE_DEP_SOFT_TABLES = [
-  "product_recommendations",
-  "product_sales_stats",
-  "orders",
-  "order_items",
-] as const;
-
-export type CacheDepSoftTable = (typeof CACHE_DEP_SOFT_TABLES)[number];
-
-export function isCacheDepSoftTable(table: string): table is CacheDepSoftTable {
-  return (CACHE_DEP_SOFT_TABLES as readonly string[]).includes(table);
-}
+/** No table uses age-based freshness; retained for recording API compatibility. */
+export const CACHE_DEP_SOFT_TABLES: readonly string[] = [];
+export type CacheDepSoftTable = never;
+export function isCacheDepSoftTable(_table: string): _table is CacheDepSoftTable { return false; }
 
 /** Tables a public read may touch (or that exist) without a key of their own, with the reason. */
 export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
-  // Soft ordering.
-  product_recommendations: SOFT,
-  product_sales_stats: SOFT,
-  orders: `${SOFT} (also-bought fallback reads orders).`,
-  order_items: `${SOFT} (also-bought fallback reads order lines).`,
   // Derived or machinery.
   products_fts: FTS,
   categories_fts: FTS,

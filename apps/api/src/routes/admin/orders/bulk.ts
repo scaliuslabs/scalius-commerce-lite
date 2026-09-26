@@ -11,7 +11,7 @@ import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilm
 import { ok, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
@@ -114,15 +114,6 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const results = await bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
     const newlyShippedResults = results.filter(isNewShipmentResult);
-    const availabilityTransitionVariantIds = results.flatMap((result) =>
-        "availabilityTransitionVariantIds" in result
-        && Array.isArray(result.availabilityTransitionVariantIds)
-            ? result.availabilityTransitionVariantIds
-            : [],
-    );
-    if (availabilityTransitionVariantIds.length > 0) {
-        await bumpCacheGeneration(c);
-    }
     const responseResults = results.map((result) => {
         const {
             availabilityTransitionVariantIds: _internalCacheSignal,
@@ -205,13 +196,8 @@ app.openapi(bulkConfirmRoute, async (c) => {
     const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const results = await bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
-    let bumped = false;
     for (const result of results) {
         if (!result.success || !result.update) continue;
-        if (!bumped && result.update.availabilityTransitionVariantIds.length > 0) {
-            await bumpCacheGeneration(c);
-            bumped = true;
-        }
         const notification = result.update.notification;
         if (notification) {
             await enqueueOrderNotificationMessage({
@@ -263,9 +249,7 @@ app.openapi(bulkFulfillRoute, async (c) => {
     const { orderIds, courierName, note, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const results = await bulkFulfillOrders(db, orderIds, { courierName, note, requestKey });
-    if (results.some((result) => (result.shipment?.availabilityTransitionVariantIds.length ?? 0) > 0)) {
-        await bumpCacheGeneration(c);
-    }
+
     for (const result of results) {
         if (!result.success || !result.shipment) continue;
         await recordOrderEvent(db, {

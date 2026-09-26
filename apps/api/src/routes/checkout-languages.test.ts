@@ -2,14 +2,6 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
-}));
-
-vi.mock("../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { checkoutLanguageRoutes, publicCheckoutLanguageRoutes } from "./checkout-languages";
 
 const languageRecord = {
@@ -85,7 +77,7 @@ function createTestApp(options: {
   });
   app.route("/checkout-languages", publicCheckoutLanguageRoutes);
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   return { app, env, batch, insertReturning, updateReturning, updateSet, deleteReturning };
 }
 
@@ -236,7 +228,7 @@ describe("checkout language route boundaries", () => {
     ).toBe(10);
   });
 
-  it("invalidates checkout and layout caches after admin checkout-language saves", async () => {
+  it("returns success after admin checkout-language saves", async () => {
     const { app, env, batch } = createTestApp();
 
     const response = await app.request(
@@ -259,8 +251,7 @@ describe("checkout language route boundaries", () => {
     expect(response.status).toBe(201);
     expect(batch).toHaveBeenCalledTimes(1);
     expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("promotes an updated active/default language in one atomic batch", async () => {
@@ -333,14 +324,14 @@ describe("checkout language route boundaries", () => {
     ["PATCH", "/api/v1/admin/settings/checkout-languages/missing"],
     ["DELETE", "/api/v1/admin/settings/checkout-languages/missing"],
     ["POST", "/api/v1/admin/settings/checkout-languages/missing/restore"],
-  ])("returns 404 and skips invalidation when %s targets a missing language", async (method, path) => {
+  ])("returns 404 when %s targets a missing language", async (method, path) => {
     const { app, env } = createTestApp({ mutationRows: [] });
 
     const response = await app.request(path, { method }, env);
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ message: "Not found" });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("returns a conflict when a concurrent promotion reaches the unique fence", async () => {
@@ -368,6 +359,6 @@ describe("checkout language route boundaries", () => {
     expect(await response.json()).toEqual({
       message: "Another checkout language selection was saved at the same time. Reload and try again.",
     });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 });

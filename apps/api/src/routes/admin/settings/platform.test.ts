@@ -8,17 +8,13 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getPlatformSettingsDocument: vi.fn(),
   savePlatformSettings: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/platform")>()),
   getPlatformSettingsDocument: mocks.getPlatformSettingsDocument,
   savePlatformSettings: mocks.savePlatformSettings,
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { platformSettingsRoutes } from "./platform";
@@ -52,7 +48,6 @@ function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined 
 
   mocks.getPlatformSettingsDocument.mockResolvedValue({ value: STORED, revision: 4 });
   mocks.savePlatformSettings.mockResolvedValue({ value: STORED, revision: 5 });
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -146,7 +141,7 @@ describe("admin platform settings", () => {
   });
 
   describe("PUT /api/v1/admin/settings/platform", () => {
-    it("saves a partial patch through the platform cache and bumps the store cache generation", async () => {
+    it("saves a partial patch through the platform cache", async () => {
       const { app, env, db, cache } = createTestApp();
       const saved = {
         ...STORED,
@@ -166,8 +161,7 @@ describe("admin platform settings", () => {
         apiUrl: "https://api.example.com",
         mediaUrl: "https://cdn.example.com",
       }, cache, { expectedRevision: 4 });
-      expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
-      );
+
       // The response reflects the persisted state, not the request-time env.
       await expect(response.json()).resolves.toEqual({
         success: true,
@@ -249,10 +243,10 @@ describe("admin platform settings", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.savePlatformSettings).not.toHaveBeenCalled();
-      expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 
-    it("surfaces service validation errors as 400 and skips cache invalidation", async () => {
+    it("surfaces service validation errors as 400 and skips write behavior", async () => {
       const { app, env } = createTestApp();
       mocks.savePlatformSettings.mockRejectedValueOnce(
         new ValidationError("API URL must be an HTTPS origin without credentials, path, query, or fragment. HTTP is limited to loopback development."),
@@ -264,7 +258,7 @@ describe("admin platform settings", () => {
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
       expect(body.error.message).toContain("API URL must be an HTTPS origin");
-      expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
   });
 });

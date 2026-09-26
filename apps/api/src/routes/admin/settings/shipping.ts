@@ -14,11 +14,9 @@ import { getCurrencyConfig, readStoreCurrency } from "@scalius/core/modules/sett
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 // Delivery zones and their rates. Rates are checkout data and feed
-// Product/Offer JSON-LD on cached pages, so every write bumps the store cache
-// generation after it commits.
+// Product/Offer JSON-LD on cached pages; database triggers advance dependencies.
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const TAGS = ["Admin - Delivery Zones"];
@@ -115,7 +113,7 @@ const createZoneRoute = createRoute({
 app.openapi(createZoneRoute, async (c) => {
     const db = c.get("db");
     const result = await createDeliveryZone(db, c.req.valid("json"), await readStoreCurrency(db));
-    await bumpCacheGeneration(c);
+
     return created(c, result);
 });
 
@@ -142,7 +140,7 @@ app.openapi(everywhereElseRoute, async (c) => {
     const db = c.get("db");
     const { rates, expectedRevision } = c.req.valid("json");
     const result = await updateEverywhereElseRates(db, rates, expectedRevision, await readStoreCurrency(db));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -176,7 +174,7 @@ app.openapi(templateRoute, async (c) => {
     const db = c.get("db");
     const { template, expectedRevision } = c.req.valid("json");
     await applyDeliveryZoneTemplate(db, template, expectedRevision, await readStoreCurrency(db));
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -205,7 +203,7 @@ app.openapi(updateZoneRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision, ...zone } = c.req.valid("json");
     const result = await updateDeliveryZone(db, id, zone, expectedRevision, await readStoreCurrency(db));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -225,7 +223,7 @@ const deleteZoneRoute = createRoute({
 app.openapi(deleteZoneRoute, async (c) => {
     const db = c.get("db");
     await deleteDeliveryZone(db, c.req.valid("param").id);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 

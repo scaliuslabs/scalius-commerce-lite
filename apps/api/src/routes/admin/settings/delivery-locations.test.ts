@@ -4,12 +4,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn() }));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { adminLocationRoutes } from "./delivery-locations";
 import { shippingMethodsSettingsRoutes } from "./shipping";
 
@@ -28,7 +22,7 @@ function createTestApp() {
     INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_else', 'Standard', 6000, 1);
   `);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -75,12 +69,11 @@ describe("deleting a delivery location", () => {
       rates: [{ name: "Nagar delivery", fee: 80, isActive: true }],
     });
     expect(zone.status).toBe(201);
-    mocks.bumpCacheGeneration.mockClear();
 
     const response = await send("DELETE", "/delivery-locations/nagar");
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
     expect(live()).toEqual(["dhaka", "mirpur"]);
     const zones = await (await send("GET", "/shipping-methods")).json() as { data: { zones: Array<{ locations: unknown[] }> } };
     expect(zones.data.zones[0]!.locations).toEqual([]);
@@ -101,7 +94,7 @@ describe("deleting a delivery location", () => {
     const response = await send("DELETE", "/delivery-locations/dhaka");
     expect(response.status).toBe(400);
     expect(live()).toEqual(["dhaka", "mirpur"]);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
   });
 });
 

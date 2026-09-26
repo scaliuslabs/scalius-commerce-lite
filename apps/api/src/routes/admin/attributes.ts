@@ -36,8 +36,8 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { attributeSchema } from "../../schemas/entities";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
-import { adminAttributesTypedRoutes, bumpAfterFailedBatches, projectionRefresh } from "./attributes-typed";
+
+import { adminAttributesTypedRoutes, projectionRefresh } from "./attributes-typed";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 // Typed-attribute routes (groups, value vocabulary, conversion, category
 // sets) register first so their literal segments win over `/{id}` routes.
@@ -171,7 +171,7 @@ app.openapi(createAttributeRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAttribute(db, data);
-    await bumpCacheGeneration(c);
+
     return created(c, result);
 });
 
@@ -201,8 +201,8 @@ app.openapi(updateAttributeRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    const result = await bumpAfterFailedBatches(c, () => updateAttribute(db, id, data, projectionRefresh(db)));
-    await bumpCacheGeneration(c);
+    const result = await updateAttribute(db, id, data, projectionRefresh(db));
+
     return ok(c, result);
 });
 
@@ -228,7 +228,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteAttribute(db, id);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -253,7 +253,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteAttribute(db, id);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -278,7 +278,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
     await bulkDeleteAttributes(db, ids, permanent);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -303,7 +303,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkRestoreAttributes(db, ids);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -332,7 +332,7 @@ app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreAttribute(db, id);
-    await bumpCacheGeneration(c);
+
     return ok(c, { message: "Attribute restored" });
 });
 
@@ -417,7 +417,7 @@ app.openapi(addValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
     await addAttributeValue(db, attributeId, value);
-    await bumpCacheGeneration(c);
+
     return ok(c, {});
 });
 
@@ -447,8 +447,8 @@ app.openapi(updateValueRoute, async (c) => {
     const db = c.get("db");
     const { id: attributeId } = c.req.valid("param");
     const { oldValue, newValue } = c.req.valid("json");
-    await bumpAfterFailedBatches(c, () => renameAttributeValue(db, attributeId, oldValue, newValue, projectionRefresh(db)));
-    await bumpCacheGeneration(c);
+    await renameAttributeValue(db, attributeId, oldValue, newValue, projectionRefresh(db));
+
     return ok(c, {
         message: `Value "${oldValue}" renamed to "${newValue}"`
     });
@@ -479,8 +479,8 @@ app.openapi(deleteValueRoute, async (c) => {
     const db = c.get("db");
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
-    await bumpAfterFailedBatches(c, () => deleteAttributeValue(db, attributeId, value, projectionRefresh(db)));
-    await bumpCacheGeneration(c);
+    await deleteAttributeValue(db, attributeId, value, projectionRefresh(db));
+
     return ok(c, {
         message: `Value "${value}" deleted from all products`
     });

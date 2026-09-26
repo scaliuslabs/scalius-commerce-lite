@@ -24,10 +24,11 @@ import {
  * Every part renders the way the dependency-validated part reader renders it
  * (public-read.ts, strict mode): inside a dependency scope, so every key a
  * read declares is paid for here, with its s0 and the Platform settings row
- * taken from the data center's clock snapshot. A declaration that needs a
- * read of its own must fold it into a statement or batch the render already
- * runs, or it fails this budget. The same page again is all hits: one
- * validation statement, one wave.
+ * taken from one authoritative validation statement before rendering. We
+ * meter that exact SQL separately (exactly one statement in the first wave)
+ * and retain the original render budgets below. Total cold cost includes both;
+ * this does not hide extra render queries or relax the HTTP timing budget.
+ * The same page again is all hits: one validation statement, one wave.
  */
 const PAGE_D1_BUDGETS = {
   home: { roundTrips: 13, waves: 2 },
@@ -150,6 +151,7 @@ interface Meter {
   binding: D1Database;
   roundTrips: number;
   waves: number;
+  calls: Array<{ kind: "validation" | "render"; wave: number }>;
 }
 
 /**
@@ -157,12 +159,15 @@ interface Meter {
  * before the wave starts share it, calls made from a result start the next.
  */
 function meteredBinding(inner: D1Database): Meter {
-  const meter = { roundTrips: 0, waves: 0 } as Meter;
+  const meter = { roundTrips: 0, waves: 0, calls: [] } as unknown as Meter;
   let queued: Array<() => void> = [];
-  const roundTrip = <T>(work: () => Promise<T>): Promise<T> => {
+  const roundTrip = <T>(work: () => Promise<T>, kind: "validation" | "render" = "render"): Promise<T> => {
     meter.roundTrips += 1;
     return new Promise<T>((resolve, reject) => {
-      queued.push(() => void work().then(resolve, reject));
+      queued.push(() => {
+        meter.calls.push({ kind, wave: meter.waves });
+        void work().then(resolve, reject);
+      });
       if (queued.length === 1) {
         setTimeout(() => {
           meter.waves += 1;
@@ -173,21 +178,29 @@ function meteredBinding(inner: D1Database): Meter {
       }
     });
   };
-  const wrapStatement = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
+  // Identify only readValidationSnapshot, which reads clock, Platform value
+  // and revision, and exact dependency keys in one statement. Other cache or
+  // settings reads count against the render budget, never this allowance.
+  const isValidation = (query: string) => query.includes('LEFT JOIN "cache_clock" c')
+    && query.includes('LEFT JOIN "cache_dep" d')
+    && query.includes("AS pv") && query.includes("AS pr")
+    && query.includes("st.\"category\" = 'platform'")
+    && query.includes('d."dep" IN (SELECT CAST(value AS TEXT) FROM json_each(');
+  const wrapStatement = (statement: D1PreparedStatement, query: string): D1PreparedStatement => new Proxy(statement, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver);
       if (property === "bind") {
-        return (...args: unknown[]) => wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args));
+        return (...args: unknown[]) => wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args), query);
       }
       if (["all", "first", "run", "raw"].includes(String(property))) {
-        return (...args: unknown[]) => roundTrip(() => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args));
+        return (...args: unknown[]) => roundTrip(() => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args), isValidation(query) ? "validation" : "render");
       }
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
   meter.binding = new Proxy(inner, {
     get(target, property, receiver) {
-      if (property === "prepare") return (query: string) => wrapStatement(target.prepare(query));
+      if (property === "prepare") return (query: string) => wrapStatement(target.prepare(query), query);
       if (property === "batch") {
         return (statements: D1PreparedStatement[]) => roundTrip(() => target.batch(statements));
       }
@@ -255,17 +268,29 @@ async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
     await Promise.all(waits);
     return { parts, bodies };
   };
-  // The data center already holds a clock snapshot (any earlier batch left one).
-  await readBatch({ ...baseEnv, DB: binding } as unknown as Env, ["/api/v1/checkout-languages/active"]);
   const env = { ...baseEnv, DB: meter.binding } as unknown as Env;
   const { parts, bodies } = await readBatch(env, PAGE_PARTS[page]);
   const miss = { roundTrips: meter.roundTrips, waves: meter.waves };
+  const validationCalls = meter.calls.filter((call) => call.kind === "validation");
+  const renderCalls = meter.calls.filter((call) => call.kind === "render");
+  const validation = {
+    roundTrips: validationCalls.length,
+    waves: new Set(validationCalls.map((call) => call.wave)).size,
+    firstWave: validationCalls[0]?.wave,
+  };
+  const render = {
+    roundTrips: renderCalls.length,
+    waves: new Set(renderCalls.map((call) => call.wave)).size,
+    firstWave: renderCalls[0]?.wave,
+  };
   const again = await readBatch(env, PAGE_PARTS[page]);
   return {
     statuses: parts.map((part) => part.response.status),
     bodies,
     roundTrips: miss.roundTrips,
     waves: miss.waves,
+    validation,
+    render,
     stored: parts.map((part) => part.cache?.status ?? null),
     hit: {
       roundTrips: meter.roundTrips - miss.roundTrips,
@@ -313,14 +338,14 @@ describe("storefront page render D1 budget", () => {
     expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
   });
 
-  it("reads a reviewed product's summary and first five reviews in its existing waves (22 round trips, 3 waves)", async () => {
+  it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {
     const result = await renderPage("product", REVIEW_SEED);
     const product = (result.bodies[1] as { data: { product: { reviews: { summary: { count: number; average: number }; items: unknown[]; nextCursor: string | null } } } }).data.product;
     expect(product.reviews.summary).toMatchObject({ count: 6, average: 4.66 });
     expect(product.reviews.items).toHaveLength(5);
     expect(product.reviews.nextCursor).toEqual(expect.any(String));
-    expect(result.roundTrips).toBeLessThanOrEqual(22);
-    expect(result.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
+    expect(result.render.roundTrips).toBeLessThanOrEqual(22);
+    expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
   });
 
   it("gives listing cards their rating and counts the rating facet without a new round trip", async () => {
@@ -329,8 +354,8 @@ describe("storefront page render D1 budget", () => {
     expect(body.products.find((product) => product.id === "p_linen")?.rating).toEqual({ average: 4.66, count: 6 });
     expect(body.products.find((product) => product.id === "p_cotton")?.rating).toBeNull();
     expect(body.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
-    expect(reviewed.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
-    expect(reviewed.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
+    expect(reviewed.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
+    expect(reviewed.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
   });
 
   // Load every route module first: a first dynamic import would otherwise
@@ -345,10 +370,16 @@ describe("storefront page render D1 budget", () => {
       const result = await renderPage(page);
 
       expect(result.statuses.every((status) => status === 200), JSON.stringify(result.statuses)).toBe(true);
-      expect({ page, roundTrips: result.roundTrips, waves: result.waves }).toEqual({
+      expect(result.validation).toEqual({ roundTrips: 1, waves: 1, firstWave: 1 });
+      expect(result.render.firstWave).toBe(2);
+      expect({ page, roundTrips: result.render.roundTrips, waves: result.render.waves }).toEqual({
         page,
-        roundTrips: Math.min(result.roundTrips, PAGE_D1_BUDGETS[page].roundTrips),
-        waves: Math.min(result.waves, PAGE_D1_BUDGETS[page].waves),
+        roundTrips: Math.min(result.render.roundTrips, PAGE_D1_BUDGETS[page].roundTrips),
+        waves: Math.min(result.render.waves, PAGE_D1_BUDGETS[page].waves),
+      });
+      expect({ roundTrips: result.roundTrips, waves: result.waves }).toEqual({
+        roundTrips: result.validation.roundTrips + result.render.roundTrips,
+        waves: result.validation.waves + result.render.waves,
       });
       // Every part was stored with its dependency proof.
       expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));

@@ -4,13 +4,13 @@
  * browser LCP/CLS on a phone (390 px, slow 4G, 4x CPU) and a desktop profile.
  *
  *   node scripts/storefront-perf.mjs --base http://localhost:4391 \
- *     --kv-explorer http://localhost:8811 [--json] [--runs 3]
+ *     --d1-explorer http://localhost:8811 [--json] [--runs 3]
  *
  * Hit TTFB is judged at the edge: against a remote base the round trip of
  * the edge's own /cdn-cgi/trace on the same connection is subtracted.
- * Read-only: only GET requests. `--kv-explorer` (local wrangler only) points
- * at the API's local explorer so a cache miss can be forced by writing a fresh
- * `cache:generation`; without it the first request of each page is reported
+ * GET-only unless `--d1-explorer` points at a local Wrangler API explorer.
+ * That option atomically advances the local store dependency and clock;
+ * without it the first request of each page is reported
  * as "first" (miss or hit, whatever the edge had) and the rest as hits.
  * Pages default to home, the first category and product linked from home,
  * a search, and the cart. Exit code 1 when any budget is exceeded.
@@ -19,10 +19,11 @@
  * (`--media-url <origin>` also checks media; `--no-binding-check` skips it).
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { stripJsonc } from "./check-worker-env.mjs";
 import { verifyStorefrontBinding } from "./dev-ports.mjs";
 
 /** Budgets (ms) the check enforces. Miss budgets hold for a local stack. */
@@ -64,7 +65,7 @@ export function median(values) {
  * renders, such as a signed-in cart, is held to the miss budget on every hit).
  */
 export function evaluateBudgets(row, budgets = DEFAULT_BUDGETS) {
-  const failures = [];
+  const failures = [...(row.measurementFailures ?? [])];
   const over = (label, value, limit) => {
     if (Number.isFinite(value) && value > limit) failures.push(`${row.path}: ${label} ${value} > ${limit}`);
   };
@@ -90,8 +91,8 @@ export function discoverPaths(homeHtml) {
   return ["/", category, product, "/search?q=a", "/cart"].filter(Boolean);
 }
 
-function parseArgs(argv) {
-  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, kvExplorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false, mediaUrl: null, bindingCheck: true };
+export function parseArgs(argv) {
+  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, d1Explorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false, mediaUrl: null, bindingCheck: true };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const next = () => argv[++i];
@@ -103,7 +104,8 @@ function parseArgs(argv) {
     else if (flag === "--no-binding-check") args.bindingCheck = false;
     else if (flag === "--profiles") args.profiles = next().split(",").filter((p) => p in PROFILES);
     else if (flag === "--paths") args.paths = next().split(",").filter(Boolean);
-    else if (flag === "--kv-explorer") args.kvExplorer = next().replace(/\/$/, "");
+    else if (flag === "--d1-explorer") args.d1Explorer = next().replace(/\/$/, "");
+    else if (flag === "--kv-explorer") throw new Error("--kv-explorer is retired: use --d1-explorer for the local dependency cache");
     else if (flag === "--cdp-port") args.cdpPort = Number(next());
     else if (flag.startsWith("--budget-")) {
       const key = flag.slice("--budget-".length).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -114,12 +116,70 @@ function parseArgs(argv) {
   return args;
 }
 
-const CACHE_KV_NAMESPACE = "d6e2d77d898e4b3f9c186802ce63f9b8";
+/** Refuse remote origins, credentials, paths and redirects before any write. */
+export function assertLocalInvalidation(base, explorer) {
+  if (!isLocalBase(base) || !isLocalBase(explorer)) {
+    throw new Error("--d1-explorer requires loopback-only storefront and explorer origins");
+  }
+}
 
-async function forceMiss(kvExplorer) {
-  const url = `${kvExplorer}/cdn-cgi/local/explorer/api/storage/kv/namespaces/${CACHE_KV_NAMESPACE}/values/cache:generation`;
-  const response = await fetch(url, { method: "PUT", body: `perf${Date.now().toString(36)}` });
-  if (!response.ok) throw new Error(`could not write the local cache generation (${response.status})`);
+export function localDatabaseId() {
+  const config = JSON.parse(stripJsonc(readFileSync(new URL("../apps/api/wrangler.local.jsonc", import.meta.url), "utf8")));
+  const id = config.d1_databases?.find((db) => db.binding === "DB")?.database_id;
+  if (!id) throw new Error("Local API config has no DB database_id");
+  return id;
+}
+
+// The cache_dep clock triggers advance cache_clock in the SAME statement.
+// Explorer's `batch` is a sequential loop, not an atomic D1 batch.
+export const FORCE_MISS_SQL = `INSERT INTO cache_dep (dep, seq)
+SELECT 'store', seq + 1 FROM cache_clock WHERE id = 1
+ON CONFLICT (dep) DO UPDATE SET seq = excluded.seq RETURNING seq`;
+
+export async function forceMiss(base, explorer, fetcher = fetch) {
+  assertLocalInvalidation(base, explorer);
+  const url = `${explorer}/cdn-cgi/local/explorer/api/d1/database/${encodeURIComponent(localDatabaseId())}/raw`;
+  const response = await fetcher(url, {
+    method: "POST", redirect: "error", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql: FORCE_MISS_SQL }),
+  });
+  if (!response.ok) throw new Error(`Could not advance the local store dependency (${response.status})`);
+  const payload = await response.json();
+  const result = payload.result?.[0];
+  const column = result?.results?.columns?.indexOf("seq") ?? -1;
+  const seq = result?.results?.rows?.[0]?.[column];
+  if (payload.success !== true || result?.success !== true || !Number.isSafeInteger(seq) || seq < 1) {
+    throw new Error("Local dependency invalidation returned no valid commit sequence");
+  }
+  return seq;
+}
+
+/** Only the first timed request carries the hint; the shared key stays canonical. */
+export function withSeenSeq(url, seq) {
+  const hinted = new URL(url);
+  hinted.searchParams.set("_sv", String(seq));
+  return hinted.href;
+}
+
+/** Never mix a render into hit latency or infer a miss from the requested action. */
+export function classifyTimings(path, first, samples, forced, rtt = 0) {
+  const isMiss = (sample) => sample.cache === "MISS" || sample.cache === "REFRESH";
+  const hits = samples.filter((sample) => sample.cache === "HIT" && sample.status === 200);
+  const cacheable = hits.length > 0 || isMiss(first) || first.cache === "HIT";
+  const failures = [];
+  if (forced && (cacheable || !/^(BYPASS(?:_|$)|NO_CACHE$)/.test(first.cache)) && !isMiss(first)) {
+    failures.push(`${path}: forced miss returned ${first.cache || "no cache header"} (${first.status})`);
+  }
+  if (cacheable && !hits.length) failures.push(`${path}: no verified HIT samples`);
+  for (const sample of samples) if (sample.status >= 400) failures.push(`${path}: sample status ${sample.status}`);
+  const measured = cacheable ? hits : samples;
+  const client = median(measured.map((sample) => sample.ttfb));
+  return {
+    cacheable, measurementFailures: failures,
+    ttfbMiss: isMiss(first) && first.status === 200 ? first.ttfb : null,
+    ttfbHitClient: client,
+    ttfbHit: client === null ? null : Math.max(0, client - rtt),
+  };
 }
 
 export function isLocalBase(base) {
@@ -242,7 +302,9 @@ export function bindingCheckTarget({ base, mediaUrl = null, bindingCheck = true 
 }
 
 export async function runStorefrontPerf(options) {
-  const { base, runs, kvExplorer, cdpPort, profiles, noBrowser } = options;
+  const { base, runs, d1Explorer, cdpPort, profiles, noBrowser } = options;
+  if (options.kvExplorer) throw new Error("kvExplorer is retired; use d1Explorer");
+  if (d1Explorer) assertLocalInvalidation(base, d1Explorer);
   const target = bindingCheckTarget(options);
   if (target) await verifyStorefrontBinding(target);
   const paths = options.paths ?? discoverPaths(await (await fetch(`${base}/`)).text());
@@ -251,8 +313,8 @@ export async function runStorefrontPerf(options) {
   try {
     for (const path of paths) {
       const url = `${base}${path}`;
-      if (kvExplorer) await forceMiss(kvExplorer);
-      const first = await timeFetch(url);
+      const seq = d1Explorer ? await forceMiss(base, d1Explorer) : null;
+      const first = await timeFetch(seq === null ? url : withSeenSeq(url, seq));
       const hits = [];
       const edgeRtts = [];
       for (let i = 0; i < runs; i += 1) {
@@ -261,18 +323,14 @@ export async function runStorefrontPerf(options) {
         if (!isLocalBase(base)) edgeRtts.push((await timeFetch(`${base}/cdn-cgi/trace`)).ttfb);
         hits.push(await timeFetch(url));
       }
-      const cacheable = hits.some((h) => h.cache === "HIT");
       const rtt = median(edgeRtts) ?? 0;
       const row = {
         path,
         status: first.status,
-        cacheable,
         firstCache: first.cache,
-        ttfbMiss: kvExplorer || first.cache === "MISS" ? first.ttfb : null,
+        ...classifyTimings(path, first, hits, Boolean(d1Explorer), rtt),
         ttfbFirst: first.ttfb,
-        ttfbHitClient: median(hits.map((h) => h.ttfb)),
         edgeRtt: rtt,
-        ttfbHit: Math.max(0, median(hits.map((h) => h.ttfb)) - rtt),
       };
       for (const profileName of noBrowser ? [] : profiles) {
         const samples = [];

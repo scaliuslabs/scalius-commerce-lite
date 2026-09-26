@@ -66,8 +66,8 @@ export interface HomeProductList {
  * - Newest and category lists take their members from the buyer-state
  *   projection's public newest (or category newest) order: `lm:all` or
  *   `lm:cat:<id>`.
- * - Popular is ordered by sales stats, which are soft (read from
- *   `product_sales_stats`, bounded automatically), over public members.
+ * - Popular is ordered by the `popular` sales projection dependency, over
+ *   public members. Each card also declares its own visible sold-count key.
  * - On sale reads a candidate window: which rows are in it (`lo:sale:all`,
  *   advanced by every write to a discount-marked product or live SKU, the
  *   only way a row enters, leaves or moves in it) and each candidate's facts.
@@ -80,6 +80,7 @@ function declareHomeProductList(
 ): void {
     if (!deps.active()) return;
     declareProductCards(productIds, mediaByProduct);
+    if (source.kind === "popular") deps.popular();
     deps.products(memberIds);
     if (source.kind === "category") {
         deps.listMembership(categoryScope(source.categoryId));

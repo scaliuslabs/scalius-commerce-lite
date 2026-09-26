@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe("storefront API service-binding boundary", () => {
-  it("pins public reads to the render's cache generation and never sends it on private calls", async () => {
+  it("sends public and private API reads without a generation header", async () => {
     const seen: Request[] = [];
     const backend = fetcher(async (request) => {
       seen.push(request);
@@ -44,7 +44,6 @@ describe("storefront API service-binding boundary", () => {
     const runtime: StorefrontRuntime = {
       PUBLIC_API_URL: apiBaseUrl,
       BACKEND_API: backend,
-      CACHE_GENERATION: "a1b2c3d4e5f60718",
     };
 
     await requestRuntime.run(runtime, async () => {
@@ -54,7 +53,7 @@ describe("storefront API service-binding boundary", () => {
     });
 
     expect(seen.map((request) => request.headers.get("X-Scalius-Cache-Generation"))).toEqual([
-      "a1b2c3d4e5f60718",
+      null,
       null,
       null,
     ]);

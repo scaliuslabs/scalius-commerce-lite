@@ -6,7 +6,7 @@ import {
 } from "@scalius/core/modules/settings";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -122,7 +122,7 @@ const saveBusinessRoute = createRoute({
 app.openapi(saveBusinessRoute, async (c) => {
     const { expectedRevision, ...fields } = c.req.valid("json");
     const saved = await saveBusinessSettings(c.get("db"), fields, { expectedRevision });
-    await bumpCacheGeneration(c);
+
     return ok(c, { ...projectBusinessSettings(saved.value), revision: saved.revision });
 });
 

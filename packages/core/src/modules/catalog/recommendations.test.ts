@@ -2,7 +2,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
     getStorefrontProductRecommendations,
@@ -10,7 +10,9 @@ import {
 } from "./recommendations";
 import { getStorefrontProductBySlug } from "./product-page";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
-import { refreshProductRecommendations } from "./recommendation-refresh";
+import { refreshProductRecommendations, refreshProductSalesStats } from "./recommendation-refresh";
+
+import { withDependencyScope } from "../../cache-deps";
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -113,7 +115,91 @@ beforeEach(() => {
     category("cat_hidden", "draft");
 });
 
+afterEach(() => sqlite.close());
+
+const recordedRecommendations = (productIds: string[]) => withDependencyScope(
+    () => getStorefrontProductRecommendations(db, { productIds, limit: 12 }),
+    { log: () => {} },
+);
+const sequence = (key: string) => Number((sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = ?").get(key) as { seq: number } | undefined)?.seq ?? 0);
+
 describe("product recommendations", () => {
+    it("caches quiet empty fallback without an age limit or private dependency values", async () => {
+        const { value, dependencies } = await recordedRecommendations([]);
+        expect(value.products).toEqual([]);
+        expect(dependencies.keys).toContain("recommendation-signals");
+        expect(dependencies.validUntil).toBeNull();
+        expect(dependencies.softMaxAgeSeconds).toBeNull();
+        expect(dependencies.uncacheable).toEqual([]);
+    });
+
+    it.each([30, 365])("expires live ranking exactly when an included %i-day order ages out", async (days) => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_shirts" });
+        const createdAt = NOW - days * 86400 + 100;
+        order("01711000001", ["source", "peer"], "completed", createdAt);
+        await rebuildCatalogProjections(db);
+        const { dependencies } = await recordedRecommendations(["source"]);
+        expect(dependencies.validUntil).toBe((createdAt + days * 86400 + 1) * 1000);
+        expect(dependencies.keys).toContain("rec:source"); // missing stored rows must invalidate when filled
+        expect(dependencies.keys).toContain("recommendation-signals");
+        expect(dependencies.keys).toContain("lo:price:all");
+        expect(dependencies.keys).toContain("lo:band:all");
+        expect(dependencies.keys.join(" ")).not.toMatch(/01711000001|ord_1/);
+        expect(dependencies.softMaxAgeSeconds).toBeNull();
+    });
+
+    it("ignores old and cancelled orders when selecting a live ranking deadline", async () => {
+        product({ id: "source" });
+        product({ id: "peer" });
+        order("01711000001", ["source", "peer"], "completed", NOW - 366 * 86400);
+        order("01711000002", ["source", "peer"], "cancelled", NOW - 29 * 86400);
+        await rebuildCatalogProjections(db);
+        const { dependencies } = await recordedRecommendations(["source"]);
+        expect(dependencies.validUntil).toBeNull();
+        expect(dependencies.softMaxAgeSeconds).toBeNull();
+    });
+
+    it("keeps unchanged stored projections stable and invalidates changed ranking positions", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "older", categoryId: "cat_shirts", createdAt: NOW - 100 });
+        product({ id: "newer", categoryId: "cat_shirts", createdAt: NOW - 50 });
+        await rebuildCatalogProjections(db);
+        await refreshProductRecommendations(db, ["source"]);
+        const before = sequence("rec:source");
+        expect(before).toBeGreaterThan(0);
+        await refreshProductRecommendations(db, ["source"]);
+        expect(sequence("rec:source")).toBe(before);
+        const stored = await recordedRecommendations(["source"]);
+        expect(stored.dependencies.keys).toContain("rec:source");
+        expect(stored.dependencies.keys).not.toContain("recommendation-signals");
+        expect(stored.dependencies.validUntil).toBeNull();
+        expect(stored.dependencies.softMaxAgeSeconds).toBeNull();
+        order("01711000001", ["source", "older"]);
+        order("01711000002", ["source", "older"]);
+        expect(sequence("rec:source")).toBe(before);
+        await refreshProductRecommendations(db, ["source"]);
+        expect(sequence("rec:source")).toBeGreaterThan(before);
+        expect(ids((await recordedRecommendations(["source"])).value)).toEqual(["older", "newer"]);
+    });
+
+    it("refreshes sales projections without invalidating unchanged visible counts", async () => {
+        product({ id: "source" });
+        order("01711000001", ["source"]);
+        sqlite.exec("UPDATE order_items SET quantity = 12");
+        expect(await refreshProductSalesStats(db)).toEqual({ products: 1 });
+        const sold = sequence("sold:source");
+        const popular = sequence("popular");
+        expect(sold).toBeGreaterThan(0);
+        await refreshProductSalesStats(db);
+        expect(sequence("sold:source")).toBe(sold);
+        expect(sequence("popular")).toBe(popular);
+        sqlite.exec("UPDATE orders SET status = 'cancelled'");
+        expect(await refreshProductSalesStats(db)).toEqual({ products: 0 });
+        expect(sequence("sold:source")).toBeGreaterThan(sold);
+        expect(sequence("popular")).toBeGreaterThan(popular);
+    });
+
     it("ranks category, collection and attribute matches above price-only and unrelated products", async () => {
         product({ id: "source", categoryId: "cat_shirts", priceMinor: 100_000 });
         attribute("source", "attr_colour", "Red");

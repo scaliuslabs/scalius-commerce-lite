@@ -1,13 +1,14 @@
+import { DEPENDENCY_CACHE_RETENTION_SECONDS } from "@scalius/shared/cache-frontier";
+import { serveStorefrontBatch } from "./storefront-batch";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { storefrontBatchPath } from "@scalius/shared/public-api-cache-routes";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { createLocalPublicReader, isStorablePublicRead, publicReadCacheKey } from "./public-read";
+import { createLocalPublicReader, createPublicPartReader, renderPublicRead, isStorablePublicRead, publicReadCacheKey } from "./public-read";
 
 /**
  * The storefront batch serves its parts inside its own invocation: the data
- * center's Cache API under the PublicApi key, else rendered in-process the
- * way PublicApi renders them. Never through the PublicApi entrypoint, whose
- * misses wait for a separate, usually cold, isolate.
+ * center's Cache API under the dependency-validated key, else rendered
+ * in-process. Legacy generation/shadow readers remain comparison fixtures.
  */
 vi.mock("cloudflare:workers", () => ({
   WorkerEntrypoint: class {
@@ -20,8 +21,8 @@ vi.mock("cloudflare:workers", () => ({
   },
 }));
 
-/** The part cache mode (a code constant in production); the generation-keyed tests pin `generation`. */
-const cacheMode = vi.hoisted(() => ({ value: "generation" as "generation" | "shadow" | "strict" }));
+/** The production mode is strict; legacy comparisons explicitly choose their reader mode. */
+const cacheMode = vi.hoisted(() => ({ value: "strict" as "generation" | "shadow" | "strict" }));
 vi.mock("./public-cache-policy", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./public-cache-policy")>();
   return {
@@ -56,7 +57,7 @@ class MemoryCache {
 }
 
 function setup(version = "version-a") {
-  const { sqlite, binding } = createSqliteD1Database();
+  const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   const env = {
     CF_VERSION_METADATA: { id: version, tag: "", timestamp: "" },
@@ -73,7 +74,7 @@ function setup(version = "version-a") {
   } as unknown as ExecutionContext;
   const cache = new MemoryCache();
   vi.stubGlobal("caches", { default: cache });
-  return { env, ctx, cache, waits, publicApi, sqlite };
+  return { env, ctx, cache, waits, publicApi, sqlite, db };
 }
 const setupWithSqlite = setup;
 
@@ -98,10 +99,10 @@ async function batch(env: Env, ctx: ExecutionContext, generation = "gen1") {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  cacheMode.value = "generation";
+  cacheMode.value = "strict";
 });
 
-type BatchPart = { status: number; body: string; cache?: { status: string; s0: number; deps: string[] } };
+type BatchPart = { status: number; body: string; cache?: { apiVersion: string; status: string; s0: number; deps: string[] } };
 
 async function batchParts(env: Env, ctx: ExecutionContext, paths = PARTS): Promise<BatchPart[]> {
   const { default: ApiWorker } = await import("./worker");
@@ -127,7 +128,7 @@ describe("storefront batch parts, dependency-validated (strict)", () => {
     }
     expect(cache.puts.some((key) => key.includes("__cg="))).toBe(false);
     expect(cache.puts).toContain("https://api.internal/api/v1/storefront/layout?__cv=version-a");
-    expect(cache.puts).toContain("https://api.internal/__scalius/dvc-snapshot?__cv=version-a");
+    expect(cache.puts.some((key) => key.includes("/__scalius/dvc-snapshot"))).toBe(false);
     expect(publicApi).not.toHaveBeenCalled();
 
     const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
@@ -171,13 +172,31 @@ describe("storefront batch parts, dependency-validated (strict)", () => {
   });
 });
 
+/** Retain generation/shadow comparisons without routing production reads through them. */
+function legacyBatchReader(setupResult: ReturnType<typeof setup>, mode: "generation" | "shadow") {
+  return async (generation = "gen1", env = setupResult.env): Promise<BatchPart[]> => {
+    const reader = createPublicPartReader({
+      mode, env, cache: setupResult.cache, db: () => setupResult.db, maxConcurrentRenders: 4,
+      render: (request) => renderPublicRead(request, env, setupResult.ctx),
+      waitUntil: (promise) => setupResult.waits.push(promise),
+    });
+    const response = await serveStorefrontBatch(new Request(batchUrl(PARTS)), {
+      readGeneration: async () => generation,
+      readParts: (parts, pinned) => reader.readParts(parts, pinned),
+    });
+    return (await response.json() as { data: { parts: BatchPart[] } }).data.parts;
+  };
+}
+
 describe("storefront batch parts, shadow (P1)", () => {
   it("serve the generation path and log, masked, a validated entry that differs from a fresh render", async () => {
     cacheMode.value = "shadow";
-    const { env, ctx, cache, waits } = setupWithSqlite();
+    const setupResult = setupWithSqlite();
+    const { cache, waits } = setupResult;
+    const legacyBatch = legacyBatchReader(setupResult, "shadow");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    const first = await batchParts(env, ctx);
+    const first = await legacyBatch();
     await Promise.all(waits.splice(0));
     // Served from generation-keyed entries; the shadow reader filled its own keys.
     expect(first.every((part) => part.cache === undefined)).toBe(true);
@@ -191,7 +210,7 @@ describe("storefront batch parts, shadow (P1)", () => {
     const stored = cache.entries.get(dvcKey)!;
     cache.entries.set(dvcKey, new Response('{"success":true,"data":"stale"}', { status: 200, headers: stored.headers }));
 
-    const second = await batchParts(env, ctx);
+    const second = await legacyBatch();
     await Promise.all(waits.splice(0));
     expect(second.map((part) => part.body)).toEqual(first.map((part) => part.body));
     const lines = warn.mock.calls.map(([line]) => String(line)).filter((line) => line.startsWith("[CacheShadow] missed-dep"));
@@ -201,7 +220,93 @@ describe("storefront batch parts, shadow (P1)", () => {
   });
 });
 
+describe("legacy generation comparator", () => {
+  it("render in-process on a miss, are stored under the PublicApi key, and never call PublicApi", async () => {
+    const setupResult = setup();
+    const { env, cache, waits, publicApi } = setupResult;
+    const legacyBatch = legacyBatchReader(setupResult, "generation");
+
+    const first = await legacyBatch();
+    await Promise.all(waits);
+
+    expect(first.map((part) => part.status)).toEqual([200, 200, 200, 404]);
+    expect(publicApi).not.toHaveBeenCalled();
+    // Only the three 200s are stored, each under the key PublicApi would use.
+    expect(cache.puts).toEqual(PARTS.slice(0, 3).map((path) =>
+      publicReadCacheKey(new Request(`https://api.internal${path}`), env, "gen1")));
+    expect(cache.puts[0]).toBe("https://api.internal/api/v1/storefront/layout?__cg=gen1&__cv=version-a");
+  });
+
+  it("are answered from the data center cache for the same generation, and re-rendered for a new one", async () => {
+    const setupResult = setup();
+    const { cache, waits } = setupResult;
+    const legacyBatch = legacyBatchReader(setupResult, "generation");
+    const first = await legacyBatch();
+    await Promise.all(waits);
+    const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
+
+    const again = await legacyBatch();
+    const rendersForBatchOnly = render.mock.calls.length;
+    const next = await legacyBatch("gen2");
+
+    expect(again).toEqual(first);
+    // Same generation: only the uncached 404 renders.
+    expect(rendersForBatchOnly).toBe(1);
+    expect(render.mock.calls.length - rendersForBatchOnly).toBe(PARTS.length);
+    expect(next.map((part) => part.status)).toEqual([200, 200, 200, 404]);
+    expect(cache.puts.filter((key) => key.includes("__cg=gen2"))).toHaveLength(3);
+    render.mockRestore();
+  });
+
+  it("are re-rendered after a deploy at the same generation, never served from the old code's entries", async () => {
+    const setupResult = setup("version-a");
+    const { env, cache, waits } = setupResult;
+    const legacyBatch = legacyBatchReader(setupResult, "generation");
+    await legacyBatch();
+    await Promise.all(waits);
+    // Plant a payload the old code rendered under the old version's key, as
+    // the Cache API still holds it after the deploy.
+    const layoutKey = publicReadCacheKey(new Request("https://api.internal/api/v1/storefront/layout"), env, "gen1")!;
+    cache.entries.set(layoutKey, new Response('{"old":"shape"}', {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
+    }));
+    expect((await legacyBatch())[0]!.body).toBe('{"old":"shape"}');
+
+    const deployed = { ...env, CF_VERSION_METADATA: { id: "version-b", tag: "", timestamp: "" } } as Env;
+    const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
+    const afterDeploy = await legacyBatch("gen1", deployed);
+    await Promise.all(waits);
+
+    expect(afterDeploy[0]!.body).not.toBe('{"old":"shape"}');
+    // Every part renders again under the new version.
+    expect(render).toHaveBeenCalledTimes(PARTS.length);
+    expect(cache.puts.filter((key) => key.endsWith("__cv=version-b"))).toHaveLength(3);
+    render.mockRestore();
+  });
+
+});
+
 describe("storefront frontier endpoint", () => {
+  it("identifies API-only deployments and fails closed when version metadata is absent", async () => {
+    const { env, ctx } = setupWithSqlite();
+    const { deriveRuntimeSecret } = await import("@scalius/shared/runtime-secrets");
+    const key = await deriveRuntimeSecret(String(env.SCALIUS_SECRET), "cache-frontier");
+    const { default: ApiWorker } = await import("./worker");
+    for (const path of ["/frontier", "/frontier/check"]) {
+      const request = () => new Request(`https://api.internal/api/v1/storefront${path}`, {
+        headers: { "X-Scalius-Frontier-Key": key, "Content-Type": "application/json" },
+        ...(path.endsWith("/check") ? { method: "POST", body: JSON.stringify({ s0: 0, deps: [] }) } : {}),
+      });
+      const deployed = { ...env, CF_VERSION_METADATA: { id: "version-b", tag: "", timestamp: "" } } as Env;
+      const changed = await (new ApiWorker(ctx, deployed) as unknown as TestWorker).fetch(request());
+      expect((await changed.json() as { data: { apiVersion: string } }).data.apiVersion).toBe("version-b");
+      const missing = { ...env, CF_VERSION_METADATA: undefined } as unknown as Env;
+      const denied = await (new ApiWorker(ctx, missing) as unknown as TestWorker).fetch(request());
+      expect(denied.status).toBe(503);
+      expect(denied.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+  });
+
   it("answers only the storefront's frontier key: hashed changes after since, and the slow-path check", async () => {
     const { env, ctx, sqlite } = setupWithSqlite();
     const { deriveRuntimeSecret } = await import("@scalius/shared/runtime-secrets");
@@ -217,9 +322,10 @@ describe("storefront frontier endpoint", () => {
     const read = async (since: number) => {
       const response = await call(`/api/v1/storefront/frontier?since=${since}`, { headers: { "X-Scalius-Frontier-Key": key } });
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-      return (await response.json() as { data: { S: number; horizon: number; clock: number; changes: Array<[string, number]> } }).data;
+      return (await response.json() as { data: { apiVersion: string; S: number; horizon: number; clock: number; changes: Array<[string, number]> } }).data;
     };
     const before = await read(0);
+    expect(before.apiVersion).toBe("version-a");
     sqlite.exec("UPDATE products SET name = 'Linen Kurta' WHERE id = 'p_linen'");
     const after = await read(before.S);
 
@@ -232,9 +338,9 @@ describe("storefront frontier endpoint", () => {
       method: "POST",
       headers: { "X-Scalius-Frontier-Key": key, "Content-Type": "application/json" },
       body: JSON.stringify({ s0, deps }),
-    })).json() as { data: { changed: boolean } }).data;
+    })).json() as { data: { apiVersion: string; changed: boolean } }).data;
     expect((await check(before.S, [hashCacheDep("p:p_linen")])).changed).toBe(true);
-    expect((await check(after.S, [hashCacheDep("p:p_linen")])).changed).toBe(false);
+    expect(await check(after.S, [hashCacheDep("p:p_linen")])).toMatchObject({ apiVersion: "version-a", changed: false });
     expect((await call("/api/v1/storefront/frontier/check", {
       method: "POST",
       headers: { "X-Scalius-Frontier-Key": key, "Content-Type": "application/json" },
@@ -244,101 +350,51 @@ describe("storefront frontier endpoint", () => {
 });
 
 describe("storefront batch parts", () => {
-  it("render in-process on a miss, are stored under the PublicApi key, and never call PublicApi", async () => {
+  it("reuses validated entries regardless of legacy generation hints", async () => {
     const { env, ctx, cache, waits, publicApi } = setup();
-
     const first = await batch(env, ctx);
-    await Promise.all(waits);
-
-    expect(first.map((part) => part.status)).toEqual([200, 200, 200, 404]);
-    expect(publicApi).not.toHaveBeenCalled();
-    // Only the three 200s are stored, each under the key PublicApi would use.
-    expect(cache.puts).toEqual(PARTS.slice(0, 3).map((path) =>
-      publicReadCacheKey(new Request(`https://api.internal${path}`), env, "gen1")));
-    expect(cache.puts[0]).toBe("https://api.internal/api/v1/storefront/layout?__cg=gen1&__cv=version-a");
-  });
-
-  it("are answered from the data center cache for the same generation, and re-rendered for a new one", async () => {
-    const { env, ctx, cache, waits } = setup();
-    const first = await batch(env, ctx);
-    await Promise.all(waits);
+    await Promise.all(waits.splice(0));
     const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
-
-    const again = await batch(env, ctx);
-    const rendersForBatchOnly = render.mock.calls.length;
-    const next = await batch(env, ctx, "gen2");
-
-    expect(again).toEqual(first);
-    // Same generation: only the batch route itself and the uncached 404 render.
-    expect(rendersForBatchOnly).toBe(2);
-    expect(render.mock.calls.length - rendersForBatchOnly).toBe(1 + PARTS.length);
-    expect(next.map((part) => part.status)).toEqual([200, 200, 200, 404]);
-    expect(cache.puts.filter((key) => key.includes("__cg=gen2"))).toHaveLength(3);
-    render.mockRestore();
+    const again = await batch(env, ctx, "gen2");
+    expect(again.map((part) => part.body)).toEqual(first.map((part) => part.body));
+    expect(render).toHaveBeenCalledTimes(2); // batch route and uncached 404
+    expect(cache.puts.every((key) => !key.includes("__cg="))).toBe(true);
+    expect(publicApi).not.toHaveBeenCalled();
   });
 
-  it("are re-rendered after a deploy at the same generation, never served from the old code's entries", async () => {
+  it("re-renders after an API-only deployment and labels every proof with the new version", async () => {
     const { env, ctx, cache, waits } = setup("version-a");
-    await batch(env, ctx);
-    await Promise.all(waits);
-    // Plant a payload the old code rendered under the old version's key, as
-    // the Cache API still holds it after the deploy.
-    const layoutKey = publicReadCacheKey(new Request("https://api.internal/api/v1/storefront/layout"), env, "gen1")!;
-    cache.entries.set(layoutKey, new Response('{"old":"shape"}', {
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
-    }));
-    expect((await batch(env, ctx))[0]!.body).toBe('{"old":"shape"}');
-
+    const before = await batchParts(env, ctx);
+    await Promise.all(waits.splice(0));
+    expect(before.slice(0, 3).every((part) => part.cache?.apiVersion === "version-a")).toBe(true);
     const deployed = { ...env, CF_VERSION_METADATA: { id: "version-b", tag: "", timestamp: "" } } as Env;
     const render = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
-    const afterDeploy = await batch(deployed, ctx);
-    await Promise.all(waits);
-
-    expect(afterDeploy[0]!.body).not.toBe('{"old":"shape"}');
-    // The batch route plus every part rendered again under the new version.
+    const after = await batchParts(deployed, ctx);
+    await Promise.all(waits.splice(0));
+    expect(after.slice(0, 3).map((part) => [part.cache?.status, part.cache?.apiVersion])).toEqual([
+      ["miss", "version-b"], ["miss", "version-b"], ["miss", "version-b"],
+    ]);
     expect(render).toHaveBeenCalledTimes(1 + PARTS.length);
     expect(cache.puts.filter((key) => key.endsWith("__cv=version-b"))).toHaveLength(3);
-    render.mockRestore();
   });
 
-  it("are stored under the exact key the default entrypoint hands to PublicApi", async () => {
-    const { env, ctx, cache, waits, publicApi } = setup();
-    await batch(env, ctx);
-    await Promise.all(waits);
-    publicApi.mockImplementation(async () => new Response("{}"));
-    const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(ctx, env) as unknown as TestWorker;
-
-    for (const path of PARTS.slice(0, 3)) {
-      await worker.fetch(new Request(`https://api.internal${path}`, {
-        headers: { "X-Scalius-Cache-Generation": "gen1" },
-      }));
-    }
-
-    expect(publicApi.mock.calls.map(([request]) => request.url)).toEqual(cache.puts);
-  });
-
-  it("give the same status, body and cache headers as the PublicApi entrypoint", async () => {
+  it("gives direct and batch reads identical bodies and keeps retention internal", async () => {
     const { env, ctx, cache, waits } = setup();
-    await batch(env, ctx);
-    await Promise.all(waits);
-    const { PublicApi } = await import("./worker");
-
-    for (const path of PARTS) {
-      const key = publicReadCacheKey(new Request(`https://api.internal${path}`), env, "gen1")!;
-      const viaPublicApi = await (new PublicApi(ctx, env) as unknown as TestWorker).fetch(new Request(key));
-      const inBatch = (await batch(env, ctx))[PARTS.indexOf(path)]!;
-
-      expect(inBatch.status, path).toBe(viaPublicApi.status);
-      expect(inBatch.body, path).toBe(await viaPublicApi.clone().text());
-      const stored = await cache.match(key);
-      if (viaPublicApi.status === 200) {
-        // The stored copy keeps PublicApi's headers; only its storage lifetime differs.
-        for (const name of ["Cloudflare-CDN-Cache-Control", "X-Content-Type-Options", "X-Frame-Options", "Content-Type"]) {
-          expect(stored!.headers.get(name), `${path} ${name}`).toBe(viaPublicApi.headers.get(name));
+    const parts = await batch(env, ctx);
+    await Promise.all(waits.splice(0));
+    const { default: ApiWorker } = await import("./worker");
+    for (const [index, path] of PARTS.entries()) {
+      const direct = await (new ApiWorker(ctx, env) as unknown as TestWorker).fetch(new Request(`https://api.internal${path}`));
+      expect(parts[index]!.status, path).toBe(direct.status);
+      expect(parts[index]!.body, path).toBe(await direct.text());
+      const stored = await cache.match(`https://api.internal${path}?__cv=version-a`);
+      if (direct.status === 200) {
+        expect(direct.headers.get("Cache-Control")).toBe("public, max-age=0, no-cache, must-revalidate");
+        expect(direct.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+        expect(stored!.headers.get("Cache-Control")).toBe(`public, max-age=${DEPENDENCY_CACHE_RETENTION_SECONDS}`);
+        for (const name of ["X-Content-Type-Options", "X-Frame-Options", "Content-Type"]) {
+          expect(stored!.headers.get(name), `${path} ${name}`).toBe(direct.headers.get(name));
         }
-        expect(viaPublicApi.headers.get("Cache-Control")).toBe("public, max-age=0, no-cache, must-revalidate");
-        expect(stored!.headers.get("Cache-Control")).toBe("public, max-age=86400");
       } else {
         expect(stored, path).toBeUndefined();
       }

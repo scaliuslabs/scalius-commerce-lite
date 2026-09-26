@@ -9,8 +9,8 @@
  *   instead: every statement that touched it must pin the documents it reads
  *   (`pinnedSourceValues`), and each of their own keys must be declared.
  *   An uncovered registered table falls back to `t:<table>`.
- * - Exempt tables need nothing; the soft ones (recommendation and popularity
- *   order) bound the entry's soft max age instead.
+ * - Exempt tables need nothing. Recommendation and sales projections are
+ *   registered hard dependencies; no table imposes an age-based expiry.
  * - A table neither registered nor exempt cannot be proven fresh: the entry is
  *   uncacheable.
  * - Budget: above `CACHE_DEP_ENTRY_KEY_BUDGET` keys, the most numerous kinds
@@ -21,7 +21,6 @@
 import {
   CACHE_DEP_ENTRY_KEY_BUDGET,
   CACHE_DEP_ROW_KEYED_TABLES,
-  CACHE_DEP_SOFT_MAX_AGE_SECONDS,
   CACHE_DEP_TABLES,
   cacheDep,
   cacheDepExemptReason,
@@ -32,17 +31,8 @@ import {
 } from "@scalius/shared/cache-deps";
 import { pinnedSourceValues } from "@scalius/database/read-observer";
 
-/**
- * Exempt tables whose only buyer-visible effect is soft ordering (owner
- * decision 4). Reading one bounds the entry's staleness by the soft max age.
- * A test keeps this list equal to the registry's soft exemptions.
- */
-export const CACHE_DEP_SOFT_TABLES: ReadonlySet<string> = new Set([
-  "product_recommendations",
-  "product_sales_stats",
-  "orders",
-  "order_items",
-]);
+/** No registered read relies on an age-based freshness bound. */
+export const CACHE_DEP_SOFT_TABLES: ReadonlySet<string> = new Set();
 
 /** For each kind, the coarse `t:` keys of every registered table that can advance it. */
 const COARSE_KEYS_BY_KIND: ReadonlyMap<CacheDepKind, readonly string[]> = (() => {
@@ -163,7 +153,7 @@ export function resolveCacheDependencies(input: CacheDepResolveInput): CacheDepR
     unregisteredTables: unregisteredTables.sort(),
     collapsedKinds,
     overBudget: keys.size > budget,
-    softMaxAgeSeconds: softTables.length > 0 ? CACHE_DEP_SOFT_MAX_AGE_SECONDS : null,
+    softMaxAgeSeconds: null,
   };
 }
 

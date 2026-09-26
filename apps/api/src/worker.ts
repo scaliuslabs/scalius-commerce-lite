@@ -20,18 +20,9 @@ import {
   applyTrustedFrontProxy,
 } from "@scalius/shared/trusted-front-proxy";
 import {
-  CACHE_GENERATION_HEADER,
-  normalizeCacheGeneration,
-} from "@scalius/shared/cache-generation";
-import {
-  API_PART_CACHE_MODE,
   getPublicApiCachePolicy,
-  isCacheLayerServerError,
-  logCacheLayerFallback,
-  withoutCacheIdentity,
 } from "./public-cache-policy";
-import { createPublicPartReader, publicReadCacheKey, renderPublicRead } from "./public-read";
-import { readCacheGeneration } from "./utils/cache-generation";
+import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
@@ -103,28 +94,6 @@ async function fetchApiApp(
   });
 }
 
-/**
- * Workers Cache entrypoint for anonymous public reads. The request URL is
- * `publicReadCacheKey`: it carries the cache generation and the Worker
- * version, so the key changes on every buyer-visible write and every deploy;
- * both are removed before the application sees the request.
- */
-export class PublicApi extends WorkerEntrypoint<Env> {
-  async fetch(incoming: Request): Promise<Response> {
-    const request = withoutCacheIdentity(await resolveFrontProxy(incoming, this.env));
-    if (!getPublicApiCachePolicy(request)) {
-      return new Response("Request is not eligible for public caching", {
-        status: 400,
-        headers: { "Cache-Control": "private, no-store" },
-      });
-    }
-
-    if (!hasMasterSecret(this.env)) return missingMasterSecretResponse(request);
-    const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
-    return renderPublicRead(request, env, this.ctx);
-  }
-}
-
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
   async fetch(incoming: Request) {
@@ -169,7 +138,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       request = routed;
     }
 
-    if (getPublicApiCachePolicy(request) && API_PART_CACHE_MODE === "strict") {
+    if (getPublicApiCachePolicy(request)) {
       // Dependency-validated: a Workers Cache hit runs no code, so it could
       // not be validated; direct reads use the batch's reader instead.
       const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
@@ -183,30 +152,30 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         waitUntil: (promise) => this.ctx.waitUntil(promise),
         maxConcurrentRenders: 1,
       });
-      const [result] = await reader.readParts([request], null);
-      if (result!.status === "rejected") throw result!.reason;
+      // HEAD shares GET's key, so always fill it with a full GET representation.
+      // Client validators must not turn a cache fill into a bodyless 304.
+      const readHeaders = new Headers(request.headers);
+      readHeaders.delete("If-None-Match");
+      readHeaders.delete("If-Modified-Since");
+      const readRequest = new Request(request, { method: "GET", headers: readHeaders });
+      const [result] = await reader.readParts([readRequest], null);
+      if (result!.status === "rejected") {
+        const unavailable = Response.json(
+          { success: false, error: { code: "PUBLIC_READ_UNAVAILABLE", message: "This content is temporarily unavailable. Please try again." } },
+          { status: 503, headers: { "Cache-Control": "private, no-store", "Cloudflare-CDN-Cache-Control": "no-store", "CDN-Cache-Control": "no-store" } },
+        );
+        return applyBaselineSecurityHeaders(request, request.method === "HEAD"
+          ? new Response(null, { status: unavailable.status, headers: unavailable.headers })
+          : unavailable, { frameProtection: "deny" });
+      }
       const { response, cache } = result!.value;
       const headers = new Headers(response.headers);
       headers.set("X-Cache-Status", cache ? cache.status.toUpperCase() : "BYPASS");
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-    }
-
-    if (getPublicApiCachePolicy(request)) {
-      // A storefront render pins its API reads to its own page generation.
-      // Generations are unguessable, so a caller-supplied value can only
-      // select an entry that already exists or render a fresh one.
-      const generation =
-        normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
-        ?? await readCacheGeneration(this.env, this.ctx);
-      const cacheKey = publicReadCacheKey(request, this.env, generation);
-      if (cacheKey) {
-        const cached = await this.ctx.exports.PublicApi.fetch(new Request(cacheKey, request));
-        // The cache is a hint: a server error from the cache layer itself (a
-        // stuck entry answers an empty platform 500) is rendered directly.
-        if (!isCacheLayerServerError(cached)) return cached;
-        await cached.body?.cancel();
-        logCacheLayerFallback(request.url, request, cached.status);
+      if (request.method === "HEAD") {
+        void response.body?.cancel().catch(() => undefined);
+        return new Response(null, { status: response.status, statusText: response.statusText, headers });
       }
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     }
 
     const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });

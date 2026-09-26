@@ -1,8 +1,6 @@
-import { getDb, type Database } from "@scalius/database/client";
-import { cacheGeneration } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
-import { reviewsChangedSince, sweepReviewRequests } from "@scalius/core/modules/reviews";
+import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
@@ -27,7 +25,6 @@ import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scal
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
-import { bumpCacheGeneration, syncCacheGenerationMirror } from "./utils/cache-generation";
 import {
   isNightlyCatalogTick,
   queuePostDeployProjectionRebuild,
@@ -137,19 +134,6 @@ async function timedScheduledOperation<T>(
   }
 }
 
-/**
- * When the store's public cache generation last moved (0 before the first
- * bump). The coalesced review bump compares review changes against it.
- */
-async function readCacheGenerationUpdatedAt(db: Database): Promise<number> {
-  const row = await db
-    .select({ updatedAt: cacheGeneration.updatedAt })
-    .from(cacheGeneration)
-    .where(eq(cacheGeneration.id, "default"))
-    .get();
-  return row?.updatedAt ?? 0;
-}
-
 async function enqueueReconciledRefundNotifications(
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -229,25 +213,12 @@ async function runScheduledMaintenanceInner(
     }
   };
 
-  // Backstop for a KV mirror write that every bump pass missed. A KV outage is
-  // logged by `timed` and must not block the commerce maintenance below.
-  const mirrorRepaired = await timed("cache_generation_mirror_sync", () =>
-    syncCacheGenerationMirror(env, db)).catch(() => false);
-  if (mirrorRepaired) console.log("[scheduled] Cache generation mirror repaired");
-
   await isolated(async () => {
     const result = await timed("inventory_expiry_sweep", () =>
       releaseExpiredReservations(db, 30, {
         limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
       }),
     );
-    const expiryAvailabilityTransitions = result.availabilityTransitionVariantIds ?? [];
-    if (expiryAvailabilityTransitions.length > 0) {
-      await timed("inventory_expiry_cache_generation", () =>
-        bumpCacheGeneration({ env, executionCtx }),
-      );
-    }
-
     console.log(
       `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
         `, limit=${result.limit}, hasMore=${result.hasMore}` +
@@ -309,19 +280,6 @@ async function runScheduledMaintenanceInner(
       console.log(
         `[scheduled] Review request sweep: queued=${reviewRequests.queued}, skipped=${reviewRequests.skipped}`,
       );
-    }
-  });
-
-  await isolated(async () => {
-    // Buyer reviews that auto-publish do not bump the cache generation inline
-    // (Wave B §2.5): one store-wide bump here when any published review
-    // changed since the generation last moved, at most four an hour.
-    const generationUpdatedAt = await timed("review_cache_generation_read", () =>
-      readCacheGenerationUpdatedAt(db),
-    );
-    if (await timed("review_changes_check", () => reviewsChangedSince(db, generationUpdatedAt))) {
-      await timed("review_cache_generation", () => bumpCacheGeneration({ env, executionCtx }));
-      console.log("[scheduled] Review changes reached the public cache generation");
     }
   });
 
@@ -629,11 +587,7 @@ async function runScheduledMaintenanceInner(
             `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
         );
       }
-      if (renditions.generated > 0) {
-        await timed("media_rendition_cache_generation", () =>
-          bumpCacheGeneration({ env, executionCtx }),
-        );
-      }
+
     }
   });
 

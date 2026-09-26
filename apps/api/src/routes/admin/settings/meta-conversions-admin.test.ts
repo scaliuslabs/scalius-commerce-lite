@@ -6,12 +6,8 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-    bumpCacheGeneration: vi.fn(async () => undefined),
-    cacheDelete: vi.fn(async () => undefined),
-}));
 
-vi.mock("../../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
+    cacheDelete: vi.fn(async () => undefined),
 }));
 
 import { metaConversionsAdminRoutes } from "./meta-conversions-admin";
@@ -143,7 +139,7 @@ async function saveSettings(
 }
 
 beforeEach(() => {
-    mocks.bumpCacheGeneration.mockClear();
+
     mocks.cacheDelete.mockClear();
 });
 
@@ -237,7 +233,7 @@ describe("Meta Conversions admin settings", () => {
         await expect(decryptCredentials(db.settings!.accessToken.replace(/^enc:/, ""), CREDENTIAL_ENCRYPTION_KEY))
             .resolves.toBe("live-access-token");
         expect(mocks.cacheDelete).toHaveBeenCalledWith("meta-capi:browser-events:circuit");
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalled();
+
     });
 
     it("reuses the stored encrypted token when saving the masked token value", async () => {

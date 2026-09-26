@@ -4,7 +4,6 @@ import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
@@ -135,7 +134,7 @@ app.openapi(saveSmsRoute, async (c) => {
     await clearNotificationProviderBlocks(db, { channel: "sms" });
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.
-    await bumpCacheGeneration(c);
+
     return ok(c, projectSmsSettings(await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>))));
 });
 

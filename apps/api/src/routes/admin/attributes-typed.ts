@@ -1,8 +1,7 @@
 // Admin OpenAPI routes for typed attributes: spec groups, the id-based value
 // vocabulary (attribute_values), value-type conversion and category
 // attribute sets. Mounted by ./attributes.ts before its own routes, under
-// /api/v1/admin/attributes. Every buyer-visible write bumps the cache
-// generation after it commits; product value rewrites carry the catalogue
+// /api/v1/admin/attributes. Product value rewrites carry the catalogue
 // projection refresh in their own batches (catalogProjectionRefreshStatements).
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
@@ -37,24 +36,9 @@ import type { Database } from "@scalius/database/client";
 import { created, noContent, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
-import { bumpCacheGeneration, type CacheWriteContext } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const TAG = "Admin - Attributes";
-
-/**
- * Rewrites that span several batches may commit some before failing (a merge
- * whose final guard trips, a conversion interrupted halfway): bump the cache
- * generation then too, so buyers never keep a stale page of committed rows.
- */
-async function bumpAfterFailedBatches<T>(c: CacheWriteContext, work: () => Promise<T>): Promise<T> {
-    try {
-        return await work();
-    } catch (error) {
-        await bumpCacheGeneration(c);
-        throw error;
-    }
-}
 
 /** The catalogue projection refresh the attribute writes append to their batches. */
 function projectionRefresh(db: Database): CatalogProjectionRefresh {
@@ -104,7 +88,7 @@ app.openapi(createRoute({
     },
 }), async (c) => {
     const result = await createAttributeGroup(c.get("db"), c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return created(c, result);
 });
 
@@ -121,7 +105,7 @@ app.openapi(createRoute({
     },
 }), async (c) => {
     const result = await reorderAttributeGroups(c.get("db"), c.req.valid("json").items);
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -143,7 +127,7 @@ app.openapi(createRoute({
 }), async (c) => {
     const { groupId } = c.req.valid("param");
     const result = await updateAttributeGroup(c.get("db"), groupId, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -159,7 +143,7 @@ app.openapi(createRoute({
 }), async (c) => {
     const { groupId } = c.req.valid("param");
     await trashAttributeGroup(c.get("db"), groupId);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -224,7 +208,7 @@ app.openapi(createRoute({
 }), async (c) => {
     const { categoryId } = c.req.valid("param");
     const result = await replaceCategoryAttributeSet(c.get("db"), categoryId, c.req.valid("json").attributes);
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -301,7 +285,7 @@ app.openapi(createRoute({
 }), async (c) => {
     const { id } = c.req.valid("param");
     const result = await createAttributeValueRow(c.get("db"), id, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return created(c, result);
 });
 
@@ -333,8 +317,8 @@ app.openapi(createRoute({
 }), async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await bumpAfterFailedBatches(c, () => reorderAttributeValueRows(db, id, c.req.valid("json").items, projectionRefresh(db)));
-    if (result.updated > 0) await bumpCacheGeneration(c);
+    const result = await reorderAttributeValueRows(db, id, c.req.valid("json").items, projectionRefresh(db));
+
     return ok(c, result);
 });
 
@@ -369,8 +353,8 @@ app.openapi(createRoute({
 }), async (c) => {
     const db = c.get("db");
     const { id, valueId } = c.req.valid("param");
-    const result = await bumpAfterFailedBatches(c, () => updateAttributeValueRow(db, id, valueId, c.req.valid("json"), projectionRefresh(db)));
-    await bumpCacheGeneration(c);
+    const result = await updateAttributeValueRow(db, id, valueId, c.req.valid("json"), projectionRefresh(db));
+
     return ok(c, result);
 });
 
@@ -406,8 +390,8 @@ app.openapi(createRoute({
     const db = c.get("db");
     const { id, valueId } = c.req.valid("param");
     const { mergeIntoValueId } = c.req.valid("query");
-    const result = await bumpAfterFailedBatches(c, () => deleteAttributeValueRow(db, id, valueId, { mergeIntoValueId }, projectionRefresh(db)));
-    await bumpCacheGeneration(c);
+    const result = await deleteAttributeValueRow(db, id, valueId, { mergeIntoValueId }, projectionRefresh(db));
+
     return ok(c, result);
 });
 
@@ -459,9 +443,9 @@ app.openapi(createRoute({
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const body = c.req.valid("json");
-    const result = await bumpAfterFailedBatches(c, () => convertAttributeValueType(db, { attributeId: id, ...body }, projectionRefresh(db)));
-    if (result.changed) await bumpCacheGeneration(c);
+    const result = await convertAttributeValueType(db, { attributeId: id, ...body }, projectionRefresh(db));
+
     return ok(c, result);
 });
 
-export { app as adminAttributesTypedRoutes, bumpAfterFailedBatches, projectionRefresh };
+export { app as adminAttributesTypedRoutes, projectionRefresh };

@@ -7,9 +7,6 @@ import { resolvePublicStorePolicies } from "@scalius/core/modules/settings";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn(async () => undefined) }));
-vi.mock("../../../utils/cache-generation", () => ({ bumpCacheGeneration: mocks.bumpCacheGeneration }));
-
 import { storePoliciesRoutes } from "./policies";
 
 function createApp() {
@@ -46,7 +43,6 @@ describe("store policies", () => {
     const saved = await request({ refund: refund.id, expectedRevision: 0 });
     expect(saved.status).toBe(200);
     await expect(saved.json()).resolves.toMatchObject({ data: { refund: refund.id, revision: 1 } });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
 
     // A tab still holding revision 0 can't overwrite it.
     const stale = await request({ refund: null, expectedRevision: 0 });
@@ -63,7 +59,7 @@ describe("store policies", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { details: { issues: [{ path: ["privacy"], message: "Choose one of your store's pages." }] } },
     });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("shows buyers only the linked pages that are published, in policy order", async () => {

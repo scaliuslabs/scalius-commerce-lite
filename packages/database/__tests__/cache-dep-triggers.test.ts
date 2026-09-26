@@ -24,6 +24,8 @@ import {
   CACHE_DEP_TRIGGER_PREFIX,
   generateCacheDepTriggers,
   renderCacheDepMigration,
+  renderCacheDepProjectionMigration,
+  CACHE_DEP_PROJECTION_MIGRATION_PATHS,
 } from "../scripts/cache-dep-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 import { bumped, runCacheDepScenario, type CacheDepDriver } from "./cache-dep-scenario";
@@ -49,6 +51,12 @@ describe("0100_cache_dependencies", () => {
     expect(readFileSync(CACHE_DEP_MIGRATION_PATHS.sqlite, "utf8")).toBe(rendered.sqlite);
     expect(readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8")).toBe(rendered.postgres);
     expect(rendered.sqlite).toContain(`VALUES (${CACHE_DEP_MIGRATION.version}, '${CACHE_DEP_MIGRATION.name}'`);
+  });
+
+  it("keeps additive 0101 equal to the generator without rewriting deployed 0100", () => {
+    const rendered = renderCacheDepProjectionMigration();
+    expect(readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.sqlite, "utf8")).toBe(rendered.sqlite);
+    expect(readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8")).toBe(rendered.postgres);
   });
 
   it("keeps the remote D1 trigger rules: no CASE, the guard in WHEN, one statement per body", () => {
@@ -89,7 +97,8 @@ describe("0100_cache_dependencies", () => {
   });
 
   it("has a PostgreSQL trigger for every rule in the sidecar", () => {
-    const sidecar = readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8");
+    const sidecar = readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8")
+      + readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8");
     const names = [...sidecar.matchAll(/CREATE CONSTRAINT TRIGGER "([a-z0-9_]+)"/g)].map((match) => match[1]).sort();
     expect(names).toEqual(expectedTriggerNames());
     expect(sidecar).toContain('CREATE OR REPLACE FUNCTION scalius_compat."cache_dep_bump"');
@@ -174,10 +183,43 @@ describe("0100_cache_dependencies", () => {
     expect(await bumped(driver, redemption("r2", "promo_cap"))).toEqual(["promo:promo_cap", "t:promotion_redemptions"]);
   });
 
+  it.each(["d1", "turso"] as const)("invalidates only the changed ordering projection on %s", async (provider) => {
+    const driver = nodeDriver(provider);
+    try {
+      await driver.exec("INSERT INTO products (id, name, slug) VALUES ('projection_source', 'Source', 'projection-source')");
+      expect(await bumped(driver, "INSERT INTO product_sales_stats (product_id, sold_30d) VALUES ('projection_source', 1)")).toEqual([]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET sold_30d = 2")).toEqual(["popular", "t:product_sales_stats"]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET sold_30d = 9")).toEqual(["popular", "t:product_sales_stats"]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET sold_30d = 10")).toEqual(["popular", "sold:projection_source", "t:product_sales_stats"]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET computed_at = computed_at + 1")).toEqual([]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET sold_30d = 9")).toEqual(["popular", "sold:projection_source", "t:product_sales_stats"]);
+      expect(await bumped(driver, "UPDATE product_sales_stats SET sold_30d = 1")).toEqual(["popular", "t:product_sales_stats"]);
+      expect(await bumped(driver, "DELETE FROM product_sales_stats")).toEqual([]);
+    } finally { driver.sqlite.close(); }
+  });
+
+  it.each(["d1", "turso"] as const)("keeps private edits off public dependencies and commits live ranking signals atomically on %s", async (provider) => {
+    const driver = nodeDriver(provider);
+    try {
+      const insert = `INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+        VALUES ('signal_order', 'Buyer', '01711000001', 'Address', 'city', 'zone', 'completed')`;
+      expect(await bumped(driver, insert)).toEqual(["recommendation-signals", "t:orders"]);
+      expect(await bumped(driver, "UPDATE orders SET customer_name = 'Edited', shipping_address = 'Elsewhere'")).toEqual([]);
+      expect(await bumped(driver, "UPDATE orders SET customer_phone = '01711000002'")).toEqual(["recommendation-signals", "t:orders"]);
+      expect(await bumped(driver, "UPDATE orders SET status = 'cancelled'")).toEqual(["recommendation-signals", "t:orders"]);
+      expect(await bumped(driver, "UPDATE orders SET customer_phone = '01711000003'")).toEqual([]);
+      const before = await driver.rows("SELECT * FROM cache_dep ORDER BY dep");
+      await driver.exec("BEGIN; UPDATE orders SET status = 'completed'; ROLLBACK");
+      expect(await driver.rows("SELECT * FROM cache_dep ORDER BY dep")).toEqual(before);
+      expect(await bumped(driver, "BEGIN; UPDATE orders SET status = 'completed'; COMMIT")).toEqual(["recommendation-signals", "t:orders"]);
+      expect(JSON.stringify(await driver.rows("SELECT dep FROM cache_dep"))).not.toContain("017110000");
+    } finally { driver.sqlite.close(); }
+  });
+
   it("runs unchanged on the real Turso engine (0.7), including coarse mode and same-band stock", async () => {
     const database = await connect(":memory:");
     const migrations = compiledMigrationSql("turso").split(BREAKPOINT);
-    const own = new Set(compiledMigrationSql("turso", undefined, "0100_").split(BREAKPOINT).map((statement) => statement.trim()));
+    const own = new Set((compiledMigrationSql("turso", undefined, "0100_") + "\n" + compiledMigrationSql("turso", undefined, "0101_")).split(BREAKPOINT).map((statement) => statement.trim()));
     const failures: string[] = [];
     for (const statement of migrations) {
       try {

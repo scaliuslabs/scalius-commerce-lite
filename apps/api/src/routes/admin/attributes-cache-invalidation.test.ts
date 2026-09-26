@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   listAttributes: vi.fn(),
   listAttributeAgentSummaries: vi.fn(),
   createAttribute: vi.fn(),
@@ -26,10 +26,6 @@ const mocks = vi.hoisted(() => ({
   getCategoryAttributeSet: vi.fn(),
   updateAttributeValueRow: vi.fn(),
   deleteAttributeValueRow: vi.fn(),
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/attributes", async (importOriginal) => ({
@@ -65,7 +61,6 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createAttribute.mockResolvedValue({
     attribute: {
       id: "attr_1",
@@ -120,12 +115,12 @@ function createTestApp() {
   return { app, env };
 }
 
-describe("admin attribute cache invalidation", () => {
+describe("admin attribute write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates attribute and product caches after attribute metadata writes", async () => {
+  it("returns success after attribute metadata writes", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -144,11 +139,10 @@ describe("admin attribute cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("invalidates attribute and product caches after attribute value renames", async () => {
+  it("returns success after attribute value renames", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -162,8 +156,7 @@ describe("admin attribute cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("returns a documented conflict when a value rename targets an existing preset", async () => {
@@ -232,7 +225,7 @@ describe("admin attribute cache invalidation", () => {
     expect(mocks.listAttributeValues).not.toHaveBeenCalled();
   });
 
-  it("passes the projection refresh to value rewrites and bumps after the rename commits", async () => {
+  it("passes the projection refresh to committed value rewrites", async () => {
     const { app, env } = createTestApp();
     const response = await app.request(
       "/api/v1/admin/attributes/attr_1/values",
@@ -247,7 +240,7 @@ describe("admin attribute cache invalidation", () => {
     expect(mocks.renameAttributeValue).toHaveBeenCalledWith({ id: "db" }, "attr_1", "Blue", "Navy", expect.any(Function));
   });
 
-  it("bumps after typed-attribute writes: groups, category sets, value rows", async () => {
+  it("commits typed-attribute writes: groups, category sets, value rows", async () => {
     const { app, env } = createTestApp();
     const group = { id: "atg_display01", name: "Display", sortOrder: 0, createdAt: 1, updatedAt: 1, attributeCount: 0 };
     mocks.createAttributeGroup.mockResolvedValue({ group });
@@ -276,7 +269,6 @@ describe("admin attribute cache invalidation", () => {
       env,
     )).status).toBe(200);
 
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(4);
     expect(mocks.replaceCategoryAttributeSet).toHaveBeenCalledWith({ id: "db" }, "cat_1", [{ attributeId: "attr_1" }]);
     expect(mocks.updateAttributeValueRow).toHaveBeenCalledWith(
       { id: "db" }, "attr_1", "atv_red_0001", { value: "Crimson" }, expect.any(Function),
@@ -302,7 +294,7 @@ describe("admin attribute cache invalidation", () => {
     expect(mocks.createAttributeGroup).not.toHaveBeenCalled();
   });
 
-  it("bumps a conversion only when it wrote, and after a failure that may have committed batches", async () => {
+  it("returns conversion outcomes and reports a partially committed failure", async () => {
     const { app, env } = createTestApp();
     const result = {
       attributeId: "attr_1", fromType: "text", valueType: "number", facetDisplay: "range", unit: "inch",
@@ -317,15 +309,13 @@ describe("admin attribute cache invalidation", () => {
 
     mocks.convertAttributeValueType.mockResolvedValueOnce(result);
     expect((await convert({ valueType: "number", unit: "inch", dryRun: true })).status).toBe(200);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
 
     mocks.convertAttributeValueType.mockResolvedValueOnce({ ...result, dryRun: false, converted: 2, changed: true });
     expect((await convert({ valueType: "number", unit: "inch" })).status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
 
     mocks.convertAttributeValueType.mockRejectedValueOnce(new Error("interrupted"));
     expect((await convert({ valueType: "number" })).status).toBe(500);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(2);
+
     expect(mocks.convertAttributeValueType).toHaveBeenLastCalledWith(
       { id: "db" }, { attributeId: "attr_1", valueType: "number", dryRun: false }, expect.any(Function),
     );

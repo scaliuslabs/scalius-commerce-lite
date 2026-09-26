@@ -1,7 +1,8 @@
 // Applies a template (plus single-block variant swaps, what a merchant does in
-// the dashboard) to the harness state and forces a new cache generation in
-// D1 and its KV mirror, so the next page load renders the new theme.
+// the dashboard) to the harness state; DVC triggers track the changed rows.
 import { importTs, tx } from "./context.mjs";
+import { sleep } from "./proc.mjs";
+import { FORCE_MISS_SQL } from "../../storefront-perf.mjs";
 
 let modules;
 export async function themeModules() {
@@ -70,25 +71,23 @@ export async function variantNames() {
   };
 }
 
-let generationSeq = 0;
-/** Writes the theme (and header menu), bumps the generation in D1 and KV. */
-export async function applyTheme({ db, stack }, template, { sets = {}, menu = null } = {}) {
+/** Writes tracked theme/menu rows, then outwaits the frontier freshness window. */
+export async function applyTheme({ db }, template, { sets = {}, menu = null } = {}) {
   const doc = await buildThemeDocument(template, sets);
   const now = Math.floor(Date.now() / 1000);
-  const generation = `fid${Date.now().toString(16)}${(generationSeq++).toString(36)}`;
   tx(db, () => {
     db.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, ?, ?) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors, revision = theme_settings.revision + 1, updated_at = excluded.updated_at").run(JSON.stringify(doc), now, now);
     if (menu) db.prepare("UPDATE navigation_placements SET menu_id = ?, is_enabled = 1, revision = revision + 1, updated_at = ? WHERE surface = 'header'").run(menu, now);
-    db.prepare("INSERT INTO cache_generation (id, generation, updated_at) VALUES ('default', ?, ?) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, updated_at = excluded.updated_at").run(generation, now);
   });
-  await stack.kvPut("cache:generation", generation);
-  return generation;
+  const seq = db.prepare("SELECT seq FROM cache_clock WHERE id = 1").get().seq;
+  // Matrix/hover/variant callers navigate many ordinary URLs. Their next
+  // request must not reuse a frontier taken just before this committed write.
+  const { CACHE_FRONTIER_DELTA_MS } = await importTs("packages/shared/src/cache-frontier.ts");
+  await sleep(CACHE_FRONTIER_DELTA_MS + 1);
+  return seq;
 }
 
-/** A new generation only (forces a cache miss without changing anything). */
-export async function bumpGeneration({ db, stack }) {
-  const generation = `fid${Date.now().toString(16)}${(generationSeq++).toString(36)}`;
-  db.prepare("INSERT INTO cache_generation (id, generation, updated_at) VALUES ('default', ?, unixepoch()) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, updated_at = excluded.updated_at").run(generation);
-  await stack.kvPut("cache:generation", generation);
-  return generation;
+/** Explicit cold measurement only; caller carries the returned `_sv` hint. */
+export function forceCacheRefresh({ db }) {
+  return db.prepare(FORCE_MISS_SQL).get().seq;
 }

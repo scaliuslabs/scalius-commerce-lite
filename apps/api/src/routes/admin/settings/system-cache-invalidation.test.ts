@@ -9,7 +9,7 @@ import { ValidationError } from "../../../utils/api-error";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   getEmailProviderReadiness: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
   firstWhatsAppPlaceholderConfigError: vi.fn(),
@@ -35,10 +35,6 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   },
   getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
   saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
@@ -118,7 +114,6 @@ async function createTestApp(setup?: (database: TestDatabase) => Promise<void> |
   };
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.readFirebaseSettings.mockResolvedValue({
     serviceAccountStored: false,
     serviceAccountJson: undefined,
@@ -309,12 +304,12 @@ function checkoutFlowBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("system settings cache invalidation", () => {
+describe("system settings write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates checkout caches after a versioned checkout settings save", async () => {
+  it("returns success after a versioned checkout settings save", async () => {
     const { app, env, executionCtx, kv } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/checkout-flow", {
@@ -327,8 +322,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(kv.delete).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("returns the current revision before stale checkout settings can reach provider checks", async () => {
@@ -422,7 +416,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(stored(database, "customer_auth")).toBeNull();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("rejects email customer auth policy before writes when no email provider is ready", async () => {
@@ -453,7 +447,7 @@ describe("system settings cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(400);
     expect(stored(database, "customer_auth")).toBeNull();
     expect(stored(database, "whatsapp")).toBeNull();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("allows email customer auth policy when Cloudflare Email and sender are ready", async () => {
@@ -540,7 +534,7 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("rejects gateway-only checkout mode when no online gateway is available", async () => {
@@ -558,7 +552,7 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("treats SSLCommerz as unavailable for checkout-flow validation outside BDT", async () => {
@@ -595,7 +589,7 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("rejects requiring customer accounts when no sign-in provider is usable", async () => {
@@ -728,7 +722,7 @@ describe("system settings cache invalidation", () => {
     expect(stored(database, "whatsapp")).toMatchObject({ accessToken: "", phoneNumberId: "phone_id_1" });
   });
 
-  it("invalidates layout caches after CSP security settings save", async () => {
+  it("returns success after CSP security settings save", async () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/security", {
@@ -737,8 +731,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(stored(database, "security")).toEqual({ cspAllowedDomains: "https://payments.example.com" });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("refuses, rather than drops, trusted websites it can't use and says what to fix", async () => {
@@ -756,7 +749,7 @@ describe("system settings cache invalidation", () => {
       { path: ["cspAllowedDomains"], message: "chat.example.com/widget: Enter just the site address, without a path." },
     ]);
     expect(stored(database, "security")).toBeNull();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("bounds legacy CSP reads to normalized origins below the agent response ceiling", async () => {
@@ -793,8 +786,7 @@ describe("system settings cache invalidation", () => {
       "settings:security",
       JSON.stringify({ cspAllowedDomains: "https://payments.example.com" }),
     );
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("keeps merchant CSP sources exact and removes inherited platform origins", async () => {
@@ -939,8 +931,7 @@ describe("system settings cache invalidation", () => {
       resendApiKey: storedKey,
     });
     expect(providerBlocks(database)).toEqual([]);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("encrypts a new Resend key before saving it", async () => {
@@ -957,8 +948,7 @@ describe("system settings cache invalidation", () => {
     expect(email).toMatchObject({ provider: "resend", sender: "orders@example.com" });
     expect(email?.resendApiKey).toMatch(/^enc:/);
     expect(JSON.stringify(email)).not.toContain("re_secret_key");
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("rejects removing the configured email provider while Email OTP remains enabled", async () => {
@@ -973,10 +963,10 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(stored(database, "email")).toBeNull();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("does not invalidate checkout caches when the email save fails", async () => {
+  it("reports failure when the email save fails", async () => {
     const { app, env, executionCtx, database } = await createTestApp();
     database.failNextWrite();
 
@@ -986,7 +976,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(500);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("saves Firebase credentials, public config, and push health reset together", async () => {

@@ -1,5 +1,6 @@
 import {
   CACHE_FRONTIER_CHECK_MAX_DEPS,
+  DEPENDENCY_CACHE_RETENTION_SECONDS,
   CACHE_FRONTIER_CHECK_PATH,
   CACHE_FRONTIER_KEY_HEADER,
   CACHE_FRONTIER_PATH,
@@ -23,8 +24,6 @@ export const CACHE_FRONTIER_DELTA_MS = 1_000;
 export const CACHE_FRONTIER_TIMEOUT_MS = 1_500;
 /** Delta pages one refresh reads before it gives up on catching up. */
 const MAX_REFRESH_ROUNDS = 4;
-/** Cache API lifetime of the stored frontier; it is refreshed long before. */
-const FRONTIER_STORE_SECONDS = 3_600;
 
 export interface CacheFrontierClient {
   delta(since: number | null): Promise<CacheFrontierDelta>;
@@ -50,13 +49,14 @@ function parseChanges(value: unknown): Array<readonly [string, number]> | null {
 
 export function parseCacheFrontierDelta(value: unknown): CacheFrontierDelta | null {
   const data = value as Partial<Record<keyof CacheFrontierDelta, unknown>> | null;
-  if (!data || !isClock(data.S) || !isClock(data.horizon) || !isClock(data.floor) || !isClock(data.clock)) return null;
+  if (!data || typeof data.apiVersion !== "string" || !data.apiVersion || !isClock(data.S) || !isClock(data.horizon) || !isClock(data.floor) || !isClock(data.clock)) return null;
   const changes = parseChanges(data.changes);
-  return changes ? { S: data.S, horizon: data.horizon, floor: data.floor, clock: data.clock, changes } : null;
+  return changes ? { apiVersion: data.apiVersion, S: data.S, horizon: data.horizon, floor: data.floor, clock: data.clock, changes } : null;
 }
 
 export function serializeCacheFrontier(frontier: CacheFrontier): string {
   return JSON.stringify({
+    apiVersion: frontier.apiVersion,
     sentAt: frontier.sentAt,
     S: frontier.S,
     horizon: frontier.horizon,
@@ -72,10 +72,10 @@ export function parseCacheFrontier(text: string): CacheFrontier | null {
   } catch {
     return null;
   }
-  if (!data || !isClock(data.sentAt) || !isClock(data.S) || !isClock(data.horizon) || !isClock(data.floor)) return null;
+  if (!data || typeof data.apiVersion !== "string" || !data.apiVersion || !isClock(data.sentAt) || !isClock(data.S) || !isClock(data.horizon) || !isClock(data.floor)) return null;
   const changes = parseChanges(data.changes);
   if (!changes) return null;
-  return { sentAt: data.sentAt, S: data.S, horizon: data.horizon, floor: data.floor, changes: new Map(changes) };
+  return { apiVersion: data.apiVersion, sentAt: data.sentAt, S: data.S, horizon: data.horizon, floor: data.floor, changes: new Map(changes) };
 }
 
 export async function readStoredCacheFrontier(
@@ -94,7 +94,7 @@ export function storeCacheFrontier(
   return cache.put(key, new Response(serializeCacheFrontier(frontier), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": `public, max-age=${FRONTIER_STORE_SECONDS}`,
+      "Cache-Control": `public, max-age=${DEPENDENCY_CACHE_RETENTION_SECONDS}`,
     },
   }));
 }
@@ -102,14 +102,14 @@ export function storeCacheFrontier(
 /**
  * `old` brought up to the store clock. `sentAt` is taken before the first
  * call, so `S` covers every commit acknowledged before it; a refresh that
- * could not catch up (every page capped) keeps the old `sentAt`, since its
- * `S` does not cover that moment.
+ * could not catch up (every page capped) fails closed: its `S` cannot prove
+ * the merchant's observed write is included.
  */
 export async function refreshCacheFrontier(
   old: CacheFrontier | null,
   client: CacheFrontierClient,
   now: () => number = Date.now,
-): Promise<CacheFrontier> {
+): Promise<CacheFrontier | null> {
   const sentAt = now();
   let frontier = old;
   for (let round = 0; round < MAX_REFRESH_ROUNDS; round += 1) {
@@ -117,7 +117,7 @@ export async function refreshCacheFrontier(
     frontier = mergeCacheFrontier(frontier, delta, sentAt);
     if (delta.S >= delta.clock) return frontier;
   }
-  return { ...frontier!, sentAt: old?.sentAt ?? 0 };
+  return null;
 }
 
 /** Whether a stored frontier may validate a hit at `now` for a request that saw `seenSeq`. */
@@ -127,6 +127,7 @@ export function isCacheFrontierFresh(
   seenSeq: number | null,
 ): frontier is CacheFrontier {
   return frontier !== null
+    && now >= frontier.sentAt
     && now - frontier.sentAt <= CACHE_FRONTIER_DELTA_MS
     && (seenSeq === null || frontier.S >= seenSeq);
 }
@@ -173,13 +174,17 @@ export function createCacheFrontierClient(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ s0, deps }),
         }) as Partial<CacheFrontierCheck> | null;
-        if (!data || !isClock(data.S) || !isClock(data.floor) || typeof data.changed !== "boolean") {
+        if (!data || typeof data.apiVersion !== "string" || !data.apiVersion || !isClock(data.S) || !isClock(data.floor) || typeof data.changed !== "boolean") {
           throw new Error("frontier check malformed");
         }
         return data as CacheFrontierCheck;
       }));
+      if (answers.some((answer) => answer.apiVersion !== answers[0]!.apiVersion)) {
+        throw new Error("frontier check crossed API versions");
+      }
       // Every chunk read its own clock: the smallest S holds for all of them.
       return {
+        apiVersion: answers[0]!.apiVersion,
         S: Math.min(...answers.map((answer) => answer.S)),
         floor: Math.max(...answers.map((answer) => answer.floor)),
         changed: answers.some((answer) => answer.changed),

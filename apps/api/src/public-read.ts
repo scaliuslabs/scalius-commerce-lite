@@ -4,7 +4,7 @@ import {
   readWorkerVersion,
   type WorkerVersionMetadataEnv,
 } from "@scalius/shared/cache-generation";
-import { hashCacheDep, type StorefrontBatchPartCache } from "@scalius/shared/cache-frontier";
+import { DEPENDENCY_CACHE_RETENTION_SECONDS, hashCacheDep, type StorefrontBatchPartCache } from "@scalius/shared/cache-frontier";
 import { cacheDepKind } from "@scalius/shared/cache-deps";
 import type { PlatformConfig } from "@scalius/shared/platform-config";
 import type { Database } from "@scalius/database/client";
@@ -12,13 +12,12 @@ import { withDependencyScope, type CacheDependencies } from "@scalius/core/cache
 import { platformSettingsFromRow } from "@scalius/core/modules/platform";
 import {
   decoratePublicApiResponse,
-  dvcSnapshotKey,
   getPublicApiCachePolicy,
   withCacheIdentity,
   withDvcIdentity,
   type ApiPartCacheMode,
 } from "./public-cache-policy";
-import { readValidationSnapshot, type PlatformSettingsRow, type ValidationSnapshot } from "./cache-frontier";
+import { readValidationSnapshot, type ValidationSnapshot } from "./cache-frontier";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { runWithPublicRenderContext } from "./runtime/public-render-context";
 import { queueRenditionsForRenderedOriginals } from "./utils/media-rendition-hints";
@@ -26,10 +25,8 @@ import { queueRenditionsForRenderedOriginals } from "./utils/media-rendition-hin
 /**
  * One anonymous public read, rendered the same way wherever it is served:
  * the runtime app (routing, validation, error mapping), then the baseline
- * security headers, then the public cache headers. The `PublicApi` Workers
- * Cache entrypoint and the storefront batch both render through this, and
- * both key their caches with `publicReadCacheKey`, so the two paths cannot
- * drift apart. `runtimeEnv` is the invocation's composed env
+ * security headers, then the public cache headers. Direct reads and storefront
+ * batches both render through this. `runtimeEnv` is the invocation's composed env
  * (`composeApiRuntimeEnv`).
  */
 export async function renderPublicRead(
@@ -155,10 +152,8 @@ export interface LocalPublicReadDeps {
 }
 
 /**
- * Serves public reads inside the calling invocation: the data center's Cache
- * API under `publicReadCacheKey`, else an in-process render that is stored
- * for the next page. Unlike a `PublicApi` entrypoint call, a miss never waits
- * for another (often cold) isolate.
+ * Legacy generation comparator for differential tests and load measurements.
+ * Production direct reads and batches use the strict reader below.
  */
 export function createLocalPublicReader(deps: LocalPublicReadDeps) {
   return createGenerationReader(deps, renderSlots(deps.maxConcurrentRenders));
@@ -203,7 +198,7 @@ export interface DvcEntryMeta {
 
 export type DvcVerdict =
   | { readonly valid: true; /** s0 raised to the validation clock. */ readonly s0: number }
-  | { readonly valid: false; readonly reason: "changed" | "expired" | "floor" | "soft-age"; readonly keys?: readonly string[] };
+  | { readonly valid: false; readonly reason: "changed" | "expired" | "floor" | "soft-age" | "future"; readonly keys?: readonly string[] };
 
 const DEPS_HEADER = "X-Scalius-Deps";
 const DEP_COUNT_HEADER = "X-Scalius-Dep-Count";
@@ -242,7 +237,11 @@ export function encodeDvcEntry(response: Response, meta: DvcEntryMeta): Response
   const joined = meta.deps.join(" ");
   if (joined.length > MAX_DEPS_HEADER_LENGTH) return null;
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`);
+  headers.set("Cache-Control", `public, max-age=${DEPENDENCY_CACHE_RETENTION_SECONDS}`);
+  // Downstream no-store applies to browser-facing responses, not this private
+  // Cache API copy. Restore it only when returning the validated response.
+  headers.delete("Cloudflare-CDN-Cache-Control");
+  headers.delete("CDN-Cache-Control");
   headers.set(DEPS_HEADER, joined);
   headers.set(DEP_COUNT_HEADER, String(meta.deps.length));
   headers.set(DEP_SEQ_HEADER, String(meta.s0));
@@ -265,6 +264,9 @@ export function judgeDvcEntries(
   now: number,
 ): DvcVerdict[] {
   return entries.map((entry): DvcVerdict => {
+    // Unlike a briefly cached storefront frontier, this snapshot is an
+    // authoritative read. A proof ahead of it belongs to another history.
+    if (entry.s0 > snapshot.S) return { valid: false, reason: "future" };
     if (entry.validUntil !== null && now >= entry.validUntil) return { valid: false, reason: "expired" };
     if (entry.softMaxAgeSeconds !== null && now - entry.renderedAt >= entry.softMaxAgeSeconds * 1000) {
       return { valid: false, reason: "soft-age" };
@@ -301,9 +303,10 @@ export async function validateDvcEntries(
 }
 
 /** The storefront's view of an entry: hashed keys only (names never leave the API). */
-export function batchPartCache(meta: DvcEntryMeta, status: StorefrontBatchPartCache["status"]): StorefrontBatchPartCache {
+export function batchPartCache(meta: DvcEntryMeta, status: StorefrontBatchPartCache["status"], apiVersion: string): StorefrontBatchPartCache {
   return {
     status,
+    apiVersion,
     s0: meta.s0,
     deps: meta.deps.map(hashCacheDep),
     validUntil: meta.validUntil,
@@ -320,52 +323,6 @@ export function maskedDepsSummary(deps: readonly string[]): string {
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
   return [...counts.entries()].sort().map(([kind, count]) => `${kind}:${count}`).join(" ");
-}
-
-/**
- * The data center's latest clock snapshot: the clock, the floor and the
- * Platform settings row, all from one validation statement. A render may take
- * its s0 from any snapshot, however old: the clock never decreases, so an
- * older value is a lower bound of the clock when the render's first data read
- * starts, and every commit at or below it is visible to that read (§6.8 L2).
- * The platform row in it is exactly the row at that clock. An older s0 only
- * makes the entry reject more.
- */
-interface ClockSnapshot {
-  readonly S: number;
-  readonly floor: number;
-  readonly platform: PlatformSettingsRow | null;
-}
-
-async function readStoredSnapshot(cache: Pick<Cache, "match">, key: string): Promise<ClockSnapshot | null> {
-  const stored = await cache.match(key).catch(() => undefined);
-  if (!stored) return null;
-  try {
-    const value = await stored.json() as Partial<ClockSnapshot>;
-    if (typeof value.S !== "number" || !Number.isFinite(value.S) || typeof value.floor !== "number") return null;
-    const platform = value.platform && typeof value.platform.value === "string" && typeof value.platform.revision === "number"
-      ? { value: value.platform.value, revision: value.platform.revision }
-      : null;
-    return { S: value.S, floor: value.floor, platform };
-  } catch {
-    return null;
-  }
-}
-
-function storedSnapshot(snapshot: ClockSnapshot): Response {
-  return new Response(JSON.stringify(snapshot), {
-    headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}` },
-  });
-}
-
-/** Stale-if-error (owner decision 3) never applies to the cart shell or checkout settings. */
-const NEVER_STALE_PREFIXES = ["/api/v1/checkout", "/api/v1/shipping-methods", "/api/v1/locations"];
-export const STALE_IF_ERROR_MAX_AGE_MS = 15 * 60_000;
-
-function staleIfErrorAllowed(request: Request, meta: DvcEntryMeta, now: number): boolean {
-  const pathname = new URL(request.url).pathname;
-  if (NEVER_STALE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}-`))) return false;
-  return now - meta.renderedAt <= STALE_IF_ERROR_MAX_AGE_MS;
 }
 
 /** Sampled rates (code constants; see public-cache-policy.ts for the mode switch). */
@@ -404,7 +361,7 @@ export interface PublicPartRead {
 interface StrictPart {
   readonly response: Response;
   readonly meta: DvcEntryMeta | null;
-  readonly status: StorefrontBatchPartCache["status"] | "stale-if-error" | "uncached";
+  readonly status: StorefrontBatchPartCache["status"] | "uncached";
   readonly key: string | null;
   /** The clock the hit was validated at. */
   readonly validatedAt?: number;
@@ -431,11 +388,9 @@ export interface BatchCacheSummary {
  * - `shadow`: the same, then (in `waitUntil`) the strict reader over the
  *   same parts under its own keys, comparing what it would have served.
  * - `strict`: every part's entry is matched first (Cache API only). One
- *   statement then validates every hit and reads the clock and the Platform
- *   row; parts with no entry do not wait for it, they render at once from the
- *   data center's clock snapshot. A rejected hit re-renders from the
- *   statement's clock. So a batch costs at most one D1 statement more than
- *   its renders, and no D1 wave more: a hit-only batch is one statement.
+ *   statement then validates every hit and reads the authoritative clock and
+ *   Platform row before rendering misses or rejected hits. A hit-only batch
+ *   costs one statement; all renders in a batch share that same snapshot.
  */
 export function createPublicPartReader(deps: PublicPartReaderDeps) {
   const now = deps.now ?? (() => Date.now());
@@ -477,7 +432,7 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
 
   /** Platform rows parse once per snapshot object. */
   const parsedPlatform = new WeakMap<object, Promise<PlatformConfig | null>>();
-  function renderBase(snapshot: ClockSnapshot): Promise<RenderBase> {
+  function renderBase(snapshot: ValidationSnapshot): Promise<RenderBase> {
     let parsed = parsedPlatform.get(snapshot);
     if (!parsed) {
       parsed = platformSettingsFromRow(snapshot.platform).catch(() => null);
@@ -488,12 +443,8 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
 
   async function readStrictParts(parts: readonly Request[], summary: BatchCacheSummary, audit: boolean): Promise<Array<Promise<StrictPart>>> {
     const keys = parts.map((part) => (deps.cache ? dvcReadCacheKey(part, deps.env) : null));
-    const version = readWorkerVersion(deps.env);
-    const snapshotKey = deps.cache && version && parts.length > 0 ? dvcSnapshotKey(new URL(parts[0]!.url).origin, version) : null;
-    const [stored, colo] = await Promise.all([
-      Promise.all(keys.map((key) => (key ? deps.cache!.match(key).catch(() => undefined) : Promise.resolve(undefined)))),
-      snapshotKey ? readStoredSnapshot(deps.cache!, snapshotKey) : Promise.resolve(null),
-    ]);
+    const stored = await Promise.all(keys.map((key) =>
+      key ? deps.cache!.match(key).catch(() => undefined) : Promise.resolve(undefined)));
     const metas = stored.map((entry) => (entry ? decodeDvcEntryMeta(entry) : null));
     const hits = metas.filter((meta): meta is DvcEntryMeta => meta !== null);
 
@@ -507,16 +458,10 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
         summary.validationMs = Math.round((performance.now() - began) * 100) / 100;
         return { snapshot, verdicts: judgeDvcEntries(hits, snapshot, now()) };
       })();
-      // Keep the data center's snapshot current for the next batch's misses.
-      if (snapshotKey) {
-        deps.waitUntil(statement.then(({ snapshot }) => {
-          if (colo && colo.S >= snapshot.S && colo.floor >= snapshot.floor && colo.platform?.revision === snapshot.platform?.revision) return;
-          return deps.cache!.put(snapshotKey, storedSnapshot({ S: snapshot.S, floor: snapshot.floor, platform: snapshot.platform }));
-        }).catch(() => undefined));
-      }
       return statement;
     };
-    if (hits.length > 0 || !colo) startStatement();
+    // Even an all-miss batch needs current Platform settings. A cached clock
+    // alone is a safe lower bound for proofs, but its Platform row can be stale.
     const statementBase = async () => renderBase((await startStatement()).snapshot);
 
     let hitIndex = 0;
@@ -530,23 +475,23 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
           return renderUncached(part);
         }
         if (!meta) {
-          const base = colo ? await renderBase(colo) : await statementBase();
+          const base = await statementBase();
           const result = await renderAndStore(part, key, base, "miss");
           if (result.status === "miss") summary.misses += 1;
           else summary.uncached += 1;
           return result;
         }
-        let validated: { snapshot: ValidationSnapshot; verdicts: DvcVerdict[] };
-        try {
-          validated = await startStatement();
-        } catch (error) {
-          return staleOrThrow(part, key, meta, stored[index]!, summary, error);
-        }
+        // Validation failures fail closed: serving an unvalidated body could
+        // expose a retired product or an expired promotion during an outage.
+        const validated = await startStatement();
         const verdict = validated.verdicts[verdictIndex]!;
         if (verdict.valid) {
           summary.hits += 1;
           const served = { ...meta, s0: verdict.s0 };
           const body = stored[index]!;
+          // Return the advanced proof for page composition without rewriting
+          // the cached body. Exact dependency validation remains correct from
+          // its original s0; a future pruning floor conservatively rejects it.
           if (audit && random() < DVC_AUDIT_RATE) {
             deps.waitUntil(auditHit(part, key, served, body.clone(), validated.snapshot.S).catch(() => undefined));
           }
@@ -557,30 +502,6 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
         return renderAndStore(part, key, await renderBase(validated.snapshot), "refresh");
       })();
     });
-  }
-
-  /**
-   * The validation read failed (database outage): re-render; if that fails
-   * too, a catalogue or content entry at most 15 minutes old is served stale
-   * (owner decision 3), without proof, so it carries no cache metadata.
-   */
-  async function staleOrThrow(part: Request, key: string, meta: DvcEntryMeta, stored: Response, summary: BatchCacheSummary, cause: unknown): Promise<StrictPart> {
-    const pathname = new URL(part.url).pathname;
-    try {
-      const response = await slot(() => deps.render(part));
-      if (response.status < 500) {
-        summary.uncached += 1;
-        discardBody(stored);
-        return { response, meta: null, status: "uncached", key };
-      }
-      if (!staleIfErrorAllowed(part, meta, now())) return { response, meta: null, status: "uncached", key };
-      discardBody(response);
-    } catch (error) {
-      if (!staleIfErrorAllowed(part, meta, now())) throw error;
-    }
-    summary.stale += 1;
-    log(`[CacheDVC] stale-if-error ${pathname} (${cause instanceof Error ? cause.name : "error"})`);
-    return { response: fromStoredEntry(stored), meta: null, status: "stale-if-error", key };
   }
 
   /**
@@ -604,8 +525,15 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
   }
 
   function toPublic(part: StrictPart): PublicPartRead {
-    const proven = part.meta !== null && part.status !== "uncached" && part.status !== "stale-if-error";
-    return { response: part.response, cache: proven ? batchPartCache(part.meta!, part.status as StorefrontBatchPartCache["status"]) : null };
+    const apiVersion = readWorkerVersion(deps.env);
+    const proven = apiVersion !== null && part.meta !== null && part.status !== "uncached";
+    // Cache API retention is internal. Every external strict response must
+    // reach this validator again, including entries written by older code.
+    const headers = new Headers(part.response.headers);
+    headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+    headers.set("CDN-Cache-Control", "no-store");
+    const response = new Response(part.response.body, { status: part.response.status, statusText: part.response.statusText, headers });
+    return { response, cache: proven ? batchPartCache(part.meta!, part.status as StorefrontBatchPartCache["status"], apiVersion!) : null };
   }
 
   function logSummary(prefix: string, summary: BatchCacheSummary, extra = ""): void {

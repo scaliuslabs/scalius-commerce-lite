@@ -4,17 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   createLocation: vi.fn(),
   deleteLocations: vi.fn(),
   updateLocation: vi.fn(),
   getLocationById: vi.fn(),
   getCheckoutDeliveryReadiness: vi.fn(),
   resetPathaoImportProgress: vi.fn(),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
@@ -48,7 +44,6 @@ function createTestApp(db: Record<string, unknown> = {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.getCheckoutDeliveryReadiness.mockResolvedValue({
     status: "ready",
     hasActiveShippingMethod: true,
@@ -78,12 +73,12 @@ function createTestApp(db: Record<string, unknown> = {
   return { app, env };
 }
 
-describe("delivery location cache invalidation", () => {
+describe("delivery location write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates checkout caches after delivery location saves", async () => {
+  it("returns success after delivery location saves", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -105,8 +100,7 @@ describe("delivery location cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("routes Pathao reset to the static import endpoint before the location ID route", async () => {

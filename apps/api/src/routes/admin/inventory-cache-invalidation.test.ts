@@ -17,8 +17,7 @@ const mocks = vi.hoisted(() => ({
   acknowledgeLowStockAlert: vi.fn(),
   setLowStockThreshold: vi.fn(),
   setDefaultLowStockThreshold: vi.fn(),
-  findStockMutationAvailabilityTransitions: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/inventory", async () => {
@@ -65,14 +64,7 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("../../utils/availability-transitions", () => ({
-  findStockMutationAvailabilityTransitions:
-    mocks.findStockMutationAvailabilityTransitions,
-}));
 
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
 
 import { adminInventoryRoutes } from "./inventory";
 
@@ -110,7 +102,6 @@ function createTestApp() {
     pageInfo: { limit: 100, hasMore: false, nextCursor: null },
   });
   mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
-  mocks.findStockMutationAvailabilityTransitions.mockResolvedValue(["var_1"]);
   mocks.getInventoryLabelVariants.mockResolvedValue({
     variants: [],
     missingVariantIds: [],
@@ -166,12 +157,12 @@ async function postJson(
   );
 }
 
-describe("admin inventory cache invalidation", () => {
+describe("admin inventory write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it.each([5, null])("saves alert level %s and bumps the public cache generation", async (lowStockThreshold) => {
+  it.each([5, null])("saves alert level %s", async (lowStockThreshold) => {
     const { app, db, env } = createTestApp();
     const response = await app.request("/api/v1/admin/inventory/var_1/alert-level", {
       method: "PUT",
@@ -182,10 +173,10 @@ describe("admin inventory cache invalidation", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: { variantId: "var_1", lowStockThreshold } });
     expect(mocks.setLowStockThreshold).toHaveBeenCalledWith(db, "var_1", lowStockThreshold);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it.each([5, null])("saves store alert level %s and bumps the public cache generation", async (defaultLowStockThreshold) => {
+  it.each([5, null])("saves store alert level %s", async (defaultLowStockThreshold) => {
     const { app, db, env } = createTestApp();
     const response = await app.request("/api/v1/admin/inventory/default-alert-level", {
       method: "PUT",
@@ -196,7 +187,7 @@ describe("admin inventory cache invalidation", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: { defaultLowStockThreshold } });
     expect(mocks.setDefaultLowStockThreshold).toHaveBeenCalledWith(db, defaultLowStockThreshold);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
   it("rejects a store alert level that is not a whole number before writing", async () => {
@@ -209,7 +200,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.setDefaultLowStockThreshold).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([-1, 2.5, 1_000_001, "5"])("rejects alert level %s with a field error before writing", async (lowStockThreshold) => {
@@ -223,17 +214,17 @@ describe("admin inventory cache invalidation", () => {
     expect(response.status).toBe(400);
     expect(JSON.stringify(await response.json())).toContain("lowStockThreshold");
     expect(mocks.setLowStockThreshold).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("returns a read-only exact-SKU label projection without cache invalidation", async () => {
+  it("returns a read-only exact-SKU label projection without write behavior", async () => {
     const { app, db, env } = createTestApp();
     const variantIds = ["var_2", "var_1"];
     const response = await postJson(app, env, "/labels/preview", { variantIds });
 
     expect(response.status).toBe(200);
     expect(mocks.getInventoryLabelVariants).toHaveBeenCalledWith(db, variantIds);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it("documents the buyer-effective price used by barcode label artwork", () => {
@@ -439,24 +430,19 @@ describe("admin inventory cache invalidation", () => {
       coreCall: () => mocks.setStock,
       operationKey: "invop_api_stocktake_01",
     },
-  ])("uses targeted product availability invalidation after $label", async ({ path, body, coreCall, operationKey }) => {
-    const { app, db, env } = createTestApp();
+  ])("forwards the inventory operation key for $label", async ({ path, body, coreCall, operationKey }) => {
+    const { app, env } = createTestApp();
 
     const response = await postJson(app, env, path, body);
 
     expect(response.status).toBe(200);
     expect(coreCall()).toHaveBeenCalled();
     expect(JSON.stringify(coreCall().mock.calls[0])).toContain(operationKey);
-    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledWith(
-      db,
-      [expect.objectContaining({ variantId: "var_1" })],
-    );
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it("keeps caches hot when a regular-stock write stays in the same availability band", async () => {
+  it("returns a regular-stock write within the same availability band", async () => {
     const { app, env } = createTestApp();
-    mocks.findStockMutationAvailabilityTransitions.mockResolvedValueOnce([]);
 
     const response = await postJson(app, env, "/stock-adjust", {
       operationKey: "invop_api_same_band_01",
@@ -465,13 +451,12 @@ describe("admin inventory cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledOnce();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { variantId: "var_1", previousStock: 5, newStock: 8, delta: 3 } });
+
   });
 
-  it("keeps preorder caches hot when capacity stays available", async () => {
+  it("returns a preorder write while capacity stays available", async () => {
     const { app, env } = createTestApp();
-    mocks.findStockMutationAvailabilityTransitions.mockResolvedValueOnce([]);
 
     const response = await postJson(app, env, "/var_1/adjust", {
       operationKey: "invop_api_preorder_001",
@@ -481,17 +466,12 @@ describe("admin inventory cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "db" }),
-      [expect.objectContaining({
-        variantId: "var_1",
-        pool: "preorderStock",
-      })],
-    );
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ pool: "preorderStock", delta: 2 }), expect.anything());
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { variantId: "var_1", previousStock: 5, newStock: 7, delta: 2 } });
+
   });
 
-  it("does not invalidate caches when the stock write fails", async () => {
+  it("reports a stock write failure", async () => {
     const { app, env } = createTestApp();
     mocks.adjustInventory.mockRejectedValueOnce(new Error("Variant not found"));
 
@@ -502,8 +482,7 @@ describe("admin inventory cache invalidation", () => {
     });
 
     expect(response.status).toBe(404);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([
@@ -517,7 +496,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(coreCall()).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([
@@ -531,7 +510,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(coreCall()).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([
@@ -586,7 +565,7 @@ describe("admin inventory cache invalidation", () => {
   });
 
   it("forwards bounded movement filters and a stable cursor to the inventory service", async () => {
-    const { app, env } = createTestApp();
+    const { app, db, env } = createTestApp();
 
     const response = await app.request(
       "/api/v1/admin/inventory?section=movements&search=SKU-1&movementType=deducted&movementOrderId=ord_exact&movementStartDate=2026-07-01&movementEndDate=2026-07-02&movementCursor=1720000000%7Cmove_20&limit=20",
@@ -653,7 +632,7 @@ describe("admin inventory cache invalidation", () => {
   });
 
   it("forwards bounded alert filters, search, and pagination to the inventory service", async () => {
-    const { app, env } = createTestApp();
+    const { app, db, env } = createTestApp();
 
     const response = await app.request(
       "/api/v1/admin/inventory?section=alerts&search=SKU-LOW&alertStatus=resolved&page=3&limit=10",

@@ -45,6 +45,15 @@ export interface ValidationSnapshot {
 
 const toNumber = (value: unknown): number => (value === null || value === undefined ? 0 : Number(value));
 
+/** Zero is a valid initial clock; a missing authority row is not. */
+function authoritativeClock(value: unknown): number {
+  const clock = Number(value);
+  if (value === null || value === undefined || !Number.isSafeInteger(clock) || clock < 0) {
+    throw new Error("Cache clock unavailable");
+  }
+  return clock;
+}
+
 /**
  * Rows of a raw `db.all` read as objects: D1 returns objects, the Turso and
  * PostgreSQL proxies may return value arrays in select-list order.
@@ -69,7 +78,7 @@ export async function readValidationSnapshot(
   since: number,
 ): Promise<ValidationSnapshot> {
   const rows = await namedRows<{ s: unknown; floor: unknown; pv: unknown; pr: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor,
+    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor,
       (SELECT st."value" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pv,
       (SELECT st."revision" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pr,
       d."dep" AS dep, d."seq" AS seq
@@ -85,7 +94,7 @@ export async function readValidationSnapshot(
   }
   const first = rows[0]!;
   return {
-    S: toNumber(first.s),
+    S: authoritativeClock(first?.s),
     floor: toNumber(first.floor),
     changed,
     platform: typeof first.pv === "string" ? { value: first.pv, revision: toNumber(first.pr) } : null,
@@ -102,18 +111,18 @@ export async function readFrontierDelta(
   db: Database,
   since: number | null,
   limit: number = CACHE_FRONTIER_MAX_CHANGES,
-): Promise<CacheFrontierDelta> {
+): Promise<Omit<CacheFrontierDelta, "apiVersion">> {
   const bounded = Math.max(1, Math.min(CACHE_FRONTIER_MAX_CHANGES, Math.floor(limit)));
   const window = since === null
     ? sql`SELECT "dep", "seq" FROM "cache_dep" ORDER BY "seq" DESC LIMIT ${bounded + 1}`
     : sql`SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${since} ORDER BY "seq" LIMIT ${bounded + 1}`;
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep, d."seq" AS seq
+    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep, d."seq" AS seq
     FROM (SELECT 1 AS one) base
     LEFT JOIN "cache_clock" c ON c."id" = 1
     LEFT JOIN (${window}) d ON d."seq" <= COALESCE(c."seq", 0)
   `), ["s", "floor", "dep", "seq"]);
-  const clock = toNumber(rows[0]!.s);
+  const clock = authoritativeClock(rows[0]?.s);
   const floor = toNumber(rows[0]!.floor);
   const ascending = rows
     .filter((row) => row.dep !== null && row.dep !== undefined)
@@ -155,26 +164,26 @@ export async function checkHashedDependencies(
   db: Database,
   s0: number,
   hashes: readonly string[],
-): Promise<CacheFrontierCheck> {
+): Promise<Omit<CacheFrontierCheck, "apiVersion">> {
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown }>(db.all(sql`
-    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep
+    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep
     FROM (SELECT 1 AS one) base
     LEFT JOIN "cache_clock" c ON c."id" = 1
     LEFT JOIN (SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${s0} ORDER BY "seq" LIMIT ${FRONTIER_CHECK_MAX_ROWS + 1}) d
       ON d."seq" <= COALESCE(c."seq", 0)
   `), ["s", "floor", "dep"]);
-  const S = toNumber(rows[0]!.s);
+  const S = authoritativeClock(rows[0]?.s);
   const floor = toNumber(rows[0]!.floor);
   const scanned = rows.filter((row) => row.dep !== null && row.dep !== undefined);
-  if (s0 < floor || scanned.length > FRONTIER_CHECK_MAX_ROWS) return { S, floor, changed: true };
+  if (s0 > S || s0 < floor || scanned.length > FRONTIER_CHECK_MAX_ROWS) return { S, floor, changed: true };
   const wanted = new Set(hashes);
   return { S, floor, changed: scanned.some((row) => wanted.has(hashCacheDep(String(row.dep)))) };
 }
 
 /** The clock now; after a committed write it is at least that write's seq. */
 export async function readCommitSeq(db: Database): Promise<number> {
-  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT COALESCE((SELECT "seq" FROM "cache_clock" WHERE "id" = 1), 0) AS s`), ["s"]);
-  return toNumber(rows[0]?.s);
+  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT (SELECT "seq" FROM "cache_clock" WHERE "id" = 1) AS s`), ["s"]);
+  return authoritativeClock(rows[0]?.s);
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

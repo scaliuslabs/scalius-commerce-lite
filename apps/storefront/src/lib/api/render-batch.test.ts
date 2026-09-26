@@ -15,7 +15,7 @@ import { getActiveCheckoutLanguage } from "./settings";
 import { getCheckoutConfig } from "./checkout";
 import { hashCacheDep } from "@scalius/shared/cache-frontier";
 import { loadPageWithLayout } from "@/lib/page-data";
-import { createPageDependencies, pageEntryFromDependencies, type PageDependencies } from "@/lib/page-dependencies";
+import { createPageDependencies, pageEntryFromDependencies, recordPagePart, type PageDependencies } from "@/lib/page-dependencies";
 
 /**
  * Per-page API budget: a storefront page render is ONE service binding call.
@@ -77,7 +77,7 @@ function backend(options: { batchStatus?: number; proof?: boolean } = {}): Backe
             ...bodyFor(part.pathname),
             contentType: "application/json",
             ...(options.proof
-              ? { cache: { status: "miss", s0: part.pathname.length, deps: [hashCacheDep(part.pathname)], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 } }
+              ? { cache: { apiVersion: "api-a", status: "miss", s0: part.pathname.length, deps: [hashCacheDep(part.pathname)], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 } }
               : {}),
           })),
         },
@@ -93,7 +93,6 @@ function render<T>(api: Backend, task: () => Promise<T>, pageDependencies?: Page
   const runtime: StorefrontRuntime = {
     PUBLIC_API_URL: apiBaseUrl,
     BACKEND_API: api.fetcher,
-    CACHE_GENERATION: "a1b2c3d4e5f60718",
     inflightReads: new Map(),
     pageDependencies,
   };
@@ -215,6 +214,17 @@ describe("render read batch transport", () => {
 });
 
 describe("page dependency proof", () => {
+  it("rejects mixed or absent API deployment proofs", () => {
+    const proof = { apiVersion: "api-a", status: "hit" as const, s0: 1, deps: [], validUntil: null, softMaxAgeSeconds: null, renderedAt: 0 };
+    const dependencies = createPageDependencies();
+    recordPagePart(dependencies, proof);
+    expect(pageEntryFromDependencies(dependencies)?.apiVersion).toBe("api-a");
+    recordPagePart(dependencies, { ...proof, apiVersion: "api-b" });
+    expect(pageEntryFromDependencies(dependencies)).toBeNull();
+    const absent = createPageDependencies();
+    recordPagePart(absent, { ...proof, apiVersion: "" });
+    expect(pageEntryFromDependencies(absent)).toBeNull();
+  });
   it("composes every batch part's proof, and sends a lone read as a batch of one", async () => {
     const api = backend({ proof: true });
     const dependencies = createPageDependencies();

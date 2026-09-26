@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { Client, types } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { CACHE_DEP_MIGRATION_PATHS } from "../scripts/cache-dep-triggers";
+import { CACHE_DEP_MIGRATION_PATHS, CACHE_DEP_PROJECTION_MIGRATION_PATHS } from "../scripts/cache-dep-triggers";
 import { compileCanonicalPostgresSchema } from "../scripts/postgres-schema";
 import { runCacheDepScenario } from "./cache-dep-scenario";
 
@@ -51,7 +51,8 @@ async function database(schemaSql: string): Promise<{ client: Client; connect():
 async function applySidecar(client: Client): Promise<void> {
   await client.query("BEGIN");
   try {
-    for (const statement of readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8").split("--> statement-breakpoint")) {
+    for (const statement of [CACHE_DEP_MIGRATION_PATHS.postgres, CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres]
+      .flatMap((path) => readFileSync(path, "utf8").split("--> statement-breakpoint"))) {
       if (statement.trim()) await client.query(statement);
     }
     await client.query("COMMIT");
@@ -81,7 +82,7 @@ async function catalog(client: Client) {
 }
 
 describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
-  it("upgrades an 0099 schema to exactly the fresh 0100 schema", async () => {
+  it("upgrades an 0099 schema to exactly the fresh 0101 schema", async () => {
     const [fresh, before] = await Promise.all([
       compileCanonicalPostgresSchema(),
       compileCanonicalPostgresSchema({ beforeMigration: "0100_" }),

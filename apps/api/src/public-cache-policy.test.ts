@@ -93,12 +93,13 @@ describe("public API cache policy", () => {
     expect(publicReadCacheKey(read, {}, "gen1")).toBeNull();
   });
 
-  it("gives the edge a bounded lifetime without extending browser freshness", () => {
+  it("prevents downstream caches from bypassing strict validation", () => {
     const response = decoratePublicApiResponse(
       new Response("{}", { headers: { "Cache-Control": "public, max-age=0" } }),
     );
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, no-cache, must-revalidate");
-    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe("public, max-age=86400");
+    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+    expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
     expect(response.headers.has("Cache-Tag")).toBe(false);
   });
 

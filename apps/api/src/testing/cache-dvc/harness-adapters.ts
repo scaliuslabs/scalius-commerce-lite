@@ -34,7 +34,7 @@ import { runWithPublicRenderContext } from "../../runtime/public-render-context"
 import type { DvcClock } from "./clocks";
 import type { DependencyRecorder } from "./recorders";
 import type { SchemaModel } from "./schema-model";
-import type { DvcFrontierModel, DvcPartValidator } from "./validators";
+import { DVC_API_VERSION, type DvcFrontierModel, type DvcPartValidator } from "./validators";
 
 export interface ScopeRecorderStats {
   /** Registered tables a render read that no declared key covered (fell back to `t:`). */
@@ -179,7 +179,7 @@ export function s4Adapters(options: S4AdapterOptions = {}): S4Adapters {
       name: "s4-frontier",
       hashDep: hashCacheDep,
       // S4's delta already carries hashed keys.
-      merge: (old, delta, sentAt, cap) => mergeCacheFrontier(old, delta, sentAt, cap),
+      merge: (old, delta, sentAt, cap) => mergeCacheFrontier(old, { ...delta, apiVersion: DVC_API_VERSION }, sentAt, cap),
       decide: (entry, frontier, now) => decideCacheFrontierHit(entry, frontier, now),
     },
   };

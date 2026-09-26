@@ -7,15 +7,14 @@
  * - A `DependencyRecorder` wraps the render: S2's `withDependencyScope`
  *   (see harness-adapters.ts), or `coarseTableRecorder`, the stand-in used
  *   until S2 lands: every registered table the render read becomes its `t:`
- *   key, soft exempt tables bound the entry's age, an unregistered table
- *   makes the entry uncacheable, and scheduled columns give `validUntil`.
+ *   key, an unregistered table makes the entry uncacheable, and scheduled
+ *   columns give `validUntil`.
  *   It is correct by construction if the registry and triggers are, so the
  *   harness proves the registry (noise columns, exemptions, schedules) even
  *   before precise declarations exist.
  */
 import type { DatabaseSync } from "node:sqlite";
 import {
-  CACHE_DEP_SOFT_MAX_AGE_SECONDS,
   cacheDep,
   cacheDepExemptReason,
   isCacheDepTable,
@@ -41,14 +40,6 @@ export interface DependencyRecorder {
   record(label: string, render: () => Promise<Response>, observed: ReadonlySet<string>): Promise<{ response: Response; dependencies: RecordedDependencies }>;
 }
 
-/** Exempt tables whose only effect is soft ordering (owner decision 4). */
-export const SOFT_TABLES: ReadonlySet<string> = new Set([
-  "product_recommendations",
-  "product_sales_stats",
-  "orders",
-  "order_items",
-]);
-
 const SCHEDULE_COLUMN = /^(?:starts|ends|published|expires|valid|available)_(?:at|until|from)$/;
 
 export function coarseTableRecorder(sqlite: DatabaseSync, model: SchemaModel, now: () => number): DependencyRecorder {
@@ -58,14 +49,11 @@ export function coarseTableRecorder(sqlite: DatabaseSync, model: SchemaModel, no
       const response = await render();
       const deps = new Set<string>([cacheDep.store()]);
       const uncacheable: string[] = [];
-      let soft = false;
       let validUntil: number | null = null;
       for (const table of observed) {
         if (isCacheDepTable(table)) {
           deps.add(cacheDep.table(table));
-        } else if (cacheDepExemptReason(table) !== null) {
-          if (SOFT_TABLES.has(table)) soft = true;
-        } else if (model.has(table)) {
+        } else if (cacheDepExemptReason(table) === null && model.has(table)) {
           uncacheable.push(`unregistered-table:${table}`);
         }
         const columns = model.get(table)?.columns.filter((column) => SCHEDULE_COLUMN.test(column.name)) ?? [];
@@ -85,7 +73,7 @@ export function coarseTableRecorder(sqlite: DatabaseSync, model: SchemaModel, no
         dependencies: {
           deps: [...deps].sort(),
           validUntil,
-          softMaxAgeSeconds: soft ? CACHE_DEP_SOFT_MAX_AGE_SECONDS : null,
+          softMaxAgeSeconds: null,
           uncacheable,
         },
       };

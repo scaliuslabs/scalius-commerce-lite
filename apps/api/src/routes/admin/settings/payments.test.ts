@@ -13,14 +13,6 @@ import {
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({
-    bumpCacheGeneration: vi.fn(async () => undefined),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { paymentSettingsRoutes } from "./payments";
 
 const CREDENTIAL_ENCRYPTION_KEY = btoa("p".repeat(32));
@@ -200,7 +192,7 @@ describe("payment settings", () => {
     });
 
     describe("payment method saves", () => {
-        it("persists methods and invalidates checkout caches only after the save", async () => {
+        it("persists methods after the save", async () => {
             const { request, sqlite } = await createTestApp({ stripe: liveStripe });
 
             const response = await request("/payment-methods", { enabledMethods: ["stripe", "cod"], defaultMethod: "stripe" });
@@ -210,7 +202,7 @@ describe("payment settings", () => {
                 enabledMethods: ["stripe", "cod"],
                 defaultMethod: "stripe",
             });
-            expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         });
 
         it("allows an intentional COD-only save in standard checkout mode", async () => {
@@ -233,7 +225,7 @@ describe("payment settings", () => {
 
             await expectValidationError(await request("/payment-methods", body), message);
             expect(storedRows(sqlite, "payment_methods")).toEqual({});
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
     });
 
@@ -258,7 +250,7 @@ describe("payment settings", () => {
                 webhookSecret: "whsec_replacement",
                 enabled: true,
             });
-            expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         });
 
         it("encrypts SSLCommerz store passwords and keeps masked updates on the stored secret", async () => {
@@ -289,10 +281,10 @@ describe("payment settings", () => {
                 error: { code: "SERVICE_UNAVAILABLE", message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials." },
             });
             expect(storedRows(sqlite, path.slice(1))).toEqual({});
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
 
-        it("does not invalidate checkout caches when the gateway save fails", async () => {
+        it("reports failure when the gateway save fails", async () => {
             const { request, sqlite, failNextWrite } = await createTestApp({ stripe: liveStripe });
             failNextWrite();
 
@@ -300,7 +292,7 @@ describe("payment settings", () => {
 
             expect(response.status).toBe(500);
             expect(storedRows(sqlite, "stripe").publishableKey).toBe("pk_live_existing");
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
 
         it.each([
@@ -331,7 +323,7 @@ describe("payment settings", () => {
 
             await expectValidationError(await request(path, body), message);
             expect(storedRows(sqlite, path.slice(1))).toEqual(before);
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
 
         it("saves a partial Stripe setup while it stays off, then names the missing keys when turning it on", async () => {
@@ -387,7 +379,7 @@ describe("payment settings", () => {
             // Nothing reads as saved any more.
             const read = await (await request(path)).json() as { data: Record<string, unknown> };
             expect(JSON.stringify(read.data)).not.toContain(MASKED);
-            expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+
         });
 
         it("refuses to remove the keys of the last payment method checkout can use, like turning it off", async () => {
@@ -400,7 +392,7 @@ describe("payment settings", () => {
             await expectValidationError(await remove("/stripe"));
             expect(storedRows(sqlite, "stripe")).toEqual(before);
             expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["stripe"], defaultMethod: "stripe" });
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
 
         it("refuses a removal based on keys someone else has since changed", async () => {
@@ -411,7 +403,7 @@ describe("payment settings", () => {
 
             expect(response.status).toBe(409);
             expect(storedRows(sqlite, "stripe")).toEqual(before);
-            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         });
 
         it("keeps a compatible online gateway when partial payments require one", async () => {

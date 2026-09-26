@@ -127,7 +127,7 @@ const VALUE_ON_LIVE_SKU = sql.raw(`EXISTS (
 export function selectProductCardFactRows(db: Database, productIds: readonly string[] | SQLWrapper) {
     // Beyond each card's own `p:` key: the brand row it names, attribute
     // definitions (pack size, key specs, swatches) and the cheapest delivery
-    // fee. Units sold is soft ordering (product_sales_stats).
+    // fee. Visible sold counts declare sold:<id> while resolving the fact rows.
     deps.anyBrand();
     deps.anyAttribute();
     deps.shipping();
@@ -257,6 +257,7 @@ export function resolveProductCardFacts(
         const label = clean(row.label);
         const value = clean(row.value);
         if (row.kind === "product") {
+            deps.sold(row.productId);
             if (label && value) facts.brand = { name: label, slug: value };
             const sold = Math.floor(Number(row.amount) || 0);
             if (sold >= CARD_SOLD_MIN) facts.sold = sold;

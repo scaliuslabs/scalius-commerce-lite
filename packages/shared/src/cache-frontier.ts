@@ -34,8 +34,17 @@ export const CACHE_FRONTIER_CHECK_MAX_DEPS = 256;
 /** Header of an admin write response: the store clock after the write committed (§6.10). */
 export const CACHE_COMMIT_SEQ_HEADER = "X-Scalius-Commit-Seq";
 
+/**
+ * Cache API storage hint only: Cloudflare requires a finite freshness header
+ * and may evict objects earlier. Content validity is proved by dependencies,
+ * deployment identity and scheduled transitions, never by this duration.
+ */
+export const DEPENDENCY_CACHE_RETENTION_SECONDS = 31_536_000;
+
 /** One frontier answer. Complete for `(horizon, S]`. */
 export interface CacheFrontierDelta {
+  /** API Worker deployment that produced this proof. */
+  readonly apiVersion: string;
   /** Clock value the answer is complete up to. */
   readonly S: number;
   /** Changes at or below it are not enumerated (entries rendered before it take the slow path). */
@@ -50,6 +59,8 @@ export interface CacheFrontierDelta {
 
 /** The slow-path answer: whether any of the hashed keys changed after `s0`. */
 export interface CacheFrontierCheck {
+  /** API Worker deployment that produced this proof. */
+  readonly apiVersion: string;
   /** The clock of the check; an unchanged entry may take it as its new s0. */
   readonly S: number;
   readonly floor: number;
@@ -63,6 +74,8 @@ export interface CacheFrontierCheck {
  * shows it must not be stored.
  */
 export interface StorefrontBatchPartCache {
+  /** API Worker deployment that produced this proof. */
+  readonly apiVersion: string;
   /** Served from a validated entry, rendered with no entry, or re-rendered after its entry was rejected. */
   readonly status: "hit" | "miss" | "refresh";
   /** Clock value the part is known fresh at (raised to the validation clock on a hit). */
@@ -83,6 +96,8 @@ export interface StorefrontBatchPartCache {
  * commit acknowledged before it.
  */
 export interface CacheFrontier {
+  /** API Worker deployment that produced this proof. */
+  readonly apiVersion: string;
   readonly sentAt: number;
   readonly S: number;
   readonly horizon: number;
@@ -93,6 +108,8 @@ export interface CacheFrontier {
 
 /** A cached storefront page, as the hit rule sees it. */
 export interface CacheFrontierEntry {
+  /** API Worker deployment that produced this proof. */
+  readonly apiVersion: string;
   readonly s0: number;
   readonly depHashes: readonly string[];
   readonly validUntil: number | null;
@@ -136,11 +153,11 @@ export function isCacheDepHash(value: unknown): value is string {
  */
 export function mergeCacheFrontier(
   old: CacheFrontier | null,
-  delta: Pick<CacheFrontierDelta, "S" | "horizon" | "floor" | "changes">,
+  delta: Pick<CacheFrontierDelta, "apiVersion" | "S" | "horizon" | "floor" | "changes">,
   sentAt: number,
   cap: number = CACHE_FRONTIER_MAX_CHANGES,
 ): CacheFrontier {
-  const connects = old !== null && delta.horizon <= old.S;
+  const connects = old !== null && old.apiVersion === delta.apiVersion && delta.horizon <= old.S;
   const changes = new Map<string, number>(connects ? old.changes : []);
   let horizon = connects ? old.horizon : delta.horizon;
   const floor = Math.max(delta.floor, connects ? old.floor : 0);
@@ -155,7 +172,7 @@ export function mergeCacheFrontier(
     changes.clear();
     for (const [hash, seq] of ordered.slice(0, cap)) if (seq > horizon) changes.set(hash, seq);
   }
-  return { sentAt, S: delta.S, horizon, floor, changes };
+  return { apiVersion: delta.apiVersion, sentAt, S: delta.S, horizon, floor, changes };
 }
 
 /**
@@ -167,6 +184,7 @@ export function decideCacheFrontierHit(
   frontier: CacheFrontier,
   now: number,
 ): CacheFrontierDecision {
+  if (!entry.apiVersion || !frontier.apiVersion || entry.apiVersion !== frontier.apiVersion) return "render";
   if (entry.validUntil !== null && now >= entry.validUntil) return "render";
   if (entry.softMaxAgeSeconds !== null && now - entry.renderedAt >= entry.softMaxAgeSeconds * 1000) return "render";
   if (entry.s0 < frontier.floor) return "render";

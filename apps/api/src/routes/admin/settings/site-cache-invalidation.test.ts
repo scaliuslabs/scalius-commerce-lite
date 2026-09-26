@@ -10,7 +10,7 @@ import {
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   getCurrencySettings: vi.fn(),
   isCurrencyCodeLocked: vi.fn(),
   saveCurrencySettings: vi.fn(),
@@ -40,11 +40,6 @@ const mocks = vi.hoisted(() => ({
   saveAllowedCountries: vi.fn(),
   runSeoDiscoveryLiveProbe: vi.fn(),
   readSettingsForEdit: vi.fn(),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration:
-    mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -114,7 +109,6 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   // Editors read a document with its revision; route each document to its reader mock.
   mocks.readSettingsForEdit.mockImplementation(async (database: unknown, document: { key: string }) => {
     const read = {
@@ -337,7 +331,7 @@ async function requestJson(
 
 const REVISIONED_PATHS = new Set(["/currency", "/media", "/seo", "/storefront-url", "/allowed-countries"]);
 
-describe("site settings cache invalidation", () => {
+describe("site settings write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -497,7 +491,7 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(200);
       expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), { socialImage }, { expectedRevision: 1 });
-      expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
     },
   );
 
@@ -652,9 +646,7 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
-      expect(
-        mocks.bumpCacheGeneration,
-      ).not.toHaveBeenCalled();
+
     },
   );
 
@@ -781,8 +773,7 @@ describe("site settings cache invalidation", () => {
         feeds: { variantStrategy: "products" },
       },
     }, { expectedRevision: 1 });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
-    );
+
   });
 
   it("accepts return policy saves through the SEO settings route", async () => {
@@ -812,11 +803,10 @@ describe("site settings cache invalidation", () => {
         policyUrl: "/returns",
       },
     }, { expectedRevision: 1 });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("rejects invalid return policy payloads before saving or invalidating", async () => {
+  it("rejects invalid return policy payloads before saving", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, "POST", "/seo", {
@@ -833,9 +823,7 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
+
   });
 
   it("returns bounded product feed diagnostics from the current SEO feed policy", async () => {
@@ -1035,16 +1023,14 @@ describe("site settings cache invalidation", () => {
       body: { allowedCountries: ["BD"], mode: "include" },
     },
   ])(
-    "bumps the cache generation after $path saves",
+    "commits $path saves",
     async ({ path, method, body }) => {
       const { app, env, kv } = createTestApp();
 
       const response = await requestJson(app, env, method, path, body);
 
       expect(response.status).toBe(200);
-      expect(
-        mocks.bumpCacheGeneration,
-      ).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
       if (path === "/storefront-url") {
         // The storefront origin lives in the platform document; its KV mirror is written through.
         expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), kv, { expectedRevision: 1 });
@@ -1087,7 +1073,7 @@ describe("site settings cache invalidation", () => {
   });
 
   it.each(["", "US", "USDT", "ZZZ", "12A"])(
-    "rejects unsupported currency code %s before saving or invalidating",
+    "rejects unsupported currency code %s before saving",
     async (currencyCode) => {
       const { app, env } = createTestApp();
 
@@ -1099,14 +1085,12 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
-      expect(
-        mocks.bumpCacheGeneration,
-      ).not.toHaveBeenCalled();
+
     },
   );
 
   it.each(["", "0", "-1", "Infinity", "NaN", "1foo"])(
-    "rejects invalid USD exchange rate %j before saving or invalidating",
+    "rejects invalid USD exchange rate %j before saving",
     async (usdExchangeRate) => {
       const { app, env } = createTestApp();
 
@@ -1118,13 +1102,11 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
-      expect(
-        mocks.bumpCacheGeneration,
-      ).not.toHaveBeenCalled();
+
     },
   );
 
-  it("returns the typed currency lock conflict without invalidating caches", async () => {
+  it("returns the typed currency lock conflict", async () => {
     const { app, env } = createTestApp();
     mocks.saveCurrencySettings.mockRejectedValueOnce(
       new ConflictError(
@@ -1147,12 +1129,10 @@ describe("site settings cache invalidation", () => {
       message:
         "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
     });
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
+
   });
 
-  it("rejects invalid version 5 theme documents before saving or invalidating cache", async () => {
+  it("rejects invalid version 5 theme documents before saving", async () => {
     const { app, env } = createTestApp();
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
     lowContrast.tokens.colors.foreground = "#f5f5f5";
@@ -1194,10 +1174,10 @@ describe("site settings cache invalidation", () => {
     expect(draftResponse.status).toBe(400);
     expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
     expect(mocks.saveThemeDraft).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("does not invalidate storefront caches after a stale theme publish", async () => {
+  it("returns a conflict for a stale theme publish", async () => {
     const { app, env } = createTestApp();
     mocks.saveThemeSettings.mockRejectedValueOnce(
       new ConflictError(
@@ -1217,12 +1197,10 @@ describe("site settings cache invalidation", () => {
       1,
       null,
     );
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
+
   });
 
-  it("saves and rebases theme drafts without invalidating the published storefront", async () => {
+  it("saves and rebases theme drafts", async () => {
     const { app, env } = createTestApp();
     const payload = {
       theme: DEFAULT_STOREFRONT_THEME,
@@ -1261,12 +1239,10 @@ describe("site settings cache invalidation", () => {
       1,
       null,
     );
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
+
   });
 
-  it("creates a private exact-draft preview without invalidating caches", async () => {
+  it("creates a private exact-draft preview", async () => {
     const { app, env } = createTestApp();
     const response = await requestJson(
       app,
@@ -1296,9 +1272,7 @@ describe("site settings cache invalidation", () => {
     expect(body.data).not.toHaveProperty("token");
     expect(JSON.stringify(body.data)).not.toContain("/tpc_");
     expect(body.data).not.toHaveProperty("theme");
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
+
   });
 
   it("publishes bounded body-only preview continuation response fields", () => {
@@ -1356,7 +1330,7 @@ describe("site settings cache invalidation", () => {
     });
   });
 
-  it("invalidates layout only after publishing or restoring a theme revision", async () => {
+  it("returns success after publishing or restoring a theme revision", async () => {
     const { app, env } = createTestApp();
     const publishResponse = await requestJson(
       app,
@@ -1379,20 +1353,6 @@ describe("site settings cache invalidation", () => {
 
     expect(publishResponse.status).toBe(200);
     expect(rollbackResponse.status).toBe(200);
-    expect(
-      mocks.bumpCacheGeneration,
-    ).toHaveBeenCalledTimes(2);
-    expect(
-      mocks.bumpCacheGeneration,
-    ).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-    );
-    expect(
-      mocks.bumpCacheGeneration,
-    ).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-    );
+
   });
 });

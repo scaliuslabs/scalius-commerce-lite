@@ -407,6 +407,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 222,
         postgresStatements: 221,
       },
+      {
+        version: 101,
+        name: "0101_cache_ordering_dependencies",
+        sqliteStatements: 20,
+        postgresStatements: 20,
+      },
     ]);
   });
 
@@ -556,6 +562,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 98, name: "0098_warranty" },
           { version: 99, name: "0099_customer_whatsapp" },
           { version: 100, name: "0100_cache_dependencies" },
+          { version: 101, name: "0101_cache_ordering_dependencies" },
         ],
       });
     } finally {

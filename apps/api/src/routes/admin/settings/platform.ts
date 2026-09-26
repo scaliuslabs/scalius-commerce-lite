@@ -12,7 +12,7 @@ import {
   dashboardBasePathFromUrl,
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
@@ -127,7 +127,6 @@ const updatePlatformRoute = createRoute({
 app.openapi(updatePlatformRoute, async (c) => {
   const { expectedRevision, ...patch } = c.req.valid("json");
   const saved = await savePlatformSettings(c.get("db"), patch, c.env.CACHE, { expectedRevision });
-  await bumpCacheGeneration(c);
 
   c.header("Cache-Control", "private, no-store");
   return respond(c, saved);

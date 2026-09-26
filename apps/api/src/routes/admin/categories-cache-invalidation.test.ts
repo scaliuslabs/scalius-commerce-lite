@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   bulkDeleteCategories: vi.fn(),
   restoreCategories: vi.fn(),
   permanentlyDeleteCategory: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/categories", async () => {
@@ -33,16 +33,6 @@ vi.mock("@scalius/core/modules/categories", async () => {
     bulkDeleteCategories: mocks.bulkDeleteCategories,
     restoreCategories: mocks.restoreCategories,
     permanentlyDeleteCategory: mocks.permanentlyDeleteCategory,
-  };
-});
-
-vi.mock("../../utils/cache-generation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
-    "../../utils/cache-generation",
-  );
-  return {
-    ...actual,
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
   };
 });
 
@@ -92,7 +82,6 @@ function createTestApp() {
   mocks.bulkDeleteCategories.mockResolvedValue(undefined);
   mocks.restoreCategories.mockResolvedValue(undefined);
   mocks.permanentlyDeleteCategory.mockResolvedValue(undefined);
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -125,12 +114,12 @@ async function requestJson(
   );
 }
 
-describe("admin category cache invalidation", () => {
+describe("admin category write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("purges category projections after creating a draft category", async () => {
+  it("returns success after creating a draft category", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -142,11 +131,10 @@ describe("admin category cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("purges category projections after slug updates", async () => {
+  it("returns success after slug updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -162,7 +150,6 @@ describe("admin category cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 });

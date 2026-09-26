@@ -5,6 +5,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
+import { CURRENT_DATABASE_SCHEMA, CURRENT_DATABASE_SCHEMA_MIGRATIONS } from "../src/schema-contract";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 type Row = Record<string, SQLInputValue>;
@@ -443,16 +444,19 @@ describe.each(PROVIDERS)("expand-only upgrade from 0094 (%s)", (provider) => {
     expect(scalar(sqlite, "SELECT count(*) FROM order_items WHERE warranty_revision_id IS NULL")).toBe(2);
     expect(scalar(sqlite, "SELECT count(*) FROM order_item_warranties")).toBe(0);
     expect(scalar(sqlite, "SELECT count(*) FROM order_review_requests")).toBe(1);
-    expect(sqlite.prepare("SELECT version, name FROM scalius_schema_migrations WHERE version >= 93 ORDER BY version").all())
-      .toEqual([
-        { version: 93, name: "0093_theme_document_v5" },
-        { version: 94, name: "0094_media_rendition_ladder" },
-        { version: 95, name: "0095_reviews" },
-        { version: 96, name: "0096_digital_goods" },
-        { version: 97, name: "0097_gift_cards" },
-        { version: 98, name: "0098_warranty" },
-        { version: 99, name: "0099_customer_whatsapp" },
-        { version: 100, name: "0100_cache_dependencies" },
-      ]);
+    const releases = sqlite.prepare("SELECT version, name FROM scalius_schema_migrations WHERE version >= 93 ORDER BY version").all();
+    expect(releases).toEqual([
+      { version: 93, name: "0093_theme_document_v5" },
+      { version: 94, name: "0094_media_rendition_ladder" },
+      { version: 95, name: "0095_reviews" },
+      { version: 96, name: "0096_digital_goods" },
+      { version: 97, name: "0097_gift_cards" },
+      { version: 98, name: "0098_warranty" },
+      { version: 99, name: "0099_customer_whatsapp" },
+      { version: 100, name: "0100_cache_dependencies" },
+      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS.filter(({ version }) => version > 100)
+        .map(({ version, name }) => ({ version, name })),
+    ]);
+    expect(releases.at(-1)).toEqual(CURRENT_DATABASE_SCHEMA);
   });
 });
