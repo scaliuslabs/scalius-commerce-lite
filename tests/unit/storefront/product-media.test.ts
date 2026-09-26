@@ -28,12 +28,15 @@ describe("storefront product media helpers", () => {
 
   it("picks the rendition for a slot and offers every rendition to srcset", () => {
     expect(getProductImageUrl(master, 96)).toBe(
-      "https://cloud.scalius.com/media/media_fish1234.jpg/160.webp",
+      "https://cloud.scalius.com/media/media_fish1234.jpg/144.webp",
     );
     expect(getProductImageUrl(master, 600)).toBe(
-      "https://cloud.scalius.com/media/media_fish1234.jpg/640.webp",
+      "https://cloud.scalius.com/media/media_fish1234.jpg/613.webp",
     );
     expect(getProductImageSrcSet(master)?.split(", ").map((entry) => entry.split(" ")[1]))
-      .toEqual(["160w", "320w", "480w", "640w", "960w", "1600w"]);
+      .toEqual([
+        "144w", "172w", "206w", "247w", "296w", "355w", "426w",
+        "511w", "613w", "735w", "882w", "960w", "1600w",
+      ]);
   });
 });
