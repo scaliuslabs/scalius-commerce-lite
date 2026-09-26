@@ -401,6 +401,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 100,
+        name: "0100_cache_dependencies",
+        sqliteStatements: 225,
+        postgresStatements: 224,
+      },
     ]);
   });
 
@@ -549,6 +555,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 97, name: "0097_gift_cards" },
           { version: 98, name: "0098_warranty" },
           { version: 99, name: "0099_customer_whatsapp" },
+          { version: 100, name: "0100_cache_dependencies" },
         ],
       });
     } finally {

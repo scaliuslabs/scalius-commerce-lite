@@ -17,6 +17,8 @@ import {
     type BrandLogo,
     type BrandLogoRow,
 } from "../brands/brands.storefront";
+import { cacheDep } from "@scalius/shared/cache-deps";
+import { deps } from "../../cache-deps";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
 
@@ -34,6 +36,7 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     resolve(results: readonly unknown[], offset: number): HomeMediaAsset[];
 } {
     if (mediaIds.length === 0) return { statements: [], resolve: () => [] };
+    deps.mediaItems(mediaIds);
     // Only the id set is an indexable condition: with `kind = 'image'` in the
     // WHERE, SQLite drives the lookup from the kind index and reads every
     // image in the library (75k rows at 30k products). Kind is checked on the
@@ -96,6 +99,10 @@ export function planHomeBrands(db: Database, limit: number): {
     resolve(results: readonly unknown[], offset: number): HomeBrand[];
 } {
     if (limit <= 0) return { statements: [], resolve: () => [] };
+    // Which brands hold a public product is a store-shape fact; the brand
+    // rows count through the "any brand" key, their logos per image below.
+    deps.key(cacheDep.storeShape());
+    deps.anyBrand();
     const statement = db
         .select({
             id: brands.id,
@@ -115,7 +122,9 @@ export function planHomeBrands(db: Database, limit: number): {
     return {
         statements: [statement],
         resolve(results, offset) {
-            return (results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow>).map((row) => ({
+            const rows = results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow>;
+            deps.mediaItems(rows.flatMap((row) => (row.logoMediaId ? [row.logoMediaId] : [])));
+            return rows.map((row) => ({
                 id: row.id,
                 name: row.name,
                 slug: row.slug,
@@ -149,6 +158,7 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
     resolve(results: readonly unknown[], offset: number): HomePromotionEnd[];
 } {
     if (ids.length === 0) return { statements: [], resolve: () => [] };
+    deps.promotions(ids);
     const statement = db
         .select({ id: promotions.id, startsAt: promotions.startsAt, endsAt: promotions.endsAt })
         .from(promotions)
@@ -165,7 +175,13 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
             return (results[offset] as Array<{ id: string; startsAt: unknown; endsAt: unknown }>).flatMap((row) => {
                 const starts = epochSeconds(row.startsAt);
                 const ends = epochSeconds(row.endsAt);
-                if (ends === null || ends <= nowSeconds || (starts !== null && starts > nowSeconds)) return [];
+                if (ends === null || ends <= nowSeconds) return [];
+                // The countdown appears when the promotion starts and goes when it ends.
+                if (starts !== null && starts > nowSeconds) {
+                    deps.validUntil(starts * 1000);
+                    return [];
+                }
+                deps.validUntil(ends * 1000);
                 return [{ id: row.id, endsAt: new Date(ends * 1000).toISOString() }];
             });
         },

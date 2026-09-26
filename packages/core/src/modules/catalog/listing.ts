@@ -24,6 +24,7 @@ import { loadCatalogCardData } from "./card-facts";
 import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
+    declareFacetReadWithoutProducts,
     groupCatalogFacets,
     groupCatalogRatingFacet,
     type CatalogFacetCountInput,
@@ -47,6 +48,15 @@ import {
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
+import {
+    brandScopes,
+    categoryScope,
+    categoryScopes,
+    declareListing,
+    declareProductCards,
+    deps,
+    type ListingDependencySet,
+} from "./declare-deps";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 
@@ -74,7 +84,6 @@ type StorefrontProductListRow = {
     freeDelivery: boolean;
     categoryId: string | null;
     createdAt: number;
-    updatedAt: number;
     ratingAvgCenti: number | null;
     reviewCount: number | null;
 };
@@ -96,7 +105,6 @@ export interface StorefrontCategoryProductCategory {
     noIndex: boolean;
     excludeFromSitemap: boolean;
     createdAt: string | null;
-    updatedAt: string | null;
 }
 
 /**
@@ -145,6 +153,8 @@ type StorefrontCatalogScope = {
     fixedCategory?: StorefrontCategoryProductCategory;
     /** The brand's own page: no brand facet. */
     withoutBrandFacet?: boolean;
+    /** The cache keys of the scope's set; the whole public catalogue when left out. */
+    dependencies?: ListingDependencySet;
     /**
      * The category-tree facet: a category's children with subtree counts;
      * by default the categories the listed products sit in.
@@ -173,6 +183,11 @@ async function readStorefrontCatalogPage(
 }
 
 /** At most `limit + 1` public products: enough to tell "more than limit" apart. */
+/** The category's closure ancestors (itself included), comma-joined; ids never contain commas. */
+function categoryAncestorIdsSql(categoryId: string): SQL<string | null> {
+    return sql<string | null>`(SELECT group_concat("category_closure"."ancestor_id", ',') FROM "category_closure" WHERE "category_closure"."descendant_id" = ${categoryId})`;
+}
+
 function boundedPublicCatalogueSizeSql(limit: number): SQL<number> {
     return sql<number>`(
         SELECT count(*) FROM (
@@ -233,7 +248,6 @@ async function readStorefrontCatalogResults(
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
-            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
             ratingAvgCenti: reviewStats.ratingAvgCenti,
@@ -254,6 +268,7 @@ async function readStorefrontCatalogResults(
     // Without a price filter the price range reads exactly the count's rows,
     // so one statement answers both.
     const hasPriceFilter = priceBounds.minPriceMinor !== undefined || priceBounds.maxPriceMinor !== undefined;
+    const ancestorsCategoryId = scope.fixedCategory?.id && deps.active() ? scope.fixedCategory.id : null;
     let countQuery = db
         .select({
             count: sql<number>`count(*)`,
@@ -263,6 +278,10 @@ async function readStorefrontCatalogResults(
             publicCatalogueSize: unscoped
                 ? boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT)
                 : sql<number>`0`,
+            // Inside a dependency scope: the fixed category's ancestors (its
+            // facets' attribute sets are its own and its ancestors'), read
+            // with the count instead of by a statement of their own.
+            ...(ancestorsCategoryId ? { categoryAncestors: categoryAncestorIdsSql(ancestorsCategoryId) } : {}),
         })
         .from(buyerState)
         .$dynamic();
@@ -287,6 +306,7 @@ async function readStorefrontCatalogResults(
         needsProducts: countNeedsProducts,
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
+        categoryAncestorsDeclared: ancestorsCategoryId !== null,
         brandFacet: !scope.withoutBrandFacet,
         ratingFacet: true,
         minRating,
@@ -319,6 +339,7 @@ async function readStorefrontCatalogResults(
         ? scope.categoryFacet.parentId
         : null;
     type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
+    const productIds = productsList.map((product) => product.id);
     // Card media and card facts share one batch (card-facts.ts).
     const [cardData, categoriesData, facetRows] = await Promise.all([
         loadCatalogCardData(db, productsList, decimalPlaces),
@@ -351,6 +372,24 @@ async function readStorefrontCatalogResults(
             : Promise.resolve([] as ListedCategory[]),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
+    declareListing(scope.dependencies ?? { scopes: ["all"] }, params, {
+        facets: !unscoped || shopAllFacetsLive,
+    });
+    declareProductCards(productIds, cardData.media);
+    if (productIds.length === 0) {
+        // An empty page shows no product, yet its statements name the card
+        // SKU (and the facet axis lookup): only coarse keys cover those reads.
+        const facetsRead = !unscoped || shopAllFacetsLive;
+        if (facetsRead) declareFacetReadWithoutProducts(facetRows);
+        if (!facetRows.some((row) => row.facetKind === "option")) deps.table("product_variants");
+    }
+    // The category of each card (published state, name, slug).
+    deps.categories(categoryIds);
+    if (ancestorsCategoryId) {
+        const ancestors = (totalCount as { categoryAncestors?: string | null } | undefined)?.categoryAncestors;
+        deps.categories(ancestors ? ancestors.split(",") : []);
+    }
+    deps.category(scope.fixedCategory?.id);
     const categoryMap = new Map(categoriesData.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
     const subcategoryIds = new Map(categoriesData.map((category) => [category.id, category.subcategoryId]));
     const productsWithImages = productsList.map(({
@@ -360,8 +399,10 @@ async function readStorefrontCatalogResults(
         reviewCount,
         ...product
     }) => {
+        // A card names its category (id, name, slug), never the page's whole
+        // category record.
         const category = scope.fixedCategory && product.categoryId === scope.fixedCategory.id
-            ? scope.fixedCategory
+            ? { id: scope.fixedCategory.id, name: scope.fixedCategory.name, slug: scope.fixedCategory.slug }
             : product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         return {
             ...presentBuyerPricing(product, decimalPlaces),
@@ -376,7 +417,6 @@ async function readStorefrontCatalogResults(
                 ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }
                 : {}),
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
         };
     });
 
@@ -411,7 +451,11 @@ export async function getStorefrontCategoryProducts(
     params: StorefrontProductFilterInput,
     options: StorefrontCategoryListingOptions = {},
 ) {
+    // `lm:cat:<id>` covers the category and every descendant; a subtree also
+    // depends on which descendants are published.
+    if (options.includeDescendants) deps.anyCategory();
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: [categoryScope(category.id)] },
         // The buyer state's category index: (is_public, category_id, newest).
         condition: options.includeDescendants
             ? publicCategorySubtreeCondition(buyerState.categoryId, category.id)
@@ -441,7 +485,9 @@ export async function getStorefrontBrandProducts(
     brand: { id: string },
     params: StorefrontProductFilterInput,
 ) {
+    deps.brand(brand.id);
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: brandScopes(brand.id) },
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
         withoutBrandFacet: true,
@@ -488,7 +534,7 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
     const condition = branches.length > 0
         ? sql`${buyerState.productId} IN (${sql.join(branches, sql` UNION `)})`
         : sql`0 = 1`;
-    return { productIds, membershipJson, condition };
+    return { productIds, categoryIds, membershipJson, condition };
 }
 
 /**
@@ -508,9 +554,12 @@ export async function getStorefrontCollectionProducts(
     membership: StorefrontCollectionMembership,
     params: StorefrontProductFilterInput,
 ) {
-    const { productIds, membershipJson, condition } = storefrontCollectionMembership(membership);
-
+    const { productIds, categoryIds, membershipJson, condition } = storefrontCollectionMembership(membership);
+    // A dynamic collection lists its categories' public products (each
+    // category's published state included); a manual one its picked ids.
+    deps.categories(categoryIds);
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: categoryScopes(categoryIds), members: productIds },
         condition,
         drivenByIdSet: true,
         orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")

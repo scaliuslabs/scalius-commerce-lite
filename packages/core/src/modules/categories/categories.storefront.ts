@@ -5,6 +5,7 @@ import { categories } from "@scalius/database/schema";
 import { sql, eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
+import { deps } from "../../cache-deps";
 import {
     publicCategoryTreeContextQueries,
     type CategoryBreadcrumbItem,
@@ -19,11 +20,49 @@ export const STOREFRONT_CATEGORY_TEXT_CHUNK = 12_000;
 export type StorefrontCategorySection = "summary" | "text";
 export type StorefrontCategoryTextField = "description" | "content";
 
+/** Category URLs one sitemap document lists at most (the sitemap protocol allows 50k). */
+export const CATEGORY_SITEMAP_LIMIT = 5000;
+
+/**
+ * Category pages for XML discovery: published, live, not `noIndex` and not
+ * `excludeFromSitemap`, filtered before the limit (never after a page read).
+ * `updatedAt` is the row's own last change, the page's lastmod.
+ */
+export async function getPublicCategorySitemapEntries(db: Database) {
+    deps.anyCategory();
+    // Sitemap lastmod: a write that changes only updated_at advances the
+    // discovery key (cache-deps registry), not a category key.
+    deps.discoveryMembership();
+    const rows = await db
+        .select({
+            slug: categories.slug,
+            canonicalPath: categories.canonicalPath,
+            updatedAt: sql<number | null>`CAST(COALESCE(${categories.updatedAt}, ${categories.createdAt}) AS INTEGER)`,
+        })
+        .from(categories)
+        .where(and(
+            ...publicCategoryConditions(),
+            eq(categories.noIndex, false),
+            eq(categories.excludeFromSitemap, false),
+        ))
+        .orderBy(categories.name, categories.id)
+        .limit(CATEGORY_SITEMAP_LIMIT)
+        .all();
+    return rows.map((row) => ({
+        slug: row.slug,
+        canonicalPath: row.canonicalPath,
+        updatedAt: row.updatedAt ? new Date(Number(row.updatedAt) * 1000).toISOString() : null,
+    }));
+}
+
 /**
  * Returns all active categories for the storefront (navigation, listing).
  * No pagination — categories are typically <100 rows and cached aggressively.
  */
 export async function getPublicCategories(db: Database) {
+    // Category reads list, look up by slug or walk the tree: any category
+    // row (and closure) change can change them, and category writes are rare.
+    deps.anyCategory();
     const categoriesList = await db
         .select({
             id: categories.id,
@@ -77,13 +116,13 @@ export async function getPublicCategorySummaries(
             imageUrl: categories.imageUrl,
             descriptionCharacters: sql<number>`length(coalesce(${categories.description}, ''))`,
             contentCharacters: sql<number>`length(coalesce(${categories.content}, ''))`,
-            updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
         .where(where)
         .orderBy(categories.name)
         .limit(limit)
         .offset((page - 1) * limit);
+    deps.anyCategory();
     const [counts, rows] = await db.batch([countQuery, rowsQuery]);
     const total = Number(counts[0]?.count ?? 0);
     return {
@@ -91,9 +130,6 @@ export async function getPublicCategorySummaries(
             ...category,
             descriptionCharacters: Number(category.descriptionCharacters ?? 0),
             contentCharacters: Number(category.contentCharacters ?? 0),
-            updatedAt: category.updatedAt
-                ? new Date(Number(category.updatedAt) * 1000).toISOString()
-                : null,
         })),
         pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
@@ -106,6 +142,7 @@ export async function getPublicCategorySummaries(
  * Returns null if not found, not published or soft-deleted.
  */
 export async function getPublicCategoryBySlug(db: Database, slug: string) {
+    deps.anyCategory();
     const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT);
     const [rows, children, breadcrumb] = await db.batch([
         db
@@ -157,6 +194,7 @@ export async function getPublicCategorySection(
     section: StorefrontCategorySection,
     options: { field?: StorefrontCategoryTextField; offset?: number } = {},
 ) {
+    deps.anyCategory();
     if (section === "summary") {
         const category = await db
             .select({
@@ -222,6 +260,7 @@ export async function getPublicCategorySection(
  * Filters out soft-deleted categories. Includes both createdAt and updatedAt.
  */
 export async function getPublicCategoryById(db: Database, id: string) {
+    deps.anyCategory();
     return db
         .select({
             id: categories.id,

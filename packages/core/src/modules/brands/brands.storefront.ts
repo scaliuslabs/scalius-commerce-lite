@@ -7,6 +7,7 @@ import { brands, media } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, eq, isNull, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { getCurrentMediaUrl } from "../../integrations/storage";
+import { deps } from "../../cache-deps";
 
 export const PUBLIC_BRAND_PAGE_LIMIT = 100;
 /** Brand URLs one sitemap document lists at most (the sitemap protocol allows 50k). */
@@ -43,6 +44,12 @@ export const brandLogoColumns = {
     logoWidth: sql<number | null>`${media.width}`.as("brand_logo_width"),
     logoHeight: sql<number | null>`${media.height}`.as("brand_logo_height"),
 };
+
+/**
+ * The brand's own logo reference, joined or not: a logo file that is not
+ * usable yet still decides the output once it becomes ready.
+ */
+const brandLogoSourceColumn = sql<string | null>`${brands.logoMediaId}`.as("brand_logo_source_media_id");
 
 export type BrandLogoRow = {
     logoMediaId: string | null;
@@ -93,16 +100,23 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
             createdAt: sql<number>`CAST(${brands.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${brands.updatedAt} AS INTEGER)`,
             ...brandLogoColumns,
+            logoSourceMediaId: brandLogoSourceColumn,
         })
         .from(brands)
         .leftJoin(media, brandLogoJoinCondition())
         .where(and(eq(brands.slug, slug), ...publicBrandConditions()))
         .get();
-    if (!row) return null;
+    if (!row) {
+        // Any brand can take this slug or be published under it.
+        deps.anyBrand();
+        return null;
+    }
     const {
         logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight,
-        createdAt, updatedAt, ...brand
+        logoSourceMediaId, createdAt, updatedAt, ...brand
     } = row;
+    deps.brand(brand.id);
+    deps.media(logoSourceMediaId);
     return {
         ...brand,
         logo: presentBrandLogo({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight }, brand.name),
@@ -132,6 +146,7 @@ export async function listPublicBrands(
                 slug: brands.slug,
                 canonicalPath: brands.canonicalPath,
                 ...brandLogoColumns,
+                logoSourceMediaId: brandLogoSourceColumn,
             })
             .from(brands)
             .leftJoin(media, brandLogoJoinCondition())
@@ -141,8 +156,11 @@ export async function listPublicBrands(
             .offset((page - 1) * limit),
     ]);
     const total = Number(counts[0]?.count ?? 0);
+    // Which brands are published and in what order, and each logo file.
+    deps.anyBrand();
+    deps.mediaItems(rows.map((row) => row.logoSourceMediaId));
     return {
-        brands: rows.map(({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight, ...brand }) => ({
+        brands: rows.map(({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight, logoSourceMediaId: _logoSource, ...brand }) => ({
             ...brand,
             logo: presentBrandLogo({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight }, brand.name),
         })),
@@ -155,6 +173,7 @@ export async function listPublicBrands(
  * `excludeFromSitemap`, filtered before the limit (never after a page read).
  */
 export async function getPublicBrandSitemapEntries(db: Database) {
+    deps.anyBrand();
     const rows = await db
         .select({
             slug: brands.slug,

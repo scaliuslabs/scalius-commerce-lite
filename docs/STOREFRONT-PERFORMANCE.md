@@ -59,6 +59,18 @@ check it. The release-wide evidence lives in
    - The batch response is `private, no-store`. Each part keeps its own
      status, a failed part fails only that part, and error parts are never
      stored.
+   - The dependency-validated part cache (CACHE-DESIGN §6.6) is switched by
+     one code constant, `API_PART_CACHE_MODE` in
+     `apps/api/src/public-cache-policy.ts`. The default is `shadow`: parts
+     are served exactly as above, and after the response the strict reader
+     evaluates the same parts under its own keys (`path + sorted query +
+     __cv`), logging `[CacheShadow] missed-dep <path> <key kinds>` for any
+     validated entry that differs from a fresh render. In `strict`, a batch
+     validates all its hits with one statement (clock, floor, Platform row,
+     `json_each` over the hit keys), renders misses at once from the data
+     center's clock snapshot, and returns each part's hashed keys and s0
+     (`cache` on the part) for the storefront page cache. Direct reads then
+     use the same reader, not `PublicApi`.
 
    Why the batch does not call the `PublicApi` Workers Cache entrypoint: live
    tails on 2026-09-25 showed that each entrypoint miss runs in a separate
@@ -446,7 +458,7 @@ also clears it at once.
 | Guardrail | Where | Budget |
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts`, `apps/storefront/src/lib/cart/cart-shell.render.test.ts` | 1 for home, product, category, search and cart (the pages' own read functions, started as the pages start them) |
-| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 7 / 3, search 7 / 2 |
+| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type). Parts render as the dependency-validated part reader renders them: inside the dependency scope, s0 and the Platform row from the data center clock snapshot, so every declared key is paid for here | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 7 / 3, search 7 / 2; the same page again (all validated hits): 1 / 1 |
 | Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
 | Product JSON-LD weight | `apps/storefront/src/lib/commerce-structured-data.product-group.test.ts` (also runs the release-check Product JSON-LD smoke on the output) | 20 KB, description once |

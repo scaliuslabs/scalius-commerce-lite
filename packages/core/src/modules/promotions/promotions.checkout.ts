@@ -31,6 +31,34 @@ import {
 } from "./promotions.evaluator";
 import { promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
+import { deps } from "../../cache-deps";
+
+/**
+ * A cached read that shows automatic promotions is valid only until the next
+ * scheduled start or end of one (no row changes at that instant, so no key
+ * advances). Only while a dependency scope records, and as one more
+ * statement of the candidates' batch, never a read of its own.
+ */
+function nextAutomaticPromotionTransitionStatement(db: Database, nowEpochSeconds: number) {
+    return db.select({
+        nextStart: sql<number | null>`MIN(CASE WHEN ${promotions.startsAt} > ${nowEpochSeconds} THEN CAST(${promotions.startsAt} AS INTEGER) END)`,
+        nextEnd: sql<number | null>`MIN(CASE WHEN ${promotions.endsAt} > ${nowEpochSeconds} THEN CAST(${promotions.endsAt} AS INTEGER) END)`,
+    }).from(promotions).where(and(
+        eq(promotions.method, "automatic"),
+        eq(promotions.status, "active"),
+        isNull(promotions.deletedAt),
+    ));
+}
+
+function declareNextAutomaticPromotionTransition(
+    rows: ReadonlyArray<{ nextStart: number | null; nextEnd: number | null }> | undefined,
+): void {
+    const row = rows?.[0];
+    const next = [row?.nextStart, row?.nextEnd]
+        .map((value) => (value === null || value === undefined ? null : Number(value)))
+        .filter((value): value is number => value !== null && Number.isFinite(value));
+    if (next.length > 0) deps.validUntil(Math.min(...next) * 1_000);
+}
 
 type CheckoutLine = StorefrontDiscountCart["lines"][number];
 
@@ -185,7 +213,9 @@ async function loadCandidates(
     codes: readonly string[],
     input: StorefrontDiscountInput,
     now: number,
+    options: { declareTransition?: boolean } = {},
 ) {
+    const declareTransition = Boolean(options.declareTransition) && deps.active();
     const codeIds = sql`SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${idList(promotionCodes.normalizedCode, codes)}`;
     const automaticIds = sql`SELECT automatic.id FROM (SELECT ${promotions.id} AS id FROM ${promotions}
         WHERE ${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
@@ -199,7 +229,7 @@ async function loadCandidates(
         : input.customerPhone
             ? sql`${promotionRedemptions.customerId} IN (SELECT ${customers.id} FROM ${customers} WHERE ${customers.phone} = ${input.customerPhone})`
             : sql`1 = 0`;
-    const [parents, codeRows, conditionRows, effectRows, usageRows] = await db.batch([
+    const [parents, codeRows, conditionRows, effectRows, usageRows, transitionRows] = await db.batch([
         db.select().from(promotions).where(sql`${promotions.id} IN ${candidateIds}`),
         db.select().from(promotionCodes)
             .where(sql`${promotionCodes.promotionId} IN ${candidateIds}`)
@@ -218,7 +248,11 @@ async function loadCandidates(
         }).from(promotionRedemptions)
             .where(sql`${promotionRedemptions.promotionId} IN (${codeIds})`)
             .groupBy(promotionRedemptions.promotionId),
+        ...(declareTransition ? [nextAutomaticPromotionTransitionStatement(db, now)] : []),
     ]);
+    if (declareTransition) {
+        declareNextAutomaticPromotionTransition(transitionRows as Array<{ nextStart: number | null; nextEnd: number | null }> | undefined);
+    }
     const usage = new Map(usageRows.map((row) => [row.promotionId, row]));
     return parents.map((parent) => {
         const stats = usage.get(parent.id);
@@ -368,6 +402,7 @@ async function loadOfferProducts(
 ): Promise<Map<string, DiscountOfferProduct>> {
     const result = new Map<string, DiscountOfferProduct>();
     if (productIds.length === 0) return result;
+    deps.products(productIds);
     const [productRows, skuRows] = await db.batch([
         db.select({
             id: products.id,
@@ -702,10 +737,21 @@ export async function listProductBuyGetOffers(
     currencyCode: string,
     evaluatedAtEpochSeconds = Math.floor(Date.now() / 1_000),
 ): Promise<ProductBuyGetOffer[]> {
-    const candidates = typedCandidates(
-        await loadCandidates(db, [], { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } }, evaluatedAtEpochSeconds),
-    ).filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
+    // Cached product pages: any automatic promotion's rows, limits and
+    // schedule decide the offers shown.
+    deps.anyPromotion();
+    const loaded = await loadCandidates(
+        db,
+        [],
+        { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } },
+        evaluatedAtEpochSeconds,
+        { declareTransition: true },
+    );
+    const candidates = typedCandidates(loaded)
+        .filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
     if (candidates.length === 0) return [];
+    // Collection-scoped offers resolve the product's collections.
+    deps.anyCollection();
     const line = { id: productId, productId, variantId: productId, unitPriceMinor: 0, quantity: 1 };
     const lineCollections = await resolveLineCollections(db, [line], scopedCollectionIds(candidates));
     const drafts = candidates.flatMap((candidate) => {

@@ -4,7 +4,12 @@ import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { getPublicCollectionCatalog, listPublicCollectionDirectory } from "@scalius/core/modules/collections";
+import {
+  getPublicCollectionCatalog,
+  getPublicCollectionSitemapEntries,
+  listPublicCollectionDirectory,
+} from "@scalius/core/modules/collections";
+import { deps } from "@scalius/core/cache-deps";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { publicCollectionConfig } from "@scalius/core/modules/collections/browser";
@@ -51,7 +56,8 @@ const storefrontCollectionSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
-const storefrontCollectionDetailSchema = storefrontCollectionSchema.extend({
+// No updatedAt or version: internal row facts, never shown to buyers.
+const storefrontCollectionDetailSchema = storefrontCollectionSchema.omit({ updatedAt: true }).extend({
   /** The listing template id from the theme; null renders the theme's default collection listing. */
   listingTemplate: z.string().nullable(),
   description: z.string().nullable(),
@@ -151,6 +157,8 @@ const listCollectionsRoute = createRoute({
 
 app.openapi(listCollectionsRoute, async (c) => {
   const db = c.get("db");
+  // Every active collection row.
+  deps.anyCollection();
   const activeCollections = await db
     .select({
       id: collections.id,
@@ -216,6 +224,33 @@ app.openapi(collectionDirectoryRoute, async (c) =>
   ok(c, { collections: await listPublicCollectionDirectory(c.get("db")) }));
 
 // GET /collections/:id — get collection by ID
+// GET /collections/sitemap — collection pages for XML discovery (registered before /{id})
+const collectionSitemapRoute = createRoute({
+  method: "get",
+  path: "/sitemap",
+  operationId: "storefront.collections.sitemap",
+  tags: ["Collections"],
+  summary: "List collection pages for the XML sitemap",
+  description: "Active collections without noIndex or a sitemap exclusion, filtered before the limit, with each page's last change.",
+  responses: {
+    200: {
+      description: "Collection sitemap entries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        collections: z.array(z.object({
+          id: z.string(),
+          canonicalPath: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(collectionSitemapRoute, async (c) => {
+  return ok(c, { collections: await getPublicCollectionSitemapEntries(c.get("db")) });
+});
+
 const getCollectionByIdRoute = createRoute({
   method: "get",
   path: "/{id}",
@@ -267,21 +302,17 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   }
 
   const { collection, categories, products, featuredProduct, pagination, priceRange, facets, ratingFacet } = result;
+  const { version: _version, updatedAt: _updatedAt, deletedAt: _deletedAt, ...publicCollection } = collection;
 
   return ok(c, {
     collection: {
-      ...collection,
+      ...publicCollection,
       config: publicCollectionConfig(collection.config),
       createdAt: formatTimestamp(
         collection.createdAt,
         collection.id,
         "createdAt",
       ),
-      updatedAt: formatTimestamp(
-        collection.updatedAt,
-        collection.id,
-        "updatedAt",
-      )
     },
     categories,
     products,

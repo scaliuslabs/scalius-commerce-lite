@@ -452,6 +452,7 @@ describe.each(PROVIDERS)("expand-only upgrade from 0094 (%s)", (provider) => {
         { version: 97, name: "0097_gift_cards" },
         { version: 98, name: "0098_warranty" },
         { version: 99, name: "0099_customer_whatsapp" },
+        { version: 100, name: "0100_cache_dependencies" },
       ]);
   });
 });

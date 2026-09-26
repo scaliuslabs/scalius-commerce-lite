@@ -2489,6 +2489,47 @@ export type GetApiV1CollectionsDirectoryResponses = {
 
 export type GetApiV1CollectionsDirectoryResponse = GetApiV1CollectionsDirectoryResponses[keyof GetApiV1CollectionsDirectoryResponses];
 
+export type GetApiV1CollectionsSitemapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/collections/sitemap';
+};
+
+export type GetApiV1CollectionsSitemapErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CollectionsSitemapError = GetApiV1CollectionsSitemapErrors[keyof GetApiV1CollectionsSitemapErrors];
+
+export type GetApiV1CollectionsSitemapResponses = {
+    /**
+     * Collection sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CollectionsSitemapResponse = GetApiV1CollectionsSitemapResponses[keyof GetApiV1CollectionsSitemapResponses];
+
 export type GetApiV1CollectionsByIdData = {
     body?: never;
     path: {
@@ -2561,7 +2602,6 @@ export type GetApiV1CollectionsByIdResponses = {
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
                 listingTemplate: string | null;
                 description: string | null;
                 content: string | null;
@@ -3023,7 +3063,6 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 /**
                  * Published-review rating; null when the product has no published review.
                  */
@@ -3184,7 +3223,6 @@ export type GetApiV1HeroSlidersResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             } | null;
             mobile?: {
                 id: string;
@@ -3203,7 +3241,6 @@ export type GetApiV1HeroSlidersResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             } | null;
             slider?: {
                 id: string;
@@ -3303,7 +3340,6 @@ export type GetApiV1HeroSlidersByIdResponses = {
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
             };
         };
     };
@@ -4055,9 +4091,7 @@ export type GetApiV1PagesResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             }>;
             pagination: {
@@ -4160,9 +4194,7 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -4248,9 +4280,7 @@ export type GetApiV1PagesByIdResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -4327,7 +4357,6 @@ export type GetApiV1ArticlesResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
@@ -4432,7 +4461,6 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
@@ -5067,9 +5095,7 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
-                revision: number;
                 createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -5369,6 +5395,17 @@ export type GetApiV1StorefrontBatchResponses = {
                  * The part's response body, exactly as its own GET returns it
                  */
                 body: string;
+                /**
+                 * Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof.
+                 */
+                cache?: {
+                    status: 'hit' | 'miss' | 'refresh';
+                    s0: number;
+                    deps: Array<string>;
+                    validUntil: number | null;
+                    softMaxAgeSeconds: number | null;
+                    renderedAt: number;
+                };
             }>;
         };
     };
@@ -14795,6 +14832,9 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
     200: {
         success: true;
         data: {
+            /**
+             * Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees.
+             */
             language: {
                 id: string;
                 name: string;
@@ -14811,9 +14851,6 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: NullableTimestamp;
             };
         };
     };
@@ -15421,7 +15458,6 @@ export type GetApiV1ShippingMethodsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
         };
     };
@@ -15648,7 +15684,6 @@ export type GetApiV1ProductsResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 /**
@@ -16341,7 +16376,6 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -16472,7 +16506,6 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
             total: number;
             offset: number;
@@ -16586,7 +16619,6 @@ export type GetApiV1ProductsBySlugResponses = {
                 isActive: boolean;
                 deletedAt: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 hasVariants: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
@@ -16787,7 +16819,6 @@ export type GetApiV1ProductsBySlugResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
-                updatedAt: string | null;
                 deletedAt: string | null;
             }>;
             recommendations: {
@@ -17027,7 +17058,6 @@ export type GetApiV1CategoriesSummariesResponses = {
                 imageUrl: string | null;
                 descriptionCharacters: number;
                 contentCharacters: number;
-                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -17040,6 +17070,47 @@ export type GetApiV1CategoriesSummariesResponses = {
 };
 
 export type GetApiV1CategoriesSummariesResponse = GetApiV1CategoriesSummariesResponses[keyof GetApiV1CategoriesSummariesResponses];
+
+export type GetApiV1CategoriesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/categories/sitemap';
+};
+
+export type GetApiV1CategoriesSitemapErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesSitemapError = GetApiV1CategoriesSitemapErrors[keyof GetApiV1CategoriesSitemapErrors];
+
+export type GetApiV1CategoriesSitemapResponses = {
+    /**
+     * Category sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CategoriesSitemapResponse = GetApiV1CategoriesSitemapResponses[keyof GetApiV1CategoriesSitemapResponses];
 
 export type GetApiV1CategoriesTreeData = {
     body?: never;
@@ -17471,7 +17542,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 description: string | null;
                 imageUrl: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -17531,7 +17601,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                  */
                 subcategoryId?: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 /**
                  * Published-review rating; null when the product has no published review.
                  */
@@ -17752,7 +17821,6 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                  */
                 subcategoryId?: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 /**
                  * Published-review rating; null when the product has no published review.
                  */
@@ -74895,6 +74963,9 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
     200: {
         success: true;
         data: {
+            /**
+             * Buyer-facing checkout copy only: no revision or timestamps, which change without changing what a buyer sees.
+             */
             language: {
                 id: string;
                 name: string;
@@ -74911,9 +74982,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: NullableTimestamp;
             };
         };
     };

@@ -39,6 +39,7 @@ import {
 } from "@scalius/shared/cache-generation";
 import type { LayoutData } from "./storefront";
 import type { PendingReadBatch } from "./transport";
+import { currentPageDependencies, type PageDependencies } from "../page-dependencies";
 
 /** Bindings and secrets the middleware hands to the request runtime. */
 export interface RequestRuntimeEnv extends MasterSecretEnvironment {
@@ -74,6 +75,11 @@ export interface StorefrontRuntime {
   inflightReads?: Map<string, Promise<unknown>>;
   /** Public reads waiting to be sent together (see transport `joinReadBatch`). */
   readBatch?: PendingReadBatch | null;
+  /**
+   * The dependency proof the gateway collects for a frontier-validated page
+   * (`page-dependencies.ts`); absent when the page is not stored that way.
+   */
+  pageDependencies?: PageDependencies;
   /** Request-local API credential derived from the current request bindings. */
   apiJwt?: {
     token: string | null;
@@ -264,6 +270,7 @@ export async function createRequestRuntime(
     ) ?? undefined,
     ...(await deriveRuntimeTokens(env)),
     inflightReads: new Map<string, Promise<unknown>>(),
+    pageDependencies: currentPageDependencies(),
     apiJwt: { token: null, expiresAt: null, refresh: null },
   };
 }

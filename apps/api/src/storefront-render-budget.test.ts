@@ -2,7 +2,8 @@
 import "@hono/zod-openapi";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
+import { createPublicPartReader, renderPublicRead } from "./public-read";
+import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import {
@@ -19,6 +20,14 @@ import {
  * `waves` the dependent rounds, the part that costs a full database round
  * trip each. Budgets are the measured values of this seeded store, so a new
  * query or a new sequential await fails here before it reaches production.
+ *
+ * Every part renders the way the dependency-validated part reader renders it
+ * (public-read.ts, strict mode): inside a dependency scope, so every key a
+ * read declares is paid for here, with its s0 and the Platform settings row
+ * taken from the data center's clock snapshot. A declaration that needs a
+ * read of its own must fold it into a statement or batch the render already
+ * runs, or it fails this budget. The same page again is all hits: one
+ * validation statement, one wave.
  */
 const PAGE_D1_BUDGETS = {
   home: { roundTrips: 13, waves: 2 },
@@ -188,6 +197,19 @@ function meteredBinding(inner: D1Database): Meter {
   return meter;
 }
 
+class MemoryCache {
+  readonly entries = new Map<string, Response>();
+  async match(key: RequestInfo | URL) {
+    return this.entries.get(String(key))?.clone();
+  }
+  async put(key: RequestInfo | URL, response: Response) {
+    this.entries.set(String(key), response);
+  }
+  async delete(key: RequestInfo | URL) {
+    return this.entries.delete(String(key));
+  }
+}
+
 async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
@@ -204,21 +226,53 @@ async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
   await refreshProductSalesStats(db);
   await refreshProductRecommendations(db, ["p_linen", "p_cotton"]);
   const meter = meteredBinding(binding);
-  const env = {
-    DB: meter.binding,
+  const baseEnv = {
+    CF_VERSION_METADATA: { id: "render-budget-version", tag: "", timestamp: "" },
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "render-budget-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "render-budget-credential-key-0123456789abcdef",
-  } as unknown as Env;
-  const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
-  const responses = await Promise.all(PAGE_PARTS[page].map((path) =>
-    fetchRuntimeApiApp(new Request(`https://api.internal${path}`), env, ctx)));
-  const bodies = await Promise.all(responses.map((response) => response.clone().json().catch(() => null)));
+  };
+  const cache = new MemoryCache();
+  const readBatch = async (env: Env, paths: readonly string[]) => {
+    const waits: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (promise: Promise<unknown>) => void waits.push(promise), passThroughOnException: () => undefined } as unknown as ExecutionContext;
+    const reader = createPublicPartReader({
+      mode: "strict",
+      env,
+      cache,
+      db: () => getDb(env),
+      render: (part) => renderPublicRead(part, env, ctx),
+      waitUntil: (promise) => void waits.push(promise),
+      maxConcurrentRenders: 4,
+      random: () => 1,
+    });
+    const settled = await reader.readParts(paths.map((path) => new Request(`https://api.internal${path}`)), null);
+    const parts = settled.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+    const bodies = await Promise.all(parts.map((part) => part.response.clone().json().catch(() => null)));
+    await Promise.all(waits);
+    return { parts, bodies };
+  };
+  // The data center already holds a clock snapshot (any earlier batch left one).
+  await readBatch({ ...baseEnv, DB: binding } as unknown as Env, ["/api/v1/checkout-languages/active"]);
+  const env = { ...baseEnv, DB: meter.binding } as unknown as Env;
+  const { parts, bodies } = await readBatch(env, PAGE_PARTS[page]);
+  const miss = { roundTrips: meter.roundTrips, waves: meter.waves };
+  const again = await readBatch(env, PAGE_PARTS[page]);
   return {
-    statuses: responses.map((response) => response.status),
+    statuses: parts.map((part) => part.response.status),
     bodies,
-    roundTrips: meter.roundTrips,
-    waves: meter.waves,
+    roundTrips: miss.roundTrips,
+    waves: miss.waves,
+    stored: parts.map((part) => part.cache?.status ?? null),
+    hit: {
+      roundTrips: meter.roundTrips - miss.roundTrips,
+      waves: meter.waves - miss.waves,
+      statuses: again.parts.map((part) => part.cache?.status ?? null),
+      sameBodies: JSON.stringify(again.bodies) === JSON.stringify(bodies),
+    },
   };
 }
 
@@ -295,6 +349,22 @@ describe("storefront page render D1 budget", () => {
         page,
         roundTrips: Math.min(result.roundTrips, PAGE_D1_BUDGETS[page].roundTrips),
         waves: Math.min(result.waves, PAGE_D1_BUDGETS[page].waves),
+      });
+      // Every part was stored with its dependency proof.
+      expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
+    },
+  );
+
+  it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(
+    "%s page again is all validated hits: one statement, one wave",
+    async (page) => {
+      const { hit } = await renderPage(page);
+
+      expect(hit).toEqual({
+        roundTrips: 1,
+        waves: 1,
+        statuses: PAGE_PARTS[page].map(() => "hit"),
+        sameBodies: true,
       });
     },
   );

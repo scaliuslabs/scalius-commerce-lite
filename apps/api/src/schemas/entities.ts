@@ -710,6 +710,15 @@ export const pageSchema = z.object({
   deletedAt: nullableTimestampSchema,
 });
 
+/**
+ * A CMS page as buyers get it: no `revision` or `updatedAt`, which change on
+ * saves that change nothing a buyer sees.
+ */
+export const publicPageSchema = pageSchema.omit({ revision: true, updatedAt: true });
+
+/** An article as buyers get it: no `revision`; `updatedAt` feeds the blog's dateModified. */
+export const publicArticleSchema = pageSchema.omit({ revision: true });
+
 // ─────────────────────────────────────────
 // Attributes
 // ─────────────────────────────────────────

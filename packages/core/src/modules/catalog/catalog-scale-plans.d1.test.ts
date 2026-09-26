@@ -101,7 +101,7 @@ describe("catalogue-scale query plans", () => {
         const result = await getStorefrontCategoryProducts(db, {
             id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
             metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
-            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+            excludeFromSitemap: false, createdAt: null,
         }, { page: 1, limit: 20 });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a", "prod_b"]);
@@ -259,7 +259,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(home.sections.lists[0]?.products.map((product) => product.id)).toEqual(["prod_b"]);
         const popularPlans = plans((sql) => sql.includes("product_sales_stats"));
-        expect(popularPlans.length).toBe(3); // the cards, their media and their card facts
+        expect(popularPlans.length).toBe(3); // the cards, their media and the members the list depends on
         for (const plan of popularPlans) {
             expect(plan).toContain("product_sales_stats_popular_idx");
             expect(plan).not.toMatch(/SCAN (orders|order_items|products|product_sales_stats)\b/);
@@ -389,7 +389,7 @@ describe("catalogue-scale query plans", () => {
         const result = await getStorefrontCategoryProducts(db, {
             id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
             metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
-            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+            excludeFromSitemap: false, createdAt: null,
         }, { page: 1, limit: 20, attributeFilters: filters });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a"]);
@@ -501,6 +501,8 @@ describe("catalogue-scale query plans", () => {
             INSERT INTO collections (id, name, presentation, config) VALUES
                 ('col_dyn', 'Laptops', 'grid', '{"source":"dynamic","categoryIds":["cat_laptop"],"maxProducts":8}');
         `);
+        // Newest and category lists take their members from the buyer state.
+        await project(db, queries);
         const home = await getHomepageData(db, {
             requests: {
                 lists: [
@@ -530,6 +532,13 @@ describe("catalogue-scale query plans", () => {
         for (const plan of plans((sql) => sql.includes("product_media_poster"))) {
             expect(plan).not.toMatch(/SCAN (product_media|media)\b/);
         }
+        // Newest and category members walk the buyer state's newest indexes.
+        const memberPlans = plans((sql) => sql.startsWith('select "product_id" from "product_buyer_state"'));
+        expect(memberPlans).toHaveLength(2);
+        for (const plan of memberPlans) {
+            expect(plan).toMatch(/product_buyer_state_(category_)?newest_idx/);
+            expect(plan).not.toContain("USE TEMP B-TREE FOR ORDER BY");
+        }
         expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(90);
     });
 
@@ -556,7 +565,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(home.sections.lists[0]?.products.map((product) => product.id)).toEqual(["prod_sale_product", "prod_sale_sku"]);
         const onSalePlans = plans((sql) => sql.includes("sale_sku_product"));
-        expect(onSalePlans.length).toBe(3); // the cards, their media and their card facts
+        expect(onSalePlans.length).toBe(3); // the cards, their media and the candidate window
         for (const plan of onSalePlans) {
             expect(plan).toContain("products_on_sale_newest_idx");
             expect(plan).toContain("product_variants_on_sale_newest_idx");

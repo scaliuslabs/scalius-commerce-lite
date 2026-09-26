@@ -137,7 +137,6 @@ const storefrontProductSchema = z.object({
   cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   rating: cardRatingSchema,
@@ -356,7 +355,6 @@ const productDetailVariantSchema = z.object({
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind: fulfillmentKindSchema,
   createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
 });
 
@@ -411,7 +409,6 @@ const productDetailDataSchema = z.object({
     isActive: z.boolean(),
     deletedAt: z.string().nullable(),
     createdAt: z.string().nullable(),
-    updatedAt: z.string().nullable(),
     hasVariants: z.boolean(),
     imageUrl: z.string().nullable(),
     imageMediaId: z.string().nullable(),
@@ -493,7 +490,6 @@ const productSectionSummarySchema = z.object({
     imageMediaId: z.string().nullable(),
     imageAlt: z.string().nullable(),
     createdAt: z.string().nullable(),
-    updatedAt: z.string().nullable(),
     category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
     textLengths: z.object({
       description: z.number().int().nonnegative(),
