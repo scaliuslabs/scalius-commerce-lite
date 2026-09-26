@@ -15,7 +15,7 @@ const PLAYER_CLASS = "absolute inset-0 z-10 h-full w-full border-0 bg-black obje
 function embedAutoplayUrl(src: string): string {
   const url = new URL(src, window.location.href);
   url.searchParams.set("autoplay", "1");
-  if (url.hostname.endsWith("youtube-nocookie.com")) url.searchParams.set("rel", "0");
+  if (url.hostname === "youtube-nocookie.com" || url.hostname === "www.youtube-nocookie.com") url.searchParams.set("rel", "0");
   return url.toString();
 }
 

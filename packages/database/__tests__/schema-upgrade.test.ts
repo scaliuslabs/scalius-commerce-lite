@@ -404,8 +404,8 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 100,
         name: "0100_cache_dependencies",
-        sqliteStatements: 225,
-        postgresStatements: 224,
+        sqliteStatements: 222,
+        postgresStatements: 221,
       },
     ]);
   });

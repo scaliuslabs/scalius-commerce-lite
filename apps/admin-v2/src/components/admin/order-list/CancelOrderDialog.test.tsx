@@ -88,11 +88,11 @@ describe("cancelling from the order list's status menu", () => {
     expect(dialog.textContent).toContain(d["cancel.title"].replace("{name}", "#1088"));
     expect(dialog.textContent).toContain(d["cancel.notify"]);
 
-    const reason = dialog.querySelector<HTMLSelectElement>("select")!;
-    await act(async () => {
-      reason.value = "unreachable";
-      reason.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const reason = dialog.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
+    await act(async () => reason.click());
+    const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((button) => button.textContent === d["cancel.reason.unreachable"])!;
+    await act(async () => option.click());
     const confirm = [...dialog.querySelectorAll("button")].find((button) => button.textContent === d["cancel.confirm"])!;
     await act(async () => confirm.click());
 

@@ -18,7 +18,7 @@ import {
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -139,14 +139,18 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="warranty-claim-status">{t("status")}</Label>
-        <NativeSelect id="warranty-claim-status" value={status} onValueChange={(value) => setStatus(value as WarrantyClaimStatus)}>
-          {WARRANTY_CLAIM_STATUSES.map((value) => <option key={value} value={value}>{t(`status.${value}`)}</option>)}
-        </NativeSelect>
+        <SearchableSelect
+          id="warranty-claim-status"
+          value={status}
+          onValueChange={(value) => setStatus(value as WarrantyClaimStatus)}
+          triggerClassName="w-full"
+          options={WARRANTY_CLAIM_STATUSES.map((value) => ({ value, label: t(`status.${value}`) }))}
+        />
       </div>
       {status === "resolved" ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="warranty-claim-resolution">{t("resolution")}</Label>
-          <NativeSelect
+          <SearchableSelect
             id="warranty-claim-resolution"
             value={resolution}
             aria-invalid={missingResolution}
@@ -155,10 +159,9 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
               setResolution(value as WarrantyClaimResolution);
               setMissingResolution(false);
             }}
-          >
-            <option value="" disabled>{t("chooseResolution")}</option>
-            {WARRANTY_CLAIM_RESOLUTIONS.map((value) => <option key={value} value={value}>{t(`resolution.${value}`)}</option>)}
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[{ value: "", disabled: true, label: t("chooseResolution") }, ...WARRANTY_CLAIM_RESOLUTIONS.map((value) => ({ value, label: t(`resolution.${value}`) }))]}
+          />
           {missingResolution ? <p id="warranty-claim-resolution-error" className="text-body text-destructive">{t("resolutionRequired")}</p> : null}
         </div>
       ) : null}

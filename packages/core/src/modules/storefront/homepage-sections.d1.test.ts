@@ -3,7 +3,9 @@ import { safeBatch } from "@scalius/database/client";
 import { describe, expect, it } from "vitest";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { storefrontSectionDefault, type StorefrontSection } from "@scalius/shared/storefront-theme";
-import { planHomeBrands, planHomePromotions, readHomeSectionMedia } from "./homepage-sections";
+import { withDependencyScope } from "../../cache-deps";
+import { planHomeBrands } from "../catalog/home-brands";
+import { planHomePromotions, readHomeSectionMedia } from "./homepage-sections";
 
 describe("homepage brand wall and deal countdown reads", () => {
     it("counts only to a running promotion's stored end", async () => {
@@ -53,6 +55,42 @@ describe("homepage brand wall and deal countdown reads", () => {
         expect(wall[0]!.logo).toMatchObject({ mediaId: "m_logo", alt: "Aarong" });
         expect(wall[1]!.logo).toBeNull();
         expect(planHomeBrands(db, 0).statements).toEqual([]);
+    });
+
+    it("invalidates a missing brand-wall logo when its media becomes ready without a brand edit", async () => {
+        const { sqlite, db } = createSqliteD1Database();
+        try {
+            sqlite.exec(`
+                INSERT INTO media (id, filename, kind, object_key, size, mime_type, status)
+                  VALUES ('m_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready');
+                INSERT INTO brands (id, name, slug, status, logo_media_id)
+                  VALUES ('brd_logo000', 'Logo', 'logo', 'published', 'm_logo');
+                INSERT INTO products (id, name, price_minor, slug, is_active, brand_id)
+                  VALUES ('p_logo', 'Product', 1000, 'product', 1, 'brd_logo000');
+                INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+                  VALUES ('v_logo', 'p_logo', 'LOGO', 1000, 1, 1, 1);
+            `);
+            await rebuildCatalogProjections(db);
+            const read = () => withDependencyScope(async () => {
+                const plan = planHomeBrands(db, 24);
+                return plan.resolve(await safeBatch(db, plan.statements), 0);
+            }, { strict: true });
+            for (const status of ["deleting", "deleted"]) {
+                sqlite.prepare("UPDATE media SET status = ?, trashed_at = unixepoch(), deleted_at = ? WHERE id = 'm_logo'")
+                    .run(status, status === "deleted" ? Math.floor(Date.now() / 1000) : null);
+                const before = await read();
+                expect(before.value[0]!.logo).toBeNull();
+                expect(before.dependencies.keys).toContain("m:m_logo");
+                const { seq } = sqlite.prepare("SELECT seq FROM cache_clock WHERE id = 1").get() as { seq: number };
+                sqlite.exec("UPDATE media SET status = 'ready', trashed_at = NULL, deleted_at = NULL WHERE id = 'm_logo'");
+                const changed = sqlite.prepare("SELECT dep FROM cache_dep WHERE seq > ?").all(seq) as Array<{ dep: string }>;
+                expect(changed.filter(({ dep }) => before.dependencies.keys.includes(dep)).map(({ dep }) => dep))
+                    .toEqual(["m:m_logo"]);
+                expect((await read()).value[0]!.logo).toMatchObject({ mediaId: "m_logo", alt: "Logo" });
+            }
+        } finally {
+            sqlite.close();
+        }
     });
 
     it("reads the images a theme's sections name, for the dashboard's previews", async () => {

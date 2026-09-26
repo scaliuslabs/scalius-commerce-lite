@@ -17,7 +17,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,7 +85,7 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
   const queryClient = useQueryClient();
   const { data } = useQuery(productContentBlocksQueryOptions(productId));
   const loaded = useMemo<Draft | undefined>(() => (data ? { blocks: data.items.map(fromItem) } : undefined), [data]);
-  const { draft, setDraft, saved, dirty, markSaved } = useSectionDraft(loaded);
+  const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
   const blocks = useMemo(() => draft?.blocks ?? [], [draft]);
   const [open, setOpen] = useState<string | null>(null);
   const [chosenMedia, setChosenMedia] = useState<BlockMediaPreview[]>([]);
@@ -111,6 +111,10 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
     label: t("content"),
     dirty: !readOnly && dirty,
     problems,
+    prepareRebase: async () => {
+      const latest = await queryClient.fetchQuery(productContentBlocksQueryOptions(productId));
+      return () => prepareRebase({ blocks: latest.items.map(fromItem) });
+    },
     save: async (revision) => {
       const sent = blocks;
       const before = new Map((saved?.blocks ?? []).map((block) => [block.key, block]));
@@ -254,16 +258,14 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
                         <div className="space-y-3 border-t pt-3">
                           <div className="space-y-1">
                             <label htmlFor={`placement-${block.key}`} className="text-body font-medium">{t("placement")}</label>
-                            <NativeSelect
+                            <SearchableSelect
                               id={`placement-${block.key}`}
                               value={block.placement}
                               disabled={readOnly}
                               onValueChange={(value) => changePlacement(block.key, value as ProductContentBlockPlacement)}
-                            >
-                              {PRODUCT_CONTENT_BLOCK_PLACEMENTS
-                                .filter((placement) => isProductContentBlockPlacementAllowed(block.type as BlockType, placement))
-                                .map((placement) => <option key={placement} value={placement}>{t(`placement_${placement}`)}</option>)}
-                            </NativeSelect>
+                              triggerClassName="w-full"
+                              options={PRODUCT_CONTENT_BLOCK_PLACEMENTS.filter((placement) => isProductContentBlockPlacementAllowed(block.type as BlockType, placement)).map((placement) => ({ value: placement, label: t(`placement_${placement}`) }))}
+                            />
                           </div>
                           <BlockSettingsEditor
                             type={block.type as BlockType}

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { RichContent } from "../ui/rich-content";
-import { NativeSelect } from "../ui/native-select";
+import { SearchableSelect } from "../ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
@@ -273,10 +273,13 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <NativeSelect value={field.value} onValueChange={field.onChange} disabled={!canSave} aria-label={t("status")}>
-                        <option value="published">{t("active")}</option>
-                        <option value="draft">{t("draft")}</option>
-                      </NativeSelect>
+                      <SearchableSelect
+                        value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
+                        triggerRef={field.ref}
+                        onBlur={field.onBlur}
+                        triggerClassName="w-full"
+                        options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }]}
+                      />
                     </FormControl>
                     <FormDescription>{t(status === "published" ? "activeHelp" : "draftHelp")}</FormDescription>
                   </FormItem>

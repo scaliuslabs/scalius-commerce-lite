@@ -418,10 +418,6 @@ const CACHE_DEP_TABLE_RULES = {
         name: "card", event: "update", image: "new", changed: ["sku_id", "has_customer_options"], where: PUBLIC_ROW,
         keys: [p("product_id")],
       },
-      // The layout's store shape: which categories and brands hold a public product.
-      { name: "shape_ins", event: "insert", image: "new", where: PUBLIC_ROW, keys: [SHAPE] },
-      { name: "shape_del", event: "delete", image: "old", where: PUBLIC_ROW, keys: [SHAPE] },
-      { name: "shape", event: "update", image: "new", changed: ["is_public", "category_id", "brand_id"], keys: [SHAPE] },
     ],
   },
   product_facet_values: {

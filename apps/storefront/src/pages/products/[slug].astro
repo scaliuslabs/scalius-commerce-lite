@@ -40,7 +40,8 @@ import { reviewStructuredData } from "@/lib/review-structured-data";
 import { pickReviewCopy } from "@/components/product/reviews/review-format";
 import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
-import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { resolveProductPageTheme } from "@/components/product/lib/product-page-theme";
 import { productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "@/components/product/lib/gallery-media";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -115,17 +116,23 @@ if (productResult.state === "unavailable" || !layoutData) {
   return response;
 }
 
+const productData = productResult.data;
+const { product, category, media, variants, recommendations } = productData;
+
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the
 // modules below the fold, in the template's order.
-const { layout: themeLayout, resolved: resolvedTheme } = await resolveRequestTheme(Astro, layoutData);
+const resolvedTheme = resolveProductPageTheme(
+  await resolveRequestTheme(Astro, layoutData),
+  product,
+  readStoreShape(layoutData.storeShape),
+);
+const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
 // The EMI line shows only in a buy box that asks for it (spec, tech); the
 // classic buy box has no such setting and stays as it is.
 const buyBoxShowsEmi = themeLayout.buyBox.emi;
 
-const productData = productResult.data;
-const { product, category, media, variants, recommendations } = productData;
 // Modules the product has data for, in the template's order (a module with
 // nothing to show is left out); the description stays in the buy box on
 // classic and Dawn.

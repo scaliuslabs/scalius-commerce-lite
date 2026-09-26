@@ -588,7 +588,7 @@ function preloadBudget(): number {
 
 /**
  * Fetch `urls` in the main slot's candidate, `concurrency` at a time, at low
- * priority. Stops starting new requests once `signal` aborts.
+ * priority. Stops starting new requests on abort or while a video is selected.
  */
 export async function preloadGalleryImages(
   root: HTMLElement,
@@ -598,7 +598,7 @@ export async function preloadGalleryImages(
 ): Promise<void> {
   let next = 0;
   const worker = async () => {
-    while (!signal.aborted && next < urls.length) {
+    while (!signal.aborted && root.dataset.activeMediaKey?.startsWith("image:") && next < urls.length) {
       const url = urls[next++]!;
       await warmImage(galleryMainSources(root, url), "low");
     }

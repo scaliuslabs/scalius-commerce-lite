@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { MediaManager, type MediaFile } from "@/components/admin/media-manager";
 import { useMessages } from "~/i18n";
@@ -79,9 +79,14 @@ function SelectField({ label, value, onChange, options, disabled }: {
   const id = useId();
   return (
     <Field label={label} id={id}>
-      <NativeSelect id={id} value={value} disabled={disabled} onValueChange={onChange}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </NativeSelect>
+      <SearchableSelect
+        id={id}
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        triggerClassName="w-full"
+        options={options}
+      />
     </Field>
   );
 }

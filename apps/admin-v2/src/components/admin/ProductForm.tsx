@@ -33,7 +33,7 @@ import {
 } from "./shared/SaveBar";
 import { PageHeader } from "./resource/PageHeader";
 import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
-import { ProductStatusBadge } from "./product-list/product-columns";
+import { ProductStatusBadge } from "./product-list/ProductStatusBadge";
 import { ProductPager } from "./product-form/ProductPager";
 import {
   AdditionalSectionsCard,
@@ -116,10 +116,8 @@ interface ProductFormProps {
   optionMatrixSaving?: boolean;
   /** Saved SKUs, for printing their labels from the page's menu. */
   variantIds?: string[];
-  /** Filled with a reader of the unsaved draft (values and changed fields). */
+  /** Reads and rebases the mounted draft after a conflict. */
   draftRef?: React.MutableRefObject<ProductDraftReader | null>;
-  /** Changes to put back on top of the loaded values, still unsaved (after a conflict). */
-  initialEdits?: Partial<ProductFormValues> | null;
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
   onDiscard: () => void;
   /** The saved buyer inputs couldn't be read (a product error, never "no inputs"). */
@@ -128,8 +126,13 @@ interface ProductFormProps {
   brandName?: string | null;
 }
 
-/** Reads the unsaved product draft: its values and the fields the merchant changed. */
-export type ProductDraftReader = () => { values: ProductFormValues; changed: Array<keyof ProductFormValues> };
+/** Reads the unsaved fields and rebases without unmounting the section or SKU editors. */
+export type ProductDraftReader = () => {
+  changed: Array<keyof ProductFormValues>;
+  changedSections: string[];
+  prepareSectionsRebase: ReturnType<typeof useProductSections>["prepareRebase"];
+  rebase: (latest: ProductFormValues) => void;
+};
 
 /** The one product page: add, edit, or view (without products.edit). */
 export function ProductForm(props: ProductFormProps) {
@@ -175,7 +178,6 @@ function ProductEditor({
   optionMatrixSaving = false,
   variantIds = [],
   draftRef,
-  initialEdits,
   onDiscard,
   customizationSchemaInvalid = false,
   brandName = null,
@@ -252,24 +254,23 @@ function ProductEditor({
   // Read while rendering so react-hook-form keeps tracking which fields changed.
   const dirtyFields = form.formState.dirtyFields;
 
-  // The route reads the draft after a conflict and hands the merchant's changes back once
-  // they sit on top of the latest version (still unsaved).
+  // Rebase only the form values: section and SKU editors keep their mounted drafts.
   if (draftRef) {
     draftRef.current = () => ({
-      values: form.getValues(),
+      changedSections: sections.dirtyHandles().map((handle) => handle.label),
+      prepareSectionsRebase: sections.prepareRebase,
+      rebase: (latest) => {
+        const values = form.getValues();
+        const changed = Object.keys(form.formState.dirtyFields) as Array<keyof ProductFormValues>;
+        form.reset({ ...form.formState.defaultValues, ...latest });
+        for (const key of changed) {
+          form.setValue(key, values[key] as never, { shouldDirty: true });
+        }
+      },
       changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)
         .filter((key) => key !== "slugEdited" && key !== "variantPriced"),
     });
   }
-  React.useEffect(() => {
-    if (!initialEdits) return;
-    for (const [key, value] of Object.entries(initialEdits)) {
-      form.setValue(key as keyof ProductFormValues, value as never, { shouldDirty: true });
-    }
-    // Applied once, when the form mounts on the latest version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // With options the variants carry the prices: the product price follows the cheapest one,
   // as the server keeps it, and is not the merchant's to edit (or a change to save).
   const [variantPrices, setVariantPrices] = React.useState<VariantPriceRange | null>(null);

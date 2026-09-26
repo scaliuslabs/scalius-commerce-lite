@@ -11,7 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { apiData } from "~/lib/api";
 import { inventoryQueryOptions, type InventoryAlert, type InventoryOverview } from "~/lib/api-query-options/inventory";
@@ -272,16 +272,13 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
           onSearchChange={(value) => onFiltersChange({ q: value })}
           searchPlaceholder={t("searchProducts")}
           filters={(
-            <NativeSelect
-              className="w-auto min-w-40"
-              aria-label={t("alertStatus")}
+            <SearchableSelect
+              triggerClassName="w-auto min-w-40"
+              ariaLabel={t("alertStatus")}
               value={status}
               onValueChange={(value) => onFiltersChange({ alert: value as AlertFilter })}
-            >
-              {ALERT_FILTERS.map((value) => (
-                <option key={value} value={value}>{t(ALERT_LABEL[value])}</option>
-              ))}
-            </NativeSelect>
+              options={ALERT_FILTERS.map((value) => ({ value, label: t(ALERT_LABEL[value]) }))}
+            />
           )}
           actions={overview ? (
             <StoreAlertLevel

@@ -6,7 +6,7 @@ import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { EmptyState } from "~/components/admin/resource/EmptyState";
@@ -90,25 +90,20 @@ export function InboxList({
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <NativeSelect
-            aria-label={t("assigneeFilter")}
+          <SearchableSelect
+            ariaLabel={t("assigneeFilter")}
             value={assignee}
             onValueChange={(value) => onSearchChange({ assignee: value === "all" ? undefined : (value as InboxSearch["assignee"]) })}
-          >
-            <option value="all">{t("assignee.all")}</option>
-            <option value="me">{t("assignee.me")}</option>
-            <option value="none">{t("assignee.none")}</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label={t("subjectFilter")}
+            triggerClassName="w-full"
+            options={[{ value: "all", label: t("assignee.all") }, { value: "me", label: t("assignee.me") }, { value: "none", label: t("assignee.none") }]}
+          />
+          <SearchableSelect
+            ariaLabel={t("subjectFilter")}
             value={subject}
             onValueChange={(value) => onSearchChange({ subject: value === "all" ? undefined : (value as InboxSearch["subject"]) })}
-          >
-            <option value="all">{t("subject.all")}</option>
-            {INBOX_SUBJECTS.map((value) => (
-              <option key={value} value={value}>{t(`subject.${value}`)}</option>
-            ))}
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[{ value: "all", label: t("subject.all") }, ...INBOX_SUBJECTS.map((value) => ({ value, label: t(`subject.${value}`) }))]}
+          />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">

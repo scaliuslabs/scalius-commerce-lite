@@ -488,54 +488,6 @@ FOR EACH ROW
 WHEN ((OLD."sku_id" IS DISTINCT FROM NEW."sku_id" OR OLD."has_customer_options" IS DISTINCT FROM NEW."has_customer_options") AND (OLD."product_id" IS DISTINCT FROM NEW."product_id" OR OLD."is_public" IS DISTINCT FROM NEW."is_public") AND OLD."is_public" = 1)
 EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_card_old_fn"();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_ins_fn"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $trigger_function$
-BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
-  RETURN NULL;
-END
-$trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape_ins"
-AFTER INSERT ON "product_buyer_state"
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-WHEN (NEW."is_public" = 1)
-EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_ins_fn"();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_del_fn"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $trigger_function$
-BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
-  RETURN NULL;
-END
-$trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape_del"
-AFTER DELETE ON "product_buyer_state"
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-WHEN (OLD."is_public" = 1)
-EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_del_fn"();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_buyer_state_shape_fn"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $trigger_function$
-BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['lm:shape', 't:product_buyer_state']::text[]) AS key_list(value)));
-  RETURN NULL;
-END
-$trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_product_buyer_state_shape"
-AFTER UPDATE ON "product_buyer_state"
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-WHEN ((OLD."is_public" IS DISTINCT FROM NEW."is_public" OR OLD."category_id" IS DISTINCT FROM NEW."category_id" OR OLD."brand_id" IS DISTINCT FROM NEW."brand_id"))
-EXECUTE FUNCTION scalius_compat."cdep_product_buyer_state_shape_fn"();
---> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_facet_values_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -3504,4 +3456,4 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."cdep_promotion_redemptions_del_fn"();
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (100, '0100_cache_dependencies', 'e1654d5c5f1dda04ab9e11576496980eccdaffd323df70bb0e8a8726a4a78a1f');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (100, '0100_cache_dependencies', '2d18253c98e70a3a58d155aa13cc91d876dbd3456ed90cda7696b497699be33f');

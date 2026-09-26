@@ -15,7 +15,6 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
@@ -176,9 +175,14 @@ function CourierCheckDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="courier-outcome">{t("courier.outcome")}</Label>
-            <NativeSelect id="courier-outcome" disabled={mutation.isPending} value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
-              {OUTCOMES.map((value) => <option key={value} value={value}>{t(`courier.outcome.${value}`)}</option>)}
-            </NativeSelect>
+            <SearchableSelect
+              triggerClassName="w-full"
+              id="courier-outcome"
+              disabled={mutation.isPending}
+              value={outcome}
+              onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}
+              options={OUTCOMES.map((value) => ({ value, label: t(`courier.outcome.${value}`) }))}
+            />
           </div>
           {outcome === "confirmed_existing" ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -194,9 +198,14 @@ function CourierCheckDialog({
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="courier-source">{t("courier.source")}</Label>
-            <NativeSelect id="courier-source" disabled={mutation.isPending} value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
-              {EVIDENCE_SOURCES.map((value) => <option key={value} value={value}>{t(`courier.source.${value}`)}</option>)}
-            </NativeSelect>
+            <SearchableSelect
+              triggerClassName="w-full"
+              id="courier-source"
+              disabled={mutation.isPending}
+              value={evidenceSource}
+              onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}
+              options={EVIDENCE_SOURCES.map((value) => ({ value, label: t(`courier.source.${value}`) }))}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="courier-evidence">{t("courier.details")}</Label>

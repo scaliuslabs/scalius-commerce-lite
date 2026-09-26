@@ -16,6 +16,8 @@ import {
 
 interface Props {
   warrantyId: string;
+  /** Eligibility gates the form, never the outcome of a refused submission. */
+  canClaim: boolean;
   access: WarrantyAccess;
   copy: WarrantyCopy;
   /** The page to come back to after a refused plain post. */
@@ -26,12 +28,15 @@ interface Props {
   class?: string;
 }
 
-const { warrantyId, access, copy, returnTo, open = false, flag = null, class: className = "mt-1" } = Astro.props;
+const { warrantyId, canClaim, access, copy, returnTo, open = false, flag = null, class: className = "mt-1" } = Astro.props;
 const idPrefix = `warrantyClaim${warrantyId.replace(/[^A-Za-z0-9]/g, "")}`;
 const sinkId = `${idPrefix}Messages`;
 ---
 
-<details class:list={["group", className]} open={open || Boolean(flag)} data-warranty-claim>
+{!canClaim && flag && (
+  <p role="status" class:list={["text-sm text-destructive", className]}>{warrantyClaimFlagText(flag, copy)}</p>
+)}
+{canClaim && <details class:list={["group", className]} open={open || Boolean(flag)} data-warranty-claim>
   <summary class="inline-flex min-h-11 cursor-pointer list-none items-center text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
     {copy.warrantyMakeClaimText}
   </summary>
@@ -49,4 +54,4 @@ const sinkId = `${idPrefix}Messages`;
     submitLabel={copy.warrantyClaimSubmitText}
     statusMessage={flag ? { tone: "error", text: warrantyClaimFlagText(flag, copy) } : null}
   />
-</details>
+</details>}

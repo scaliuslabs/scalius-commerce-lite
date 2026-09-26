@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { RichContent } from "../ui/rich-content";
-import { NativeSelect } from "../ui/native-select";
 import { SearchableSelect } from "../ui/searchable-select";
 import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
 import { CategoryAttributeSetCard } from "@/components/admin/catalog/CategoryAttributeSetCard";
@@ -332,11 +331,13 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <NativeSelect value={field.value} onValueChange={field.onChange} disabled={!canSave} aria-label={t("status")}>
-                        <option value="published">{t("active")}</option>
-                        <option value="draft">{t("draft")}</option>
-                        <option value="internal">{t("hidden")}</option>
-                      </NativeSelect>
+                      <SearchableSelect
+                        value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
+                        triggerRef={field.ref}
+                        onBlur={field.onBlur}
+                        triggerClassName="w-full"
+                        options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }, { value: "internal", label: t("hidden") }]}
+                      />
                     </FormControl>
                     <FormDescription>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}

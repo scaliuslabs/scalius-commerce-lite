@@ -1,9 +1,7 @@
 ---
-// The template's `warranty` module below the fold: a mount point only.
-// Warranty presentation (terms, the trust row, the terms dialog and their
-// copy) is owned by the warranty work (Wave B §5); it fills this slot with
-// its terms component. Until then the module renders nothing, so no page
-// shows an empty box.
+// Intentionally empty: the buy-box WarrantyRow already exposes the terms
+// through native details, and ProductDetails shows the warranty specification.
+// Keep the template slot without duplicating the same terms below the fold.
 import type { Product } from "@/lib/api";
 
 export interface Props {

@@ -12,7 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
@@ -86,7 +86,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
           {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
           <div className="space-y-2">
             <Label htmlFor="convert-type">{t("newType")}</Label>
-            <NativeSelect
+            <SearchableSelect
               id="convert-type"
               value={valueType}
               disabled={busy}
@@ -94,11 +94,9 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
                 setValueType(value as AttributeValueType);
                 setPreview(null);
               }}
-            >
-              {ATTRIBUTE_VALUE_TYPES.map((type) => (
-                <option key={type} value={type} disabled={type === attribute.valueType}>{t(`type_${type}`)}</option>
-              ))}
-            </NativeSelect>
+              triggerClassName="w-full"
+              options={ATTRIBUTE_VALUE_TYPES.map((type) => ({ value: type, label: t(`type_${type}`), disabled: type === attribute.valueType }))}
+            />
             <p className="text-body text-muted-foreground">{t(`typeHelp_${valueType}`)}</p>
           </div>
           {valueType === "number" ? (

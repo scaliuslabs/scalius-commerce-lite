@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { NumberInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
@@ -186,15 +186,14 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                   aria-describedby={describedBy("durationValue", false)}
                   onValueChange={(value) => set("durationValue", value)}
                 />
-                <NativeSelect
+                <SearchableSelect
                   id="warranty-policy-durationUnit"
-                  aria-label={t("duration")}
-                  className="w-36"
+                  ariaLabel={t("duration")}
+                  triggerClassName="w-36"
                   value={draft.durationUnit}
                   onValueChange={(value) => set("durationUnit", value as WarrantyDurationUnit)}
-                >
-                  {WARRANTY_DURATION_UNITS.map((unit) => <option key={unit} value={unit}>{t(`unit.${unit}`)}</option>)}
-                </NativeSelect>
+                  options={WARRANTY_DURATION_UNITS.map((unit) => ({ value: unit, label: t(`unit.${unit}`) }))}
+                />
               </div>
               {fieldNote("durationValue")}
             </div>

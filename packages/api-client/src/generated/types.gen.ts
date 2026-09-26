@@ -4092,6 +4092,7 @@ export type GetApiV1PagesResponses = {
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             }>;
             pagination: {
@@ -4195,6 +4196,7 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -4281,6 +4283,7 @@ export type GetApiV1PagesByIdResponses = {
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };
@@ -5096,6 +5099,7 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
             };
         };

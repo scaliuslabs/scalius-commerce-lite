@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
@@ -49,14 +49,15 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <NativeSelect
+                  <SearchableSelect
+                    triggerRef={field.ref}
+                    onBlur={field.onBlur}
                     value={field.value ? "active" : "inactive"}
                     onValueChange={(value) => field.onChange(value === "active")}
-                    aria-label={t("status")}
-                  >
-                    <option value="active">{t("active")}</option>
-                    <option value="inactive">{t("draft")}</option>
-                  </NativeSelect>
+                    ariaLabel={t("status")}
+                    triggerClassName="w-full"
+                    options={[{ value: "active", label: t("active") }, { value: "inactive", label: t("draft") }]}
+                  />
                 </FormControl>
                 <FormDescription>{t(field.value ? "activeHelp" : "draftHelp")}</FormDescription>
               </FormItem>
@@ -97,10 +98,13 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
                   <FormItem>
                     <FormLabel>{t("layout")}</FormLabel>
                     <FormControl>
-                      <NativeSelect value={field.value} onValueChange={field.onChange}>
-                        <option value="grid">{t("grid")}</option>
-                        <option value="carousel">{t("carousel")}</option>
-                      </NativeSelect>
+                      <SearchableSelect
+                        value={field.value} onValueChange={field.onChange}
+                        triggerRef={field.ref}
+                        onBlur={field.onBlur}
+                        triggerClassName="w-full"
+                        options={[{ value: "grid", label: t("grid") }, { value: "carousel", label: t("carousel") }]}
+                      />
                     </FormControl>
                   </FormItem>
                 )}

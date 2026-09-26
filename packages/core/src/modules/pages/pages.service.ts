@@ -366,25 +366,13 @@ export async function getPublicPages(
 }
 
 /**
- * A CMS page as buyers get it. The row's `revision` and `updatedAt` are left
- * out: both change on saves that change nothing a buyer sees, so a cached
- * answer carrying them could never be proven fresh.
+ * Public pages and articles omit the editor revision. `updatedAt` stays for
+ * sitemap lastmod and article dateModified; truthfulUpdatedAt leaves no-op
+ * saves unchanged, and the registry's lastmod rule covers real changes.
  */
-function toPublicPage<T extends { revision: number; updatedAt: unknown }>(
-  row: T,
-): Omit<T, "revision" | "updatedAt"> {
-  const { revision: _revision, updatedAt: _updatedAt, ...page } = row;
+function toPublicPage<T extends { revision: number }>(row: T): Omit<T, "revision"> {
+  const { revision: _revision, ...page } = row;
   return page;
-}
-
-/**
- * An article as buyers get it: no `revision`, which changes on saves that
- * change nothing a buyer sees. `updatedAt` stays (the blog's dateModified);
- * its own trigger rule advances the article's key.
- */
-function toPublicArticle<T extends { revision: number }>(row: T): Omit<T, "revision"> {
-  const { revision: _revision, ...article } = row;
-  return article;
 }
 
 /**
@@ -441,7 +429,7 @@ export async function getPublicArticleBySlug(db: Database, slug: string) {
     deps.anyPage();
     await declareNextPagePublication(db, and(eq(pages.slug, slug), eq(pages.contentType, "article")));
   }
-  return article ? toPublicArticle(sanitizePageRecord(article)) : null;
+  return article ? toPublicPage(sanitizePageRecord(article)) : null;
 }
 
 export async function getPublicArticles(
@@ -484,7 +472,7 @@ export async function getPublicArticles(
   deps.anyPage();
   await declareNextPagePublication(db, and(eq(pages.contentType, "article"), tagCondition));
   return {
-    articles: results.map((row) => toPublicArticle(sanitizePageRecord(row))),
+    articles: results.map((row) => toPublicPage(sanitizePageRecord(row))),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 }

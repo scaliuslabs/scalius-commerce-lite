@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/OrderStatusCard";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -70,16 +70,14 @@ export function CancelOrderDialog({
         </AlertDialogHeader>
         <div className="space-y-2">
           <Label htmlFor="cancel-reason">{t("cancel.reason")}</Label>
-          <NativeSelect
+          <SearchableSelect
+            triggerClassName="w-full"
             id="cancel-reason"
             value={reason}
             onValueChange={(value) => setReason(value as CancelReason)}
             placeholder={t("cancel.reasonPlaceholder")}
-          >
-            {CANCEL_REASONS.map((value) => (
-              <option key={value} value={value}>{t(`cancel.reason.${value}`)}</option>
-            ))}
-          </NativeSelect>
+            options={CANCEL_REASONS.map((value) => ({ value, label: t(`cancel.reason.${value}`) }))}
+          />
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("cancel.keep")}</AlertDialogCancel>

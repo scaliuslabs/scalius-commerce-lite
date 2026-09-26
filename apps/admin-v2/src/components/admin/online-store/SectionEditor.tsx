@@ -24,7 +24,6 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaManager } from "~/components/admin/media-manager";
@@ -166,13 +165,13 @@ function ChoiceField<Value extends string | number>({ id, label, help, value, op
 }) {
   return (
     <Field id={id} label={label} help={help}>
-      <NativeSelect
+      <SearchableSelect
         id={id}
         value={String(value)}
         onValueChange={(next) => onChange(options.find((option) => String(option.value) === next)!.value)}
-      >
-        {options.map((option) => <option key={option.value} value={String(option.value)}>{option.label}</option>)}
-      </NativeSelect>
+        options={options.map((option) => ({ value: String(option.value), label: option.label }))}
+        triggerClassName="w-full"
+      />
     </Field>
   );
 }
@@ -294,9 +293,13 @@ function SourceField({ id, label, source, onChange, error }: {
   return (
     <Field id={id} label={label} error={pickError}>
       <div className="space-y-2">
-        <NativeSelect id={id} value={source.kind} onValueChange={(kind) => setKind(kind as StorefrontProductSource["kind"])}>
-          {SOURCE_KINDS.map((kind) => <option key={kind} value={kind}>{t(`productSource_${kind}`)}</option>)}
-        </NativeSelect>
+        <SearchableSelect
+          id={id}
+          value={source.kind}
+          onValueChange={(kind) => setKind(kind as StorefrontProductSource["kind"])}
+          options={SOURCE_KINDS.map((kind) => ({ value: kind, label: t(`productSource_${kind}`) }))}
+          triggerClassName="w-full"
+        />
         {source.kind === "collection" ? (
           <CollectionSelect
             id={`${id}-collection`}
@@ -805,20 +808,20 @@ export function SectionEditor({ sections, notes, media, onChange }: {
         )}
       />
       <div className="space-y-1.5 border-t border-border px-4 py-3">
-        <NativeSelect
+        <SearchableSelect
           value={adding}
           placeholder={t("addSection")}
-          aria-label={t("addSection")}
+          ariaLabel={t("addSection")}
           disabled={full}
           onValueChange={(type) => {
             setAdding("");
             add(type as StorefrontSectionType);
           }}
-        >
-          {ADDABLE.filter((type) => type !== "hero" || !hasHero).map((type) => (
-            <option key={type} value={type}>{t(`section_${type}` as MessageKey)}</option>
-          ))}
-        </NativeSelect>
+          options={ADDABLE.filter((type) => type !== "hero" || !hasHero).map((type) => ({
+            value: type, label: t(`section_${type}` as MessageKey),
+          }))}
+          triggerClassName="w-full"
+        />
         {full ? <p className="text-body text-muted-foreground">{t("sectionLimit", { count: STOREFRONT_MAX_SECTIONS })}</p> : null}
       </div>
 

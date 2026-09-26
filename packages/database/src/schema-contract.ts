@@ -279,7 +279,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   },
   {
     ...CURRENT_DATABASE_SCHEMA,
-    sourceSha256: "e1654d5c5f1dda04ab9e11576496980eccdaffd323df70bb0e8a8726a4a78a1f",
+    sourceSha256: "2d18253c98e70a3a58d155aa13cc91d876dbd3456ed90cda7696b497699be33f",
   },
 ] as const;
 

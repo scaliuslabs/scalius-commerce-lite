@@ -1,28 +1,28 @@
-// An article's public payload keeps `updatedAt` (the blog's dateModified).
+// Public pages keep `updatedAt` for sitemap lastmod and blog dateModified.
 // `pages.updated_at` is noise to the cache registry except through the
 // lastmod rule, so it may move only with a buyer-visible change: a save that
-// changes nothing leaves it and the article's keys alone, and a real edit
+// changes nothing leaves it and the page's keys alone, and a real edit
 // moves both (truthfulUpdatedAt in pages.service.ts).
 import { afterEach, describe, expect, it } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { updatePage } from "./pages.service";
+import { getPublicPages, updatePage } from "./pages.service";
 
 const STALE_UPDATED_AT = 1_700_000_000;
 
-describe("article updated_at and cache keys", () => {
+describe("page updated_at and cache keys", () => {
   let sqlite: DatabaseSync | null = null;
   afterEach(() => {
     sqlite?.close();
     sqlite = null;
   });
 
-  it("moves updated_at and the article's key only on a real edit", async () => {
+  it.each(["article", "page"] as const)("moves %s updated_at and its key only on a real edit", async (contentType) => {
     const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
     sqlite.exec(`
-      INSERT INTO pages (id, content_type, title, slug, content, is_published, revision, updated_at)
-      VALUES ('article_one', 'article', 'Eid care', 'eid-care', '<p>x</p>', 1, 1, ${STALE_UPDATED_AT});
+      INSERT INTO pages (id, content_type, title, slug, content, is_published, revision, published_at, updated_at)
+      VALUES ('article_one', '${contentType}', 'Eid care', 'eid-care', '<p>x</p>', 1, 1, ${STALE_UPDATED_AT}, ${STALE_UPDATED_AT});
     `);
     const state = () => ({
       updatedAt: (sqlite!.prepare("SELECT updated_at AS v FROM pages WHERE id = 'article_one'").get() as { v: number }).v,
@@ -38,5 +38,11 @@ describe("article updated_at and cache keys", () => {
     const after = state();
     expect(after.updatedAt).toBeGreaterThan(STALE_UPDATED_AT);
     expect(after.seq).toBeGreaterThan(before.seq);
+    if (contentType === "page") {
+      const [page] = (await getPublicPages(harness.db)).pages;
+      expect(page?.publishedAt?.getTime()).toBe(STALE_UPDATED_AT * 1000);
+      expect(page?.updatedAt.getTime()).toBe(after.updatedAt * 1000);
+      expect(page).not.toHaveProperty("revision");
+    }
   });
 });

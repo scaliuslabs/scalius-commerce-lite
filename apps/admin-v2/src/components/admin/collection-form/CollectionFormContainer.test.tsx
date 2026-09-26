@@ -8,12 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CollectionForm } from "./CollectionFormContainer";
 import type { Category, CollectionFormValues, Product } from "./types";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const api = vi.hoisted(() => ({
   createCollection: vi.fn(),
+  getCollection: vi.fn(),
   updateCollection: vi.fn(),
   getCollectionProductOptions: vi.fn(),
 }));
@@ -24,6 +26,7 @@ const permissionMock = vi.hoisted(() => ({ canCreate: true, canEdit: true }));
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminCollections: api.createCollection,
+  getApiV1AdminCollectionsById: api.getCollection,
   putApiV1AdminCollectionsById: api.updateCollection,
   getApiV1AdminCollectionsProductOptions: api.getCollectionProductOptions,
 }));
@@ -134,18 +137,12 @@ async function click(element: HTMLElement) {
 }
 
 async function choose(selectLabel: string, option: string) {
-  const select = Array.from(document.body.querySelectorAll<HTMLSelectElement>("select")).find(
-    (candidate) =>
-      candidate.getAttribute("aria-label") === selectLabel
-      || text(candidate.selectedOptions[0]?.textContent) === selectLabel,
+  await click(button(selectLabel));
+  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+    (candidate) => text(candidate.textContent) === option,
   );
-  if (!select) throw new Error(`Expected a select labeled ${selectLabel}`);
-  const item = Array.from(select.options).find((candidate) => text(candidate.textContent) === option);
   if (!item) throw new Error(`Expected option ${option}`);
-  await act(async () => {
-    select.value = item.value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await click(item);
 }
 
 describe("CollectionForm", () => {
@@ -249,6 +246,34 @@ describe("CollectionForm", () => {
     await click(button("Save"));
     await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(2));
     expect(lastUpdateBody().expectedVersion).toBe(8);
+  });
+
+  it("reloads a conflicting collection under the merchant's edits and saves with the fresh version", async () => {
+    api.updateCollection.mockRejectedValueOnce(new AdminApiResponseError("changed", 409, "COLLECTION_REVISION_CONFLICT"));
+    api.getCollection.mockResolvedValue({
+      ...savedCollection,
+      version: 9,
+      metaTitle: "Saved elsewhere",
+      config: JSON.stringify({ ...savedCollection.config, title: "Latest heading" }),
+    });
+    await renderSaved();
+    await type(field("Title"), "My collection title");
+    await click(button("Save"));
+    await waitFor(() => expect(button("Reload and keep my edits")).toBeDefined());
+    expect(api.getCollection).not.toHaveBeenCalled();
+
+    await click(button("Reload and keep my edits"));
+    await waitFor(() => expect(field("Heading").value).toBe("Latest heading"));
+    expect(field("Title").value).toBe("My collection title");
+    expect(host.textContent).toContain("Saved elsewhere");
+    expect(api.getCollection).toHaveBeenCalledWith({ path: { id: "col_eid" } });
+
+    await click(button("Save"));
+    await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(2));
+    expect(lastUpdateBody()).toMatchObject({
+      name: "My collection title", expectedVersion: 9, metaTitle: "Saved elsewhere",
+      config: { title: "Latest heading", productIds: savedCollection.config!.productIds },
+    });
   });
 
   it("is read-only without edit permission", async () => {

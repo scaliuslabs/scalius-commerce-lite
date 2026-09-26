@@ -9,7 +9,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { PoliciesCard, StorePagePicker } from "~/components/admin/settings/PoliciesCard";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
 import { WarrantyPoliciesEntry } from "~/components/admin/settings/warranty-policies/WarrantyPoliciesEntry";
 import { SettingsCard, SettingsField, SettingsPage, SettingsCardLoading } from "~/components/admin/settings/SettingsPage";
@@ -127,17 +127,24 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
       {accepts ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <SettingsField id="return-fees" label={t("fees")}>
-            <NativeSelect id="return-fees" value={values.returnFees} disabled={!canEdit} onValueChange={(fees) => setValue("returnFees", fees as SeoReturnPolicySettings["returnFees"])}>
-              <option value="free">{t("free")}</option>
-              <option value="customer_responsibility">{t("customerPays")}</option>
-            </NativeSelect>
+            <SearchableSelect
+              id="return-fees"
+              value={values.returnFees}
+              disabled={!canEdit}
+              onValueChange={(fees) => setValue("returnFees", fees as SeoReturnPolicySettings["returnFees"])}
+              triggerClassName="w-full"
+              options={[{ value: "free", label: t("free") }, { value: "customer_responsibility", label: t("customerPays") }]}
+            />
           </SettingsField>
           <SettingsField id="return-method" label={t("method")}>
-            <NativeSelect id="return-method" value={values.returnMethod} disabled={!canEdit} onValueChange={(method) => setValue("returnMethod", method as SeoReturnPolicySettings["returnMethod"])}>
-              <option value="mail">{t("mail")}</option>
-              <option value="in_store">{t("inStore")}</option>
-              <option value="both">{t("both")}</option>
-            </NativeSelect>
+            <SearchableSelect
+              id="return-method"
+              value={values.returnMethod}
+              disabled={!canEdit}
+              onValueChange={(method) => setValue("returnMethod", method as SeoReturnPolicySettings["returnMethod"])}
+              triggerClassName="w-full"
+              options={[{ value: "mail", label: t("mail") }, { value: "in_store", label: t("inStore") }, { value: "both", label: t("both") }]}
+            />
           </SettingsField>
         </div>
       ) : null}

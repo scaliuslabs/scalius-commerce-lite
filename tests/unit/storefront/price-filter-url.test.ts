@@ -1,71 +1,37 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_MAX_PRICE,
-  appendPriceFilterParams,
-  parsePriceFilterValue,
-} from "../../../apps/storefront/src/lib/filters/price-url";
+import { resolveProductListQueryState, buildProductListHref } from "../../../apps/storefront/src/lib/product-list-query";
+
+function priceState(search: string) {
+  return resolveProductListQueryState({ url: new URL(`https://store.test/search${search}`) });
+}
 
 describe("storefront price filter URL params", () => {
-  it("keeps max prices above the default ceiling", () => {
-    const params = new URLSearchParams();
-
-    appendPriceFilterParams(params, {
-      includePriceFilter: true,
-      priceChanged: true,
-      minPriceInput: "0",
-      maxPriceInput: "200000",
-    });
-
-    expect(params.get("minPrice")).toBeNull();
-    expect(params.get("maxPrice")).toBe("200000");
+  it.each([200000, 25000, 50000])("keeps an explicit maximum of %s without a default ceiling", (maxPrice) => {
+    const state = priceState(`?maxPrice=${maxPrice}`);
+    expect(state.options.maxPrice).toBe(maxPrice);
+    expect(state.options.minPrice).toBeUndefined();
+    expect(buildProductListHref({ pathname: "/search", currentFilters: state.currentFilters }))
+      .toBe(`/search?maxPrice=${maxPrice}`);
   });
 
-  it("keeps max prices below the default ceiling", () => {
-    const params = new URLSearchParams();
-
-    appendPriceFilterParams(params, {
-      includePriceFilter: true,
-      priceChanged: true,
-      minPriceInput: "0",
-      maxPriceInput: "25000",
-    });
-
-    expect(params.get("maxPrice")).toBe("25000");
+  it("omits the untouched maximum when only minimum price is active", () => {
+    const state = priceState("?minPrice=10000&maxPrice=");
+    expect(state.options.minPrice).toBe(10000);
+    expect(state.options.maxPrice).toBeUndefined();
+    expect(state.redirectPath).toBe("/search?minPrice=10000");
   });
 
-  it("omits the unchanged maximum when only minimum price is active", () => {
-    const params = new URLSearchParams();
-
-    appendPriceFilterParams(params, {
-      includePriceFilter: true,
-      priceChanged: true,
-      minPriceInput: "10000",
-      maxPriceInput: DEFAULT_MAX_PRICE.toString(),
-    });
-
-    expect(params.get("minPrice")).toBe("10000");
-    expect(params.get("maxPrice")).toBeNull();
+  it("omits untouched empty price inputs from the native filter form", () => {
+    const state = priceState("?minPrice=&maxPrice=");
+    expect(state.options.minPrice).toBeUndefined();
+    expect(state.options.maxPrice).toBeUndefined();
+    expect(state.redirectPath).toBe("/search");
   });
 
-  it("omits untouched default price filters", () => {
-    const params = new URLSearchParams();
-
-    appendPriceFilterParams(params, {
-      includePriceFilter: true,
-      priceChanged: true,
-      minPriceInput: "0",
-      maxPriceInput: DEFAULT_MAX_PRICE.toString(),
-    });
-
-    expect(params.toString()).toBe("");
-  });
-
-  it("parses invalid price values back to the fallback", () => {
-    expect(parsePriceFilterValue("nope", DEFAULT_MAX_PRICE)).toBe(
-      DEFAULT_MAX_PRICE,
-    );
-    expect(parsePriceFilterValue("-100", DEFAULT_MAX_PRICE)).toBe(
-      DEFAULT_MAX_PRICE,
-    );
+  it.each(["nope", "-100"])("drops invalid price %s instead of applying a default ceiling", (value) => {
+    const state = priceState(`?minPrice=${value}&maxPrice=${value}`);
+    expect(state.options.minPrice).toBeUndefined();
+    expect(state.options.maxPrice).toBeUndefined();
+    expect(state.redirectPath).toBe("/search");
   });
 });

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import {
   ATTRIBUTE_FACET_DISPLAYS,
   ATTRIBUTE_UNIT_MAX_LENGTH,
@@ -212,7 +212,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                     <Button type="button" variant="outline" onClick={() => setConverting(true)}>{a("changeType")}</Button>
                   </div>
                 ) : (
-                  <NativeSelect
+                  <SearchableSelect
                     id="attribute-type"
                     value={valueType}
                     onValueChange={(value) => {
@@ -220,9 +220,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                       setValueType(next);
                       if (!isAttributeFacetDisplayAllowed(next, facetDisplay)) setFacetDisplay(defaultAttributeFacetDisplay(next));
                     }}
-                  >
-                    {ATTRIBUTE_VALUE_TYPES.map((type) => <option key={type} value={type}>{a(`type_${type}`)}</option>)}
-                  </NativeSelect>
+                    triggerClassName="w-full"
+                    options={ATTRIBUTE_VALUE_TYPES.map((type) => ({ value: type, label: a(`type_${type}`) }))}
+                  />
                 )}
                 <p className="text-body text-muted-foreground">{a(`typeHelp_${valueType}`)}</p>
               </div>
@@ -240,20 +240,24 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
               ) : null}
               <div className="space-y-2">
                 <Label htmlFor="attribute-group">{a("group")}</Label>
-                <NativeSelect id="attribute-group" value={groupId ?? ""} onValueChange={(value) => setGroupId(value || null)}>
-                  <option value="">{a("noGroup")}</option>
-                  {(groupData?.groups ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                  {groupId && groupData && !groupData.groups.some((group) => group.id === groupId) ? <option value={groupId}>{groupId}</option> : null}
-                </NativeSelect>
+                <SearchableSelect
+                  id="attribute-group" value={groupId ?? ""} onValueChange={(value) => setGroupId(value || null)}
+                  triggerClassName="w-full"
+                  options={[
+                    { value: "", label: a("noGroup") },
+                    ...(groupData?.groups ?? []).map((group) => ({ value: group.id, label: group.name })),
+                    ...(groupId && groupData && !groupData.groups.some((group) => group.id === groupId) ? [{ value: groupId, label: groupId }] : []),
+                  ]}
+                />
                 <p className="text-body text-muted-foreground">{a("groupHelp")}</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="attribute-display">{a("filterDisplay")}</Label>
-                <NativeSelect id="attribute-display" value={facetDisplay} onValueChange={(value) => setFacetDisplay(value as AttributeFacetDisplay)}>
-                  {ATTRIBUTE_FACET_DISPLAYS.filter((display) => isAttributeFacetDisplayAllowed(valueType, display)).map((display) => (
-                    <option key={display} value={display}>{a(`display_${display}`)}</option>
-                  ))}
-                </NativeSelect>
+                <SearchableSelect
+                  id="attribute-display" value={facetDisplay} onValueChange={(value) => setFacetDisplay(value as AttributeFacetDisplay)}
+                  triggerClassName="w-full"
+                  options={ATTRIBUTE_FACET_DISPLAYS.filter((display) => isAttributeFacetDisplayAllowed(valueType, display)).map((display) => ({ value: display, label: a(`display_${display}`) }))}
+                />
               </div>
             </div>
             {hasPresets ? (

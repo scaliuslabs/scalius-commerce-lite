@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -185,7 +185,7 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   );
   return (
     <div className="flex min-w-0 gap-1">
-      <NativeSelect
+      <SearchableSelect
         value={mode}
         onValueChange={(next) => {
           setMode(next as "none" | "percentage" | "flat");
@@ -197,13 +197,10 @@ function DiscountInput({ variant, name, invalid, onChange }: {
             onChange({ discountType: "flat", discountAmount: 0, discountPercentage: null });
           }
         }}
-        aria-label={t("discountTypeFor", { name })}
-        className="min-w-24 flex-1"
-      >
-        <option value="none">{t("noDiscount")}</option>
-        <option value="percentage">{t("discountPercentage")}</option>
-        <option value="flat">{t("discountFixed")}</option>
-      </NativeSelect>
+        ariaLabel={t("discountTypeFor", { name })}
+        triggerClassName="min-w-24 flex-1"
+        options={[{ value: "none", label: t("noDiscount") }, { value: "percentage", label: t("discountPercentage") }, { value: "flat", label: t("discountFixed") }]}
+      />
       {mode === "flat" ? (
         <MoneyInput
           currencyCode={currencyCode}
@@ -263,20 +260,22 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
       </Field>
       <Field label={t("barcodeType")}>
         {() => (
-          <NativeSelect
+          <SearchableSelect
             value={variant.barcodeType ?? "none"}
             onValueChange={(value) => onChange(value === "none"
               ? { barcodeType: null, barcode: null }
               : { barcodeType: value as DraftVariant["barcodeType"] })}
-          >
-            <option value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</option>
-            <option value="ean13">EAN-13</option>
-            <option value="upc">UPC</option>
-            <option value="isbn">ISBN</option>
-            <option value="gtin">GTIN</option>
-            <option value="code128">Code 128</option>
-            <option value="custom">{t("barcodeCustom")}</option>
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[
+              { value: "none", label: t(isUnsavedSku ? "barcodeAuto" : "noBarcode") },
+              { value: "ean13", label: "EAN-13" },
+              { value: "upc", label: "UPC" },
+              { value: "isbn", label: "ISBN" },
+              { value: "gtin", label: "GTIN" },
+              { value: "code128", label: "Code 128" },
+              { value: "custom", label: t("barcodeCustom") },
+            ]}
+          />
         )}
       </Field>
       {showWeight ? (

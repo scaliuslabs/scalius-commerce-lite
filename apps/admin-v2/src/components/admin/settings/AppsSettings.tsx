@@ -35,7 +35,7 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -245,11 +245,13 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
     <>
       {script ? null : (
         <SettingsField id="tracking-service" label={t("service")}>
-          <NativeSelect id="tracking-service" value={draft.type} onValueChange={(value) => changeType(value as AnalyticsScriptType)}>
-            {analyticsScriptTypes.map((type) => (
-              <option key={type} value={type}>{t(type)}</option>
-            ))}
-          </NativeSelect>
+          <SearchableSelect
+            id="tracking-service"
+            value={draft.type}
+            onValueChange={(value) => changeType(value as AnalyticsScriptType)}
+            triggerClassName="w-full"
+            options={analyticsScriptTypes.map((type) => ({ value: type, label: t(type) }))}
+          />
         </SettingsField>
       )}
       <SettingsField
@@ -296,11 +298,13 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
       </SettingsField>
       {isCustom ? (
         <SettingsField id="tracking-placement" label={t("placement")}>
-          <NativeSelect id="tracking-placement" value={draft.location} onValueChange={(value) => set("location", value as Placement)}>
-            {PLACEMENTS.map((placement) => (
-              <option key={placement} value={placement}>{t(placement)}</option>
-            ))}
-          </NativeSelect>
+          <SearchableSelect
+            id="tracking-placement"
+            value={draft.location}
+            onValueChange={(value) => set("location", value as Placement)}
+            triggerClassName="w-full"
+            options={PLACEMENTS.map((placement) => ({ value: placement, label: t(placement) }))}
+          />
         </SettingsField>
       ) : null}
       {!script && canToggle ? (
