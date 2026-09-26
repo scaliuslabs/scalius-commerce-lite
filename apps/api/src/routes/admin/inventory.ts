@@ -29,11 +29,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
-import { bumpCacheGeneration, type CacheWriteContext } from "../../utils/cache-generation";
-import {
-    findStockMutationAvailabilityTransitions,
-    type StockAvailabilityMutationInput,
-} from "../../utils/availability-transitions";
+
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
@@ -61,16 +57,6 @@ function resolveInventoryOperationKey(
         throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
     }
     return operationKey;
-}
-
-/** Same-band stock writes leave the public cache generation alone. */
-async function bumpCacheGenerationIfBandChanged(
-    db: Parameters<typeof findStockMutationAvailabilityTransitions>[0],
-    result: StockAvailabilityMutationInput,
-    c: CacheWriteContext,
-): Promise<void> {
-    const variantIds = await findStockMutationAvailabilityTransitions(db, [result]);
-    if (variantIds.length > 0) await bumpCacheGeneration(c);
 }
 
 // ─── Inline response schemas ──
@@ -605,7 +591,7 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
-        await bumpCacheGenerationIfBandChanged(db, { ...result, pool: payload.pool }, c);
+
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -656,7 +642,7 @@ app.openapi(alertLevelRoute, async (c) => {
     const { lowStockThreshold } = c.req.valid("json");
     const result = await setLowStockThreshold(c.get("db"), variantId, lowStockThreshold);
     // The alert level shapes the buyer availability band.
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -696,8 +682,8 @@ app.openapi(defaultAlertLevelRoute, async (c) => {
     const result = await setDefaultLowStockThreshold(c.get("db"), defaultLowStockThreshold);
     // The level shapes buyer availability bands for every SKU that uses it,
     // including each product's stored card band: rebuild those off the
-    // request path (the rebuild bumps the generation again when it ends).
-    await bumpCacheGeneration(c);
+    // request path; database triggers advance the affected dependencies.
+
     await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
         console.warn("[inventory] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
     });
@@ -779,7 +765,7 @@ app.openapi(stockAdjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
-        await bumpCacheGenerationIfBandChanged(db, result, c);
+
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -830,7 +816,7 @@ app.openapi(stockSetRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);
-        await bumpCacheGenerationIfBandChanged(db, result, c);
+
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);

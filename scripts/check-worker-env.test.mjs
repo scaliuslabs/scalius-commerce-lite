@@ -77,7 +77,7 @@ describe("worker env check: Wrangler vars", () => {
         if (path === "apps/api/wrangler.jsonc") {
           return JSON.stringify({
             cache: { enabled: true },
-            exports: { default: { cache: { enabled: false } }, PublicApi: { cache: { enabled: true } } },
+            exports: { default: { cache: { enabled: false } } },
             vars: { PURGE_URL: "https://storefront.example.test/api/purge-cache" },
           });
         }
@@ -86,6 +86,22 @@ describe("worker env check: Wrangler vars", () => {
     });
 
     expect(errors.some((error) => error.includes("apps/api/wrangler.jsonc declares Wrangler vars PURGE_URL"))).toBe(true);
+  });
+});
+
+describe("worker env check: dependency validation cannot be bypassed", () => {
+  it.each([
+    { default: { cache: { enabled: true } } },
+    { default: { cache: { enabled: false } }, PublicApi: { cache: { enabled: true } } },
+  ])("rejects a cached API entrypoint", (exports) => {
+    const { errors } = runWorkerEnvCheck({
+      readTextImpl(path) {
+        const text = readFileSync(resolve(root, path), "utf8");
+        if (path !== "apps/api/wrangler.jsonc") return text;
+        return JSON.stringify({ ...readRepoJsonc(path), exports });
+      },
+    });
+    expect(errors.some((error) => error.includes("every public hit validates dependencies"))).toBe(true);
   });
 });
 

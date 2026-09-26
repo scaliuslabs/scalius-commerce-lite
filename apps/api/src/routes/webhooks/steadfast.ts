@@ -15,7 +15,6 @@ import {
     markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
 import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -312,13 +311,6 @@ app.post("/", async (c) => {
             trackingId: shipment.trackingId,
             source: "steadfast-webhook",
         });
-        if (
-            statusResult
-            && Array.isArray(statusResult.availabilityTransitionVariantIds)
-            && statusResult.availabilityTransitionVariantIds.length > 0
-        ) {
-            await bumpCacheGeneration(c);
-        }
 
         await markWebhookEventProcessed(
             db,

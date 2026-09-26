@@ -339,7 +339,7 @@ export const getApiV1StorefrontLayout = <ThrowOnError extends boolean = false>(o
 /**
  * Read several public storefront resources in one request
  *
- * Answers each `r` part (the /api/v1 path and query of a public, generation-cached read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same generation-keyed cache. At most 8 parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.
+ * Answers each `r` part (the /api/v1 path and query of a public, dependency-validated read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same dependency-validated cache. At most 8 parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.
  */
 export const getApiV1StorefrontBatch = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontBatchData, ThrowOnError>): RequestResult<GetApiV1StorefrontBatchResponses, GetApiV1StorefrontBatchErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontBatchResponses, GetApiV1StorefrontBatchErrors, ThrowOnError>({ url: '/api/v1/storefront/batch', ...options });
 
@@ -1547,7 +1547,7 @@ export const getApiV1CategoriesBySlugProductSummaries = <ThrowOnError extends bo
 /**
  * Refresh the storefront
  *
- * Starts a new public cache generation. Saves already do this; use it only after changing data outside the dashboard.
+ * Invalidates all public pages through the store dependency clock. Normal writes invalidate their affected data automatically.
  */
 export const postApiV1CacheClear = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CacheClearData, ThrowOnError>): RequestResult<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError>({
     security: [{
@@ -9200,7 +9200,7 @@ export const putApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean =
 /**
  * Rebuild the catalogue listing projections
  *
- * Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the public cache generation is bumped once the last product is covered. Stock and checkout are unaffected.
+ * Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the database triggers invalidate rebuilt rows. Stock and checkout are unaffected.
  */
 export const postApiV1AdminCatalogProjectionsRebuild = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCatalogProjectionsRebuildData, ThrowOnError>): RequestResult<PostApiV1AdminCatalogProjectionsRebuildResponses, PostApiV1AdminCatalogProjectionsRebuildErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCatalogProjectionsRebuildResponses, PostApiV1AdminCatalogProjectionsRebuildErrors, ThrowOnError>({
     security: [{

@@ -123,11 +123,6 @@ export class Stack {
     await verifyStorefrontBinding({ storefrontUrl: o.storefrontUrl, mediaUrl: o.mediaUrl });
   }
 
-  async kvPut(key, value) {
-    const r = await fetch(kvValueUrl(this.ports, key), { method: "PUT", body: value });
-    if (!r.ok) throw new Error(`KV ${key} write failed (${r.status})`);
-  }
-
   async stop() {
     const left = [];
     if (this.storefront) left.push(...(await killTree(this.storefront.pid)));

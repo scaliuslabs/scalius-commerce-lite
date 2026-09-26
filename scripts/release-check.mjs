@@ -1833,7 +1833,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   }
 
   logger?.log(
-    "PASS storefront cache headers: public pages and feed use the generation-keyed cache and checkout is no-store.",
+    "PASS storefront cache headers: public pages and feed revalidate, and checkout is no-store.",
   );
   return {
     paths: [...STOREFRONT_CACHE_HEADER_PATHS],

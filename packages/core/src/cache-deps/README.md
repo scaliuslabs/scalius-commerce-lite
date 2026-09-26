@@ -5,6 +5,31 @@ Read side of the dependency-validated public cache (DVC), described in
 registry live in `@scalius/shared/cache-deps`. The database triggers advance
 those keys on every committed buyer-visible change.
 
+## Public freshness contract
+
+The API validates all cached parts of one batch with one authoritative database
+statement, including the starting clock and current Platform settings. Storefront
+HTML/XML checks a per-colo change frontier no older than one second; merchant
+preview links carry `_sv` to require their acknowledged commit immediately.
+Worker deployment identities are part of the proof. External responses cannot
+bypass validation through another CDN cache.
+
+Content has no routine expiration. Scheduled fact changes keep their exact
+transition deadline. Internal Cache API objects use a one-year storage hint;
+Cloudflare may evict them sooner, requiring a correct refill. Normal hot hits
+do not rewrite unchanged bodies. Missing freshness proof fails closed or renders
+live; it never grants a stale-response window.
+
+For the generation-to-dependency rollout, deploy the storefront first: an older
+API supplies no compatible proof, so pages render without persistent storage.
+Apply migration 0101 before deploying the strict API. Once the API removes
+generation bumps, do not roll back only the storefront to generation mode.
+
+Database restore or authority replacement must redeploy **both API and
+storefront Worker versions before serving traffic**. Commit clocks order one
+database history only; a rollback or replacement can reuse earlier sequence
+numbers, so existing proofs must not cross that boundary.
+
 ## Pieces
 
 - `@scalius/database/read-observer`: the transports call `observeStatement(sql)`
@@ -29,7 +54,7 @@ those keys on every committed buyer-visible change.
 | `tables` | Every table the render touched. |
 | `coarseTables` | Registered tables no declared key covered. Each one added its `t:<table>` key and logged `[CacheDeps] coarse <label> <tables>`. |
 | `collapsedKinds` | Kinds that the 256-key budget replaced by their `t:` keys. |
-| `softMaxAgeSeconds` | Set when a soft table was read (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`) or `deps.softOrdering()` was called. |
+| `softMaxAgeSeconds` | Compatibility field for an explicit caller bound; ordinary reads never set it. |
 | `validUntil` | The earliest scheduled transition declared. Never serve the entry at or after it. |
 | `uncacheable` | Reasons the entry must not be stored: an unregistered table was read, `deps.uncacheable()` was called, the entry is over budget, or a nested render failed. |
 
@@ -74,9 +99,22 @@ Import from inside core with `import { deps } from "../../cache-deps";`.
    per-buyer value makes the output uncacheable. Call
    `deps.uncacheable("short-code")`, and never put a value in the reason.
 
-5. **Soft ordering.** Recommendation and popularity order may lag by up to
-   10 minutes. Reading the soft tables sets this automatically. Every card
-   shown still needs its hard `p:` key.
+5. **Ordering projections.** Stored recommendation readers declare
+   `deps.recommendations(sourceId)` (`rec:<id>`) even when rows are missing.
+   Card fact readers declare `deps.sold(productId)` (`sold:<id>`); the popular
+   home list also declares `deps.popular()` (`popular`). Migration 0101 adds
+   triggers for those projections without modifying deployed 0100. Unchanged
+   refreshes only update `computed_at`, which advances no key. Sold counts
+   below the card threshold (10) do not invalidate cards; popular-list changes
+   start at its threshold (2). Counts leaving either threshold advance its key.
+
+   Only the live ranking fallback declares `deps.recommendationSignals()`.
+   Relevant committed order/line changes advance this constant key, never a
+   private order/customer identifier. The reader declares `validUntil` at the
+   earliest included order's 30-day popularity or 365-day co-purchase exit
+   (one second after the inclusive SQL boundary). Empty/quiet order sets have
+   no deadline. Stored lists and ordinary cards never depend on live order
+   signals. There is no routine age-based ordering expiry.
 
 6. **Check coverage.** Run the reader under
    `withDependencyScope(render, { strict: true })`. Strict mode throws

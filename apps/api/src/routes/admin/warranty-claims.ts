@@ -3,7 +3,7 @@
 // packages/core/src/auth/rbac/route-permissions/warranty.ts. A status change
 // writes an event line in the claim thread (and an optional public reply) in
 // the same batch; claims never move money, stock or order status. Claims are
-// private, so nothing here bumps the cache generation.
+// private and do not affect public cache dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { getWarrantyClaim, listWarrantyClaims, updateWarrantyClaim } from "@scalius/core/modules/warranty";

@@ -2,9 +2,13 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
 
 import { platformRoutes } from "./platform";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
-function createApp() {
+function createApp(config: typeof RESOLVED_CONFIG | null = RESOLVED_CONFIG) {
+  const { db, sqlite } = createSqliteD1Database();
+  if (config) sqlite.prepare("INSERT INTO settings (id, category, key, value, type) VALUES ('platform', 'platform', 'document', ?, 'json')").run(JSON.stringify(config));
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+  app.use("*", async (c, next) => { c.set("db", db); await next(); });
   app.route("/platform", platformRoutes);
   return app;
 }
@@ -27,15 +31,15 @@ const RESOLVED_CONFIG = {
 };
 
 describe("GET /api/v1/platform", () => {
-  it("returns only the four public origins from the composed runtime env with a short public cache", async () => {
+  it("reads current public configuration even when the entry-time KV hint is stale", async () => {
     const response = await createApp().request(
       "/api/v1/platform",
       {},
-      { PLATFORM_CONFIG: RESOLVED_CONFIG } as unknown as Env,
+      { PLATFORM_CONFIG: { ...RESOLVED_CONFIG, storefrontUrl: "https://old.example.com" } } as unknown as Env,
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Content-Type")).toContain("application/json");
     await expect(response.json()).resolves.toEqual({
       success: true,
@@ -70,10 +74,10 @@ describe("GET /api/v1/platform", () => {
   });
 
   it("answers with empty origins when the platform is not configured yet", async () => {
-    const response = await createApp().request("/api/v1/platform", {}, {} as Env);
+    const response = await createApp(null).request("/api/v1/platform", {}, {} as Env);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       success: true,
       data: {

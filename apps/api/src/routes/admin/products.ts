@@ -49,7 +49,7 @@ import {
     selectedProductOptionSchema,
 } from "../../schemas/entities";
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
+
 import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -527,7 +527,7 @@ const createProductRoute = createRoute({
 app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
     const result = await createProduct(db, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     scheduleRecommendationRefreshAfterWrite(c, db, [result.id]);
     return created(c, result);
 });
@@ -566,9 +566,6 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const deletedIds = result.outcomes
         .filter((outcome) => outcome.status === "deleted")
         .map((outcome) => outcome.id);
-    if (!data.permanent || deletedIds.length > 0) {
-        await bumpCacheGeneration(c);
-    }
     return ok(c, {
         products: result.revisions.map((revision, index) => ({
             id: data.products[index]!.id,
@@ -618,7 +615,7 @@ app.openapi(bulkUpdateRoute, async (c) => {
     const { products, ...changes } = c.req.valid("json");
     const result = await bulkUpdateProducts(db, products, changes);
     if (result.products.length > 0) {
-        await bumpCacheGeneration(c);
+
         scheduleRecommendationRefreshAfterWrite(c, db, result.products.map((product) => product.id));
     }
     return ok(c, result);
@@ -659,7 +656,6 @@ app.openapi(duplicateProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { name } = c.req.valid("json");
-    // A draft is not buyer-visible, so no cache generation bump.
     return created(c, await duplicateProduct(db, id, name));
 });
 
@@ -756,7 +752,7 @@ app.openapi(updateProductSectionRoute, async (c) => {
     try {
         const result = await updateProductSemanticSection(db, id, patch);
         if (!result) throw new NotFoundError("Product not found");
-        await bumpCacheGeneration(c);
+
         scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
@@ -823,7 +819,7 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await updateProduct(db, id, data);
-        await bumpCacheGeneration(c);
+
         scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
@@ -862,7 +858,7 @@ app.openapi(deleteProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await deleteProduct(db, id, expectedAggregateRevision);
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -892,7 +888,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await restoreProduct(db, id, expectedAggregateRevision);
-    await bumpCacheGeneration(c);
+
     scheduleRecommendationRefreshAfterWrite(c, db, [id]);
     return ok(c, result);
 });
@@ -920,7 +916,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     await permanentlyDeleteProduct(db, id, expectedAggregateRevision);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 
@@ -952,7 +948,7 @@ app.openapi(createVariantRoute, async (c) => {
     try {
         const result = await createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
-        await bumpCacheGeneration(c);
+
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -1018,7 +1014,7 @@ app.openapi(updateVariantRoute, async (c) => {
     try {
         const result = await updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
-        await bumpCacheGeneration(c);
+
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -1061,7 +1057,7 @@ app.openapi(deleteVariantRoute, async (c) => {
             variantId,
             expectedAggregateRevision,
         );
-        await bumpCacheGeneration(c);
+
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -1093,7 +1089,7 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const { id } = c.req.valid("param");
     const user = c.get("user");
     const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
-    await bumpCacheGeneration(c);
+
     scheduleRecommendationRefreshAfterWrite(c, db, [id]);
     return ok(c, result);
 });

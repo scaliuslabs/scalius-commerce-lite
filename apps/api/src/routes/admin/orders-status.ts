@@ -31,7 +31,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
+
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
 import {
     enqueueOrderNotificationMessage,
@@ -193,7 +193,6 @@ app.openapi(updateStatusRoute, async (c) => {
             },
         });
     }
-    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
     if (result.notification) {
         await enqueueOrderNotificationMessage({
@@ -262,7 +261,7 @@ app.openapi(markDeliveredRoute, async (c) => {
             source: "orders-mark-delivered",
         });
     }
-    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+
     return ok(c, { message: result.message });
 });
 
@@ -347,8 +346,8 @@ app.openapi(postCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await processCodAction(db, orderId, data);
-    const { availabilityTransitionVariantIds, ...responseData } = result;
-    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
+
     // Collected cash settles the order: hand over its automatic lines.
     if (data.action === "collected") await enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, orderId, "orders-cod-action");
     await recordOrderEvent(db, data.action === "collected"
@@ -476,8 +475,6 @@ app.openapi(createShipmentRoute, async (c) => {
         console.error(`Failed to create shipment for order ${orderId}: ${errorMessage}`);
         throw new ValidationError(errorMessage);
     }
-    if (Array.isArray(shipmentResult.availabilityTransitionVariantIds)
-        && shipmentResult.availabilityTransitionVariantIds.length > 0) await bumpCacheGeneration(c);
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);
@@ -687,8 +684,7 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     const db = c.get("db");
 
     const result = await reconcileOrderShipment(db, orderId, shipmentId);
-    const { availabilityTransitionVariantIds, ...responseData } = result;
-    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
@@ -747,8 +743,8 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
         actorId: user?.id ?? null,
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
     });
-    const { availabilityTransitionVariantIds, ...responseData } = result;
-    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
+
     if (result.status === "repaired" && RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,
@@ -798,8 +794,8 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
     });
     if (result.status === "released") return ok(c, result);
 
-    const { availabilityTransitionVariantIds, ...responseData } = result;
-    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
+
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,

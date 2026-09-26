@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders, checkoutAttempts } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { getCheckoutAttemptRequestKeyFromStatusToken } from "@scalius/core/modules/checkout";
-import { getOptionalExecutionContext } from "../../utils/cache-generation";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ValidationError } from "../../utils/api-error";
 import { getCheckoutStatusKvKey } from "../../utils/order-receipt-token";
 import { ok } from "../../utils/api-response";

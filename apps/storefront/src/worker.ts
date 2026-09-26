@@ -1,7 +1,7 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
-import { readCacheGenerationHint, readWorkerVersion } from "@scalius/shared/cache-generation";
+import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
   STOREFRONT_PAGE_CACHE_MODE,
   servePublicStorefrontRequest,
@@ -63,7 +63,6 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     if (httpsRedirect) return httpsRedirect;
     return servePublicStorefrontRequest(request, {
       cache: caches.default,
-      readGeneration: () => readCacheGenerationHint(this.env.CACHE),
       buildId: BUILD_ID,
       workerVersion: readWorkerVersion(this.env),
       render: (renderRequest) => handle(renderRequest, this.env, this.ctx),

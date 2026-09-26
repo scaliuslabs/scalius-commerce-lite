@@ -35,7 +35,7 @@ import {
   successEnvelope,
 } from "../schemas/responses";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { bumpCacheGeneration, getOptionalExecutionContext } from "../utils/cache-generation";
+import { getOptionalExecutionContext } from "../utils/execution-context";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 import { listPaymentMethodIds } from "@scalius/core/modules/payments";
 
@@ -667,11 +667,6 @@ app.openapi(submitCheckoutRoute, async (c) => {
     );
     if (executionCtx) executionCtx.waitUntil(postCommit);
     else await postCommit;
-  }
-  if (submitted.availabilityVariantIds.length > 0) {
-    const bump = bumpCacheGeneration(c);
-    if (executionCtx) executionCtx.waitUntil(bump);
-    else await bump;
   }
   return submitted.response.status === "complete"
     ? created(c, submitted.response)

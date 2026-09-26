@@ -252,8 +252,8 @@ describe("Wave A checkout", () => {
         expect(one("SELECT reserved_stock FROM product_variants WHERE id = 'v_tee'")).toEqual({ reserved_stock: 99 });
     });
 
-    it("keeps cache dependency writes inside the commit: none for stock within its band, one product for a sell-out", async () => {
-        // Count what the 0100 triggers write, per commit.
+    it("keeps cache dependency writes inside the commit: ranking signals, no same-band product invalidation, one product for a sell-out", async () => {
+        // Count what the stock (0100) and live-ranking (0101) triggers write per commit.
         sqlite.exec(`
             CREATE TABLE amp (k TEXT PRIMARY KEY, n INTEGER NOT NULL);
             CREATE TRIGGER amp_dep_ins AFTER INSERT ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
@@ -278,17 +278,24 @@ describe("Wave A checkout", () => {
                 clockWrites: counts.clock ?? 0,
             };
         };
-        // 99 lines of one SKU that stays in stock: the batch is unchanged and writes no key.
+        // 99 lines of one SKU that stays in stock: no product/band key changes.
+        // Each order/line advances its table key and the constant live-ranking
+        // key, in one clock step. Stored recommendations and sold counts stay put.
         const inBand = await measure(Array.from({ length: 99 }, (_, index) =>
             line("p_tee", "v_tee", 1, 1000, [{ key: "fit", value: "regular" }, { key: "engraving", value: `No ${index}` }])));
-        expect(inBand).toEqual({ statements: 40, keys: [], depWrites: 0, clockWrites: 0 });
+        const rankingKeys = ["recommendation-signals", "t:order_items", "t:orders"];
+        expect(inBand).toEqual({ statements: 40, keys: rankingKeys, depWrites: 200, clockWrites: 100 });
         // The last 3 mugs: the SKU and the card cross into sold out.
         const soldOut = await measure([line("p_mug", "v_mug", 3, 300)]);
         // The SKU trigger (product) and the buyer-state band trigger (product, band order of its scopes).
-        expect(soldOut.keys).toEqual(["lo:band:all", "p:p_mug", "t:product_buyer_state", "t:product_variants"]);
+        expect(soldOut.keys).toEqual([
+            "lo:band:all", "p:p_mug", ...rankingKeys, "t:product_buyer_state", "t:product_variants",
+        ]);
         expect(soldOut.statements).toBeLessThanOrEqual(40);
-        expect(soldOut.depWrites).toBeLessThanOrEqual(6);
-        expect(soldOut.clockWrites).toBeLessThanOrEqual(2);
+        // Subtract the order + single line's exact ranking overhead; the
+        // original stock mutation bounds remain unchanged.
+        expect(soldOut.depWrites - 4).toBeLessThanOrEqual(6);
+        expect(soldOut.clockWrites - 2).toBeLessThanOrEqual(2);
     });
 
     it("offers cash on delivery only when something is handed over in person", async () => {

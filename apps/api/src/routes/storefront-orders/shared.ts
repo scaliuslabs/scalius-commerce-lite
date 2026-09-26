@@ -5,7 +5,7 @@ import { CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES, type StorefrontGiftCardTenderSumm
 import { GIFT_CARD_APPLY_HANDLE_MAX_LENGTH } from "@scalius/core/modules/gift-cards";
 import { MAX_GIFT_CARDS_PER_ORDER } from "@scalius/shared/gift-card-tender";
 import { fromMinor } from "@scalius/shared/money";
-import type { WaitUntilExecutionContext } from "../../utils/cache-generation";
+import type { WaitUntilExecutionContext } from "../../utils/execution-context";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
   getCheckoutStatusKvKey,

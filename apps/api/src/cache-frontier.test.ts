@@ -114,6 +114,22 @@ describe.each(["d1", "turso"] as const)("DVC clock reads (%s)", (provider) => {
     expect(FRONTIER_CHECK_MAX_ROWS).toBeGreaterThan(4_000);
   });
 
+  it("rejects a missing clock instead of minting a reusable zero proof", async () => {
+    const { db, sqlite } = store(provider);
+    expect((await readValidationSnapshot(db, [], 0)).S).toBe(0);
+    sqlite.exec("DELETE FROM cache_clock WHERE id = 1");
+    await expect(readValidationSnapshot(db, [], 0)).rejects.toThrow("Cache clock unavailable");
+    await expect(readFrontierDelta(db, null)).rejects.toThrow("Cache clock unavailable");
+    await expect(checkHashedDependencies(db, 0, [])).rejects.toThrow("Cache clock unavailable");
+    await expect(readCommitSeq(db)).rejects.toThrow("Cache clock unavailable");
+  });
+
+  it("rejects future proofs in the authoritative slow path", async () => {
+    const { db, bump } = store(provider);
+    bump(5, ["p:a"]);
+    expect(await checkHashedDependencies(db, 6, [hashCacheDep("p:a")])).toEqual({ S: 5, floor: 0, changed: true });
+  });
+
   it("commit seq is the clock after the write", async () => {
     const { db, bump } = store(provider);
     bump(5, ["p:a"]);

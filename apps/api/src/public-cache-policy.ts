@@ -1,12 +1,7 @@
 import { PUBLIC_CACHE_MAX_AGE_SECONDS } from "@scalius/shared/cache-generation";
 import { isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
 
-/**
- * Anonymous public API reads served through the `PublicApi` Workers Cache
- * entrypoint. The cache key is the canonical path + sorted query plus the
- * store's cache generation and the running Worker version, so a buyer-visible
- * write or a deploy makes every entry stale without a purge.
- */
+/** Anonymous public reads eligible for dependency-validated caching. */
 export interface PublicApiCachePolicy {
   canonicalUrl: string;
 }
@@ -68,25 +63,12 @@ export function withCacheIdentity(canonicalUrl: string, generation: string, vers
 }
 
 /**
- * How public API reads are cached (CACHE-DESIGN §8). One code-level switch,
- * deliberately not an env var (AGENTS.md: no env var without an
- * architecture decision); a change ships as a deploy, and the Worker version
- * in every key isolates the entries of one mode from the other's.
- *
- * - `generation`: the cache generation is the only freshness authority
- *   (PublicApi for direct reads, the batch reader for storefront parts).
- * - `shadow` (P1): serves exactly as `generation`; after each batch answers,
- *   the dependency-validated cache evaluates the same parts in the
- *   background under its own keys and logs, masked, every entry it would have
- *   served that differs from a fresh render (`[CacheShadow]`).
- * - `strict` (P2): parts are keyed without the generation and served only
- *   after one validation read proves none of their dependencies changed;
- *   direct reads use the same reader in the default entrypoint (PublicApi is
- *   not called). Before switching, remove `exports.PublicApi.cache` from
- *   wrangler.jsonc.
+ * Production always uses strict dependency validation. Generation and shadow
+ * remain available only to differential tests and the comparison load harness.
+ * Never enable a Workers Cache entrypoint: its hits would skip validation.
  */
 export type ApiPartCacheMode = "generation" | "shadow" | "strict";
-export const API_PART_CACHE_MODE: ApiPartCacheMode = "shadow";
+export const API_PART_CACHE_MODE: ApiPartCacheMode = "strict";
 
 /**
  * The dependency-validated key of a public read: the canonical URL and the
@@ -94,16 +76,6 @@ export const API_PART_CACHE_MODE: ApiPartCacheMode = "shadow";
  */
 export function withDvcIdentity(canonicalUrl: string, version: string): string {
   const url = new URL(canonicalUrl);
-  url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
-  return url.toString();
-}
-
-/**
- * The data center's snapshot of the store clock and the Platform settings
- * row, as last read by a validation statement (public-read.ts).
- */
-export function dvcSnapshotKey(origin: string, version: string): string {
-  const url = new URL("/__scalius/dvc-snapshot", origin);
   url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
   return url.toString();
 }
@@ -116,30 +88,7 @@ export function withoutCacheIdentity(request: Request): Request {
   return new Request(url.toString(), request);
 }
 
-/**
- * A server error the Workers Cache layer produced itself, not this Worker:
- * every response of ours carries the baseline security headers
- * (`applyBaselineSecurityHeaders`), and a stuck cache entry answers an empty
- * 500 without them. Such a read is rendered directly instead; our own 5xx
- * passes through so an outage never doubles the database load.
- */
-export function isCacheLayerServerError(response: Response): boolean {
-  return response.status >= 500 && !response.headers.has("X-Content-Type-Options");
-}
-
-/**
- * One masked line per cache-layer fallback: the read's path and the colo of
- * the incoming request, never query values.
- */
-export function logCacheLayerFallback(readUrl: string, incoming: Request, status: number): void {
-  const colo = (incoming as Request & { cf?: { colo?: unknown } }).cf?.colo;
-  console.warn(
-    `[PublicCache] cache layer answered ${status} for ${new URL(readUrl).pathname}` +
-      `${typeof colo === "string" ? ` at ${colo}` : ""}; rendering it directly`,
-  );
-}
-
-export function decoratePublicApiResponse(response: Response): Response {
+export function decoratePublicApiResponse(response: Response, mode: ApiPartCacheMode = API_PART_CACHE_MODE): Response {
   if (!response.ok || response.headers.get("Cache-Control")?.includes("no-store")) {
     return response;
   }
@@ -148,8 +97,9 @@ export function decoratePublicApiResponse(response: Response): Response {
   headers.set("Cache-Control", "public, max-age=0, no-cache, must-revalidate");
   headers.set(
     "Cloudflare-CDN-Cache-Control",
-    `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`,
+    mode === "strict" ? "no-store" : `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`,
   );
+  if (mode === "strict") headers.set("CDN-Cache-Control", "no-store");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

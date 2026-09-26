@@ -5403,6 +5403,7 @@ export type GetApiV1StorefrontBatchResponses = {
                  * Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof.
                  */
                 cache?: {
+                    apiVersion: string;
                     status: 'hit' | 'miss' | 'refresh';
                     s0: number;
                     deps: Array<string>;
@@ -18013,7 +18014,7 @@ export type PostApiV1CacheClearError = PostApiV1CacheClearErrors[keyof PostApiV1
 
 export type PostApiV1CacheClearResponses = {
     /**
-     * New public cache generation started
+     * Public store dependency advanced
      */
     200: {
         success: true;

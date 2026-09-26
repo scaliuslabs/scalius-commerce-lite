@@ -16,7 +16,7 @@ import { promotionEvaluationCartSchema } from "@scalius/core/modules/promotions/
 
 import { NotFoundError } from "../../utils/api-error";
 import { created, noContent, ok } from "../../utils/api-response";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
+
 import {
     conflictResponse,
     errorResponses,
@@ -147,7 +147,7 @@ app.openapi(createRoute({
     responses: { 200: mutationResponse("Discount updated"), 409: conflictResponse, ...errorResponses },
 }), async (c) => {
     const result = await updatePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -215,7 +215,7 @@ for (const [command, summary, run] of [
         responses: { 200: mutationResponse(summary), 409: conflictResponse, ...errorResponses },
     }), async (c) => {
         const result = await run(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
-        await bumpCacheGeneration(c);
+
         return ok(c, result);
     });
 }
@@ -230,7 +230,7 @@ app.openapi(createRoute({
     responses: { 204: noContentResponse, 409: conflictResponse, ...errorResponses },
 }), async (c) => {
     await archivePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
-    await bumpCacheGeneration(c);
+
     return noContent(c);
 });
 

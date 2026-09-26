@@ -50,7 +50,6 @@ import { MutationCoverage, RowMutator, TRIGGER_OWNED_TABLES, type Mutation } fro
 import {
   coarseTableRecorder,
   headerDependencies,
-  SOFT_TABLES,
   type DependencyRecorder,
   type RecordedDependencies,
 } from "./recorders";
@@ -60,6 +59,7 @@ import { dvcPageCatalogue, dvcPartCatalogue, type DvcPage } from "./routes";
 import { loadSchemaModel, type SchemaModel } from "./schema-model";
 import { DVC_IDS, DVC_SEED_EPOCH, seedDvcStore } from "./seed-store";
 import {
+  DVC_API_VERSION,
   referenceFrontierModel,
   referencePartValidator,
   type DvcFrontierModel,
@@ -169,7 +169,6 @@ export interface DvcStats {
   partFreshComparisons: number;
   partInvalidations: number;
   partSpuriousInvalidations: number;
-  partSoftStaleServed: number;
   invalidationReasons: Record<string, number>;
   pageReads: number;
   pageServed: number;
@@ -196,7 +195,7 @@ export class DvcHarness {
   readonly stats: DvcStats = {
     steps: 0, writes: 0, mutations: 0, mutationsRefused: 0, curated: {}, curatedRefused: 0, timeJumps: 0, raceInjections: 0,
     partRenders: 0, partChecks: 0, partValidHits: 0, partFreshComparisons: 0, partInvalidations: 0, partSpuriousInvalidations: 0,
-    partSoftStaleServed: 0, invalidationReasons: {}, pageReads: 0, pageServed: 0, pageSlow: 0, pageRendered: 0,
+    invalidationReasons: {}, pageReads: 0, pageServed: 0, pageSlow: 0, pageRendered: 0,
     frontierRefreshes: 0, frontierRacesLanded: 0, svReads: 0, uncacheableRoutes: {}, nondeterministicRoutes: [],
     triggerCrossCheck: { compared: 0, triggerOnly: 0, oracleOnly: 0, samples: [] },
   };
@@ -254,6 +253,9 @@ export class DvcHarness {
   static async create(config: DvcHarnessConfig): Promise<DvcHarness> {
     const rng = new Rng(config.seed);
     const sqlite = createMigratedSqlite();
+    let harnessNow = () => DVC_SEED_EPOCH * 1000;
+    // SQL publication guards and JS deadlines must advance on the same clock.
+    sqlite.function("unixepoch", () => Math.floor(harnessNow() / 1000));
     const binding = createSqliteD1Binding(sqlite);
     const seedDb = drizzle(binding, { schema }) as unknown as Database;
     config.setSystemTime(DVC_SEED_EPOCH * 1000);
@@ -275,7 +277,6 @@ export class DvcHarness {
       CREDENTIAL_ENCRYPTION_KEY: "dvc-harness-credential-key-0123456789abcdef",
       ...(config.provider === "turso" ? { __DVC_DB: db } : {}),
     } as unknown as Env;
-    let harnessNow = () => DVC_SEED_EPOCH * 1000;
     const recorder = (config.recorder ?? ((context) => coarseTableRecorder(context.sqlite, context.model, context.now)))({
       sqlite, model, now: () => harnessNow(),
     });
@@ -477,6 +478,7 @@ export class DvcHarness {
       body,
       storable,
       meta: {
+        apiVersion: DVC_API_VERSION,
         s0: recorded.s0 ?? s0Used,
         deps: recorded.deps.includes("store") ? recorded.deps : [...recorded.deps, "store"],
         validUntil: recorded.validUntil,
@@ -574,10 +576,6 @@ export class DvcHarness {
           entry.verifiedAt = this.now;
           continue;
         }
-        if (await this.softStaleAllowed(entry, fresh)) {
-          this.stats.partSoftStaleServed += 1;
-          continue;
-        }
         const failure = this.staleFailure(entry, fresh);
         if (!this.config.collect) throw failure;
         this.recordFinding("stale-part", entry.path, await this.culprits(entry), failure.report);
@@ -594,22 +592,6 @@ export class DvcHarness {
   }
 
   /**
-   * A valid entry may differ from a fresh render only through soft ordering
-   * (owner decision 4), within its soft age. Proven, not assumed: the soft
-   * tables' changes since the entry rendered are reverted in a copy of the
-   * database, and the entry must equal a render of that copy.
-   */
-  private async softStaleAllowed(entry: PartEntry, fresh: RenderResult): Promise<boolean> {
-    void fresh;
-    if (entry.meta.softMaxAgeSeconds === null) return false;
-    if (this.now - entry.meta.renderedAt >= entry.meta.softMaxAgeSeconds * 1000) return false;
-    const softChanges = this.rowLog.since(entry.logPos).filter((change) => SOFT_TABLES.has(change.table) && entry.tables.has(change.table));
-    if (softChanges.length === 0) return false;
-    const reverted = await this.renderOnRevertedCopy(entry.path, softChanges);
-    return reverted.status === entry.status && reverted.body === entry.body;
-  }
-
-  /**
    * Render `path` on a copy of the database with `changes` undone (newest
    * first), except the one candidate `keep` names: an update column kept at
    * its new value (`table.column`) or an insert/delete left in place
@@ -619,6 +601,7 @@ export class DvcHarness {
     const image = (this.sqlite as DatabaseSync & { serialize(): Uint8Array }).serialize();
     const copy = new DatabaseSync(":memory:") as DatabaseSync & { deserialize(image: Uint8Array): void };
     copy.deserialize(image);
+    copy.function("unixepoch", () => Math.floor(this.now / 1000));
     copy.exec("PRAGMA foreign_keys = OFF");
     for (const { name } of copy.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string }>) {
       copy.exec(`DROP TRIGGER "${name}"`);
@@ -786,7 +769,7 @@ export class DvcHarness {
     }
     if (merged!.S < clockAtSend) {
       // Could not catch up: claim nothing older than the clock (every older entry takes the slow path).
-      merged = { sentAt, S: clockAtSend, horizon: clockAtSend, floor: merged!.floor, changes: new Map() };
+      merged = { apiVersion: DVC_API_VERSION, sentAt, S: clockAtSend, horizon: clockAtSend, floor: merged!.floor, changes: new Map() };
     }
     this.stats.frontierRefreshes += 1;
     if (!this.truthAtS.has(merged!.S)) this.truthAtS.set(merged!.S, await this.snapshotTruth());
@@ -839,6 +822,7 @@ export class DvcHarness {
       body: composePage(results),
       rawDeps,
       meta: {
+        apiVersion: DVC_API_VERSION,
         s0: Math.min(...results.map((result) => result.meta.s0)),
         depHashes: rawDeps.map((dep) => this.frontierModel.hashDep(dep)),
         validUntil: validUntils.length > 0 ? Math.min(...validUntils) : null,
@@ -1162,7 +1146,7 @@ export class DvcHarness {
     return [
       `seed=${this.config.seed} clock=${this.clock.name} validator=${this.validator.name} recorder=${this.recorder.name} frontier=${this.frontierModel.name}`,
       `steps=${s.steps} writes=${s.writes} mutations=${s.mutations} refused=${s.mutationsRefused} curated=${JSON.stringify(s.curated)} curatedRefused=${s.curatedRefused} timeJumps=${s.timeJumps} raceInjections=${s.raceInjections}`,
-      `parts: renders=${s.partRenders} checks=${s.partChecks} validHits=${s.partValidHits} freshComparisons=${s.partFreshComparisons} invalidations=${s.partInvalidations} spurious=${s.partSpuriousInvalidations} softStale=${s.partSoftStaleServed} reasons=${JSON.stringify(s.invalidationReasons)}`,
+      `parts: renders=${s.partRenders} checks=${s.partChecks} validHits=${s.partValidHits} freshComparisons=${s.partFreshComparisons} invalidations=${s.partInvalidations} spurious=${s.partSpuriousInvalidations} reasons=${JSON.stringify(s.invalidationReasons)}`,
       `pages: reads=${s.pageReads} served=${s.pageServed} slow=${s.pageSlow} rendered=${s.pageRendered} frontierRefreshes=${s.frontierRefreshes} racesLanded=${s.frontierRacesLanded} svReads=${s.svReads}`,
       `precision: spurious invalidations per write=${s.writes > 0 ? (s.partSpuriousInvalidations / s.writes).toFixed(2) : "n/a"}; hit ratio (validated)=${s.partChecks > 0 ? (s.partValidHits / s.partChecks).toFixed(3) : "n/a"}`,
       `coverage gaps: ops=${gaps.ops.length} columns=${gaps.columns.length}`,

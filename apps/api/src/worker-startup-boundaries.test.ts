@@ -80,6 +80,7 @@ const composedEnv = expect.objectContaining({
 describe("API Worker startup boundaries", () => {
   afterEach(() => {
     vi.doUnmock("./app");
+    vi.doUnmock("@scalius/database/client");
     vi.doUnmock("./runtime/probe-app");
     vi.doUnmock("./runtime/public-app");
     vi.doUnmock("./runtime/admin-app");
@@ -90,6 +91,7 @@ describe("API Worker startup boundaries", () => {
     vi.doUnmock("./agent-access/oauth");
     vi.doUnmock("./agent-access/artifact-delivery");
     vi.doUnmock("./agent-access/runtime");
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -130,7 +132,7 @@ describe("API Worker startup boundaries", () => {
     });
   });
 
-  it("keys public reads by the store cache generation through the PublicApi entrypoint", async () => {
+  it("validates public reads directly under versioned keys without loading other route families", async () => {
     const loaded: Record<RuntimeAppName, boolean> = {
       probe: false,
       public: false,
@@ -139,12 +141,21 @@ describe("API Worker startup boundaries", () => {
       docs: false,
     };
     mockRuntimeApps(loaded);
+    const validate = vi.fn(async () => [{ s: 1, floor: 0, pv: null, pr: null, dep: null, seq: null }]);
+    vi.doMock("@scalius/database/client", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@scalius/database/client")>()),
+      getDb: () => ({ all: validate }),
+    }));
+    const match = vi.fn(async (_key: string) => undefined);
+    const put = vi.fn(async (_key: string, response: Response) => { await response.arrayBuffer(); });
+    vi.stubGlobal("caches", { default: { match, put } });
+    const waits: Promise<unknown>[] = [];
     const cachedFetch = vi.fn(async (_request: Request) => new Response("cached"));
     const kvGet = vi.fn(async () => "a1b2c3d4e5f60718");
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       {
-        waitUntil: vi.fn(),
+        waitUntil: (promise: Promise<unknown>) => { waits.push(promise); },
         exports: { PublicApi: { fetch: cachedFetch } },
       } as unknown as ExecutionContext,
       runtimeEnv({
@@ -154,20 +165,24 @@ describe("API Worker startup boundaries", () => {
     ) as unknown as TestApiWorker;
 
     await worker.fetch(new Request("https://api.example.test/api/v1/products?page=2&limit=10"));
-    // A storefront render pins its sub-requests to the page's generation.
+    // Retired generation hints cannot change a strict cache key.
     await worker.fetch(new Request("https://api.example.test/api/v1/products", {
       headers: { "X-Scalius-Cache-Generation": "feedc0de" },
     }));
 
-    expect(kvGet).toHaveBeenCalledWith("cache:generation", { cacheTtl: 30 });
-    expect(cachedFetch.mock.calls.map(([request]) => request.url)).toEqual([
-      "https://api.example.test/api/v1/products?limit=10&page=2&__cg=a1b2c3d4e5f60718&__cv=version-a",
-      "https://api.example.test/api/v1/products?__cg=feedc0de&__cv=version-a",
+    await Promise.all(waits);
+    expect(kvGet).not.toHaveBeenCalled();
+    expect(cachedFetch).not.toHaveBeenCalled();
+    expect(match.mock.calls.map(([key]) => key)).toEqual([
+      "https://api.example.test/api/v1/products?limit=10&page=2&__cv=version-a",
+      "https://api.example.test/api/v1/products?__cv=version-a",
     ]);
-    expect(loaded.public).toBe(false);
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(validate).toHaveBeenCalledTimes(2);
+    expect(loaded).toEqual({ probe: false, public: true, admin: false, system: false, docs: false });
   });
 
-  it("serves public reads uncached when no cache generation is available", async () => {
+  it("serves public reads uncached when no Worker version is available", async () => {
     const loaded: Record<RuntimeAppName, boolean> = {
       probe: false,
       public: false,
@@ -216,9 +231,7 @@ describe("API Worker startup boundaries", () => {
       }));
 
       const workerModule = await import("./worker");
-      const WorkerClass = expected === "public"
-        ? workerModule.PublicApi
-        : workerModule.default;
+      const WorkerClass = workerModule.default;
       const worker = new WorkerClass(
         undefined as never,
         runtimeEnv(),
@@ -537,7 +550,7 @@ describe("API Worker startup boundaries", () => {
       });
     });
 
-    it("rejects the public cache entrypoint too", async () => {
+    it("rejects direct strict public reads before loading the public runtime", async () => {
       const loaded: Record<RuntimeAppName, boolean> = {
         probe: false,
         public: false,
@@ -547,8 +560,8 @@ describe("API Worker startup boundaries", () => {
       };
       mockRuntimeApps(loaded);
 
-      const { PublicApi } = await import("./worker");
-      const worker = new PublicApi(undefined as never, {} as Env) as unknown as TestApiWorker;
+      const { default: ApiWorker } = await import("./worker");
+      const worker = new ApiWorker(undefined as never, {} as Env) as unknown as TestApiWorker;
       const response = await worker.fetch(new Request("https://api.example.test/api/v1/products"));
 
       expect(response.status).toBe(503);
@@ -634,6 +647,7 @@ describe("API Worker startup boundaries", () => {
 describe("API Worker trusted front proxy", () => {
   afterEach(() => {
     vi.doUnmock("./runtime/public-app");
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 

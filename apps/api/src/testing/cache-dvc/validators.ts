@@ -8,8 +8,11 @@
 import { createHash } from "node:crypto";
 import type { ClockDelta, DvcClock } from "./clocks";
 
+export const DVC_API_VERSION = "api-test";
+
 /** What a cached entry carries besides its body. */
 export interface EntryMeta {
+  readonly apiVersion: string;
   /** Clock value read first in the render's session (min over parts for a page). */
   readonly s0: number;
   readonly deps: readonly string[];
@@ -23,7 +26,7 @@ export interface EntryMeta {
 
 export type Verdict =
   | { readonly valid: true; /** The entry's s0 after the check (raised to the checked clock). */ readonly s0: number }
-  | { readonly valid: false; readonly reason: "changed" | "expired" | "floor" | "soft-age"; readonly keys?: readonly string[] };
+  | { readonly valid: false; readonly reason: "changed" | "expired" | "floor" | "future" | "soft-age"; readonly keys?: readonly string[] };
 
 /** Strict validation of API parts (G2, Δ = 0). */
 export interface DvcPartValidator {
@@ -64,6 +67,7 @@ export function referencePartValidator(clock: DvcClock): DvcPartValidator {
 // ---------------------------------------------------------------------------
 
 export interface Frontier {
+  readonly apiVersion: string;
   /** Time the refresh request was sent; S covers every commit acknowledged before it. */
   readonly sentAt: number;
   readonly S: number;
@@ -100,8 +104,9 @@ export function referenceFrontierModel(): DvcFrontierModel {
     name: "reference-frontier",
     hashDep: referenceDepHash,
     merge(old, delta, sentAt, cap) {
-      const changes = new Map<string, number>(old && delta.horizon <= old.S ? old.changes : []);
-      let horizon = old && delta.horizon <= old.S ? old.horizon : delta.horizon;
+      const connects = old !== null && old.apiVersion === DVC_API_VERSION && delta.horizon <= old.S;
+      const changes = new Map<string, number>(connects ? old.changes : []);
+      let horizon = connects ? old.horizon : delta.horizon;
       for (const [dep, seq] of delta.changes) {
         const hash = referenceDepHash(dep);
         if ((changes.get(hash) ?? -Infinity) < seq) changes.set(hash, seq);
@@ -114,9 +119,10 @@ export function referenceFrontierModel(): DvcFrontierModel {
         changes.clear();
         for (const [hash, seq] of kept) if (seq > horizon) changes.set(hash, seq);
       }
-      return { sentAt, S: delta.S, horizon, floor: delta.floor, changes };
+      return { apiVersion: DVC_API_VERSION, sentAt, S: delta.S, horizon, floor: delta.floor, changes };
     },
     decide(entry, frontier, now) {
+      if (!entry.apiVersion || entry.apiVersion !== frontier.apiVersion) return "render";
       if (entry.validUntil !== null && now >= entry.validUntil) return "render";
       if (entry.softMaxAgeSeconds !== null && now - entry.renderedAt >= entry.softMaxAgeSeconds * 1000) return "render";
       if (entry.s0 < frontier.floor) return "render";

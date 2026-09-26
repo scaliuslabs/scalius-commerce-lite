@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   bulkDeactivateCollections: vi.fn(),
   restoreCollections: vi.fn(),
   reorderCollections: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/collections", async () => {
@@ -37,16 +37,6 @@ vi.mock("@scalius/core/modules/collections", async () => {
     bulkDeactivateCollections: mocks.bulkDeactivateCollections,
     restoreCollections: mocks.restoreCollections,
     reorderCollections: mocks.reorderCollections,
-  };
-});
-
-vi.mock("../../utils/cache-generation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
-    "../../utils/cache-generation",
-  );
-  return {
-    ...actual,
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
   };
 });
 
@@ -100,7 +90,6 @@ function createTestApp() {
   mocks.bulkDeactivateCollections.mockResolvedValue(undefined);
   mocks.restoreCollections.mockResolvedValue(undefined);
   mocks.reorderCollections.mockResolvedValue(undefined);
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -133,12 +122,12 @@ async function requestJson(
   );
 }
 
-describe("admin collection cache invalidation", () => {
+describe("admin collection write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates homepage collection caches after collection creation", async () => {
+  it("returns success after collection creation", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -150,11 +139,10 @@ describe("admin collection cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("invalidates homepage collection caches after collection activation changes", async () => {
+  it("returns success after collection activation changes", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -166,8 +154,7 @@ describe("admin collection cache invalidation", () => {
     );
 
     expect(response.status).toBe(204);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("rejects bulk collection writes above the D1-safe boundary", async () => {
@@ -186,6 +173,6 @@ describe("admin collection cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.bulkDeleteCollections).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 });

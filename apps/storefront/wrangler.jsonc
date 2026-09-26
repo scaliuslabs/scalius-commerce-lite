@@ -20,8 +20,8 @@
 		}
 	],
 	// Public pages are cached with the Cache API (caches.default) under keys
-	// that include the build ID, this Worker version (binding below) and the
-	// store's cache generation, read from the API's KV namespace below.
+	// that include the build ID and this Worker version (binding below).
+	// Dependency proofs are checked against a change frontier at most 1s old.
 	// Workers Cache stays off here: it would bill every page hit twice and
 	// every static asset request.
 	"kv_namespaces": [

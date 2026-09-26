@@ -16,6 +16,7 @@ import type {
  * streams count too.
  */
 export interface PageDependencies {
+  apiVersion: string | null;
   s0: number | null;
   readonly deps: Set<string>;
   validUntil: number | null;
@@ -29,7 +30,7 @@ export interface PageDependencies {
 export const MAX_PAGE_DEPENDENCIES = 1_024;
 
 export function createPageDependencies(): PageDependencies {
-  return { s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false };
+  return { apiVersion: null, s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false };
 }
 
 const minOf = (a: number | null, b: number | null): number | null =>
@@ -41,10 +42,11 @@ export function recordPagePart(
   cache: StorefrontBatchPartCache | null | undefined,
 ): void {
   if (!target) return;
-  if (!cache) {
+  if (!cache || typeof cache.apiVersion !== "string" || !cache.apiVersion.trim() || (target.apiVersion !== null && target.apiVersion !== cache.apiVersion)) {
     target.unproven = true;
     return;
   }
+  target.apiVersion = cache.apiVersion;
   target.s0 = minOf(target.s0, cache.s0);
   for (const hash of cache.deps) target.deps.add(hash);
   target.validUntil = minOf(target.validUntil, cache.validUntil);
@@ -60,9 +62,10 @@ export function markPageUnproven(target: PageDependencies | null | undefined): v
 
 /** The page entry the hit rule validates, or null when the render proves nothing. */
 export function pageEntryFromDependencies(dependencies: PageDependencies): CacheFrontierEntry | null {
-  if (dependencies.unproven || dependencies.s0 === null || dependencies.renderedAt === null) return null;
+  if (!dependencies.apiVersion || dependencies.unproven || dependencies.s0 === null || dependencies.renderedAt === null) return null;
   if (dependencies.deps.size > MAX_PAGE_DEPENDENCIES) return null;
   return {
+    apiVersion: dependencies.apiVersion,
     s0: dependencies.s0,
     depHashes: [...dependencies.deps],
     validUntil: dependencies.validUntil,

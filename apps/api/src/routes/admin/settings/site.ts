@@ -61,7 +61,6 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
 } from "@scalius/core/modules/catalog";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 import { ok } from "../../../utils/api-response";
 import {
@@ -173,7 +172,6 @@ const saveCurrencyRoute = createRoute({
 app.openapi(saveCurrencyRoute, async (c) => {
   const { expectedRevision, ...body } = c.req.valid("json");
   const { revision } = await saveCurrencySettings(c.get("db"), body, { expectedRevision });
-  await bumpCacheGeneration(c);
 
   return ok(c, { message: "Currency settings saved successfully", revision });
 });
@@ -181,7 +179,6 @@ app.openapi(saveCurrencyRoute, async (c) => {
 // ─────────────────────────────────────────
 // GENERAL (header + footer config)
 // ─────────────────────────────────────────
-
 
 const getGeneralRoute = createRoute({
   method: "get",
@@ -393,7 +390,7 @@ app.openapi(saveHeaderRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 
@@ -503,7 +500,7 @@ app.openapi(saveFooterRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 
@@ -599,7 +596,7 @@ app.openapi(saveThemeRoute, async (c) => {
     body.expectedRevision,
     user?.id ?? null,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, {
     ...saved,
     message: "Theme settings saved successfully",
@@ -755,7 +752,7 @@ app.openapi(publishThemeDraftRoute, async (c) => {
     body.expectedDraftRevision,
     user?.id ?? null,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, workspace);
 });
 
@@ -841,7 +838,7 @@ app.openapi(rollbackThemeRoute, async (c) => {
     body.expectedDraftRevision,
     user?.id ?? null,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, workspace);
 });
 
@@ -1028,7 +1025,7 @@ const saveMediaOptimizationRoute = createRoute({
 app.openapi(saveMediaOptimizationRoute, async (c) => {
   const { expectedRevision, ...body } = c.req.valid("json");
   const saved = await saveMediaOptimizationSettings(c.get("db"), body, { expectedRevision });
-  await bumpCacheGeneration(c);
+
   return ok(c, {
     message: "Media settings saved successfully",
     ...projectMediaOptimizationSettings(saved.value),
@@ -1403,7 +1400,7 @@ const saveSeoRoute = createRoute({
 app.openapi(saveSeoRoute, async (c) => {
   const { expectedRevision, ...data } = c.req.valid("json");
   const { revision } = await saveSeoSettings(c.get("db"), data, { expectedRevision });
-  await bumpCacheGeneration(c);
+
   return ok(c, { message: "SEO settings saved successfully", revision });
 });
 
@@ -1489,7 +1486,7 @@ const saveStorefrontUrlRoute = createRoute({
 app.openapi(saveStorefrontUrlRoute, async (c) => {
   const { storefrontUrl, expectedRevision } = c.req.valid("json");
   const { revision } = await saveStorefrontUrl(c.get("db"), storefrontUrl, c.env.CACHE, { expectedRevision });
-  await bumpCacheGeneration(c);
+
   return ok(c, { message: "Storefront URL saved successfully", revision });
 });
 
@@ -1586,7 +1583,7 @@ app.openapi(saveHomepagePresentationRoute, async (c) => {
     config,
     expectedRevision,
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 
@@ -1697,7 +1694,7 @@ app.openapi(saveAllowedCountriesRoute, async (c) => {
     projected.allowedCountriesMode,
     { expectedRevision },
   );
-  await bumpCacheGeneration(c);
+
   return ok(c, { message: "Allowed countries saved", revision });
 });
 

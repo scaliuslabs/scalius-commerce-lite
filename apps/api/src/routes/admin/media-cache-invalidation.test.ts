@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     saveMediaVariants: vi.fn(),
     completeMediaUpload: vi.fn(),
     importMediaFromUrl: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("./media-url-import", () => ({
@@ -30,10 +30,6 @@ vi.mock("@scalius/core/modules/media", async () => {
         completeMediaUpload: mocks.completeMediaUpload,
     };
 });
-
-vi.mock("../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
 
 import { MEDIA_VARIANTS_JOB_DELAY_SECONDS } from "@scalius/core/modules/media";
 import { adminMediaRoutes } from "./media";
@@ -78,7 +74,6 @@ function createTestApp() {
     mocks.restoreMediaFile.mockResolvedValue(presentedMedia);
     mocks.saveMediaVariants.mockResolvedValue({ ...presentedMedia, variantWidth: 800 });
     mocks.completeMediaUpload.mockResolvedValue(presentedMedia);
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -106,7 +101,7 @@ async function mutate(
     }, env);
 }
 
-describe("admin media cache invalidation", () => {
+describe("admin media write behavior", () => {
     afterEach(() => {
         vi.clearAllMocks();
     });
@@ -133,20 +128,17 @@ describe("admin media cache invalidation", () => {
             body: { expectedVersion: 1 },
             coreCall: () => mocks.restoreMediaFile,
         },
-    ])("invalidates dependent products after $label commits", async ({ path, method, body, coreCall }) => {
+    ])("returns success after $label commits", async ({ path, method, body, coreCall }) => {
         const { app, env } = createTestApp();
 
         const response = await mutate(app, env, path, method, body);
 
         expect(response.status).toBe(200);
         expect(coreCall()).toHaveBeenCalled();
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
-        expect(coreCall().mock.invocationCallOrder[0]).toBeLessThan(
-            mocks.bumpCacheGeneration.mock.invocationCallOrder[0]!,
-        );
+
     });
 
-    it("does not invalidate when a media write fails", async () => {
+    it("reports failure when a media write fails", async () => {
         const { app, env } = createTestApp();
         mocks.updateMediaFile.mockRejectedValueOnce(new Error("conflict"));
 
@@ -156,11 +148,11 @@ describe("admin media cache invalidation", () => {
         });
 
         expect(response.status).toBe(500);
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 
-    it("stores browser renditions from the multipart form and invalidates dependent products", async () => {
-        const { app, db, env } = createTestApp();
+    it("stores browser renditions from the multipart form", async () => {
+        const { app, env } = createTestApp();
         const form = new FormData();
         form.set("width", "800");
         form.set("height", "600");
@@ -180,7 +172,7 @@ describe("admin media cache invalidation", () => {
         expect({ width: input.width, height: input.height, widths: [...input.files.keys()] })
             .toEqual({ width: 800, height: 600, widths: [160, 800] });
         expect(input.files.get(800).byteLength).toBe(2);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
     });
 
     it("renders renditions on the server unless the dashboard uploads its own", async () => {
@@ -208,8 +200,7 @@ describe("admin media cache invalidation", () => {
             { type: "media.render_variants", mediaId: "media_123" },
             { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS },
         );
-        // A brand-new upload is not referenced yet; the job bumps if it renders.
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 
     it("schedules nothing when completion already rendered, or without the Images binding", async () => {

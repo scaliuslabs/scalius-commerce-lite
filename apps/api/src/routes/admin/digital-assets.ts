@@ -35,8 +35,7 @@ import {
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
-import { findStockMutationAvailabilityTransitions } from "../../utils/availability-transitions";
+
 import {
     conflictResponse,
     errorResponses,
@@ -359,12 +358,6 @@ adminDigitalAssetRoutes.openapi(createRoute({
     return ok(c, await listLicenceKeys(c.get("db"), { assetId: c.req.valid("param").id, ...query }));
 });
 
-async function bumpIfBandChanged(c: Parameters<typeof bumpCacheGeneration>[0] & { get(key: "db"): Parameters<typeof findStockMutationAvailabilityTransitions>[0] }, result: { variantId: string; previousStock: number; stock: number }) {
-    if (result.previousStock === result.stock) return;
-    const changed = await findStockMutationAvailabilityTransitions(c.get("db"), [{ variantId: result.variantId, previousStock: result.previousStock, newStock: result.stock, pool: "stock" }]);
-    if (changed.length > 0) await bumpCacheGeneration(c);
-}
-
 adminDigitalAssetRoutes.openapi(createRoute({
     method: "post",
     path: "/{id}/licence-keys",
@@ -412,7 +405,7 @@ adminDigitalAssetRoutes.openapi(createRoute({
         credentialKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
         adminUserId: actorIdOf(c),
     });
-    await bumpIfBandChanged(c, result);
+
     return ok(c, {
         imported: result.imported,
         alreadyInPool: result.alreadyInPool,
@@ -458,7 +451,7 @@ adminDigitalAssetRoutes.openapi(createRoute({
         requestKey: body.requestKey,
         adminUserId: actorIdOf(c),
     });
-    await bumpIfBandChanged(c, result);
+
     return ok(c, { revoked: result.revoked, stock: result.stock, replayed: result.replayed });
 });
 

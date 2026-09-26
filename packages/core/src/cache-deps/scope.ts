@@ -37,9 +37,9 @@ export interface CacheDependencies {
   /** Kinds the entry key budget collapsed to coarse `t:` keys. */
   readonly collapsedKinds: readonly CacheDepKind[];
   /**
-   * Soft staleness bound in seconds (recommendation/popularity order), or null
-   * when every dependency is hard. The entry may be served up to this age
-   * after a soft change; hard keys still validate every hit.
+   * Optional explicit caller bound retained for compatibility. Registered
+   * catalog readers use hard keys and semantic validUntil boundaries; no
+   * table read imposes a routine age-based expiry.
    */
   readonly softMaxAgeSeconds: number | null;
   /** Epoch ms of the earliest scheduled transition read; never serve at or after it. */

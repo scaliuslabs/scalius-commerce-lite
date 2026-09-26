@@ -21,7 +21,7 @@ import {
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -242,7 +242,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     }, { expectedRevision: validation.expectedRevision });
 
     await clearMetaCapiBrowserCircuit(c.env);
-    await bumpCacheGeneration(c);
+
     const maskedResult = {
         ...maskedSettings(
             saved.value,

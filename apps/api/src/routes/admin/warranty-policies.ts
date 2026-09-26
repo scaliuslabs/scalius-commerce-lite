@@ -2,8 +2,7 @@
 // catalog family; Wave B design §5.1, §7.2). Permissions live in
 // packages/core/src/auth/rbac/route-permissions/warranty.ts. An edit makes the
 // next immutable revision; archive hides a policy from buyers and the editor.
-// Every write changes what product pages may show, so it bumps the cache
-// generation once after it commits.
+// Database triggers advance affected product-page dependencies in the write transaction.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -23,7 +22,6 @@ import {
   warrantyPolicySchema,
   warrantyPolicyUpdateBodySchema,
 } from "../../schemas/warranty";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -106,9 +104,8 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   noStore(c);
-  const before = c.req.valid("json").version;
   const policy = await updateWarrantyPolicy(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-  if (policy.version !== before && policy.productCount > 0) await bumpCacheGeneration(c);
+
   return ok(c, { policy: presentWarrantyPolicy(policy) });
 });
 
@@ -126,7 +123,7 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const policy = await archiveWarrantyPolicy(c.get("db"), c.req.valid("param").id);
-  if (policy.productCount > 0) await bumpCacheGeneration(c);
+
   return ok(c, { policy: presentWarrantyPolicy(policy) });
 });
 
@@ -144,7 +141,7 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const policy = await restoreWarrantyPolicy(c.get("db"), c.req.valid("param").id);
-  if (policy.productCount > 0) await bumpCacheGeneration(c);
+
   return ok(c, { policy: presentWarrantyPolicy(policy) });
 });
 

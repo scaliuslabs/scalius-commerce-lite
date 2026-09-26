@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     processRefund: vi.fn(),
     reconcileRefundAttemptForOrder: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     enqueueNotificationOutboxById: vi.fn(),
 }));
@@ -18,10 +18,6 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
     processRefund: mocks.processRefund,
     reconcileRefundAttemptForOrder: mocks.reconcileRefundAttemptForOrder,
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -66,7 +62,7 @@ describe("admin refund notification routes", () => {
             orderIds: [],
             refundNotifications: [],
         });
-        mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
         mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
     });
 
@@ -94,7 +90,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
@@ -132,7 +128,7 @@ describe("admin refund notification routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.processRefund).toHaveBeenCalledWith(db, expect.objectContaining({ requestKey }), "credential-key");
         expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).toMatchObject({ replayed: true, amount: 500.5, notificationCount: 0 });
     });
@@ -236,7 +232,7 @@ describe("admin refund notification routes", () => {
         expect(mocks.processRefund).not.toHaveBeenCalled();
     });
 
-    it("returns committed success when cache and notification follow-up both fail", async () => {
+    it("returns committed success when notification follow-up fails", async () => {
         mocks.processRefund.mockResolvedValue({
             success: true,
             gateway: "sslcommerz",
@@ -251,7 +247,7 @@ describe("admin refund notification routes", () => {
                 refundId: "refund_provider_1",
             },
         });
-        mocks.bumpCacheGeneration.mockRejectedValueOnce(new Error("cache unavailable"));
+
         mocks.enqueueOrderRefundNotificationForOrder.mockRejectedValueOnce(new Error("queue unavailable"));
         const { app, env } = createTestApp();
 
@@ -267,7 +263,7 @@ describe("admin refund notification routes", () => {
             success: true,
             refundId: "refund_provider_1",
             notificationCount: 0,
-            sideEffectErrors: 2,
+            sideEffectErrors: 1,
         });
         expect(body.data).not.toHaveProperty("refundNotification");
     });
@@ -302,7 +298,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(503);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
             db,
             queue,
@@ -353,7 +349,7 @@ describe("admin refund notification routes", () => {
             "rfa_1",
             { encryptionKey: "credential-key" },
         );
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
@@ -388,7 +384,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(404);
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     });
 });

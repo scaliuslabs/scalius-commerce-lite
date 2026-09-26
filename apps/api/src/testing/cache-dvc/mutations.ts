@@ -238,6 +238,7 @@ export class RowMutator {
   insert(tableName: string): Mutation | null {
     const table = this.model.get(tableName);
     if (!table || !writableByGenerator(tableName)) return null;
+    if (tableName === "product_reviews") return this.insertReview();
     const rows = this.rows(tableName);
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -283,6 +284,38 @@ export class RowMutator {
       }
     }
     return this.reinsert(table, rows);
+  }
+
+  /** Reviews require a matching fulfilled line; earlier parent mutations may have removed every eligible one. */
+  // Parent mutations can leave no eligible line; independent FK clones cannot
+  // satisfy the review trigger's delivered-order/fulfilled-line relationship.
+  private insertReview(): Mutation | null {
+    const product = this.sqlite.prepare("SELECT id FROM products ORDER BY id LIMIT 1").get() as { id: string } | undefined;
+    if (!product) return null;
+    const suffix = `review_${++this.counter}`;
+    const orderId = `o_${suffix}`;
+    const lineId = `oi_${suffix}`;
+    const id = `rev_generated_${this.counter}`;
+    this.sqlite.exec("SAVEPOINT dvc_review");
+    try {
+      this.run(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+        VALUES (?, 'Harness buyer', '01700000999', 'Test road', 'city', 'zone', 'delivered')`, [orderId]);
+      this.run(`INSERT INTO order_items (id, order_id, product_id, quantity, fulfilled_quantity)
+        VALUES (?, ?, ?, 1, 1)`, [lineId, orderId, product.id]);
+      this.run(`INSERT INTO product_reviews (id, product_id, order_id, order_item_id, reviewer_key,
+        author_type, author_display_name, rating, status, published_at)
+        VALUES (?, ?, ?, ?, ?, 'guest_receipt', 'Harness buyer', 5, 'published', unixepoch())`,
+      [id, product.id, orderId, lineId, `rk_${suffix}`]);
+      this.sqlite.exec("RELEASE dvc_review");
+      const mutation: Mutation = { kind: "insert", table: "product_reviews", columns: [], description: `INSERT INTO product_reviews ${id} with fulfilled line` };
+      this.coverage.record(mutation);
+      this.idPool = null;
+      return mutation;
+    } catch (error) {
+      this.sqlite.exec("ROLLBACK TO dvc_review; RELEASE dvc_review");
+      this.coverage.refused("product_reviews", errorText(error));
+      return null;
+    }
   }
 
   /**

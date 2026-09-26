@@ -12,7 +12,7 @@ import {
 import { recordOrderEvent } from "@scalius/core/modules/orders";
 import { enqueueOrderNotificationOutboxById } from "@scalius/core/modules/notifications";
 import { ok, created } from "../../../utils/api-response";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { enqueueOrderAutoFulfil } from "../../../utils/auto-fulfil-queue";
 import {
     enqueueOrderNotificationMessage,
@@ -114,7 +114,7 @@ app.openapi(createFulfilmentRoute, async (c) => {
         parcel: body.tracking,
         cashReceived: body.cashReceived,
     }, { type: "admin", id: actorId });
-    if (result.availabilityTransitionVariantIds.length > 0) await bumpCacheGeneration(c);
+
     // Cash taken at the counter settled the order in the same batch.
     if (body.cashReceived !== undefined) await enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, orderId, "orders-fulfilment-cash");
     if (!result.replayed) {

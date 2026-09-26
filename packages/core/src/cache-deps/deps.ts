@@ -11,7 +11,6 @@
  * changes only when a trigger advances this key".
  */
 import {
-  CACHE_DEP_SOFT_MAX_AGE_SECONDS,
   cacheDep,
   type CacheDepListOrderFacet,
   type CacheDepScope,
@@ -54,6 +53,10 @@ export const deps = {
   // --- Catalogue ------------------------------------------------------------------
   /** `p:<id>`: every buyer-visible fact of one product (page, card, JSON-LD, feed row). */
   product: (productId: Id): void => declareOne(cacheDep.product, productId),
+  recommendations: (productId: Id): void => declareOne(cacheDep.recommendations, productId),
+  sold: (productId: Id): void => declareOne(cacheDep.sold, productId),
+  popular: (): void => declare(cacheDep.popular()),
+  recommendationSignals: (): void => declare(cacheDep.recommendationSignals()),
   /** `p:<id>` for every card, row or recommendation shown. */
   products: (productIds: Iterable<Id>): void => declareEach(cacheDep.product, productIds),
   /** `lm:<scope>`: which products are public members of a listing, and newest order. */
@@ -107,10 +110,10 @@ export const deps = {
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */
   table: (table: string): void => declare(cacheDep.table(table)),
   /**
-   * The output's ordering comes from soft sources (recommendations, popularity)
-   * the scope cannot observe as tables; it may lag by at most this many seconds.
+   * Explicit caller bound for compatibility. Registered catalog readers use
+   * projection dependencies and semantic validUntil boundaries instead.
    */
-  softOrdering: (maxAgeSeconds: number = CACHE_DEP_SOFT_MAX_AGE_SECONDS): void => {
+  softOrdering: (maxAgeSeconds: number): void => {
     activeDependencyScope()?.softMaxAge(maxAgeSeconds);
   },
   /**

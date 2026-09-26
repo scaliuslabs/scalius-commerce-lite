@@ -31,7 +31,6 @@ import {
   conflictResponse,
 } from "../../schemas/responses";
 import { pageSchema } from "../../schemas/entities";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -152,7 +151,7 @@ app.openapi(createPageRoute, async (c) => {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     reservedSlugs: reservedDashboardSlugs(c.env),
   });
-  await bumpCacheGeneration(c);
+
   return created(c, result);
 });
 
@@ -186,7 +185,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims, permanent } = c.req.valid("json");
   await bulkDeletePages(db, revisionClaims, permanent);
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -214,7 +213,7 @@ app.openapi(bulkPublishRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims } = c.req.valid("json");
   await bulkPublishPages(db, revisionClaims);
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -242,7 +241,7 @@ app.openapi(bulkUnpublishRoute, async (c) => {
   const db = c.get("db");
   const revisionClaims = c.req.valid("json").pages;
   await bulkUnpublishPages(db, revisionClaims);
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -270,7 +269,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims } = c.req.valid("json");
   await restorePages(db, revisionClaims);
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -310,7 +309,7 @@ app.openapi(restoreRoute, async (c) => {
   await restorePages(db, [
     { id, expectedRevision: c.req.valid("json").expectedRevision },
   ]);
-  await bumpCacheGeneration(c);
+
   return ok(c, { message: "Page restored" });
 });
 
@@ -373,7 +372,7 @@ app.openapi(updatePageRoute, async (c) => {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     reservedSlugs: reservedDashboardSlugs(c.env),
   });
-  await bumpCacheGeneration(c);
+
   return ok(c, result);
 });
 
@@ -406,7 +405,7 @@ app.openapi(deletePageRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await deletePage(db, id, c.req.valid("json").expectedRevision);
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 
@@ -443,7 +442,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     [{ id, expectedRevision: c.req.valid("json").expectedRevision }],
     true,
   );
-  await bumpCacheGeneration(c);
+
   return noContent(c);
 });
 

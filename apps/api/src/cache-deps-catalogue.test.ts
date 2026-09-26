@@ -249,16 +249,18 @@ describe("catalogue dependency declarations", () => {
     }
 
     // Product page: its product, category, brand, gallery, promotions, EMI and
-    // recommendations (soft order, hard cards).
+    // recommendations (stored ordering and cards are hard dependencies).
     const page = await keysOf("/api/v1/products/linen-panjabi");
     expect(page.keys).toEqual(expect.arrayContaining([
       "p:p_linen", "c:cat_eid", "b:brd_walton01", "m:media_linen", "m:media_linen_2", "m:media_linen_3",
-      "promo:*", "set:emi:document", "set:currency:document", "attr:*",
+      "promo:*", "set:emi:document", "set:currency:document", "attr:*", "rec:p_linen",
     ]));
-    expect(page.softMaxAgeSeconds).toBe(600);
+    expect(page.softMaxAgeSeconds).toBeNull();
 
-    // Soft ordering: recommendations lag by at most the soft bound.
-    expect((await keysOf("/api/v1/products/recommendations?productIds=p_linen,p_cotton")).softMaxAgeSeconds).toBe(600);
+    // Live multi-product ranking depends on committed order signals, not an age limit.
+    const recommendations = await keysOf("/api/v1/products/recommendations?productIds=p_linen,p_cotton");
+    expect(recommendations.keys).toContain("recommendation-signals");
+    expect(recommendations.softMaxAgeSeconds).toBeNull();
 
     // Brand page and wall: the brand, its logo file.
     expect((await keysOf("/api/v1/brands/walton")).keys).toEqual(expect.arrayContaining(["b:brd_walton01", "m:media_logo"]));

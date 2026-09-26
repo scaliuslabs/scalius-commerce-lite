@@ -10,6 +10,7 @@ import {
     selectProductCardFactRows,
     type ProductCardFactRow,
 } from "./card-facts";
+import { withDependencyScope } from "../../cache-deps";
 import { getStorefrontProducts } from "./listing";
 
 // A laptop with a brand, five key specs (one in a later group, one enum) and
@@ -79,6 +80,30 @@ function setup() {
 }
 
 describe("card facts", () => {
+    it("records sold keys for hidden and absent counts without live-order or global popularity dependencies", async () => {
+        const { db, sqlite } = setup();
+        try {
+            const { value: facts, dependencies } = await withDependencyScope(async () =>
+                resolveProductCardFacts(await selectProductCardFactRows(db, ["p_shirt", "p_rice"]) as ProductCardFactRow[], 2),
+                { log: () => {} },
+            );
+            expect(facts("p_shirt").soldLast30Days).toBeNull();
+            expect(facts("p_rice").soldLast30Days).toBeNull();
+            expect(dependencies.keys).toEqual(expect.arrayContaining(["sold:p_shirt", "sold:p_rice"]));
+            expect(dependencies.keys).not.toContain("popular");
+            expect(dependencies.keys).not.toContain("recommendation-signals");
+            expect(dependencies.keys).not.toContain("t:product_sales_stats");
+            expect(dependencies.softMaxAgeSeconds).toBeNull();
+            const before = sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'sold:p_shirt'").get();
+            sqlite.exec("UPDATE product_sales_stats SET sold_30d = 8 WHERE product_id = 'p_shirt'");
+            expect(sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'sold:p_shirt'").get()).toEqual(before);
+            sqlite.exec("UPDATE product_sales_stats SET sold_30d = 10 WHERE product_id = 'p_shirt'");
+            expect(sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'sold:p_shirt'").get()).toBeDefined();
+            const updated = resolveProductCardFacts(await selectProductCardFactRows(db, ["p_shirt"]) as ProductCardFactRow[], 2);
+            expect(updated("p_shirt").soldLast30Days).toBe(10);
+        } finally { sqlite.close(); }
+    });
+
     it("reads only stored facts, in spec-table order, and nothing invented", async () => {
         const { db } = setup();
         const rows = await selectProductCardFactRows(db, ["p_laptop", "p_shirt", "p_rice", "p_free"]) as ProductCardFactRow[];

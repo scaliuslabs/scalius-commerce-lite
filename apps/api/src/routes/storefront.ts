@@ -18,10 +18,7 @@ import {
   homeSectionRequests,
   homeSectionRequestsEmpty,
 } from "@scalius/shared/storefront-theme";
-import {
-  CACHE_GENERATION_HEADER,
-  normalizeCacheGeneration,
-} from "@scalius/shared/cache-generation";
+import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
   MAX_STOREFRONT_BATCH_PARTS,
   STOREFRONT_BATCH_PART_PARAM,
@@ -44,7 +41,6 @@ import {
  * lower limit would serialise the parts and add whole D1 waves instead.
  */
 const MAX_BATCH_PART_RENDERS = 4;
-import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -436,6 +432,7 @@ const batchPartSchema = z.object({
   contentType: z.string(),
   body: z.string().openapi({ description: "The part's response body, exactly as its own GET returns it" }),
   cache: z.object({
+    apiVersion: z.string().min(1),
     status: z.enum(["hit", "miss", "refresh"]),
     s0: z.number().int(),
     deps: z.array(z.string()),
@@ -453,7 +450,7 @@ const batchRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read several public storefront resources in one request",
   description:
-    `Answers each \`${STOREFRONT_BATCH_PART_PARAM}\` part (the /api/v1 path and query of a public, generation-cached read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same generation-keyed cache. At most ${MAX_STOREFRONT_BATCH_PARTS} parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.`,
+    `Answers each \`${STOREFRONT_BATCH_PART_PARAM}\` part (the /api/v1 path and query of a public, dependency-validated read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same dependency-validated cache. At most ${MAX_STOREFRONT_BATCH_PARTS} parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.`,
   request: {
     query: z.object({
       [STOREFRONT_BATCH_PART_PARAM]: z.union([
@@ -481,8 +478,7 @@ app.openapi(batchRoute, async (c) => {
     ctx = undefined;
   }
   // Parts are served inside this invocation: the data center's Cache API,
-  // else rendered here exactly as PublicApi renders them (renderPublicRead).
-  // A PublicApi miss would instead wait for a separate, usually cold, isolate.
+  // else rendered here by the same renderPublicRead path as direct reads.
   const reader = createPublicPartReader({
     mode: API_PART_CACHE_MODE,
     env: c.env,
@@ -493,12 +489,7 @@ app.openapi(batchRoute, async (c) => {
     maxConcurrentRenders: MAX_BATCH_PART_RENDERS,
   });
   const response = await serveStorefrontBatch(request, {
-    // A render pins its reads to its page's generation. Generations are
-    // unguessable, so a caller-supplied one can only select existing entries.
-    readGeneration: async () => API_PART_CACHE_MODE === "strict"
-      ? null
-      : normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
-        ?? await readCacheGeneration(c.env, ctx),
+    readGeneration: async () => null,
     readParts: (parts, generation) => reader.readParts(parts, generation),
   });
   return response as never;
@@ -515,6 +506,8 @@ const nonNegativeInteger = (value: unknown): number | null =>
 
 app.get("/frontier", async (c) => {
   if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const apiVersion = readWorkerVersion(c.env);
+  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
   const url = new URL(c.req.url);
   const since = url.searchParams.has("since") ? nonNegativeInteger(Number(url.searchParams.get("since"))) : null;
   if (url.searchParams.has("since") && since === null) {
@@ -522,11 +515,13 @@ app.get("/frontier", async (c) => {
   }
   const limit = nonNegativeInteger(Number(url.searchParams.get("limit") ?? CACHE_FRONTIER_MAX_CHANGES)) ?? CACHE_FRONTIER_MAX_CHANGES;
   const delta = await readFrontierDelta(c.get("db"), since, Math.max(1, limit));
-  return Response.json({ success: true, data: delta }, { headers: frontierHeaders });
+  return Response.json({ success: true, data: { ...delta, apiVersion } }, { headers: frontierHeaders });
 });
 
 app.post("/frontier/check", async (c) => {
   if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const apiVersion = readWorkerVersion(c.env);
+  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
   const input = await c.req.json().catch(() => null) as { s0?: unknown; deps?: unknown } | null;
   const s0 = nonNegativeInteger(input?.s0);
   const hashes = Array.isArray(input?.deps) ? input!.deps as unknown[] : null;
@@ -534,7 +529,7 @@ app.post("/frontier/check", async (c) => {
     return Response.json({ success: false, error: "Invalid frontier check" }, { status: 400, headers: frontierHeaders });
   }
   const result = await checkHashedDependencies(c.get("db"), s0, hashes as string[]);
-  return Response.json({ success: true, data: result }, { headers: frontierHeaders });
+  return Response.json({ success: true, data: { ...result, apiVersion } }, { headers: frontierHeaders });
 });
 
 const resolveThemePreviewRoute = createRoute({
