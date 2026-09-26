@@ -214848,7 +214848,7 @@
           "Admin - Products"
         ],
         "summary": "Copy a product as a new draft",
-        "description": "Copies text, pricing, media, attributes, sections, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+        "description": "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
         "parameters": [
           {
             "schema": {
@@ -215747,6 +215747,53 @@
                               },
                               "maxItems": 40
                             },
+                            "media": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "image",
+                                      "video"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "altText": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "posterUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "url",
+                                  "altText",
+                                  "width",
+                                  "height",
+                                  "posterUrl"
+                                ]
+                              },
+                              "description": "The ready files the inlined blocks name, for the editor's previews; a missing file is absent."
+                            },
                             "total": {
                               "type": "integer",
                               "minimum": 0
@@ -215770,6 +215817,7 @@
                             "section",
                             "aggregateRevision",
                             "items",
+                            "media",
                             "total",
                             "offset",
                             "limit",
@@ -217935,6 +217983,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "brandName": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "metaTitle": {
                           "type": "string",
                           "nullable": true
@@ -218511,6 +218563,7 @@
                         "price",
                         "categoryId",
                         "brandId",
+                        "brandName",
                         "metaTitle",
                         "metaDescription",
                         "canonicalPath",

@@ -22,6 +22,17 @@ export const productBundleTierSchema = z.object({
   isActive: z.boolean(),
 }).openapi("ProductBundleTier");
 
+/** A ready file a content block names. */
+const blockMediaSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["image", "video"]),
+  url: z.string(),
+  altText: z.string().nullable(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  posterUrl: z.string().nullable(),
+});
+
 const semanticPageFields = {
   total: z.number().int().nonnegative(),
   offset: z.number().int().nonnegative(),
@@ -48,6 +59,9 @@ export const productMerchandisingSectionResponseSchemas = [
         description: "Inline while the page stays small; null means read it with the content_block section (itemId).",
       }),
     })).max(PRODUCT_CONTENT_BLOCKS_MAX),
+    media: z.array(blockMediaSchema).openapi({
+      description: "The ready files the inlined blocks name, for the editor's previews; a missing file is absent.",
+    }),
     ...semanticPageFields,
   }),
   z.object({
@@ -93,15 +107,7 @@ export const productPageMerchandisingFields = {
   contentBlocks: z.array(productPageContentBlockSchema).max(PRODUCT_CONTENT_BLOCKS_MAX).openapi({
     description: "Blocks other than the tabs (`additionalInfo`), in placement then page order.",
   }),
-  contentBlockMedia: z.array(z.object({
-    id: z.string(),
-    kind: z.enum(["image", "video"]),
-    url: z.string(),
-    altText: z.string().nullable(),
-    width: z.number().int().nullable(),
-    height: z.number().int().nullable(),
-    posterUrl: z.string().nullable(),
-  })).openapi({ description: "The ready files the blocks name; a block's missing file is simply absent." }),
+  contentBlockMedia: z.array(blockMediaSchema).openapi({ description: "The ready files the blocks name; a block's missing file is simply absent." }),
   bundles: z.array(productBundleTierSchema).max(PRODUCT_BUNDLES_MAX).openapi({
     description: "Active quantity tiers. Checkout prices them exactly this way (they add to promotions, which are evaluated at catalog prices).",
   }),

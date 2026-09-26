@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { GripVertical, Trash2 } from "lucide-react";
 import { postApiV1AdminSettingsHomepagePresentation } from "@scalius/api-client/sdk";
 import {
@@ -11,15 +11,28 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SortableList } from "~/components/admin/shared/SortableList";
 import { apiData } from "~/lib/api";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
+import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import type { SearchableSelectLoader } from "~/components/ui/searchable-select";
+import { landingHomeMessages } from "~/i18n/landing-home";
 import { homepageSectionsQueryOptions } from "~/lib/api-query-options/online-store";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { Field, SectionCard, failSave, useDocumentDraft } from "./shared";
 
-/** Featured categories and the delivery & returns strip on the homepage. */
+const PRODUCT_PAGE_SIZE = 20;
+const landingProductLoader: SearchableSelectLoader = async ({ search, page }) => {
+  const result = await fetchProducts({ page, limit: PRODUCT_PAGE_SIZE, ...(search ? { search } : {}) });
+  return {
+    options: result.products.map((product) => ({ value: product.id, label: product.name })),
+    hasMore: page < result.pagination.totalPages,
+  };
+};
+
+/** What the homepage is, the delivery & returns strip, and the featured categories. */
 export function HomepageSectionsCards() {
   const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
@@ -29,6 +42,8 @@ export function HomepageSectionsCards() {
     label: t("featuredCategories"),
     saved: data.config,
     fields: (path) => (path === "categoryRail.title" ? "homepage-category-title" : undefined),
+    // A landing homepage needs its product (the server would fall back to the catalog).
+    invalid: (config) => config.homeMode === "landing" && !config.landingProductId,
     save: async (config) => {
       try {
         const saved = await apiData(postApiV1AdminSettingsHomepagePresentation({
@@ -122,6 +137,12 @@ export function HomepageSectionsCards() {
         />
       </SectionCard>
 
+      <LandingHomeCard
+        mode={draft.homeMode}
+        productId={draft.landingProductId}
+        onChange={(homeMode, landingProductId) => setDraft((current) => ({ ...current, homeMode, landingProductId }))}
+      />
+
       <SectionCard
         title={t("trustStrip")}
         description={t("trustStripHelp")}
@@ -134,5 +155,50 @@ export function HomepageSectionsCards() {
         }
       />
     </>
+  );
+}
+
+/**
+ * A single-product store can open on that product's landing page (the
+ * showcase landing template) instead of the catalog homepage.
+ */
+function LandingHomeCard({ mode, productId, onChange }: {
+  mode: HomepagePresentationConfig["homeMode"];
+  productId: string | null;
+  onChange: (mode: HomepagePresentationConfig["homeMode"], productId: string | null) => void;
+}) {
+  const t = useMessages(landingHomeMessages);
+  const { data } = useQuery(productsByIdsQueryOptions(productId ? [productId] : []));
+  const productName = data?.products.find((product) => product.id === productId)?.name;
+  return (
+    <SectionCard title={t("title")} description={t("description")}>
+      <RadioGroup value={mode} onValueChange={(value) => onChange(value as typeof mode, productId)}>
+        {(["catalog", "landing"] as const).map((value) => (
+          <label key={value} className="flex min-h-11 items-start gap-3 py-1 text-body">
+            <RadioGroupItem value={value} className="mt-0.5" />
+            <span>
+              <span className="block font-medium">{t(value)}</span>
+              <span className="block text-muted-foreground">{t(`${value}Help`)}</span>
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+      {mode === "landing" ? (
+        <Field id="homepage-landing-product" label={t("product")} error={productId ? undefined : t("chooseProduct")}>
+          <SearchableSelect
+            id="homepage-landing-product"
+            value={productId ?? ""}
+            selectedLabel={productName}
+            load={landingProductLoader}
+            queryKey={["online-store", "landing-product"]}
+            onValueChange={(value) => onChange(mode, value || null)}
+            placeholder={t("chooseProduct")}
+            searchPlaceholder={t("searchProducts")}
+            emptyMessage={t("noProducts")}
+            triggerClassName="w-full"
+          />
+        </Field>
+      ) : null}
+    </SectionCard>
   );
 }

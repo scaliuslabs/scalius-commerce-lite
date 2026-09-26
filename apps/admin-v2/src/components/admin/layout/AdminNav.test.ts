@@ -13,7 +13,7 @@ describe("admin sidebar", () => {
     expect(nav.map((item) => item.key)).toEqual(["products", "content"]);
     // Without products.view the section opens its first reachable page.
     expect(nav[0]).toMatchObject({ to: "/admin/categories" });
-    expect(nav[0]!.children.map((child) => child.key)).toEqual(["categories"]);
+    expect(nav[0]!.children.map((child) => child.key)).toEqual(["categories", "brands"]);
     expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts"]);
   });
 

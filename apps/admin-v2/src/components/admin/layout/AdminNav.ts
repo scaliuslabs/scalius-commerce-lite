@@ -58,6 +58,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     children: [
       { key: "collections", to: "/admin/collections" },
       { key: "categories", to: "/admin/categories" },
+      { key: "brands", to: "/admin/brands" },
       { key: "inventory", to: "/admin/inventory" },
       { key: "attributes", to: "/admin/attributes" },
       ...when(REVIEWS_NAV_ENABLED, { key: "reviews", to: "/admin/reviews", badge: "reviews" }),

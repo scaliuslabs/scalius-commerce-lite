@@ -126,6 +126,11 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 404;
 }
 
+/** The API's error code (e.g. BRAND_REVISION_CONFLICT), or null. */
+export function readAdminApiErrorCode(error: unknown): string | null {
+  return readAdminApiError(error)?.code ?? null;
+}
+
 export function isAdminApiConflictError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 409;
 }
