@@ -111,17 +111,16 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                           </p>
                         )}
 
-                        {canClaimWarranty(record, now) && (
-                          <WarrantyClaimForm
-                            warrantyId={warranty.warrantyId}
-                            access={{ kind: "account" }}
-                            copy={copy}
-                            returnTo="/account/warranties"
-                            open={isNoticed}
-                            flag={isNoticed ? notice.flag : null}
-                            class="mt-2"
-                          />
-                        )}
+                        <WarrantyClaimForm
+                          canClaim={canClaimWarranty(record, now)}
+                          warrantyId={warranty.warrantyId}
+                          access={{ kind: "account" }}
+                          copy={copy}
+                          returnTo="/account/warranties"
+                          open={isNoticed}
+                          flag={isNoticed ? notice.flag : null}
+                          class="mt-2"
+                        />
 
                         {warranty.terms && (
                           <details class="group mt-2 border-t border-border pt-1">

@@ -90,6 +90,28 @@ describe("statement table extraction", () => {
     }
   });
 
+  it("masks comments in lexical order without consuming literals or quoted identifiers", () => {
+    const cases: Array<[string, string[]]> = [
+      ["select * from products /* -- ignored */ join categories on 1 = 1", ["products", "categories"]],
+      ["select * from products -- /* ignored\n join categories on 1 = 1", ["products", "categories"]],
+      ["select * from products /* ' */ join categories on label = 'value'", ["products", "categories"]],
+      ["select '-- /* from orders */' from settings", ["settings"]],
+      ['select * from "products/*archive*/"', ["products/*archive*/"]],
+      ["select * from `products--archive`", ["products--archive"]],
+      ["select * from [products/*archive*/]", ["products/*archive*/"]],
+      ["select * from products /* unterminated join orders", ["products"]],
+    ];
+    for (const [query, tables] of cases) expect(statementTables(query), query).toEqual(tables);
+  });
+
+  it("handles an unterminated block with many opening delimiters without rescanning", () => {
+    const comment = "/*" + "a/*".repeat(100_000) + " join orders where category = ?";
+    const query = "select * from settings where category = ? " + comment;
+    expect(statementTables(query)).toEqual(["settings"]);
+    expect(pinnedSourceValues(query, ["seo"], "settings", ["category"]))
+      .toEqual([{ category: ["seo"] }]);
+  });
+
   it("returns the same frozen array for a repeated literal-free statement", () => {
     const statement = "select \"id\" from \"products\" where \"id\" = ?";
     expect(statementTables(statement)).toBe(statementTables(statement));
@@ -241,6 +263,13 @@ describe("pinned source values", () => {
     // Placeholders inside literals and comments are not placeholders.
     expect(pin(`select '?' as q /* ? */, value from settings where category = ? and key = 'document'`, ["seo"]))
       .toEqual([{ category: ["seo"], key: ["document"] }]);
+  });
+
+  it("preserves bound-value offsets across mixed comments, quotes and escaped literals", () => {
+    expect(pin(`select /* '-- ? */ ? as ignored, '-- /* ?' as literal from settings
+      where /* -- ? */ category = ? -- /* ?
+      and key = 'it''s/*document*/'`, ["ignored", "seo"]))
+      .toEqual([{ category: ["seo"], key: ["it's/*document*/"] }]);
   });
 
   it("leaves a column unpinned when it is not compared with a value", () => {

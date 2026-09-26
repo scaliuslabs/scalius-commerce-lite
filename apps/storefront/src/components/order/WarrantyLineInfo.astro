@@ -39,15 +39,14 @@ const returnTo = (() => {
 {records.map((record) => (
   <div>
     <Fragment set:html={lineWarrantyMarkup(record, { copy, access, now })} />
-    {canClaimWarranty(record, now) && (
-      <WarrantyClaimForm
-        warrantyId={record.warrantyId}
-        access={access}
-        copy={copy}
-        returnTo={returnTo}
-        open={notice?.warrantyId === record.warrantyId}
-        flag={notice?.warrantyId === record.warrantyId ? notice.flag : null}
-      />
-    )}
+    <WarrantyClaimForm
+      canClaim={canClaimWarranty(record, now)}
+      warrantyId={record.warrantyId}
+      access={access}
+      copy={copy}
+      returnTo={returnTo}
+      open={notice?.warrantyId === record.warrantyId}
+      flag={notice?.warrantyId === record.warrantyId ? notice.flag : null}
+    />
   </div>
 ))}

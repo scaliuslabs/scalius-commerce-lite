@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared/product-condition";
 import { useMessages } from "~/i18n";
@@ -40,14 +40,15 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           render={({ field }) => (
             <FormItem>
               <FormControl>
-                <NativeSelect
+                <SearchableSelect
                   value={field.value ? "active" : "draft"}
                   onValueChange={(value) => field.onChange(value === "active")}
-                  aria-label={t("status")}
-                >
-                  <option value="active">{t("statusActive")}</option>
-                  <option value="draft">{t("statusDraft")}</option>
-                </NativeSelect>
+                  ariaLabel={t("status")}
+                  triggerClassName="w-full"
+                  triggerRef={field.ref}
+                  onBlur={field.onBlur}
+                  options={[{ value: "active", label: t("statusActive") }, { value: "draft", label: t("statusDraft") }]}
+                />
               </FormControl>
               <FormDescription>{t(field.value ? "statusActiveHelp" : "statusDraftHelp")}</FormDescription>
             </FormItem>
@@ -77,13 +78,14 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
             <FormItem>
               <FormLabel>{t("condition")}</FormLabel>
               <FormControl>
-                <NativeSelect value={field.value} onValueChange={field.onChange}>
-                  {PRODUCT_CONDITION_VALUES.map((condition) => (
-                    <option key={condition} value={condition}>
-                      {t(CONDITION_LABELS[condition])}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <SearchableSelect
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  triggerClassName="w-full"
+                  triggerRef={field.ref}
+                  onBlur={field.onBlur}
+                  options={PRODUCT_CONDITION_VALUES.map((condition) => ({ value: condition, label: t(CONDITION_LABELS[condition]) }))}
+                />
               </FormControl>
             </FormItem>
           )}

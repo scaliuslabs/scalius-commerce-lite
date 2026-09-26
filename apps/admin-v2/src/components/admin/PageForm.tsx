@@ -11,7 +11,7 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { RichContent } from "../ui/rich-content";
-import { NativeSelect } from "../ui/native-select";
+import { SearchableSelect } from "../ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
@@ -335,16 +335,16 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <NativeSelect
+                      <SearchableSelect
+                        triggerRef={field.ref}
+                        onBlur={field.onBlur}
                         value={field.value}
                         disabled={!canPublish}
                         onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
-                        aria-label={t("visibility")}
-                      >
-                        <option value="draft">{t("draft")}</option>
-                        <option value="published">{t("visible")}</option>
-                        <option value="scheduled">{t("scheduled")}</option>
-                      </NativeSelect>
+                        ariaLabel={t("visibility")}
+                        triggerClassName="w-full"
+                        options={[{ value: "draft", label: t("draft") }, { value: "published", label: t("visible") }, { value: "scheduled", label: t("scheduled") }]}
+                      />
                     </FormControl>
                     <FormDescription>
                       {!canPublish

@@ -65,7 +65,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
       .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
       .map((page) => ({
         loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
-        lastmod: page.publishedAt ?? undefined,
+        lastmod: page.updatedAt ?? undefined,
       }));
 
     const xml = generateSitemap(pageUrls, baseUrl);

@@ -8,7 +8,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
@@ -94,7 +94,7 @@ export function PricingCard({ form, variantPrices }: {
                 <FormItem>
                   <FormLabel>{t("discountType")}</FormLabel>
                   <FormControl>
-                    <NativeSelect
+                    <SearchableSelect
                       value={field.value}
                       onValueChange={(value) => {
                         field.onChange(value);
@@ -103,10 +103,11 @@ export function PricingCard({ form, variantPrices }: {
                           shouldValidate: true,
                         });
                       }}
-                    >
-                      <option value="percentage">{t("discountPercentage")}</option>
-                      <option value="flat">{t("discountFixed")}</option>
-                    </NativeSelect>
+                      triggerClassName="w-full"
+                      triggerRef={field.ref}
+                      onBlur={field.onBlur}
+                      options={[{ value: "percentage", label: t("discountPercentage") }, { value: "flat", label: t("discountFixed") }]}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

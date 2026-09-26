@@ -174,12 +174,10 @@ export function pinnedSourceValues(
   // Same-length masks: literals keep their quotes (their text becomes 'x'),
   // comments become spaces, so offsets agree across the three strings.
   const literals = new Map<number, string>();
-  let masked = sql.replace(STRING_LITERAL, (match, offset: number) => {
+  const masked = maskSqlComments(sql).replace(STRING_LITERAL, (match, offset: number) => {
     literals.set(offset, match.slice(1, -1).replace(/''/g, "'"));
     return `'${"x".repeat(match.length - 2)}'`;
   });
-  masked = masked.replace(LINE_COMMENT, (match) => " ".repeat(match.length))
-    .replace(BLOCK_COMMENT, (match) => " ".repeat(match.length));
   const placeholders = new Map<number, number>();
   for (let index = 0, count = 0; index < masked.length; index += 1) {
     if (masked[index] === "'") {
@@ -314,8 +312,33 @@ const COMMA_SOURCE_PATTERN = new RegExp(
   "iy",
 );
 const STRING_LITERAL = /'(?:[^']|'')*'/g;
-const LINE_COMMENT = /--[^\n]*/g;
-const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+/** Mask comments in one forward pass, preserving literal/parameter offsets. */
+function maskSqlComments(sql: string): string {
+  const parts: string[] = [];
+  let copied = 0;
+  for (let index = 0; index < sql.length;) {
+    const char = sql[index];
+    if (char === "'" || char === '"' || char === "`" || char === "[") {
+      const close = char === "[" ? "]" : char;
+      index += 1;
+      while (index < sql.length) {
+        if (sql[index++] !== close) continue;
+        if (close !== "]" && sql[index] === close) index += 1;
+        else break;
+      }
+    } else if (sql.startsWith("--", index) || sql.startsWith("/*", index)) {
+      const start = index;
+      const line = char === "-";
+      const end = sql.indexOf(line ? "\n" : "*/", index + 2);
+      index = end === -1 ? sql.length : end + (line ? 0 : 2);
+      parts.push(sql.slice(copied, start), " ".repeat(index - start));
+      copied = index;
+    } else {
+      index += 1;
+    }
+  }
+  return parts.length === 0 ? sql : parts.join("") + sql.slice(copied);
+}
 
 /** Bare words that can follow FROM/JOIN without naming a table. */
 const NOT_TABLES = new Set(["select", "values", "lateral", "only"]);
@@ -352,10 +375,8 @@ export function statementTables(sql: string): readonly string[] {
 }
 
 function parseStatementTables(input: string): readonly string[] {
-  let sql = input;
+  let sql = maskSqlComments(input);
   if (sql.indexOf("'") !== -1) sql = sql.replace(STRING_LITERAL, "''");
-  if (sql.indexOf("--") !== -1) sql = sql.replace(LINE_COMMENT, " ");
-  if (sql.indexOf("/*") !== -1) sql = sql.replace(BLOCK_COMMENT, " ");
 
   const tables: string[] = [];
   const add = (name: string) => {

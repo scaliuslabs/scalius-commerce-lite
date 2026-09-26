@@ -97,11 +97,9 @@ describe("BuyerInputsCard", () => {
     expect(form.getValues("customizationSchema")).toEqual([]);
 
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#buyer-input-label")!, "Fit"));
-    const type = document.querySelector<HTMLSelectElement>("#buyer-input-type")!;
-    await act(async () => {
-      type.value = "select";
-      type.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => document.querySelector<HTMLButtonElement>("#buyer-input-type")!.click());
+    await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+      .find((option) => option.textContent === en["inputType.select"])!.click());
     await act(async () => button(en.inputDone)!.click());
     expect(document.body.textContent).toContain(en.inputChoiceRequired);
   });

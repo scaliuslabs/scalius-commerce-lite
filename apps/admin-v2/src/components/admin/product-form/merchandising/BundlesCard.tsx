@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "../CollapsibleCard";
-import { productBundlesQueryOptions, saveProductSection } from "./section-api";
+import { productBundlesQueryOptions, saveProductSection, type BundleItem } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
 
@@ -29,6 +29,18 @@ interface TierDraft {
   isActive: boolean;
 }
 
+function fromItem(item: BundleItem): TierDraft {
+  return {
+    key: item.id,
+    quantity: item.quantity,
+    discountType: item.discountType,
+    discountPercentage: item.discountPercentage,
+    price: item.price,
+    label: item.label ?? "",
+    isActive: item.isActive,
+  };
+}
+
 const valid = (value: number | null): value is number => value !== null && Number.isFinite(value);
 
 /** Quantity bundles ("2 for 10% off", "3 for ৳900"): checkout prices them exactly as shown. */
@@ -37,16 +49,8 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
   const { code, symbol, fmt } = useCurrency();
   const queryClient = useQueryClient();
   const { data } = useQuery(productBundlesQueryOptions(productId));
-  const loaded = useMemo<TierDraft[] | undefined>(() => data?.items.map((item) => ({
-    key: item.id,
-    quantity: item.quantity,
-    discountType: item.discountType,
-    discountPercentage: item.discountPercentage,
-    price: item.price,
-    label: item.label ?? "",
-    isActive: item.isActive,
-  })), [data]);
-  const { draft, setDraft, dirty, markSaved } = useSectionDraft(loaded);
+  const loaded = useMemo(() => data?.items.map(fromItem), [data]);
+  const { draft, setDraft, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
   const tiers = useMemo(() => draft ?? [], [draft]);
 
   const problems = useMemo(() => {
@@ -76,6 +80,10 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
     label: t("bundles"),
     dirty: !readOnly && dirty,
     problems,
+    prepareRebase: async () => {
+      const latest = await queryClient.fetchQuery(productBundlesQueryOptions(productId));
+      return () => prepareRebase(latest.items.map(fromItem));
+    },
     save: async (revision) => {
       const sent = tiers;
       const next = await saveProductSection(productId, {
@@ -147,15 +155,14 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                     </div>
                     <div className="space-y-1 sm:col-span-3">
                       <Label htmlFor={idFor("type")}>{t("bundleDiscount")}</Label>
-                      <NativeSelect
+                      <SearchableSelect
                         id={idFor("type")}
                         value={tier.discountType}
                         disabled={readOnly}
                         onValueChange={(value) => update(tier.key, { discountType: value as TierDraft["discountType"] })}
-                      >
-                        <option value="percentage">{t("bundlePercentOff")}</option>
-                        <option value="fixed_price">{t("bundleSetPrice")}</option>
-                      </NativeSelect>
+                        triggerClassName="w-full"
+                        options={[{ value: "percentage", label: t("bundlePercentOff") }, { value: "fixed_price", label: t("bundleSetPrice") }]}
+                      />
                     </div>
                     <div className="space-y-1 sm:col-span-3">
                       {tier.discountType === "percentage" ? (

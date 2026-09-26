@@ -52,11 +52,12 @@ const button = (label: string) =>
 const rows = () => [...container.querySelectorAll("li")].map((row) => row.firstElementChild?.textContent);
 const dialog = () => document.querySelector("[role=dialog]");
 
-function choose(select: HTMLSelectElement, value: string) {
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, value);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+function choose(trigger: HTMLButtonElement, label: string) {
+  act(() => trigger.click());
+  const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    .find((item) => item.textContent?.trim() === label);
+  expect(option).toBeDefined();
+  act(() => option!.click());
 }
 
 function type(input: HTMLInputElement, value: string) {
@@ -74,7 +75,7 @@ describe("homepage section editor", () => {
 
   it("adds a section with its settings on Done, under a free id", async () => {
     render([section("product-tabs", "product-tabs")]);
-    choose(container.querySelector<HTMLSelectElement>('select[aria-label="Add section"]')!, "product-tabs");
+    choose(container.querySelector<HTMLButtonElement>('button[aria-label="Add section"]')!, "Product tabs");
     expect(dialog()?.textContent).toContain("Product tabs");
     expect(seen.sections).toHaveLength(1); // nothing lands before Done
     await act(async () => button("Done").click());
@@ -83,7 +84,7 @@ describe("homepage section editor", () => {
 
   it("adds a data-only section at once", () => {
     render([]);
-    choose(container.querySelector<HTMLSelectElement>('select[aria-label="Add section"]')!, "collections");
+    choose(container.querySelector<HTMLButtonElement>('button[aria-label="Add section"]')!, "Collections");
     expect(seen.sections.map((each) => each.type)).toEqual(["collections"]);
     expect(dialog()).toBeNull();
   });

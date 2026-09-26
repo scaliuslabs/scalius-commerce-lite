@@ -1,6 +1,6 @@
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
@@ -47,20 +47,18 @@ export function FulfilmentCard({ form, hasOptions }: {
           </>
         ) : (
           <>
-            <NativeSelect
+            <SearchableSelect
               id="product-fulfilment"
-              aria-label={t("fulfilment")}
+              ariaLabel={t("fulfilment")}
               value={mode}
               aria-describedby="product-fulfilment-help"
               onValueChange={(value) => {
                 const next = choices.find((choice) => choice === value);
                 if (next) form.setValue("fulfillmentKind", next, { shouldDirty: true });
               }}
-            >
-              {choices.map((choice) => (
-                <option key={choice} value={choice}>{t(`fulfilmentMode.${choice}`)}</option>
-              ))}
-            </NativeSelect>
+              triggerClassName="w-full"
+              options={choices.map((choice) => ({ value: choice, label: t(`fulfilmentMode.${choice}`) }))}
+            />
             <p id="product-fulfilment-help" className="text-body text-muted-foreground">{t(HELP[mode])}</p>
           </>
         )}

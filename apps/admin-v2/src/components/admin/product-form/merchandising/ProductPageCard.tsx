@@ -25,12 +25,16 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
     () => (data ? { pageTemplate: data.product.pageTemplate, emiEligible: data.product.emiEligible } : undefined),
     [data],
   );
-  const { draft, setDraft, saved, dirty, markSaved } = useSectionDraft(loaded);
+  const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
 
   useProductSection({
     label: t("productPage"),
     dirty: !readOnly && dirty,
     problems: null,
+    prepareRebase: async () => {
+      const latest = await queryClient.fetchQuery(productBaseSectionQueryOptions(productId));
+      return () => prepareRebase({ pageTemplate: latest.product.pageTemplate, emiEligible: latest.product.emiEligible });
+    },
     save: async (revision) => {
       if (!draft || !saved) return revision;
       const sent = draft;

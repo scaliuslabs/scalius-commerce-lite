@@ -15931,6 +15931,9 @@
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
+                              "updatedAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
+                              },
                               "deletedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               }
@@ -15955,6 +15958,7 @@
                               "hideTitle",
                               "sortOrder",
                               "createdAt",
+                              "updatedAt",
                               "deletedAt"
                             ]
                           }
@@ -16233,6 +16237,9 @@
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
+                            "updatedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             }
@@ -16257,6 +16264,7 @@
                             "hideTitle",
                             "sortOrder",
                             "createdAt",
+                            "updatedAt",
                             "deletedAt"
                           ]
                         }
@@ -16586,6 +16594,9 @@
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
+                            "updatedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             }
@@ -16610,6 +16621,7 @@
                             "hideTitle",
                             "sortOrder",
                             "createdAt",
+                            "updatedAt",
                             "deletedAt"
                           ]
                         }
@@ -19569,6 +19581,9 @@
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
+                            "updatedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             }
@@ -19593,6 +19608,7 @@
                             "hideTitle",
                             "sortOrder",
                             "createdAt",
+                            "updatedAt",
                             "deletedAt"
                           ]
                         }

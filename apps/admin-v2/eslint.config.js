@@ -17,6 +17,10 @@ const classRule = (pattern, message) => [
 ];
 
 const designRules = [
+  {
+    selector: ":matches(Identifier, JSXIdentifier)[name='NativeSelect']",
+    message: "NativeSelect was removed: use SearchableSelect.",
+  },
   ...classRule(`(^|\\s)${variant}text-(xs|sm|base|lg|xl|[2-9]xl)(\\s|$)`, "Use the type scale: text-caption, text-body, text-body-lg or text-heading-sm/md/lg/xl (DESIGN.md)."),
   ...classRule(`(^|\\s)${variant}font-(bold|extrabold|black)(\\s|$)`, "Never bold: headings are font-semibold, inline emphasis font-medium."),
   ...classRule(`(^|\\s)${variant}tracking-`, "Never change the font's tracking."),
@@ -35,21 +39,20 @@ const designRules = [
   },
   {
     selector: "JSXOpeningElement[name.name='select']",
-    message: "Use NativeSelect for a short fixed choice, or SearchableSelect for options from data (DESIGN.md).",
+    message: "Use SearchableSelect for fixed choices and options from data (DESIGN.md).",
   },
 ];
 
-// The Radix Select is gone for good: short fixed choices use NativeSelect,
-// anything from data or longer than about ten options uses SearchableSelect.
-const noRadixSelect = {
+// All dashboard choices use the viewport-aware SearchableSelect.
+const noLegacySelect = {
   "no-restricted-imports": [
     "error",
     {
-      paths: [{ name: "@radix-ui/react-select", message: "Use NativeSelect (fixed choices) or SearchableSelect (data) from components/ui." }],
+      paths: [{ name: "@radix-ui/react-select", message: "Use SearchableSelect from components/ui." }],
       patterns: [
         {
-          group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select"],
-          message: "The Radix Select was removed: use NativeSelect (fixed choices) or SearchableSelect (data).",
+          group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select", "**/native-select", "**/native-select.*", "**/components/ui/select.*"],
+          message: "Legacy selects were removed: use SearchableSelect.",
         },
       ],
     },
@@ -106,6 +109,6 @@ export default [
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: noRadixSelect,
+    rules: noLegacySelect,
   },
 ];

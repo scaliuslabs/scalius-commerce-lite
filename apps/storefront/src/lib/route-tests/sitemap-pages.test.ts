@@ -47,7 +47,7 @@ describe("pages sitemap route", () => {
     expect(body).toContain("<urlset");
   });
 
-  it("formats CMS page Unix-second timestamps as real lastmod dates", async () => {
+  it("uses the saved modification time rather than publication time for lastmod", async () => {
     mocks.getAllPages.mockResolvedValueOnce({
       data: [
         {
@@ -58,7 +58,8 @@ describe("pages sitemap route", () => {
           canonicalPath: "/company",
           noIndex: false,
           excludeFromSitemap: false,
-          publishedAt: 1782691200,
+          publishedAt: 1700000000,
+          updatedAt: 1782691200,
         },
       ],
       pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -72,6 +73,7 @@ describe("pages sitemap route", () => {
     expect(body).not.toContain("https://storefront.example.test/about-us");
     expect(body).toContain("<lastmod>2026-06-29T00:00:00.000Z</lastmod>");
     expect(body).not.toContain("1970");
+    expect(mocks.getAllPages).toHaveBeenCalledTimes(1);
   });
 
   it("returns non-cacheable 503 instead of relative page locs when the storefront URL is missing", async () => {

@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
@@ -241,15 +241,14 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                 </GiftCardField>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <GiftCardField id="gift-card-deliver-by" label={t("deliverBy")}>
-                    <NativeSelect
+                    <SearchableSelect
                       id="gift-card-deliver-by"
                       value={draft.deliverBy}
                       disabled={busy}
                       onValueChange={(value) => update({ deliverBy: value === "sms" ? "sms" : "email" })}
-                    >
-                      <option value="email">{t("deliverByEmail")}</option>
-                      <option value="sms">{t("deliverBySms")}</option>
-                    </NativeSelect>
+                      triggerClassName="w-full"
+                      options={[{ value: "email", label: t("deliverByEmail") }, { value: "sms", label: t("deliverBySms") }]}
+                    />
                   </GiftCardField>
                   <div className="sm:col-span-2">
                     <GiftCardField

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -260,16 +260,15 @@ export function VariantTable(props: VariantTableProps) {
         {options.length >= 2 ? (
           <label className="flex items-center gap-2 text-body text-muted-foreground">
             {t("groupBy")}
-            <NativeSelect
+            <SearchableSelect
               value={String(grouped ? groupAxis : -1)}
               onValueChange={(value) => setGroupAxis(Number(value) < 0 ? options.length : Number(value))}
-              className="w-auto min-w-28"
-            >
-              {options.map((option, index) => (
-                <option key={option.id} value={index}>{option.name.trim() || t("optionNumber", { number: index + 1 })}</option>
-              ))}
-              <option value={-1}>{t("groupByNone")}</option>
-            </NativeSelect>
+              triggerClassName="w-auto min-w-28"
+              options={[
+                ...options.map((option, index) => ({ value: String(index), label: option.name.trim() || t("optionNumber", { number: index + 1 }) })),
+                { value: "-1", label: t("groupByNone") },
+              ]}
+            />
           </label>
         ) : null}
         {missingCombinations.length > 0 ? (
@@ -639,17 +638,19 @@ function KindSelect({ value, label, onChange }: {
 }) {
   const t = useMessages(productMessages);
   return (
-    <NativeSelect
+    <SearchableSelect
       value={value ?? ""}
-      aria-label={label}
+      ariaLabel={label}
       onValueChange={(next) => {
         if (next === "physical" || next === "service") onChange(next);
       }}
-    >
-      {value === undefined ? <option value="" disabled>{t("mixedValues")}</option> : null}
-      <option value="physical">{t("fulfilmentPhysicalShort")}</option>
-      <option value="service">{t("fulfilmentServiceShort")}</option>
-    </NativeSelect>
+      triggerClassName="w-full"
+      options={[
+        ...(value === undefined ? [{ value: "", label: t("mixedValues"), disabled: true }] : []),
+        { value: "physical", label: t("fulfilmentPhysicalShort") },
+        { value: "service", label: t("fulfilmentServiceShort") },
+      ]}
+    />
   );
 }
 

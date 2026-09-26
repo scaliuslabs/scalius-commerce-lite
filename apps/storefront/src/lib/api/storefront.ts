@@ -55,6 +55,8 @@ export interface HomepageData {
   hero: HomepageHero;
   collections: CollectionWithProducts[];
   presentation: {
+    homeMode?: "catalog" | "landing";
+    landingProduct?: { id: string; slug: string } | null;
     categoryRail: {
       enabled: boolean;
       title: string;

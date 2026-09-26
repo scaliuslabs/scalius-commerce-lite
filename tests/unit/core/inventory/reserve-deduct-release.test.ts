@@ -9,6 +9,14 @@ import { beforeAll, beforeEach, describe, it, expect, vi } from "vitest";
 import { seedVariant } from "../../../setup";
 import { inventoryMovements, orders, productVariants } from "../../../../packages/database/src/schema";
 
+// Keep the inventory batch observable without reproducing the catalog SQL builder.
+// catalog-projections.d1.test.ts verifies the real refresh against migrated SQLite.
+vi.mock("../../../../packages/core/src/modules/products/catalog-projections", () => ({
+  catalogBuyerStateRefreshStatementsForSkus: (_db: unknown, skuIds: readonly string[]) => [
+    { kind: "refreshBuyerState", skuIds },
+  ],
+}));
+
 // ---------------------------------------------------------------------------
 // Pure logic extracted from reserve.ts, release.ts, deduct.ts
 // ---------------------------------------------------------------------------
@@ -735,6 +743,7 @@ describe("inventory status transition hardening", () => {
     expect(batchCalls[0]).toEqual([
       expect.objectContaining({ kind: "insertMovement", table: inventoryMovements }),
       expect.objectContaining({ kind: "updateVariant", table: productVariants }),
+      expect.objectContaining({ kind: "refreshBuyerState", skuIds: [TRANSITION_ITEM.variantId] }),
     ]);
     expect(batchCalls[1]).toEqual([
       expect.objectContaining({ kind: "updateOrder", table: orders }),
@@ -769,6 +778,7 @@ describe("inventory status transition hardening", () => {
     expect(batchCalls[0]).toEqual([
       expect.objectContaining({ kind: "insertMovement", table: inventoryMovements }),
       expect.objectContaining({ kind: "updateVariant", table: productVariants }),
+      expect.objectContaining({ kind: "refreshBuyerState", skuIds: [TRANSITION_ITEM.variantId] }),
     ]);
     expect(batchCalls[1]).toEqual([
       expect.objectContaining({ kind: "updateOrder", table: orders }),
@@ -807,7 +817,7 @@ describe("inventory status transition hardening", () => {
   it("accepts a missed inventoryAction CAS when another caller already finalized the same transition", async () => {
     const { db } = createTransitionDb({
       batchResults: [
-        [[{ id: "movement_1" }], [{ id: TRANSITION_ITEM.variantId }]],
+        [[{ id: "movement_1" }], [{ id: TRANSITION_ITEM.variantId }], []],
         [[]],
       ],
       currentActionAfterMiss: "deducted",
@@ -821,7 +831,7 @@ describe("inventory status transition hardening", () => {
   it("rejects a missed inventoryAction CAS when the order is still on a conflicting action", async () => {
     const { db } = createTransitionDb({
       batchResults: [
-        [[{ id: "movement_1" }], [{ id: TRANSITION_ITEM.variantId }]],
+        [[{ id: "movement_1" }], [{ id: TRANSITION_ITEM.variantId }], []],
         [[]],
       ],
       currentActionAfterMiss: "reserved",

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -240,12 +240,13 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
           {readOnly ? null : (
             <div className="flex flex-wrap items-center gap-2">
               {digitalVariants.length > 1 ? (
-                <NativeSelect aria-label={t("deliverTo")} value={target} onValueChange={setTarget}>
-                  <option value="">{t("everyDigitalVariant")}</option>
-                  {digitalVariants.map((variant) => (
-                    <option key={variant.id} value={variant.id}>{variantLabel(variant) ?? variant.sku}</option>
-                  ))}
-                </NativeSelect>
+                <SearchableSelect
+                  ariaLabel={t("deliverTo")}
+                  value={target}
+                  onValueChange={setTarget}
+                  triggerClassName="w-full"
+                  options={[{ value: "", label: t("everyDigitalVariant") }, ...digitalVariants.map((variant) => ({ value: variant.id, label: variantLabel(variant) ?? variant.sku }))]}
+                />
               ) : null}
               <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => pickFile(null)}>{t("addFile")}</Button>
             </div>
@@ -480,10 +481,13 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="digital-file-limit">{t("downloadsLabel")}</Label>
-              <NativeSelect id="digital-file-limit" value={limited ? "limited" : "unlimited"} onValueChange={(value) => setLimited(value === "limited")}>
-                <option value="limited">{t("limited")}</option>
-                <option value="unlimited">{t("unlimited")}</option>
-              </NativeSelect>
+              <SearchableSelect
+                id="digital-file-limit"
+                value={limited ? "limited" : "unlimited"}
+                onValueChange={(value) => setLimited(value === "limited")}
+                triggerClassName="w-full"
+                options={[{ value: "limited", label: t("limited") }, { value: "unlimited", label: t("unlimited") }]}
+              />
               {limited ? (
                 <>
                   <NumberInput integer aria-label={t("downloadCountLabel")} value={limit} aria-invalid={checked && limitIssue ? true : undefined} onValueChange={setLimit} />
@@ -493,10 +497,13 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
             </div>
             <div className="space-y-1">
               <Label htmlFor="digital-file-access">{t("accessLabel")}</Label>
-              <NativeSelect id="digital-file-access" value={expires ? "days" : "forever"} onValueChange={(value) => setExpires(value === "days")}>
-                <option value="forever">{t("forever")}</option>
-                <option value="days">{t("limitedTime")}</option>
-              </NativeSelect>
+              <SearchableSelect
+                id="digital-file-access"
+                value={expires ? "days" : "forever"}
+                onValueChange={(value) => setExpires(value === "days")}
+                triggerClassName="w-full"
+                options={[{ value: "forever", label: t("forever") }, { value: "days", label: t("limitedTime") }]}
+              />
               {expires ? (
                 <>
                   <NumberInput integer aria-label={t("daysLabel")} placeholder={t("daysLabel")} value={days} aria-invalid={checked && daysIssue ? true : undefined} onValueChange={setDays} />

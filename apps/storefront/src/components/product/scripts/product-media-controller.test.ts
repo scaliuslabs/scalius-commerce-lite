@@ -473,6 +473,37 @@ describe("product gallery photo switching", () => {
 });
 
 describe("product gallery preloading", () => {
+  it("does not warm photos while the featured video remains selected", async () => {
+    const root = renderGallery();
+    initProductMediaGallery(root);
+    idleTasks.forEach((task) => task());
+    expect(FakeImage.created).toHaveLength(0);
+
+    window.dispatchEvent(new CustomEvent("product-media-select", {
+      detail: { productMediaId: "pmed_side", source: "variant" },
+    }));
+    expect(FakeImage.created).toHaveLength(1);
+    expect(FakeImage.created[0]).toMatchObject({
+      src: rendition("side", 960), fetchPriority: "high",
+    });
+    FakeImage.created[0]!.finishDecode();
+    await flush();
+    expect(mainImages(root)[0]!.getAttribute("srcset")).toBe(srcset("side"));
+  });
+
+  it("stops idle photo warm-up when the buyer switches to video", async () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    idleTasks.forEach((task) => task());
+    expect(FakeImage.created).toHaveLength(PRELOAD_CONCURRENCY);
+
+    button(root, "pmed_video").click();
+    FakeImage.created.forEach((image) => image.onload?.());
+    await flush();
+    expect(FakeImage.created).toHaveLength(PRELOAD_CONCURRENCY);
+  });
+
   it("warms SKU photos first after load, in the slot's candidate, two at a time", async () => {
     const root = renderGallery("pmed_front", {
       variants: [{ imageId: "pmed_back" }, { imageId: "pmed_back" }],

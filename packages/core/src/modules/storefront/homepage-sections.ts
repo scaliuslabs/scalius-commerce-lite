@@ -1,23 +1,14 @@
 // What the homepage sections read besides product lists, each planned as
 // one statement of the homepage's second D1 batch (storefront.service.ts):
-// section images by media id, the brand wall's brands and the deal
-// countdowns' promotions. The product lists are catalog reads
-// (catalog/home-lists.ts).
-import { brands, media, productBuyerState, promotions } from "@scalius/database/schema";
+// section images by media id and the deal countdowns' promotions.
+// Product lists and the brand wall are catalog reads
+// (catalog/home-lists.ts and catalog/home-brands.ts).
+import { media, promotions } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
-import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { homeSectionRequests, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import { getCurrentMediaUrl } from "../../integrations/storage";
-import {
-    brandLogoColumns,
-    brandLogoJoinCondition,
-    presentBrandLogo,
-    publicBrandConditions,
-    type BrandLogo,
-    type BrandLogoRow,
-} from "../brands/brands.storefront";
-import { cacheDep } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
@@ -77,60 +68,6 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
                     height: row.height,
                 }] : [];
             });
-        },
-    };
-}
-
-/** A brand on the brand wall: published, live, with a public product. */
-export interface HomeBrand {
-    id: string;
-    name: string;
-    slug: string;
-    canonicalPath: string | null;
-    logo: BrandLogo | null;
-}
-
-/**
- * One statement for the brand wall: public brands that have a public
- * product (the buyer-state brand index), in merchant order.
- */
-export function planHomeBrands(db: Database, limit: number): {
-    statements: BatchStatement[];
-    resolve(results: readonly unknown[], offset: number): HomeBrand[];
-} {
-    if (limit <= 0) return { statements: [], resolve: () => [] };
-    // Which brands hold a public product is a store-shape fact; the brand
-    // rows count through the "any brand" key, their logos per image below.
-    deps.key(cacheDep.storeShape());
-    deps.anyBrand();
-    const statement = db
-        .select({
-            id: brands.id,
-            name: brands.name,
-            slug: brands.slug,
-            canonicalPath: brands.canonicalPath,
-            ...brandLogoColumns,
-        })
-        .from(brands)
-        .leftJoin(media, brandLogoJoinCondition())
-        .where(and(
-            ...publicBrandConditions(),
-            sql`EXISTS (SELECT 1 FROM ${productBuyerState} WHERE ${eq(productBuyerState.isPublic, true)} AND ${productBuyerState.brandId} = ${brands.id})`,
-        ))
-        .orderBy(asc(brands.sortOrder), asc(brands.name), asc(brands.id))
-        .limit(limit);
-    return {
-        statements: [statement],
-        resolve(results, offset) {
-            const rows = results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow>;
-            deps.mediaItems(rows.flatMap((row) => (row.logoMediaId ? [row.logoMediaId] : [])));
-            return rows.map((row) => ({
-                id: row.id,
-                name: row.name,
-                slug: row.slug,
-                canonicalPath: row.canonicalPath,
-                logo: presentBrandLogo(row, row.name),
-            }));
         },
     };
 }

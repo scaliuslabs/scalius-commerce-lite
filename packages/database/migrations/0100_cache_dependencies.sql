@@ -325,36 +325,6 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-CREATE TRIGGER `cdep_product_buyer_state_shape_ins` AFTER INSERT ON `product_buyer_state`
-WHEN NEW.`is_public` = 1
-BEGIN
-  INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:shape', 't:product_buyer_state')) AS key_list) AS key_rows
-  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
-  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
-  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
-END;
---> statement-breakpoint
-CREATE TRIGGER `cdep_product_buyer_state_shape_del` AFTER DELETE ON `product_buyer_state`
-WHEN OLD.`is_public` = 1
-BEGIN
-  INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:shape', 't:product_buyer_state')) AS key_list) AS key_rows
-  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
-  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
-  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
-END;
---> statement-breakpoint
-CREATE TRIGGER `cdep_product_buyer_state_shape` AFTER UPDATE ON `product_buyer_state`
-WHEN (OLD.`is_public` IS NOT NEW.`is_public` OR OLD.`category_id` IS NOT NEW.`category_id` OR OLD.`brand_id` IS NOT NEW.`brand_id`)
-BEGIN
-  INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('lm:shape', 't:product_buyer_state')) AS key_list) AS key_rows
-  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
-  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
-  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
-END;
---> statement-breakpoint
 CREATE TRIGGER `cdep_product_facet_values_ins` AFTER INSERT ON `product_facet_values`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -2164,4 +2134,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (100, '0100_cache_dependencies', 'e1654d5c5f1dda04ab9e11576496980eccdaffd323df70bb0e8a8726a4a78a1f');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (100, '0100_cache_dependencies', '2d18253c98e70a3a58d155aa13cc91d876dbd3456ed90cda7696b497699be33f');

@@ -10,6 +10,8 @@ export interface ProductSectionHandle {
   dirty: boolean;
   /** Problems that keep it from saving, one line each (null when it can save). */
   problems: string[] | null;
+  /** Reads fresh state and checks overlap; applies it only after the whole page passes. */
+  prepareRebase: () => Promise<() => (() => void) | null>;
   /** Saves against `revision`; resolves with the product's new revision. */
   save: (revision: number) => Promise<number>;
 }
@@ -39,7 +41,18 @@ export function useProductSections() {
     },
   }), [refresh]);
   const dirtyHandles = useCallback(() => [...handles.current.values()].filter((handle) => handle.dirty), []);
-  return { registry, dirty, dirtyHandles };
+  const prepareRebase = useCallback(async () => {
+    const loaded = await Promise.all([...handles.current.values()].map(async (handle) => ({
+      label: handle.label,
+      check: await handle.prepareRebase(),
+    })));
+    const checks = loaded.map(({ label, check }) => ({ label, apply: check() }));
+    return {
+      overlaps: checks.filter((check) => !check.apply).map((check) => check.label),
+      apply: () => { for (const check of checks) check.apply?.(); },
+    };
+  }, []);
+  return { registry, dirty, dirtyHandles, prepareRebase };
 }
 
 export function ProductSectionsProvider({ registry, children }: { registry: Registry; children: ReactNode }) {

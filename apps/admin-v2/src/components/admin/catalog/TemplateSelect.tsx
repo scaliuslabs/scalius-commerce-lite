@@ -1,4 +1,4 @@
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   LISTING_FILTER_TEMPLATE_IDS,
   LISTING_LAYOUT_TEMPLATE_IDS,
@@ -32,27 +32,23 @@ export function TemplateSelect({
     : [...LISTING_LAYOUT_TEMPLATE_IDS, ...LISTING_FILTER_TEMPLATE_IDS];
   const label = (template: string) => t(`${kind === "product" ? "page" : "listing"}_${template}` as never);
   return (
-    <NativeSelect
+    <SearchableSelect
       id={id}
       value={value ?? ""}
       disabled={disabled}
-      aria-label={t("template")}
+      ariaLabel={t("template")}
       onValueChange={(next) => onChange(next || null)}
-    >
-      <option value="">{t("themeDefault")}</option>
-      {value && !known.includes(value) ? <option value={value}>{t("unknownTemplate", { id: value })}</option> : null}
-      {kind === "product" ? (
-        PRODUCT_PAGE_TEMPLATE_IDS.map((template) => <option key={template} value={template}>{label(template)}</option>)
-      ) : (
-        <>
-          <optgroup label={t("layouts")}>
-            {LISTING_LAYOUT_TEMPLATE_IDS.map((template) => <option key={template} value={template}>{label(template)}</option>)}
-          </optgroup>
-          <optgroup label={t("filters")}>
-            {LISTING_FILTER_TEMPLATE_IDS.map((template) => <option key={template} value={template}>{label(template)}</option>)}
-          </optgroup>
-        </>
-      )}
-    </NativeSelect>
+      triggerClassName="w-full"
+      options={[
+        { value: "", label: t("themeDefault") },
+        ...(value && !known.includes(value) ? [{ value, label: t("unknownTemplate", { id: value }) }] : []),
+        ...(kind === "product"
+          ? PRODUCT_PAGE_TEMPLATE_IDS.map((template) => ({ value: template, label: label(template) }))
+          : [
+              ...LISTING_LAYOUT_TEMPLATE_IDS.map((template) => ({ value: template, label: label(template), group: t("layouts") })),
+              ...LISTING_FILTER_TEMPLATE_IDS.map((template) => ({ value: template, label: label(template), group: t("filters") })),
+            ]),
+      ]}
+    />
   );
 }

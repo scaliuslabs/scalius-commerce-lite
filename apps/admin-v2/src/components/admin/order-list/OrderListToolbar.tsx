@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -61,21 +61,24 @@ function FilterSelect({
   label,
   value,
   onChange,
-  children,
+  options,
 }: {
   label: string;
   value: string | undefined;
   onChange: (value: string | undefined) => void;
-  children: ReactNode;
+  options: SearchableSelectOption[];
 }) {
   const t = useMessages(orderListMessages);
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
-      <NativeSelect aria-label={label} value={value ?? ANY} onValueChange={(next) => onChange(next === ANY ? undefined : next)}>
-        <option value={ANY}>{t("any")}</option>
-        {children}
-      </NativeSelect>
+      <SearchableSelect
+        triggerClassName="w-full"
+        ariaLabel={label}
+        value={value ?? ANY}
+        onValueChange={(next) => onChange(next === ANY ? undefined : next)}
+        options={[{ value: ANY, label: t("any") }, ...options]}
+      />
     </div>
   );
 }
@@ -158,21 +161,16 @@ export function OrderListToolbar({
               <ListFilter className="h-4 w-4" />
               {filterCount > 0 ? t("filtersCount", { count: filterCount }) : t("filters")}
             </Button>
-            <NativeSelect
-              className="w-auto"
-              aria-label={t("sort")}
+            <SearchableSelect
+              triggerClassName="w-auto"
+              ariaLabel={t("sort")}
               value={`${search.sort}:${search.order}`}
               onValueChange={(value) => {
                 const [sort, order] = value.split(":") as [OrderListSearch["sort"], "asc" | "desc"];
                 onChange({ sort, order, page: 1 });
               }}
-            >
-              {sortOptions.map((option) => (
-                <option key={option} value={option}>
-                  {t(`sort.${option}`)}
-                </option>
-              ))}
-            </NativeSelect>
+              options={sortOptions.map((option) => ({ value: option, label: t(`sort.${option}`) }))}
+            />
             <Button
               variant={autoRefresh.enabled ? "secondary" : "ghost"}
               aria-pressed={autoRefresh.enabled}
@@ -189,71 +187,45 @@ export function OrderListToolbar({
       {filtersOpen ? (
         <div id="order-filters" className="space-y-4 border-t pt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FilterSelect label={t("orderStatus")} value={search.status} onChange={(status) => filter({ status })}>
-              {ORDER_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {orderStatusLabel(to, status)}
-                </option>
-              ))}
-            </FilterSelect>
+            <FilterSelect
+              label={t("orderStatus")}
+              value={search.status}
+              onChange={(status) => filter({ status })}
+              options={ORDER_STATUSES.map((status) => ({ value: status, label: orderStatusLabel(to, status) }))}
+            />
             <FilterSelect
               label={t("payment")}
               value={search.paymentStatus}
               onChange={(value) => filter({ paymentStatus: value as OrderListSearch["paymentStatus"] })}
-            >
-              {PAYMENT_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {paymentStatusLabel(to, status)}
-                </option>
-              ))}
-            </FilterSelect>
+              options={PAYMENT_STATUSES.map((status) => ({ value: status, label: paymentStatusLabel(to, status) }))}
+            />
             <FilterSelect
               label={t("paymentMethod")}
               value={search.paymentMethod}
               onChange={(value) => filter({ paymentMethod: value as OrderListSearch["paymentMethod"] })}
-            >
-              {PAYMENT_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {paymentMethodLabel(to, method)}
-                </option>
-              ))}
-            </FilterSelect>
+              options={PAYMENT_METHODS.map((method) => ({ value: method, label: paymentMethodLabel(to, method) }))}
+            />
             <FilterSelect
               label={t("fulfillment")}
               value={search.fulfillmentStatus}
               onChange={(value) =>
                 filter({ fulfillmentStatus: value as OrderListSearch["fulfillmentStatus"] })}
-            >
-              {FULFILLMENT_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {fulfillmentStatusLabel(to, status)}
-                </option>
-              ))}
-            </FilterSelect>
+              options={FULFILLMENT_STATUSES.map((status) => ({ value: status, label: fulfillmentStatusLabel(to, status) }))}
+            />
             <FilterSelect
               label={t("deliveryMethod")}
               value={search.deliveryMethod}
               onChange={(value) =>
                 filter({ deliveryMethod: value as OrderListSearch["deliveryMethod"] })}
-            >
-              {DELIVERY_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {deliveryMethodLabel(to, method)}
-                </option>
-              ))}
-            </FilterSelect>
+              options={DELIVERY_METHODS.map((method) => ({ value: method, label: deliveryMethodLabel(to, method) }))}
+            />
             <FilterSelect
               label={t("onlinePayment")}
               value={search.paymentRecovery}
               onChange={(value) =>
                 filter({ paymentRecovery: value as OrderListSearch["paymentRecovery"] })}
-            >
-              {PAYMENT_RECOVERY_STATES.map((state) => (
-                <option key={state} value={state}>
-                  {t(`recovery.${state}`)}
-                </option>
-              ))}
-            </FilterSelect>
+              options={PAYMENT_RECOVERY_STATES.map((state) => ({ value: state, label: t(`recovery.${state}`) }))}
+            />
             <DateRangeFilter
               search={search}
               onChange={(range) =>

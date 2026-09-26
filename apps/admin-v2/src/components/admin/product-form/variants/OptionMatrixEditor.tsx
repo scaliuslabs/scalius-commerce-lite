@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@scalius/shared/utils";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
 import {
@@ -712,17 +712,19 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
         </label>
         <label className="flex w-full flex-col gap-1 text-body text-muted-foreground sm:w-40">
           {t("optionFilterAs")}
-          <NativeSelect
+          <SearchableSelect
             value={option.standardMapping}
             onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
-            aria-label={t("optionType", { name: optionLabel })}
-          >
-            <option value="none">{t("optionTypeOther")}</option>
-            <option value="size">{t("optionTypeSize")}</option>
-            <option value="color">{t("optionTypeColor")}</option>
-            <option value="material">{t("optionTypeMaterial")}</option>
-            <option value="pattern">{t("optionTypePattern")}</option>
-          </NativeSelect>
+            ariaLabel={t("optionType", { name: optionLabel })}
+            triggerClassName="w-full"
+            options={[
+              { value: "none", label: t("optionTypeOther") },
+              { value: "size", label: t("optionTypeSize") },
+              { value: "color", label: t("optionTypeColor") },
+              { value: "material", label: t("optionTypeMaterial") },
+              { value: "pattern", label: t("optionTypePattern") },
+            ]}
+          />
         </label>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>

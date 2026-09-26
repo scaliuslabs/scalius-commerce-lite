@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { SettingsField } from "~/components/admin/settings/SettingsPage";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
 
@@ -74,30 +74,25 @@ export function AccessFields({
       </fieldset>
       {kind === "pat" ? (
         <SettingsField id="ai-access-resource" label={t("worksWith")}>
-          <NativeSelect
+          <SearchableSelect
             id="ai-access-resource"
             value={value.resource}
             disabled={disabled}
             onValueChange={(resource) => onChange({ ...value, resource: resource as AgentResource })}
-          >
-            <option value="dashboard">{t("resource_dashboard")}</option>
-            <option value="storefront">{t("resource_storefront")}</option>
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[{ value: "dashboard", label: t("resource_dashboard") }, { value: "storefront", label: t("resource_storefront") }]}
+          />
         </SettingsField>
       ) : null}
       <SettingsField id="ai-access-expiry" label={t("expiresAfter")}>
-        <NativeSelect
+        <SearchableSelect
           id="ai-access-expiry"
           value={String(value.expiresInDays)}
           disabled={disabled}
           onValueChange={(days) => onChange({ ...value, expiresInDays: Number(days) })}
-        >
-          {EXPIRY_DAYS.filter((days) => days <= max).map((days) => (
-            <option key={days} value={String(days)}>
-              {days === 365 ? t("oneYear") : t("days", { count: days })}
-            </option>
-          ))}
-        </NativeSelect>
+          triggerClassName="w-full"
+          options={EXPIRY_DAYS.filter((days) => days <= max).map((days) => ({ value: String(days), label: days === 365 ? t("oneYear") : t("days", { count: days }) }))}
+        />
       </SettingsField>
     </>
   );

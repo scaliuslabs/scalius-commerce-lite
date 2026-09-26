@@ -5,12 +5,14 @@
 // migrated schema inside a strict dependency scope, so a table read without a
 // precise declared key fails here instead of falling back to `t:<table>`.
 // The same harness checks that those payloads are deterministic and carry no
-// row revisions or update times, which change without a buyer-visible change.
+// editor revisions or untracked update times. CMS/article timestamps are
+// public lastmod values covered by the page dependency and truthful saves.
 import "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { Database } from "@scalius/database/client";
+import { updatePage } from "@scalius/core/modules/pages";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { withDependencyScope, type CacheDependencies } from "@scalius/core/cache-deps";
 import {
@@ -109,15 +111,18 @@ const NO_INTERNAL_FIELD_ROUTES = [
   "/api/v1/hero/sliders?type=desktop",
   "/api/v1/hero/sliders/hero_desktop",
   "/api/v1/checkout-languages/active",
+  "/api/v1/shipping-methods",
+];
+
+/** CMS/article updatedAt is a tracked sitemap/dateModified value, never an editor revision. */
+const NO_REVISION_ROUTES = [
   "/api/v1/pages",
   "/api/v1/pages/pg_about",
   "/api/v1/pages/slug/about",
   "/api/v1/storefront/pages/slug/about",
-  "/api/v1/shipping-methods",
+  "/api/v1/articles",
+  "/api/v1/articles/slug/post",
 ];
-
-/** Articles keep `updatedAt` (the blog's dateModified, advanced by its own rule) but no revision. */
-const NO_REVISION_ROUTES = ["/api/v1/articles", "/api/v1/articles/slug/post"];
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -315,7 +320,7 @@ describe("public content payloads", () => {
     ]);
   });
 
-  it("carry no row revision or update time", async () => {
+  it("omit editor revisions and permit only tracked public update times", async () => {
     for (const route of NO_INTERNAL_FIELD_ROUTES) {
       const { status, body } = await render(route);
       expect(status, route).toBe(200);
@@ -325,6 +330,36 @@ describe("public content payloads", () => {
       const { status, body } = await render(route);
       expect(status, route).toBe(200);
       expect(internalFieldPaths(JSON.parse(body)).filter((path) => path.endsWith(".revision")), route).toEqual([]);
+      expect(internalFieldPaths(JSON.parse(body)).some((path) => path.endsWith(".updatedAt")), route).toBe(true);
     }
   });
+
+  it("keeps CMS lastmod and its dependency unchanged on a no-op, then advances both for a published edit", async () => {
+    const publishedAt = 1_700_000_000;
+    sqlite.exec(`INSERT INTO pages (id, title, slug, content, is_published, revision, published_at, updated_at)
+      VALUES ('pg_lastmod', 'Lastmod', 'lastmod', '<p>Before</p>', 1, 1, ${publishedAt}, ${publishedAt})`);
+    const route = "/api/v1/pages/slug/lastmod";
+    const seq = () => (sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'pg:pg_lastmod'").get() as { seq: number }).seq;
+    const before = await render(route);
+    const beforeSeq = seq();
+    expect(before.status).toBe(200);
+    expect(before.dependencies.keys).toContain("pg:pg_lastmod");
+    expect(JSON.parse(before.body).data.page.updatedAt).toBe(new Date(publishedAt * 1000).toISOString());
+
+    await updatePage(db, "pg_lastmod", { expectedRevision: 1, content: "<p>Before</p>" } as never);
+    expect((await render(route)).body).toBe(before.body);
+    expect(seq()).toBe(beforeSeq);
+
+    await updatePage(db, "pg_lastmod", { expectedRevision: 2, content: "<p>After</p>" } as never);
+    const after = await render(route);
+    const page = JSON.parse(after.body).data.page;
+    const saved = sqlite.prepare("SELECT updated_at FROM pages WHERE id = 'pg_lastmod'").get() as { updated_at: number };
+    expect(page.publishedAt).toBe(new Date(publishedAt * 1000).toISOString());
+    expect(page.updatedAt).toBe(new Date(saved.updated_at * 1000).toISOString());
+    expect(saved.updated_at).toBeGreaterThan(publishedAt);
+    expect(seq()).toBeGreaterThan(beforeSeq);
+    expect(after.dependencies.keys).toContain("pg:pg_lastmod");
+    expect(page).not.toHaveProperty("revision");
+  });
+
 });
