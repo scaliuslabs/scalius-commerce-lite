@@ -18,6 +18,14 @@ vi.mock("@scalius/core/modules/digital", () => ({
   listLineDeliveries: vi.fn(async () => digital.deliveries),
 }));
 
+// B5 filled the warranty reader (covered on the real schema by the warranty
+// domain tests); it is stubbed here like the digital one.
+const warrantyMocks = vi.hoisted(() => ({ listLineWarranties: vi.fn(async () => new Map()) }));
+vi.mock("@scalius/core/modules/warranty", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/warranty")>()),
+  listLineWarranties: warrantyMocks.listLineWarranties,
+}));
+
 beforeEach(() => {
   digital.deliveries = new Map();
 });
@@ -38,6 +46,7 @@ describe("composeOrderLineExtras", () => {
     });
     expect(extras.size).toBe(0);
     expect(giftCardMocks.listLineIssuedCards).toHaveBeenCalledTimes(1);
+    expect(warrantyMocks.listLineWarranties).toHaveBeenCalledTimes(1);
     const item = { id: "oi_1", quantity: 1 };
     const presented = withOrderLineExtras(item, extras);
     expect(presented).toBe(item);
