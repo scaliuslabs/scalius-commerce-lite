@@ -58,6 +58,8 @@ interface CommonProps {
   /** The field is waiting for something else (e.g. its parent's list). */
   busy?: boolean;
   triggerRef?: React.Ref<HTMLButtonElement>;
+  onBlur?: React.FocusEventHandler<HTMLButtonElement>;
+  onFocus?: React.FocusEventHandler<HTMLButtonElement>;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -82,9 +84,8 @@ export type SearchableSelectProps = StaticProps | AsyncProps;
 
 /**
  * The dashboard's combobox: a searchable list in a popover. Use it whenever
- * the options come from merchant or server data, or can pass about ten; give
- * it `load` + `queryKey` when the source is large (server search, paged).
- * Short fixed enums use NativeSelect.
+ * choosing one option, including fixed enums. Give it `load` + `queryKey`
+ * when the source is large (server search, paged).
  */
 export function SearchableSelect(props: SearchableSelectProps) {
   return props.load ? <AsyncSearchableSelect {...props} /> : <StaticSearchableSelect {...(props as StaticProps)} />;
@@ -205,6 +206,8 @@ function ComboboxView({
   selectedLabel,
   busy = false,
   triggerRef,
+  onBlur,
+  onFocus,
   onOpenChange,
   open,
   setOpen,
@@ -230,9 +233,9 @@ function ComboboxView({
   const listId = React.useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
 
-  const label = value
-    ? selectedOption?.label ?? (picked?.value === value ? picked.label : undefined) ?? selectedLabel
-    : undefined;
+  const label = selectedOption?.label
+    ?? (picked && picked.value === value ? picked.label : undefined)
+    ?? (value ? selectedLabel : undefined);
   const selectable = options.flatMap((option, index) => (option.disabled ? [] : [index]));
   const safeActive = selectable.includes(activeIndex) ? activeIndex : (selectable[0] ?? -1);
   const activeOption = safeActive >= 0 ? options[safeActive] : undefined;
@@ -247,13 +250,21 @@ function ComboboxView({
   function select(option: SearchableSelectOption) {
     if (option.disabled) return;
     setPicked(option);
-    onValueChange(option.value, option);
+    if (option.value !== value) onValueChange(option.value, option);
     changeOpen(false);
   }
 
   function moveTo(index: number) {
     setActiveIndex(index);
-    requestAnimationFrame(() => document.getElementById(optionId(index))?.scrollIntoView?.({ block: "nearest" }));
+    requestAnimationFrame(() => {
+      const list = listRef.current;
+      const option = document.getElementById(optionId(index));
+      if (!list || !option) return;
+      const bounds = list.getBoundingClientRect();
+      const row = option.getBoundingClientRect();
+      if (row.top < bounds.top) list.scrollTop += row.top - bounds.top;
+      else if (row.bottom > bounds.bottom) list.scrollTop += row.bottom - bounds.bottom;
+    });
   }
 
   function move(direction: -1 | 1) {
@@ -317,6 +328,8 @@ function ComboboxView({
         <PopoverTrigger asChild>
           <button
             ref={triggerRef}
+            onBlur={onBlur}
+            onFocus={onFocus}
             id={id}
             type="button"
             role="combobox"
@@ -368,9 +381,9 @@ function ComboboxView({
         sideOffset={4}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          requestAnimationFrame(() => inputRef.current?.focus());
+          requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
         }}
-        className="flex w-(--radix-popover-trigger-width) min-w-60 flex-col overflow-hidden p-0"
+        className="flex w-(--radix-popover-trigger-width) min-w-60 max-w-(--radix-popover-content-available-width) flex-col overflow-hidden p-0"
       >
         <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 sm:h-9">
           <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />

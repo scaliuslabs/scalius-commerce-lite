@@ -352,10 +352,9 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
 
   for (const configPath of apps[0].configs) {
     const config = readJsoncWith(configPath);
-    if (config.cache?.enabled !== true ||
-      config.exports?.default?.cache?.enabled !== false ||
-      config.exports?.PublicApi?.cache?.enabled !== true) {
-      errors.push(`${configPath} must keep the default API entrypoint uncached and PublicApi Workers Caching enabled`);
+    if (config.exports?.default?.cache?.enabled !== false ||
+      config.exports?.PublicApi !== undefined) {
+      errors.push(`${configPath} must keep the default API entrypoint uncached and omit PublicApi so every public hit validates dependencies`);
     }
   }
 

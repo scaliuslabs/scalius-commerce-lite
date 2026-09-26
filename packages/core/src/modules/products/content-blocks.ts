@@ -29,6 +29,7 @@ import {
     type ProductContentBlockPlacement,
     type ProductContentBlockValue,
 } from "@scalius/shared/product-content-blocks";
+import { deps } from "../../cache-deps";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -161,10 +162,19 @@ export async function readProductContentBlockSection(
     });
     const total = Number(header.total);
     const nextOffset = page.offset + items.length < total ? page.offset + items.length : null;
+    // The files the inlined blocks name, so the editor can show them (one bounded read).
+    const mediaIds = new Set<string>();
+    for (const item of items) {
+        if (item.settings) {
+            productContentBlockMediaIds({ type: item.type, settings: item.settings } as ProductContentBlockValue)
+                .forEach((id) => mediaIds.add(id));
+        }
+    }
     return {
         section: "content_blocks" as const,
         aggregateRevision: header.aggregateRevision,
         items,
+        media: await loadProductPageBlockMedia(db, [...mediaIds]),
         total,
         offset: page.offset,
         limit,
@@ -415,6 +425,36 @@ export async function buildProductContentBlockReplaceStatements(
     return statements;
 }
 
+/**
+ * The statements that give `targetId` a copy of `sourceId`'s own blocks
+ * (legacy mirrored tabs excluded: the copied tabs mirror themselves), for
+ * duplicating a product. Positions are kept, so they follow the copied tabs.
+ */
+export async function buildProductContentBlockCopyStatements(
+    db: Database,
+    sourceId: string,
+    targetId: string,
+): Promise<SQLiteBatchItem[]> {
+    const rows = await db.select({
+        placement: productContentBlocks.placement,
+        position: productContentBlocks.position,
+        type: productContentBlocks.type,
+        version: productContentBlocks.version,
+        settings: productContentBlocks.settings,
+        legacy: legacyTabSql,
+    }).from(productContentBlocks).where(eq(productContentBlocks.productId, sourceId))
+        .orderBy(...blockOrder()).limit(PRODUCT_CONTENT_BLOCKS_MAX).all();
+    return rows.filter((row) => Number(row.legacy) !== 1).map((row) => db.insert(productContentBlocks).values({
+        id: `${PRODUCT_CONTENT_BLOCK_ID_PREFIX}${nanoid()}`,
+        productId: targetId,
+        placement: row.placement,
+        position: row.position,
+        type: row.type,
+        version: row.version,
+        settings: row.settings,
+    }));
+}
+
 // ─────────────────────────────────────────
 // Product page
 // ─────────────────────────────────────────
@@ -508,6 +548,7 @@ export interface ProductPageBlockMedia {
 /** The ready files the blocks name (one read, ≤ 90 ids as one parameter). */
 export async function loadProductPageBlockMedia(db: Database, mediaIds: readonly string[]): Promise<ProductPageBlockMedia[]> {
     if (mediaIds.length === 0) return [];
+    deps.mediaItems(mediaIds);
     const rows = await db.select({
         id: media.id,
         kind: media.kind,
@@ -516,18 +557,22 @@ export async function loadProductPageBlockMedia(db: Database, mediaIds: readonly
         altText: media.altText,
         width: media.width,
         height: media.height,
+        posterMediaId: media.posterMediaId,
+        // Drizzle unqualifies interpolated columns in a single-table select.
+        // Keep the outer media reference explicit inside both self-subqueries.
         posterObjectKey: sql<string | null>`(
             SELECT poster.object_key FROM ${media} AS poster
-            WHERE poster.id = ${media.posterMediaId} AND poster.kind = 'image' AND poster.status = 'ready'
+            WHERE poster.id = "media"."poster_media_id" AND poster.kind = 'image' AND poster.status = 'ready'
         )`,
         posterVariantWidth: sql<number | null>`(
             SELECT poster.variant_width FROM ${media} AS poster
-            WHERE poster.id = ${media.posterMediaId} AND poster.kind = 'image' AND poster.status = 'ready'
+            WHERE poster.id = "media"."poster_media_id" AND poster.kind = 'image' AND poster.status = 'ready'
         )`,
     }).from(media).where(and(
         sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds.slice(0, PRODUCT_CONTENT_BLOCK_MEDIA_MAX))}))`,
         eq(media.status, "ready"),
     )).all();
+    deps.mediaItems(rows.map((row) => row.posterMediaId));
     return rows.map((row) => ({
         id: row.id,
         kind: row.kind,

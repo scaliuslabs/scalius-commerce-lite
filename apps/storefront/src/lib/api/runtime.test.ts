@@ -80,23 +80,13 @@ describe("createRequestRuntime", () => {
     }
   });
 
-  it("pins API reads to the gateway's cache generation only when it is well formed", async () => {
-    const pinned = await createRequestRuntime(
-      new Request("https://storefront-host.example.test/", {
-        headers: { "X-Scalius-Cache-Generation": "a1b2c3d4e5f60718" },
-      }),
-      null,
-    );
-    expect(pinned.CACHE_GENERATION).toBe("a1b2c3d4e5f60718");
-
-    const malformed = await createRequestRuntime(
-      new Request("https://storefront-host.example.test/", {
-        headers: { "X-Scalius-Cache-Generation": "../../evil" },
-      }),
-      null,
-    );
-    expect(malformed.CACHE_GENERATION).toBeUndefined();
-    expect((await createRequestRuntime(request, null)).CACHE_GENERATION).toBeUndefined();
+  it("does not admit legacy generation headers into the request runtime", async () => {
+    for (const value of ["a1b2c3d4e5f60718", "../../evil"]) {
+      const runtime = await createRequestRuntime(new Request(request.url, {
+        headers: { "X-Scalius-Cache-Generation": value },
+      }), null);
+      expect(runtime).not.toHaveProperty("CACHE_GENERATION");
+    }
   });
 });
 

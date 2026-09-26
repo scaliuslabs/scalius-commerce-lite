@@ -29,7 +29,6 @@ import {
     updateNavigationMenuMetadata,
 } from "@scalius/core/modules/navigation";
 import { ValidationError } from "@scalius/core/errors";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 import { ok } from "../../utils/api-response";
 import {
@@ -473,7 +472,7 @@ const trashMenuRoute = createRoute({
 app.openapi(trashMenuRoute, async (c) => {
     const { menuId } = c.req.valid("param");
     const result = await trashNavigationMenu(c.get("db"), menuId, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -504,7 +503,7 @@ const restoreMenuRoute = createRoute({
 app.openapi(restoreMenuRoute, async (c) => {
     const { menuId } = c.req.valid("param");
     const result = await restoreNavigationMenu(c.get("db"), menuId, c.req.valid("json"));
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -829,7 +828,7 @@ app.openapi(publishMenuRoute, async (c) => {
         ...c.req.valid("json"),
         publishedBy: user?.id ?? null,
     });
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -910,7 +909,7 @@ app.openapi(rollbackMenuRoute, async (c) => {
         ...c.req.valid("json"),
         publishedBy: user?.id ?? null,
     });
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 
@@ -992,7 +991,7 @@ app.openapi(savePlacementRoute, async (c) => {
         id: placementId,
         ...c.req.valid("json"),
     });
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 

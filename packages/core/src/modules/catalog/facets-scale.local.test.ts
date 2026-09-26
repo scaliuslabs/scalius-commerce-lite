@@ -355,7 +355,7 @@ describe.skipIf(!SQLITE)("catalogue-scale facet counts equal brute force", () =>
       ? await getStorefrontBrandProducts(db, { id: scope.brandId }, params)
       : await getStorefrontCategoryProducts(db, {
         id: scope.category!.id, name: "x", slug: "x", description: null, imageUrl: null, metaTitle: null,
-        metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null, updatedAt: null,
+        metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false, createdAt: null,
       }, params, { includeDescendants: scope.category!.subtree });
     const ms = Math.round(performance.now() - started);
     const summary = compareFacets(`${scope.name} ${JSON.stringify(query)}`, scope, filters, result.facets, result.pagination.total);

@@ -13,7 +13,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
-import { NativeSelect } from "~/components/ui/native-select";
 import { Progress } from "~/components/ui/progress";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -126,17 +125,13 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
 
   const filters = (
     <>
-      <NativeSelect
-        aria-label={t("ratingFilter")}
+      <SearchableSelect
+        ariaLabel={t("ratingFilter")}
         value={search.rating ? String(search.rating) : "all"}
         onValueChange={(value) => onSearchChange({ rating: value === "all" ? undefined : (Number(value) as ReviewSearch["rating"]) }, { replace: true })}
-        className="w-36"
-      >
-        <option value="all">{t("rating.all")}</option>
-        {[5, 4, 3, 2, 1].map((rating) => (
-          <option key={rating} value={rating}>{t("ratingOption", { count: rating })}</option>
-        ))}
-      </NativeSelect>
+        triggerClassName="w-36"
+        options={[{ value: "all", label: t("rating.all") }, ...[5, 4, 3, 2, 1].map((rating) => ({ value: String(rating), label: t("ratingOption", { count: rating }) }))]}
+      />
       {canPickProduct ? (
         <SearchableSelect
           load={reviewProductLoader}

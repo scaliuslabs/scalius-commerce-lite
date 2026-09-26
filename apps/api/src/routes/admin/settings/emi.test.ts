@@ -6,9 +6,6 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn(async () => undefined) }));
-vi.mock("../../../utils/cache-generation", () => ({ bumpCacheGeneration: mocks.bumpCacheGeneration }));
-
 import { emiSettingsRoutes } from "./emi";
 
 function createApp() {
@@ -40,12 +37,11 @@ describe("EMI plans settings", () => {
     const saved = await request({ enabled: true, plans: [plan], expectedRevision: 0 });
     expect(saved.status).toBe(200);
     await expect(saved.json()).resolves.toMatchObject({ data: { enabled: true, plans: [plan], revision: 1 } });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
 
     expect((await request({ enabled: false, plans: [], expectedRevision: 0 })).status).toBe(409);
     expect((await request({ enabled: true, plans: [{ ...plan, minAmount: 4999.5 }], expectedRevision: 1 })).status).toBe(400);
     expect((await request({ enabled: true, plans: [{ ...plan, bank: "x" }], expectedRevision: 1 })).status).toBe(400);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+
   });
 
   it("needs the general settings permissions", () => {

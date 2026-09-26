@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     reconcileOrderReturnReceipt: vi.fn(),
     listOrderReturns: vi.fn(),
     getOrderReturn: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
     enqueueOrderNotificationsForStatus: vi.fn(),
 }));
 
@@ -23,10 +23,6 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     reconcileOrderReturnReceipt: mocks.reconcileOrderReturnReceipt,
     listOrderReturns: mocks.listOrderReturns,
     getOrderReturn: mocks.getOrderReturn,
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -71,7 +67,7 @@ describe("admin item return routes", () => {
         mocks.reconcileOrderReturnReceipt.mockResolvedValue({ ...baseResult, status: "receiving", version: 3 });
     });
 
-    it("does not invalidate stock on request or approval", async () => {
+    it("accepts a return request and approval", async () => {
         const app = createApp();
         const requestResponse = await app.request("/api/v1/admin/orders/order_1/returns", {
             method: "POST",
@@ -95,10 +91,10 @@ describe("admin item return routes", () => {
 
         expect(requestResponse.status).toBe(201);
         expect(approveResponse.status).toBe(200);
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 
-    it("invalidates availability only after an explicit restock disposition", async () => {
+    it("records an explicit restock disposition", async () => {
         mocks.receiveOrderReturn.mockResolvedValue({
             ...baseResult,
             status: "completed",
@@ -123,7 +119,7 @@ describe("admin item return routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
         expect(await response.json()).not.toHaveProperty(
             "data.availabilityTransitionVariantIds",
         );

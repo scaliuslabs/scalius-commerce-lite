@@ -48,7 +48,6 @@ import {
   FooterSketch,
   HeaderRows,
   HeaderSketch,
-  HomepageOrder,
   MobileNavigationSketch,
   NavigationSketch,
   ProductPageSketch,
@@ -56,6 +55,7 @@ import {
   Sketch,
   VisualChoice,
 } from "./ThemeChoices";
+import { SectionEditor, type SectionMediaPreview } from "./SectionEditor";
 import { TypographyCard } from "./TypographyCard";
 import {
   COLOR_FIELD_IDS,
@@ -350,10 +350,11 @@ function FitNote({ fallback, name, reason }: {
  * with the storefront's own resolver, so a choice that does not fit the
  * store says what buyers see instead.
  */
-function ThemeCards({ saved, revision, storeShape, refetch, site }: {
+function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }: {
   saved: Theme;
   revision: number;
   storeShape: StoreShape;
+  sectionMedia: readonly SectionMediaPreview[];
   refetch: () => unknown;
   site: SiteDrafts;
 }) {
@@ -574,9 +575,10 @@ function ThemeCards({ saved, revision, storeShape, refetch, site }: {
         title={t("homepageSections")}
         description={t("homepageSectionsHelp")}
         rows={
-          <HomepageOrder
+          <SectionEditor
             sections={theme.pages.home}
             notes={sectionNotes}
+            media={sectionMedia}
             onChange={(home) => setDraft((current) => ({ ...current, pages: { ...current.pages, home } }))}
           />
         }
@@ -593,6 +595,7 @@ function ThemeSettings() {
       saved={data.theme as Theme}
       revision={data.revision}
       storeShape={data.storeShape as StoreShape}
+      sectionMedia={data.sectionMedia}
       refetch={refetch}
       site={site}
     />

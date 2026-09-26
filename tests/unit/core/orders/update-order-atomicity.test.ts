@@ -1,730 +1,270 @@
-// tests/unit/core/orders/update-order-atomicity.test.ts
-// Focused regression coverage for updateOrder() inventory pre-write atomicity.
+// Regression coverage for the current quote-backed order edit transaction.
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Database } from "../../../../packages/database/src/client";
+import { createSqliteD1Database } from "../../../../packages/database/src/testing/sqlite-d1";
+import { confirmManualOrderAmendment, previewManualOrderAmendment } from "../../../../packages/core/src/modules/orders/admin/amend";
+import { restoreOrder } from "../../../../packages/core/src/modules/orders/admin/archive";
+import { confirmManualOrderAmendmentSchema, type ConfirmManualOrderAmendmentInput, type PreviewManualOrderAmendmentInput } from "../../../../packages/core/src/modules/orders/validation";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { seedOrder, seedOrderItem } from "../../../setup";
+describe("order amendment inventory atomicity", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+  let beforeAmendmentBatch: (() => void) | null;
 
-const inventoryMocks = vi.hoisted(() => ({
-  reserveStockBatch: vi.fn(),
-  releaseReservedStockBatch: vi.fn(),
-  validateStockBatchAvailability: vi.fn(),
-  applyClaimedInventoryEntryBatch: vi.fn(),
-  applyInventoryForStatusChange: vi.fn(),
-}));
-
-vi.mock("../../../../packages/core/src/modules/inventory", () => ({
-  reserveStockBatch: inventoryMocks.reserveStockBatch,
-  releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
-  validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
-}));
-
-vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: inventoryMocks.applyInventoryForStatusChange,
-  applyClaimedInventoryEntryBatch: inventoryMocks.applyClaimedInventoryEntryBatch,
-  isStockRestoreStatus: (status: string) => ["cancelled", "returned", "refunded"].includes(status),
-  isStockDeductStatus: (status: string) => ["shipped", "delivered"].includes(status),
-  isStockReservableStatus: (status: string) => ["incomplete", "pending", "processing", "confirmed"].includes(status),
-}));
-
-type UpdateOrder = typeof import("../../../../packages/core/src/modules/orders/admin/archive").updateOrder;
-type RestoreOrder = typeof import("../../../../packages/core/src/modules/orders/admin/archive").restoreOrder;
-
-type MockChain = {
-  __kind?: string;
-  from: ReturnType<typeof vi.fn>;
-  innerJoin: ReturnType<typeof vi.fn>;
-  leftJoin: ReturnType<typeof vi.fn>;
-  where: ReturnType<typeof vi.fn>;
-  orderBy: ReturnType<typeof vi.fn>;
-  select: ReturnType<typeof vi.fn>;
-  set: ReturnType<typeof vi.fn>;
-  values: ReturnType<typeof vi.fn>;
-  returning: ReturnType<typeof vi.fn>;
-  get: ReturnType<typeof vi.fn>;
-  all: ReturnType<typeof vi.fn>;
-  then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) => Promise<void>;
-};
-
-const ORDER_ID = "ord_atomicity";
-const EXISTING_VARIANT_ID = "var_existing";
-const NEW_VARIANT_ID = "var_new";
-
-const successResult = { success: true, results: [] };
-const validationFailure = {
-  success: false,
-  results: [
-    {
-      success: false,
-      variantId: EXISTING_VARIANT_ID,
-      previousStock: 5,
-      newStock: 5,
-      error: "Insufficient stock for variant var_existing. Available: 1, Requested: 2",
-    },
-  ],
-  error: "Insufficient stock for variant var_existing. Available: 1, Requested: 2",
-};
-const releaseFailure = {
-  success: false,
-  results: [
-    {
-      success: false,
-      variantId: EXISTING_VARIANT_ID,
-      previousStock: 5,
-      newStock: 5,
-      error: "release failed",
-    },
-  ],
-  error: "release failed",
-};
-function activeLocationRows() {
-  return [
-    {
-      id: "dhaka",
-      name: "Dhaka",
-      type: "city",
-      parentId: null,
-      isActive: true,
-      deletedAt: null,
-    },
-    {
-      id: "zone1",
-      name: "Mirpur",
-      type: "zone",
-      parentId: "dhaka",
-      isActive: true,
-      deletedAt: null,
-    },
-    {
-      id: "area1",
-      name: "Section 10",
-      type: "area",
-      parentId: "zone1",
-      isActive: true,
-      deletedAt: null,
-    },
-  ];
-}
-
-let updateOrder: UpdateOrder;
-let restoreOrder: RestoreOrder;
-let events: string[];
-
-beforeEach(async () => {
-  vi.resetAllMocks();
-  events = [];
-
-  inventoryMocks.validateStockBatchAvailability.mockImplementation(async () => {
-    events.push("validate");
-    return successResult;
-  });
-  inventoryMocks.reserveStockBatch.mockImplementation(async () => {
-    events.push("reserve");
-    return successResult;
-  });
-  inventoryMocks.applyClaimedInventoryEntryBatch.mockImplementation(async (_db, input) => {
-    events.push(input.operation === "deduct" ? "deduct" : "restore-deducted");
-  });
-  inventoryMocks.releaseReservedStockBatch.mockImplementation(async () => {
-    events.push("release");
-    return successResult;
-  });
-  inventoryMocks.applyInventoryForStatusChange.mockResolvedValue("reserved");
-
-  ({ updateOrder, restoreOrder } = await import("../../../../packages/core/src/modules/orders/admin/archive"));
-});
-
-function createChain(result: unknown): MockChain {
-  const chain = {} as MockChain;
-  chain.from = vi.fn(() => chain);
-  chain.innerJoin = vi.fn(() => chain);
-  chain.leftJoin = vi.fn(() => chain);
-  chain.where = vi.fn(() => chain);
-  chain.orderBy = vi.fn(() => chain);
-  chain.select = vi.fn((callback?: unknown) => {
-    if (typeof callback === "function") {
-      const qbSelect = vi.fn(() => chain);
-      callback({ select: qbSelect });
-    }
-    return chain;
-  });
-  chain.set = vi.fn(() => chain);
-  chain.values = vi.fn(() => chain);
-  chain.returning = vi.fn(() => result);
-  chain.get = vi.fn(async () => result ?? null);
-  chain.all = vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []);
-  chain.then = (resolve, reject) => {
-    const value = Array.isArray(result) ? result : result ? [result] : [];
-    return Promise.resolve(value).then(resolve, reject);
-  };
-  return chain;
-}
-
-function createUpdateOrderDb(options: {
-  existingOrder: ReturnType<typeof seedOrder>;
-  existingItems: ReturnType<typeof seedOrderItem>[];
-  activeRefundAttempt?: Record<string, unknown> | null;
-  legacyPendingRefund?: Record<string, unknown> | null;
-  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
-  orderUpdateResult?: unknown[];
-  itemReplacementError?: Error;
-  locationRows?: ReturnType<typeof activeLocationRows>;
-}) {
-  let selectIndex = 0;
-  const liveSkuRows = [
-    {
-      id: EXISTING_VARIANT_ID,
-      productId: `prod_${EXISTING_VARIANT_ID}`,
-      trackInventory: true,
-      variantDeletedAt: null,
-      productActive: true,
-      productDeletedAt: null,
-    },
-    {
-      id: NEW_VARIANT_ID,
-      productId: `prod_${NEW_VARIANT_ID}`,
-      trackInventory: true,
-      variantDeletedAt: null,
-      productActive: true,
-      productDeletedAt: null,
-    },
-  ];
-  const selectResults = [
-    options.existingOrder,
-    {
-      status: options.existingOrder.status,
-      paymentStatus: options.existingOrder.paymentStatus,
-      paidAmountMinor: options.existingOrder.paidAmountMinor,
-      fulfillmentStatus: options.existingOrder.fulfillmentStatus,
-      shipmentClaimId: options.existingOrder.shipmentClaimId ?? null,
-      shipmentClaimExpiresAt:
-        options.existingOrder.shipmentClaimExpiresAt ?? null,
-      hasTaxSnapshot: 0,
-      hasPaymentHistory: 0,
-      hasShipmentHistory: 0,
-      hasRefundHistory: 0,
-      hasReturnHistory: 0,
-      hasInvoiceHistory: 0,
-    },
-    options.locationRows ?? activeLocationRows(),
-    options.activeRefundAttempt ?? null,
-    options.legacyPendingRefund ?? null,
-    options.activePaymentSessionAttemptRows ?? [],
-    null, // no item-level return history
-    null, // no issued invoice
-    options.existingItems,
-    liveSkuRows,
-    [], // no product media for order-item snapshots
-  ];
-
-  return {
-    select: vi.fn(() => createChain(selectResults[selectIndex++])),
-    update: vi.fn(() => {
-      events.push("order-cas-update");
-      const chain = createChain(options.orderUpdateResult ?? [{ id: ORDER_ID }]);
-      chain.__kind = "order-update";
-      chain.returning = vi.fn(() => chain);
-      return chain;
-    }),
-    insert: vi.fn(() => createChain([{ id: "inserted" }])),
-    delete: vi.fn(() => createChain(undefined)),
-    batch: vi.fn(async (statements: unknown[]) => {
-      events.push("atomic-order-edit-batch");
-      if (options.itemReplacementError) {
-        throw options.itemReplacementError;
-      }
-      return statements.map((statement) =>
-        (statement as MockChain).__kind === "order-update"
-          ? options.orderUpdateResult ?? [{ id: ORDER_ID }]
-          : [],
+  beforeEach(() => {
+    beforeAmendmentBatch = null;
+    ({ sqlite, db } = createSqliteD1Database({
+      beforeBatch() {
+        const before = beforeAmendmentBatch;
+        beforeAmendmentBatch = null;
+        before?.();
+      },
+    }));
+    sqlite.exec(`
+      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+      VALUES
+        ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
+        ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1),
+        ('zone_2', 'South', 'zone', 'city_1', '{}', '{}', 1);
+      INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
+      INSERT OR REPLACE INTO tax_settings
+        (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, display_label, version)
+      VALUES ('default', 1, 0, 0, 'tax_standard', 'Tax', 1);
+      INSERT INTO tax_rates
+        (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, is_active)
+      VALUES ('tax_south', 'tax_standard', 'South tax', 1000, 'zone', 'zone_2', 'South', 1);
+      INSERT INTO products (id, name, slug, price_minor, is_active)
+      VALUES
+        ('product_1', 'Test product', 'test-product', 10000, 1),
+        ('product_2', 'Swap product', 'swap-product', 12500, 1);
+      INSERT INTO product_variants
+        (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory)
+      VALUES
+        ('variant_1', 'product_1', 'AMEND-SKU', 10000, 10, 2, 1, 1, 1),
+        ('variant_2', 'product_2', 'AMEND-SWAP', 12500, 5, 0, 0, 1, 1);
+      INSERT INTO orders (
+        id, customer_name, customer_phone, customer_email, shipping_address,
+        city, zone, city_name, zone_name, currency_code, currency_decimal_places,
+        subtotal_amount_minor, shipping_amount_minor, discount_amount_minor,
+        tax_amount_minor, total_amount_minor, tax_label, prices_include_tax,
+        status, payment_method, payment_status, paid_amount_minor, balance_due_minor,
+        fulfillment_status, inventory_pool, inventory_action, version
+      ) VALUES (
+        'order_1', 'Buyer', '+8801712345678', NULL, '123 Test Street, Dhaka',
+        'city_1', 'zone_1', 'Dhaka', 'North', 'BDT', 2, 20000, 6000, 0, 0, 26000, 'Tax', 0,
+        'confirmed', 'cod', 'unpaid', 0, 26000, 'pending', 'regular', 'reserved', 1
       );
-    }),
-  };
-}
+      INSERT INTO admin_order_create_attempts (
+        id, actor_id, request_key_hash, request_hash, order_id, status, attempts
+      ) VALUES ('create_1', 'admin_1', 'create-key', 'create-hash', 'order_1', 'committed', 1);
+      INSERT INTO cod_tracking (id, order_id, cod_status)
+      VALUES ('cod_1', 'order_1', 'pending');
+      INSERT INTO order_items (
+        id, order_id, product_id, variant_id, quantity, product_name,
+        inventory_tracked, unit_price_minor, line_subtotal_minor,
+        discount_amount_minor, taxable_amount_minor, tax_amount_minor
+      ) VALUES (
+        'item_1', 'order_1', 'product_1', 'variant_1', 2, 'Test product',
+        1, 10000, 20000, 0, 0, 0
+      );
+      INSERT INTO order_tax_snapshots (
+        order_id, currency_code, decimal_places, display_label,
+        prices_include_tax, shipping_taxed, settings_version,
+        calculation_version, destination_snapshot, rate_snapshot
+      ) VALUES (
+        'order_1', 'BDT', 2, 'Tax', 0, 0,
+        1, 'tax-v1', '{"city":"city_1","zone":"zone_1","area":null}', '{}'
+      );
+      INSERT INTO order_item_tax_snapshots (
+        order_item_id, order_id, prices_include_tax, rate_snapshot
+      ) VALUES ('item_1', 'order_1', 0, '[]');
+      INSERT INTO inventory_movements (
+        id, variant_id, order_id, type, quantity, previous_stock, new_stock,
+        ledger_version, pool, reservation_generation, stock_version_before,
+        stock_version_after, stock_delta, previous_reserved_stock,
+        new_reserved_stock, reserved_stock_delta, previous_preorder_stock,
+        new_preorder_stock, preorder_stock_delta
+      ) VALUES (
+        'reservation_1', 'variant_1', 'order_1', 'reserved', 2, 10, 10,
+        2, 'regular', 1, 0, 1, 0, 0, 2, 2, 0, 0, 0
+      );
+    `);
+  });
 
-function createRestoreOrderDb(options: {
-  order: {
-    id: string;
-    archivedAt: number | Date | null;
-    deletedAt: number | Date | null;
-    version: number;
-  };
-  orderUpdateResult?: unknown[];
-}) {
-  const updateSets: unknown[] = [];
+  afterEach(() => sqlite.close());
 
-  const db = {
-    select: vi.fn(() => createChain(options.order)),
-    update: vi.fn(() => {
-      const chain = createChain(options.orderUpdateResult ?? [{ id: ORDER_ID }]);
-      chain.set = vi.fn((value) => {
-        updateSets.push(value);
-        return chain;
+  type AmendmentDraft = PreviewManualOrderAmendmentInput & { requestKey: string };
+
+  function input(overrides: Partial<AmendmentDraft> = {}): AmendmentDraft {
+    return {
+      requestKey: crypto.randomUUID(),
+      expectedVersion: 1,
+      customerName: "Buyer",
+      customerPhone: "+8801712345678",
+      customerEmail: null,
+      shippingAddress: "123 Test Street, Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      area: null,
+      notes: null,
+      items: [{
+        orderItemId: "item_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 2,
+      }],
+      discountAmount: null,
+      shippingCharge: 60,
+      ...overrides,
+    };
+  }
+
+  async function confirmedInput(
+    overrides: Partial<AmendmentDraft> = {},
+  ): Promise<ConfirmManualOrderAmendmentInput> {
+    const draft = input(overrides);
+    const preview = await previewManualOrderAmendment(db, "order_1", draft);
+    return { ...draft, quoteFingerprint: preview.quoteFingerprint };
+  }
+
+  // Compare durable facts, not the removed pre-write/compensation call sequence.
+  function state() {
+    return Object.fromEntries([
+      "orders", "order_items", "customers", "customer_history", "product_variants",
+      "inventory_movements", "order_amendments", "order_tax_snapshots", "order_item_tax_snapshots",
+    ].map((table) => [table, sqlite.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
+  }
+
+  async function unchangedOnFailure(data: ConfirmManualOrderAmendmentInput, message: string | RegExp, name = "ConflictError") {
+    const before = state();
+    await expect(confirmManualOrderAmendment(db, "order_1", data, "admin_1")).rejects.toMatchObject({
+      name,
+      code: name === "ValidationError" ? "VALIDATION_ERROR" : "CONFLICT",
+      message: typeof message === "string" ? message : expect.stringMatching(message),
+    });
+    expect(state()).toEqual(before);
+  }
+
+  function quantity(value: number): Partial<AmendmentDraft> {
+    return { items: [{ orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: value }] };
+  }
+
+  it("rejects invalid delivery-location hierarchy before inventory or order writes", async () => {
+    const data = await confirmedInput(quantity(3));
+    sqlite.exec("INSERT INTO delivery_locations (id, name, type, external_ids, metadata, is_active) VALUES ('city_2', 'Other city', 'city', '{}', '{}', 1)");
+    await unchangedOnFailure({ ...data, city: "city_2" }, "Selected thana is no longer available for the chosen city.", "ValidationError");
+  });
+
+  it("rejects active shipment claims before inventory or order writes", async () => {
+    const data = await confirmedInput(quantity(3));
+    sqlite.exec("UPDATE orders SET shipment_claim_id = 'claim_active'");
+    await unchangedOnFailure(data, "A courier booking is in progress. Try again in a minute.");
+  });
+
+  it("rejects active refund attempts before inventory or order writes", async () => {
+    const data = await confirmedInput(quantity(3));
+    sqlite.exec(`
+      INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
+      VALUES ('source', 'order_1', 100, 'BDT', 'cod', 'full', 'completed'),
+             ('refund', 'order_1', -100, 'BDT', 'cod', 'refund', 'pending');
+      INSERT INTO refund_attempts (id, attempt_key, refund_group_id, order_id, source_payment_id,
+        refund_payment_id, gateway, amount_minor, currency, reason, request_hash, provider_idempotency_key, refund_reference)
+      VALUES ('attempt', 'key', 'group', 'order_1', 'source', 'refund', 'cod', 100, 'BDT', 'Test', 'hash', 'provider', 'reference');
+    `);
+    await unchangedOnFailure(data, "Items can't be changed after payment. Refund or create a new order instead.");
+  });
+
+  it("fails reserved quantity increases before order/customer/item writes when stock is insufficient", async () => {
+    const data = await confirmedInput(quantity(99));
+    await unchangedOnFailure(data, /Insufficient stock/, "ValidationError");
+  });
+
+  it.each([3, 1])("rolls back reserved quantity %s when the order CAS races", async (value) => {
+    const data = await confirmedInput(quantity(value));
+    let before: ReturnType<typeof state>;
+    beforeAmendmentBatch = () => {
+      sqlite.exec("UPDATE orders SET version = version + 1");
+      before = state();
+    };
+    await expect(confirmManualOrderAmendment(db, "order_1", data, "admin_1"))
+      .rejects.toThrow("This order changed while the amendment was being confirmed. Reload and review it.");
+    expect(state()).toEqual(before!);
+  });
+
+  it.each(["shipped", "cancelled"])("blocks inventory rewrites after an order reaches %s", async (status) => {
+    const data = await confirmedInput(quantity(3));
+    sqlite.prepare("UPDATE orders SET status = ?, inventory_action = ?").run(status, status === "shipped" ? "deducted" : "restored");
+    await unchangedOnFailure(data, status === "shipped"
+      ? "This order has been sent, so it can't be changed."
+      : "This order is closed, so it can't be changed.");
+  });
+
+  it("fails reserved quantity decreases before item replacement when the reservation cannot be released", async () => {
+    const data = await confirmedInput(quantity(1));
+    sqlite.exec("UPDATE product_variants SET reserved_stock = 0 WHERE id = 'variant_1'");
+    const before = state();
+    await expect(confirmManualOrderAmendment(db, "order_1", data, "admin_1")).rejects.toMatchObject({
+      name: "InventoryLedgerDiscontinuityError", message: expect.stringMatching(/reservation|reserved/i),
+    });
+    expect(state()).toEqual(before);
+  });
+
+  it("cannot change lifecycle status through the amendment request", async () => {
+    const data = await confirmedInput(quantity(3));
+    const parsed = confirmManualOrderAmendmentSchema.parse({ ...data, status: "cancelled" });
+    expect(parsed).not.toHaveProperty("status");
+    await confirmManualOrderAmendment(db, "order_1", parsed, "admin_1");
+    expect(sqlite.prepare("SELECT status FROM orders WHERE id = 'order_1'").get()).toEqual({ status: "confirmed" });
+  });
+
+  it.each([3, 1])("rolls back inventory and order CAS when item replacement fails for quantity %s", async (value) => {
+    const data = await confirmedInput(quantity(value));
+    sqlite.exec(`CREATE TRIGGER fail_item_edit BEFORE UPDATE ON order_items BEGIN SELECT RAISE(ABORT, 'item batch failed'); END`);
+    const before = state();
+    await expect(confirmManualOrderAmendment(db, "order_1", data, "admin_1")).rejects.toThrow(/item batch failed/);
+    expect(state()).toEqual(before);
+  });
+
+  it("does not use amendments as a shipped-order inventory reconciliation command", async () => {
+    const data = await confirmedInput();
+    sqlite.exec("UPDATE orders SET status = 'shipped'");
+    await unchangedOnFailure(data, "This order has been sent, so it can't be changed.");
+  });
+
+  describe("restoreOrder archive safety", () => {
+    beforeEach(() => sqlite.exec("UPDATE orders SET archived_at = 1800000"));
+
+    it("restores only the archive marker and revision without rewriting commerce facts", async () => {
+      const before = state();
+      await restoreOrder(db, "order_1", 1);
+      const after = state();
+      expect(after.orders[0]).toEqual({ ...before.orders[0], archived_at: null, version: 2, updated_at: expect.any(Number) });
+      expect({ ...after, orders: [] }).toEqual({ ...before, orders: [] });
+    });
+
+    it.each([
+      ["legacy soft-deleted order", "UPDATE orders SET deleted_at = 1700000", 1, "This legacy-deleted order cannot be restored from the archive."],
+      ["unarchived order", "UPDATE orders SET archived_at = NULL", 1, "Order is not archived"],
+      ["stale version", "UPDATE orders SET version = 4", 3, "Order was modified by another request. Reload and try again."],
+    ] as const)("rejects a %s without touching inventory", async (_label, sql, version, message) => {
+      sqlite.exec(sql);
+      const before = state();
+      await expect(restoreOrder(db, "order_1", version)).rejects.toThrow(message);
+      expect(state()).toEqual(before);
+    });
+
+    it("reports a CAS race without inventory compensation side effects", async () => {
+      const update = db.update.bind(db);
+      let before: ReturnType<typeof state>;
+      vi.spyOn(db, "update").mockImplementationOnce((...args) => {
+        sqlite.exec("UPDATE orders SET version = version + 1");
+        before = state();
+        return update(...args);
       });
-      return chain;
-    }),
-  };
-
-  return { db, updateSets };
-}
-
-type SeedOrderWithVersion = ReturnType<typeof seedOrder> & { version: number };
-
-function existingOrder(overrides: Partial<SeedOrderWithVersion> = {}): SeedOrderWithVersion {
-  const { version = 1, ...seedOverrides } = overrides;
-  return {
-    ...seedOrder({
-    id: ORDER_ID,
-    customerId: "cust_atomicity",
-    customerName: "Atomic Customer",
-    customerPhone: "+8801700000000",
-    status: "pending",
-    inventoryAction: "reserved",
-    inventoryPool: "regular",
-      ...seedOverrides,
-    }),
-    version,
-  };
-}
-
-function archivedOrder(overrides: Partial<{
-  id: string;
-  archivedAt: number | Date | null;
-  deletedAt: number | Date | null;
-  version: number;
-}> = {}) {
-  return {
-    id: ORDER_ID,
-    archivedAt: 1_800_000,
-    deletedAt: null,
-    version: 1,
-    ...overrides,
-  };
-}
-
-function item(quantity: number, variantId = EXISTING_VARIANT_ID) {
-  // One shape serves as the stored order row (minor units) and the editor input (decimal price).
-  return {
-    ...seedOrderItem({
-      id: `item_${variantId}_${quantity}`,
-      orderId: ORDER_ID,
-      productId: `prod_${variantId}`,
-      variantId,
-      quantity,
-      unitPriceMinor: 10_000,
-    }),
-    price: 100,
-  };
-}
-
-function updateData(overrides: Partial<Parameters<UpdateOrder>[2]> = {}): Parameters<UpdateOrder>[2] {
-  return {
-    expectedVersion: 1,
-    customerName: "Atomic Customer",
-    customerPhone: "+8801700000000",
-    customerEmail: null,
-    shippingAddress: "123 Test Street",
-    city: "dhaka",
-    zone: "zone1",
-    area: null,
-    notes: null,
-    items: [item(3)],
-    shippingCharge: 60,
-    discountAmount: 0,
-    status: "pending",
-    ...overrides,
-  };
-}
-
-describe("updateOrder inventory atomicity", () => {
-  it("rejects invalid delivery-location hierarchy before order, refund, or inventory reads", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved" }),
-      existingItems: [item(1)],
-      locationRows: [
-        {
-          id: "dhaka",
-          name: "Dhaka",
-          type: "city",
-          parentId: null,
-          isActive: true,
-          deletedAt: null,
-        },
-        {
-          id: "zone1",
-          name: "Mirpur",
-          type: "zone",
-          parentId: "other_city",
-          isActive: true,
-          deletedAt: null,
-        },
-      ],
+      await expect(restoreOrder(db, "order_1", 1))
+        .rejects.toThrow("Order was modified by another request. Reload and try again.");
+      expect(state()).toEqual(before!);
     });
-
-    await expect(updateOrder(db as never, ORDER_ID, updateData()))
-      .rejects.toMatchObject({
-        name: "ValidationError",
-        code: "VALIDATION_ERROR",
-        message: "Selected zone is no longer available for the chosen city.",
-      });
-
-    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("rejects active shipment claims before inventory pre-writes", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: {
-        ...existingOrder({ inventoryAction: "reserved" }),
-        shipmentClaimId: "shp_active",
-        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
-      } as ReturnType<typeof seedOrder>,
-      existingItems: [item(1)],
-    });
-
-    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "Fulfillment or shipment evidence already exists. Use the shipment, return, or replacement-order workflows instead.",
-    });
-
-    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("rejects active refund attempts before inventory pre-writes", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved" }),
-      existingItems: [item(1)],
-      activeRefundAttempt: { id: "rfa_active", orderId: ORDER_ID, status: "provider_unknown" },
-    });
-
-    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "Order has an active refund operation. Complete or reconcile the refund before changing this order.",
-    });
-
-    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("fails reserved quantity increases before order/customer/item writes when stock validation fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved" }),
-      existingItems: [item(1)],
-    });
-    inventoryMocks.validateStockBatchAvailability.mockImplementation(async () => {
-      events.push("validate");
-      return validationFailure;
-    });
-
-    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
-      name: "ValidationError",
-      code: "VALIDATION_ERROR",
-      message: validationFailure.error,
-    });
-
-    expect(inventoryMocks.validateStockBatchAvailability).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-    );
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(events).toEqual(["validate"]);
-  });
-
-  it("compensates an acquired extra reservation when the reserved order CAS update fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved", version: 7 }),
-      existingItems: [item(1)],
-      orderUpdateResult: [],
-    });
-
-    await expect(updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 7 }))).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "Order was modified by another request. Please reload and try again.",
-    });
-
-    const positiveEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v7:reserve-positive" },
-    );
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      positiveEntries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v7:compensate-acquired" },
-    );
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["validate", "reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
-  });
-
-  it.each([
-    { status: "shipped", inventoryAction: "deducted", version: 3 },
-    { status: "cancelled", inventoryAction: "restored", version: 4 },
-  ])("blocks full-editor inventory rewrites after an order reaches $status", async ({ status, inventoryAction, version }) => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ status, inventoryAction, version }),
-      existingItems: [item(1)],
-    });
-
-    await expect(
-      updateOrder(
-        db as never,
-        ORDER_ID,
-        updateData({ expectedVersion: version, status, items: [item(4)] }),
-      ),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "The full editor is available only before shipment, cancellation, completion, return, or refund. Use the dedicated order actions instead.",
-    });
-
-    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("fails reserved quantity decreases before item replacement when reservation release fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved" }),
-      existingItems: [item(3)],
-    });
-    inventoryMocks.releaseReservedStockBatch.mockImplementation(async () => {
-      events.push("release");
-      return releaseFailure;
-    });
-
-    await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
-    ).rejects.toMatchObject({
-      name: "ValidationError",
-      code: "VALIDATION_ERROR",
-      message: releaseFailure.error,
-    });
-
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v1:release-negative" },
-    );
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["release"]);
-  });
-
-  it("compensates released reserved deltas when the order CAS fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved", version: 11 }),
-      existingItems: [item(3)],
-      orderUpdateResult: [],
-    });
-
-    await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 11, items: [item(1)] })),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-    });
-
-    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      releasedEntries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v11:release-negative" },
-    );
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v11:compensate-released:reserve:regular" },
-    );
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
-  });
-
-  it("rejects lifecycle changes in the full editor before inventory writes", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved", version: 13 }),
-      existingItems: [item(2)],
-    });
-
-    await expect(
-      updateOrder(
-        db as never,
-        ORDER_ID,
-        updateData({ expectedVersion: 13, status: "cancelled", items: [] }),
-      ),
-    ).rejects.toMatchObject({
-      name: "ValidationError",
-      code: "VALIDATION_ERROR",
-      message: "Use the order status action for operational progress. The full editor only changes customer, item, shipping-charge, and discount details.",
-    });
-
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("compensates inventory if atomic item replacement fails after the order CAS", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved", version: 14 }),
-      existingItems: [item(3)],
-      itemReplacementError: new Error("item batch failed"),
-    });
-
-    await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 14, items: [item(1)] })),
-    ).rejects.toThrow("item batch failed");
-
-    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      releasedEntries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v14:release-negative" },
-    );
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v14:compensate-released:reserve:regular" },
-    );
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
-  });
-
-  it("does not use the full editor as a shipped-order inventory reconciliation command", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({
-        status: "shipped",
-        inventoryAction: "reserved",
-        version: 8,
-      }),
-      existingItems: [item(2)],
-    });
-
-    await expect(
-      updateOrder(
-        db as never,
-        ORDER_ID,
-        updateData({ expectedVersion: 8, status: "shipped", items: [item(2)] }),
-      ),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "The full editor is available only before shipment, cancellation, completion, return, or refund. Use the dedicated order actions instead.",
-    });
-
-    expect(inventoryMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-  });
-});
-
-describe("restoreOrder archive safety", () => {
-  it("restores only the archive marker without rewriting order or inventory facts", async () => {
-    const { db, updateSets } = createRestoreOrderDb({
-      order: archivedOrder(),
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID, 1)).resolves.toBeUndefined();
-
-    expect(updateSets).toHaveLength(1);
-    expect(updateSets[0]).toMatchObject({ archivedAt: null });
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-  });
-
-  it("rejects legacy soft-deleted orders instead of guessing how to restore evidence", async () => {
-    const { db } = createRestoreOrderDb({
-      order: archivedOrder({ deletedAt: 1_700_000 }),
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID, 1)).rejects.toMatchObject({
-      name: "ValidationError",
-      code: "VALIDATION_ERROR",
-      message: "This legacy-deleted order cannot be restored from the archive.",
-    });
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects a live order that is not archived", async () => {
-    const { db } = createRestoreOrderDb({
-      order: archivedOrder({ archivedAt: null }),
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID, 1)).rejects.toMatchObject({
-      name: "ValidationError",
-      code: "VALIDATION_ERROR",
-      message: "Order is not archived",
-    });
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects a stale restore version before the archive marker changes", async () => {
-    const { db } = createRestoreOrderDb({
-      order: archivedOrder({ version: 4 }),
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID, 3)).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-      message: "Order was modified by another request. Reload and try again.",
-    });
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("reports a CAS race without any inventory compensation side effects", async () => {
-    const { db } = createRestoreOrderDb({
-      order: archivedOrder({ version: 5 }),
-      orderUpdateResult: [],
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID, 5)).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-    });
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
   });
 });

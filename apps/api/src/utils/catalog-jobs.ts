@@ -4,7 +4,7 @@
 //       ranking statement each (core catalog/recommendation-refresh.ts).
 //   catalog.projections.rebuild      { afterProductId }   one keyset chunk of
 //       the buyer-state/facet rebuild; the consumer enqueues the next chunk
-//       and bumps the cache generation after the last.
+//       with dependency changes committed by the database triggers.
 //
 // Producers never fail the write that triggered them: the enqueue is logged
 // and dropped, and the nightly run (scheduled/catalog-projections.ts) heals.
@@ -15,7 +15,7 @@ import {
   recommendationRefreshTargets,
   refreshProductRecommendations,
 } from "@scalius/core/modules/catalog";
-import { bumpCacheGeneration, getOptionalExecutionContext, type WaitUntilExecutionContext } from "./cache-generation";
+import { getOptionalExecutionContext, type WaitUntilExecutionContext } from "./execution-context";
 
 export type CatalogRecommendationsRefreshQueueMessage = {
   type: "catalog.recommendations.refresh";
@@ -97,7 +97,6 @@ export async function processCatalogQueueMessage(
   payload: CatalogQueueMessage,
   db: Database,
   env: Env,
-  executionCtx?: WaitUntilExecutionContext,
 ): Promise<void> {
   if (payload.type === "catalog.recommendations.refresh") {
     const productIds = Array.isArray(payload.productIds)
@@ -115,6 +114,5 @@ export async function processCatalogQueueMessage(
     await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, result.nextAfterProductId);
     return;
   }
-  // The rebuild heals drift in buyer-visible rows: one bump when it ends.
-  await bumpCacheGeneration({ env, executionCtx });
+  // The rebuild's atomic batches advance `store` only when they repair drift.
 }

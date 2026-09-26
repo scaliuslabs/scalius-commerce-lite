@@ -10,7 +10,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { formatNumber, useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
 import type { ScannedProduct } from "./ScannerApp";
@@ -248,11 +248,13 @@ export function ManualSheet({
             </div>
           )}
 
-          <NativeSelect value={reason} onValueChange={(value) => setReason(value as AdjustmentReason)} aria-label={t("reason")}>
-            {REASONS.map((value) => (
-              <option key={value} value={value}>{t(`reason_${value}`)}</option>
-            ))}
-          </NativeSelect>
+          <SearchableSelect
+            triggerClassName="w-full"
+            value={reason}
+            onValueChange={(value) => setReason(value as AdjustmentReason)}
+            ariaLabel={t("reason")}
+            options={REASONS.map((value) => ({ value, label: t(`reason_${value}`) }))}
+          />
 
           {isLargeAdjustment ? (
             <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">

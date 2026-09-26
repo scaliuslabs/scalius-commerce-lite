@@ -18,7 +18,6 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { NativeSelect } from "~/components/ui/native-select";
 import { EMPTY_LOCATION, LocationPicker, type LocationValue } from "~/components/admin/location/LocationPicker";
 import { deliveryLocationLoader } from "~/lib/api-query-options/delivery";
 import { Switch } from "~/components/ui/switch";
@@ -516,14 +515,14 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
       </SettingsField>
       <div className="grid gap-4 sm:grid-cols-2">
         <SettingsField id="tax-rate-where" label={t("where")}>
-          <NativeSelect
+          <SearchableSelect
             id="tax-rate-where"
             value={draft.jurisdictionType}
             onValueChange={(value) =>
               setDraft({ ...draft, jurisdictionType: value as TaxJurisdictionType, jurisdictionId: "", jurisdictionLabel: "" })}
-          >
-            {(["all", "city", "zone", "area"] as const).map((type) => <option key={type} value={type}>{t(type)}</option>)}
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={(["all", "city", "zone", "area"] as const).map((type) => ({ value: type, label: t(type) }))}
+          />
         </SettingsField>
         {draft.jurisdictionType !== "all" ? (
           <SettingsField id="tax-rate-place" label={t(draft.jurisdictionType)}>
@@ -878,9 +877,9 @@ export function TaxOverridesCard() {
       }
     >
       <div className="flex flex-col gap-2 sm:flex-row">
-        <NativeSelect
-          className="sm:w-40"
-          aria-label={t("show")}
+        <SearchableSelect
+          triggerClassName="sm:w-40"
+          ariaLabel={t("show")}
           value={kind}
           onValueChange={(value) => {
             setKind(value as TaxClassificationKind);
@@ -888,10 +887,8 @@ export function TaxOverridesCard() {
             setSearch("");
             setPage(1);
           }}
-        >
-          <option value="product">{t("products")}</option>
-          <option value="variant">{t("variants")}</option>
-        </NativeSelect>
+          options={[{ value: "product", label: t("products") }, { value: "variant", label: t("variants") }]}
+        />
         <form
           method="get"
           role="search"

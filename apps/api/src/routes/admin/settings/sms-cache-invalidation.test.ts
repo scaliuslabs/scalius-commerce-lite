@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getSmsSettings: vi.fn(),
   saveSmsSettings: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/integrations/sms", () => ({
@@ -19,14 +19,9 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration:
-    mocks.bumpCacheGeneration,
-}));
-
 import { smsSettingsRoutes } from "./sms";
 
-describe("SMS settings cache invalidation", () => {
+describe("SMS settings write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -73,7 +68,7 @@ describe("SMS settings cache invalidation", () => {
     expect(body.data.revision).toBe(3);
   });
 
-  it("invalidates public checkout readiness after a provider save", async () => {
+  it("returns success after a provider save", async () => {
     const env = {
       CACHE: { id: "api-cache-kv" },
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
@@ -98,7 +93,6 @@ describe("SMS settings cache invalidation", () => {
       revision: 3,
     });
     mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.use("*", async (c, next) => {
       c.set("db", db as never);
@@ -130,7 +124,6 @@ describe("SMS settings cache invalidation", () => {
       env,
     );
     expect(withoutRevision.status).toBe(400);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 });

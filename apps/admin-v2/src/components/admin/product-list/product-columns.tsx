@@ -2,7 +2,7 @@ import { Copy, CopyPlus, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
-import { Badge } from "~/components/ui/badge";
+import { ProductStatusBadge } from "./ProductStatusBadge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
@@ -50,14 +50,6 @@ export function ProductThumb({ src }: { src: string | null }) {
         <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       )}
     </div>
-  );
-}
-
-export function ProductStatusBadge({ isActive }: { isActive: boolean }) {
-  return (
-    <Badge variant={isActive ? "success" : "attention"} className="shrink-0">
-      {t(isActive ? "statusActive" : "statusDraft")}
-    </Badge>
   );
 }
 

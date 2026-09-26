@@ -17,12 +17,11 @@ import {
   productBuyerState,
   products,
 } from "@scalius/database/schema";
-import { eq, isNull, isNotNull, inArray, and, or, sql } from "drizzle-orm";
+import { eq, isNull, inArray, and, or, sql } from "drizzle-orm";
 import {
   pickProductPageCopy,
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
-import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
@@ -31,7 +30,8 @@ import {
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
 import { planCollectionProducts } from "../collections/collections.service";
 import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
-import { planHomeMedia } from "./homepage-sections";
+import { planHomeBrands } from "../catalog/home-brands";
+import { planHomeMedia, planHomePromotions } from "./homepage-sections";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import {
   businessDocument,
@@ -70,6 +70,7 @@ import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow 
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 import { categoryNavigationFromRows, selectCategoryNavigationRows, trimCategoryNavigation } from "../navigation/navigation.categories";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { deps } from "../../cache-deps";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
@@ -102,18 +103,42 @@ function toOptionalString(value: unknown): string | undefined {
   return String(value);
 }
 
-function normalizeSocialLink(value: unknown): SocialLink {
+/**
+ * A stable id for a stored social link saved without one: FNV-1a over its
+ * position, platform and URL. Public reads must render byte-identical output
+ * for identical data (the cache validator and audit compare bodies), so an id
+ * is never minted per render.
+ */
+function fallbackSocialLinkId(index: number, platform: string | undefined, url: string): string {
+  let hash = 0x811c9dc5;
+  const input = `${index}\u0000${platform ?? ""}\u0000${url}`;
+  for (let position = 0; position < input.length; position += 1) {
+    hash ^= input.charCodeAt(position);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `social_${index}_${(hash >>> 0).toString(36)}`;
+}
+
+function normalizeSocialLink(value: unknown, index: number): SocialLink {
   const link = asRecord(value);
   const platform = toOptionalString(link.platform);
+  const url = toOptionalString(link.url) ?? "";
   return {
-    id: toOptionalString(link.id) ?? nanoid(),
+    id: toOptionalString(link.id) ?? fallbackSocialLinkId(index, platform, url),
     label: toOptionalString(link.label) ?? platform ?? "",
-    url: toOptionalString(link.url) ?? "",
+    url,
     iconUrl: toOptionalString(link.iconUrl) ?? toOptionalString(link.icon),
   };
 }
 
 // ── Homepage data ─────────────────────────────────────────────────────────────
+
+interface HeroRenditionRow {
+  id: string;
+  objectKey: string;
+  variantWidth: number | null;
+  status: string;
+}
 
 /** D1 binds at most 100 parameters per query; hero slide sets are far smaller. */
 const HERO_RENDITION_LOOKUP_LIMIT = 90;
@@ -137,17 +162,18 @@ function planHeroRenditions(db: Database, slides: HeroSlide[]) {
   }
   const keys = [...new Set(keyByUrl.values())].slice(0, HERO_RENDITION_LOOKUP_LIMIT);
   const statement = keys.length === 0 ? null : db
-    .select({ objectKey: media.objectKey, variantWidth: media.variantWidth })
+    .select({ id: media.id, objectKey: media.objectKey, variantWidth: media.variantWidth, status: media.status })
     .from(media)
-    .where(and(
-      inArray(media.objectKey, keys),
-      isNotNull(media.variantWidth),
-      inArray(media.status, ["ready", "trashed"]),
-    ));
+    .where(inArray(media.objectKey, keys));
   return {
     statement,
-    apply(rows: Array<{ objectKey: string; variantWidth: number | null }>): HeroSlide[] {
-      const widthByKey = new Map(rows.map((row) => [row.objectKey, row.variantWidth]));
+    apply(rows: HeroRenditionRow[]): HeroSlide[] {
+      // Every row found by key, published rendition or not: its m:<id> advances
+      // when a rendition is written or its status changes.
+      deps.mediaItems(rows.map((row) => row.id));
+      const widthByKey = new Map(rows
+        .filter((row) => row.variantWidth !== null && (row.status === "ready" || row.status === "trashed"))
+        .map((row) => [row.objectKey, row.variantWidth]));
       return slides.map((slide) => {
         const key = keyByUrl.get(slide.url);
         const width = key ? widthByKey.get(key) : null;
@@ -181,6 +207,35 @@ export interface HomepageProductList extends HomeProductList {
 type BatchItem = Parameters<typeof safeBatch>[1][number];
 
 /**
+ * A landing homepage's product, only while it is public (the buyer state
+ * projection's single-sourced rule); otherwise null, and the homepage is the
+ * catalog. Planned only when the homepage document asks for a landing
+ * product, so a catalog homepage reads no product row for it.
+ */
+function planLandingProduct(
+  db: Database,
+  homepage: { homeMode?: string; landingProductId?: string | null } | null,
+) {
+  const productId = homepage?.homeMode === "landing" ? homepage.landingProductId?.trim() || null : null;
+  deps.product(productId);
+  const statement = productId === null ? null : db
+    .select({ id: products.id, slug: products.slug })
+    .from(products)
+    .innerJoin(productBuyerState, and(
+      eq(productBuyerState.productId, products.id),
+      eq(productBuyerState.isPublic, true),
+    ))
+    .where(eq(products.id, productId))
+    .limit(1);
+  return {
+    statement,
+    resolve(rows: unknown): { id: string; slug: string } | null {
+      return (rows as Array<{ id: string; slug: string }>)[0] ?? null;
+    },
+  };
+}
+
+/**
  * Fetch and shape all homepage data in two batched D1 round trips.
  *
  * 1. Settings documents, hero banners, active collections, the category
@@ -188,7 +243,8 @@ type BatchItem = Parameters<typeof safeBatch>[1][number];
  *    theme (whose sections say which product lists and images to read).
  * 2. One batch with every product list (homepage collections, section
  *    sources), each with the card media of exactly its rows, the section
- *    images and the hero rendition lookup.
+ *    images, the brand wall's brands, the deal countdowns' promotions and
+ *    the hero rendition lookup.
  *
  * `requests` (a preview's draft sections) replaces the published theme's;
  * with `sectionsOnly` the second batch holds the section reads alone.
@@ -265,28 +321,10 @@ export async function getHomepageData(db: Database, options: {
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
-
-    // 5. A landing homepage's product, only while it is public (the buyer
-    // state projection's single-sourced rule); otherwise no row, and the
-    // homepage is the catalog.
-    db
-      .select({ id: products.id, slug: products.slug })
-      .from(products)
-      .innerJoin(productBuyerState, and(
-        eq(productBuyerState.productId, products.id),
-        eq(productBuyerState.isPublic, true),
-      ))
-      .where(sql`${products.id} = (
-        SELECT CASE
-          WHEN json_valid(${settings.value}) AND json_extract(${settings.value}, '$.homeMode') = 'landing'
-            THEN json_extract(${settings.value}, '$.landingProductId')
-        END
-        FROM ${settings}
-        WHERE ${settings.category} = ${homepageDocument.key}
-          AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
-      )`)
-      .limit(1),
   ]);
+  deps.hero();
+  deps.anyCollection();
+  deps.theme();
 
   const [
     documentRows,
@@ -294,10 +332,8 @@ export async function getHomepageData(db: Database, options: {
     collectionResults,
     categoryResults,
     themeResults,
-    landingResults,
   ] =
     batchResults;
-  const landingProduct = (landingResults as Array<{ id: string; slug: string }>)[0] ?? null;
 
   const rows = documentRows as SettingsDocumentRow[];
   const [seo, homepage] = await Promise.all([
@@ -311,6 +347,9 @@ export async function getHomepageData(db: Database, options: {
     homepageMetaDescription: seo.value.homepageMetaDescription.trim() || null,
   };
   const homepageConfig = homepage.value;
+  // The rail shows the saved ids that are public categories now; any of them
+  // may be published, renamed or trashed later.
+  deps.categories(homepageConfig.categoryRail.categoryIds);
   // An unreadable theme renders the default whole (as the layout read does).
   const requests = options.requests ?? homeSectionRequests(
     (parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
@@ -364,19 +403,31 @@ export async function getHomepageData(db: Database, options: {
   ]);
   const listPlan = planHomeProductLists(db, requests.lists.filter((list) => list.source.kind !== "collection"));
   const mediaPlan = planHomeMedia(db, requests.mediaIds);
+  const brandPlan = planHomeBrands(db, requests.brandLimit);
+  const promotionPlan = planHomePromotions(db, requests.promotionIds);
+  const landingPlan = planLandingProduct(db, options.sectionsOnly ? null : homepageConfig);
   const statements: BatchItem[] = [
     ...collectionPlan.statements,
     ...listPlan.statements,
     ...mediaPlan.statements,
+    ...brandPlan.statements,
+    ...promotionPlan.statements,
     ...(heroRenditions.statement ? [heroRenditions.statement] : []),
+    ...(landingPlan.statement ? [landingPlan.statement] : []),
   ];
   const results = statements.length > 0 ? await safeBatch(db, statements) : [];
   const listOffset = collectionPlan.statements.length;
   const mediaOffset = listOffset + listPlan.statements.length;
+  const brandOffset = mediaOffset + mediaPlan.statements.length;
+  const promotionOffset = brandOffset + brandPlan.statements.length;
+  const heroOffset = promotionOffset + promotionPlan.statements.length;
   const resolvedMap = collectionPlan.resolve(results);
   const productLists = listPlan.resolve(results, listOffset);
   const heroSlides = heroRenditions.apply(heroRenditions.statement
-    ? results[mediaOffset + mediaPlan.statements.length] as Array<{ objectKey: string; variantWidth: number | null }>
+    ? results[heroOffset] as HeroRenditionRow[]
+    : []);
+  const landingProduct = landingPlan.resolve(landingPlan.statement
+    ? results[heroOffset + (heroRenditions.statement ? 1 : 0)]
     : []);
   const desktopSlideCount = desktopHero?.images.length ?? 0;
   const hero = {
@@ -461,6 +512,8 @@ export async function getHomepageData(db: Database, options: {
     sections: {
       lists,
       media: mediaPlan.resolve(results, mediaOffset),
+      brands: brandPlan.resolve(results, brandOffset),
+      promotions: promotionPlan.resolve(results, promotionOffset),
     },
   };
 }
@@ -540,6 +593,9 @@ export async function getLayoutData(
     selectCategoryNavigationRows(db),
   ]);
 
+  deps.analytics();
+  deps.theme();
+  deps.checkoutLanguages();
   const [
     analyticsResults,
     documentRows,

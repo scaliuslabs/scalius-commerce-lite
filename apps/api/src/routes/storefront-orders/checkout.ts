@@ -34,7 +34,7 @@ import {
     type StorefrontCheckoutAuthoritySnapshot,
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
-import { bumpCacheGeneration, getOptionalExecutionContext } from "../../utils/cache-generation";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
 import { AppError, ValidationError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
@@ -545,14 +545,13 @@ app.openapi(createOrderRoute, async (c) => {
       message: "Order created",
     };
 
-    let availabilityTransitionVariantIds: string[];
     try {
-      ({ availabilityTransitionVariantIds } = await commitStorefrontOrderPayload(
+      await commitStorefrontOrderPayload(
         db,
         result.commitPayload,
         { attempt: checkoutAttempt, response: responsePayload },
         checkoutReads.commitReads,
-      ));
+      );
     } catch (commitError) {
       const recoveredAttempt = await resolveExistingCheckoutAttempt<typeof responsePayload>(
         db,
@@ -604,7 +603,6 @@ app.openapi(createOrderRoute, async (c) => {
     );
 
     const postCommit = Promise.all([
-      availabilityTransitionVariantIds.length > 0 ? bumpCacheGeneration(c) : null,
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
       // An order fully paid at commit (e.g. covered by gift cards) is settled now.
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID

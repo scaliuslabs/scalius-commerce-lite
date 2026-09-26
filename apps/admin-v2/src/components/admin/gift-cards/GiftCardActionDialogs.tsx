@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import { translate, useMessages } from "~/i18n";
@@ -153,7 +153,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <GiftCardField id="gift-card-adjust-direction" label={t("direction")}>
-          <NativeSelect
+          <SearchableSelect
             id="gift-card-adjust-direction"
             value={direction}
             disabled={mutation.isPending}
@@ -161,10 +161,9 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
               setDirection(value === "decrease" ? "decrease" : "increase");
               setErrors((current) => ({ ...current, amount: undefined }));
             }}
-          >
-            <option value="increase">{t("increase")}</option>
-            <option value="decrease">{t("decrease")}</option>
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[{ value: "increase", label: t("increase") }, { value: "decrease", label: t("decrease") }]}
+          />
         </GiftCardField>
         <GiftCardField id="gift-card-adjust-amount" label={t("amount")} error={shown("amount")}>
           <MoneyInput

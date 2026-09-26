@@ -195,12 +195,17 @@ describe("reviews screens", () => {
     const submit = [...document.querySelectorAll('[data-slot="dialog-footer"] button')].find((item) => item.textContent === en.reject) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
-    const reason = document.querySelector('[data-slot="dialog-content"] select') as HTMLSelectElement;
-    expect([...reason.options].slice(1).map((option) => option.value)).toEqual(["spam", "abusive", "personal_info", "off_topic", "not_about_product"]);
-    await act(async () => {
-      reason.value = "off_topic";
-      reason.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const reason = document.querySelector('[data-slot="dialog-content"] button[role="combobox"]') as HTMLButtonElement;
+    await act(async () => reason.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(sdk.moderate).not.toHaveBeenCalled();
+    expect(reason.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(reason.getAttribute("aria-describedby")!)?.textContent).toBe(en.reasonPlaceholder);
+    expect(document.activeElement).toBe(reason);
+    await act(async () => reason.click());
+    const options = [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')];
+    expect(options.map((option) => option.textContent?.trim())).toEqual([en["reason.spam"], en["reason.abusive"], en["reason.personal_info"], en["reason.off_topic"], en["reason.not_about_product"]]);
+    await act(async () => options.find((option) => option.textContent?.trim() === en["reason.off_topic"])!.click());
+    expect(reason.getAttribute("aria-invalid")).toBe("false");
     expect(submit.disabled).toBe(false);
     await act(async () => submit.click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));

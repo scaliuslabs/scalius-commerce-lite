@@ -16,8 +16,11 @@ describe("database client composition", () => {
     const secondDb = getDb({ DB: second });
 
     expect(firstDb).not.toBe(secondDb);
-    expect((firstDb as unknown as { $client: D1Database }).$client).toBe(first);
-    expect((secondDb as unknown as { $client: D1Database }).$client).toBe(second);
+    // The client is an observing wrapper; each routes to its own binding.
+    (firstDb as unknown as { $client: D1Database }).$client.prepare("SELECT 1");
+    (secondDb as unknown as { $client: D1Database }).$client.prepare("SELECT 2");
+    expect(first.prepare).toHaveBeenCalledExactlyOnceWith("SELECT 1");
+    expect(second.prepare).toHaveBeenCalledExactlyOnceWith("SELECT 2");
     expect(getDatabaseProviderForClient(firstDb)).toBe("d1");
   });
 

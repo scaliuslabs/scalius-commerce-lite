@@ -59,7 +59,7 @@ describe("adjust stock dialog", () => {
   const field = (id: string) => document.getElementById(id) as HTMLInputElement;
   const apply = () => [...document.querySelectorAll("button")].find((button) => button.textContent === t("apply"))!;
   const reasonText = () =>
-    (document.getElementById("inventory-adjustment-reason") as HTMLSelectElement).selectedOptions[0]?.textContent;
+    document.getElementById("inventory-adjustment-reason")?.textContent;
   async function type(id: string, value: string) {
     const input = field(id);
     await act(async () => {

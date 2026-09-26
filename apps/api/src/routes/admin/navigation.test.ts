@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
     trashNavigationMenu: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/navigation", () => ({
@@ -58,10 +58,6 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
 }));
 
-vi.mock("../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
-
 import { adminNavigationRoutes } from "./navigation";
 
 function createTestApp() {
@@ -70,7 +66,7 @@ function createTestApp() {
         CACHE: { id: "api-cache-kv" },
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
@@ -204,7 +200,7 @@ describe("admin navigation routes", () => {
         ["PUT", "/placements/placement_header_primary", {
             expectedRevision: 1, surface: "header", slot: "primary", position: 0, menuId: "menu_1", isEnabled: true,
         }, "saveNavigationPlacement"],
-    ] as const)("%s %s claims the revision and invalidates public layout once", async (method, path, body, command) => {
+    ] as const)("%s %s claims the revision", async (method, path, body, command) => {
         mocks[command].mockResolvedValue({ revision: 9 });
         const { app, env } = createTestApp();
 
@@ -216,7 +212,6 @@ describe("admin navigation routes", () => {
 
         expect(response.status).toBe(200);
         expect(JSON.stringify(mocks[command].mock.calls[0])).toContain(`"expectedRevision":${body.expectedRevision}`);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
     });
 });

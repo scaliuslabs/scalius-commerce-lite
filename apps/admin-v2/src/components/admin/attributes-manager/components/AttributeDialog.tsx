@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { postApiV1AdminAttributes, putApiV1AdminAttributesById } from "@scalius/api-client/sdk";
@@ -9,15 +9,27 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import {
+  ATTRIBUTE_FACET_DISPLAYS,
+  ATTRIBUTE_UNIT_MAX_LENGTH,
+  ATTRIBUTE_VALUE_TYPES,
+  defaultAttributeFacetDisplay,
+  isAttributeFacetDisplayAllowed,
+  type AttributeFacetDisplay,
+  type AttributeValueType,
+} from "@scalius/shared/catalog-attributes";
+import { ConvertTypeDialog } from "./ConvertTypeDialog";
 import { autoHandleFor } from "~/components/admin/search-listing/SearchListingCard";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
-import type { AttributeDto } from "~/lib/api-query-options/attributes";
+import { attributeGroupsQueryOptions, type AttributeDto } from "~/lib/api-query-options/attributes";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
+import { attributeTypeMessages } from "~/i18n/attribute-types";
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
@@ -36,7 +48,23 @@ interface AttributeDialogProps {
  */
 export function AttributeDialog({ open, attribute, onClose }: AttributeDialogProps) {
   const t = useMessages(catalogMessages);
+  const a = useMessages(attributeTypeMessages);
   const queryClient = useQueryClient();
+  const { data: groupData } = useQuery({ ...attributeGroupsQueryOptions(), enabled: open });
+  const [valueType, setValueType] = useState<AttributeValueType>(attribute?.valueType ?? "text");
+  const [groupId, setGroupId] = useState<string | null>(attribute?.groupId ?? null);
+  const [unit, setUnit] = useState(attribute?.unit ?? "");
+  const [facetDisplay, setFacetDisplay] = useState<AttributeFacetDisplay>(attribute?.facetDisplay ?? "checkbox");
+  const [keySpec, setKeySpec] = useState(attribute?.keySpec ?? false);
+  const [highlight, setHighlight] = useState(attribute?.highlight ?? false);
+  const [converting, setConverting] = useState(false);
+  // What is saved: a type change is saved by its own dialog.
+  const [saved, setSaved] = useState({
+    valueType: attribute?.valueType ?? "text",
+    unit: attribute?.unit ?? "",
+    facetDisplay: attribute?.facetDisplay ?? "checkbox",
+  });
+  const hasPresets = valueType === "text" || valueType === "enum";
   const [name, setName] = useState(attribute?.name ?? "");
   const [slug, setSlug] = useState(attribute?.slug ?? "");
   const [filterable, setFilterable] = useState(attribute?.filterable ?? true);
@@ -60,10 +88,17 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
     mutationFn: () => {
       // Presets are also edited in the values editor: resend them only when changed here.
       const optionsChanged = options.join("\u0000") !== (attribute?.options ?? []).join("\u0000");
-      const body = { name: name.trim(), slug, filterable, ...(optionsChanged ? { options } : {}) };
+      const typed = {
+        groupId,
+        unit: valueType === "number" ? unit.trim() || null : null,
+        facetDisplay,
+        keySpec,
+        highlight,
+      };
+      const body = { name: name.trim(), slug, filterable, ...typed, ...(optionsChanged && hasPresets ? { options } : {}) };
       return attribute
         ? apiData(putApiV1AdminAttributesById({ path: { id: attribute.id }, body }))
-        : apiData(postApiV1AdminAttributes({ body: { ...body, slug: slug || undefined } }));
+        : apiData(postApiV1AdminAttributes({ body: { ...body, valueType, slug: slug || undefined } }));
     },
     onSuccess: () => {
       toast.success(t("saved"));
@@ -84,6 +119,12 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
     name !== (attribute?.name ?? "") ||
     slug !== (attribute?.slug ?? "") ||
     filterable !== (attribute?.filterable ?? true) ||
+    valueType !== saved.valueType ||
+    groupId !== (attribute?.groupId ?? null) ||
+    unit !== saved.unit ||
+    facetDisplay !== saved.facetDisplay ||
+    keySpec !== (attribute?.keySpec ?? false) ||
+    highlight !== (attribute?.highlight ?? false) ||
     options.join("\u0000") !== (attribute?.options ?? []).join("\u0000") ||
     draftValue.trim() !== "";
   // Esc, an outside click or Cancel with unsaved edits asks first.
@@ -162,6 +203,64 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 </p>
               </div>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="attribute-type">{a("type")}</Label>
+                {attribute ? (
+                  <div className="flex items-center gap-2">
+                    <p id="attribute-type" className="min-w-0 flex-1 text-body">{a(`type_${valueType}`)}</p>
+                    <Button type="button" variant="outline" onClick={() => setConverting(true)}>{a("changeType")}</Button>
+                  </div>
+                ) : (
+                  <SearchableSelect
+                    id="attribute-type"
+                    value={valueType}
+                    onValueChange={(value) => {
+                      const next = value as AttributeValueType;
+                      setValueType(next);
+                      if (!isAttributeFacetDisplayAllowed(next, facetDisplay)) setFacetDisplay(defaultAttributeFacetDisplay(next));
+                    }}
+                    triggerClassName="w-full"
+                    options={ATTRIBUTE_VALUE_TYPES.map((type) => ({ value: type, label: a(`type_${type}`) }))}
+                  />
+                )}
+                <p className="text-body text-muted-foreground">{a(`typeHelp_${valueType}`)}</p>
+              </div>
+              {valueType === "number" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="attribute-unit">{a("unit")}</Label>
+                  <Input
+                    id="attribute-unit"
+                    maxLength={ATTRIBUTE_UNIT_MAX_LENGTH}
+                    placeholder={a("unitPlaceholder")}
+                    value={unit}
+                    onChange={(event) => setUnit(event.target.value)}
+                  />
+                </div>
+              ) : null}
+              <div className="space-y-2">
+                <Label htmlFor="attribute-group">{a("group")}</Label>
+                <SearchableSelect
+                  id="attribute-group" value={groupId ?? ""} onValueChange={(value) => setGroupId(value || null)}
+                  triggerClassName="w-full"
+                  options={[
+                    { value: "", label: a("noGroup") },
+                    ...(groupData?.groups ?? []).map((group) => ({ value: group.id, label: group.name })),
+                    ...(groupId && groupData && !groupData.groups.some((group) => group.id === groupId) ? [{ value: groupId, label: groupId }] : []),
+                  ]}
+                />
+                <p className="text-body text-muted-foreground">{a("groupHelp")}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-display">{a("filterDisplay")}</Label>
+                <SearchableSelect
+                  id="attribute-display" value={facetDisplay} onValueChange={(value) => setFacetDisplay(value as AttributeFacetDisplay)}
+                  triggerClassName="w-full"
+                  options={ATTRIBUTE_FACET_DISPLAYS.filter((display) => isAttributeFacetDisplayAllowed(valueType, display)).map((display) => ({ value: display, label: a(`display_${display}`) }))}
+                />
+              </div>
+            </div>
+            {hasPresets ? (
             <div className="space-y-2">
               <Label htmlFor="attribute-value">{t("presetValues")}</Label>
               <div className="flex gap-2">
@@ -206,6 +305,21 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 </div>
               ) : null}
             </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+              <div>
+                <Label htmlFor="attribute-key-spec">{a("keySpec")}</Label>
+                <p className="text-body text-muted-foreground">{a("keySpecHelp")}</p>
+              </div>
+              <Switch id="attribute-key-spec" checked={keySpec} onCheckedChange={setKeySpec} />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+              <div>
+                <Label htmlFor="attribute-highlight">{a("highlight")}</Label>
+                <p className="text-body text-muted-foreground">{a("highlightHelp")}</p>
+              </div>
+              <Switch id="attribute-highlight" checked={highlight} onCheckedChange={setHighlight} />
+            </div>
             <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <div>
                 <Label htmlFor="attribute-filterable">{t("filterableYes")}</Label>
@@ -225,6 +339,21 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
         </DialogContent>
       </Dialog>
       <ConfirmDialog {...discardDialog} />
+      {attribute ? (
+        <ConvertTypeDialog
+          attribute={attribute}
+          open={converting}
+          onClose={() => setConverting(false)}
+          onConverted={(next, convertedUnit) => {
+            // The server switched the type (and its filter style): the dialog follows it.
+            const nextUnit = convertedUnit ?? "";
+            setValueType(next);
+            setFacetDisplay(defaultAttributeFacetDisplay(next));
+            setUnit(nextUnit);
+            setSaved({ valueType: next, unit: nextUnit, facetDisplay: defaultAttributeFacetDisplay(next) });
+          }}
+        />
+      ) : null}
     </>
   );
 }

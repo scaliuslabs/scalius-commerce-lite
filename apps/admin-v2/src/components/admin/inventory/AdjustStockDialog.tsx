@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData } from "~/lib/api";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
@@ -72,7 +72,7 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const fieldRefs = {
     quantity: useRef<HTMLInputElement>(null),
-    reason: useRef<HTMLSelectElement>(null),
+    reason: useRef<HTMLButtonElement>(null),
     alertLevel: useRef<HTMLInputElement>(null),
   };
 
@@ -217,7 +217,8 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
 
             <div className="space-y-2">
               <Label htmlFor="inventory-adjustment-mode">{t("adjustment")}</Label>
-              <NativeSelect
+              <SearchableSelect
+                triggerClassName="w-full"
                 id="inventory-adjustment-mode"
                 value={mode}
                 onValueChange={(value) => {
@@ -226,10 +227,11 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                   setDelta(0);
                   setTouched(false);
                 }}
-              >
-                <option value="relative">{t("modeRelative")}</option>
-                <option value="stocktake">{t("modeStocktake")}</option>
-              </NativeSelect>
+                options={[
+                  { value: "relative", label: t("modeRelative") },
+                  { value: "stocktake", label: t("modeStocktake") },
+                ]}
+              />
               <p className="text-body text-muted-foreground">
                 {t(mode === "stocktake" ? "modeStocktakeHelp" : "modeRelativeHelp")}
               </p>
@@ -304,8 +306,9 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
             {mode === "relative" ? (
               <div className="space-y-2">
                 <Label htmlFor="inventory-adjustment-reason">{t("reason")}</Label>
-                <NativeSelect
-                  ref={fieldRefs.reason}
+                <SearchableSelect
+                  triggerClassName="w-full"
+                  triggerRef={fieldRefs.reason}
                   id="inventory-adjustment-reason"
                   aria-invalid={errors.reason ? true : undefined}
                   aria-describedby={errors.reason ? "inventory-adjustment-reason-error" : undefined}
@@ -316,11 +319,8 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                     clearServerError("reason");
                     setReasonChoice(value as InventoryAdjustmentReason);
                   }}
-                >
-                  {reasonOptions.map((value) => (
-                    <option key={value} value={value}>{t(`reason_${value}`)}</option>
-                  ))}
-                </NativeSelect>
+                  options={reasonOptions.map((value) => ({ value, label: t(`reason_${value}`) }))}
+                />
                 {fieldError("reason", "inventory-adjustment-reason-error")}
               </div>
             ) : null}

@@ -1,6 +1,5 @@
 // Browser-safe entry: pure types and constants only (no database, no domain
 // index). Safe to import from the dashboard and from any domain.
-// B5 fills the warranty domain; these names are the contract it keeps.
 
 /** `warranty_policies.provider`: who honours the warranty (Wave B design §5.1). */
 export const WARRANTY_PROVIDERS = ["brand", "store"] as const;
@@ -31,11 +30,24 @@ export const WARRANTY_LIMITS = {
   maxTermsLength: 4000,
 } as const;
 
+/** The latest claim on a warranty (an open one wins over closed ones). */
+export interface LineWarrantyClaim {
+  id: string;
+  conversationId: string;
+  status: WarrantyClaimStatus;
+  resolution: WarrantyClaimResolution | null;
+}
+
 /** One warranty record of an order line (`extras.warranty[]`, one per fulfilment line). */
 export interface LineWarrantyExtra {
   warrantyId: string;
+  /** The frozen revision's buyer-facing terms. */
   policyName: string;
   provider: WarrantyProvider;
+  durationValue: number;
+  durationUnit: WarrantyDurationUnit;
+  replacementDays: number | null;
+  terms: string | null;
   quantity: number;
   /** Epoch seconds: the handover recorded by the fulfilment ledger. */
   startsAt: number;
@@ -44,4 +56,5 @@ export interface LineWarrantyExtra {
   voided: boolean;
   /** The open or in-progress claim on this warranty, when one exists. */
   openClaimId: string | null;
+  claim: LineWarrantyClaim | null;
 }

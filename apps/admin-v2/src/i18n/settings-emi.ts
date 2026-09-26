@@ -1,0 +1,43 @@
+import { defineMessages } from "./index";
+
+/** Settings › Payments: EMI plans ("EMI on card payment"). */
+export const emiMessages = defineMessages({
+  en: {
+    title: "EMI on card payment",
+    description: "Product pages show the lowest monthly amount from these bank plans. Buyers arrange EMI with their bank; checkout takes the full price.",
+    enabled: "Show EMI on product pages",
+    enabledHelp: "Off by default. Products can opt out on their own page.",
+    loadFailed: "Couldn't load EMI plans",
+    noPlans: "No plans yet.",
+    addPlan: "Add plan",
+    provider: "Bank or card",
+    providerPlaceholder: "e.g. City Bank",
+    months: "Months",
+    fee: "Fee (%)",
+    minAmount: "Minimum price ({symbol})",
+    removePlan: "Remove plan {row}",
+    planProvider: "Plan {row}: enter the bank or card.",
+    planMonths: "Plan {row}: months must be from 2 to 60.",
+    planFee: "Plan {row}: the fee must be from 0% to 50%.",
+    planMin: "Plan {row}: the minimum price can't be negative.",
+  },
+  bn: {
+    title: "কার্ডে কিস্তি (EMI)",
+    description: "প্রোডাক্ট পেজে এই ব্যাংক প্ল্যানগুলো থেকে সবচেয়ে কম মাসিক কিস্তি দেখায়। কাস্টমার ব্যাংকের সাথে EMI ঠিক করেন; চেকআউটে পুরো দাম নেওয়া হয়।",
+    enabled: "প্রোডাক্ট পেজে EMI দেখান",
+    enabledHelp: "ডিফল্টভাবে বন্ধ। প্রতিটি প্রোডাক্ট নিজের পেজে এটি বন্ধ রাখতে পারে।",
+    loadFailed: "EMI প্ল্যান লোড করা যায়নি",
+    noPlans: "এখনও কোনো প্ল্যান নেই।",
+    addPlan: "প্ল্যান যোগ করুন",
+    provider: "ব্যাংক বা কার্ড",
+    providerPlaceholder: "যেমন: সিটি ব্যাংক",
+    months: "মাস",
+    fee: "ফি (%)",
+    minAmount: "সর্বনিম্ন দাম ({symbol})",
+    removePlan: "প্ল্যান {row} সরান",
+    planProvider: "প্ল্যান {row}: ব্যাংক বা কার্ডের নাম দিন।",
+    planMonths: "প্ল্যান {row}: মাস ২ থেকে ৬০-এর মধ্যে হতে হবে।",
+    planFee: "প্ল্যান {row}: ফি ০% থেকে ৫০%-এর মধ্যে হতে হবে।",
+    planMin: "প্ল্যান {row}: সর্বনিম্ন দাম ঋণাত্মক হতে পারে না।",
+  },
+});

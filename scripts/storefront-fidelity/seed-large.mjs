@@ -44,10 +44,6 @@ export function fillProjections(db) {
   db.exec(`BEGIN; ${sql}; COMMIT;`);
 }
 
-export function bumpGenerationRow(db, generation) {
-  db.prepare("INSERT INTO cache_generation (id, generation, updated_at) VALUES ('default', ?, unixepoch()) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, updated_at = excluded.updated_at").run(generation);
-}
-
 /** Points the local Platform document at this stack's origins (dev-ports.mjs contract). */
 export async function syncPlatform(db, ports) {
   const { platformSyncSql } = await import(pathToFileURL(join(ROOT, "scripts/dev-ports.mjs")).href);
@@ -242,7 +238,6 @@ export async function seedLarge({ stateDir, ports, log = console.log }) {
   seedMenus(stateDir, { log });
   const db = openDb(stateDir);
   await syncPlatform(db, ports);
-  bumpGenerationRow(db, `fid${Date.now().toString(16)}`);
   const counts = Object.fromEntries(["products", "product_variants", "categories", "brands", "media"].map((t) => [t, db.prepare(`SELECT count(*) AS n FROM ${t}`).get().n]));
   counts.publicProducts = db.prepare("SELECT count(*) AS n FROM product_buyer_state WHERE is_public = 1").get().n;
   db.exec("PRAGMA wal_checkpoint(TRUNCATE);");

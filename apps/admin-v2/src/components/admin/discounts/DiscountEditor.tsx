@@ -34,7 +34,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -434,14 +434,13 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     warning={aboveEveryPrice ? t("warnAboveEveryPrice") : undefined}
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <NativeSelect
+                      <SearchableSelect
                         value={draft.valueKind}
                         onValueChange={(valueKind) => update({ valueKind: valueKind as DiscountDraft["valueKind"] })}
-                        aria-label={t("valueCard")}
-                      >
-                        <option value="percentage">{t("percentage")}</option>
-                        <option value="fixed">{t("fixedAmount")}</option>
-                      </NativeSelect>
+                        ariaLabel={t("valueCard")}
+                        triggerClassName="w-full"
+                        options={[{ value: "percentage", label: t("percentage") }, { value: "fixed", label: t("fixedAmount") }]}
+                      />
                       <NumberInput id="discount-value" value={draft.value} error={shown("value")} onValue={(value) => update({ value })} />
                     </div>
                   </Field>

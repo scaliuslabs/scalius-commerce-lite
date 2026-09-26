@@ -37,6 +37,46 @@ import { loadProductOptions, loadVariantSelectedOptions } from "../products/opti
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicBrandJoinCondition } from "../brands/brands.storefront";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
+import { deps } from "./declare-deps";
+
+/**
+ * What one feed page depends on. Beyond the public set, the feed filters
+ * every product by SKU facts (a live physical SKU) and media facts (a real
+ * primary image) that no listing key tracks, so a product outside the page
+ * can enter or leave it through any SKU, gallery or media change: the
+ * coarse table keys are the only exact ones. They also cover every row's
+ * gallery, SKU image and band, so no per-row media keys are needed. The SKU
+ * topology test reads option definitions, values and SKU assignments of
+ * products outside the page too, so those tables are coarse keys as well.
+ */
+function declareFeedPage(
+    params: StorefrontFeedProductFilterInput,
+    productIds: readonly string[],
+    categoryIds: readonly string[],
+): void {
+    if (!deps.active()) return;
+    deps.listMembership("all");
+    deps.discoveryMembership();
+    deps.table("product_variants");
+    deps.table("product_media");
+    deps.table("media");
+    deps.table("product_option_definitions");
+    deps.table("product_option_values");
+    deps.table("product_variant_option_values");
+    deps.products(productIds);
+    deps.categories(categoryIds);
+    // The published brand joined by products.brand_id; attribute names.
+    deps.anyBrand();
+    deps.anyAttribute();
+    if (params.search) {
+        deps.search();
+        deps.anyCategory();
+    }
+    if (params.category) deps.anyCategory();
+    // Id, slug and SKU lookups and price bounds test products columns of
+    // products outside the page (SKU lookups and prices are covered above).
+    if (params.ids || params.minPrice !== undefined || params.maxPrice !== undefined) deps.table("products");
+}
 
 /** A required (or unreadable) buyer-input schema: an agent cart can't buy the product. */
 function requiresBuyerInput(stored: string | null): boolean {
@@ -416,6 +456,7 @@ export async function getStorefrontFeedProducts(
             }).from(pagePricing).all()
             : Promise.resolve([]),
     ]);
+    declareFeedPage(params, productIds, categoryIds);
     const imageMap = productImageMapFromMedia(mediaMap);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
     const pricingByProduct = new Map(pricingRows.map((row) => [row.productId, row]));

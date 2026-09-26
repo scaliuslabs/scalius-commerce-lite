@@ -5,8 +5,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
     createOrder: vi.fn(),
-    findCheckoutReservationAvailabilityTransitions: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
@@ -14,15 +13,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     createOrder: mocks.createOrder,
 }));
 
-vi.mock("../../utils/availability-transitions", async (importOriginal) => ({
-    ...await importOriginal<typeof import("../../utils/availability-transitions")>(),
-    findCheckoutReservationAvailabilityTransitions: mocks.findCheckoutReservationAvailabilityTransitions,
-}));
 
-vi.mock("../../utils/cache-generation", async (importOriginal) => ({
-    ...await importOriginal<typeof import("../../utils/cache-generation")>(),
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
 
 import { adminOrdersRoutes } from "./orders";
 
@@ -61,7 +52,6 @@ describe("admin order create idempotency boundary", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.createOrder.mockResolvedValue({ id: "order_1" });
-        mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([]);
     });
 
     it("passes one canonical header key through exact request replay", async () => {

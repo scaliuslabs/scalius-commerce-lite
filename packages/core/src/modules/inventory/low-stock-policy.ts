@@ -2,6 +2,7 @@ import { z } from "zod";
 import { productVariants, settings } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
 import { defineSettingsDocument, SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { deps } from "../../cache-deps";
 import { lowStockThresholdSchema } from "./inventory.validation";
 
 /** A null or non-positive threshold explicitly disables low-stock alerts. */
@@ -23,6 +24,8 @@ export const inventorySettingsDocument = defineSettingsDocument<{ defaultLowStoc
 
 /** The saved store default as a scalar subquery, so a read carries it without an extra statement. */
 export function storeDefaultLowStockThresholdSql(): SQL<number | null> {
+  // Every availability band a statement resolves reads this settings row.
+  deps.inventoryBands();
   return sql<number | null>`(
     SELECT CASE WHEN json_valid(${settings.value})
       THEN CAST(json_extract(${settings.value}, '$.defaultLowStockThreshold') AS INTEGER) END

@@ -19,7 +19,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { apiData } from "~/lib/api";
 import type {
@@ -187,11 +187,11 @@ function ItemForm({
       </Field>
       <div className="space-y-1.5">
         <Label htmlFor="menu-item-link-type">{t("linkTo")}</Label>
-        <NativeSelect id="menu-item-link-type" value={linkType} onValueChange={(value) => setTarget(targetFor(value as LinkType))}>
-          {LINK_TYPES.map((type) => (
-            <option key={type} value={type}>{t(`link_${type}`)}</option>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          id="menu-item-link-type" value={linkType} onValueChange={(value) => setTarget(targetFor(value as LinkType))}
+          triggerClassName="w-full"
+          options={LINK_TYPES.map((type) => ({ value: type, label: t(`link_${type}`) }))}
+        />
       </div>
       {target.type === "resource" ? (
         <NavigationResourcePicker
@@ -208,15 +208,13 @@ function ItemForm({
         />
       ) : null}
       {target.type === "system" ? (
-        <NativeSelect
+        <SearchableSelect
           value={target.key}
           onValueChange={(key) => setTarget({ type: "system", key: key as SystemKey })}
-          aria-label={t("link_system")}
-        >
-          {SYSTEM_PAGES.map((key) => (
-            <option key={key} value={key}>{t(`system_${key}`)}</option>
-          ))}
-        </NativeSelect>
+          ariaLabel={t("link_system")}
+          triggerClassName="w-full"
+          options={SYSTEM_PAGES.map((key) => ({ value: key, label: t(`system_${key}`) }))}
+        />
       ) : null}
       {target.type === "internal_path" ? (
         <Field id="menu-item-path" label={t("link_internal_path")}>

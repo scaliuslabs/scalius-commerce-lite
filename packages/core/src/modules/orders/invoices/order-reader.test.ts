@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { readInvoiceOrderSource } from "./order-reader";
 import { snapshotInvoiceOrder } from "./snapshot";
 
 describe("invoice order projection", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+
+  beforeEach(() => {
+    ({ sqlite, db } = createSqliteD1Database());
+  });
+  afterEach(() => sqlite.close());
+
   it("uses the immutable order-line labels even after the live catalog changes", async () => {
-    const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`
       INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Original', 'original', 10000);
       INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES ('variant_1', 'product_1', 'SKU-1', 10000, 1);
@@ -26,7 +35,6 @@ describe("invoice order projection", () => {
   });
 
   it("snapshots the frozen buyer inputs of each line for the invoice", async () => {
-    const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`
       INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Pen', 'pen', 10000);
       INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES ('variant_1', 'product_1', 'PEN-1', 10000, 1);

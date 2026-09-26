@@ -5,16 +5,12 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { AppError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   listHeroSliders: vi.fn(),
   getHeroSlider: vi.fn(),
   createHeroSlider: vi.fn(),
   updateHeroSlider: vi.fn(),
   deleteHeroSlider: vi.fn(),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/hero-sliders", () => ({
@@ -59,7 +55,7 @@ function createTestApp(db = createDb()) {
   mocks.createHeroSlider.mockResolvedValue(sliderRecord);
   mocks.updateHeroSlider.mockResolvedValue(sliderRecord);
   mocks.deleteHeroSlider.mockResolvedValue({ ...sliderRecord, isActive: false });
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -72,12 +68,12 @@ function createTestApp(db = createDb()) {
   return { app, env };
 }
 
-describe("hero slider cache invalidation", () => {
+describe("hero slider write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates homepage caches after hero slider saves", async () => {
+  it("returns success after hero slider saves", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -95,10 +91,10 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it("does not invalidate homepage caches after hero slider reads", async () => {
+  it("returns the saved hero sliders", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -108,10 +104,10 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("invalidates homepage caches after hero slider updates", async () => {
+  it("returns success after hero slider updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -125,10 +121,10 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it("invalidates homepage caches after hero slider deletes", async () => {
+  it("returns success after hero slider deletes", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -142,10 +138,10 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it("preserves the typed stale-write conflict and does not invalidate caches", async () => {
+  it("preserves the typed stale-write conflict", async () => {
     const { app, env } = createTestApp();
     mocks.updateHeroSlider.mockRejectedValueOnce(new AppError(
       409,
@@ -172,6 +168,6 @@ describe("hero slider cache invalidation", () => {
       code: "HERO_SLIDER_REVISION_CONFLICT",
       details: { expectedRevision: 1, currentRevision: 2 },
     });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 });

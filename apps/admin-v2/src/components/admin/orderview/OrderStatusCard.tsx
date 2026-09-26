@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { CancelOrderDialog } from "~/components/admin/order-list/CancelOrderDialog";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -124,22 +124,21 @@ export function OrderStatusCard({ order }: { order: Order }) {
       </CardHeader>
       <CardContent className="space-y-2">
         {changeable ? (
-          <NativeSelect
+          <SearchableSelect
             value={status}
             onValueChange={change}
             disabled={statusMutation.isPending}
-            aria-label={t("status.title")}
-          >
-            <option value={status}>{orderStatusLabel(o, status)}</option>
-            {options.map(({ status: value, block }) => (
-              <option key={value} value={value} disabled={block !== null}>
-                {/* A native option holds text only: the reason follows the greyed-out choice. */}
-                {block
-                  ? `${orderStatusLabel(o, value)} — ${statusBlockText(block, order, t)}`
-                  : orderStatusLabel(o, value)}
-              </option>
-            ))}
-          </NativeSelect>
+            ariaLabel={t("status.title")}
+            triggerClassName="w-full"
+            options={[
+              { value: status, label: orderStatusLabel(o, status) },
+              ...options.map(({ status: value, block }) => ({
+                value,
+                label: block ? `${orderStatusLabel(o, value)} — ${statusBlockText(block, order, t)}` : orderStatusLabel(o, value),
+                disabled: block !== null,
+              })),
+            ]}
+          />
         ) : (
           // A final or locked status is a fact, not a menu.
           <p className="font-medium">{orderStatusLabel(o, status)}</p>

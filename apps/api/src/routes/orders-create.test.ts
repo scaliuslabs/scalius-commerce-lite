@@ -37,7 +37,7 @@ const mocks = vi.hoisted(() => ({
   getCurrencySettings: vi.fn(),
   calculateStorefrontTaxQuote: vi.fn(),
   quoteStorefrontDiscount: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -147,8 +147,7 @@ function withWaveAPreflightDefaults<T>(
   };
 }
 
-vi.mock("../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
+vi.mock("../utils/execution-context", () => ({
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
     try {
       return c.executionCtx;
@@ -252,7 +251,7 @@ beforeEach(() => {
   mocks.quoteStorefrontDiscount.mockResolvedValue({
     applied: null, snapshot: null, taxAllocation: undefined, discounts: [], offers: [], rejectedCodes: [],
   });
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
     orderId: "order_1",
@@ -1959,7 +1958,7 @@ describe("create order commit/KV ordering", () => {
       expect(response.status, responseText).toBe(201);
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
       expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
-      expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
         "availability caches",
       );

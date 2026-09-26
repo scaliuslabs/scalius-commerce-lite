@@ -1,11 +1,8 @@
 // The tester's two-tab repro: checkout form-field toggles live on the checkout
 // language, so a stale second save must be refused instead of overwriting.
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn(async () => undefined) }));
-vi.mock("../utils/cache-generation", () => ({ bumpCacheGeneration: mocks.bumpCacheGeneration }));
 
 import { errorResponseFromError } from "../utils/api-response";
 import { checkoutLanguageRoutes } from "./checkout-languages";
@@ -67,7 +64,6 @@ describe("checkout language revision", () => {
       code: "SETTINGS_REVISION_CONFLICT",
       details: { document: "checkout_language", expectedRevision: 0, currentRevision: 1 },
     });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(2);
 
     const stored = await request("GET", `/${id}`);
     expect(stored.body.data).toMatchObject({

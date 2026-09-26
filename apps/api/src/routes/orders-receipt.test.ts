@@ -41,6 +41,12 @@ vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
   listLineReviewStates: vi.fn(async () => new Map()),
 }));
 
+// Warranty extras are covered on the real schema by the warranty domain tests.
+vi.mock("@scalius/core/modules/warranty", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/warranty")>(),
+  listLineWarranties: vi.fn(async () => new Map()),
+}));
+
 // Per-line digital extras read D1; they are covered by storefront-orders/downloads.test.ts.
 vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/digital")>(),

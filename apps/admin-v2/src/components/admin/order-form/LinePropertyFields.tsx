@@ -2,7 +2,7 @@ import type { CustomizationSchema } from "@scalius/shared/line-properties";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
@@ -63,18 +63,19 @@ export function LinePropertyFields({ schema, values, onChange, error, surcharge 
               {field.type === "select" ? label : `${label}${extra(field.priceMinor)}`}
             </Label>
             {field.type === "select" ? (
-              <NativeSelect
+              <SearchableSelect
                 id={id}
                 value={value}
                 aria-invalid={invalid || undefined}
                 aria-describedby={describedBy}
                 onValueChange={(next) => onChange(field.key, next)}
-              >
-                <option value="">{t("chooseOption")}</option>
-                {field.options.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}{extra(option.priceMinor)}</option>
-                ))}
-              </NativeSelect>
+                triggerClassName="w-full"
+                placeholder={t("chooseOption")}
+                options={[
+                  { value: "", label: t("chooseOption") },
+                  ...field.options.map((option) => ({ value: option.value, label: `${option.label}${extra(option.priceMinor)}` })),
+                ]}
+              />
             ) : field.type === "textarea" ? (
               <Textarea
                 id={id}

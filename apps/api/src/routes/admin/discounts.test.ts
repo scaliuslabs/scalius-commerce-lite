@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
     createPromotionDraft: vi.fn(),
     getPromotionAggregate: vi.fn(),
     getPromotionOrderUsage: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
@@ -19,10 +19,6 @@ vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
     createPromotionDraft: mocks.createPromotionDraft,
     getPromotionAggregate: mocks.getPromotionAggregate,
     getPromotionOrderUsage: mocks.getPromotionOrderUsage,
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { adminDiscountRoutes } from "./discounts";
@@ -96,7 +92,7 @@ describe("admin discount routes", () => {
         });
     });
 
-    it("requires a revision claim to activate or deactivate, and refreshes the storefront cache", async () => {
+    it("requires a revision claim to activate or deactivate,", async () => {
         const app = createTestApp();
         for (const command of ["activate", "pause"]) {
             expect((await app.request(`/api/v1/admin/discounts/promo_1/${command}`, json({}))).status).toBe(400);
@@ -106,6 +102,6 @@ describe("admin discount routes", () => {
         const response = await app.request("/api/v1/admin/discounts/promo_1/activate", json({ expectedRevision: 1 }));
         expect(response.status).toBe(200);
         expect(mocks.activatePromotion).toHaveBeenCalledWith({}, "promo_1", 1);
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+
     });
 });

@@ -2,7 +2,7 @@
 // Public platform origins. The storefront Worker and the dashboard read this at
 // request time instead of carrying their own URL configuration.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
+import { getPlatformSettings } from "@scalius/core/modules/platform";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 
@@ -41,8 +41,11 @@ const getPlatformRoute = createRoute({
 });
 
 app.openapi(getPlatformRoute, async (c) => {
-  const platform = c.env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG;
-  c.header("Cache-Control", "public, max-age=60");
+  // Worker-entry KV is an eventually consistent hint. Origin changes must be
+  // visible on this configuration read immediately after a successful save.
+  const platform = await getPlatformSettings(c.get("db"));
+  c.header("Cache-Control", "no-store");
+  c.header("Cloudflare-CDN-Cache-Control", "no-store");
   return ok(c, {
     storefrontUrl: platform.storefrontUrl,
     apiUrl: platform.apiUrl,

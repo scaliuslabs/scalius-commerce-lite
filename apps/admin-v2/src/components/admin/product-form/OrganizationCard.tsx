@@ -1,4 +1,5 @@
-import { memo, useState } from "react";
+import { lazy, memo, Suspense, useMemo, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { getServerFnError } from "@/lib/api-helpers";
 import { apiData } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import { categoriesInTreeOrder, categoryPathLabel, indexCategories } from "@/lib/category-tree";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
@@ -28,19 +30,25 @@ import type { Category, ProductFormValues } from "./types";
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
   categories: Category[];
+  /** The saved brand's name, for the picker's label. */
+  brandName?: string | null;
 }
 
-/** Side card: the product's category (new categories start as drafts). */
-export const OrganizationCard = memo(function OrganizationCard({ form, categories }: OrganizationCardProps) {
+// The brand search picker is loaded after the page, so it stays off the product page's first download.
+const BrandPicker = lazy(() => import("./BrandPicker"));
+
+/** Side card: the product's category (new categories start as drafts) and brand. */
+export const OrganizationCard = memo(function OrganizationCard({ form, categories, brandName = null }: OrganizationCardProps) {
   const t = useMessages(productMessages);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
+  const [brandLabel, setBrandLabel] = useState<string | null>(brandName);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t("organization")}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <FormField
           control={form.control}
           name="categoryId"
@@ -57,6 +65,27 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
                   form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
                 }}
               />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="brandId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel htmlFor="product-brand">{t("brand")}</FormLabel>
+              <Suspense fallback={<Skeleton className="h-11 w-full sm:h-9" />}>
+                <BrandPicker
+                  id="product-brand"
+                  value={field.value}
+                  label={brandLabel}
+                  onChange={(value, label) => {
+                    setBrandLabel(label);
+                    field.onChange(value);
+                  }}
+                />
+              </Suspense>
               <FormMessage />
             </FormItem>
           )}
@@ -128,16 +157,22 @@ function CategoryCombobox({
     }
   };
 
+  // Categories are named by their path ("Men › Shirts"), parents before children.
+  const { ordered, byId } = useMemo(
+    () => ({ ordered: categoriesInTreeOrder(categories), byId: indexCategories(categories) }),
+    [categories],
+  );
+  const pathOf = (category: Category) => categoryPathLabel(category.id, byId);
   const selected = categories.find((category) => category.id === selectedId);
   const selectedStatus = selected ? statusLabel(selected) : null;
-  const filtered = categories.filter((category) => category.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-invalid={invalid || undefined} className="w-full justify-between">
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? (selectedStatus ? `${selected.name} · ${selectedStatus}` : selected.name) : t("chooseCategory")}
+            {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t("chooseCategory")}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -171,7 +206,7 @@ function CategoryCombobox({
                 {filtered.map((category) => (
                   <CommandItem
                     key={category.id}
-                    value={category.name}
+                    value={category.id}
                     onSelect={() => {
                       onSelect(category.id);
                       setOpen(false);
@@ -179,7 +214,7 @@ function CategoryCombobox({
                     }}
                   >
                     <Check className={cn("mr-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
-                    <span className="flex-1">{category.name}</span>
+                    <span className="flex-1">{pathOf(category)}</span>
                     {statusLabel(category) ? (
                       <span className="text-body text-muted-foreground">{statusLabel(category)}</span>
                     ) : null}

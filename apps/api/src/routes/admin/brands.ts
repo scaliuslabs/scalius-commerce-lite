@@ -1,6 +1,6 @@
 // Admin brand routes: list, picker options, detail and revision-guarded
 // writes. Every write is buyer-visible (brand page, product brand line, feed
-// and JSON-LD brand), so each bumps the cache generation after it commits.
+// and JSON-LD brand); database triggers advance the affected dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   createBrand,
@@ -31,7 +31,6 @@ import {
   paginatedEnvelope,
   successEnvelope,
 } from "../../schemas/responses";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const TAGS = ["Admin - Brands"];
@@ -188,7 +187,7 @@ const createRouteDef = createRoute({
 
 app.openapi(createRouteDef, async (c) => {
   const result = await createBrand(c.get("db"), c.req.valid("json"));
-  await bumpCacheGeneration(c);
+
   return created(c, result);
 });
 
@@ -214,7 +213,7 @@ const updateRoute = createRoute({
 
 app.openapi(updateRoute, async (c) => {
   const result = await updateBrand(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-  await bumpCacheGeneration(c);
+
   return ok(c, result);
 });
 
@@ -240,7 +239,7 @@ const statusRoute = createRoute({
 
 app.openapi(statusRoute, async (c) => {
   const result = await updateBrandStatus(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-  await bumpCacheGeneration(c);
+
   return ok(c, result);
 });
 
@@ -269,7 +268,7 @@ function claimsRoute(
   app.openapi(route, async (c) => {
     const { brands } = c.req.valid("json");
     await run(c.get("db"), brands);
-    await bumpCacheGeneration(c);
+
     return ok(c, { count: brands.length });
   });
 }

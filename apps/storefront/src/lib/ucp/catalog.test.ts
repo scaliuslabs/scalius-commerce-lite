@@ -67,7 +67,7 @@ function productFixture(): Product {
     imageAlt: "Khaki shoe",
     hasVariants: true,
     availableForSale: true,
-    attributes: [{ name: "Material", slug: "material", value: "Canvas" }],
+    attributes: [{ name: "Material", slug: "material", value: "Canvas", group: null, unit: null, keySpec: false }],
     variants: [
       {
         id: "var_1",

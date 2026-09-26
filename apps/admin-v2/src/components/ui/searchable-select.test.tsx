@@ -134,6 +134,96 @@ describe("SearchableSelect", () => {
     expect(document.body.textContent).toContain("No categories found.");
   });
 
+  it.each(["current", ""])("closes without changing a reselected value %j", async (value) => {
+    const onValueChange = vi.fn();
+    await act(async () => root.render(
+      <SearchableSelect value={value} onValueChange={onValueChange} options={[
+        { value, label: "Current" },
+        { value: "different", label: "Different" },
+      ]} />,
+    ));
+    const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    await act(async () => trigger.click());
+    await flushUi();
+    await act(async () => document.body.querySelector<HTMLButtonElement>('[role="option"]')!.click());
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => trigger.click());
+    await flushUi();
+    await act(async () => document.body.querySelectorAll<HTMLButtonElement>('[role="option"]')[1]!.click());
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("different", { value: "different", label: "Different" });
+  });
+
+  it.each([undefined, ""])("allows repeated actions with no selected value %j", async (value) => {
+    const onValueChange = vi.fn();
+    await act(async () => root.render(
+      <SearchableSelect value={value} onValueChange={onValueChange} options={[{ value: "add", label: "Add section" }]} />,
+    ));
+    const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    for (let pick = 0; pick < 2; pick++) {
+      await act(async () => trigger.click());
+      await flushUi();
+      await act(async () => document.body.querySelector<HTMLButtonElement>('[role="option"]')!.click());
+    }
+    expect(onValueChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows an empty-value option and forwards form focus and validation props", async () => {
+    const onBlur = vi.fn();
+    const onFocus = vi.fn();
+    const triggerRef = { current: null as HTMLButtonElement | null };
+    await act(async () => root.render(
+      <SearchableSelect
+        value=""
+        options={[{ value: "", label: "Use theme default" }]}
+        onValueChange={vi.fn()}
+        placeholder="Choose a template"
+        triggerRef={triggerRef}
+        onBlur={onBlur}
+        onFocus={onFocus}
+        id="template"
+        aria-invalid="true"
+        aria-describedby="template-error"
+      />,
+    ));
+    const trigger = triggerRef.current!;
+    expect(trigger.textContent).toContain("Use theme default");
+    expect(trigger.querySelector("[data-placeholder]")).toBeNull();
+    expect(trigger.id).toBe("template");
+    expect(trigger.getAttribute("aria-invalid")).toBe("true");
+    expect(trigger.getAttribute("aria-describedby")).toBe("template-error");
+    await act(async () => { trigger.focus(); trigger.blur(); });
+    expect(onFocus).toHaveBeenCalledOnce();
+    expect(onBlur).toHaveBeenCalledOnce();
+  });
+
+  it("skips disabled choices and scrolls only the list during keyboard navigation", async () => {
+    const onValueChange = vi.fn();
+    await act(async () => root.render(
+      <SearchableSelect value="first" onValueChange={onValueChange} options={[
+        { value: "first", label: "First" },
+        { value: "disabled", label: "Unavailable", disabled: true },
+        { value: "last", label: "Last" },
+      ]} />,
+    ));
+    const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    await act(async () => trigger.click());
+    await flushUi();
+    const list = document.body.querySelector<HTMLDivElement>('[role="listbox"]')!;
+    const rows = document.body.querySelectorAll<HTMLButtonElement>('[role="option"]');
+    vi.spyOn(list, "getBoundingClientRect").mockReturnValue({ top: 100, bottom: 200 } as DOMRect);
+    vi.spyOn(rows[2]!, "getBoundingClientRect").mockReturnValue({ top: 220, bottom: 250 } as DOMRect);
+    const pageScroll = window.scrollY;
+    const search = document.body.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    await act(async () => { search.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    await flushUi();
+    expect(search.getAttribute("aria-activedescendant")).toBe(rows[2]!.id);
+    expect(list.scrollTop).toBe(50);
+    expect(window.scrollY).toBe(pageScroll);
+    await act(async () => { search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(onValueChange).toHaveBeenCalledWith("last", expect.objectContaining({ value: "last" }));
+  });
+
   it("bounds a very large list while keeping the selected option reachable", async () => {
     const options = Array.from({ length: 1258 }, (_, index) => ({
       value: `zone-${index + 1}`,

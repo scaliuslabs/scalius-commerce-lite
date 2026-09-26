@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  HOME_BRAND_LIMIT,
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
+  homeSectionRequestsEmpty,
   storefrontProductSourceKey,
 } from "./home-data";
 import {
@@ -11,6 +13,7 @@ import {
   STOREFRONT_SECTION_TYPES,
   storefrontSectionDefault,
   storefrontSectionListSchema,
+  storefrontSectionNeedsContent,
   storefrontSectionRenderer,
   type StorefrontSection,
 } from "./sections";
@@ -35,7 +38,14 @@ describe("homepage section data requests", () => {
     const requests = homeSectionRequests([
       section({ id: "a", type: "product-rail", version: 1, settings: { title: "", source: { kind: "newest" }, limit: 8 } }),
       section({ id: "b", type: "product-grid", version: 1, settings: { title: "", source: { kind: "newest" }, columns: 6, rows: 4 } }),
-      section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, endsAt: null } }),
+      section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: "promo_a" } }),
+      section({ id: "c2", type: "product-tabs", version: 1, settings: { title: "", limit: 8, tabs: [
+        { label: "", source: { kind: "on-sale" } },
+        { label: "Top", source: { kind: "popular" } },
+      ] } }),
+      section({ id: "c3", type: "shop-by", version: 1, settings: { title: "", cards: [{ mediaId: "m5", title: "Eid", href: "/eid" }] } }),
+      section({ id: "c4", type: "banner-mosaic", version: 1, settings: { tiles: [{ mediaId: "m6", alt: "", href: null }, { mediaId: "m1", alt: "", href: null }] } }),
+      section({ id: "c5", type: "brand-wall", version: 1, settings: { title: "", style: "rail" } }),
       section({ id: "d", type: "lookbook", version: 1, settings: { title: "", mediaId: "m1", source: { kind: "category", categoryId: "cat" } } }),
       section({ id: "e", type: "banner", version: 1, settings: { layout: "two-up", heading: "", text: "", mediaId: "m1", cta: null } }),
       section({ id: "f", type: "editorial", version: 1, settings: { layout: "image-with-text", heading: "", body: "", mediaId: "m2", imageSide: "end" } }),
@@ -47,10 +57,36 @@ describe("homepage section data requests", () => {
     expect(requests.lists).toEqual([
       { key: "newest", source: { kind: "newest" }, limit: 36 },
       { key: "on-sale", source: { kind: "on-sale" }, limit: 12 },
+      { key: "popular", source: { kind: "popular" }, limit: 8 },
       { key: "category:cat", source: { kind: "category", categoryId: "cat" }, limit: 8 },
     ]);
     // Side banners only show beside a contained hero.
-    expect(requests.mediaIds).toEqual(["m1", "m2", "m3"]);
+    expect(requests.mediaIds).toEqual(["m5", "m6", "m1", "m2", "m3"]);
+    expect(requests.brandLimit).toBe(HOME_BRAND_LIMIT);
+    expect(requests.promotionIds).toEqual(["promo_a"]);
+  });
+
+  it("reads no brands or promotions for a homepage without a brand wall or a promotion deal", () => {
+    const requests = homeSectionRequests([
+      section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: null } }),
+    ]);
+    expect(requests.brandLimit).toBe(0);
+    expect(requests.promotionIds).toEqual([]);
+    expect(homeSectionRequestsEmpty(homeSectionRequests([storefrontSectionDefault("faq", "f")]))).toBe(true);
+  });
+
+  it("flags sections whose own words or photos are missing, never data-driven ones", () => {
+    const needs = STOREFRONT_SECTION_TYPES.filter((type) => storefrontSectionNeedsContent(storefrontSectionDefault(type, "x")));
+    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "editorial", "faq", "seo-text", "shop-by", "utility-cards"]);
+    expect(storefrontSectionNeedsContent(section({ id: "b", type: "banner", version: 1, settings: { layout: "full", heading: "Eid", text: "", mediaId: null, cta: null } }))).toBe(false);
+  });
+
+  it("bounds tabbed product blocks to 2 to 4 tabs", () => {
+    const tabs = (count: number) => storefrontSectionListSchema.safeParse([{
+      id: "t", type: "product-tabs", version: 1,
+      settings: { title: "", limit: 8, tabs: Array.from({ length: count }, () => ({ label: "", source: { kind: "newest" } })) },
+    }]).success;
+    expect([1, 2, 4, 5].map(tabs)).toEqual([false, true, true, false]);
   });
 
   it("caps the lists and images one homepage reads", () => {
@@ -64,7 +100,7 @@ describe("homepage section data requests", () => {
 
   it("renders every section type whose data exists today", () => {
     const waiting = STOREFRONT_SECTION_TYPES.filter((type) => !(STOREFRONT_SECTION_RENDERERS as readonly string[]).includes(type));
-    expect(waiting.sort()).toEqual(["brand-wall", "newsletter", "recently-viewed"]);
+    expect(waiting.sort()).toEqual(["newsletter"]);
     for (const type of STOREFRONT_SECTION_TYPES) {
       const expected = waiting.includes(type) ? null : type;
       expect(storefrontSectionRenderer(storefrontSectionDefault(type, "x"))).toBe(expected);

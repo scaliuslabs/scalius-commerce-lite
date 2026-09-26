@@ -100,9 +100,13 @@ describe("R2 storage URL handling", () => {
 
     await deleteMediaVariants("media/media_abc12345.png", 500, bucket);
     expect(bucket.delete).toHaveBeenCalledWith([
-      "media/media_abc12345.png/160.webp",
-      "media/media_abc12345.png/320.webp",
-      "media/media_abc12345.png/480.webp",
+      "media/media_abc12345.png/144.webp",
+      "media/media_abc12345.png/172.webp",
+      "media/media_abc12345.png/206.webp",
+      "media/media_abc12345.png/247.webp",
+      "media/media_abc12345.png/296.webp",
+      "media/media_abc12345.png/355.webp",
+      "media/media_abc12345.png/426.webp",
       "media/media_abc12345.png/500.webp",
     ]);
   });

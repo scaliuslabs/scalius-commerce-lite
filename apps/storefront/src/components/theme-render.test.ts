@@ -265,6 +265,8 @@ const HOMEPAGE_CONTENT: HomepageContent = {
   deliveryFacts: HOMEPAGE_DATA.deliveryFacts as HomepageContent["deliveryFacts"],
   lists: new Map(SECTION_LISTS.map((list) => [list.key, list as never])),
   media: new Map(),
+  brands: [],
+  promotionEnds: new Map(),
 };
 const HOMEPAGE_PROPS = { content: HOMEPAGE_CONTENT, currencySymbol: "৳", currencyCode: "BDT" };
 const NO_HERO = { desktop: [], mobile: [] };

@@ -15,8 +15,8 @@
 // `?brand=<brand slug>` for the brand entity. Values are normalised: text and
 // enum values lowercased and trimmed, numbers canonical ("15.6"), booleans
 // "1"/"0".
-import { brands, productAttributes, attributeValues } from "@scalius/database/schema";
-import { and, sql, type SQL } from "drizzle-orm";
+import { brands, productAttributes, attributeValues, categoryClosure } from "@scalius/database/schema";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import {
     OPTION_FACET_KEY_PREFIX,
     canonicalAttributeNumber,
@@ -31,6 +31,7 @@ import type { CatalogFacetFilter } from "../products/types";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { buildStorefrontBuyerStateConditions, reviewStats } from "./shared";
+import { categoryScope, deps } from "./declare-deps";
 import { reviewsEnabledSql } from "../settings/documents";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 
@@ -197,6 +198,10 @@ export async function resolvePublicAttributeFilters(
     const slugs = uniqueStrings([...requestedValues.keys(), ...rangeBounds.keys()]);
     if (slugs.length === 0 && brandSlugs.length === 0) return optionFilters;
 
+    // Slugs, enum values and brand slugs are looked up by value: any
+    // definition or brand change can make a parameter resolve differently.
+    if (slugs.length > 0) deps.anyAttribute();
+    if (brandSlugs.length > 0) deps.anyBrand();
     const enumCandidates = uniqueStrings([...requestedValues.values()].flat().map(normalizeAttributeValue));
     // The slug indexes drive every branch; `status || ''` (a unary + on text
     // does not compile on PostgreSQL) keeps the brand status index from
@@ -486,6 +491,12 @@ export interface CatalogFacetCountInput {
     /** Count the brand facet (not on a brand's own page). */
     brandFacet?: boolean;
     /**
+     * The caller declares `c:` for the category and its ancestors from a
+     * statement it already runs (listing.ts reads them with its count), so
+     * the facet read adds no ancestor lookup of its own.
+     */
+    categoryAncestorsDeclared?: boolean;
+    /**
      * Count the "N★ & up" rating facet (listings; `groupCatalogRatingFacet`),
      * read from `product_review_stats` by primary key per scoped product (R9).
      */
@@ -522,6 +533,8 @@ export type CatalogFacetCountRow = {
     swatch: string | null;
     rangeMin: number | null;
     rangeMax: number | null;
+    /** An option value's sample SKU's product: the facet's axis name is read from it. */
+    sampleProductId?: string | null;
 };
 
 /**
@@ -537,7 +550,49 @@ export type CatalogFacetCountRow = {
  * probed per scoped product (`CROSS JOIN` fixes that order, since SQLite has
  * no statistics on D1 and would otherwise walk every option row in the store).
  */
-export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput) {
+export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput): Promise<CatalogFacetCountRow[]> {
+    // Facet names, units, displays and enum labels come from the attribute
+    // definitions of whatever the scope holds; brand facets from brand rows.
+    deps.anyAttribute();
+    if (input.brandFacet !== false) deps.anyBrand();
+    // The category facet: which categories are published, and the tree.
+    if (input.categoryFacet) deps.anyCategory();
+    const rows = catalogFacetCountRows(db, input).then((facetRows) => {
+        declareOptionFacetNames(facetRows);
+        return facetRows;
+    });
+    if (!input.categoryId || input.categoryAncestorsDeclared || !deps.active()) return rows;
+    // The category's effective attribute set is its own and its ancestors'
+    // (category_attribute_sets advances only `c:<the set's category>`).
+    const ancestors = db
+        .select({ id: categoryClosure.ancestorId })
+        .from(categoryClosure)
+        .where(eq(categoryClosure.descendantId, input.categoryId))
+        .all()
+        .then((ancestorRows: Array<{ id: string }>) => deps.categories(ancestorRows.map((row) => row.id)));
+    return Promise.all([rows, ancestors]).then(([facetRows]) => facetRows);
+}
+
+/** An option facet's name is its axis name on the value's sample SKU, a `p:` fact of that SKU's product. */
+function declareOptionFacetNames(rows: readonly CatalogFacetCountRow[]): void {
+    if (!deps.active()) return;
+    deps.products(rows.filter((row) => row.facetKind === "option").map((row) => row.sampleProductId));
+}
+
+/**
+ * A facet read that shows no product at all (no card, no option value) still
+ * names the option tables in its axis-name lookup, though nothing it returns
+ * depends on them. Coverage is decided per table and kind, so only the
+ * tables' own coarse keys can cover that read: a cheap, empty entry.
+ */
+export function declareFacetReadWithoutProducts(rows: readonly CatalogFacetCountRow[]): void {
+    if (!deps.active() || rows.some((row) => row.facetKind === "option")) return;
+    deps.table("product_option_definitions");
+    deps.table("product_variant_option_values");
+    deps.table("product_variants");
+}
+
+function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
     const sets = splitFacetFilters(input.filters);
     const minRatingCenti = input.minRating === undefined ? undefined : input.minRating * 100;
     const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;
@@ -782,7 +837,11 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
             value_count AS valueCount, display_label AS valueLabel, display_sort AS valueSort,
             value_number AS valueNumber, facet_name AS facetName, facet_slug AS facetSlug,
             facet_display AS facetDisplay, facet_unit AS facetUnit, facet_order AS facetOrder,
-            url_value AS urlValue, swatch, range_min AS rangeMin, range_max AS rangeMax
+            url_value AS urlValue, swatch, range_min AS rangeMin, range_max AS rangeMax,
+            CASE WHEN facet_kind = 'option' THEN (
+                SELECT sample_variant.product_id FROM product_variants AS sample_variant
+                WHERE sample_variant.id = facet_ranked.sample_sku
+            ) END AS sampleProductId
         FROM facet_ranked
         WHERE (facet_kind <> 'attribute' OR facet_rank <= ${sql.raw(String(boundedLimit(input.attributeLimit, FACET_ATTRIBUTE_LIMIT)))})
           AND (value_rank <= CASE facet_kind WHEN 'brand' THEN ${sql.raw(String(brandValueLimit))} ELSE ${sql.raw(String(valueLimit))} END OR is_selected = 1)
@@ -790,6 +849,7 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
     `), [
         "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
         "facetSlug", "facetDisplay", "facetUnit", "facetOrder", "urlValue", "swatch", "rangeMin", "rangeMax",
+        "sampleProductId",
     ]);
 }
 
@@ -926,6 +986,12 @@ const DEFINITION_FACET_LIMITS = { attributeLimit: 20, valueLimit: 30 };
  * and restricts the attribute facets).
  */
 export async function getPublicCategoryFacets(db: Database, categoryId: string): Promise<{ facets: PublicProductFacet[] }> {
+    // Counts change with the scope's facet rows and with its membership
+    // (whatever order a refresh writes them in); the subtree with which
+    // descendants are published.
+    deps.listFacets(categoryScope(categoryId));
+    deps.listMembership(categoryScope(categoryId));
+    deps.anyCategory();
     const rows = await buildCatalogFacetCountQuery(db, {
         baseConditions: [publicBuyerStateCondition(), publicCategorySubtreeCondition(buyerState.categoryId, categoryId)],
         needsProducts: false,
@@ -933,6 +999,7 @@ export async function getPublicCategoryFacets(db: Database, categoryId: string):
         categoryId,
         ...DEFINITION_FACET_LIMITS,
     });
+    declareFacetReadWithoutProducts(rows);
     return { facets: groupCatalogFacets(rows) };
 }
 
@@ -942,6 +1009,10 @@ export async function getPublicSearchFacets(
     search: string,
     category?: string,
 ): Promise<{ facets: PublicProductFacet[] }> {
+    deps.listFacets("all");
+    deps.listMembership("all");
+    deps.search();
+    deps.anyCategory();
     const { conditions, needsProducts } = buildStorefrontBuyerStateConditions(db, { search, category });
     const rows = await buildCatalogFacetCountQuery(db, {
         baseConditions: conditions,
@@ -949,5 +1020,6 @@ export async function getPublicSearchFacets(
         filters: [],
         ...DEFINITION_FACET_LIMITS,
     });
+    declareFacetReadWithoutProducts(rows);
     return { facets: groupCatalogFacets(rows) };
 }

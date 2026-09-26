@@ -8,6 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { productContentBlockDefault } from "@scalius/shared/product-content-blocks";
 import { getStorefrontProductBySlug } from "../catalog/product-page";
+import { withDependencyScope } from "../../cache-deps";
 import { loadMediaUsage } from "../media/media.usage";
 import {
     PRODUCT_CONTENT_BLOCK_TEXT_CHUNK_MAX,
@@ -171,6 +172,23 @@ describe("product content blocks", () => {
             offset = chunk.nextOffset;
         }
         expect(JSON.parse(text)).toEqual({ title: "Story", html });
+    });
+
+    it("loads a file video poster from that video's media reference", async () => {
+        sqlite.exec("UPDATE media SET poster_media_id = 'med_photo' WHERE id = 'med_clip'; UPDATE media SET variant_width = 800 WHERE id = 'med_photo'");
+        await replace([block("after-buy-box", { type: "video", version: 1, settings: {
+            heading: "Harvest", source: { kind: "media", mediaId: "med_clip" },
+        } })]);
+        const read = () => withDependencyScope(() => getStorefrontProductBySlug(db, "honey"), { strict: true });
+        const { value: page, dependencies } = await read();
+        expect(page!.product.contentBlockMedia).toEqual([expect.objectContaining({
+            id: "med_clip", kind: "video", posterUrl: expect.stringContaining("media/jar.jpg/800.webp"),
+        })]);
+        expect(dependencies.keys).toEqual(expect.arrayContaining(["m:med_clip", "m:med_photo"]));
+        sqlite.exec("UPDATE media SET status = 'trashed', trashed_at = unixepoch() WHERE id = 'med_photo'");
+        const hidden = await read();
+        expect(hidden.value!.product.contentBlockMedia[0]!.posterUrl).toBeNull();
+        expect(hidden.dependencies.keys).toContain("m:med_photo");
     });
 
     it("renders blocks on the product page in placement then page order, with their files", async () => {

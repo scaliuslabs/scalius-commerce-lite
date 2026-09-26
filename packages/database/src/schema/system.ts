@@ -81,6 +81,36 @@ export const cacheGeneration = sqliteTable("cache_generation", {
 ]);
 
 /**
+ * Commit-ordered change clock of the dependency-validated cache (migration
+ * 0100). One row. `seq` is the highest `cache_dep.seq` committed; a render
+ * reads it first (`s0`). `floor` is raised when old `cache_dep` rows are
+ * pruned (an entry below it is invalid). `coarse` is 1 only inside a
+ * catalogue-wide rebuild batch, where every trigger advances `store` instead
+ * of its own keys. Written only by the generated triggers and that batch.
+ */
+export const cacheClock = sqliteTable("cache_clock", {
+    id: integer("id").primaryKey(),
+    seq: integer("seq").notNull().default(0),
+    floor: integer("floor").notNull().default(0),
+    coarse: integer("coarse").notNull().default(0),
+}, (table) => [
+    check("cache_clock_singleton", sql`${table.id} = 1`),
+    check("cache_clock_coarse_flag", sql`${table.coarse} IN (0, 1)`),
+]);
+
+/**
+ * Dependency key -> clock value of its last buyer-visible change. Kept by the
+ * triggers generated from `@scalius/shared/cache-deps` in the same
+ * transaction as the change; `cache_dep_seq_idx` serves the frontier range scan.
+ */
+export const cacheDep = sqliteTable("cache_dep", {
+    dep: text("dep").primaryKey(),
+    seq: integer("seq").notNull(),
+}, (table) => [
+    index("cache_dep_seq_idx").on(table.seq),
+]);
+
+/**
  * Published storefront theme document.
  *
  * Presentation settings affect every buyer-facing route, so they need an explicit

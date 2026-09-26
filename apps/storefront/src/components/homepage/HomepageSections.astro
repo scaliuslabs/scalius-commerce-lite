@@ -6,10 +6,14 @@
 // (a leading hero is also preloaded by pages/index.astro).
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
+  dealEndsAt,
   homepageCollectionsFallback,
   homepageMedia,
+  homepageMosaicTiles,
   homepageRenderUnits,
   homepageSectionProducts,
+  homepageSectionTabs,
+  homepageShopByCards,
   type HomepageContent,
 } from "@/lib/homepage-sections";
 import Hero from "@/components/hero.astro";
@@ -26,6 +30,11 @@ import FaqSection from "./FaqSection.astro";
 import UtilityCards from "./UtilityCards.astro";
 import EndlessGrid from "./EndlessGrid.astro";
 import SeoText from "./SeoText.astro";
+import ProductTabs from "./ProductTabs.astro";
+import ShopByCards from "./ShopByCards.astro";
+import BannerMosaic from "./BannerMosaic.astro";
+import BrandWall from "./BrandWall.astro";
+import RecentlyViewed from "./RecentlyViewed.astro";
 
 interface Props {
   sections: StorefrontSection[];
@@ -104,8 +113,36 @@ const money = { currencySymbol, currencyCode };
         )}
 
         {section.type === "deal-block" && list && (
-          <DealBlock section={section} title={list.title} href={list.href} products={list.products} aboveFold={lead} {...money} />
+          <DealBlock
+            section={section}
+            title={list.title}
+            href={list.href}
+            products={list.products}
+            aboveFold={lead}
+            endsAt={dealEndsAt(section, content)}
+            {...money}
+          />
         )}
+
+        {section.type === "product-tabs" && (
+          <ProductTabs
+            sectionId={section.id}
+            title={section.settings.title}
+            tabs={homepageSectionTabs(section, content)}
+            aboveFold={lead}
+            {...money}
+          />
+        )}
+
+        {section.type === "shop-by" && (
+          <ShopByCards sectionId={section.id} title={section.settings.title} cards={homepageShopByCards(section, content)} aboveFold={lead} />
+        )}
+
+        {section.type === "banner-mosaic" && <BannerMosaic tiles={homepageMosaicTiles(section, content)} aboveFold={lead} />}
+
+        {section.type === "brand-wall" && <BrandWall section={section} brands={content.brands} />}
+
+        {section.type === "recently-viewed" && <RecentlyViewed section={section} />}
 
         {section.type === "lookbook" && list && (
           <Lookbook

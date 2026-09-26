@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { RichContent } from "../ui/rich-content";
-import { NativeSelect } from "../ui/native-select";
+import { SearchableSelect } from "../ui/searchable-select";
+import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
+import { CategoryAttributeSetCard } from "@/components/admin/catalog/CategoryAttributeSetCard";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
@@ -18,13 +20,19 @@ import { SearchListingCard, autoHandleFor } from "@/components/admin/search-list
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
-import { categoryQueryOptions, type CategoryDetail } from "@/lib/api-query-options/categories";
+import {
+  categoryFormOptionsQueryOptions,
+  categoryQueryOptions,
+  type CategoryDetail,
+} from "@/lib/api-query-options/categories";
+import { categoryPathLabel, indexCategories } from "@/lib/category-tree";
+import { parentChoices } from "@/lib/category-parent-choices";
 import { categoryFormSchema, type CategoryFormInput, type CategoryFormValues } from "@/lib/form-schemas";
 import { getPlainText } from "@/lib/format-utils";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
-import { readCategoryRevisionConflict } from "@/lib/admin-api-error";
+import { readAdminApiErrorCode, readCategoryRevisionConflict } from "@/lib/admin-api-error";
 import { useMessages } from "~/i18n";
 import { categoryFormMessages } from "~/i18n/category-form";
 
@@ -47,6 +55,8 @@ function toCategoryInput(values: CategoryFormValues): CategoryInput {
     canonicalPath: values.canonicalPath,
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
+    parentId: values.parentId,
+    listingTemplate: values.listingTemplate,
     image: image
       ? {
           id: image.id,
@@ -81,6 +91,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       noIndex: false,
       excludeFromSitemap: false,
       image: null,
+      parentId: null,
+      listingTemplate: null,
       ...defaultValues,
     },
   });
@@ -121,6 +133,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     },
     onError: (error, message) => {
       if (readCategoryRevisionConflict(error)) throw new SaveConflict(t("conflict"));
+      if (readAdminApiErrorCode(error) === "CATEGORY_PLACEMENT_REFUSED") {
+        form.setError("parentId", { type: "server", message: t("placementRefused") });
+        return t("placementRefused");
+      }
       const address = message.includes("exists in trash")
         ? t("addressInTrash")
         : message.includes("slug already exists")
@@ -261,6 +277,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             </CardContent>
           </Card>
 
+          {isEdit && defaultValues?.id ? (
+            <CategoryAttributeSetCard categoryId={defaultValues.id} canEdit={canSave} />
+          ) : null}
+
           <SearchListingCard
             resource="category"
             value={{
@@ -311,11 +331,13 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <NativeSelect value={field.value} onValueChange={field.onChange} disabled={!canSave} aria-label={t("status")}>
-                        <option value="published">{t("active")}</option>
-                        <option value="draft">{t("draft")}</option>
-                        <option value="internal">{t("hidden")}</option>
-                      </NativeSelect>
+                      <SearchableSelect
+                        value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
+                        triggerRef={field.ref}
+                        onBlur={field.onBlur}
+                        triggerClassName="w-full"
+                        options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }, { value: "internal", label: t("hidden") }]}
+                      />
                     </FormControl>
                     <FormDescription>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
@@ -339,8 +361,94 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               ) : null}
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("organization")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="parentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="category-parent">{t("parentCategory")}</FormLabel>
+                    <ParentCategorySelect
+                      selfId={defaultValues?.id}
+                      name={name ?? ""}
+                      value={field.value ?? null}
+                      onChange={field.onChange}
+                      disabled={!canSave}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="listingTemplate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="category-template">{t("template")}</FormLabel>
+                    <TemplateSelect
+                      id="category-template"
+                      kind="listing"
+                      value={field.value ?? null}
+                      onChange={field.onChange}
+                      disabled={!canSave}
+                    />
+                    <FormDescription>{t("templateHelp")}</FormDescription>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </FormContainer>
+  );
+}
+
+/**
+ * The category this one sits under, named by its path. Its own subtree and
+ * places that would make a fifth level are left out (the server refuses them).
+ */
+function ParentCategorySelect({ selfId, name, value, onChange, disabled }: {
+  selfId?: string;
+  name: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled?: boolean;
+}) {
+  const t = useMessages(categoryFormMessages);
+  const { data } = useQuery(categoryFormOptionsQueryOptions());
+  const categories = data?.categories ?? [];
+  const byId = indexCategories(categories);
+  const options = parentChoices(selfId, categories).map((category) => ({
+    value: category.id,
+    label: categoryPathLabel(category.id, byId),
+    keywords: [category.name],
+    description: category.status === "published" ? undefined : t(category.status === "internal" ? "hidden" : "draft"),
+  }));
+  const parentPath = value ? categoryPathLabel(value, byId) : "";
+  const ownName = name.trim() || t("thisCategory");
+  return (
+    <>
+      <SearchableSelect
+        id="category-parent"
+        value={value ?? ""}
+        options={options}
+        selectedLabel={parentPath || undefined}
+        clearable
+        disabled={disabled}
+        triggerClassName="w-full"
+        placeholder={t("topLevel")}
+        searchPlaceholder={t("searchCategories")}
+        emptyMessage={t("noCategoriesFound")}
+        onValueChange={(next) => onChange(next || null)}
+      />
+      <FormDescription>
+        {t("path", { path: parentPath ? `${parentPath} › ${ownName}` : ownName })}
+      </FormDescription>
+    </>
   );
 }

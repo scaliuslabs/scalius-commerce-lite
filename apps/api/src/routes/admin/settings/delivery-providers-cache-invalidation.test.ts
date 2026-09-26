@@ -5,7 +5,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
-  bumpCacheGeneration: vi.fn(),
+
   getCredentialEncryptionKey: vi.fn(),
   requireEncryptionKey: vi.fn(),
   readStoredCredentialStrict: vi.fn(),
@@ -15,10 +15,6 @@ const mocks = vi.hoisted(() => ({
   testDeliveryProvider: vi.fn(),
   createProvider: vi.fn(),
   deleteWhere: vi.fn(),
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../../utils/encryption-key", () => ({
@@ -73,7 +69,6 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
   mocks.requireEncryptionKey.mockReturnValue("credential-key");
   mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
@@ -99,12 +94,12 @@ function createTestApp() {
   return { app, env };
 }
 
-describe("delivery provider cache invalidation", () => {
+describe("delivery provider write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates checkout caches after provider creation", async () => {
+  it("returns success after provider creation", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -130,8 +125,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
     expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
@@ -212,10 +206,10 @@ describe("delivery provider cache invalidation", () => {
       },
     });
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("invalidates checkout caches after provider updates", async () => {
+  it("returns success after provider updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -242,8 +236,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -467,7 +460,7 @@ describe("delivery provider cache invalidation", () => {
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
   });
 
-  it("records existing-provider test attempts and invalidates checkout caches", async () => {
+  it("records existing-provider test attempts", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -485,8 +478,7 @@ describe("delivery provider cache invalidation", () => {
       "provider_pathao",
       "credential-key",
     );
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("does not return upstream failure details from credential tests", async () => {
@@ -624,10 +616,10 @@ describe("delivery provider cache invalidation", () => {
       },
     });
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("invalidates checkout caches after update creates a missing provider", async () => {
+  it("returns success after update creates a missing provider", async () => {
     const { app, env } = createTestApp();
     mocks.getDeliveryProvider.mockResolvedValueOnce(null);
 
@@ -655,8 +647,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
     expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
   });
 
@@ -688,7 +679,7 @@ describe("delivery provider cache invalidation", () => {
     );
   });
 
-  it("invalidates checkout caches after provider deletion", async () => {
+  it("returns success after provider deletion", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
@@ -698,7 +689,6 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 });

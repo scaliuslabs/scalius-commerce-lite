@@ -22,6 +22,7 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { checkoutDocument, customerAuthDocument } from "./documents";
 import { selectSettingsDocuments } from "./settings-store";
+import { deps } from "../../cache-deps";
 
 /**
  * Checkout readiness speaks the one shared vocabulary (`status` + `issues`)
@@ -84,6 +85,8 @@ export async function getCheckoutDeliveryReadiness(
 ): Promise<CheckoutDeliveryReadiness> {
     const excludedShippingMethodIds = uniqueIds(options.excludeShippingMethodIds);
     const excludedDeliveryLocationIds = uniqueIds(options.excludeDeliveryLocationIds);
+    deps.shipping();
+    deps.locations();
 
     const shippingConditions: SQL[] = [
         eq(shippingMethods.isActive, true),

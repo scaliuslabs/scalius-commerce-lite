@@ -33,10 +33,20 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
   },
   "storefront.categories.list_children": { limits: { request: 16_384 } },
   "storefront.categories.list_summaries": { limits: { request: 16_384 } },
+  "storefront.categories.sitemap": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "XML discovery source of up to 5,000 category URLs for the storefront sitemap; use storefront.categories.list_summaries.",
+  },
   "storefront.categories.tree": { limits: { request: 16_384 } },
   "storefront.collections.directory": { limits: { request: 16_384 } },
   "storefront.collections.get": { limits: { request: 16_384 } },
   "storefront.collections.list": { limits: { request: 16_384 } },
+  "storefront.collections.sitemap": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "XML discovery source of up to 5,000 collection URLs for the storefront sitemap; use storefront.collections.list.",
+  },
   "storefront.products_feed.get_feed": {
     exposure: "excluded",
     principals: ["internal"],

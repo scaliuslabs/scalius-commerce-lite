@@ -6,7 +6,7 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 - `index.ts` -- barrel exports (re-exports everything from `storefront.service.ts`)
 - `storefront.service.ts` -- `getHomepageData()`, `getLayoutData()`
-- `homepage-sections.ts` -- the homepage section images, planned into the homepage's second batch (the product lists are `catalog/home-lists.ts`)
+- `homepage-sections.ts` -- the homepage section images and deal countdowns, planned into the homepage's second batch (catalog lists and brands live in `catalog/home-lists.ts` and `catalog/home-brands.ts`)
 
 ## Local Helpers
 
@@ -32,6 +32,8 @@ a theme preview passes `requests` for its draft instead.
   homepage collections and of collection-sourced section lists;
 - `planHomeProductLists()` (`catalog/home-lists.ts`): newest, on sale,
   popular (distinct buyers in real orders of 30 days) and category lists;
+- `planHomeBrands()` (`catalog/home-brands.ts`): public brands with public products;
+- `planHomePromotions()` (`homepage-sections.ts`): running promotions' end times;
 - `planHomeMedia()` (`homepage-sections.ts`): section images (ready or trashed images only);
 - the hero rendition lookup for slides still on an original upload.
 

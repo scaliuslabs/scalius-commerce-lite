@@ -7,6 +7,8 @@ rewrite thresholds are recorded in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEAS
 How a storefront page renders from one API batch, the per-page API and D1
 budgets, API placement, and `pnpm perf:storefront` are in
 [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
+Public cache validity, dependency triggers, and the one-second edge freshness
+contract are in [CACHE-FRESHNESS.md](./platform/CACHE-FRESHNESS.md).
 
 
 ## System Overview

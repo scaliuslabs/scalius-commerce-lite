@@ -4,9 +4,17 @@
 // - Duplicate variant merging
 // - Rollback mechanics
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { groupReservationMovementsForAudit, reserveStockBatch } from "../../../../packages/core/src/modules/inventory/reserve";
 import { inventoryMovements, productVariants } from "../../../../packages/database/src/schema";
+
+// Keep the inventory batch observable without reproducing the catalog SQL builder.
+// catalog-projections.d1.test.ts verifies the real refresh against migrated SQLite.
+vi.mock("../../../../packages/core/src/modules/products/catalog-projections", () => ({
+  catalogBuyerStateRefreshStatementsForSkus: (_db: unknown, skuIds: readonly string[]) => [
+    { kind: "refreshBuyerState", skuIds },
+  ],
+}));
 
 // ---------------------------------------------------------------------------
 // Types
@@ -408,6 +416,7 @@ describe("reserveStockBatch strict movement claims", () => {
       expect.objectContaining({ kind: "batchGuard" }),
       expect.objectContaining({ kind: "insertMovement", table: inventoryMovements }),
       expect.objectContaining({ kind: "updateVariant", table: productVariants }),
+      expect.objectContaining({ kind: "refreshBuyerState", skuIds: ["var_a"] }),
     ]);
   });
 
