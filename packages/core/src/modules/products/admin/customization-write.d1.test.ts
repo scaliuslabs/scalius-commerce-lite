@@ -152,13 +152,14 @@ describe("product writes persist buyer inputs and fulfilment kinds", () => {
         const { id } = await createProduct(db, createProductSchema.parse({ ...baseInput, customizationSchema: buyerInputs }));
         const stored = product(id)?.customization_schema;
 
-        await updateProduct(db, id, updateInput(id, 1));
+        // Omitted keeps the stored schema; a save that changes nothing is a no-op.
+        expect(await updateProduct(db, id, updateInput(id, 1))).toEqual({ aggregateRevision: 1 });
         expect(product(id)?.customization_schema).toBe(stored);
 
         const before = authorityRevision();
-        await updateProduct(db, id, updateInput(id, 2, { customizationSchema: null }));
+        await updateProduct(db, id, updateInput(id, 1, { customizationSchema: null }));
         expect(product(id)?.customization_schema).toBeNull();
-        expect(product(id)?.aggregate_revision).toBe(3);
+        expect(product(id)?.aggregate_revision).toBe(2);
         expect(authorityRevision()).toBe(before + 1);
     });
 

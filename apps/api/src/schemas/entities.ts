@@ -168,6 +168,8 @@ export const productDetailSchema = z.object({
   categoryId: z.string().nullable(),
   /** The product's brand (brd_…), or null. */
   brandId: z.string().nullable(),
+  /** The brand's name, or null without a brand. */
+  brandName: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
   canonicalPath: z.string().nullable(),
@@ -709,6 +711,12 @@ export const pageSchema = z.object({
   updatedAt: nullableTimestampSchema,
   deletedAt: nullableTimestampSchema,
 });
+
+/** A public CMS page retains truthful `updatedAt` for sitemap lastmod, but no editor revision. */
+export const publicPageSchema = pageSchema.omit({ revision: true });
+
+/** An article as buyers get it: no `revision`; `updatedAt` feeds the blog's dateModified. */
+export const publicArticleSchema = pageSchema.omit({ revision: true });
 
 // ─────────────────────────────────────────
 // Attributes

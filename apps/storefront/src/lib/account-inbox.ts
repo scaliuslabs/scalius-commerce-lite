@@ -136,7 +136,7 @@ export function statusFlagForApiStatus(status: number, action: "post" | "start" 
 }
 
 // Pages that host a conversation form. A post only ever redirects back to one.
-const RETURN_PATH_PATTERN = /^\/(?:account\/inbox(?:\/[A-Za-z0-9_-]{1,128})?|account\/orders\/[A-Za-z0-9_-]{1,128}|order-success|track-order)\/?$/;
+const RETURN_PATH_PATTERN = /^\/(?:account\/inbox(?:\/[A-Za-z0-9_-]{1,128})?|account\/orders\/[A-Za-z0-9_-]{1,128}|account\/warranties|warranty-claims\/[A-Za-z0-9_-]{1,128}\/wcl_[A-Za-z0-9_-]{8,64}|order-success|track-order)\/?$/;
 
 /**
  * A same-origin page to return to after a post, or null. Only the pages that
@@ -306,10 +306,16 @@ export function conversationEventLine(message: Pick<BuyerConversationMessage, "e
 
 /** Same-origin image URL for an attachment. Opaque ids only; the proxy adds the session or receipt proof. */
 export function conversationAttachmentUrl(
-  target: { access: "account"; conversationId: string } | { access: "receipt"; orderId: string },
+  target:
+    | { access: "account"; conversationId: string }
+    | { access: "receipt"; orderId: string }
+    | { access: "claim"; orderId: string; claimId: string },
   attachmentId: string,
 ): string {
   const attachment = encodeURIComponent(attachmentId);
+  if (target.access === "claim") {
+    return `/api/warranties/orders/${encodeURIComponent(target.orderId)}/claims/${encodeURIComponent(target.claimId)}/attachments/${attachment}`;
+  }
   return target.access === "account"
     ? `/api/conversations/${encodeURIComponent(target.conversationId)}/attachments/${attachment}`
     : `/api/conversations/orders/${encodeURIComponent(target.orderId)}/attachments/${attachment}`;

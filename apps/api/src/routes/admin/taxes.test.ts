@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   getTaxConfiguration: vi.fn(),
   updateTaxSettings: vi.fn(),
   updateTaxRate: vi.fn(),
-  invalidate: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
@@ -17,10 +16,6 @@ vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
     updateTaxRate: mocks.updateTaxRate,
   };
 });
-
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.invalidate,
-}));
 
 import { adminTaxRoutes } from "./taxes";
 
@@ -75,7 +70,6 @@ beforeEach(() => {
     updatedAt: new Date("2026-07-10T00:00:00.000Z"),
     deletedAt: null,
   });
-  mocks.invalidate.mockResolvedValue(undefined);
 });
 
 describe("Admin tax routes", () => {
@@ -97,10 +91,9 @@ describe("Admin tax routes", () => {
         ],
       },
     });
-    expect(mocks.invalidate).not.toHaveBeenCalled();
   });
 
-  it("forwards the optimistic settings version and invalidates checkout reads", async () => {
+  it("forwards the optimistic settings version", async () => {
     const body = {
       expectedVersion: 1,
       enabled: false,
@@ -118,7 +111,6 @@ describe("Admin tax routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.updateTaxSettings).toHaveBeenCalledWith(expect.anything(), body);
-    expect(mocks.invalidate).toHaveBeenCalledWith(expect.anything());
     expect(await response.json()).toMatchObject({
       success: true,
       data: { settings: { version: 2 } },
@@ -134,7 +126,6 @@ describe("Admin tax routes", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.updateTaxSettings).not.toHaveBeenCalled();
-    expect(mocks.invalidate).not.toHaveBeenCalled();
   });
 
   it("does not inject create defaults into a partial rate update", async () => {

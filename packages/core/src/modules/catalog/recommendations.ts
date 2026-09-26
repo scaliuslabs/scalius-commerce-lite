@@ -12,7 +12,8 @@
 //   3. popularity — distinct buyers in the last 30 days, used only when enough
 //      of the list can be filled that way, otherwise newest first.
 // Ties break by newest then id, so the order is deterministic. Card images
-// come from one bounded media read, so a call is two statements.
+// come from one bounded media read. A recorded live fallback also reads its
+// next semantic ranking-window boundary.
 //
 // Candidates are the stored buyer state's public, buyable products
 // (buyer-state.ts), so the statement never evaluates eligibility or ranks
@@ -25,10 +26,9 @@
 // product never computed and for multi-product sources (cart, order
 // confirmation) or none (404, search dead ends).
 //
-// Freshness: responses ride the public API cache keyed by the store cache
-// generation. Placing an order does not bump the generation by itself, so
-// also-bought and popularity rankings refresh with the next buyer-visible
-// write (stock band change, catalog edit) or the one-day cache ceiling.
+// Freshness: stored lists declare rec:<source>; live fallback declares the
+// recommendation-signals key and the next included order's ranking-window
+// exit. No arbitrary age limit applies to a quiet store's recommendations.
 import { productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
@@ -48,6 +48,7 @@ import {
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
+import { declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
 
 export const MAX_RECOMMENDATION_SOURCE_IDS = 20;
 export const MAX_RECOMMENDATION_LIMIT = 12;
@@ -256,8 +257,39 @@ export async function rankRecommendationRows(
     sourceIds: readonly string[],
     limit: number,
 ): Promise<RankedRecommendationRow[]> {
+    // Only this live fallback reads private order signals. Stored lists use rec:<id>.
+    deps.recommendationSignals();
+    deps.listMembership("all");
+    // Any candidate may enter the result when its price score or buyability changes.
+    deps.listOrder("price", "all");
+    deps.listOrder("band", "all");
+    declareRequestedProducts(sourceIds);
+    deps.anyCategory();
+    deps.anyCollection();
+    deps.anyAttribute();
     const sourceJson = JSON.stringify(sourceIds);
     const sourceSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${sourceJson}))`;
+
+    if (deps.active()) {
+        // Inclusive SQL windows stop including an order one second after its
+        // boundary. Empty/quiet stores have no deadline, never a routine TTL.
+        const [boundary] = await db.select({ at: sql<number | null>`MIN(
+            CASE WHEN rec_boundary.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+                THEN rec_boundary.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
+                ELSE rec_boundary.created_at + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
+            END
+        )` }).from(sql`orders AS rec_boundary`).where(sql`
+            ${realOrder("rec_boundary")}
+            AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_boundary.id)
+            AND (
+                rec_boundary.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+                OR (rec_boundary.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
+                    AND EXISTS (SELECT 1 FROM order_items AS boundary_source
+                        WHERE boundary_source.order_id = rec_boundary.id AND boundary_source.product_id IN ${sourceSet}))
+            )
+        `).all();
+        if (boundary?.at != null) deps.validUntil(Number(boundary.at) * 1000);
+    }
 
     const coPurchase = sql`(
         SELECT rec_peer_line.product_id AS product_id,
@@ -475,6 +507,7 @@ async function readStoredRecommendations(
     productId: string,
     limit: number,
 ): Promise<{ reason: ProductRecommendationReason; rows: RecommendationCardRow[] } | null> {
+    deps.recommendations(productId);
     const cardSku = buyerStateCardSku();
     const stored = await db
         .select({
@@ -502,6 +535,9 @@ async function readStoredRecommendations(
         .orderBy(asc(productRecommendations.position))
         .all() as StoredRecommendationRow[];
     if (stored.length === 0) return null;
+    // A stored product hidden now (not public, sold out) shows again when its
+    // own buyer state changes; rec:<source> covers the stored order.
+    deps.products(stored.map((row) => row.id));
     const shown = stored
         .filter((row) => Boolean(row.isPublic) && Boolean(row.availableForSale) && row.id !== null)
         .slice(0, limit);
@@ -546,6 +582,7 @@ export async function getStorefrontProductRecommendations(
         mediaMap = media;
     }
     if (rows.length === 0) return { reason, products: [] };
+    declareProductCards(rows.map((row) => row.id), mediaMap);
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return {
         reason,

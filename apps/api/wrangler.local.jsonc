@@ -14,8 +14,7 @@
     "enabled": true
   },
   "exports": {
-    "default": { "type": "worker", "cache": { "enabled": false } },
-    "PublicApi": { "type": "worker", "cache": { "enabled": true } }
+    "default": { "type": "worker", "cache": { "enabled": false } }
   },
   // Part of every public cache key; `wrangler dev` assigns a fresh id on every
   // start and reload, so local caches never serve the previous code's payload.

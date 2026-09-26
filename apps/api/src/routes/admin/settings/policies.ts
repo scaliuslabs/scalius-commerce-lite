@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { STORE_POLICY_KINDS, getStorePolicies, saveStorePolicies } from "@scalius/core/modules/settings";
 
 import { ok } from "../../../utils/api-response";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -59,7 +59,7 @@ app.openapi(savePoliciesRoute, async (c) => {
   const { expectedRevision, ...patch } = c.req.valid("json");
   const saved = await saveStorePolicies(c.get("db"), patch, { expectedRevision });
   // The storefront footer and checkout link these pages.
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 

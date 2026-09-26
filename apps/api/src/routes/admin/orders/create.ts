@@ -17,8 +17,7 @@ import {
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
-import { findCheckoutReservationAvailabilityTransitions } from "../../../utils/availability-transitions";
+
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
 
@@ -161,7 +160,7 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         { ...payload, requestKey },
         user?.id ?? null,
     );
-    if (result.inventoryMutationVariantIds.length > 0) await bumpCacheGeneration(c);
+
     return ok(c, {
         id: result.id,
         version: result.version,
@@ -201,18 +200,6 @@ app.openapi(createOrderRoute, async (c) => {
     const data = { ...payload, requestKey };
     const user = c.get("user") as { id?: string } | undefined;
     const result = await createOrder(db, data, user?.id ?? null);
-    const availabilityTransitionVariantIds =
-        await findCheckoutReservationAvailabilityTransitions(
-            db,
-            data.items.flatMap((item) =>
-                item.variantId && item.quantity > 0
-                    ? [{ variantId: item.variantId, quantity: item.quantity }]
-                    : [],
-            ),
-        );
-    if (availabilityTransitionVariantIds.length > 0) {
-        await bumpCacheGeneration(c);
-    }
     return created(c, result);
 });
 

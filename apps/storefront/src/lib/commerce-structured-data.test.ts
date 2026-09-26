@@ -223,7 +223,6 @@ describe("commerce structured data helpers", () => {
             isActive: true,
             sortOrder: 1,
             createdAt: null,
-            updatedAt: null,
           },
           {
             id: "disabled",
@@ -233,7 +232,6 @@ describe("commerce structured data helpers", () => {
             isActive: false,
             sortOrder: 2,
             createdAt: null,
-            updatedAt: null,
           },
         ],
         currencyCode: "BDT",
@@ -269,7 +267,6 @@ describe("commerce structured data helpers", () => {
             isActive: true,
             sortOrder: 1,
             createdAt: null,
-            updatedAt: null,
           },
         ],
         currencyCode: "BDT",
@@ -284,7 +281,7 @@ describe("commerce structured data helpers", () => {
 
   it("claims no country-wide rate when delivery fees vary by zone or for pickup", () => {
     const rate = (id: string, fee: number, extra: Record<string, unknown> = {}) => ({
-      id, name: id, fee, description: null, isActive: true, sortOrder: 0, createdAt: null, updatedAt: null,
+      id, name: id, fee, description: null, isActive: true, sortOrder: 0, createdAt: null,
       kind: "delivery" as const, everywhereElse: true, ...extra,
     });
     const zoned = [rate("Inside Dhaka", 60, { everywhereElse: false }), rate("Outside Dhaka", 120)];
@@ -348,7 +345,6 @@ describe("commerce structured data helpers", () => {
         isActive: true,
         sortOrder: 1,
         createdAt: null,
-        updatedAt: null,
       }],
       currencyCode: "BDT",
       freeDelivery: false,

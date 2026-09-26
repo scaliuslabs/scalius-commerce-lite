@@ -194,7 +194,7 @@ describe("review ratings on buyer listings", () => {
     it("puts the rating on homepage cards", async () => {
         const { db } = harness;
         const home = await getHomepageData(db, {
-            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [] },
+            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
             sectionsOnly: true,
         });
         const cards = home.sections.lists[0]?.products ?? [];
@@ -214,7 +214,7 @@ describe("review ratings on buyer listings", () => {
         expect(result.products.every((product) => product.rating === null)).toBe(true);
         expect(result.ratingFacet).toEqual([]);
         const home = await getHomepageData(db, {
-            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [] },
+            requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
             sectionsOnly: true,
         });
         expect((home.sections.lists[0]?.products ?? []).every((card) => card.rating === null)).toBe(true);

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   bulkPublishPages: vi.fn(),
   bulkUnpublishPages: vi.fn(),
   restorePages: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/pages", async () => {
@@ -34,11 +34,6 @@ vi.mock("@scalius/core/modules/pages", async () => {
     restorePages: mocks.restorePages,
   };
 });
-
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration:
-    mocks.bumpCacheGeneration,
-}));
 
 import { adminPageRoutes } from "./pages";
 
@@ -76,7 +71,6 @@ function createTestApp(
   mocks.bulkPublishPages.mockResolvedValue(undefined);
   mocks.bulkUnpublishPages.mockResolvedValue(undefined);
   mocks.restorePages.mockResolvedValue(undefined);
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -110,7 +104,7 @@ async function requestJson(
   );
 }
 
-describe("admin page cache invalidation", () => {
+describe("admin page write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -126,14 +120,13 @@ describe("admin page cache invalidation", () => {
     { label: "soft delete", path: "/page_1", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
     { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
     { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 204 },
-  ])("purges the semantic page projection after $label", async ({ path, method, body, status }) => {
+  ])("returns success after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it("passes the caller's publication authority into create and edit services", async () => {

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { hashCacheDep } from "@scalius/shared/cache-frontier";
 
 const handle = vi.hoisted(() => vi.fn(
   async (_request: Request, _env?: unknown, _ctx?: unknown) => new Response("rendered"),
@@ -17,20 +18,40 @@ vi.stubGlobal("caches", {
   },
 });
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("storefront Worker gateway cache", () => {
-  it("serves a stored public page under the Worker version and KV generation without rendering", async () => {
+  it("serves a proven public page under the Worker version with a fresh frontier and no API work", async () => {
     cacheStore.set(
-      "https://shop.example/__cache/test-build/version-a/gen7/products/fish",
-      new Response("cached page", { headers: { "Content-Type": "text/html" } }),
+      "https://shop.example/__cache/test-build/version-a/dvc/products/fish",
+      new Response("cached page", { headers: {
+        "Content-Type": "text/html",
+        "X-Scalius-Api-Version": "api-version-a",
+        "X-Scalius-Dep-Seq": "7",
+        "X-Scalius-Deps": hashCacheDep("p:fish"),
+        "X-Scalius-Rendered-At": "1000",
+      } }),
     );
-    const kvGet = vi.fn(async () => "gen7");
+    vi.spyOn(Date, "now").mockReturnValue(2_000);
+    cacheStore.set(
+      "https://shop.example/__scalius/frontier/test-build/version-a",
+      new Response(JSON.stringify({
+        apiVersion: "api-version-a", S: 7, horizon: 0, floor: 0,
+        sentAt: 2_000, changes: [],
+      })),
+    );
+    const kvGet = vi.fn();
+    const apiFetch = vi.fn();
+    const waitUntil = vi.fn();
     const { default: StorefrontGateway } = await import("./worker");
     const worker = Object.assign(new StorefrontGateway(), {
       env: {
         CACHE: { get: kvGet },
+        SCALIUS_SECRET: "storefront-test-master-secret-with-enough-length-0123456789",
+        BACKEND_API: { fetch: apiFetch },
         CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
       } as unknown as Env,
-      ctx: { waitUntil: vi.fn() } as unknown as ExecutionContext,
+      ctx: { waitUntil } as unknown as ExecutionContext,
     });
     handle.mockClear();
 
@@ -38,7 +59,9 @@ describe("storefront Worker gateway cache", () => {
 
     expect(await response.text()).toBe("cached page");
     expect(response.headers.get("X-Cache-Status")).toBe("HIT");
-    expect(kvGet).toHaveBeenCalledWith("cache:generation", { cacheTtl: 30 });
+    expect(kvGet).not.toHaveBeenCalled();
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
     expect(handle).not.toHaveBeenCalled();
   });
 });

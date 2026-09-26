@@ -265,13 +265,11 @@ describe("CategoryForm", () => {
   });
 
   async function chooseStatus(label: string) {
-    const status = byLabel<HTMLSelectElement>("Status");
-    const option = Array.from(status.options).find((candidate) => candidate.textContent === label);
+    await click(byLabel<HTMLButtonElement>("Status"));
+    const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((candidate) => candidate.textContent === label);
     if (!option) throw new Error(`No status ${label}`);
-    await act(async () => {
-      status.value = option.value;
-      status.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await click(option);
     await settle();
   }
 

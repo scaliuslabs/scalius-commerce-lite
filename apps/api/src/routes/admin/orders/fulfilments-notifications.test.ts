@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     recordOrderFulfilment: vi.fn(),
     recordOrderEvent: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
     enqueueOrderStatusChangeNotification: vi.fn(),
     enqueueOrderNotificationsForStatus: vi.fn(),
 }));
@@ -24,10 +24,6 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
         recordOrderEvent: mocks.recordOrderEvent,
     };
 });
-
-vi.mock("../../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
 
 vi.mock("../../../utils/order-notification-queue", async (importOriginal) => {
     const actual = await importOriginal<typeof import("../../../utils/order-notification-queue")>();
@@ -92,7 +88,7 @@ function post(app: ReturnType<typeof createTestApp>["app"], env: Env) {
 describe("admin own-rider fulfilment notifications", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
         mocks.recordOrderEvent.mockResolvedValue(undefined);
         mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
         mocks.enqueueOrderNotificationsForStatus.mockResolvedValue(undefined);
@@ -107,7 +103,7 @@ describe("admin own-rider fulfilment notifications", () => {
         const response = await post(app, env);
 
         expect(response.status).toBe(201);
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
         expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
             db,
             queue,

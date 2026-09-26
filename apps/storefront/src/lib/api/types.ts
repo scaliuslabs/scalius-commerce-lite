@@ -259,7 +259,8 @@ export interface Product {
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
-  attributes?: Array<{ name: string; value: string; slug: string }>;
+  /** Specification rows, grouped and in the merchant's order. */
+  attributes?: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean }>;
   /** The published brand record (product page, feeds); never a free-text attribute. */
   brand?: ProductBrand | null;
   categoryId: string | null;
@@ -297,6 +298,32 @@ export interface Product {
   bundles?: ProductBundleTier[];
   /** Product page only: "EMI on card payment, from X/month"; null when it must not show. */
   emi?: ProductEmiOffer | null;
+  /** Product page only: content blocks other than the tabs, in placement then page order. */
+  contentBlocks?: ProductPageContentBlock[];
+  /** Product page only: the ready files those blocks name (a missing file is absent). */
+  contentBlockMedia?: ProductPageBlockMedia[];
+  /** Product page only: the warranty policy's current terms; null without one. */
+  warranty?: ProductWarranty | null;
+}
+
+export type ProductPageContentBlock = import("@scalius/api-client/types").ProductPageContentBlock;
+
+export interface ProductPageBlockMedia {
+  id: string;
+  kind: "image" | "video";
+  url: string;
+  altText: string | null;
+  width: number | null;
+  height: number | null;
+  posterUrl: string | null;
+}
+
+export interface ProductWarranty {
+  name: string;
+  provider: "brand" | "store";
+  duration: { value: number; unit: "days" | "months" | "years" };
+  replacementDays: number | null;
+  terms: string | null;
 }
 
 /** A quantity tier ("2 for 10% off", "3 for ৳900") in major units. */
@@ -571,7 +598,8 @@ export interface Page {
   publishedAt: number | null;
   sortOrder: number;
   createdAt: number;
-  updatedAt: number;
+  /** Articles only: CMS page reads leave it out. */
+  updatedAt?: number;
   deletedAt: number | null;
 }
 
@@ -877,7 +905,6 @@ export interface ShippingMethod {
   isActive: boolean;
   sortOrder: number;
   createdAt: string | null;
-  updatedAt: string | null;
 }
 
 export interface AnalyticsConfig {

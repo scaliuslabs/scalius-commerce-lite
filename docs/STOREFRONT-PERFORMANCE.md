@@ -1,6 +1,6 @@
 # Storefront render performance
 
-Last reviewed: 2026-09-25
+Last reviewed: 2026-09-26
 
 How a storefront page is served, what each page is allowed to cost, and how to
 check it. The release-wide evidence lives in
@@ -9,10 +9,12 @@ check it. The release-wide evidence lives in
 ## Render path
 
 1. **Cache hit.** The storefront gateway (`apps/storefront/src/worker.ts`,
-   `lib/public-worker-cache.ts`) reads the store's cache generation from KV and
-   serves the page from the Cache API under `build + Worker version +
-   generation + canonical URL` (see [Cache keys](#cache-keys-data-and-code)).
-   No API call. Measured server time at the edge: 3-20 ms.
+   `lib/public-worker-cache.ts`) validates the stored dependency proof against
+   a frontier at most one second old, refreshing it through the API when needed.
+   The key carries build, storefront Worker version and canonical URL; the
+   proof also carries the API Worker version. A fresh local frontier needs no
+   API call. The built frontier stack measured 5–9 ms warm HTTP responses in
+   the local 2026-09-26 check below.
 2. **Cache miss.** Astro renders the page. Each page starts all of its public
    reads together, including the layout read, and the storefront transport
    (`lib/api/transport.ts`, `joinReadBatch`) sends them as **one** request:
@@ -35,43 +37,23 @@ check it. The release-wide evidence lives in
      deadline, because a short one would turn a slow cold read into a 503.
      Before this change, that turned a cold layout read at HKG into a 503 home
      page.
-3. **The batch in the API** (`routes/storefront.ts` `storefront.batch.get`,
-   `storefront-batch.ts`). Only public generation-cached routes can be parts
-   (`@scalius/shared/public-api-cache-routes`, the same list the API cache
-   policy uses). The route serves every part **inside its own invocation**
-   (`apps/api/src/public-read.ts`):
-   - It first looks the part up in the data center's Cache API
-     (`caches.default`) under `publicReadCacheKey`: `path + sorted query +
-     __cg=<generation> + __cv=<API Worker version>`. That is the same
-     function the `PublicApi` entrypoint path uses, so the two cannot drift
-     apart (`storefront-batch-route.test.ts` checks the batch stores under
-     the exact URLs the default entrypoint hands to `PublicApi`).
-   - On a miss it renders the part in-process with `renderPublicRead`. That
-     is the render `PublicApi` itself runs: the runtime app, the baseline
-     security headers, and the public cache headers.
-   - It stores a part only when the result is a 200 this Worker produced,
-     with the public cache headers and no cookie. The stored copy lives
-     `PUBLIC_CACHE_MAX_AGE_SECONDS`.
-   - Parts shared by many pages (layout, shipping methods, checkout
-     settings) are therefore computed once per generation per data center.
+3. **The batch in the API** (`routes/storefront.ts`, `storefront-batch.ts`).
+   Only public cacheable routes can be parts (`@scalius/shared/public-api-cache-routes`).
+   Parts run inside this invocation through `apps/api/src/public-read.ts`,
+   avoiding a separate cold Worker entrypoint for each part.
+   - Production uses dependency validation (`API_PART_CACHE_MODE = strict`).
+     Part keys contain path, sorted query and API Worker version. One bounded
+     validation read checks the batch's cached dependencies against the committed
+     clock; misses render in-process. Each successful part returns its dependency
+     hashes, clock proof and API Worker version for the HTML cache.
    - Up to four parts render at once (`MAX_BATCH_PART_RENDERS`); D1 queues
      the rest on the invocation's six connections.
-   - The batch response is `private, no-store`. Each part keeps its own
-     status, a failed part fails only that part, and error parts are never
-     stored.
+   - Only successful public responses without cookies can be stored. The batch
+     itself is `private, no-store`; failed parts are never cached. Shared parts
+     such as layout remain reusable across unrelated product edits.
+   - Direct public reads use the same strict reader. Generation mode remains an
+     explicit differential/load-test comparator, not production plumbing.
 
-   Why the batch does not call the `PublicApi` Workers Cache entrypoint: live
-   tails on 2026-09-25 showed that each entrypoint miss runs in a separate
-   isolate pool behind the cache layer. At this traffic level that pool is
-   usually cold, so each miss paid 350-600 ms of isolate start-up plus
-   150-330 ms of CPU for module initialisation, while the storefront's own
-   API isolate was warm. With that hop, a product page miss took 0.7-1.2 s.
-   Without it, the batch costs about as much as its slowest part. Direct
-   browser reads on `api.<store>` still go through the `PublicApi`
-   entrypoint (with the cache-layer 5xx fallback below).
-   `apps/api/src/storefront-batch-route.test.ts` checks that a part answered
-   in-process has the same status, body and cache headers as the same read
-   through `PublicApi`.
 4. **Placement.** `apps/api/wrangler.jsonc` uses **targeted placement by
    region**: `"placement": { "region": "aws:ap-southeast-1" }`. The API's fetch
    handler runs beside the D1 primary (APAC, served from SIN) instead of beside
@@ -93,9 +75,9 @@ the cache in about 20 ms. Nothing in its GET HTML depends on the buyer:
 - sign-in state is read in the browser (`cs_auth`), saved details and
   discounts come from no-store APIs, and cart validation, the tax quote and
   the order go through server APIs or the POST;
-- the reads are public and generation-cached: layout, cities, delivery
-  methods, checkout settings and the checkout copy. Every write to them bumps
-  the generation.
+- the reads are public and dependency-validated: layout, cities, delivery
+  methods, checkout settings and the checkout copy. Their committed dependency
+  revisions invalidate affected entries.
 
 What was buyer-specific, and where it went:
 
@@ -108,7 +90,7 @@ What was buyer-specific, and where it went:
 
 So an anonymous `GET /cart` goes through the same gateway lane as a product
 page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`):
-one entry per build, Worker version and generation, keyed on `/cart` alone,
+one entry per build and Worker version, keyed on `/cart` alone,
 rendered from a cookie-less canonical request. Two things differ from a
 catalogue page: the browser copy is still
 `private, no-cache, no-store, must-revalidate` (the buyer types contact
@@ -146,23 +128,32 @@ check).
 
 ## Cache keys: data and code
 
-Every public cache key, in the API (`publicReadCacheKey`, for both the batch
-and the `PublicApi` entrypoint) and in the storefront gateway
-(`publicStorefrontCacheKey`), carries two identities:
+API part keys carry the API Worker version; page keys carry the storefront
+Worker version and build. Page proofs also carry the API Worker version, so
+an API-only deploy invalidates HTML built from the previous API. Versions come
+from `CF_VERSION_METADATA.id` through `readWorkerVersion`.
 
-- the store's **cache generation**, which changes on every buyer-visible
-  write (`bumpCacheGeneration`);
-- the running **Worker version**, `CF_VERSION_METADATA.id` from the
-  `version_metadata` binding (`readWorkerVersion` in
-  `@scalius/shared/cache-generation`).
+Committed dependency revisions, rather than content age, determine validity.
+An unchanged retained entry can HIT after months or a year. Internal
+`DEPENDENCY_CACHE_RETENTION_SECONDS` is a one-year storage hint, renewed only
+when a slow horizon check rebases a page's proof without rendering its body.
+Ordinary hot hits do not rewrite it. It is not a
+validity TTL or a promise that Cloudflare will keep the object: eviction causes
+a normal miss. Browser cache policy remains separate.
 
-Why the version: the generation only says when the data changed. Before
-2026-09-25 nothing in the key said which code rendered an entry. Templates
-Phase 4 added `sections` to `GET /api/v1/storefront/homepage`. After a
-restart on the new code with no data write, the batch still served the old
-payload from the Cache API, and the new storefront rendered an empty home
-page. Production had the same hazard after every deploy, with entries living
-up to a day in the Cache API and never replaced until a merchant write.
+The buyer freshness allowance is at most one second of frontier proof age.
+Slow validation must finish within that bound and recheck scheduled deadlines
+at completion; stale or incomplete proofs fail closed to a render. Scheduled
+promotion boundaries invalidate content even when no row was edited. There is
+no stale-if-error allowance for buyer facts. Merchant links use `_sv` as a
+read-your-writes hint, forcing catch-up before reusing an older proof; the hint
+never enters a cache key or render. Future/forged hints cause bounded work and
+cannot certify stale content.
+
+Sensitive paths, authenticated/session-bearing requests, writes, variant
+selections and degraded renders bypass shared storage. Checkout, account,
+payment and receipt responses remain no-store. Anonymous cart HTML contains
+only the public shell and is always no-store to the browser.
 
 Why this identity and not the others considered:
 
@@ -238,15 +229,12 @@ warm):
 Live, a MISS from Bangladesh costs 0.9-2.3 s against 0.11-0.36 s for a hit
 (fidelity audit §5.2), so every such ad click was paying the full miss.
 
-### One store-wide generation: what a save costs (design note)
+### Historical generation baseline: what a save cost
 
-"Every admin save makes the whole store cold" is by design. There is one
-generation per store (`cache_generation`, mirrored to KV) and every
-buyer-visible write calls `bumpCacheGeneration` after it commits: 174 call
-sites in 45 API files. Same-band stock writes skip the bump. There are no
-purges, tags or warm-up lists, so a stale price, stock band, feed row or
-JSON-LD fact cannot outlive a write by more than the KV mirror delay (about a
-minute).
+The following measurements describe the former store-wide generation design,
+retained as a comparison baseline. Production now invalidates only entries
+whose declared dependencies changed; saves no longer make the entire store
+cold. The generation comparator can still reproduce these measurements.
 
 Measured cost of one bump (local built stack, the demo store's 18 sitemap
 pages plus home, search and cart; 2 runs):
@@ -264,24 +252,9 @@ miss together. On a store where the merchant edits during trading hours, the
 long tail of product pages is effectively always cold in low-traffic data
 centers.
 
-Options, none implemented (for the lead):
-
-1. Coalesce bumps. Bulk edits and a burst of saves each bump. Holding the
-   bump to one per short window (for example, the first write bumps at once
-   and later writes in the next 10 s bump once at its end) keeps freshness
-   within seconds and cuts the cold events a burst causes to two.
-2. Split the generation by what a page reads (catalogue, content, settings
-   and theme). A theme or CMS save would no longer chill product pages. It
-   costs a dependency map per route, and a missed dependency serves stale
-   facts, the failure the single generation was chosen to rule out.
-3. Serve the previous generation's entry while re-rendering in the
-   background (stale-while-revalidate), for writes that change no buyer
-   fact (copy, theme). Price, stock and availability writes must stay
-   synchronous. Same dependency risk as 2.
-4. Make the miss cheaper. The miss is mostly distance to D1 and a cold
-   isolate, not rendering. This is the only option that keeps the
-   single-generation guarantee and helps every miss, including the first
-   visit after a deploy.
+Dependency validation replaces the former options to coalesce or partition
+store-wide bumps. New buyer-visible writes must be represented in the dependency
+registry, and public reads must declare the keys they consume.
 
 ## Cold isolates
 
@@ -404,7 +377,7 @@ What production does beyond this: API placement keeps the isolate that
 serves storefront renders warm, and storefront batch parts never start a
 second isolate (see the render path).
 
-## Known platform failure: a stuck Workers Cache key
+## Historical platform failure: a stuck Workers Cache key
 
 Seen on 2026-09-24. In one colo (SIN), one key of the `PublicApi` Workers
 Cache entrypoint (`/api/v1/storefront/homepage?__cg=<generation>`, before
@@ -416,7 +389,7 @@ other key were fine:
 - none of our headers (no `X-Request-Id`, no security headers);
 - no Worker invocation in `wrangler tail`.
 
-The storefront pins its reads to that generation, so the home page was a 503
+The storefront then pinned its reads to that generation, so the home page was a 503
 in that colo until the generation changed. The most likely trigger is a cache
 fill that was cancelled mid-way: the storefront aborted a slow cold read
 there. The deadline fix above removes that trigger.
@@ -429,7 +402,7 @@ curl -s -o /dev/null -D - https://api.<store>/api/v1/storefront/homepage
 
 The same path with an extra query parameter (a different key) answers 200.
 
-Handling: the API treats the generation cache as a hint
+Historical handling: the API treated the generation cache as a hint
 (`isCacheLayerServerError` in `apps/api/src/public-cache-policy.ts`). When the
 cache entrypoint returns a 5xx without the baseline security headers that
 every response of ours carries, the read is rendered directly and uncached,
@@ -438,23 +411,33 @@ the path and colo and no query values. This applies to single reads through
 the entrypoint (`worker.ts`); storefront batch parts no longer go through the
 entrypoint at all (see the render path above). Our own 5xx
 passes through untouched, so a real outage does not double the database load.
-Bumping the cache generation (any buyer-visible save) or deploying the API
-also clears it at once.
+A generation bump or API deploy also changed the affected key. Production
+strict reads now bypass that entrypoint; this incident is retained as context.
 
 ## Budgets and guardrails
 
 | Guardrail | Where | Budget |
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts`, `apps/storefront/src/lib/cart/cart-shell.render.test.ts` | 1 for home, product, category, search and cart (the pages' own read functions, started as the pages start them) |
-| D1 round trips / dependent waves per page (cache miss, seeded store; home on a store whose theme uses every section type) | `apps/api/src/storefront-render-budget.test.ts` | home 13 / 2, product 21 / 3, category 7 / 3, search 7 / 2 |
-| Batch safety (public parts only, per-part status, generation- and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
+| D1 render-only round trips / dependent waves (cache miss, seeded store; home uses every section type). Original render limits remain unchanged; every declared dependency read is included | `apps/api/src/storefront-render-budget.test.ts` | home ≤13 / 2, product ≤21 / 3, category ≤7 / 3, search ≤7 / 2 |
+| Authoritative freshness read before a cold render: exact clock + Platform + dependency validation SQL | Same test, separately identified from render statements | Exactly 1 statement / 1 first wave; every render starts in wave 2 |
+| Total measured cold D1 round trips / waves, including authoritative freshness | Same seeded integration measurement | home 12 / 3, product 20 / 4, category 8 / 4, search 8 / 3 |
+| Same page again, all validated hits | Same test | Exactly 1 statement / 1 wave; identical response bodies |
+| Batch safety (public parts only, per-part status, dependency-validated and version-keyed parts) | `apps/api/src/storefront-batch.test.ts`, `apps/api/src/storefront-batch-route.test.ts`, `packages/shared/src/public-api-cache-routes.test.ts` | exact |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) | below |
 | Product JSON-LD weight | `apps/storefront/src/lib/commerce-structured-data.product-group.test.ts` (also runs the release-check Product JSON-LD smoke on the output) | 20 KB, description once |
 | Ad-click and campaign parameters never split the page cache | `packages/shared/src/storefront-cache-path.test.ts`, `apps/storefront/src/lib/public-worker-cache.test.ts` | exact |
 
 | Similarity to the reference sites, listing density, navigation at scale, page weights (30k-product seeded store) | `pnpm fidelity:check` (`scripts/storefront-fidelity/`) | below |
 
-The homepage part reads in two waves whatever its sections are: the
+The mandatory first wave reads current Platform settings and the dependency
+clock together before any cold render. A cached Platform snapshot cannot
+replace it: a new URL after a settings edit must use the new origins immediately.
+The test recognizes this exact SQL, requires it once in the first wave, and
+counts every other statement against the unchanged render limits. Total cold
+cost is their sum; the 300 ms miss and 50 ms hit HTTP budgets remain unchanged.
+
+The homepage part itself reads in two waves whatever its sections are: the
 settings, banners, collections, category rail and published theme first,
 then one batch with every product list the sections name (each scoped to
 the products it returns, with the media statement of exactly those rows),
@@ -467,7 +450,20 @@ read fails the D1 budget test even when the query count stays the same.
 
 ### `pnpm perf:storefront`
 
-The script only sends GET requests. For every page (default: home, the first
+Verified 2026-09-26 against built local Workers and local D1, three browser runs
+per profile. Every forced first request was a MISS; every timed hit was a HIT.
+These are local measurements, not worldwide latency promises.
+
+| Page | Cold TTFB | Warm TTFB | Phone LCP | Desktop LCP | CLS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Home | 122 ms | 6 ms | 980 ms | 108 ms | 0 |
+| Video product | 118 ms | 9 ms | 988 ms | 128 ms | 0 |
+| Category | 68 ms | 6 ms | 912 ms | 100 ms | 0 |
+| Search | 58 ms | 5 ms | 920 ms | 96 ms | 0 |
+| Cart shell | 58 ms | 5 ms | 900 ms | 76 ms | 0 |
+
+The script sends only GET requests unless its local-only `--d1-explorer`
+option is supplied. For every page (default: home, the first
 category and product linked from home, a search, and the cart) it records:
 
 - server TTFB for a cache miss and the median of three hits. Against a remote
@@ -495,11 +491,13 @@ Override any threshold with `--budget-<name> <value>`, for example
 `--cdp-port` (default 9395; the script starts and stops its own headless
 Chrome when nothing listens there).
 
-Local stack (forces real misses by writing a fresh `cache:generation` through
-the local wrangler explorer):
+For repeatable cold measurements, the local explorer option atomically advances
+the store dependency and clock. The first timed request carries that commit
+sequence and must report a genuine MISS or REFRESH; hit measurements include
+only verified HIT responses. Both origins must be loopback addresses:
 
 ```sh
-pnpm perf:storefront --base http://localhost:4391 --kv-explorer http://localhost:8811
+pnpm perf:storefront --base http://localhost:4391 --d1-explorer http://localhost:8811
 ```
 
 Wrangler's dev registry is shared by every local stack on the machine, so a
@@ -583,7 +581,7 @@ What one run does, sequentially:
      layout swapped alone; the first cards are compared pixel by pixel;
    - `navscale.mjs`: every template x the five menus x {1440, 1280, 1024},
      the open panel, "More", keyboard, the phone drawer, and no JavaScript;
-   - `perf.mjs`: TTFB miss (new cache generation) and hit, phone and desktop
+   - `perf.mjs`: dependency-cache TTFB miss and hit, phone and desktop
      LCP and CLS for home, category and product on every template, plus the
      100-SKU, legacy-image and video products;
    - `hover.mjs`: hover photo latency at 10 Mbps / 60 ms;
@@ -762,7 +760,7 @@ page 1,090 → 54 (1.73M → 2.7k), recommendations 1,045 → 13, manual collect
   (`media/<id>.<jpg|png|webp|avif>`), it queues that media id's
   `media.render_variants` job, deduplicated by a 15-minute KV marker and at
   most 8 ids per read (`apps/api/src/utils/media-rendition-hints.ts`). Buyers
-  see the original until the job renders; the job then bumps the generation
+  see the original until the job renders; the job then advances the media dependency
   and every page switches to the renditions. Every upload path goes through
   the two media upload routes, which also queue the job
   (`media-upload-paths.test.ts` holds that).

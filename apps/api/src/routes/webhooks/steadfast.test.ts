@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -42,10 +42,6 @@ const courierLedger = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/fulfilment")>()),
   syncCourierFulfilmentFromShipment: courierLedger.sync,
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -214,7 +210,7 @@ describe("Steadfast webhook idempotency keys", () => {
       "steadfast:delivery_status:delivery_wh:steadfast:123:delivery_status:delivered",
       expect.objectContaining({ rawStatus: "delivered", normalizedStatus: "delivered" }),
     );
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
       queue: undefined,
@@ -489,7 +485,7 @@ describe("Steadfast webhook idempotency keys", () => {
       trackingId: "TRACK-1",
       source: "steadfast-webhook",
     });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
+
   });
 
   it("skips duplicate durable delivery-status events before shipment updates", async () => {
@@ -519,7 +515,7 @@ describe("Steadfast webhook idempotency keys", () => {
     expect(body.deduplicated).toBe(true);
     expect(updateSet).not.toHaveBeenCalled();
     expect(mocks.updateOrderStatusFromShipment).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 });

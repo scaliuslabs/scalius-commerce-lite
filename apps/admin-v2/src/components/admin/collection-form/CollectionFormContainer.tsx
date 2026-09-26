@@ -10,6 +10,9 @@ import {
 } from "@scalius/api-client/sdk";
 import { FormContainer } from "~/components/admin/shared/FormContainer";
 import { SaveConflict, SaveNotCompleted } from "~/components/admin/shared/SaveBar";
+import { copyValues, rebaseForm } from "~/components/admin/shared/use-form-save-bar";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/browser";
+import { collectionQueryOptions } from "~/lib/api-query-options/collections";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
@@ -244,6 +247,13 @@ export function CollectionForm({
       form={form}
       onSave={saveCollection}
       savedValues={(result) => result as Partial<CollectionFormInput>}
+      reload={isEdit && defaultValues?.id ? async () => {
+        const latest = await queryClient.fetchQuery({ ...collectionQueryOptions(defaultValues.id!), staleTime: 0 });
+        rebaseForm(form, copyValues(form.formState.defaultValues as CollectionFormInput), {
+          ...latest,
+          config: normalizeCollectionConfig(latest.config),
+        });
+      } : undefined}
       unsavedLabel={isEdit ? undefined : tf("unsavedCollection")}
       savedMessage={tf("saved")}
     >

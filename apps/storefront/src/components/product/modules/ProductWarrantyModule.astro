@@ -1,0 +1,10 @@
+---
+// Intentionally empty: the buy-box WarrantyRow already exposes the terms
+// through native details, and ProductDetails shows the warranty specification.
+// Keep the template slot without duplicating the same terms below the fold.
+import type { Product } from "@/lib/api";
+
+export interface Props {
+  product: Product;
+}
+---

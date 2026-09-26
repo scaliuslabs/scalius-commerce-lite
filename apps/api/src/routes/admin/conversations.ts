@@ -1,7 +1,7 @@
 // Dashboard inbox routes, mounted at /admin/conversations (Wave A §6.2).
 // Reads need conversations.view; replies, notes, uploads, status and
 // assignment need conversations.reply (route-permissions/conversations.ts).
-// Conversation writes are private and never bump the cache generation.
+// Conversation writes are private and do not affect public cache dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {

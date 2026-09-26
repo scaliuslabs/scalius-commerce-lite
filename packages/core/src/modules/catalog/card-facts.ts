@@ -20,6 +20,7 @@ import {
     type ProductMediaProjection,
     type ProductMediaProjectionRow,
 } from "../products/media";
+import { deps } from "../../cache-deps";
 
 /** Key specs a card lists (Star Tech shows four). */
 export const CARD_KEY_SPECS_MAX = 4;
@@ -124,6 +125,12 @@ const VALUE_ON_LIVE_SKU = sql.raw(`EXISTS (
  * subquery unqualified.
  */
 export function selectProductCardFactRows(db: Database, productIds: readonly string[] | SQLWrapper) {
+    // Beyond each card's own `p:` key: the brand row it names, attribute
+    // definitions (pack size, key specs, swatches) and the cheapest delivery
+    // fee. Visible sold counts declare sold:<id> while resolving the fact rows.
+    deps.anyBrand();
+    deps.anyAttribute();
+    deps.shipping();
     const packSlugs = CARD_PACK_SIZE_SLUGS.map((slug) => `'${slug}'`).join(", ");
     const packRank = CARD_PACK_SIZE_SLUGS.map((slug, index) => `WHEN '${slug}' THEN ${index}`).join(" ");
     // Four terms: D1 refuses a compound SELECT of more than five.
@@ -250,6 +257,7 @@ export function resolveProductCardFacts(
         const label = clean(row.label);
         const value = clean(row.value);
         if (row.kind === "product") {
+            deps.sold(row.productId);
             if (label && value) facts.brand = { name: label, slug: value };
             const sold = Math.floor(Number(row.amount) || 0);
             if (sold >= CARD_SOLD_MIN) facts.sold = sold;

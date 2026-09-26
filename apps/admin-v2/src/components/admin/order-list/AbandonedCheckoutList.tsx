@@ -17,7 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar";
 import { DataTableRowActions } from "@/components/admin/data-table/DataTableRowActions";
@@ -486,21 +486,16 @@ export function AbandonedCheckoutList({
             selectedCount={selectedIds.length}
             bulkActions={<div className="hidden md:flex">{bulkDelete}</div>}
             filters={
-              <NativeSelect
-                className="w-auto"
-                aria-label={t("sort")}
+              <SearchableSelect
+                triggerClassName="w-auto"
+                ariaLabel={t("sort")}
                 value={`${routeState.sort}:${routeState.order}`}
                 onValueChange={(value) => {
                   const [sort, order] = value.split(":") as [AbandonedCheckoutListState["sort"], "asc" | "desc"];
                   onRouteStateChange({ sort, order, page: 1 });
                 }}
-              >
-                {SORTS.map((option) => (
-                  <option key={option} value={option}>
-                    {t(`checkoutSort.${option}`)}
-                  </option>
-                ))}
-              </NativeSelect>
+                options={SORTS.map((option) => ({ value: option, label: t(`checkoutSort.${option}`) }))}
+              />
             }
           /></div>}
         emptyState={{

@@ -13,7 +13,9 @@ import { getAllProducts, getProductBySlugResult, getProductsByCategory } from ".
 import { getCities, getShippingMethods } from "./shipping";
 import { getActiveCheckoutLanguage } from "./settings";
 import { getCheckoutConfig } from "./checkout";
+import { hashCacheDep } from "@scalius/shared/cache-frontier";
 import { loadPageWithLayout } from "@/lib/page-data";
+import { createPageDependencies, pageEntryFromDependencies, recordPagePart, type PageDependencies } from "@/lib/page-dependencies";
 
 /**
  * Per-page API budget: a storefront page render is ONE service binding call.
@@ -60,7 +62,7 @@ interface Backend {
   calls: string[];
 }
 
-function backend(options: { batchStatus?: number } = {}): Backend {
+function backend(options: { batchStatus?: number; proof?: boolean } = {}): Backend {
   const calls: string[] = [];
   const fetch = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
@@ -74,6 +76,9 @@ function backend(options: { batchStatus?: number } = {}): Backend {
           parts: parts.map((part) => ({
             ...bodyFor(part.pathname),
             contentType: "application/json",
+            ...(options.proof
+              ? { cache: { apiVersion: "api-a", status: "miss", s0: part.pathname.length, deps: [hashCacheDep(part.pathname)], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 } }
+              : {}),
           })),
         },
       });
@@ -84,12 +89,12 @@ function backend(options: { batchStatus?: number } = {}): Backend {
   return { fetcher: { fetch } as unknown as Fetcher, calls };
 }
 
-function render<T>(api: Backend, task: () => Promise<T>): Promise<T> {
+function render<T>(api: Backend, task: () => Promise<T>, pageDependencies?: PageDependencies): Promise<T> {
   const runtime: StorefrontRuntime = {
     PUBLIC_API_URL: apiBaseUrl,
     BACKEND_API: api.fetcher,
-    CACHE_GENERATION: "a1b2c3d4e5f60718",
     inflightReads: new Map(),
+    pageDependencies,
   };
   return requestRuntime.run(runtime, task);
 }
@@ -205,5 +210,52 @@ describe("render read batch transport", () => {
 
     expect(api.calls.some((call) => call.includes(STOREFRONT_BATCH_PATH))).toBe(false);
     expect(api.calls).toHaveLength(4);
+  });
+});
+
+describe("page dependency proof", () => {
+  it("rejects mixed or absent API deployment proofs", () => {
+    const proof = { apiVersion: "api-a", status: "hit" as const, s0: 1, deps: [], validUntil: null, softMaxAgeSeconds: null, renderedAt: 0 };
+    const dependencies = createPageDependencies();
+    recordPagePart(dependencies, proof);
+    expect(pageEntryFromDependencies(dependencies)?.apiVersion).toBe("api-a");
+    recordPagePart(dependencies, { ...proof, apiVersion: "api-b" });
+    expect(pageEntryFromDependencies(dependencies)).toBeNull();
+    const absent = createPageDependencies();
+    recordPagePart(absent, { ...proof, apiVersion: "" });
+    expect(pageEntryFromDependencies(absent)).toBeNull();
+  });
+  it("composes every batch part's proof, and sends a lone read as a batch of one", async () => {
+    const api = backend({ proof: true });
+    const dependencies = createPageDependencies();
+    await render(api, () => Promise.all([getLayoutData(), getShippingMethods()]), dependencies);
+    await render(api, () => getCities(), dependencies);
+
+    expect(api.calls.every((call) => call.startsWith(STOREFRONT_BATCH_PATH))).toBe(true);
+    const entry = pageEntryFromDependencies(dependencies);
+    expect(entry?.s0).toBe(Math.min(..."/api/v1/storefront/layout /api/v1/shipping-methods /api/v1/locations/cities".split(" ").map((path) => path.length)));
+    expect(entry?.depHashes).toHaveLength(3);
+  });
+
+  it("starts the next batch instead of a lone read when a batch is full", async () => {
+    const api = backend({ proof: true });
+    const dependencies = createPageDependencies();
+    await render(api, () => Promise.all(Array.from({ length: 10 }, (_, index) => getProductBySlugResult(`p${index}`))), dependencies);
+
+    expect(api.calls).toHaveLength(2);
+    expect(pageEntryFromDependencies(dependencies)).not.toBeNull();
+  });
+
+  it("proves nothing when a part carries no proof or a read left the batch", async () => {
+    const unproven = createPageDependencies();
+    await render(backend(), () => Promise.all([getLayoutData(), getShippingMethods()]), unproven);
+    expect(pageEntryFromDependencies(unproven)).toBeNull();
+
+    const outside = createPageDependencies();
+    await render(backend({ proof: true }), () => Promise.all([
+      getLayoutData(),
+      apiFetch(`${apiBaseUrl}/search?q=linen`, {}, { auth: false }),
+    ]), outside);
+    expect(pageEntryFromDependencies(outside)).toBeNull();
   });
 });

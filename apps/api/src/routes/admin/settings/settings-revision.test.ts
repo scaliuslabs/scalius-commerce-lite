@@ -4,9 +4,6 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn() }));
-vi.mock("../../../utils/cache-generation", () => ({ bumpCacheGeneration: mocks.bumpCacheGeneration }));
-
 import { errorResponseFromError } from "../../../utils/api-response";
 import { adminSettingsRoutes } from "../settings";
 
@@ -42,7 +39,7 @@ function createApp() {
 describe("settings revision contract", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   });
 
   it("business details: the second tab's stale save is refused and the first tab's change stays", async () => {
@@ -60,7 +57,6 @@ describe("settings revision contract", () => {
       code: "SETTINGS_REVISION_CONFLICT",
       details: { document: "business", expectedRevision: 0, currentRevision: 1 },
     });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
 
     const latest = await request("GET", "/business");
     expect(latest.body.data).toMatchObject({ companyName: "Tab A", legalName: "", revision: 1 });

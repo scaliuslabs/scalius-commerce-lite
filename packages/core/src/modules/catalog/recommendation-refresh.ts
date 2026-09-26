@@ -13,7 +13,7 @@
 //   (new co-purchases) and the longest-unrefreshed public products, so
 //   popularity and the "new arrivals" tail roll over within days.
 // - `refreshProductSalesStats`: units sold in the last 30 days from real
-//   order lines, replaced in one batch.
+//   order lines, reconciled in one batch without churning unchanged rows.
 import {
     orderItems,
     orders,
@@ -77,7 +77,17 @@ export async function refreshProductRecommendations(
         const rows = await rankRecommendationRows(db, [productId], STORED_RECOMMENDATION_LIMIT);
         const entries = JSON.stringify(rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) })));
         await safeBatch(db, [
-            db.delete(productRecommendations).where(eq(productRecommendations.productId, productId)),
+            // Remove only changed slots first: the pair-unique constraint must
+            // permit two recommendations swapping positions in the same batch.
+            db.delete(productRecommendations).where(and(
+                eq(productRecommendations.productId, productId),
+                sql`NOT EXISTS (
+                    SELECT 1 FROM json_each(${entries}) AS entry
+                    WHERE CAST(entry.key AS INTEGER) = ${productRecommendations.position}
+                      AND CAST(json_extract(entry.value, '$.id') AS TEXT) = ${productRecommendations.recommendedProductId}
+                      AND CAST(json_extract(entry.value, '$.reason') AS TEXT) = ${productRecommendations.reason}
+                )`,
+            )),
             db.insert(productRecommendations).select(sql`
                 SELECT ${productId}, CAST(entry.key AS INTEGER),
                        CAST(json_extract(entry.value, '$.id') AS TEXT),
@@ -89,7 +99,10 @@ export async function refreshProductRecommendations(
                       SELECT 1 FROM ${products} AS rec_target
                       WHERE rec_target.id = CAST(json_extract(entry.value, '$.id') AS TEXT)
                   )
-            `),
+            `).onConflictDoUpdate({
+                target: [productRecommendations.productId, productRecommendations.position],
+                set: { computedAt: sql`unixepoch()` },
+            }),
         ] as never);
         refreshed += 1;
     }
@@ -173,24 +186,40 @@ export async function nightlyRecommendationRefreshCandidates(
 
 /**
  * Units sold per product in the last 30 days, from real orders (placed and
- * kept: not cancelled, refunded, returned or unfinished), replacing the
- * table in one batch.
+ * kept: not cancelled, refunded, returned or unfinished), reconciling the
+ * table in one batch. Unchanged projections only refresh their timestamp.
  */
 export async function refreshProductSalesStats(db: Database): Promise<{ products: number }> {
+    // Both reconciliation statements use the same database time, including
+    // when an order reaches the 30-day boundary between their executions.
+    const [clock] = await db.select({ now: sql<number>`unixepoch()` })
+        .from(sql`(SELECT 1) AS refresh_clock`).all();
+    const refreshAt = Number(clock!.now);
     const statuses = sql.join(REAL_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `);
     const results = await safeBatch(db, [
-        db.delete(productSalesStats),
+        db.delete(productSalesStats).where(sql`NOT EXISTS (
+            SELECT 1 FROM ${orders} AS sales_order
+            INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
+            WHERE sales_line.product_id = ${productSalesStats.productId}
+              AND sales_order.status IN (${statuses})
+              AND sales_order.deleted_at IS NULL
+              AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
+              AND sales_line.quantity > 0
+        )`),
         db.insert(productSalesStats).select(sql`
-            SELECT sales_line.product_id, SUM(sales_line.quantity), unixepoch()
+            SELECT sales_line.product_id, SUM(sales_line.quantity), ${refreshAt}
             FROM ${orders} AS sales_order
             INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
             WHERE sales_order.status IN (${statuses})
               AND sales_order.deleted_at IS NULL
-              AND sales_order.created_at >= unixepoch() - ${sql.raw(String(SALES_WINDOW_SECONDS))}
+              AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
               AND sales_line.quantity > 0
               AND EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = sales_line.product_id)
             GROUP BY sales_line.product_id
-        `),
+        `).onConflictDoUpdate({
+            target: productSalesStats.productId,
+            set: { sold30d: sql`excluded.sold_30d`, computedAt: sql`${refreshAt}` },
+        }),
         db.select({ count: sql<number>`count(*)` }).from(productSalesStats),
     ] as never) as unknown[];
     const [countRow] = (results[2] as Array<{ count: number }> | undefined) ?? [];

@@ -10,7 +10,7 @@ import { Input } from "~/components/ui/input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -651,11 +651,13 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="failReason">{t("cod.failureReason")}</Label>
-              <NativeSelect id="failReason" value={failReason} onValueChange={(value) => setFailReason(value as CodFailureReason)}>
-                {COD_FAILURE_REASONS.map((reason) => (
-                  <option key={reason} value={reason}>{orderDetailLabel(t, "cod.reason.", reason)}</option>
-                ))}
-              </NativeSelect>
+              <SearchableSelect
+                triggerClassName="w-full"
+                id="failReason"
+                value={failReason}
+                onValueChange={(value) => setFailReason(value as CodFailureReason)}
+                options={COD_FAILURE_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "cod.reason.", reason) }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="failNotes">{t("cod.notes")}</Label>
@@ -727,11 +729,13 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             </div>
             <div className="space-y-2">
               <Label htmlFor="refundReason">{t("refund.reason")}</Label>
-              <NativeSelect id="refundReason" value={refundReason} onValueChange={setRefundReason}>
-                {REFUND_REASONS.map((reason) => (
-                  <option key={reason} value={reason}>{orderDetailLabel(t, "refund.reason.", reason)}</option>
-                ))}
-              </NativeSelect>
+              <SearchableSelect
+                triggerClassName="w-full"
+                id="refundReason"
+                value={refundReason}
+                onValueChange={setRefundReason}
+                options={REFUND_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "refund.reason.", reason) }))}
+              />
             </div>
             <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} disabled={isRefundLocked} />
             {requiresManualSettlementConfirmation ? (

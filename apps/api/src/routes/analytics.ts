@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { analytics } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { deps } from "@scalius/core/cache-deps";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
@@ -38,6 +39,7 @@ const getConfigurationsRoute = createRoute({
 
 app.openapi(getConfigurationsRoute, async (c) => {
   const db = c.get("db");
+  deps.analytics();
   const activeAnalyticsScriptsFromDB = await db
     .select({
       id: analytics.id,

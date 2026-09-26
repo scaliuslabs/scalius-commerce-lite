@@ -32,11 +32,12 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   fulfillmentKind: "fulfilment",
   isGiftCard: "giftCardProduct",
   warrantyPolicyId: "warranty",
+  brandId: "brand",
   customizationSchema: "buyerInputs",
 };
 
 /** Product fields an edit sends only when the merchant changed them ("omit to keep"). */
-export type ProductSubmitChanges = Partial<Record<"customizationSchema" | "fulfillmentKind" | "isGiftCard" | "warrantyPolicyId", boolean>>;
+export type ProductSubmitChanges = Partial<Record<"customizationSchema" | "fulfillmentKind" | "isGiftCard" | "warrantyPolicyId" | "brandId", boolean>>;
 
 /** The "omit to keep" fields the merchant changed, from the form's dirty state. */
 export function productSubmitChanges(dirty: Partial<Record<keyof ProductFormValues, unknown>>): ProductSubmitChanges {
@@ -45,6 +46,7 @@ export function productSubmitChanges(dirty: Partial<Record<keyof ProductFormValu
     fulfillmentKind: Boolean(dirty.fulfillmentKind),
     isGiftCard: Boolean(dirty.isGiftCard),
     warrantyPolicyId: Boolean(dirty.warrantyPolicyId),
+    brandId: Boolean(dirty.brandId),
   };
 }
 
@@ -68,11 +70,14 @@ export function formatFormValuesForSubmission(
   // Wave B extras: a new product sends them only when set; an edit only when changed.
   const sendGiftCard = changed ? changed.isGiftCard === true : values.isGiftCard;
   const sendWarranty = changed ? changed.warrantyPolicyId === true : values.warrantyPolicyId !== null;
+  // The brand is "omit to keep" too: an edit sends it only when changed.
+  const sendBrand = changed ? changed.brandId === true : values.brandId !== null;
   return {
     ...(sendInputs ? { customizationSchema: customizationInput(values.customizationSchema) } : {}),
     ...(sendKind && values.fulfillmentKind !== "mixed" ? { fulfillmentKind: values.fulfillmentKind } : {}),
     ...(sendGiftCard ? { isGiftCard: values.isGiftCard } : {}),
     ...(sendWarranty ? { warrantyPolicyId: values.warrantyPolicyId } : {}),
+    ...(sendBrand ? { brandId: values.brandId } : {}),
     name: values.name,
     description: values.description,
     price: values.price ?? 0,

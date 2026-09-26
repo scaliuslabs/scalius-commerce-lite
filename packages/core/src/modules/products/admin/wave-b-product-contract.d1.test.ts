@@ -219,7 +219,8 @@ describe("Wave B product contract", () => {
         const copy = await duplicateProduct(db, id, "Store gift card copy");
         expect(product(copy.id)).toMatchObject({ warranty_policy_id: "wrp_live_policy1" });
 
-        await updateProduct(db, id, updateInput(id, 1));
+        // An edit that omits the policy keeps it (a save that changes nothing writes nothing, so rename).
+        await updateProduct(db, id, updateInput(id, 1, { name: "Store gift card renamed" }));
         expect(product(id)).toMatchObject({ warranty_policy_id: "wrp_live_policy1", aggregate_revision: 2 });
         await expect(updateProduct(db, id, updateInput(id, 2, { warrantyPolicyId: "wrp_archived_pol" })))
             .rejects.toBeInstanceOf(ValidationError);

@@ -42,14 +42,25 @@ describe("StatusCard", () => {
   });
 
   const statusSelect = () =>
-    host.querySelector<HTMLSelectElement>(`select[aria-label="${translate(productMessages, "status")}"]`);
+    host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${translate(productMessages, "status")}"]`);
 
   it("shows Active or Draft for the saved isActive value", async () => {
     await act(async () => root.render(<Harness isActive={false} />));
-    expect(statusSelect()?.selectedOptions[0]?.textContent).toBe(translate(productMessages, "statusDraft"));
+    expect(statusSelect()?.textContent).toBe(translate(productMessages, "statusDraft"));
 
     await act(async () => root.render(<Harness key="active" isActive />));
-    expect(statusSelect()?.selectedOptions[0]?.textContent).toBe(translate(productMessages, "statusActive"));
+    expect(statusSelect()?.textContent).toBe(translate(productMessages, "statusActive"));
+  });
+
+  it("updates the form through the searchable status choices", async () => {
+    await act(async () => root.render(<Harness isActive={false} />));
+    await act(async () => statusSelect()!.click());
+    const active = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+      .find((option) => option.textContent === translate(productMessages, "statusActive"));
+    await act(async () => active!.click());
+    expect(form?.getValues("isActive")).toBe(true);
+    expect(statusSelect()?.textContent).toBe(translate(productMessages, "statusActive"));
+    expect(host.querySelector("select")).toBeNull();
   });
 
   it("switches free delivery on", async () => {

@@ -1,17 +1,13 @@
 // Catalogue jobs end to end on the real migrated schema: the queued
-// projection rebuild walks the catalogue in keyset chunks and bumps the cache
-// generation once at the end; recommendation refreshes store each product's
+// projection rebuild walks the catalogue in keyset chunks; transactional
+// dependency triggers refresh only changed output; recommendation refreshes store each product's
 // list; the nightly pass refreshes sales stats and queues both.
 import "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn(async () => undefined) }));
-vi.mock("./cache-generation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./cache-generation")>()),
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
+
 
 import {
   CATALOG_PROJECTION_REBUILD_CHUNK,
@@ -59,21 +55,24 @@ function fakeQueue() {
 }
 
 describe("catalogue queue jobs", () => {
-  it("rebuilds the projections chunk by chunk and bumps the generation once at the end", async () => {
-    const { db, count } = seeded(CATALOG_PROJECTION_REBUILD_CHUNK + 5);
+  it("rebuilds in chunks, advances dependencies for drift, and leaves unchanged output valid", async () => {
+    const { db, count, sqlite } = seeded(CATALOG_PROJECTION_REBUILD_CHUNK + 5);
+    const storeSeq = () => Number((sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'store'").get() as { seq: number } | undefined)?.seq ?? 0);
+    const before = storeSeq();
     const { queue, sent } = fakeQueue();
     const env = { JOBS_QUEUE: queue } as unknown as Env;
-    mocks.bumpCacheGeneration.mockClear();
 
     await processCatalogQueueMessage({ type: "catalog.projections.rebuild", afterProductId: null }, db, env);
     expect(count("product_buyer_state")).toBe(CATALOG_PROJECTION_REBUILD_CHUNK);
+    expect(storeSeq()).toBeGreaterThan(before);
     expect(sent).toEqual([{ type: "catalog.projections.rebuild", afterProductId: "prod_00899" }]);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
 
     await processCatalogQueueMessage(sent[0]!, db, env);
     expect(count("product_buyer_state")).toBe(CATALOG_PROJECTION_REBUILD_CHUNK + 5);
     expect(sent).toHaveLength(1);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+    const unchanged = storeSeq();
+    await processCatalogQueueMessage({ type: "catalog.projections.rebuild", afterProductId: null }, db, env);
+    expect(storeSeq()).toBe(unchanged);
   });
 
   it("stores recommendations for the products a message names, 20 per message", async () => {
@@ -163,7 +162,7 @@ describe("post-deploy projection rebuild", () => {
 });
 
 describe("POST /api/v1/admin/catalog/projections/rebuild", () => {
-  it("rebuilds one chunk per call and bumps the generation when done", async () => {
+  it("rebuilds one chunk per call and reports completion", async () => {
     const { db, count } = seeded(5);
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
@@ -183,15 +182,12 @@ describe("POST /api/v1/admin/catalog/projections/rebuild", () => {
       }, {} as Env);
       return { status: response.status, body: await response.json() as { data: { processed: number; nextAfterProductId: string | null; done: boolean } } };
     };
-    mocks.bumpCacheGeneration.mockClear();
 
     const first = await post({ limit: 3 });
     expect(first).toMatchObject({ status: 200, body: { data: { processed: 3, nextAfterProductId: "prod_00002", done: false } } });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     const second = await post({ afterProductId: first.body.data.nextAfterProductId, limit: 3 });
     expect(second).toMatchObject({ status: 200, body: { data: { processed: 2, nextAfterProductId: null, done: true } } });
     expect(count("product_buyer_state")).toBe(5);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
     expect((await post({ limit: 0 })).status).toBe(400);
   });
 });

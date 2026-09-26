@@ -10,12 +10,6 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { createConversationHarness, OTHER_SESSION, OWNER_SESSION, type Harness } from "./__tests__/conversation-harness";
 import { errorResponseFromError } from "../utils/api-response";
 
-const mocks = vi.hoisted(() => ({ bumpCacheGeneration: vi.fn(async () => undefined) }));
-vi.mock("../utils/cache-generation", async () => {
-  const actual = await vi.importActual<typeof import("../utils/cache-generation")>("../utils/cache-generation");
-  return { ...actual, bumpCacheGeneration: mocks.bumpCacheGeneration };
-});
-
 import { adminReviewRoutes } from "./admin/reviews";
 import { productReviewRoutes } from "./product-reviews";
 
@@ -182,16 +176,15 @@ describe("dashboard moderation routes", () => {
       .toEqual({ allOf: [PERMISSIONS.REVIEWS_MODERATE, PERMISSIONS.CONVERSATIONS_REPLY] });
   });
 
-  it("holds, publishes, replies and bumps the cache generation only for buyer-visible changes", async () => {
+  it("holds, publishes and replies while preserving moderation visibility", async () => {
     const { send } = staffApp();
     await send("/admin/reviews/settings", "PUT", { moderation: "hold", expectedRevision: 0 });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
     const submitted = await harness.request("/customer-auth/reviews", {
       method: "POST", session: OWNER_SESSION, body: JSON.stringify({ orderItemId: "item_owned", rating: 2, body: "Too small" }),
     });
     const { data } = await json<WriteBody>(submitted);
     expect(data.review.status).toBe("pending");
-    mocks.bumpCacheGeneration.mockClear();
 
     const queue = await json<{ data: { items: Array<{ id: string; product: { name: string }; order: { orderNumber: string } }> } }>(
       await send("/admin/reviews?status=pending"),
@@ -202,16 +195,14 @@ describe("dashboard moderation routes", () => {
     // A pending reply is private: no bump.
     const replied = await send(`/admin/reviews/${data.review.id}/reply`, "PUT", { body: "Sorry! We'll swap it.", version: 1 });
     expect(replied.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
 
     const rejectWithoutReason = await send("/admin/reviews/moderate", "POST", { ids: [data.review.id], action: "reject", requestKey: "moderate-0001" });
     expect(rejectWithoutReason.status).toBe(400);
     const published = await send("/admin/reviews/moderate", "POST", { ids: [data.review.id], action: "publish", requestKey: "moderate-0002" });
     expect((await json<{ data: unknown }>(published)).data).toEqual({ updated: [{ id: data.review.id, previousStatus: "pending" }], skipped: [] });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
     const again = await send("/admin/reviews/moderate", "POST", { ids: [data.review.id], action: "publish", requestKey: "moderate-0003" });
     expect((await json<{ data: { skipped: string[] } }>(again)).data.skipped).toEqual([data.review.id]);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
 
     const thread = await send(`/admin/reviews/${data.review.id}/conversation`, "POST");
     expect(thread.status).toBe(201);

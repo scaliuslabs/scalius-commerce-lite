@@ -138,23 +138,21 @@ describe("dashboard inbox", () => {
     expect(sdk.list).toHaveBeenCalledWith({ query: expect.objectContaining({ subjectType: "warranty_claim" }) });
     expect(host.textContent).toContain(en["empty.filtered"]);
 
-    const select = host.querySelector<HTMLSelectElement>(`select[aria-label="${en.subjectFilter}"]`)!;
-    expect([...select.options].map((option) => option.textContent)).toEqual([
+    const select = host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${en.subjectFilter}"]`)!;
+    expect(select.textContent).toContain(en["subject.warranty_claim"]);
+    await act(async () => select.click());
+    const options = () => [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')];
+    expect(options().map((option) => option.textContent?.trim())).toEqual([
       en["subject.all"],
       en["subject.order"],
       en["subject.store"],
       en["subject.review"],
       en["subject.warranty_claim"],
     ]);
-    await act(async () => {
-      select.value = "review";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => options().find((option) => option.textContent?.trim() === en["subject.review"])!.click());
     expect(onSearchChange).toHaveBeenCalledWith({ subject: "review" });
-    await act(async () => {
-      select.value = "all";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => select.click());
+    await act(async () => options().find((option) => option.textContent?.trim() === en["subject.all"])!.click());
     expect(onSearchChange).toHaveBeenCalledWith({ subject: undefined });
   });
 

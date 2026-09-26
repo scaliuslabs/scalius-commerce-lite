@@ -701,6 +701,20 @@
       "when": 1790300030000,
       "tag": "0099_customer_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1790300031000,
+      "tag": "0100_cache_dependencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1790300032000,
+      "tag": "0101_cache_ordering_dependencies",
+      "breakpoints": true
     }
   ]
 }

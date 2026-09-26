@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useMessages } from "~/i18n";
@@ -120,7 +120,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
           <form id="buyer-input-form" method="post" noValidate className="space-y-4" onSubmit={save}>
             <div className="space-y-2">
               <Label htmlFor="buyer-input-type">{t("inputTypeLabel")}</Label>
-              <NativeSelect
+              <SearchableSelect
                 id="buyer-input-type"
                 value={draft.type}
                 onValueChange={(value) => {
@@ -131,9 +131,9 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                     options: type === "select" && draft.options.length === 0 ? [{ value: "", label: "", price: null }] : draft.options,
                   });
                 }}
-              >
-                {BUYER_INPUT_TYPES.map((type) => <option key={type} value={type}>{t(TYPE_LABELS[type])}</option>)}
-              </NativeSelect>
+                triggerClassName="w-full"
+                options={BUYER_INPUT_TYPES.map((type) => ({ value: type, label: t(TYPE_LABELS[type]) }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="buyer-input-label">{t("inputLabel")}</Label>

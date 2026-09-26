@@ -41,17 +41,13 @@ const mocks = vi.hoisted(() => ({
   recordPaymentWebhookDlqEvidence: vi.fn(),
   readStoreIdentity: vi.fn(),
   renderMissingMediaVariants: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/media", () => ({
   renderMissingMediaVariants: mocks.renderMissingMediaVariants,
 }));
 
-vi.mock("./utils/cache-generation", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./utils/cache-generation")>(),
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
-}));
+
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
@@ -2237,23 +2233,20 @@ describe("handleQueueBatch media rendition jobs", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   });
 
-  it("renders a still-missing upload and bumps the cache generation once", async () => {
+  it("renders and acknowledges a still-missing upload", async () => {
     mocks.renderMissingMediaVariants.mockResolvedValueOnce("generated");
     const message = renderJob("media_upload_1");
 
     await runBatch([message]);
 
     expect(mocks.renderMissingMediaVariants).toHaveBeenCalledWith({ id: "db" }, "media_upload_1", bucket, images);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
   });
 
-  it("acks without a generation bump when the browser already saved renditions or rendering failed", async () => {
+  it("acks when the browser already saved renditions or rendering failed", async () => {
     mocks.renderMissingMediaVariants.mockResolvedValueOnce("skipped").mockResolvedValueOnce("failed");
     const done = renderJob("media_browser_done");
     const broken = renderJob("media_broken");
@@ -2261,7 +2254,6 @@ describe("handleQueueBatch media rendition jobs", () => {
     await runBatch([done, broken]);
 
     expect(mocks.renderMissingMediaVariants).toHaveBeenCalledTimes(2);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(done.ack).toHaveBeenCalledTimes(1);
     expect(broken.ack).toHaveBeenCalledTimes(1);
   });
@@ -2272,7 +2264,6 @@ describe("handleQueueBatch media rendition jobs", () => {
     await runBatch([message], { BUCKET: bucket } as unknown as Env);
 
     expect(mocks.renderMissingMediaVariants).not.toHaveBeenCalled();
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
@@ -2284,6 +2275,5 @@ describe("handleQueueBatch media rendition jobs", () => {
 
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 });

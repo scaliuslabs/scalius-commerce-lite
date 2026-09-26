@@ -10,7 +10,9 @@
 // ledger-v2 edge and the `stockVersion` CAS, so the projection commits with
 // the write or not at all. `rebuildCatalogProjections` recomputes them from
 // the same sources in keyset pages; the nightly rebuild and the dashboard
-// action heal drift and fill them the first time.
+// action heal drift and fill them the first time. The per-write facet refresh
+// rewrites only the rows that differ, so the cache dependency triggers fire
+// only for real changes; the rebuild runs its batches in coarse mode.
 //
 // The SQL is single-sourced: the buyer pricing projection
 // (`buildBuyerCatalogPricingProjection`) and the public eligibility predicate
@@ -19,6 +21,7 @@
 // one `json_each` parameter.
 import {
     attributeValues,
+    cacheClock,
     productAttributeValues,
     productAttributes,
     productBuyerState,
@@ -300,6 +303,47 @@ function facetRefreshStatements(db: Database, scope: ProductScope): SQLiteBatchI
     ];
 }
 
+/**
+ * The per-write facet refresh: deletes only the stored rows that no live row
+ * equals, then inserts the live rows that are missing. Rows that did not
+ * change are neither deleted nor rewritten, so a product save whose facets
+ * are unchanged fires no cache dependency trigger on them (migration 0100).
+ * `EXCEPT` compares every column with NULLs equal, on SQLite and PostgreSQL.
+ */
+function facetDiffRefreshStatements(db: Database, scope: ProductScope): SQLiteBatchItem[] {
+    const stored = db
+        .select({
+            ownerId: productFacetValues.ownerId,
+            productId: productFacetValues.productId,
+            variantId: productFacetValues.variantId,
+            facetKind: productFacetValues.facetKind,
+            facetKey: productFacetValues.facetKey,
+            valueKey: productFacetValues.valueKey,
+            valueLabel: productFacetValues.valueLabel,
+            valueNumber: productFacetValues.valueNumber,
+            sortOrder: productFacetValues.sortOrder,
+        })
+        .from(productFacetValues)
+        .where(scope.on(sql`${productFacetValues.productId}`));
+    const liveAttributes = selectLiveAttributeFacetRows(db, scope.on(sql`${productAttributeValues.productId}`));
+    const liveOptions = selectLiveOptionFacetRows(db, scope.on(sql`${productVariants.productId}`));
+    const stale = stored.except(liveAttributes as never).except(liveOptions as never);
+    return [
+        db.delete(productFacetValues).where(and(
+            scope.on(sql`${productFacetValues.productId}`),
+            sql`(${productFacetValues.ownerId}, ${productFacetValues.facetKey}) IN (
+                SELECT stale.owner_id, stale.facet_key FROM ${stale} AS stale
+            )`,
+        )),
+        db.insert(productFacetValues)
+            .select(selectLiveAttributeFacetRows(db, scope.on(sql`${productAttributeValues.productId}`)) as never)
+            .onConflictDoNothing(),
+        db.insert(productFacetValues)
+            .select(selectLiveOptionFacetRows(db, scope.on(sql`${productVariants.productId}`)) as never)
+            .onConflictDoNothing(),
+    ];
+}
+
 function refreshStatementsForIds(
     db: Database,
     kind: "product" | "sku",
@@ -309,7 +353,7 @@ function refreshStatementsForIds(
     const statements: SQLiteBatchItem[] = [];
     for (const chunk of chunks(uniqueIds(ids), CATALOG_PROJECTION_PRODUCTS_PER_CALL)) {
         const scope = idScope(kind, chunk);
-        if (options.facets !== false) statements.push(...facetRefreshStatements(db, scope));
+        if (options.facets !== false) statements.push(...facetDiffRefreshStatements(db, scope));
         statements.push(buyerStateUpsert(db, scope));
     }
     return statements;
@@ -384,7 +428,15 @@ export async function rebuildCatalogProjections(
             .all();
         if (rows.length === 0) return { processed, nextAfterProductId: null, done: true };
         const ids = rows.map((row) => row.id);
-        await safeBatch(db, catalogProjectionRefreshStatements(db, ids) as never);
+        // Coarse: inside this batch every cache dependency trigger advances
+        // `store` once per fire instead of each product's keys (migration
+        // 0100); a rebuild that finds no drift writes no key at all. The flag
+        // is set and cleared in the same transaction, so no other write sees it.
+        await safeBatch(db, [
+            db.update(cacheClock).set({ coarse: 1 }).where(eq(cacheClock.id, 1)),
+            ...catalogProjectionRefreshStatements(db, ids),
+            db.update(cacheClock).set({ coarse: 0 }).where(eq(cacheClock.id, 1)),
+        ] as never);
         processed += ids.length;
         after = ids[ids.length - 1]!;
         if (rows.length < pageSize) return { processed, nextAfterProductId: null, done: true };

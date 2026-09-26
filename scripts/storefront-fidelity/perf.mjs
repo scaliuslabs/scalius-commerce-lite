@@ -1,9 +1,10 @@
-// Built-stack performance (AUDIT §5): TTFB miss (forced by a new cache
-// generation) and hit, and in the browser LCP, CLS, INP-ish and bytes by type
+// Built-stack performance (AUDIT §5): TTFB miss (forced by the store dependency
+// clock) and hit, and in the browser LCP, CLS, INP-ish and bytes by type
 // on the phone profile (390x844 DPR 3, 150 ms RTT, 1.6 Mbps, 4x CPU) and the
 // desktop profile (1440x900, unthrottled). Run through check.mjs.
 import { sleep } from "./lib/proc.mjs";
-import { applyTheme, bumpGeneration } from "./lib/theme.mjs";
+import { applyTheme, forceCacheRefresh } from "./lib/theme.mjs";
+import { withSeenSeq } from "../storefront-perf.mjs";
 import { htmlWeights } from "./matrix.mjs";
 import { MENUS } from "./menus.mjs";
 
@@ -24,12 +25,16 @@ async function timeFetch(url) {
 export async function ttfbRuns(ctx, path, runs = 3) {
   const out = [];
   for (let i = 0; i < runs; i += 1) {
-    await bumpGeneration(ctx);
-    await sleep(50);
-    const miss = await timeFetch(ctx.base + path);
+    const seq = forceCacheRefresh(ctx);
+    const miss = await timeFetch(withSeenSeq(ctx.base + path, seq));
+    if (miss.status !== 200 || !["MISS", "REFRESH"].includes(miss.cache)) {
+      throw new Error(`${path}: forced miss returned ${miss.cache} (${miss.status})`);
+    }
     const hit1 = await timeFetch(ctx.base + path);
     const hit2 = await timeFetch(ctx.base + path);
-    out.push({ miss: miss.ms, missCache: miss.cache, hit: Math.min(hit1.ms, hit2.ms), hitCache: hit2.cache, htmlKB: Math.round(miss.bytes / 1024), status: miss.status });
+    const hits = [hit1, hit2].filter((sample) => sample.status === 200 && sample.cache === "HIT");
+    if (!hits.length) throw new Error(`${path}: no verified HIT samples`);
+    out.push({ miss: miss.ms, missCache: miss.cache, hit: Math.min(...hits.map((sample) => sample.ms)), hitCache: "HIT", htmlKB: Math.round(miss.bytes / 1024), status: miss.status });
   }
   return out;
 }

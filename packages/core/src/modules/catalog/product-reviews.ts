@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gt, isNull, lt, or, sql, type SQL } from "drizzle-o
 import type { Database } from "@scalius/database/client";
 import { productReviews, productReviewStats, products } from "@scalius/database/schema";
 import { reviewsEnabledSql } from "../settings/documents";
+import { deps } from "./declare-deps";
 
 export const PUBLIC_REVIEW_SORTS = ["recent", "highest", "lowest"] as const;
 export type PublicReviewSort = (typeof PUBLIC_REVIEW_SORTS)[number];
@@ -212,6 +213,8 @@ export async function getPublicProductReviews(
   productId: string,
   query: PublicReviewQuery = {},
 ): Promise<ProductPageReviews | null> {
+  // The product's buyer state, its review stats and its published reviews.
+  deps.product(productId);
   const product = await db
     .select({ id: products.id, ...reviewStatsSelection() })
     .from(products)

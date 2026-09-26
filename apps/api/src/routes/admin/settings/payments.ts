@@ -3,7 +3,7 @@ import type { Database } from "@scalius/database/client";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { successEnvelope, conflictResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     getPaymentGatewaySettingsSnapshot,
@@ -328,8 +328,6 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         defaultMethod: data.defaultMethod,
     }, {}, { expectedRevision: data.expectedRevision });
 
-    await bumpCacheGeneration(c);
-
     return ok(c, { message: "Payment methods updated", revision });
 });
 
@@ -417,8 +415,6 @@ app.openapi(saveStripeRoute, async (c) => {
             expectedRevision: body.expectedRevision,
         });
 
-        await bumpCacheGeneration(c);
-
         return ok(c, { message: "Stripe settings saved successfully", revision });
 });
 
@@ -503,8 +499,6 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
             expectedRevision: body.expectedRevision,
         });
 
-        await bumpCacheGeneration(c);
-
         return ok(c, { message: "SSLCommerz settings saved successfully", revision });
 });
 
@@ -566,7 +560,7 @@ for (const gateway of ["stripe", "sslcommerz"] as const) {
     }), async (c) => {
         const { expectedRevision } = c.req.valid("json");
         const revision = await removeGatewayKeys(c.get("db"), c.env, gateway, expectedRevision);
-        await bumpCacheGeneration(c);
+
         return ok(c, { message: `${label} keys removed`, revision });
     });
 }

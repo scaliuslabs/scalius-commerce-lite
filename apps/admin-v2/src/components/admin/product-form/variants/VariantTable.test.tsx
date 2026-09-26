@@ -134,7 +134,7 @@ describe("VariantTable", () => {
     expect(latest.find((row) => row.id === "mw")!.stock).toBe(9);
     expect(latest.find((row) => row.id === "mb")!.stock).toBe(0);
 
-    const toggle = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.startsWith("S"))!;
+    const toggle = [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]:not([role="combobox"])')].find((element) => element.textContent?.startsWith("S"))!;
     await act(async () => toggle.click());
     expect(host.querySelector('[data-variant-row="sw"]')).toBeNull();
     expect(host.querySelector('[data-variant-row="mw"]')).not.toBeNull();
@@ -213,7 +213,7 @@ describe("VariantTable", () => {
     expect(host.querySelector("[data-variant-row]")).toBeNull();
     expect(input(label("priceForGroup", { name: "S" }))).not.toBeNull();
 
-    const toggle = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.startsWith("S"))!;
+    const toggle = [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]:not([role="combobox"])')].find((element) => element.textContent?.startsWith("S"))!;
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await act(async () => toggle.click());
     expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(16);
@@ -235,6 +235,8 @@ describe("VariantTable", () => {
     expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
   });
 
+});
+
 describe("VariantTable fulfilment column", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -250,11 +252,23 @@ describe("VariantTable fulfilment column", () => {
     root = createRoot(host);
     await act(async () => root.render(<Harness initial={initial} fulfilmentColumn={fulfilmentColumn} />));
   }
-  const select = (ariaLabel: string) => host.querySelector<HTMLSelectElement>(`select[aria-label="${ariaLabel}"]`);
-  const choose = (element: HTMLSelectElement, value: string) => act(async () => {
-    element.value = value;
-    element.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  const select = (ariaLabel: string) => host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${ariaLabel}"]`);
+  const choose = async (element: HTMLButtonElement, value: "physical" | "service") => {
+    await act(async () => {
+      element.click();
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const optionLabel = label(value === "physical" ? "fulfilmentPhysicalShort" : "fulfilmentServiceShort");
+    await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+      .find((option) => option.textContent === optionLabel)!.click());
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
   const rows = () => [variant("sw", "s", "w", 1000), variant("sb", "s", "b", 1000, { fulfillmentKind: "service" })];
 
   it("shows no Fulfilment column while every variant is the same kind", async () => {
@@ -266,11 +280,11 @@ describe("VariantTable fulfilment column", () => {
     await render(rows(), true);
     expect(host.textContent).toContain(label("fulfilment"));
     const white = select(label("fulfilmentFor", { name: "S / White" }))!;
-    expect(white.value).toBe("physical");
-    expect(select(label("fulfilmentFor", { name: "S / কালো" }))!.value).toBe("service");
+    expect(white.textContent).toBe(label("fulfilmentPhysicalShort"));
+    expect(select(label("fulfilmentFor", { name: "S / কালো" }))!.textContent).toBe(label("fulfilmentServiceShort"));
     // The S group mixes both kinds until one is chosen for all.
     const group = select(label("fulfilmentForGroup", { name: "S" }))!;
-    expect(group.value).toBe("");
+    expect(group.textContent).toBe(label("mixedValues"));
 
     await choose(white, "service");
     expect(latest.find((row) => row.id === "sw")?.fulfillmentKind).toBe("service");
@@ -278,5 +292,3 @@ describe("VariantTable fulfilment column", () => {
     expect(latest.map((row) => row.fulfillmentKind)).toEqual(["physical", "physical"]);
   });
 });
-});
-

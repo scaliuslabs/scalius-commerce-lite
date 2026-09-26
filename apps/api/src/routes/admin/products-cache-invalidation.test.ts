@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   deleteVariant: vi.fn(),
   getProductVariants: vi.fn(),
   saveProductOptionMatrix: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/products", async (importOriginal) => ({
@@ -40,16 +40,6 @@ vi.mock("@scalius/core/modules/products", async (importOriginal) => ({
   getProductVariants: mocks.getProductVariants,
   saveProductOptionMatrix: mocks.saveProductOptionMatrix,
 }));
-
-vi.mock("../../utils/cache-generation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
-    "../../utils/cache-generation",
-  );
-  return {
-    ...actual,
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
-  };
-});
 
 import { adminProductsRoutes } from "./products";
 
@@ -144,7 +134,6 @@ function createTestApp() {
   mocks.updateVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
   mocks.deleteVariant.mockResolvedValue({ aggregateRevision: 2 });
   mocks.saveProductOptionMatrix.mockResolvedValue({ aggregateRevision: 2 });
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -176,12 +165,12 @@ async function requestJson(
   );
 }
 
-describe("admin product cache invalidation", () => {
+describe("admin product write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("purges product projections after product creation", async () => {
+  it("returns success after product creation", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -193,11 +182,10 @@ describe("admin product cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("purges product projections after slug/category updates", async () => {
+  it("returns success after slug/category updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -209,8 +197,7 @@ describe("admin product cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
   it.each([
@@ -218,17 +205,16 @@ describe("admin product cache invalidation", () => {
     { label: "soft delete", path: "/prod_1?expectedAggregateRevision=1", method: "DELETE" },
     { label: "restore", path: "/prod_1/restore?expectedAggregateRevision=1", method: "POST" },
     { label: "permanent delete", path: "/prod_1/permanent?expectedAggregateRevision=1", method: "DELETE" },
-  ])("purges product projections after $label", async ({ path, method, body }) => {
+  ])("returns success after $label", async ({ path, method, body }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, path, method, body);
 
     expect([200, 204]).toContain(response.status);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 
-  it("returns per-product permanent-delete outcomes and invalidates after partial success", async () => {
+  it("returns per-product permanent-delete outcomes after partial success", async () => {
     const { app, env } = createTestApp();
     mocks.bulkDeleteProducts.mockResolvedValueOnce({
       revisions: [],
@@ -263,10 +249,10 @@ describe("admin product cache invalidation", () => {
         ],
       },
     });
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+
   });
 
-  it("does not churn catalog caches when every permanent delete is blocked", async () => {
+  it("returns blocked outcomes when every permanent delete is refused", async () => {
     const { app, env } = createTestApp();
     mocks.bulkDeleteProducts.mockResolvedValueOnce({
       revisions: [],
@@ -284,7 +270,7 @@ describe("admin product cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
   it.each([
@@ -323,13 +309,12 @@ describe("admin product cache invalidation", () => {
       },
       status: 200,
     },
-  ])("purges product projections after $label", async ({ path, method, body, status }) => {
+  ])("returns success after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
+
   });
 });

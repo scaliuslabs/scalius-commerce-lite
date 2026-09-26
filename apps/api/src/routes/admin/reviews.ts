@@ -2,8 +2,8 @@
 // family; Wave B design §7.2). Permissions live in
 // packages/core/src/auth/rbac/route-permissions/reviews.ts. Staff never author
 // or edit buyer text: the only writes are status, reason, reply, settings and
-// opening a private thread with the reviewer. A staff write that changes what
-// buyers see bumps the cache generation once per request.
+// opening a private thread with the reviewer. Database triggers advance
+// dependencies when a write changes what buyers see.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -31,7 +31,7 @@ import {
   reviewSettingsBodySchema,
   reviewSettingsSchema,
 } from "../../schemas/reviews";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
+
 import { UnauthorizedError } from "../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -119,7 +119,7 @@ app.openapi(createRoute({
   const { expectedRevision, ...patch } = c.req.valid("json");
   const saved = await saveReviewSettings(c.get("db"), patch, expectedRevision);
   // Turning reviews on or off changes every product page and the store shape.
-  await bumpCacheGeneration(c);
+
   return ok(c, saved);
 });
 
@@ -138,7 +138,7 @@ app.openapi(createRoute({
   noStore(c);
   const body = c.req.valid("json");
   const result = await moderateReviews(c.get("db"), { ids: body.ids, action: body.action, reason: body.reason });
-  if (result.publicChange) await bumpCacheGeneration(c);
+
   return ok(c, { updated: result.updated, skipped: result.skipped });
 });
 
@@ -181,7 +181,7 @@ app.openapi(createRoute({
     version: body.version,
     userId: staffUserId(c),
   });
-  if (result.publicChange) await bumpCacheGeneration(c);
+
   return ok(c, presentReview(result.review));
 });
 

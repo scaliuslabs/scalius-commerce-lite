@@ -4,7 +4,7 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
-import { pageSchema } from "../schemas/entities";
+import { publicPageSchema } from "../schemas/entities";
 // Create an OpenAPIHono app for pages routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -52,7 +52,7 @@ const listPagesRoute = createRoute({
     200: {
       description: "Page list with pagination",
       content: { "application/json": { schema: successEnvelope(z.object({
-        pages: z.array(pageSchema),
+        pages: z.array(publicPageSchema),
         pagination: paginationSchema,
       })) } },
     },
@@ -83,7 +83,7 @@ const getPageBySlugRoute = createRoute({
     200: {
       description: "Page details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: pageSchema,
+        page: publicPageSchema,
       })) } },
     },
     400: errorResponses[400],
@@ -116,7 +116,7 @@ const getPageByIdRoute = createRoute({
     200: {
       description: "Page details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: pageSchema,
+        page: publicPageSchema,
       })) } },
     },
     404: errorResponses[404],

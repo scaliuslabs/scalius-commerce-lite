@@ -41,4 +41,8 @@ export * from "./storefront-sections";
 export * from "./cards";
 export * from "./card-facts";
 export * from "./home-lists";
+export { planHomeBrands, type HomeBrand } from "./home-brands";
 export * from "./recommendation-refresh";
+// Cache dependency declarations of catalogue cards and requested products,
+// for the domains that show catalogue cards (collections).
+export { declareProductCards, declareRequestedProducts } from "./declare-deps";

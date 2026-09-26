@@ -8,7 +8,7 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
@@ -192,17 +192,13 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
         searchPlaceholder={t("searchProducts")}
         filters={(
           <>
-            <NativeSelect
-              className="w-auto min-w-40"
-              aria-label={t("changeType")}
+            <SearchableSelect
+              triggerClassName="w-auto min-w-40"
+              ariaLabel={t("changeType")}
               value={type}
               onValueChange={(value) => onFiltersChange({ type: value as MovementFilter })}
-            >
-              <option value="all">{t("typeAll")}</option>
-              {MOVEMENT_TYPES.map((value) => (
-                <option key={value} value={value}>{t(`type_${value}`)}</option>
-              ))}
-            </NativeSelect>
+              options={[{ value: "all", label: t("typeAll") }, ...MOVEMENT_TYPES.map((value) => ({ value, label: t(`type_${value}`) }))]}
+            />
             <HistoryDateFilter from={startDate} to={endDate} onChange={onFiltersChange} />
           </>
         )}

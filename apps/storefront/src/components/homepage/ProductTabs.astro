@@ -1,0 +1,111 @@
+---
+// Multi-list tabs (Game Ghor's "New arrival / Best seller / Offer",
+// Walmart's and Chaldal's tabbed rows): one heading, up to four tabs, one
+// product row per tab. The tabs are a native radio group, so they switch
+// with a click, a tap or the arrow keys with no script, and every panel is
+// in the HTML (each hidden until its tab is chosen). Only tabs that have
+// products are shown; a single tab is a plain row under its title.
+import type { HomepageProductTab } from "@/lib/homepage-sections";
+import ProductRail from "./ProductRail.astro";
+import SectionHeader from "./SectionHeader.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+
+interface Props {
+  sectionId: string;
+  title: string;
+  tabs: HomepageProductTab[];
+  currencySymbol: string;
+  currencyCode: string;
+  aboveFold: boolean;
+}
+
+const { sectionId, title, tabs, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const base = `home-${sectionId}`;
+const headingId = `${base}-title`;
+const heading = title.trim();
+const single = tabs.length === 1;
+const labelled = Boolean(heading) || single;
+---
+
+<section
+  class="home-section w-full"
+  aria-labelledby={labelled ? headingId : undefined}
+  aria-label={labelled ? undefined : tabs.map((tab) => tab.title).join(", ")}
+  data-product-tabs
+>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    {labelled && <SectionHeader id={headingId} title={heading || tabs[0]!.title} href={single ? tabs[0]!.href : null} />}
+    <div class="home-tabs">
+      {!single && tabs.map((tab, index) => (
+        <input
+          type="radio"
+          class="home-tab-input sr-only"
+          name={`${base}-tab`}
+          id={`${base}-tab-${index}`}
+          checked={index === 0}
+          aria-label={tab.title}
+          aria-controls={`${base}-panel-${index}`}
+        />
+      ))}
+      {!single && (
+        <div class="mb-3 flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] md:mb-5 [&::-webkit-scrollbar]:hidden" aria-hidden="true">
+          {tabs.map((tab, index) => (
+            <label
+              for={`${base}-tab-${index}`}
+              class="home-tab-label -mb-px inline-flex min-h-11 shrink-0 cursor-pointer items-center border-b-2 border-transparent px-3 text-sm font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground md:px-4 md:text-base"
+            >
+              {tab.title}
+            </label>
+          ))}
+        </div>
+      )}
+      <div class="home-tab-panels">
+        {tabs.map((tab, index) => {
+          const eager = aboveFold && index === 0;
+          return (
+            <div id={`${base}-panel-${index}`} class="home-tab-panel">
+              {tab.products.length >= 4 ? (
+                <ProductRail title={tab.title} href={null} products={tab.products} currencySymbol={currencySymbol} currencyCode={currencyCode} aboveFold={eager} bare />
+              ) : (
+                <ProductGrid>
+                  {tab.products.map((product, cardIndex) => (
+                    <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={cardIndex} aboveFold={eager} />
+                  ))}
+                </ProductGrid>
+              )}
+              {!single && tab.href && (
+                <p class="mt-2 text-right">
+                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">View all {tab.title}</a>
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Radio tabs: the checked tab's label is underlined and its panel shows. */
+  .home-tabs:has(> .home-tab-input) .home-tab-panel { display: none; }
+  .home-tabs:has(> .home-tab-input:nth-of-type(1):checked) .home-tab-panel:nth-child(1),
+  .home-tabs:has(> .home-tab-input:nth-of-type(2):checked) .home-tab-panel:nth-child(2),
+  .home-tabs:has(> .home-tab-input:nth-of-type(3):checked) .home-tab-panel:nth-child(3),
+  .home-tabs:has(> .home-tab-input:nth-of-type(4):checked) .home-tab-panel:nth-child(4) { display: block; }
+  .home-tabs:has(> .home-tab-input:nth-of-type(1):checked) .home-tab-label:nth-child(1),
+  .home-tabs:has(> .home-tab-input:nth-of-type(2):checked) .home-tab-label:nth-child(2),
+  .home-tabs:has(> .home-tab-input:nth-of-type(3):checked) .home-tab-label:nth-child(3),
+  .home-tabs:has(> .home-tab-input:nth-of-type(4):checked) .home-tab-label:nth-child(4) {
+    border-color: var(--color-primary);
+    color: var(--color-foreground);
+  }
+  .home-tabs:has(> .home-tab-input:nth-of-type(1):focus-visible) .home-tab-label:nth-child(1),
+  .home-tabs:has(> .home-tab-input:nth-of-type(2):focus-visible) .home-tab-label:nth-child(2),
+  .home-tabs:has(> .home-tab-input:nth-of-type(3):focus-visible) .home-tab-label:nth-child(3),
+  .home-tabs:has(> .home-tab-input:nth-of-type(4):focus-visible) .home-tab-label:nth-child(4) {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+</style>

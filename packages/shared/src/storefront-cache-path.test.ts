@@ -3,6 +3,8 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
   isStorefrontTrackingQueryParam,
+  readStorefrontSeenSeq,
+  withStorefrontSeenSeq,
 } from "./storefront-cache-path";
 
 describe("storefront HTML cache path canonicalization", () => {
@@ -104,5 +106,21 @@ describe("storefront HTML cache path canonicalization", () => {
     expect(canonicalizeStorefrontHtmlCachePath("https://evil.example/products/fish")).toBeNull();
     expect(canonicalizeStorefrontHtmlCachePath("//evil.example/products/fish")).toBeNull();
     expect(canonicalizeStorefrontHtmlCachePath("/products/fish")).toBe("/products/fish");
+  });
+});
+
+describe("_sv read-your-writes parameter", () => {
+  it("never splits the page cache and is read before the key is built", () => {
+    expect(canonicalizeStorefrontHtmlCachePath("/products/linen?_sv=42")).toBe("/products/linen");
+    expect(readStorefrontSeenSeq(new URL("https://shop.test/?_sv=42"))).toBe(42);
+    expect(readStorefrontSeenSeq(new URL("https://shop.test/?_sv=-1"))).toBeNull();
+    expect(readStorefrontSeenSeq(new URL("https://shop.test/?_sv=1e9"))).toBeNull();
+    expect(readStorefrontSeenSeq(new URL("https://shop.test/"))).toBeNull();
+  });
+
+  it("is appended to absolute and relative store links", () => {
+    expect(withStorefrontSeenSeq("https://shop.test/products/a?x=1", 7)).toBe("https://shop.test/products/a?x=1&_sv=7");
+    expect(withStorefrontSeenSeq("/products/a", 7)).toBe("/products/a?_sv=7");
+    expect(withStorefrontSeenSeq("/products/a", null)).toBe("/products/a");
   });
 });

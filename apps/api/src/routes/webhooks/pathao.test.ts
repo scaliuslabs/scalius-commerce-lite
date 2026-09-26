@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -39,10 +39,6 @@ const courierLedger = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/fulfilment")>()),
   syncCourierFulfilmentFromShipment: courierLedger.sync,
-}));
-
-vi.mock("../../utils/cache-generation", () => ({
-  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({

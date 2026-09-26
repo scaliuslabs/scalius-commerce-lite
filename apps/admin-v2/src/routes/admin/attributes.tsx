@@ -24,6 +24,8 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { AttributeDialog } from "~/components/admin/attributes-manager/components/AttributeDialog";
 import { AttributeValueEditor } from "~/components/admin/attributes-manager/components/AttributeValueEditor";
 import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
+import { AttributeGroupsDialog } from "~/components/admin/attributes-manager/components/AttributeGroupsDialog";
+import { attributeTypeMessages } from "~/i18n/attribute-types";
 import { formatNumber, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -61,6 +63,8 @@ function AttributesPage() {
   const [term] = useListSearch(listSearchKey("attributes", search));
   const t = useMessages(catalogMessages);
   const tableCopy = useMessages(dataTableMessages);
+  const a = useMessages(attributeTypeMessages);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const { attributes: can } = useCatalogActionPermissions();
   const [editing, setEditingState] = useState<AttributeDto | "new" | null>(null);
   // The dialog stays mounted so it can animate closed; each opening gets a
@@ -94,6 +98,17 @@ function AttributesPage() {
       cell: ({ row }) => <IdText value={row.original.slug} className="text-muted-foreground" />,
     },
     {
+      id: "valueType",
+      header: a("type"),
+      meta: { priority: 70, minWidth: 110 },
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {a(`type_${row.original.valueType}`)}
+          {row.original.unit ? ` · ${row.original.unit}` : ""}
+        </span>
+      ),
+    },
+    {
       id: "values",
       header: t("values"),
       meta: { numeric: true, priority: 80, minWidth: 80 },
@@ -117,14 +132,19 @@ function AttributesPage() {
       meta: { mobile: "status", priority: 50, minWidth: 110 },
       cell: ({ row }) => (row.original.filterable ? <StatusBadge tone="neutral">{t("filterableYes")}</StatusBadge> : null),
     },
-  ], [t, can.canEdit, search.trashed]);
+  ], [t, a, can.canEdit, search.trashed]);
 
   return (
     <>
       <ResourceListPage<AttributeDto>
         title={t("attributes")}
         defaultSortLabel={tableCopy("nameAZ")}
-        actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
+        actions={(
+          <>
+            <Button variant="outline" onClick={() => setGroupsOpen(true)}>{a("groups")}</Button>
+            {can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
+          </>
+        )}
         search={search}
         list="attributes"
         countLabel={(count) => t("attributeCount", { count })}
@@ -159,6 +179,7 @@ function AttributesPage() {
           },
         }}
       />
+      <AttributeGroupsDialog open={groupsOpen} onClose={() => setGroupsOpen(false)} canEdit={can.canEdit} />
       <AttributeDialog
         key={dialog.key}
         open={editing !== null}

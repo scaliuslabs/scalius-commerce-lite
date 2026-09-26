@@ -1,6 +1,8 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 
-import { bumpCacheGeneration } from "../utils/cache-generation";
+import { getDb } from "@scalius/database/client";
+import { cacheClock, cacheDep } from "@scalius/database/schema";
+import { eq, sql } from "drizzle-orm";
 import { ok } from "../utils/api-response";
 import { errorResponses, messageResponse } from "../schemas/responses";
 
@@ -12,11 +14,11 @@ const refreshRoute = createRoute({
   tags: ["Cache"],
   summary: "Refresh the storefront",
   description:
-    "Starts a new public cache generation. Saves already do this; use it only after changing data outside the dashboard.",
+    "Invalidates all public pages through the store dependency clock. Normal writes invalidate their affected data automatically.",
   operationId: "dashboard.cache.purge_all",
   responses: {
     200: {
-      description: "New public cache generation started",
+      description: "Public store dependency advanced",
       content: { "application/json": { schema: messageResponse } },
     },
     ...errorResponses,
@@ -24,7 +26,13 @@ const refreshRoute = createRoute({
 });
 
 app.openapi(refreshRoute, async (c) => {
-  await bumpCacheGeneration(c);
+  const db = getDb(c.env);
+  const nextSequence = sql<number>`(select ${cacheClock.seq} from ${cacheClock} where ${cacheClock.id} = 1)`;
+  await db.batch([
+    db.update(cacheClock).set({ seq: sql`${cacheClock.seq} + 1` }).where(eq(cacheClock.id, 1)),
+    db.insert(cacheDep).values({ dep: "store", seq: nextSequence })
+      .onConflictDoUpdate({ target: cacheDep.dep, set: { seq: nextSequence } }),
+  ]);
   return ok(c, { message: "Store refreshed" });
 });
 

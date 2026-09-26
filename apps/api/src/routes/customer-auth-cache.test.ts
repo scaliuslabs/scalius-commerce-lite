@@ -71,6 +71,12 @@ vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
   listLineDeliveries: vi.fn(async () => new Map()),
 }));
 
+// Warranty extras read D1; they are covered on the real schema by the warranty domain tests.
+vi.mock("@scalius/core/modules/warranty", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/warranty")>()),
+  listLineWarranties: vi.fn(async () => new Map()),
+}));
+
 vi.mock("../utils/order-receipt-token", () => ({
   validateReceiptToken: mocks.validateReceiptToken,
 }));

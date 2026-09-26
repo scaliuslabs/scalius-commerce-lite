@@ -81,7 +81,6 @@ import {
   type MediaVariantsQueueMessage,
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
-import { bumpCacheGeneration } from "./utils/cache-generation";
 import { enqueueOrderAutoFulfil } from "./utils/auto-fulfil-queue";
 import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
@@ -734,7 +733,6 @@ async function processQueueMessage(
         await flushOutbox();
         throw error;
       }
-      if (outcome.delivered) await bumpCacheGeneration({ env, executionCtx });
       if (outcome.fulfilledTypes.length > 0) await flushOutbox();
       break;
     }
@@ -746,9 +744,8 @@ async function processQueueMessage(
     case "media.render_variants": {
       const images = env.IMAGES;
       if (!images) break;
-      const outcome = await renderMissingMediaVariants(db, payload.mediaId, env.BUCKET, images);
-      // Rendition URLs replace the published image URLs.
-      if (outcome === "generated") await bumpCacheGeneration({ env, executionCtx });
+      // Updating the media row advances its dependency in the same transaction.
+      await renderMissingMediaVariants(db, payload.mediaId, env.BUCKET, images);
       break;
     }
 
@@ -758,7 +755,7 @@ async function processQueueMessage(
     case "catalog.recommendations.refresh":
     case "catalog.projections.rebuild": {
       const { processCatalogQueueMessage } = await import("./utils/catalog-jobs");
-      await processCatalogQueueMessage(payload, db, env, executionCtx);
+      await processCatalogQueueMessage(payload, db, env);
       break;
     }
 

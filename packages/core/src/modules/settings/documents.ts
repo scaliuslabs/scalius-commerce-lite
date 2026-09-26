@@ -51,9 +51,11 @@ import {
 } from "./customer-request-policy.shared";
 import type { Database } from "@scalius/database/client";
 import { sql, type SQL } from "drizzle-orm";
+import { deps } from "../../cache-deps";
 import {
   defineSettingsDocument,
   readSettingsDocumentStrict,
+  SETTINGS_DOCUMENT_ROW_KEY,
   type StrictSettingsRead,
 } from "./settings-store";
 
@@ -400,6 +402,8 @@ export function readReviewSettings(db: Database): Promise<StrictSettingsRead<Rev
  * authority for every write.
  */
 export function reviewsEnabledSql(): SQL<number> {
+  // Inside a public render's dependency scope: the reviews document it reads.
+  deps.settings("reviews", SETTINGS_DOCUMENT_ROW_KEY);
   return sql<number>`(SELECT CASE WHEN count(*) = 0 THEN 1 ELSE count(CASE WHEN
       (CASE WHEN json_valid(rs."value") THEN coalesce(json_type(rs."value", '$.enabled'), 'true') END) = 'true'
     THEN 1 END) END

@@ -111,11 +111,11 @@ describe("IssueGiftCardDialog", () => {
     });
     await render(true);
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#gift-card-amount")!, "500"));
-    const deliverBy = document.querySelector<HTMLSelectElement>("#gift-card-deliver-by")!;
-    await act(async () => {
-      deliverBy.value = "sms";
-      deliverBy.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const deliverBy = document.querySelector<HTMLButtonElement>("#gift-card-deliver-by")!;
+    await act(async () => deliverBy.click());
+    const sms = [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')]
+      .find((option) => option.textContent?.trim() === en.deliverBySms)!;
+    await act(async () => sms.click());
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#gift-card-contact")!, "+8801712345678"));
     await act(async () => {
       document.querySelector("form#issue-gift-card")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

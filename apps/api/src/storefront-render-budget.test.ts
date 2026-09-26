@@ -2,7 +2,8 @@
 import "@hono/zod-openapi";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
+import { createPublicPartReader, renderPublicRead } from "./public-read";
+import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import {
@@ -19,6 +20,15 @@ import {
  * `waves` the dependent rounds, the part that costs a full database round
  * trip each. Budgets are the measured values of this seeded store, so a new
  * query or a new sequential await fails here before it reaches production.
+ *
+ * Every part renders the way the dependency-validated part reader renders it
+ * (public-read.ts, strict mode): inside a dependency scope, so every key a
+ * read declares is paid for here, with its s0 and the Platform settings row
+ * taken from one authoritative validation statement before rendering. We
+ * meter that exact SQL separately (exactly one statement in the first wave)
+ * and retain the original render budgets below. Total cold cost includes both;
+ * this does not hide extra render queries or relax the HTTP timing budget.
+ * The same page again is all hits: one validation statement, one wave.
  */
 const PAGE_D1_BUDGETS = {
   home: { roundTrips: 13, waves: 2 },
@@ -80,7 +90,10 @@ function everySectionTheme() {
   set("hero", { layout: "contained-banners", sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }] });
   set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
   set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
-  set("deal-block", { title: "", source: { kind: "on-sale" }, endsAt: null });
+  set("deal-block", { title: "", source: { kind: "on-sale" }, promotionId: "promo_deal" });
+  set("product-tabs", { title: "", limit: 8, tabs: [{ label: "", source: { kind: "newest" } }, { label: "", source: { kind: "popular" } }] });
+  set("shop-by", { title: "", cards: [{ mediaId: "media_banner", title: "Eid", href: "/eid" }] });
+  set("banner-mosaic", { tiles: [{ mediaId: "media_story", alt: "", href: null }, { mediaId: "media_look", alt: "", href: null }] });
   set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" } });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
@@ -101,6 +114,9 @@ const HOME_SEED = `
     ('hero_desktop', 'desktop', '${JSON.stringify([slide("d1", "media/hero.jpg"), slide("d2", "media/side.jpg")])}'),
     ('hero_mobile', 'mobile', '${JSON.stringify([slide("m1", "media/hero.jpg")])}');
   UPDATE products SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'p_cotton';
+  INSERT INTO brands (id, name, slug, status, logo_media_id) VALUES ('brd_aarong01', 'Aarong', 'aarong', 'published', 'media_look');
+  UPDATE products SET brand_id = 'brd_aarong01' WHERE id = 'p_linen';
+  INSERT INTO promotions (id, name, method, status, ends_at) VALUES ('promo_deal', 'Eid deal', 'automatic', 'active', unixepoch() + 86400);
   INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
     ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"showOnHomepage":true,"featuredProductId":"p_linen","maxProducts":8}', 0),
     ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"showOnHomepage":true,"maxProducts":12}', 1);
@@ -135,6 +151,7 @@ interface Meter {
   binding: D1Database;
   roundTrips: number;
   waves: number;
+  calls: Array<{ kind: "validation" | "render"; wave: number }>;
 }
 
 /**
@@ -142,12 +159,15 @@ interface Meter {
  * before the wave starts share it, calls made from a result start the next.
  */
 function meteredBinding(inner: D1Database): Meter {
-  const meter = { roundTrips: 0, waves: 0 } as Meter;
+  const meter = { roundTrips: 0, waves: 0, calls: [] } as unknown as Meter;
   let queued: Array<() => void> = [];
-  const roundTrip = <T>(work: () => Promise<T>): Promise<T> => {
+  const roundTrip = <T>(work: () => Promise<T>, kind: "validation" | "render" = "render"): Promise<T> => {
     meter.roundTrips += 1;
     return new Promise<T>((resolve, reject) => {
-      queued.push(() => void work().then(resolve, reject));
+      queued.push(() => {
+        meter.calls.push({ kind, wave: meter.waves });
+        void work().then(resolve, reject);
+      });
       if (queued.length === 1) {
         setTimeout(() => {
           meter.waves += 1;
@@ -158,21 +178,29 @@ function meteredBinding(inner: D1Database): Meter {
       }
     });
   };
-  const wrapStatement = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
+  // Identify only readValidationSnapshot, which reads clock, Platform value
+  // and revision, and exact dependency keys in one statement. Other cache or
+  // settings reads count against the render budget, never this allowance.
+  const isValidation = (query: string) => query.includes('LEFT JOIN "cache_clock" c')
+    && query.includes('LEFT JOIN "cache_dep" d')
+    && query.includes("AS pv") && query.includes("AS pr")
+    && query.includes("st.\"category\" = 'platform'")
+    && query.includes('d."dep" IN (SELECT CAST(value AS TEXT) FROM json_each(');
+  const wrapStatement = (statement: D1PreparedStatement, query: string): D1PreparedStatement => new Proxy(statement, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver);
       if (property === "bind") {
-        return (...args: unknown[]) => wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args));
+        return (...args: unknown[]) => wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args), query);
       }
       if (["all", "first", "run", "raw"].includes(String(property))) {
-        return (...args: unknown[]) => roundTrip(() => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args));
+        return (...args: unknown[]) => roundTrip(() => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args), isValidation(query) ? "validation" : "render");
       }
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
   meter.binding = new Proxy(inner, {
     get(target, property, receiver) {
-      if (property === "prepare") return (query: string) => wrapStatement(target.prepare(query));
+      if (property === "prepare") return (query: string) => wrapStatement(target.prepare(query), query);
       if (property === "batch") {
         return (statements: D1PreparedStatement[]) => roundTrip(() => target.batch(statements));
       }
@@ -180,6 +208,19 @@ function meteredBinding(inner: D1Database): Meter {
     },
   }) as D1Database;
   return meter;
+}
+
+class MemoryCache {
+  readonly entries = new Map<string, Response>();
+  async match(key: RequestInfo | URL) {
+    return this.entries.get(String(key))?.clone();
+  }
+  async put(key: RequestInfo | URL, response: Response) {
+    this.entries.set(String(key), response);
+  }
+  async delete(key: RequestInfo | URL) {
+    return this.entries.delete(String(key));
+  }
 }
 
 async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
@@ -198,21 +239,65 @@ async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
   await refreshProductSalesStats(db);
   await refreshProductRecommendations(db, ["p_linen", "p_cotton"]);
   const meter = meteredBinding(binding);
-  const env = {
-    DB: meter.binding,
+  const baseEnv = {
+    CF_VERSION_METADATA: { id: "render-budget-version", tag: "", timestamp: "" },
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "render-budget-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "render-budget-credential-key-0123456789abcdef",
-  } as unknown as Env;
-  const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
-  const responses = await Promise.all(PAGE_PARTS[page].map((path) =>
-    fetchRuntimeApiApp(new Request(`https://api.internal${path}`), env, ctx)));
-  const bodies = await Promise.all(responses.map((response) => response.clone().json().catch(() => null)));
+  };
+  const cache = new MemoryCache();
+  const readBatch = async (env: Env, paths: readonly string[]) => {
+    const waits: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (promise: Promise<unknown>) => void waits.push(promise), passThroughOnException: () => undefined } as unknown as ExecutionContext;
+    const reader = createPublicPartReader({
+      mode: "strict",
+      env,
+      cache,
+      db: () => getDb(env),
+      render: (part) => renderPublicRead(part, env, ctx),
+      waitUntil: (promise) => void waits.push(promise),
+      maxConcurrentRenders: 4,
+      random: () => 1,
+    });
+    const settled = await reader.readParts(paths.map((path) => new Request(`https://api.internal${path}`)), null);
+    const parts = settled.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+    const bodies = await Promise.all(parts.map((part) => part.response.clone().json().catch(() => null)));
+    await Promise.all(waits);
+    return { parts, bodies };
+  };
+  const env = { ...baseEnv, DB: meter.binding } as unknown as Env;
+  const { parts, bodies } = await readBatch(env, PAGE_PARTS[page]);
+  const miss = { roundTrips: meter.roundTrips, waves: meter.waves };
+  const validationCalls = meter.calls.filter((call) => call.kind === "validation");
+  const renderCalls = meter.calls.filter((call) => call.kind === "render");
+  const validation = {
+    roundTrips: validationCalls.length,
+    waves: new Set(validationCalls.map((call) => call.wave)).size,
+    firstWave: validationCalls[0]?.wave,
+  };
+  const render = {
+    roundTrips: renderCalls.length,
+    waves: new Set(renderCalls.map((call) => call.wave)).size,
+    firstWave: renderCalls[0]?.wave,
+  };
+  const again = await readBatch(env, PAGE_PARTS[page]);
   return {
-    statuses: responses.map((response) => response.status),
+    statuses: parts.map((part) => part.response.status),
     bodies,
-    roundTrips: meter.roundTrips,
-    waves: meter.waves,
+    roundTrips: miss.roundTrips,
+    waves: miss.waves,
+    validation,
+    render,
+    stored: parts.map((part) => part.cache?.status ?? null),
+    hit: {
+      roundTrips: meter.roundTrips - miss.roundTrips,
+      waves: meter.waves - miss.waves,
+      statuses: again.parts.map((part) => part.cache?.status ?? null),
+      sameBodies: JSON.stringify(again.bodies) === JSON.stringify(bodies),
+    },
   };
 }
 
@@ -221,7 +306,7 @@ describe("storefront page render D1 budget", () => {
     const theme = everySectionTheme();
     expect(new Set(theme.pages.home.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
     const { bodies } = await renderPage("home");
-    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
+    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; brands: unknown[]; promotions: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
     const filled = Object.fromEntries(homepage.sections.lists.map((list) => [list.key, list.products.length]));
     expect(filled).toMatchObject({
       newest: 2,
@@ -231,6 +316,9 @@ describe("storefront page render D1 budget", () => {
       "collection:col_grid": 2,
     });
     expect(homepage.sections.media).toHaveLength(4);
+    // The brand wall and the deal countdown ride in the same second batch.
+    expect(homepage.sections.brands).toEqual([expect.objectContaining({ id: "brd_aarong01", name: "Aarong", logo: expect.objectContaining({ mediaId: "media_look" }) })]);
+    expect(homepage.sections.promotions).toEqual([{ id: "promo_deal", endsAt: expect.any(String) }]);
     expect(homepage.collections).toHaveLength(2);
     // The banner's original upload was pointed at its rendition in the same batch.
     expect(homepage.hero.desktop.images[0]!.url).toBe("https://media.test/media/hero.jpg/1600.webp");
@@ -250,14 +338,14 @@ describe("storefront page render D1 budget", () => {
     expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
   });
 
-  it("reads a reviewed product's summary and first five reviews in its existing waves (22 round trips, 3 waves)", async () => {
+  it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {
     const result = await renderPage("product", REVIEW_SEED);
     const product = (result.bodies[1] as { data: { product: { reviews: { summary: { count: number; average: number }; items: unknown[]; nextCursor: string | null } } } }).data.product;
     expect(product.reviews.summary).toMatchObject({ count: 6, average: 4.66 });
     expect(product.reviews.items).toHaveLength(5);
     expect(product.reviews.nextCursor).toEqual(expect.any(String));
-    expect(result.roundTrips).toBeLessThanOrEqual(22);
-    expect(result.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
+    expect(result.render.roundTrips).toBeLessThanOrEqual(22);
+    expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
   });
 
   it("gives listing cards their rating and counts the rating facet without a new round trip", async () => {
@@ -266,8 +354,8 @@ describe("storefront page render D1 budget", () => {
     expect(body.products.find((product) => product.id === "p_linen")?.rating).toEqual({ average: 4.66, count: 6 });
     expect(body.products.find((product) => product.id === "p_cotton")?.rating).toBeNull();
     expect(body.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
-    expect(reviewed.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
-    expect(reviewed.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
+    expect(reviewed.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
+    expect(reviewed.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
   });
 
   // Load every route module first: a first dynamic import would otherwise
@@ -282,10 +370,32 @@ describe("storefront page render D1 budget", () => {
       const result = await renderPage(page);
 
       expect(result.statuses.every((status) => status === 200), JSON.stringify(result.statuses)).toBe(true);
-      expect({ page, roundTrips: result.roundTrips, waves: result.waves }).toEqual({
+      expect(result.validation).toEqual({ roundTrips: 1, waves: 1, firstWave: 1 });
+      expect(result.render.firstWave).toBe(2);
+      expect({ page, roundTrips: result.render.roundTrips, waves: result.render.waves }).toEqual({
         page,
-        roundTrips: Math.min(result.roundTrips, PAGE_D1_BUDGETS[page].roundTrips),
-        waves: Math.min(result.waves, PAGE_D1_BUDGETS[page].waves),
+        roundTrips: Math.min(result.render.roundTrips, PAGE_D1_BUDGETS[page].roundTrips),
+        waves: Math.min(result.render.waves, PAGE_D1_BUDGETS[page].waves),
+      });
+      expect({ roundTrips: result.roundTrips, waves: result.waves }).toEqual({
+        roundTrips: result.validation.roundTrips + result.render.roundTrips,
+        waves: result.validation.waves + result.render.waves,
+      });
+      // Every part was stored with its dependency proof.
+      expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
+    },
+  );
+
+  it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(
+    "%s page again is all validated hits: one statement, one wave",
+    async (page) => {
+      const { hit } = await renderPage(page);
+
+      expect(hit).toEqual({
+        roundTrips: 1,
+        waves: 1,
+        statuses: PAGE_PARTS[page].map(() => "hit"),
+        sameBodies: true,
       });
     },
   );

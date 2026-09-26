@@ -1,8 +1,7 @@
 // Public product review routes (Wave B design §7.1): GET /products/{id}/reviews
 // is a keyset page of a buyer-visible product's published reviews with its
 // summary. Mounted at /products after the product router (public catalog
-// family); cached under the store's cache generation like every /products
-// read (`/api/v1/products` prefix in @scalius/shared/public-api-cache-routes).
+// family); public cache entries validate their declared review dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPublicProductReviews, PUBLIC_REVIEW_PAGE_SIZE, PUBLIC_REVIEW_SORTS } from "@scalius/core/modules/catalog";
 import { ok } from "../utils/api-response";

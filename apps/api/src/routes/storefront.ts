@@ -10,21 +10,28 @@ import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared/checkout-language";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
+  HOME_BRAND_LIMIT,
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
+  HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
+  homeSectionRequestsEmpty,
 } from "@scalius/shared/storefront-theme";
-import {
-  CACHE_GENERATION_HEADER,
-  normalizeCacheGeneration,
-} from "@scalius/shared/cache-generation";
+import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
   MAX_STOREFRONT_BATCH_PARTS,
   STOREFRONT_BATCH_PART_PARAM,
 } from "@scalius/shared/public-api-cache-routes";
 import { serveStorefrontBatch } from "../storefront-batch";
-import { createLocalPublicReader, renderPublicRead } from "../public-read";
+import { createPublicPartReader, renderPublicRead } from "../public-read";
+import { API_PART_CACHE_MODE } from "../public-cache-policy";
+import { checkHashedDependencies, hasFrontierKey, readFrontierDelta } from "../cache-frontier";
+import {
+  CACHE_FRONTIER_CHECK_MAX_DEPS,
+  CACHE_FRONTIER_MAX_CHANGES,
+  isCacheDepHash,
+} from "@scalius/shared/cache-frontier";
 
 /**
  * Parts of one batch rendered at once: every part of a page (layout, page
@@ -34,11 +41,10 @@ import { createLocalPublicReader, renderPublicRead } from "../public-read";
  * lower limit would serialise the parts and add whole D1 waves instead.
  */
 const MAX_BATCH_PART_RENDERS = 4;
-import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { pageSchema } from "../schemas/entities";
+import { publicPageSchema } from "../schemas/entities";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -112,6 +118,25 @@ const homepageMediaSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
 });
+/** A brand-wall brand: published, live, with a public product. */
+const homepageBrandSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  canonicalPath: z.string().nullable(),
+  logo: z.object({
+    mediaId: z.string(),
+    url: z.string(),
+    alt: z.string(),
+    width: z.number().int().nullable(),
+    height: z.number().int().nullable(),
+  }).nullable(),
+});
+/** A deal countdown's promotion: active, started, and ending at `endsAt` (still ahead when read). */
+const homepagePromotionSchema = z.object({
+  id: z.string(),
+  endsAt: z.string(),
+});
 const homepageDataSchema = z.object({
   seo: z.object({
     homepageTitle: z.string().nullable(),
@@ -158,6 +183,8 @@ const homepageDataSchema = z.object({
   sections: z.object({
     lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
     media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
+    brands: z.array(homepageBrandSchema).max(HOME_BRAND_LIMIT),
+    promotions: z.array(homepagePromotionSchema).max(HOME_MAX_PROMOTIONS),
   }),
 });
 type HomepageData = z.infer<typeof homepageDataSchema>;
@@ -350,7 +377,7 @@ const pageBySlugRoute = createRoute({
     200: {
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: pageSchema,
+        page: publicPageSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -404,6 +431,17 @@ const batchPartSchema = z.object({
   status: z.number().int(),
   contentType: z.string(),
   body: z.string().openapi({ description: "The part's response body, exactly as its own GET returns it" }),
+  cache: z.object({
+    apiVersion: z.string().min(1),
+    status: z.enum(["hit", "miss", "refresh"]),
+    s0: z.number().int(),
+    deps: z.array(z.string()),
+    validUntil: z.number().nullable(),
+    softMaxAgeSeconds: z.number().nullable(),
+    renderedAt: z.number(),
+  }).optional().openapi({
+    description: "Dependency-validated cache proof of the part (hashed dependency keys and the change-clock value it is fresh at), for the storefront page cache. Absent when the part carries no proof.",
+  }),
 });
 const batchRoute = createRoute({
   method: "get",
@@ -412,7 +450,7 @@ const batchRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read several public storefront resources in one request",
   description:
-    `Answers each \`${STOREFRONT_BATCH_PART_PARAM}\` part (the /api/v1 path and query of a public, generation-cached read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same generation-keyed cache. At most ${MAX_STOREFRONT_BATCH_PARTS} parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.`,
+    `Answers each \`${STOREFRONT_BATCH_PART_PARAM}\` part (the /api/v1 path and query of a public, dependency-validated read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same dependency-validated cache. At most ${MAX_STOREFRONT_BATCH_PARTS} parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.`,
   request: {
     query: z.object({
       [STOREFRONT_BATCH_PART_PARAM]: z.union([
@@ -439,26 +477,59 @@ app.openapi(batchRoute, async (c) => {
   } catch {
     ctx = undefined;
   }
-  // Parts are served inside this invocation: the data center's Cache API
-  // under the key the PublicApi cache uses (publicReadCacheKey), else
-  // rendered here exactly as PublicApi renders them (renderPublicRead). A
-  // PublicApi miss would instead wait for a separate, usually cold, isolate.
-  const readPart = createLocalPublicReader({
+  // Parts are served inside this invocation: the data center's Cache API,
+  // else rendered here by the same renderPublicRead path as direct reads.
+  const reader = createPublicPartReader({
+    mode: API_PART_CACHE_MODE,
     env: c.env,
     cache: typeof caches === "undefined" ? null : caches.default,
+    db: () => c.get("db"),
     render: (part) => renderPublicRead(part, c.env, ctx as ExecutionContext),
     waitUntil: (promise) => ctx?.waitUntil(promise),
     maxConcurrentRenders: MAX_BATCH_PART_RENDERS,
   });
   const response = await serveStorefrontBatch(request, {
-    // A render pins its reads to its page's generation. Generations are
-    // unguessable, so a caller-supplied one can only select existing entries.
-    readGeneration: async () =>
-      normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
-      ?? await readCacheGeneration(c.env, ctx),
-    fetchPart: readPart,
+    readGeneration: async () => null,
+    readParts: (parts, generation) => reader.readParts(parts, generation),
   });
   return response as never;
+});
+
+// GET /storefront/frontier and POST /storefront/frontier/check: the
+// dependency-validated cache's change frontier for the storefront page cache
+// (CACHE-DESIGN §6.7). Internal: authenticated with the storefront's frontier
+// key (HKDF of SCALIUS_SECRET), never cached, not part of the public contract.
+const frontierHeaders = { "Cache-Control": "private, no-store" } as const;
+const frontierDenied = () => Response.json({ success: false, error: "Not found" }, { status: 404, headers: frontierHeaders });
+const nonNegativeInteger = (value: unknown): number | null =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+app.get("/frontier", async (c) => {
+  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const apiVersion = readWorkerVersion(c.env);
+  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
+  const url = new URL(c.req.url);
+  const since = url.searchParams.has("since") ? nonNegativeInteger(Number(url.searchParams.get("since"))) : null;
+  if (url.searchParams.has("since") && since === null) {
+    return Response.json({ success: false, error: "since must be a clock value" }, { status: 400, headers: frontierHeaders });
+  }
+  const limit = nonNegativeInteger(Number(url.searchParams.get("limit") ?? CACHE_FRONTIER_MAX_CHANGES)) ?? CACHE_FRONTIER_MAX_CHANGES;
+  const delta = await readFrontierDelta(c.get("db"), since, Math.max(1, limit));
+  return Response.json({ success: true, data: { ...delta, apiVersion } }, { headers: frontierHeaders });
+});
+
+app.post("/frontier/check", async (c) => {
+  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
+  const apiVersion = readWorkerVersion(c.env);
+  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
+  const input = await c.req.json().catch(() => null) as { s0?: unknown; deps?: unknown } | null;
+  const s0 = nonNegativeInteger(input?.s0);
+  const hashes = Array.isArray(input?.deps) ? input!.deps as unknown[] : null;
+  if (s0 === null || !hashes || hashes.length > CACHE_FRONTIER_CHECK_MAX_DEPS || !hashes.every(isCacheDepHash)) {
+    return Response.json({ success: false, error: "Invalid frontier check" }, { status: 400, headers: frontierHeaders });
+  }
+  const result = await checkHashedDependencies(c.get("db"), s0, hashes as string[]);
+  return Response.json({ success: true, data: { ...result, apiVersion } }, { headers: frontierHeaders });
 });
 
 const resolveThemePreviewRoute = createRoute({
@@ -511,7 +582,7 @@ const themePreviewHomepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read the homepage section data of a theme preview's draft",
   description:
-    "The product lists and images the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+    "The product lists, images, brands and deal promotions the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
   operationId: "system.storefront_theme_preview.homepage",
   request: {
     body: {
@@ -541,9 +612,9 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
   const requests = homeSectionRequests(preview.theme.pages.home);
-  const data = requests.lists.length > 0 || requests.mediaIds.length > 0
-    ? (await getHomepageData(db, { requests, sectionsOnly: true })).sections
-    : { lists: [], media: [] };
+  const data = homeSectionRequestsEmpty(requests)
+    ? { lists: [], media: [], brands: [], promotions: [] }
+    : (await getHomepageData(db, { requests, sectionsOnly: true })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
 });
 

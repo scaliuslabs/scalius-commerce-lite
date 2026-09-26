@@ -83,7 +83,9 @@ describe("0091_catalogue_projection_fill", () => {
             ["var_opt_s", "option.size", "s"],
         ]);
 
-        // The same rows as the chunked rebuild, from empty tables.
+        // The same rows as the chunked rebuild, from empty tables (on the
+        // current schema: the rebuild batch uses 0100's cache clock).
+        sqlite.exec(compiledMigrationSql(provider, undefined, "0092_"));
         sqlite.exec("DELETE FROM product_buyer_state; DELETE FROM product_facet_values;");
         const db = provider === "d1" ? createSqliteD1Database({ sqlite }).db : createSqliteTursoDatabase(sqlite);
         await rebuildCatalogProjections(db, { limit: 2_700 });

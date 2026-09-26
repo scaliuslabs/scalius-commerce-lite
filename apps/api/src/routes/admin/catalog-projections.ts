@@ -12,7 +12,6 @@ import {
 
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -25,7 +24,7 @@ const rebuildRoute = createRoute({
     description:
         "Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` "
         + "(product id order). Send `{}` to start, then call again with the returned cursor until `done`; the "
-        + "public cache generation is bumped once the last product is covered. Stock and checkout are unaffected.",
+        + "database triggers invalidate rebuilt rows. Stock and checkout are unaffected.",
     request: {
         body: {
             required: true,
@@ -65,7 +64,7 @@ app.openapi(rebuildRoute, async (c) => {
         limit: body.limit,
     });
     // Rebuilt rows are buyer-visible (listings, counts, sitemaps).
-    if (result.done) await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 

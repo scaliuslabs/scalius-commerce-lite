@@ -20,7 +20,7 @@ import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encry
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_BREAKING_LOCATION_MESSAGE =
     "This change would make checkout unavailable. Keep at least one active city with an active thana.";
@@ -316,7 +316,7 @@ app.openapi(createLocationRoute, (async (c) => {
             data.isActive,
         );
         const newLocation = await createLocation(db, data);
-        await bumpCacheGeneration(c);
+
         return created(c, { location: newLocation });
     } catch (error: unknown) {
         rethrowDeliveryLocationIdentityConflict(error);
@@ -349,7 +349,7 @@ app.openapi(deleteAllRoute, async (c) => {
     const db = c.get("db");
     await assertAllDeliveryLocationsCanBeRemovedFromCheckout(db);
     await db.delete(deliveryLocations);
-    await bumpCacheGeneration(c);
+
     return ok(c, { message: "All delivery locations have been permanently deleted." });
 });
 
@@ -378,7 +378,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         const { ids } = c.req.valid("json");
         await assertDeliveryLocationsCanBeRemovedFromCheckout(db, ids);
         await deleteLocations(db, ids);
-        await bumpCacheGeneration(c);
+
         return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
@@ -480,7 +480,6 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
-        await bumpCacheGeneration(c);
         return ok(c, updatedLocation);
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
@@ -554,7 +553,7 @@ app.openapi(deleteLocationRoute, async (c) => {
         }
 
         await deleteLocations(db, [id]);
-        await bumpCacheGeneration(c);
+
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error deleting location:", error);
@@ -563,7 +562,6 @@ app.openapi(deleteLocationRoute, async (c) => {
 });
 
 // ── Pathao Location Import ──────────────────────────────────────────────────
-
 
 const pathaoImportStatsSchema = z.object({
     citiesCreated: z.number().int().nonnegative(),
@@ -646,7 +644,7 @@ app.openapi(processPathaoImportRoute, async (c) => {
     }
 
     const result = await processPathaoImportChunk(db, kv, creds);
-    await bumpCacheGeneration(c);
+
     return ok(c, result);
 });
 

@@ -1,0 +1,31 @@
+---
+// One module below the product fold (Theme -> Product page -> modules): the
+// page's container, a rule above and a heading, like the reviews module.
+interface Props {
+  /** The module id (`resolved.blocks.product.below`), also the anchor. */
+  id: string;
+  title?: string | null;
+}
+
+const { id, title = null } = Astro.props;
+const headingId = `${id}-heading`;
+---
+
+<section
+  id={id}
+  class="product-module mx-auto max-w-7xl border-t border-border px-3 py-6 sm:px-6 lg:px-8 lg:py-10"
+  data-product-module={id}
+  aria-labelledby={title ? headingId : undefined}
+>
+  {title && <h2 id={headingId} class="mb-4 text-xl font-bold leading-tight text-foreground lg:text-2xl">{title}</h2>}
+  <slot />
+</section>
+
+<style>
+  /* The description's tabs bring their own rule; the module's is enough. */
+  [data-product-module="description"] :global(#product-details) {
+    margin-top: 0;
+    border-top: 0;
+    padding-top: 0;
+  }
+</style>

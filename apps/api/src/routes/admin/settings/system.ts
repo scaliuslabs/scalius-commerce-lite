@@ -42,7 +42,7 @@ import {
     getCustomerSignInReadiness,
     isCustomerAuthChannelReady,
 } from "@scalius/core/modules/settings";
-import { bumpCacheGeneration } from "../../../utils/cache-generation";
+
 import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/modules/notifications";
 import {
     normalizeMerchantCspSource,
@@ -382,7 +382,6 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
         ),
     });
 
-    await bumpCacheGeneration(c);
     return ok(c, saved);
 });
 
@@ -554,7 +553,6 @@ app.openapi(saveAuthRoute, async (c) => {
     const rows = await selectSettingsDocuments(db, [customerAuthDocument, whatsappDocument]);
     const revisionOf = (key: string) => rows.find((row) => row.category === key)?.revision ?? 0;
 
-    await bumpCacheGeneration(c);
     return ok(c, {
         message: "Auth settings saved successfully",
         revision: {
@@ -661,7 +659,7 @@ app.openapi(saveSecurityRoute, async (c) => {
                     c.env as Record<string, unknown>,
                 ),
             }, { kv: c.env.CACHE }, { expectedRevision }));
-            await bumpCacheGeneration(c);
+
         }
 
         return ok(c, { message: "Security settings saved successfully", revision });
@@ -815,7 +813,7 @@ app.openapi(saveEmailRoute, async (c) => {
             }));
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
-            await bumpCacheGeneration(c);
+
         }
         return ok(c, { message: "Email settings saved successfully", revision });
 });

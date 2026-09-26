@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   restoreBrands: vi.fn(),
   permanentlyDeleteBrands: vi.fn(),
   moveCategory: vi.fn(),
-  bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/brands", async () => {
@@ -32,11 +32,6 @@ vi.mock("@scalius/core/modules/categories", async () => {
   return { ...actual, moveCategory: mocks.moveCategory };
 });
 
-vi.mock("../../utils/cache-generation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>("../../utils/cache-generation");
-  return { ...actual, bumpCacheGeneration: mocks.bumpCacheGeneration };
-});
-
 import { adminBrandRoutes } from "./brands";
 import { adminCategoryRoutes } from "./categories";
 
@@ -49,7 +44,7 @@ function createTestApp() {
   mocks.trashBrands.mockResolvedValue(undefined);
   mocks.restoreBrands.mockResolvedValue(undefined);
   mocks.permanentlyDeleteBrands.mockResolvedValue(undefined);
-  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -73,7 +68,7 @@ async function send(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: string,
 
 const claims = { brands: [{ id: "brd_walton01", expectedRevision: 1 }] };
 
-describe("admin brand and category tree writes bump the cache generation", () => {
+describe("admin brand and category tree writes", () => {
   afterEach(() => vi.clearAllMocks());
 
   it.each([
@@ -83,16 +78,15 @@ describe("admin brand and category tree writes bump the cache generation", () =>
     ["/brands/trash", "POST", claims, 200],
     ["/brands/restore", "POST", claims, 200],
     ["/brands/delete-permanently", "POST", claims, 200],
-  ])("%s %s commits, then bumps", async (path, method, body, status) => {
+  ])("%s %s commits", async (path, method, body, status) => {
     const { app, env } = createTestApp();
     const response = await send(app, env, path, method, body);
 
     expect(response.status, await response.clone().text()).toBe(status);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+
   });
 
-  it("does not bump when a brand write is refused", async () => {
+  it("reports a refused brand write", async () => {
     const { app, env } = createTestApp();
     mocks.updateBrand.mockRejectedValueOnce(new Error("refused"));
 
@@ -101,19 +95,18 @@ describe("admin brand and category tree writes bump the cache generation", () =>
     });
 
     expect(response.status).toBe(500);
-    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
   });
 
-  it("bumps after a category move and not after a move to the same parent", async () => {
+  it("returns changed and unchanged category move results", async () => {
     const { app, env } = createTestApp();
     mocks.moveCategory.mockResolvedValueOnce({ revision: 2, parentId: "cat_root", changed: true });
     const moved = await send(app, env, "/categories/cat_child/parent", "PATCH", { expectedRevision: 1, parentId: "cat_root" });
     expect(moved.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
 
     mocks.moveCategory.mockResolvedValueOnce({ revision: 2, parentId: "cat_root", changed: false });
     const unchanged = await send(app, env, "/categories/cat_child/parent", "PATCH", { expectedRevision: 2, parentId: "cat_root" });
     expect(unchanged.status).toBe(200);
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+
   });
 });

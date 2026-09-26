@@ -48,21 +48,24 @@ describe("OrderStatusCard", () => {
     document.body.innerHTML = "";
   });
 
-  const statusSelect = () => host.querySelector<HTMLSelectElement>(`select[aria-label="${t["status.title"]}"]`);
+  const statusSelect = () => host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${t["status.title"]}"]`);
+
+  async function openOptions() {
+    if (statusSelect()?.getAttribute("aria-expanded") !== "true") {
+      await act(async () => statusSelect()?.click());
+    }
+    return [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+  }
 
   /** Returns the status option whose text starts with `label`. */
   async function openOption(label: string) {
-    return [...(statusSelect()?.options ?? [])].find((element) => element.textContent?.startsWith(label));
+    return (await openOptions()).find((element) => element.textContent?.startsWith(label));
   }
 
   async function chooseStatus(label: string) {
-    const select = statusSelect();
-    const option = [...(select?.options ?? [])].find((element) => element.textContent === label);
+    const option = (await openOptions()).find((element) => element.textContent === label);
     expect(option).toBeDefined();
-    await act(async () => {
-      select!.value = option!.value;
-      select!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => option!.click());
   }
 
   it("changes forward statuses in one step", async () => {
@@ -149,14 +152,14 @@ describe("OrderStatusCard", () => {
   it("never offers Shipped or Delivered: those come from sending and delivering (R3-ORD-01)", async () => {
     const confirmed = { ...order, status: "confirmed" } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={confirmed} />));
-    const labels = [...(statusSelect()?.options ?? [])].map((option) => option.textContent);
+    const labels = (await openOptions()).map((option) => option.textContent);
     expect(labels).toEqual([o["status.confirmed"], o["status.cancelled"]]);
   });
 
   it("lets a Shipped order with nothing actually sent be cancelled", async () => {
     const stuck = { ...order, status: "shipped" } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={stuck} />));
-    const labels = [...(statusSelect()?.options ?? [])].map((option) => option.textContent);
+    const labels = (await openOptions()).map((option) => option.textContent);
     expect(labels).toEqual([o["status.shipped"], o["status.cancelled"]]);
     await chooseStatus(o["status.cancelled"]);
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(t["cancel.restock"].replace("{count}", "2"));

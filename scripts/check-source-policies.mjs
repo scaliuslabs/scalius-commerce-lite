@@ -199,6 +199,23 @@ export const policies = [
     sample: 'import { restoreDeductedStock } from "../inventory/restore";',
   },
   {
+    rule: "warranty claims never write money, stock or order state (W5)",
+    why: "a claim is a record plus a thread; a repair, replacement or refund goes through the order's own refund, return or manual-order flows (Wave B §5.2), so the warranty domain and its routes write only warranty and conversation rows",
+    paths: [
+      "packages/core/src/modules/warranty",
+      "apps/api/src/routes/admin/warranty-claims.ts",
+      "apps/api/src/routes/admin/orders/warranty-claims.ts",
+      "apps/api/src/routes/customer-auth/warranties.ts",
+      "apps/api/src/routes/storefront-orders/warranties.ts",
+    ],
+    forbid: [
+      /\.(?:insert|update|delete)\(\s*(?:orders|orderItems|orderFulfillments|orderFulfillmentLines|payments|refunds\w*|productVariants|inventory\w*|stock\w*|giftCard\w*)\s*\)/,
+      /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+[`"]?(?:orders|order_items|order_fulfillments|order_fulfillment_lines|payments|refunds|product_variants|inventory_\w+|gift_card\w*)\b/i,
+      /\bfrom\s+["']@scalius\/core\/modules\/(?:payments|inventory|checkout|gift-cards|returns)(?:\/|["'])/,
+    ],
+    sample: "await db.update(orders).set({ status: \"refunded\" });",
+  },
+  {
     rule: "order_items.fulfilled_quantity moves only through the fulfilment ledger",
     why: "fulfilled_quantity is a trigger projection of active order_fulfillment_lines (Wave A F1); a direct update desynchronises it from the ledger",
     paths: ["apps/api/src", "packages/core/src"],

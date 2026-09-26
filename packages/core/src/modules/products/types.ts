@@ -111,6 +111,8 @@ export interface ProductWithDetails extends Omit<CatalogMoneyView<Product>, "cus
     /** The stored schema does not validate: a readiness issue, checkout refuses the product. */
     customizationSchemaInvalid: boolean;
     category: { name: string };
+    /** The brand's name, for the editor's brand picker; null without a brand. */
+    brandName: string | null;
     variants: Array<CatalogMoneyView<ProductVariant> & { selectedOptions: SelectedProductOption[] }>;
     options: ProductOptionDefinitionRecord[];
     media: ProductMediaProjection[];

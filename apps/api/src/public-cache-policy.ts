@@ -1,12 +1,7 @@
 import { PUBLIC_CACHE_MAX_AGE_SECONDS } from "@scalius/shared/cache-generation";
 import { isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
 
-/**
- * Anonymous public API reads served through the `PublicApi` Workers Cache
- * entrypoint. The cache key is the canonical path + sorted query plus the
- * store's cache generation and the running Worker version, so a buyer-visible
- * write or a deploy makes every entry stale without a purge.
- */
+/** Anonymous public reads eligible for dependency-validated caching. */
 export interface PublicApiCachePolicy {
   canonicalUrl: string;
 }
@@ -67,6 +62,24 @@ export function withCacheIdentity(canonicalUrl: string, generation: string, vers
   return url.toString();
 }
 
+/**
+ * Production always uses strict dependency validation. Generation and shadow
+ * remain available only to differential tests and the comparison load harness.
+ * Never enable a Workers Cache entrypoint: its hits would skip validation.
+ */
+export type ApiPartCacheMode = "generation" | "shadow" | "strict";
+export const API_PART_CACHE_MODE: ApiPartCacheMode = "strict";
+
+/**
+ * The dependency-validated key of a public read: the canonical URL and the
+ * Worker version, without the generation (the entry carries its own proof).
+ */
+export function withDvcIdentity(canonicalUrl: string, version: string): string {
+  const url = new URL(canonicalUrl);
+  url.searchParams.append(CACHE_VERSION_QUERY_PARAM, version);
+  return url.toString();
+}
+
 /** Removes the generation and version before the request reaches the application. */
 export function withoutCacheIdentity(request: Request): Request {
   const url = new URL(request.url);
@@ -75,30 +88,7 @@ export function withoutCacheIdentity(request: Request): Request {
   return new Request(url.toString(), request);
 }
 
-/**
- * A server error the Workers Cache layer produced itself, not this Worker:
- * every response of ours carries the baseline security headers
- * (`applyBaselineSecurityHeaders`), and a stuck cache entry answers an empty
- * 500 without them. Such a read is rendered directly instead; our own 5xx
- * passes through so an outage never doubles the database load.
- */
-export function isCacheLayerServerError(response: Response): boolean {
-  return response.status >= 500 && !response.headers.has("X-Content-Type-Options");
-}
-
-/**
- * One masked line per cache-layer fallback: the read's path and the colo of
- * the incoming request, never query values.
- */
-export function logCacheLayerFallback(readUrl: string, incoming: Request, status: number): void {
-  const colo = (incoming as Request & { cf?: { colo?: unknown } }).cf?.colo;
-  console.warn(
-    `[PublicCache] cache layer answered ${status} for ${new URL(readUrl).pathname}` +
-      `${typeof colo === "string" ? ` at ${colo}` : ""}; rendering it directly`,
-  );
-}
-
-export function decoratePublicApiResponse(response: Response): Response {
+export function decoratePublicApiResponse(response: Response, mode: ApiPartCacheMode = API_PART_CACHE_MODE): Response {
   if (!response.ok || response.headers.get("Cache-Control")?.includes("no-store")) {
     return response;
   }
@@ -107,8 +97,9 @@ export function decoratePublicApiResponse(response: Response): Response {
   headers.set("Cache-Control", "public, max-age=0, no-cache, must-revalidate");
   headers.set(
     "Cloudflare-CDN-Cache-Control",
-    `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`,
+    mode === "strict" ? "no-store" : `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`,
   );
+  if (mode === "strict") headers.set("CDN-Cache-Control", "no-store");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

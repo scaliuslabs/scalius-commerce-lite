@@ -16,7 +16,7 @@ import {
 import { Button } from "../button";
 import { Input } from "../input";
 import { Label } from "../label";
-import { NativeSelect } from "../native-select";
+import { SearchableSelect } from "../searchable-select";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import {
   clampRichTextImageWidth,
@@ -40,6 +40,7 @@ export function ResizableImageView({
   const [displayWidth, setDisplayWidth] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
   const [sizeFocused, setSizeFocused] = useState(false);
+  const [sizeOpen, setSizeOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [altDraft, setAltDraft] = useState<string>(alt || "");
   const [editingCustomSize, setEditingCustomSize] = useState(false);
@@ -135,7 +136,7 @@ export function ResizableImageView({
       ? "custom-current"
       : "auto";
   const controlsVisible =
-    selected || sizeFocused || detailsOpen || editingCustomSize;
+    selected || sizeFocused || sizeOpen || detailsOpen || editingCustomSize;
 
   const changeSize = (value: string) => {
     if (value === "custom") {
@@ -302,26 +303,21 @@ export function ResizableImageView({
                 </Button>
               </div>
             ) : (
-              <NativeSelect
-                aria-label={t("imageSize")}
-                className="w-auto min-w-28"
+              <SearchableSelect
+                ariaLabel={t("imageSize")}
+                triggerClassName="w-auto min-w-28"
                 value={sizeValue}
                 onFocus={() => setSizeFocused(true)}
                 onBlur={() => setSizeFocused(false)}
                 onValueChange={changeSize}
-              >
-                <option value="auto">{t("sizeNatural")}</option>
-                <option value="25%">25%</option>
-                <option value="50%">50%</option>
-                <option value="75%">75%</option>
-                <option value="100%">{t("sizeFull")}</option>
-                {sizeValue === "custom-current" ? (
-                  <option value="custom-current" disabled>
-                    {t("sizeCustomCurrent", { width })}
-                  </option>
-                ) : null}
-                <option value="custom">{t("sizeCustom")}</option>
-              </NativeSelect>
+                onOpenChange={setSizeOpen}
+                options={[
+                  { value: "auto", label: t("sizeNatural") },
+                  ...presetWidths.map((value) => ({ value, label: value === "100%" ? t("sizeFull") : value })),
+                  ...(sizeValue === "custom-current" ? [{ value: "custom-current", label: t("sizeCustomCurrent", { width }), disabled: true }] : []),
+                  { value: "custom", label: t("sizeCustom") },
+                ]}
+              />
             )}
             <Popover
               open={detailsOpen}

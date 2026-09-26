@@ -6,17 +6,13 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
     getBusinessSettingsDocument: vi.fn(),
     saveBusinessSettings: vi.fn(),
-    bumpCacheGeneration: vi.fn(),
+
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
     getBusinessSettingsDocument: mocks.getBusinessSettingsDocument,
     saveBusinessSettings: mocks.saveBusinessSettings,
-}));
-
-vi.mock("../../../utils/cache-generation", () => ({
-    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { businessSettingsRoutes } from "./business";
@@ -30,7 +26,6 @@ function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
     mocks.saveBusinessSettings.mockResolvedValue(undefined);
-    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -44,7 +39,7 @@ function createTestApp() {
     return { app, env };
 }
 
-describe("business settings cache invalidation", () => {
+describe("business settings write behavior", () => {
     afterEach(() => {
         vi.clearAllMocks();
     });
@@ -87,7 +82,7 @@ describe("business settings cache invalidation", () => {
         expect(responseText).not.toContain("must-not-project");
     });
 
-    it("invalidates layout caches after business identity saves", async () => {
+    it("returns success after business identity saves", async () => {
         const { app, env } = createTestApp();
         mocks.saveBusinessSettings.mockResolvedValueOnce({
             value: {
@@ -124,11 +119,10 @@ describe("business settings cache invalidation", () => {
             }),
             { expectedRevision: 1 },
         );
-        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
-        );
+
     });
 
-    it("does not invalidate layout when the Business write fails", async () => {
+    it("reports failure when the Business write fails", async () => {
         const { app, env } = createTestApp();
         mocks.saveBusinessSettings.mockRejectedValueOnce(new Error("Business settings write failed"));
 
@@ -144,7 +138,7 @@ describe("business settings cache invalidation", () => {
 
         expect(response.status).toBe(500);
         expect(mocks.saveBusinessSettings).toHaveBeenCalledOnce();
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 
     it.each([
@@ -167,6 +161,6 @@ describe("business settings cache invalidation", () => {
 
         expect(response.status).toBe(400);
         expect(mocks.saveBusinessSettings).not.toHaveBeenCalled();
-        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
     });
 });

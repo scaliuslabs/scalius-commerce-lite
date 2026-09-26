@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
@@ -293,16 +293,13 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
             onSearchChange={(value) => onFiltersChange({ q: value })}
             searchPlaceholder={t("searchVariants")}
             filters={(
-              <NativeSelect
-                className="w-auto min-w-40"
-                aria-label={t("stockFilter")}
+              <SearchableSelect
+                triggerClassName="w-auto min-w-40"
+                ariaLabel={t("stockFilter")}
                 value={status}
                 onValueChange={(value) => onFiltersChange({ stock: value as StockFilter })}
-              >
-                {STOCK_FILTERS.map((value) => (
-                  <option key={value} value={value}>{t(FILTER_LABEL[value])}</option>
-                ))}
-              </NativeSelect>
+                options={STOCK_FILTERS.map((value) => ({ value, label: t(FILTER_LABEL[value]) }))}
+              />
             )}
           /></div>}
         emptyState={filtered

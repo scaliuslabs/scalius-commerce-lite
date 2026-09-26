@@ -13,7 +13,9 @@ import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
 import { heroLeadCandidates } from "@/lib/homepage-hero";
+import { homepageLandingPath } from "@/lib/homepage-landing";
 import {
+  EMPTY_HOMEPAGE_SECTION_DATA,
   homepageContent,
   homepageLeadSection,
   homepageSectionRenders,
@@ -44,6 +46,9 @@ if (!layoutData || !homepageData) {
   response.headers.set("X-Storefront-Data-State", "unavailable");
   return response;
 }
+
+const landingPath = homepageLandingPath(homepageData.presentation);
+if (landingPath) return Astro.redirect(landingPath, 302);
 
 const seo = homepageData?.seo ?? {
   homepageTitle: null as string | null,
@@ -83,9 +88,9 @@ const deliveryFacts = presentation.trustStrip.enabled
 // only under the preview cookie).
 const requestTheme = await resolveRequestTheme(Astro, layoutData);
 const homeSections = requestTheme.resolved.pages.home;
-let sectionData = homepageData.sections ?? { lists: [], media: [] };
+let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
 if (requestTheme.preview && requestTheme.previewToken) {
-  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken)) ?? { lists: [], media: [] };
+  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
 }
 const content = homepageContent({ ...homepageData, sections: sectionData }, deliveryFacts);
 const hero = content.hero;

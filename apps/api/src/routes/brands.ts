@@ -1,7 +1,6 @@
 // Public brand routes: the brand list (brand wall, agents), the brand page,
 // its product listing and the brand sitemap entries. Only published, live
-// brands exist here; every response is cached under the store's cache
-// generation (`/api/v1/brands` is a public cache route).
+// brands exist here; public cache entries validate their declared brand dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   BRAND_SITEMAP_LIMIT,
@@ -111,7 +110,6 @@ const brandProductSchema = z.object({
   cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
   rating: cardRatingSchema,
 });
 

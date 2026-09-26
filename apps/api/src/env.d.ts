@@ -133,7 +133,6 @@ interface CacheStorage {
 }
 
 interface WorkerExports {
-  PublicApi: WorkerEntrypointFetcher;
   [name: string]: WorkerEntrypointFetcher | undefined;
 }
 

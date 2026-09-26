@@ -9,9 +9,11 @@ import { fromMinor } from "@scalius/shared/money";
 import { lowestEmiQuote, normalizeEmiSettings, type EmiSettings } from "@scalius/shared/emi";
 import { emiDocument } from "../settings/documents";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { deps } from "../../cache-deps";
 
 /** The stored `emi` document as a scalar subquery, so a page read carries it without a statement of its own. */
 export function storeEmiSettingsSql() {
+    deps.settings(emiDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
     return sql<string | null>`(
         SELECT ${settings.value} FROM ${settings}
         WHERE ${settings.category} = ${emiDocument.key} AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}

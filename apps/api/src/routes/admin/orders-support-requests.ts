@@ -22,7 +22,7 @@ import {
     enqueueOrderNotificationMessage,
     enqueueOrderSupportRequestNotificationForOrder,
 } from "../../utils/order-notification-queue";
-import { bumpCacheGeneration } from "../../utils/cache-generation";
+
 import { ok } from "../../utils/api-response";
 import {
     conflictResponse,
@@ -190,7 +190,7 @@ async function cancelOrderForRequest(
         throw new ValidationError("This order was already sent, so it can't be cancelled. Reject the request or start a return.");
     }
     const result = await updateOrderStatus(db, orderId, "cancelled");
-    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+
     await recordOrderEvent(db, {
         orderId,
         kind: "status_changed",

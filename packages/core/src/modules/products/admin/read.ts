@@ -2,6 +2,7 @@
 import {
     products,
     categories,
+    brands,
     productVariants,
     productMedia,
     productRichContent,
@@ -478,9 +479,12 @@ export async function getProductDetails(
             category: {
                 name: categories.name,
             },
+            /** The brand picker's label (a trashed brand keeps its name until changed). */
+            brandName: brands.name,
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
+        .leftJoin(brands, eq(brands.id, products.brandId))
         .where(eq(products.id, id));
 
     const [[result], variants, mediaByProduct, richContent, attributeValues, decimalPlaces, optionsByProduct, selectedOptionsByVariant] = await Promise.all([

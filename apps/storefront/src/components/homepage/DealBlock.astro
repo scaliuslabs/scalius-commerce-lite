@@ -1,13 +1,13 @@
 ---
 // A deal block (Daraz flash sale: title, countdown, "Shop all", then the
-// cards). The countdown shows only for a real end time still ahead, and a
-// small script shows and ticks it and removes it at the end: the cached
-// page never claims a deal is running once it has ended, and without script
-// there is no countdown at all. Its box is laid out (invisible) from the
-// first paint, so showing it shifts nothing.
+// cards). The countdown counts only to the end of the running promotion the
+// merchant picked (`dealEndsAt`), and a small script shows and ticks it and
+// removes it at the end: the cached page never claims a deal is running
+// once it has ended, and without script there is no countdown at all. Its
+// box is laid out (invisible) from the first paint, so showing it shifts
+// nothing.
 import type { Product } from "@/lib/api";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
-import { dealEndsAt } from "@/lib/homepage-sections";
 import ProductRail from "./ProductRail.astro";
 import SectionHeader from "./SectionHeader.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
@@ -21,10 +21,11 @@ interface Props {
   currencySymbol: string;
   currencyCode: string;
   aboveFold: boolean;
+  /** The running promotion's end (`dealEndsAt`), or null for no countdown. */
+  endsAt: string | null;
 }
 
-const { section, title, href, products, currencySymbol, currencyCode, aboveFold } = Astro.props;
-const endsAt = dealEndsAt(section);
+const { section, title, href, products, currencySymbol, currencyCode, aboveFold, endsAt } = Astro.props;
 const headingId = `home-${section.id}-title`;
 // The time left when the page was rendered: the box's width from the first
 // paint (the script replaces it before showing it).

@@ -9,6 +9,7 @@
  * Only routes in this list can be batched, so a batch never reaches a private
  * or uncached route.
  */
+import type { StorefrontBatchPartCache } from "./cache-frontier";
 
 export interface PublicApiCacheRoute {
   path: string;
@@ -94,6 +95,11 @@ export interface StorefrontBatchPartResult {
   status: number;
   contentType: string;
   body: string;
+  /**
+   * Dependency-validated cache metadata (API strict mode only; see
+   * `@scalius/shared/cache-frontier`). Absent: the part carries no proof.
+   */
+  cache?: StorefrontBatchPartCache;
 }
 
 export interface StorefrontBatchResponse {

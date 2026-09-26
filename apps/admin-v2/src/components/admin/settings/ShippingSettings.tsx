@@ -11,7 +11,7 @@ import {
 import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/browser";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -235,7 +235,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           <Input id="courier-name" value={draft.name} placeholder={courierLabel} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
         </SettingsField>
         <SettingsField id="courier-type" label={t("courierType")}>
-          <NativeSelect
+          <SearchableSelect
             id="courier-type"
             value={draft.type}
             disabled={Boolean(courier)}
@@ -243,10 +243,9 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
               const type = value as CourierType;
               setDraft({ ...draft, type, credentials: { ...DEFAULTS[type].credentials }, config: { ...DEFAULTS[type].config } });
             }}
-          >
-            <option value="pathao">Pathao</option>
-            <option value="steadfast">Steadfast</option>
-          </NativeSelect>
+            triggerClassName="w-full"
+            options={[{ value: "pathao", label: "Pathao" }, { value: "steadfast", label: "Steadfast" }]}
+          />
         </SettingsField>
       </div>
       <label className="flex min-h-11 items-center justify-between gap-4 text-body">
@@ -261,16 +260,14 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
         />
       </label>
       <SettingsField id="courier-environment" label={t("environment")} help={courier ? t("environmentChanged") : undefined}>
-        <NativeSelect
+        <SearchableSelect
           id="courier-environment"
           aria-describedby="courier-environment-note"
           value={environment}
           onValueChange={(value) => setEnvironment(value as Environment)}
-        >
-          <option value="production">{t("production")}</option>
-          {draft.type === "pathao" ? <option value="sandbox">{t("sandbox")}</option> : null}
-          <option value="custom">{t("custom")}</option>
-        </NativeSelect>
+          triggerClassName="w-full"
+          options={[{ value: "production", label: t("production") }, ...(draft.type === "pathao" ? [{ value: "sandbox", label: t("sandbox") }] : []), { value: "custom", label: t("custom") }]}
+        />
       </SettingsField>
       {environment === "custom" ? (
         <SettingsField id="courier-base-url" label={t("baseUrl")}>
@@ -304,16 +301,22 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
             <Input id="courier-weight" type="number" min="0.1" step="0.1" value={text(draft.config.defaultItemWeight)} onChange={(event) => setConfig("defaultItemWeight", Number(event.target.value))} />
           </SettingsField>
           <SettingsField id="courier-speed" label={t("deliveryType")}>
-            <NativeSelect id="courier-speed" value={text(draft.config.defaultDeliveryType || 48)} onValueChange={(value) => setConfig("defaultDeliveryType", Number(value))}>
-              <option value="48">{t("regular")}</option>
-              <option value="12">{t("express")}</option>
-            </NativeSelect>
+            <SearchableSelect
+              id="courier-speed"
+              value={text(draft.config.defaultDeliveryType || 48)}
+              onValueChange={(value) => setConfig("defaultDeliveryType", Number(value))}
+              triggerClassName="w-full"
+              options={[{ value: "48", label: t("regular") }, { value: "12", label: t("express") }]}
+            />
           </SettingsField>
           <SettingsField id="courier-item" label={t("itemType")}>
-            <NativeSelect id="courier-item" value={text(draft.config.defaultItemType || 2)} onValueChange={(value) => setConfig("defaultItemType", Number(value))}>
-              <option value="2">{t("parcel")}</option>
-              <option value="1">{t("document")}</option>
-            </NativeSelect>
+            <SearchableSelect
+              id="courier-item"
+              value={text(draft.config.defaultItemType || 2)}
+              onValueChange={(value) => setConfig("defaultItemType", Number(value))}
+              triggerClassName="w-full"
+              options={[{ value: "2", label: t("parcel") }, { value: "1", label: t("document") }]}
+            />
           </SettingsField>
         </div>
       ) : null}
