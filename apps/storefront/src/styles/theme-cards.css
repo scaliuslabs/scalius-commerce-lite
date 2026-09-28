@@ -925,6 +925,17 @@
   }
 }
 
+/* ─── mall: compact department tiles ───────────────────────────────────── */
+.site-root .product-card[data-card-variant="mall"] {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--card);
+}
+
+.site-root .product-card[data-card-variant="mall"] .product-card-name {
+  color: var(--primary);
+}
+
 /* ─── detailed: Amazon ─────────────────────────────────────────────────────
    The photo contained on a grey well; colour dots; title 16/400 in three
    lines; "Options: 4 sizes"; "1K+ bought in past month"; the superscript

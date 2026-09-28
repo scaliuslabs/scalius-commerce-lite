@@ -200,6 +200,15 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 18, phone: 12 }, weight: 700 },
   },
+  // A department mall's dense four-column tiles: blue merchant-accent title
+  // and a quieter 20px price, separated by fine rules rather than gutters.
+  mall: {
+    image: { ratio: 1, fit: "contain" },
+    radius: 0,
+    surface: "hairline",
+    title: { size: { desktop: 14, phone: 14 }, weight: 700, lines: 2 },
+    price: { size: { desktop: 20, phone: 20 }, weight: 400 },
+  },
   // Amazon UK search grid (owner's screenshot, 2026-09-25): square photo
   // contained on a grey well, no card chrome, radius 0; title 16/400 in
   // three lines (14 on phones), superscript price with 28px whole units
@@ -681,6 +690,7 @@ export const STOREFRONT_CARD_VARIANTS = {
       action: "round",
     }),
   }),
+  mall: variant({ renders: card(STOREFRONT_CARD_LOOKS.mall, {}) }),
   // Amazon: colour swatches, title in three lines, "Options: 4 sizes",
   // stars with the count, "1K+ bought in past month" (only from real
   // sales), the red deal box, a superscript price with "List:", the

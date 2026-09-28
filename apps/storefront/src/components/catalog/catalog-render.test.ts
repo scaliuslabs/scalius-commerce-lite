@@ -785,6 +785,14 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
   });
 
+  it("renders department tiles in a capped grid with the merchant's card choice", async () => {
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.card = { variant: "mall", settings: {} };
+    const page = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-card")).toBe("mall");
+    expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+  });
+
   it("opens with one compact band: breadcrumb, h1 at the theme's title size, count and sort", async () => {
     const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
       ...plain(),

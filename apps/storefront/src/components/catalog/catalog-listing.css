@@ -423,6 +423,11 @@
   .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) > .product-grid {
     gap: 0;
   }
+
+  .site-root .product-grid-frame[data-catalog-card="mall"]:not([data-catalog-results="list"]) > .product-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+  }
 }
 
 /* ─── Computers ──────────────────────────────────────────────────────── */

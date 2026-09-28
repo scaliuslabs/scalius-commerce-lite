@@ -134,7 +134,7 @@ describe("contract matrix: template x card x filters x navigation source", () =>
         }
       }
     }
-    expect(documents).toBe(10 * 10 * 4 * 3);
+    expect(documents).toBe(STOREFRONT_TEMPLATE_IDS.length * storefrontBlockVariants("card").length * STOREFRONT_LISTING_FILTER_STYLES.length * STOREFRONT_NAVIGATION_SOURCES.length);
   });
 });
 

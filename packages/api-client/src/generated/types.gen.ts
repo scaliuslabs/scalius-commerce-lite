@@ -269,6 +269,11 @@ export type StorefrontThemeDocument = {
                 [key: string]: never;
             };
         } | {
+            variant: 'mall';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
             variant: 'detailed';
             settings: {
                 [key: string]: never;

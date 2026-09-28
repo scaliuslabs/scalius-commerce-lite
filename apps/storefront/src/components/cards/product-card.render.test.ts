@@ -242,7 +242,7 @@ function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["
 describe("product card matrix", () => {
   it("covers every card variant with every density, image ratio and fit", () => {
     expect(MATRIX).toHaveLength(CARD_VARIANTS.length * STOREFRONT_DENSITIES.length * STOREFRONT_IMAGE_RATIOS.length * STOREFRONT_IMAGE_FITS.length);
-    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "detailed"]);
+    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "mall", "detailed"]);
   });
 
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {

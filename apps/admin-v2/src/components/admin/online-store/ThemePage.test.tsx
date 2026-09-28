@@ -136,6 +136,7 @@ describe("theme page", () => {
     // All ten templates are offered.
     const templates = container.querySelector("[role=radiogroup]")!;
     expect(templates.querySelectorAll("[role=radio]")).toHaveLength(10);
+    expect(radio("Department tiles").getAttribute("aria-checked")).toBe("false");
     expect(saveBar()).toBeNull();
   });
 
