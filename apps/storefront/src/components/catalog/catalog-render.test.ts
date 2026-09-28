@@ -1001,6 +1001,52 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(heading.closest(".catalog-band")!.textContent).toContain("50 results for linen");
   });
 
+  it("gives spec search the full five-card width while preserving merchant views and filter controls", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    const search = { ...listingProps("https://shop.test/search?q=linen", {}, [CATEGORY_FACET, ...FACETS]), kind: "search" as const };
+    const defaultPage = await renderListing(theme, search, TREE_STORE_SHAPE);
+    expect(defaultPage.querySelector("[data-catalog-kind='search'][data-catalog-layout='drawer']")).not.toBeNull();
+    expect(defaultPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("5");
+    expect(defaultPage.querySelector(".catalog-spec-results-band [data-catalog-filter-toggle][aria-controls='filter-section']")).not.toBeNull();
+    expect(defaultPage.querySelector("#filterForm")!.getAttribute("data-placement")).toBe("drawer");
+
+    const category = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    expect(category.querySelector("[data-catalog-kind='category'][data-catalog-layout='sidebar']")).not.toBeNull();
+    expect(category.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+
+    theme.blocks.listing.searchLayout = "list";
+    theme.blocks.listing.toolbar.push("grid-list-toggle");
+    const list = await renderListing(theme, search, TREE_STORE_SHAPE);
+    expect(list.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(list.querySelector("[data-catalog-view-toggle]")).not.toBeNull();
+
+    theme.blocks.listing.filters = { style: "sidebar-comfortable", openByDefault: true };
+    const sidebar = await renderListing(theme, search, TREE_STORE_SHAPE);
+    expect(sidebar.querySelector("[data-catalog-kind='search'][data-catalog-layout='sidebar'] > #filter-section")).not.toBeNull();
+    expect(sidebar.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+  });
+
+  it("bounds spec search phone chips and leaves only real refinements above products", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    const facets = [CATEGORY_FACET, ...FACETS];
+    const search = { ...listingProps("https://shop.test/search?q=laptop&size=M&hasDiscount=true", {}, facets), kind: "search" as const };
+    const page = await renderListing(theme, search, TREE_STORE_SHAPE);
+    const pills = page.querySelector("nav[aria-label='Categories']")!;
+    expect(pills.className).toContain("catalog-spec-search-pills");
+    expect(pills.querySelectorAll("a")).toHaveLength(CATEGORY_FACET.values.filter(({ count }) => count > 0).length);
+    expect(page.querySelector(".catalog-spec-results-band")!.hasAttribute("data-spec-search")).toBe(true);
+    expect(page.querySelector("[data-catalog-phone-bar] #mobile-filter-toggle")).not.toBeNull();
+    expect(page.querySelector("[data-catalog-phone-bar] #sortByMobile")).not.toBeNull();
+    const applied = page.querySelector("nav[aria-label='Applied filters']")!;
+    expect(applied.textContent).toContain("Size: M");
+    expect(applied.textContent).toContain("On sale");
+    expect(applied.textContent).not.toContain("Search:");
+
+    theme.blocks.header = { variant: "showcase-simple", settings: {} };
+    const alternateHeader = await renderListing(theme, search, TREE_STORE_SHAPE);
+    expect(alternateHeader.querySelector("nav[aria-label='Applied filters']")!.textContent).toContain("Search:");
+  });
+
   it("puts price first only in the spec catalogue's dense filter rail", async () => {
     const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
       .map((span) => span.textContent!.trim());
@@ -1094,7 +1140,7 @@ describe("listing page", () => {
       if (id === "boutique") expect(document.querySelector(".min-h-screen")!.classList.contains("bg-background")).toBe(true);
       if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
       if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
-      if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='4']")).not.toBeNull();
+      if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='5']")).not.toBeNull();
       expect(document.querySelector("[data-catalog-rail='fashion']") !== null, id).toBe(id === "fashion-value");
       expect(document.querySelector("[data-catalog-fashion-phone-bar]") !== null, id).toBe(id === "fashion-value");
     }

@@ -22,9 +22,11 @@ interface Props {
   defaultSort: ProductListSort;
   currencySymbol: string;
   currencyCode: string;
+  /** The current search is already editable in the visible header field. */
+  hideSearch?: boolean;
 }
 
-const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol, currencyCode } =
+const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol, currencyCode, hideSearch = false } =
   Astro.props;
 const money = (amount: string) =>
   formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
@@ -92,7 +94,7 @@ const appliedFilters: AppliedFilter[] = [];
 const rangesShown = new Set<string>();
 
 for (const [key, rawValue] of Object.entries(currentFilters)) {
-  if (navigationKeys.has(key) || priceKeys.has(key)) continue;
+  if (navigationKeys.has(key) || priceKeys.has(key) || (hideSearch && key === "q")) continue;
   const range = parseProductListRangeKey(key);
   const rangeFacet = range ? facetsBySlug.get(range.slug) : undefined;
   if (range && rangeFacet?.display === "range") {

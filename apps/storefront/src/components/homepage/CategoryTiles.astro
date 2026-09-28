@@ -10,6 +10,7 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { HomepageData } from "@/lib/api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import HomepageCategoryRail from "./HomepageCategoryRail.astro";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 
 const { section, rail } = Astro.props;
 const style = section.settings.style;
+const compactRound = style === "round" && (await currentRequestTheme(Astro.locals)).resolved.template === "rounded-tech";
 const categories = rail.enabled ? rail.categories : [];
 const headingId = `home-${section.id}-title`;
 const hrefOf = (category: (typeof categories)[number]) =>
@@ -61,9 +63,9 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
           {categories.map((category) => (
             <li>
               <a href={hrefOf(category)} class="group flex flex-col items-center gap-2 text-center">
-                <span class="grid aspect-square w-full max-w-28 place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-shadow group-hover:ring-2 group-hover:ring-primary" aria-hidden="true">
+                <span class:list={["grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-shadow group-hover:ring-2 group-hover:ring-primary", compactRound ? "size-14" : "aspect-square w-full max-w-28"]} aria-hidden="true">
                   {category.imageUrl ? (
-                    <img src={mediaImageUrl(category.imageUrl, 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="(max-width: 639px) 30vw, 112px" alt="" width="112" height="112" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+                    <img src={mediaImageUrl(category.imageUrl, compactRound ? 160 : 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes={compactRound ? "56px" : "(max-width: 639px) 30vw, 112px"} alt="" width={compactRound ? "56" : "112"} height={compactRound ? "56" : "112"} loading="lazy" decoding="async" class="h-full w-full object-cover" />
                   ) : (
                     <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
                   )}

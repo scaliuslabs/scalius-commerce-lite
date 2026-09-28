@@ -61,6 +61,15 @@ describe("product page modules", () => {
     expect(featuresPlacement(["description"], null)).toBe("description");
   });
 
+  it("puts department-mall's saved highlights in the buy box", () => {
+    const look = STOREFRONT_BUY_BOX_LOOKS.mall;
+    expect(look.features).toBe("list");
+    const modules = productPageModules(["description", "reviews", "related"], product(), { look, hasRelated: false });
+    expect(featuresPlacement(modules, look)).toBe("buy-box");
+    expect(buyBoxFeatures(product())).toEqual(["Soft"]);
+    expect(buyBoxFeatures(product({ features: [] }), true)).toEqual([]);
+  });
+
   it("groups specification rows in the order they arrive", () => {
     expect(groupSpecificationRows([spec("A", "Body"), spec("B", "Body"), spec("C", null), spec("D", "Body")]).map((group) => [group.group, group.rows.length]))
       .toEqual([["Body", 2], [null, 1], ["Body", 1]]);

@@ -45,7 +45,19 @@
   "sites": {
     "startech": {
       "name": "Star Tech /laptop-notebook",
-      "shots": { "home": "startech-home", "plp": "startech-plp", "pdp": "startech-pdp", "density": "density-ref-startech" },
+      "shots": { "home": "startech-home", "plp": "startech-plp", "search": "startech-search", "pdp": "startech-pdp", "density": "density-ref-startech" },
+      "search": {
+        "desktop": {
+          "cols": { "v": 5, "src": "saved startech-search-d-top.jpg: five cards across the full results width" },
+          "firstCardY": { "v": 289, "src": "saved startech-search-d-top.jpg: first card starts at y=289" },
+          "productsVisible": { "v": 5, "src": "saved startech-search-d-top.jpg: first row fills the viewport" }
+        },
+        "phone": {
+          "cols": { "v": 1, "src": "saved startech-search-m-top.jpg: one full-width card" },
+          "firstCardY": { "v": 260, "src": "saved startech-search-m-top.jpg: first card starts near y=260 CSS px" },
+          "productsVisible": { "v": 1, "src": "saved startech-search-m-top.jpg: first card is more than half visible" }
+        }
+      },
       "desktop": {
         "header.h": { "v": 132, "src": "study: header 132px in two rows (82 + 50)" },
         "header.search.w": { "v": 580, "src": "study: 580x42 search input" },

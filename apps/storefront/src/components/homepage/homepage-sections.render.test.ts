@@ -400,6 +400,19 @@ describe("homepage section library", () => {
     expect(classic.querySelector("[data-product-rail-track] > div")!.className).toContain("w-[72%]");
   });
 
+  it("keeps rounded-tech round categories compact without changing other round layouts", async () => {
+    const sections = [section("category-tiles", "tiles", { style: "round" })];
+    const rounded = await render(sections, store("large"), storefrontTemplateTheme("rounded-tech"));
+    const roundedTile = rounded.querySelector('a[href="/categories/category-1"]')!;
+    expect(roundedTile.querySelector("span")!.classList.contains("size-14")).toBe(true);
+    expect(roundedTile.querySelector("img")!.getAttribute("sizes")).toBe("56px");
+
+    const classic = await render(sections, store("large"));
+    const classicTile = classic.querySelector('a[href="/categories/category-1"]')!;
+    expect(classicTile.querySelector("span")!.classList.contains("max-w-28")).toBe(true);
+    expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
+  });
+
   it("fills a product grid with columns x rows and caps its columns", async () => {
     const page = await render([section("product-grid", "grid", { title: "", source: { kind: "category", categoryId: "cat-sarees" }, columns: 5, rows: 2 })], store("large"));
     expect(page.querySelectorAll(".product-grid > *")).toHaveLength(10);

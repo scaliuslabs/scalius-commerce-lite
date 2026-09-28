@@ -155,6 +155,20 @@ export function marketplaceLayoutChecks(matrixRows = {}) {
   return checks;
 }
 
+/** Star Tech's search uses five full-width cards, unlike its sidebar category. */
+export function specSearchLayoutChecks(matrixRows = {}, refs = {}) {
+  return ["desktop", "phone"].flatMap((viewport) => [
+    ["searchGridCols", "cols", "cols", "exact"],
+    ["searchFirstCardY", "firstCardTop", "firstCardY", "firstY"],
+    ["searchProductsVisible", "productsFullyHalfVisible", "productsVisible", "min"],
+  ].map(([metric, oursField, refField, rule]) => {
+    const ref = refs[viewport]?.[refField];
+    const ours = matrixRows[`search-${viewport}`]?.density?.[oursField] ?? null;
+    const { pass, detail } = judge(rule, ours, ref?.v);
+    return { id: `spec-catalogue/listing/${viewport}/listing.${metric}`, template: "spec-catalogue", block: "listing", viewport, metric: `listing.${metric}`, rule, ours, ref: ref?.v, refSite: "startech", src: ref?.src, pass, detail };
+  }));
+}
+
 /** Invalidates a cached seeded state when the seed code or the migrations change. */
 export function seedFingerprint() {
   const h = createHash("sha256");
@@ -314,7 +328,7 @@ async function main() {
       log(`PDP candidates: ${Object.entries(pdpCandidates).map(([name, row]) => `${name}=${row.slug}`).join(", ")}`);
     }
     const extraPages = Object.fromEntries(templates.map((template) => [template, {
-      ...(template === "marketplace" ? { search: pages.search } : {}),
+      ...(["marketplace", "spec-catalogue"].includes(template) ? { search: pages.search } : {}),
       ...(pdpCandidates[template] ? { pdp: pdpCandidates[template].path } : {}),
     }]));
     // Warm the isolates so the first template is not measured cold.
@@ -343,7 +357,7 @@ async function main() {
       return null;
     };
     if (stages.matrix) {
-      log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}} x {1440, 390}`);
+      log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}${templates.includes("spec-catalogue") ? ", spec search" : ""}} x {1440, 390}`);
       results.matrix = {};
       await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages, into: results.matrix }));
     }
@@ -387,6 +401,7 @@ async function main() {
         const ours = Object.fromEntries(["desktop", "phone"].map((v) => [v, extractOurs({ home: m[`home-${v}`], plp: m[`plp-${v}`], pdp: m[`pdp-${v}`], cardPage: template === "marketplace" ? m[`search-${v}`] : m[`plp-${v}`] })]));
         checks.push(...compareTemplate(template, ours, reference));
         if (template === "marketplace") checks.push(...marketplaceLayoutChecks(m));
+        if (template === "spec-catalogue") checks.push(...specSearchLayoutChecks(m, reference.sites.startech.search));
       }
       const perfRows = results.perf?.[template] ?? {};
       const rows = {};

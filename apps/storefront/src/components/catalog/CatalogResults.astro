@@ -30,6 +30,8 @@ interface Props {
    * listing template can override the theme's filter style), for image sizes.
    */
   filterColumnPx?: number;
+  /** A full-width search can fit one more card than the category sidebar. */
+  maxColumns?: number;
   /** The grid/list toggle is on: restore the buyer's stored view. */
   restoreView: boolean;
   /** Mark the frame for the paging and toggle scripts (list and quick grids always are). */
@@ -38,9 +40,9 @@ interface Props {
   currencyCode: string;
 }
 
-const { products, results, kind, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+const { products, results, kind, phoneLayout, context, filterColumnPx = 0, maxColumns: columns, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
 const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
-const maxColumns = ["spec", "mall"].includes(resolved.blocks.card.variant) || (resolved.template === "mass-retail" && resolved.tokens.density === "comfortable") ? 4 : undefined;
+const maxColumns = columns ?? (["spec", "mall"].includes(resolved.blocks.card.variant) || (resolved.template === "mass-retail" && resolved.tokens.density === "comfortable") ? 4 : undefined);
 // Only a grid beside the filters loses their column.
 const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 

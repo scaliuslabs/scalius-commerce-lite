@@ -113,7 +113,14 @@ const {
 } = Astro.props;
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
-const presentation = catalogListingPresentation(resolved, listingTemplate);
+const listingPresentation = catalogListingPresentation(resolved, listingTemplate);
+// Star Tech search spends the results width on products; its category pages
+// keep the dense rail. Other merchant filter styles retain their placement.
+const specSearch = resolved.template === "spec-catalogue" && kind === "search" && listingPresentation.filters.style === "sidebar-dense";
+const presentation = specSearch
+  ? { ...listingPresentation, filters: { ...listingPresentation.filters, placement: "drawer" as const, columnPx: 0 } }
+  : listingPresentation;
+const specSearchShowsQuery = specSearch && Boolean(query) && resolved.blocks.header.variant === "spec-two-row";
 const results = kind === "search" && query && resolved.blocks.listing.searchLayout !== "same"
   ? resolved.blocks.listing.searchLayout
   : presentation.results;
@@ -146,7 +153,7 @@ const controls = catalogListingControls({
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
 const fashionRail = showFilters && resolved.template === "fashion-value" && presentation.filters.style === "sidebar-comfortable";
-const specRail = resolved.template === "spec-catalogue" && placement === "sidebar";
+const specRail = resolved.template === "spec-catalogue" && (placement === "sidebar" || specSearch);
 const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
@@ -287,12 +294,12 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </div>
 </div>}
 
-{specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class="catalog-spec-pills mb-3 pb-1" />}
+{specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={specSearch ? "catalog-spec-pills catalog-spec-search-pills mb-2 pb-1" : "catalog-spec-pills mb-3 pb-1"} />}
 
 {showPhoneBar && (
   <div
     class:list={[
-      "sticky z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
+      specSearch ? "z-30 mb-2 bg-background lg:hidden" : "sticky z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
       marketplacePhoneFilters ? "catalog-marketplace-phone-bar top-0" : "top-[calc(var(--header-height,3.5rem)+0.5rem)]",
       boutiqueBar && "catalog-boutique-phone-bar",
       massRetailPhoneBar && "catalog-mass-retail-phone-bar catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1",
@@ -452,12 +459,17 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
 
   <div class="min-w-0 flex-1">
     {specRail && (
-      <div class="catalog-band catalog-spec-results-band" data-catalog-band data-catalog-kind={kind} data-visible-breadcrumb={visibleBreadcrumb ? "" : undefined} data-placement={placement}>
+      <div class="catalog-band catalog-spec-results-band" data-catalog-band data-catalog-kind={kind} data-spec-search={specSearchShowsQuery ? "" : undefined} data-visible-breadcrumb={visibleBreadcrumb ? "" : undefined} data-placement={placement}>
         <div class="catalog-band-heading">
           <h1 class="catalog-band-title">{band.title}</h1>
           {countLabel && <p class="catalog-band-count" aria-live="polite">{countLabel}</p>}
         </div>
         <div class="catalog-band-tools">
+          {drawer && showFilters && (
+            <button type="button" data-catalog-filter-toggle aria-controls="filter-section" aria-expanded="false" class="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted">
+              <SlidersHorizontal className="h-4 w-4" /> Filters
+            </button>
+          )}
           {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
           {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
           {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
@@ -472,6 +484,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       defaultSort={defaultSort}
       currencySymbol={currencySymbol}
       currencyCode={currencyCode}
+      hideSearch={specSearchShowsQuery}
     />
 
     {products.length === 0 ? (
@@ -497,6 +510,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           phoneLayout={presentation.phoneLayout}
           context={catalogCardContext(presentation, showFilters)}
           filterColumnPx={presentation.filters.columnPx}
+          maxColumns={specSearch ? 5 : undefined}
           restoreView={showViewToggle}
           marked={showViewToggle || paging !== "numbered"}
           currencySymbol={currencySymbol}

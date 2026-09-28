@@ -351,7 +351,7 @@ describe("slice 5: product page per template", () => {
   it.each(["fashion-value", "heritage-editorial"] as const)("starts %s with one purchase action and accepts a merchant's Buy now choice", (id) => {
     const theme = storefrontTemplateTheme(id);
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(false);
-    theme.blocks.product.buyBox.settings.showBuyNow = true;
+    theme.blocks.product.buyBox.settings = { showBuyNow: true };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(true);
   });
 

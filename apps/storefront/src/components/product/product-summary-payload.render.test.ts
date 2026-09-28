@@ -6,6 +6,7 @@ import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import { STOREFRONT_BUY_BOX_LOOKS, type StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
+import { buyBoxFeatures } from "./lib/product-page-modules";
 import { resolveExactVariantSelection, validateSelection } from "./lib/variant-state-machine";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
@@ -16,8 +17,9 @@ const virtualModules: Record<string, string> = {
 };
 
 let server: ViteDevServer;
-let container: { renderToString(component: unknown, options: { props: object; request: Request }): Promise<string> };
+let container: { renderToString(component: unknown, options: { props: object; request: Request; slots?: Record<string, string> }): Promise<string> };
 let ProductSummary: unknown;
+let ProductFeatureList: unknown;
 
 beforeAll(async () => {
   const { getViteConfig } = await import("astro/config");
@@ -43,6 +45,7 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   ProductSummary = (await server.ssrLoadModule("/src/components/product/ProductSummary.astro")).default;
+  ProductFeatureList = (await server.ssrLoadModule("/src/components/product/modules/ProductFeatureList.astro")).default;
 }, 120_000);
 
 afterAll(async () => { await server?.close(); });
@@ -83,6 +86,37 @@ const variants: ProductVariant[] = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 describe("product summary browser payload", () => {
+  it("places only saved mall highlights between the title and price", async () => {
+    const request = new Request("https://shop.test/products/game-key");
+    const render = async (features: string[]) => {
+      const product = {
+        id: "prod_1", slug: "game-key", name: "Game key", price: 1200,
+        features,
+        attributes: [{ name: "Region", value: "US", slug: "region", group: null, unit: null, keySpec: true }],
+      } as Product;
+      const bullets = await container.renderToString(ProductFeatureList, {
+        props: { features: buyBoxFeatures(product, true), variant: "bullets", compact: true }, request,
+      });
+      const html = await container.renderToString(ProductSummary, {
+        props: { product, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.mall },
+        slots: { "after-title": bullets }, request,
+      });
+      const doc = new Window().document;
+      doc.write(`<body>${html}</body>`);
+      return doc;
+    };
+    const populated = await render(["Redeem on a US account", "Delivery by email"]);
+    const title = populated.querySelector("h1")!;
+    const list = populated.querySelector('[data-product-features="bullets"]')!;
+    const price = populated.querySelector(".buy-box-main-price")!;
+    expect(list.textContent).toContain("Redeem on a US account");
+    expect(list.className).toContain("space-y-0.5");
+    expect(title.compareDocumentPosition(list) & 4).toBe(4);
+    expect(list.compareDocumentPosition(price) & 4).toBe(4);
+    expect(populated.querySelectorAll('[data-product-features="bullets"]')).toHaveLength(1);
+    expect((await render([])).querySelector('[data-product-features="bullets"]')).toBeNull();
+  });
+
   it("places fashion copy after its purchase card in the photo's info column", async () => {
     const product = {
       id: "prod_1", slug: "tunic", name: "Cotton tunic", price: 300,

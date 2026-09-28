@@ -28,6 +28,7 @@ const { shape, id, departments = [], class: className } = Astro.props;
 const scopes = departments
   .filter((item) => item.href?.startsWith("/categories/"))
   .slice(0, 24);
+const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.get("q")?.slice(0, 200) ?? "" : "";
 ---
 
 {
@@ -62,6 +63,7 @@ const scopes = departments
         class="hsearch-input"
         type="search"
         name="q"
+        value={currentQuery}
         placeholder="Search products"
         autocomplete="off"
         enterkeyhint="search"

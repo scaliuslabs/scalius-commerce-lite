@@ -21,9 +21,9 @@ Page colors come from `src/styles/theme-foundation.css` and the published or pre
 
 ## Template fidelity checkpoint (2026-09-28)
 
-The built 30,000-product fidelity stack passed 70/70 selected card, listing, and product-page checks for spec-catalogue, rounded-tech, and marketplace, producing 18 visual pairs under `.wrangler/fidelity/pairs/`. Reproduce with `pnpm fidelity:check --only spec-catalogue,rounded-tech,marketplace,listing,card,pdp --report-only`. This is a selected checkpoint; the ten-template visual review remains open.
+The built 30,000-product fidelity stack passed 98/98 selected card, listing, and product-page checks for spec-catalogue, rounded-tech, department-mall, and marketplace, producing 26 desktop/phone visual pairs. Star Tech search starts its first card at 286px desktop and 232px phone against saved reference positions of 289px and about 260px. Reproduce with `pnpm fidelity:check --only spec-catalogue,rounded-tech,department-mall,marketplace,listing,card,pdp --report-only`. This is a selected checkpoint; the ten-template visual review remains open.
 
-The marketplace size check still exceeds its raw HTML targets (203/150 KB category, 169/120 KB product). Do not remove buyer-visible products, filters, navigation, or truthful SKU data merely to meet that byte gate. The next proof needs representative content for every template and a real touch-browser check of the marketplace product gallery.
+The marketplace size check still exceeds its raw HTML targets (203/150 KB category, 170/120 KB product). Do not remove buyer-visible products, filters, navigation, or truthful SKU data merely to meet that byte gate. The synthetic media sometimes mismatches seeded product names; the next proof needs representative content for every template and a real touch-browser check of the marketplace product gallery.
 
 ## Local Dev Runtime Notes
 

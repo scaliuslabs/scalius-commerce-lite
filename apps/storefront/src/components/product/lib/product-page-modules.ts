@@ -107,8 +107,9 @@ export function specificationValue(row: { value: string; unit: string | null }):
 }
 
 /** Merchant highlights win; saved key specifications fill an otherwise empty buy-box list. */
-export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">): string[] {
+export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">, savedOnly = false): string[] {
   if (product.features?.length) return product.features;
+  if (savedOnly) return [];
   return publicSpecificationRows(product.attributes ?? [])
     .filter((row) => row.keySpec)
     .slice(0, 6)

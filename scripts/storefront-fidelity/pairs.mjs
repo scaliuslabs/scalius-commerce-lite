@@ -60,9 +60,9 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
   for (const template of templates) {
     const tpl = reference.templates[template];
     const counts = checks.filter((c) => c.template === template);
-    for (const page of ["home", "plp", "pdp"]) {
-      const block = page === "plp" ? "listing" : page === "pdp" ? "pdp" : "header";
-      const siteKey = page === "plp" ? tpl.refs.listing : tpl.refs.card;
+    for (const page of ["home", "plp", "pdp", ...(template === "spec-catalogue" ? ["search"] : [])]) {
+      const block = page === "plp" || page === "search" ? "listing" : page === "pdp" ? "pdp" : "header";
+      const siteKey = page === "plp" || page === "search" ? tpl.refs.listing : tpl.refs.card;
       const site = reference.sites[siteKey];
       const base = site?.shots?.[page];
       for (const v of ["d", "m"]) {
@@ -78,16 +78,16 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
         const H = v === "d" ? 900 : 1000;
         const vw = v === "d" ? 1440 : 390;
         const [a, b] = [await firstScreen(sharp, ref, H, vw), await firstScreen(sharp, ours, H, vw)];
-        const blockChecks = counts.filter((c) => c.block === block && c.viewport === viewport);
+        const blockChecks = counts.filter((c) => c.block === block && c.viewport === viewport && (page === "search" ? c.metric.startsWith("listing.search") : !c.metric.startsWith("listing.search")));
         const failed = blockChecks.filter((c) => !c.pass).length;
         const probe = matrix?.[template]?.[`${oursPage}-${viewport}`];
         const lines = [
           { text: `REFERENCE ${site.name} (${viewport})`, color: "#c80000" },
-          { text: page === "plp" ? refFmt(site[viewport]) : "", color: "#c80000" },
+          { text: page === "plp" ? refFmt(site[viewport]) : page === "search" ? `${site.search?.[viewport]?.cols?.v ?? "-"} cards per row` : "", color: "#c80000" },
         ];
         const oursLines = [
           { text: `OURS ${template} ${page} (${viewport}) - ${block}: ${blockChecks.length - failed}/${blockChecks.length} checks pass`, color: "#0050c8" },
-          { text: page === "plp" ? fmt(probe?.density) : "", color: "#0050c8" },
+          { text: page === "plp" ? fmt(probe?.density) : page === "search" ? `${probe?.density?.cols ?? "-"} cards per row` : "", color: "#0050c8" },
         ];
         const labelH = 64;
         const width = a.info.width + b.info.width + 24;

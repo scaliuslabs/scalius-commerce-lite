@@ -66,9 +66,29 @@
   overflow-x: visible;
 }
 
-/* Category breadcrumbs name the page on phones. Search has no breadcrumb, so
-   its heading stays visible even when matching category chips are absent. */
-.catalog-spec-results-band[data-visible-breadcrumb] {
+@media (max-width: 63.999rem) {
+  .site-root .catalog-spec-search-pills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .catalog-spec-search-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-root .catalog-spec-search-pills a {
+    max-width: min(12rem, 75vw);
+  }
+
+  .site-root .catalog-spec-search-pills a span {
+    min-width: 0;
+  }
+}
+
+/* Category breadcrumbs name the page on phones; the populated spec search
+   field names its query. Keep the heading in the accessibility tree. */
+.catalog-spec-results-band:is([data-visible-breadcrumb], [data-spec-search]) {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -91,7 +111,7 @@
     flex-wrap: nowrap;
   }
 
-  .catalog-spec-results-band[data-visible-breadcrumb] {
+  .catalog-spec-results-band:is([data-visible-breadcrumb], [data-spec-search]) {
     position: static;
     width: auto;
     height: auto;
@@ -544,6 +564,12 @@
         1fr
       )
     );
+  }
+}
+
+@container product-grid (min-width: 72rem) {
+  .product-grid-frame[data-catalog-grid-columns="5"]:not([data-catalog-results="list"]) .product-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

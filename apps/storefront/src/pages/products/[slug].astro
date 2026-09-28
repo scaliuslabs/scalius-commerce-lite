@@ -133,6 +133,7 @@ const resolvedTheme = resolveProductPageTheme(
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
+const mallBuyBox = resolvedTheme.blocks.product.buyBox.variant === "mall";
 const contactLinks = (resolvedTheme.blocks.product.buyBox.variant === "essentials" || resolvedTheme.blocks.product.buyBox.variant === "showcase")
   ? storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")
   : [];
@@ -720,8 +721,9 @@ const productCategoryAnalytics = productCategory
           {featuresAt === "buy-box" && buyBoxLook && buyBoxLook.features !== "none" && !buyBoxLook.factPills && (
             <ProductFeatureList
               slot="after-title"
-              features={buyBoxFeatures(product)}
-              variant={buyBoxLook.features}
+              features={buyBoxFeatures(product, mallBuyBox)}
+              variant={mallBuyBox ? "bullets" : buyBoxLook.features}
+              compact={mallBuyBox}
               title={productPageCopy.productKeyFeaturesText}
             />
           )}

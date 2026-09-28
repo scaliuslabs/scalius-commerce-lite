@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { poolFile } from "./lib/media-server.mjs";
@@ -8,9 +8,9 @@ import {
   DEFAULT_TOLERANCES, METRIC_RULES, compareTemplate, exitCode, extractOurs, htmlBudgetKb, judge, median, navChecks,
   parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
-import { TEMPLATES } from "./lib/context.mjs";
+import { TEMPLATES, loadSharp } from "./lib/context.mjs";
 import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
-import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, stagesFor } from "./check.mjs";
+import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, specSearchLayoutChecks, stagesFor } from "./check.mjs";
 import { referenceShotIssue, writePairs } from "./pairs.mjs";
 import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
@@ -236,6 +236,21 @@ describe("marketplace category and search layout", () => {
   });
 });
 
+it("checks spec search columns, first card position, and visible products against saved references", () => {
+  const refs = reference.sites.startech.search;
+  expect(specSearchLayoutChecks({ "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } }, refs)
+    .map(({ pass, ref, src }) => [pass, ref, src])).toEqual([
+    [true, 5, expect.stringContaining("startech-search-d-top.jpg")],
+    [true, 289, expect.stringContaining("startech-search-d-top.jpg")],
+    [true, 5, expect.stringContaining("startech-search-d-top.jpg")],
+    [true, 1, expect.stringContaining("startech-search-m-top.jpg")],
+    [true, 260, expect.stringContaining("startech-search-m-top.jpg")],
+    [true, 1, expect.stringContaining("startech-search-m-top.jpg")],
+  ]);
+  expect(specSearchLayoutChecks({ "search-desktop": { density: { cols: 4, firstCardTop: 352, productsFullyHalfVisible: 4 } }, "search-phone": { density: { cols: 1, firstCardTop: 664, productsFullyHalfVisible: 0 } } }, refs)
+    .map(({ pass }) => pass)).toEqual([false, false, false, true, false, false]);
+});
+
 describe("budgets", () => {
   it("takes the median TTFB and applies the page-type HTML budget", () => {
     expect(median([418, 1198, 172])).toBe(418);
@@ -375,6 +390,28 @@ describe("filters, verdict and exit code", () => {
     expect(report).toContain("1/1 metric checks pass");
     expect(report).toContain("Visual pairs: 2 paired, 1 unverified.");
     expect(report).toContain("mass-retail/home/desktop | target-home-d-top.jpg | known blocked reference capture");
+  });
+
+  it("pairs spec search separately from its category page", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "fidelity-spec-search-"));
+    try {
+      const sharp = await loadSharp();
+      const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer();
+      for (const v of ["d", "m"]) {
+        writeFileSync(join(dir, `startech-search-${v}-top.jpg`), photo);
+        writeFileSync(join(dir, `ours-spec-catalogue-search-${v}-top.jpg`), photo);
+      }
+      const pairs = await writePairs({
+        reference,
+        matrix: { "spec-catalogue": { "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } } },
+        checks: specSearchLayoutChecks({ "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } }, reference.sites.startech.search),
+        shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["spec-catalogue"],
+      });
+      expect(pairs.made.map((file) => basename(file))).toEqual(["spec-catalogue-search-d.jpg", "spec-catalogue-search-m.jpg"]);
+      expect(pairs.unverified.filter(({ page }) => page === "plp")).toHaveLength(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

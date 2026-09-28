@@ -631,6 +631,14 @@ describe("storefront theme render matrix", () => {
     expect(bar.textContent).toContain("Free delivery in Dhaka over");
     expect(bar.nextElementSibling).toBe(header);
   });
+
+  it("shows the current search term in the header field on search pages", async () => {
+    const field = "/src/components/header/HeaderSearch.astro";
+    const search = parse(await render(field, storefrontTemplateTheme("spec-catalogue"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/search?q=portable+SSD"));
+    expect(search.querySelector("input[name='q']")!.getAttribute("value")).toBe("portable SSD");
+    const category = parse(await render(field, storefrontTemplateTheme("spec-catalogue"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/categories/ssd?q=portable+SSD"));
+    expect(category.querySelector("input[name='q']")!.getAttribute("value")).toBe("");
+  });
 });
 
 function assertTopBar(page: Document, variant: string, shows: boolean) {

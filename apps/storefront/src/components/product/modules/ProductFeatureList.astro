@@ -8,9 +8,10 @@ interface Props {
   variant: "list" | "chips" | "bullets";
   /** A small heading over the buy-box list ("Key features"). */
   title?: string | null;
+  compact?: boolean;
 }
 
-const { features, variant, title = null } = Astro.props;
+const { features, variant, title = null, compact = false } = Astro.props;
 ---
 
 {features.length > 0 && (
@@ -33,7 +34,7 @@ const { features, variant, title = null } = Astro.props;
       </ul>
     </div>
   ) : (
-    <ul class="max-w-3xl list-disc space-y-2 pl-5 text-sm text-foreground lg:text-base" data-product-features="bullets">
+    <ul class:list={["max-w-3xl list-disc pl-5 text-sm", compact ? "space-y-0.5 leading-5 text-muted-foreground" : "space-y-2 text-foreground lg:text-base"]} data-product-features="bullets">
       {features.map((feature) => <li>{feature}</li>)}
     </ul>
   )

@@ -378,7 +378,7 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     cta: { height: 55, shape: "pill", layout: "row", maxWidth: 302, first: "buy-now", inlineQuantity: true },
     facts: "list",
     factPills: false,
-    features: "none",
+    features: "list",
     bundles: "chips",
     card: false,
   },

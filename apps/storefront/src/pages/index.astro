@@ -113,9 +113,10 @@ const phoneCategory = phoneLeadSection?.type === "category-tiles"
   ? content.categoryRail.categories.find((category) => category.imageUrl)
   : null;
 const phoneCategoryImage = phoneCategory?.imageUrl ?? null;
-const phoneCategoryWidth = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "photo" ? 480 : 320;
+const compactRoundCategory = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "round" && requestTheme.resolved.template === "rounded-tech";
+const phoneCategoryWidth = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "photo" ? 480 : compactRoundCategory ? 160 : 320;
 const phoneCategorySizes = phoneLeadSection?.type === "category-tiles" ? {
-  photo: "min(42vw, 176px)", icons: "56px", round: "30vw", square: "30vw", quad: "45vw",
+  photo: "min(42vw, 176px)", icons: "56px", round: compactRoundCategory ? "56px" : "30vw", square: "30vw", quad: "45vw",
 }[phoneLeadSection.settings.style] : "";
 
 // --- SEO: canonical URL for homepage ---
