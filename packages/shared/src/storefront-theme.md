@@ -181,10 +181,10 @@ numbers come from the storefront study
 | `heritage-editorial` | fashion, sarees, crafts | fashion-department / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns / portrait / fashion / newsletter-grey; nav tree+menu, 11 | airy, display, uppercase, portrait photos, 1360 |
 | `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6 | compact, retail, uppercase, square, flat |
 | `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (list rows on phones) / thumbs-below / spec / support-dark; nav category-tree, 18 | dense, flat type, subtle, dark header, contain, 1290 |
-| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, dark header |
-| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / detailed / list + sidebar-dense (list rows on phones) / thumbs-left / marketplace-3col / directory; nav tree+menu, 18 | compact, flat type, dark header, full width |
-| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + sidebar-dense (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
-| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / grid + sidebar-comfortable / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
+| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, light header |
+| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / detailed / grid categories, list search + sidebar-dense / thumbs-left / marketplace-3col / directory; nav tree+menu, 18 | compact, flat type, dark header, full width |
+| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + drawer (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
+| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / grid + sidebar-dense / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
 | `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid + drawer / thumbs-below / classic / minimal-columns; nav tree+menu, 16 | compact, rounded, pill, contain, full width |
 | `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / grid + drawer / stacked / boutique / minimal-columns; nav menu, 6 | comfortable, display, rounded, pill, 1200 |
 
@@ -198,10 +198,11 @@ Where the data departs from SYNTHESIS.md, and why:
   row (today's bar and row) instead of the study's utility bar and
   "All departments" rail; both stay available as `utility` and
   `departments-rail` for any other mix.
-- **Mass retail** uses the open dense column (`sidebar-dense`) instead of
-  Target's filter drawer: it is a large-catalogue template, and the owner's
-  rule is that large catalogues show their filters like Amazon and Star Tech
-  (fidelity AUDIT.md section 0). Target's popular-filter chips stay.
+- **Mass retail** starts with Target's filter drawer; merchants can select a
+  sticky category sidebar in the dashboard. Its popular-filter chips stay.
+- **Marketplace** starts categories as cards and searches as rows. Shoppers
+  can switch views; the dashboard sets the category default and the switch.
+  Other grid/list templates expose the same dashboard controls.
 - **Department mall** takes its departments from the tree (`tree+menu`),
   as Game Ghor's "All departments" does; a store without published roots
   with products keeps rendering its menu exactly as before.
