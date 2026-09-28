@@ -396,6 +396,28 @@ const MATRIX = (() => {
 })();
 
 describe("storefront theme render matrix", () => {
+  it("renders Marketplace's directory footer from merchant facts", async () => {
+    const data = layoutData({ business: true });
+    const marketplace = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
+      title: "Home", layoutData: data,
+    }));
+    const footer = marketplace.querySelector('footer[data-footer-variant="directory"]')!;
+    expect(footer.hasAttribute("data-footer-marketplace")).toBe(true);
+    expect(footer.querySelector('a[data-footer-back-to-top]')?.getAttribute("href")).toBe("#");
+    expect(footer.querySelector('nav[aria-label="Store directory"]')?.querySelectorAll("section")).toHaveLength(FOOTER_MENUS.length);
+    expect(footer.querySelector("[data-footer-identity]")?.textContent).toContain("Nakshi Ghor");
+    expect(footer.querySelector("[data-footer-lower]")).not.toBeNull();
+    expect(footer.textContent).not.toContain("USD");
+    expect(footer.textContent).not.toContain("United States");
+
+    const other = parse(await render("/src/layouts/Layout.astro", withChoice(storefrontTemplateTheme("boutique"), "footer", "directory"), {
+      title: "Home", layoutData: data,
+    }));
+    const otherFooter = other.querySelector('footer[data-footer-variant="directory"]')!;
+    expect(otherFooter.hasAttribute("data-footer-marketplace")).toBe(false);
+    expect(otherFooter.querySelector("[data-footer-back-to-top], [data-footer-lower], [data-footer-identity]")).toBeNull();
+  });
+
   it("covers every pair of desktop menu, phone menu and header", () => {
     const pairs = new Set(NAVIGATION_MATRIX.flatMap(({ desktop, phone, header }) => {
       const d = `${desktop.variant}${JSON.stringify(desktop.settings)}`;
@@ -928,6 +950,22 @@ function headerLinks(page: Document): number {
 }
 
 describe("navigation", () => {
+  it("uses the narrower phone drill drawer only for Marketplace", async () => {
+    for (const template of ["marketplace", "mass-retail"] as const) {
+      const page = await renderNavigationPage(storefrontTemplateTheme(template));
+      const drawer = page.querySelector("#mobile-menu-panel")!;
+      expect(drawer.classList.contains("max-w-[365px]")).toBe(true);
+      expect(drawer.classList.contains("nav-drawer--marketplace")).toBe(template === "marketplace");
+      expect(drawer.classList.contains("w-[80vw]")).toBe(template === "marketplace");
+      expect(drawer.classList.contains("lg:w-[365px]")).toBe(template === "marketplace");
+      expect(drawer.classList.contains("w-[90vw]")).toBe(template !== "marketplace");
+      if (template === "marketplace") {
+        expect(drawer.querySelector(".drill[data-menu-root] details[data-menu='drill'] [data-menu-panel] details[data-menu='drill']"))
+          .not.toBeNull();
+      }
+    }
+  });
+
   it.each(NAVIGATION_MATRIX)("$name", async (entry) => {
     const theme = navigationTheme(entry);
     const { layout } = requestThemeFor(theme, STORE_SHAPE);

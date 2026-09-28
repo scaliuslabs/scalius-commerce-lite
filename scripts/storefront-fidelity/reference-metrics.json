@@ -36,7 +36,7 @@
     "fashion-value": { "largeCatalogue": false, "refs": { "header": "fabrilife", "card": "fabrilife", "listing": "fabrilife", "pdp": "fabrilife", "footer": "fabrilife" } },
     "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
     "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
-    "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "daraz" } },
+    "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
     "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
     "daily-essentials": { "largeCatalogue": false, "refs": { "header": "chaldal", "card": "chaldal", "listing": "chaldal", "pdp": "chaldal", "footer": "chaldal" } },
@@ -169,7 +169,8 @@
         "listing.productsVisible": { "v": 3, "src": "study: first three list rows at 1440px" },
         "listing.filterColumnW": { "v": 262, "src": "study: 1440px search sidebar" },
         "listing.filterRowPitch": { "v": 22, "src": "study: 1440px facet row pitch" },
-        "pdp.h1": { "v": "18/400", "src": "study: title 18/400" }
+        "pdp.h1": { "v": "18/400", "src": "study: title 18/400" },
+        "footer.h": { "v": 920, "src": "2026-09-28: Amazon.com desktop footer at 1920px; phone height varies with merchant link count" }
       },
       "phone": {
         "header.search.w": { "v": 370, "src": "study: full-width 370x44 search" },

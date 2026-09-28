@@ -297,6 +297,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     screens={sharedDrawer ? "all" : "phone"}
     title={drawerTitle}
     allCategories={plan.drawerAllCategories}
+    marketplace={resolved.template === "marketplace"}
   />
 
   {
@@ -309,6 +310,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
         screens="all"
         title={drawerTitle}
         allCategories={plan.drawerAllCategories}
+        marketplace={resolved.template === "marketplace"}
       />
     )
   }

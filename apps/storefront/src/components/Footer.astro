@@ -38,6 +38,7 @@ interface Props {
 const { footerData, storeName, storePhone, social, policies, business } = Astro.props;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const variant = resolved.blocks.footer.variant;
+const marketplaceDirectory = variant === "directory" && resolved.template === "marketplace";
 const model = footerModel({ footerData, storeName, storePhone, social, policies, business }, Astro.url);
 const TONES: Record<string, string | undefined> = {
   "support-dark": "header",
@@ -50,15 +51,24 @@ const TONES: Record<string, string | undefined> = {
   class="relative border-t border-border bg-secondary text-secondary-foreground overflow-hidden"
   data-footer-variant={variant}
   data-footer-tone={TONES[variant]}
+  data-footer-marketplace={marketplaceDirectory ? "" : undefined}
 >
-  <div class="relative mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 lg:py-6">
+  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">Back to top</a>}
+  <div class:list={["relative mx-auto w-full px-4 sm:px-6", marketplaceDirectory ? "directory-main max-w-5xl py-8 lg:py-10" : "max-w-7xl py-5 lg:py-6"]}>
     {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} />}
     {variant === "support-dark" && <SupportFooter model={model} />}
     {variant === "brand-black" && <BrandFooter model={model} />}
     {variant === "newsletter-grey" && <NewsletterFooter model={model} />}
-    {variant === "directory" && <DirectoryFooter model={model} />}
-    <FooterBottom model={model} showPolicies={variant !== "newsletter-grey" && variant !== "brand-black"} />
+    {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
+    {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "newsletter-grey" && variant !== "brand-black"} />}
   </div>
+  {marketplaceDirectory && (
+    <div class="directory-lower" data-footer-lower>
+      <div class="relative mx-auto w-full max-w-5xl px-4 sm:px-6">
+        <FooterBottom model={model} marketplace />
+      </div>
+    </div>
+  )}
 </footer>
 
 <style>
@@ -99,5 +109,37 @@ const TONES: Record<string, string | undefined> = {
   footer[data-footer-tone="muted"] {
     --secondary: var(--muted);
     --secondary-foreground: var(--foreground);
+  }
+
+  footer[data-footer-marketplace] {
+    --secondary: #232f3e;
+    --secondary-foreground: #fff;
+    --primary-foreground: #fff;
+    --border: rgb(255 255 255 / 18%);
+  }
+
+  footer[data-footer-marketplace]::after,
+  .directory-lower {
+    background-color: #131a22;
+  }
+
+  .directory-back-to-top {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+    background: #37475a;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .directory-back-to-top:hover {
+    background: #485769;
+  }
+
+  .directory-back-to-top:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: -4px;
   }
 </style>

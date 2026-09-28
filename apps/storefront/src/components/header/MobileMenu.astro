@@ -4,8 +4,8 @@
 // the computer's "All" drawer (`nav-drawer`, or the phone drawer itself when
 // both use drill-in). drawer.ts owns the dialog behaviour; without
 // JavaScript it opens as the URL's :target from the <noscript> links.
-// Amazon's 365px drawer (at most 90% of a phone), 44px rows; each target
-// once: the fixed "Track your order" row steps aside when the menu has it.
+// The Marketplace drawer is 80vw on phones and 365px on computers; other
+// themes retain their usual 90vw phone drawer. Each target appears once.
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, Phone, ChevronRight } from "lucide-react";
 import { mediaImageUrl } from "@/lib/media-url";
@@ -26,6 +26,8 @@ interface Props {
   title?: string;
   /** The top level ends with "All categories" (/categories). */
   allCategories?: boolean;
+  /** Amazon-style drawer geometry for the Marketplace template. */
+  marketplace?: boolean;
 }
 
 const {
@@ -37,6 +39,7 @@ const {
   screens = "phone",
   title = "Menu",
   allCategories = false,
+  marketplace = false,
 } = Astro.props;
 const menuHasTrackOrder = (function has(list: NavigationItem[]): boolean {
   return list.some((item) => {
@@ -63,7 +66,8 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 <div
   id={`${id}-panel`}
   class:list={[
-    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[365px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh max-w-[365px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    marketplace ? "nav-drawer--marketplace w-[80vw] lg:w-[365px]" : "w-[90vw]",
     phoneOnly && "lg:hidden",
   ]}
   role="dialog"
@@ -208,6 +212,13 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 </div>
 
 <style>
+  @media (max-width: 63.999rem) {
+    .nav-drawer--marketplace :global(.drill-link),
+    .nav-drawer--marketplace :global(.drill-level-ghost) {
+      min-height: 3.25rem;
+    }
+  }
+
   /* Without JavaScript the drawer opens as the URL's target (the <noscript>
      menu links) and closes through its <noscript> close link. */
   .nav-drawer:target {
