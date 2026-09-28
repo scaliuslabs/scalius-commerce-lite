@@ -276,11 +276,10 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
     expect(boutique.blocks.header.variant).toBe("boutique-inline");
     expect(boutique.facts.navTopItems).toBe(6);
     expect(boutique.fallbacks.filter((each) => each.kind === "block")).toEqual([]);
-    // The old shape (every published category counted as a root) pushed it out.
+    // The menu keeps its overflow pattern even for many roots and SKUs.
     const oldShape = storeShapeFromFacts({ ...LIVE_SMALL, topCategoryCount: 382, menu: flatMenu(12) });
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), oldShape).blocks.header.variant).toBe("fashion-department");
-    // A big catalogue still moves to a header with a visible search.
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), SEED_30K).blocks.header.variant).toBe("fashion-department");
+    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), oldShape).blocks.header.variant).toBe("boutique-inline");
+    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), SEED_30K).blocks.header.variant).toBe("boutique-inline");
   });
 
   it("brings shelves, sub-category pills and popular-filter chips alive on the 30k tree", () => {

@@ -194,7 +194,8 @@ const stickyMenuRow =
   Boolean(spec) && desktopMenu && menuPlacement === "row" && (header.variant === "spec-two-row" || desktopKind === "sticky-category-bar");
 // Heights and the scroll reserve, from the variant data (HeaderLayout's CSS).
 const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }))
-  + (header.variant === "tech-rounded" ? "; --hdr-phone-bar: 4rem" : "");
+  + (header.variant === "tech-rounded" || header.variant === "boutique-inline" ? "; --hdr-phone-bar: 4rem" : "")
+  + (header.variant === "showcase-simple" ? "; --hdr-phone-bar: 4.125rem" : "");
 ---
 
 <header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant} data-nav-source={navigation.source}>

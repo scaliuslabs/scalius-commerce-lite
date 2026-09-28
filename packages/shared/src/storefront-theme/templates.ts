@@ -419,7 +419,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "announcement",
-      header: ["boutique-inline"],
+      header: ["showcase-simple"],
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],

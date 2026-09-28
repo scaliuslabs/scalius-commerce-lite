@@ -154,12 +154,10 @@ describe("fallback resolution", () => {
     expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("product-widgets");
   });
 
-  it("moves a big catalogue to a header with a visible search and keeps every rich block", () => {
+  it("keeps the merchant's chosen header on a big catalogue and every rich block", () => {
     const boutique = resolveStorefrontTheme(storefrontTemplateTheme("boutique"), DEEP);
-    expect(boutique.blocks.header).toMatchObject({ variant: "fashion-department", requested: "boutique-inline", settings: { subBrandRow: false } });
-    expect(boutique.fallbacks).toEqual([
-      expect.objectContaining({ key: "header", failed: expect.arrayContaining([{ fact: "skuCount", max: 500 }]) }),
-    ]);
+    expect(boutique.blocks.header.variant).toBe("boutique-inline");
+    expect(boutique.fallbacks.filter((each) => each.kind === "block")).toEqual([]);
     for (const template of STOREFRONT_TEMPLATES) {
       if (template.id === "boutique" || template.id === "showcase-landing") continue;
       const resolved = resolveStorefrontTheme(storefrontTemplateTheme(template.id), DEEP);

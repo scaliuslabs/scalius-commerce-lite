@@ -54,6 +54,20 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     mainHeight: 5.25,
     menuHeight: 0,
   },
+  // Showcase: a shorter landing-page bar, with the same searchable menu.
+  "showcase-simple": {
+    toneRow: false,
+    menuRowTone: "surface",
+    menu: "inline",
+    uppercaseMenu: false,
+    search: "icon",
+    utilities: "icons",
+    cartTotal: false,
+    phoneSearch: "none",
+    phoneShortcuts: false,
+    mainHeight: 4.125,
+    menuHeight: 0,
+  },
   // Fabrilife: 80px, uppercase departments, a filled 300x44 search,
   // icon-over-label utilities.
   "fashion-department": {

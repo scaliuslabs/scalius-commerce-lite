@@ -125,7 +125,7 @@ describe("templates", () => {
     expect(blockVariant(setBlockVariant(theme, "gallery", "stacked"), "gallery")).toBe("stacked");
   });
 
-  it("resolves the draft with the storefront's resolver, and says what a choice falls back to", () => {
+  it("resolves the draft with the storefront's resolver and keeps a chosen header", () => {
     const shape = storeShapeFromFacts({
       productCount: 800, skuCount: 2000, topCategoryCount: 12, categoryDepth: 1,
       menu: [{}, {}, {}], hasCollections: true, hasDeliveryMethods: true,
@@ -133,7 +133,8 @@ describe("templates", () => {
     const boutique = storefrontTemplateTheme("boutique");
     const resolved = resolveThemeForStore(boutique, shape);
     expect(resolved).toEqual(resolveStorefrontTheme(boutique, shape));
-    expect(blockFallback(resolved, "header")).toMatchObject({ requested: "boutique-inline", resolved: "fashion-department" });
+    expect(resolved.blocks.header.variant).toBe("boutique-inline");
+    expect(blockFallback(resolved, "header")).toBeNull();
     expect(blockFallback(resolved, "desktopNav")).toBeNull();
     expect(blockFallback(resolveThemeForStore(boutique, EMPTY_STORE_SHAPE), "header")).toBeNull();
   });

@@ -18,7 +18,6 @@ import {
   STOREFRONT_NAVIGATION_SOURCES,
   anyOf,
   atLeast,
-  atMost,
   between,
   blockIs,
   has,
@@ -61,15 +60,6 @@ function variant<Shape extends z.ZodRawShape = Record<never, never>, const Rende
 
 const hoverImage = { hoverImage: z.boolean() };
 const cartTotal = { cartTotal: z.boolean() };
-
-/**
- * Searches must be reachable: big catalogues get a header with a visible
- * search field (mix rule 3). The inline row shows at most eight top entries
- * (`navTopItems` is already capped by `navigation.maxTopItems`; the rest sit
- * behind "More"), so a long flat menu no longer pushes a 20-product shop out
- * of its own header.
- */
-const SMALL_CATALOGUE = [atMost("skuCount", 500), atMost("navTopItems", 8), atMost("topCategoryCount", 8)];
 
 // Existing renderers (the v3 components) the variants map to for now.
 export const STOREFRONT_HEADER_RENDERERS = ["classic", "centered", "marketplace"] as const;
@@ -485,7 +475,8 @@ export const STOREFRONT_TOP_BAR_VARIANTS = {
 
 export const STOREFRONT_HEADER_VARIANTS = {
   // Dawn: 84px, logo, 3-6 inline items, icon search.
-  "boutique-inline": variant({ requires: SMALL_CATALOGUE, fallback: "fashion-department", renders: "centered" }),
+  "boutique-inline": variant({ renders: "centered" }),
+  "showcase-simple": variant({ renders: "centered" }),
   // Fabrilife/Aarong: uppercase departments, filled search, icon-over-label utilities.
   // The filled search fields paint ink on the muted surface.
   "fashion-department": variant({

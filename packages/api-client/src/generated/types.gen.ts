@@ -120,6 +120,11 @@ export type StorefrontThemeDocument = {
                 [key: string]: never;
             };
         } | {
+            variant: 'showcase-simple';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
             variant: 'fashion-department';
             settings: {
                 subBrandRow: boolean;

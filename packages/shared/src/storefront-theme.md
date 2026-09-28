@@ -186,7 +186,7 @@ numbers come from the storefront study
 | `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + drawer (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
 | `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-search / departments-rail (home) / accordion-drawer / standard / grid + sidebar-dense / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
 | `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid + drawer / thumbs-below / classic / minimal-columns; nav tree+menu, 16 | compact, rounded, pill, contain, full width |
-| `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / grid + drawer / stacked / boutique / minimal-columns; nav menu, 6 | comfortable, display, rounded, pill, 1200 |
+| `showcase-landing` | 1–20 hero products, launches | showcase-simple / dropdown / accordion-drawer / boutique / grid + drawer / stacked / boutique / minimal-columns; nav menu, 6 | comfortable, display, rounded, pill, 1200 |
 
 Where the data departs from SYNTHESIS.md, and why:
 

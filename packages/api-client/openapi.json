@@ -569,6 +569,27 @@
                       "variant": {
                         "type": "string",
                         "enum": [
+                          "showcase-simple"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
                           "fashion-department"
                         ]
                       },
