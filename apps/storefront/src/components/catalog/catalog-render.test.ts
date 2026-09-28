@@ -938,6 +938,17 @@ describe("filter styles (fidelity slice 3)", () => {
     // Nothing sits between the band and the results but the pills and the filters.
     expect(document.body.textContent).not.toContain("Showing 20 of");
   });
+
+  it("puts price first only in the spec catalogue's dense filter rail", async () => {
+    const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
+      .map((span) => span.textContent!.trim());
+    const spec = storefrontTemplateTheme("spec-catalogue");
+    expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Price", "Availability", "Size"]);
+    expect(names(await renderListing(storefrontTemplateTheme("marketplace"), plain(), TREE_STORE_SHAPE)).slice(0, 3))
+      .toEqual(["Availability", "Size", "Fabric"]);
+    spec.blocks.listing.filters = { style: "bar-dropdowns", openByDefault: false };
+    expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Availability", "Price", "Size"]);
+  });
 });
 
 describe("paging", () => {

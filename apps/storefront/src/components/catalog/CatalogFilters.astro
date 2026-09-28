@@ -44,6 +44,7 @@ import {
 } from "@/lib/catalog-listing";
 import { formatMoney } from "@/lib/currency";
 import { PRODUCT_LIST_MIN_RATING_PARAM } from "@/lib/product-list-query";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { Search } from "lucide-react";
 
 interface Props {
@@ -93,6 +94,7 @@ const placement = presentation.placement;
 const drawer = placement === "drawer";
 const bar = placement === "bar";
 const dense = presentation.style === "sidebar-dense";
+const { resolved } = await currentRequestTheme(Astro.locals);
 const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
 const applyButton = catalogApplyButton(total);
 const showPrice = showsCatalogPriceFilter(priceRange, currentFilters);
@@ -130,10 +132,9 @@ const priceSection: Section | null = showPrice
   ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
   : null;
 // The order follows the references:
-// - dense column (Amazon, Daraz): availability, the customer rating (Amazon
-//   lists "Customer Reviews" near the top), brand and the first specs as
-//   tight checkbox rows, then price and the other specs, the category links
-//   last (pills or the breadcrumb carry the tree above);
+// - dense column: Star Tech puts price first; Amazon/Daraz put availability,
+//   rating, brand and the first specs before price. Category links come last
+//   (pills or the breadcrumb carry the tree above);
 // - bar (Dawn): availability, price, the rating, then the facets;
 // - comfortable column and drawer (Apple Gadgets, Fabrilife, Target): the
 //   category links, price, availability, the rating, then the facets.
@@ -142,7 +143,9 @@ const brandSections = facetSections.filter((section) => section.kind === "group"
 const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
 const price = priceSection ? [priceSection] : [];
 const sections: Section[] = dense
-  ? [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
+  ? resolved.template === "spec-catalogue"
+    ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
+    : [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
   : bar
     ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections]
     : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];

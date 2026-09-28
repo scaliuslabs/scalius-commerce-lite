@@ -74,4 +74,12 @@ describe("product page template", () => {
     expect(resolveProductPageTheme(pantryRequest, { pageTemplate: "department-mall" }, EMPTY_STORE_SHAPE).blocks.product.sticky.phoneBottom).toBe("buy-bar");
     expect(resolveProductPageTheme(requestTheme, { pageTemplate: "daily-essentials" }, EMPTY_STORE_SHAPE).blocks.product.sticky.phoneBottom).toBe("none");
   });
+
+  it("resolves contact-friendly buy boxes from the product override", () => {
+    const showcase = storefrontTemplateTheme("showcase-landing");
+    const showcaseRequest = { theme: showcase, resolved: resolveStorefrontTheme(showcase, EMPTY_STORE_SHAPE) };
+    expect(resolveProductPageTheme(showcaseRequest, { pageTemplate: null }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("showcase");
+    expect(resolveProductPageTheme(showcaseRequest, { pageTemplate: "classic" }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("mall");
+    expect(resolveProductPageTheme(requestTheme, { pageTemplate: "showcase-landing" }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("showcase");
+  });
 });

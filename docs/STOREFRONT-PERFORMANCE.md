@@ -1,6 +1,6 @@
 # Storefront render performance
 
-Last reviewed: 2026-09-26
+Last reviewed: 2026-09-28
 
 How a storefront page is served, what each page is allowed to cost, and how to
 check it. The release-wide evidence lives in
@@ -436,6 +436,14 @@ replace it: a new URL after a settings edit must use the new origins immediately
 The test recognizes this exact SQL, requires it once in the first wave, and
 counts every other statement against the unchanged render limits. Total cold
 cost is their sum; the 300 ms miss and 50 ms hit HTTP budgets remain unchanged.
+
+On 2026-09-28, a fresh built 30,000-product Heritage category run rendered 36
+cards across four child shelves in a 3,780-product parent. The bounded preview
+added no D1 statement; category miss TTFB samples were 1790/273/250 ms
+(median 273 ms), hit samples 6/6/5 ms, and page HTML was 233 KB. The separate
+homepage miss was 748 ms and breached its budget in that run. See
+`packages/core/src/modules/categories/categories.tree.d1.test.ts` for the
+first-page/pagination and unchanged-statement checks.
 
 The homepage part itself reads in two waves whatever its sections are: the
 settings, banners, collections, category rail and published theme first,

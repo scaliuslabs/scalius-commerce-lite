@@ -133,7 +133,7 @@ const resolvedTheme = resolveProductPageTheme(
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
-const contactLinks = (product.pageTemplate === "daily-essentials" || (!product.pageTemplate && resolvedTheme.template === "daily-essentials"))
+const contactLinks = (resolvedTheme.blocks.product.buyBox.variant === "essentials" || resolvedTheme.blocks.product.buyBox.variant === "showcase")
   ? storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")
   : [];
 const wideProductSummary = buyBoxLook?.cta.layout === "stack" && buyBoxLook.cta.phoneLayout === "row";

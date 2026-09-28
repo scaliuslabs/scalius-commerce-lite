@@ -556,6 +556,16 @@ describe("product card matrix", () => {
     expect(text(cards.onSale.querySelector("a[href^='/buy/']"))).toContain("Buy now");
   });
 
+  it("shows a choice hint instead of a cart on fashion cards with options", async () => {
+    const cards = await renderCards(themeWith("fashion-value", {}));
+    const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
+    expect(text(hint)).toBe("Choose options");
+    expect(hint.getAttribute("aria-hidden")).toBe("true");
+    expect(text(cards.withOptions.querySelector(".product-card-link"))).toBe("Product options — Choose options");
+    expect(cards.withOptions.querySelector("a[data-card-quick-add], a[href^='/buy/']")).toBeNull();
+    expect(cards.onSale.querySelector("a.product-card-round-action[href='/buy/product-sale']")).not.toBeNull();
+  });
+
   it("keeps prices beside sparse facts and removes empty buy slots", async () => {
     const tech = await renderCards(themeWith("tech-rounded", {}));
     for (const fixture of ["onSale", "withOptions", "noPhoto", "bangla"] as const) {
