@@ -76,7 +76,7 @@ const CARD_PROBE = (slug) => `(async () => {
   const cs = (el) => el ? getComputedStyle(el) : null;
   const body = card.querySelector('.product-card-body');
   const title = link.parentElement;
-  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('p.mt-auto > span:last-child');
+  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('[data-card-price] > span:last-child');
   const regular = card.querySelector('.pc-price-regular') || card.querySelector('s');
   const media = card.querySelector('.product-card-media');
   const marks = [...card.querySelectorAll('[data-card-discount]')].map((m) => { const s = cs(m); return [m.closest('.product-card-media') ? 'photo' : 'price', m.textContent.trim(), s.backgroundColor, s.color, s.borderRadius].join('/'); });

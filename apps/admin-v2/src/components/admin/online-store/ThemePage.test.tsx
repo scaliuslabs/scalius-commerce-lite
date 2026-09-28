@@ -334,6 +334,18 @@ describe("theme page", () => {
     expect(saved.blocks.listing.searchLayout).toBe("list");
   });
 
+  it("saves description placement for category, collection and brand pages", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    const placement = container.querySelector<HTMLButtonElement>("#theme-listing-description-placement")!;
+    expect(placement.textContent).toContain("Below products");
+    act(() => placement.click());
+    const above = [...document.querySelectorAll<HTMLElement>("[role=option]")]
+      .find((option) => option.textContent?.includes("Above products"))!;
+    act(() => above.click());
+    await pressSave();
+    expect(api.draft.mock.calls[0]![0].body.theme.blocks.listing.descriptionPlacement).toBe("above");
+  });
+
   it.each([
     ["heritage-editorial", "Category shelves"],
   ] as const)("lets %s stores choose card or list layouts", async (template, selected) => {
@@ -365,14 +377,14 @@ describe("theme page", () => {
     expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false, showBuyNow: false } });
   });
 
-  it("lets an essentials merchant move phone thumbnails below the photo", async () => {
+  it("lets an essentials merchant move phone thumbnails beside the photo", async () => {
     render(storefrontTemplateTheme("daily-essentials"));
     const side = container.querySelector<HTMLButtonElement>("#theme-gallery-phone-side")!;
-    expect(side.getAttribute("aria-checked")).toBe("true");
+    expect(side.getAttribute("aria-checked")).toBe("false");
     act(() => side.click());
     await pressSave();
     const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: false } });
+    expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: true } });
   });
 
   it.each(["fashion-value", "heritage-editorial"] as const)("lets %s merchants add a Buy now button to the product page", async (template) => {

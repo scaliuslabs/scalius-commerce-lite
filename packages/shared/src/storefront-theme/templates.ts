@@ -82,7 +82,7 @@ function blocks(spec: {
     desktopNav: pick("desktopNav", ...spec.desktopNav),
     mobileNav: pick("mobileNav", ...spec.mobileNav),
     card: pick("card", ...spec.card),
-    listing: { searchLayout: "same", ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
+    listing: { searchLayout: "same", descriptionPlacement: "below", ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
     product: {
       gallery: typeof spec.product.gallery === "string"
         ? pick("gallery", spec.product.gallery)
@@ -428,7 +428,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["boutique", { hoverImage: false, quickAction: true }],
-      listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["subcategory-pills", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",
     }),

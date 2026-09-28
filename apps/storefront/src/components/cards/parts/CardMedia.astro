@@ -61,7 +61,7 @@ const own = className !== undefined;
     )
   }
 
-  <div class:list={[own && "product-card-badges", "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"]}>
+  {(badge || model.soldOut) && <div class:list={[own && "product-card-badges", "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"]}>
     {
       badge && (
         <span data-card-discount class:list={[own && "product-card-badge", own && badgeStyle && `pc-badge-${badgeStyle}`, "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"]}>
@@ -76,7 +76,7 @@ const own = className !== undefined;
         </span>
       )
     }
-  </div>
+  </div>}
   <slot />
 </div>
 

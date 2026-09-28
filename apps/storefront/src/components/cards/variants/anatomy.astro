@@ -130,7 +130,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
       roundAction && model.quickBuyHref && (
         <a
           href={cartAction ? model.href : model.quickBuyHref}
-          data-card-quick-add={cartAction ? model.name : undefined}
+          data-card-quick-add={cartAction ? "" : undefined}
           data-astro-prefetch="false"
           rel="nofollow"
           class="product-card-round-action absolute z-10 inline-flex items-center justify-center rounded-full"
@@ -295,7 +295,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
       bodyAction && model.quickBuyHref && (
         <a
           href={cartAction ? model.href : model.quickBuyHref}
-          data-card-quick-add={cartAction ? model.name : undefined}
+          data-card-quick-add={cartAction ? "" : undefined}
           data-astro-prefetch="false"
           rel="nofollow"
           class:list={[

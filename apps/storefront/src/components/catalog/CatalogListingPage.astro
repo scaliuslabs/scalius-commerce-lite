@@ -1,14 +1,13 @@
 ---
 // The body of every listing page (category, collection, brand, search): the
 // category banner when the theme asks for it, the listing (CatalogListing,
-// which opens with the compact title band) and, below the results, the
-// listing's description and the merchant's guide. Pages keep their own data
+// which opens with the compact title band), the short description where the
+// merchant chose, and the guide below results. Pages keep their own data
 // reads, SEO (canonical, robots, JSON-LD) and analytics; everything a buyer
 // sees between the site header and footer is decided here, once.
 //
-// The first product sits right under one short band (Amazon 248px, Daraz
-// 292px, Star Tech 364px from the top of the page): the description no
-// longer pushes the results down, it reads after them (Star Tech's SEO copy).
+// The default keeps products near the title band; a merchant can put a
+// clamped short description above them when that helps explain the category.
 import type { ComponentProps } from "astro/types";
 import RichContent from "@/components/RichContent.astro";
 import CatalogDescription from "./CatalogDescription.astro";
@@ -52,6 +51,7 @@ const countLabel = hero.countLabel === undefined
 const breadcrumb = kind === "search" ? null : [{ label: "Home", href: "/" }, ...(hero.breadcrumb ?? [])];
 const description = hero.description && hasRenderableHtmlContent(hero.description) ? hero.description : null;
 const guide = content && hasRenderableHtmlContent(content.html) ? content : null;
+const descriptionAbove = resolved.blocks.listing.descriptionPlacement === "above";
 ---
 
 <div class:list={["min-h-screen", resolved.template === "boutique" ? "bg-background" : "bg-muted/30"]} {...data}>
@@ -78,15 +78,21 @@ const guide = content && hasRenderableHtmlContent(content.html) ? content : null
       band={{ title: hero.title, breadcrumb, countLabel }}
       pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
     >
+      {description && descriptionAbove && (
+        <section slot="description" class="mb-4" aria-label={`About ${hero.title}`} data-catalog-content="above">
+          <CatalogDescription content={description} />
+        </section>
+      )}
       <slot name="empty" slot="empty" />
     </CatalogListing>
 
-    {(description || guide) && (
+    {((description && !descriptionAbove) || guide) && (
       <section
         class="mx-auto mt-10 max-w-4xl space-y-6 border-t border-border pt-8 sm:mt-12 sm:pt-10"
         aria-label={guide?.label ?? `About ${hero.title}`}
+        data-catalog-content="below"
       >
-        {description && <CatalogDescription content={description} />}
+        {description && !descriptionAbove && <CatalogDescription content={description} />}
         {guide && (
           <RichContent
             content={guide.html}

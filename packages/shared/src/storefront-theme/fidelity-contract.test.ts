@@ -165,6 +165,16 @@ describe("contract matrix: template x card x filters x navigation source", () =>
 describe("listing filters", () => {
   const filtersOf = (template: StorefrontTemplateId) => storefrontTemplateTheme(template).blocks.listing.filters;
 
+  it("keeps old themes below by default and accepts a saved above-products choice", () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    expect(theme.blocks.listing.descriptionPlacement).toBe("below");
+    delete theme.blocks.listing.descriptionPlacement;
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("below");
+    theme.blocks.listing.descriptionPlacement = "above";
+    expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
+  });
+
   it("defaults mass-retail browse to phone rows with a shopper card/list choice", () => {
     const listing = storefrontTemplateTheme("mass-retail").blocks.listing;
     expect(listing.phoneLayout).toBe("list-row");
@@ -332,6 +342,8 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
     const spec = resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), SEED_30K);
     expect(spec.blocks.listing.toolbar).toContain("subcategory-pills");
     expect(spec.blocks.product.below).toContain("spec-table");
+    const showcase = resolveStorefrontTheme(storefrontTemplateTheme("showcase-landing"), SEED_30K);
+    expect(showcase.blocks.listing.toolbar).toContain("subcategory-pills");
     const retail = resolveStorefrontTheme(storefrontTemplateTheme("mass-retail"), SEED_30K);
     expect(retail.blocks.listing.toolbar).toContain("popular-filter-chips");
     // A flat store without collections has no shelves: the grid renders, and the dashboard says why.

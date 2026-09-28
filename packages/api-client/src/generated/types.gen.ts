@@ -309,6 +309,7 @@ export type StorefrontThemeDocument = {
                 };
             };
             searchLayout?: 'same' | 'grid' | 'list';
+            descriptionPlacement?: 'above' | 'below';
             filters: {
                 style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
                 openByDefault: boolean;

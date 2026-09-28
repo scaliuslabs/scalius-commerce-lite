@@ -1493,6 +1493,13 @@
                       "list"
                     ]
                   },
+                  "descriptionPlacement": {
+                    "type": "string",
+                    "enum": [
+                      "above",
+                      "below"
+                    ]
+                  },
                   "filters": {
                     "type": "object",
                     "properties": {

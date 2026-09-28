@@ -957,6 +957,23 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
                 blocks: { ...current.blocks, listing: { ...current.blocks.listing, phoneLayout } },
               }))}
             />
+            <div className="space-y-1">
+              <Label htmlFor="theme-listing-description-placement">{t("listingDescriptionPlacement")}</Label>
+              <p className="text-body text-muted-foreground">{t("listingDescriptionPlacementHelp")}</p>
+              <SearchableSelect
+                id="theme-listing-description-placement"
+                value={theme.blocks.listing.descriptionPlacement ?? "below"}
+                options={([
+                  { value: "below", label: t("listingDescriptionBelow") },
+                  { value: "above", label: t("listingDescriptionAbove") },
+                ] as const)}
+                onValueChange={(descriptionPlacement) => setDraft((current) => ({
+                  ...current,
+                  blocks: { ...current.blocks, listing: { ...current.blocks.listing, descriptionPlacement: descriptionPlacement as "above" | "below" } },
+                }))}
+                triggerClassName="w-full"
+              />
+            </div>
           </div>
       </SectionCard>
 

@@ -1189,6 +1189,21 @@ describe("listing page", () => {
     expect(document.querySelector("img[data-catalog-banner]")).toBeNull();
   });
 
+  it("places the short description above products while the buying guide stays below", async () => {
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.blocks.listing.descriptionPlacement = "above";
+    const document = await categoryPage(theme);
+    const title = document.querySelector("h1")!;
+    const description = document.querySelector("[data-catalog-content='above']")!;
+    const product = document.querySelector("[data-theme-component='product-card']")!;
+    const guide = document.querySelector("[data-catalog-content='below']")!;
+    expect(title.compareDocumentPosition(description) & 4).toBeTruthy();
+    expect(description.compareDocumentPosition(product) & 4).toBeTruthy();
+    expect(product.compareDocumentPosition(guide) & 4).toBeTruthy();
+    expect(description.textContent).toContain("Handwoven.");
+    expect(guide.textContent).toContain("Buying guide");
+  });
+
   it("shows the banner and hides the breadcrumb visually when the template says so", async () => {
     const document = await categoryPage(themeWith({ toolbar: ["category-banner", "sort"] }));
     const banner = document.querySelector("img[data-catalog-banner]")!;

@@ -255,6 +255,7 @@ describe("product card matrix", () => {
     expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
     expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
+    expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("data-card-quick-add")).toBe("");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
     expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
   });
@@ -369,6 +370,8 @@ describe("product card matrix", () => {
     }
     // No discount, no mark and no struck price anywhere.
     expect(cards.withOptions.querySelector("[data-card-discount], s, .pc-price-reg")).toBeNull();
+    expect(cards.withOptions.querySelector(".product-card-badges")).toBeNull();
+    expect(text(cards.soldOut.querySelector(".product-card-media"))).toContain("Sold out");
     // Amount wordings fall back to the percentage when the price varies by option.
     expect(text(cards.soldOut)).toContain("Sold out");
 

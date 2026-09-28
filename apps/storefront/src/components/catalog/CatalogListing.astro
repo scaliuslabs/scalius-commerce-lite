@@ -477,6 +477,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         </div>
       </div>
     )}
+    <slot name="description" />
     <AppliedCatalogFilters
       facets={filterFacets}
       currentFilters={currentFilters}
