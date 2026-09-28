@@ -76,7 +76,7 @@ const CARD_PROBE = (slug) => `(async () => {
   const cs = (el) => el ? getComputedStyle(el) : null;
   const body = card.querySelector('.product-card-body');
   const title = link.parentElement;
-  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('[data-card-price] > span:last-child');
+  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('[data-card-price] > span:last-child') || (card.dataset.cardVariant === 'showcase' ? body.querySelector('.product-card-action') : null);
   const regular = card.querySelector('.pc-price-regular') || card.querySelector('s');
   const media = card.querySelector('.product-card-media');
   const marks = [...card.querySelectorAll('[data-card-discount]')].map((m) => { const s = cs(m); return [m.closest('.product-card-media') ? 'photo' : 'price', m.textContent.trim(), s.backgroundColor, s.color, s.borderRadius].join('/'); });
@@ -101,7 +101,7 @@ const CARD_PROBE = (slug) => `(async () => {
       ratio: media ? (media.clientWidth / media.clientHeight).toFixed(2) : 'none',
       fit: img ? cs(img).objectFit + '/' + Math.round(parseFloat(cs(img).paddingLeft)) : 'none',
       tile: [c.backgroundColor, c.borderTopWidth, c.boxShadow === 'none' ? 'flat' : 'shadow', c.borderTopLeftRadius].join('/'),
-      pricePlace: box(price).top < box(title).top ? 'before-title' : 'after-title',
+      pricePlace: price.classList.contains('product-card-action') ? 'in-action' : box(price).top < box(title).top ? 'before-title' : 'after-title',
       priceSize: cs(price).fontSize + '/' + cs(price).fontWeight,
       priceColour: cs(price).color,
       strike: regular ? [box(regular).top > box(price).top + 4 ? 'below' : box(regular).x < box(price).x ? 'before' : 'after', cs(regular.querySelector('s') || regular).textDecorationLine, regular.textContent.replace(/[\\d৳,.\\s]|Regular price/g, '')].join('/') : 'none',
