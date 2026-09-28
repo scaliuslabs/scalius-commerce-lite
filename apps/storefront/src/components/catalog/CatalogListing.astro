@@ -21,6 +21,7 @@ import CatalogResults from "./CatalogResults.astro";
 import CatalogShelves from "./CatalogShelves.astro";
 import CatalogViewSelect from "./CatalogViewSelect.astro";
 import CatalogViewToggle from "./CatalogViewToggle.astro";
+import { catalogViewStorageKey } from "@/lib/catalog-paging";
 import {
   DEFAULT_PRODUCT_LIST_PAGE_SIZE,
   PRODUCT_LIST_SHOW_ALL_PARAM,
@@ -225,10 +226,10 @@ const shelves = presentation.shelves && landing
       restTitle: `More from ${listingName}`,
     })
   : [];
-// Shelves render their own product rails, so there is no results frame for a
-// grid/list switch until the listing falls back to ordinary results.
-const showViewToggle = piece("grid-list-toggle") && results !== "quick" && products.length > 1 && shelves.length === 0;
-const phoneDefaultView = results === "list" || presentation.phoneLayout === "list-row" ? "list" : "grid";
+const showViewToggle = piece("grid-list-toggle") && (products.length > 1 || (shelves.length > 0 && shelfProducts.length > 1));
+const shelfViewStorageKey = catalogViewStorageKey(kind === "search" ? "search" : "browse");
+const shelfRestoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${JSON.stringify(shelfViewStorageKey)});if(v==="grid"||v==="list")f.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
+const phoneDefaultView = results === "list" || (results !== "quick" && presentation.phoneLayout === "list-row") ? "list" : "grid";
 const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
@@ -508,7 +509,10 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       <slot name="empty" />
     ) : shelves.length > 0 ? (
       <Fragment>
-        <CatalogShelves shelves={shelves} heritage={resolved.template === "heritage-editorial"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+        <div class="product-grid-frame" data-catalog-results={showViewToggle ? "grid" : undefined} data-catalog-view-storage-key={showViewToggle ? shelfViewStorageKey : undefined} data-catalog-shelf-view={showViewToggle ? "" : undefined}>
+          <CatalogShelves shelves={shelves} heritage={resolved.template === "heritage-editorial"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+        </div>
+        {showViewToggle && <script is:inline set:html={shelfRestoreScript} />}
         <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} shown={products.length} limit={limit} getPageUrl={pageUrl} />
       </Fragment>
     ) : (
@@ -546,6 +550,23 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
     )}
   </div>
 </div>
+
+<style is:global>
+  .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track {
+    --listing-row-media: min(40%, 10rem);
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+  @container product-grid (min-width: 36rem) {
+    .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track { --listing-row-media: 11rem; }
+  }
+  @container product-grid (min-width: 60rem) {
+    .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track { --listing-row-media: 16rem; }
+  }
+</style>
 
 {showFilters && (
   <noscript>

@@ -404,6 +404,19 @@ describe("listing layouts", () => {
     expect(fallback.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
   });
 
+  it("lets buyers switch a quick-add category grid to list rows", async () => {
+    const quickAdd = { variant: "quick-add", settings: {} } as StorefrontThemeBlocks["card"];
+    const document = await renderListing(themeWith({ variant: "quick-grid", phoneLayout: "list-row", toolbar: ["grid-list-toggle"] }, quickAdd), plain());
+    const frame = document.querySelector(".product-grid-frame")!;
+    expect(frame.getAttribute("data-catalog-results")).toBe("grid");
+    expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
+    expect(frame.getAttribute("data-catalog-view-storage-key")).toBe("scalius:listing-view:browse");
+    expect(frame.querySelector(".product-card-media img")!.getAttribute("sizes")).toContain("160px");
+    expect(frame.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    expect(document.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+    expect(document.querySelector("[data-catalog-view-mobile] [data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shelves group the first page by sub-listing, with View all links, and fall back to the grid", async () => {
     const theme = themeWith({ variant: "shelves", settings: { maxShelves: 8 } });
     const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 3 === 0 ? "c-cotton" : index % 3 === 1 ? "c-silk" : null }));
@@ -461,7 +474,7 @@ describe("listing layouts", () => {
     expect(document.querySelector("[data-catalog-shelves][data-catalog-heritage]")).not.toBeNull();
   });
 
-  it("hides the grid/list switch when a category overrides a grid theme with shelves", async () => {
+  it("lets buyers switch category shelves to grouped list rows without duplicating cards", async () => {
     const theme = themeWith({ toolbar: ["grid-list-toggle"] });
     const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "c-silk" : "c-cotton" }));
     const subListings = [
@@ -470,8 +483,17 @@ describe("listing layouts", () => {
     ];
     const page = { ...plain(), products, subListings, listingTemplate: "shelves" };
     const landing = await renderListing(theme, page, TREE_STORE_SHAPE);
-    expect(landing.querySelector("[data-catalog-shelves]")).not.toBeNull();
-    expect(landing.querySelector("[data-catalog-view-toggle]")).toBeNull();
+    const shelfFrame = landing.querySelector("[data-catalog-shelf-view]")!;
+    expect(shelfFrame.getAttribute("data-catalog-results")).toBe("grid");
+    expect(shelfFrame.getAttribute("data-catalog-view-storage-key")).toBe("scalius:listing-view:browse");
+    expect(shelfFrame.querySelector("[data-catalog-shelves]")).not.toBeNull();
+    expect(shelfFrame.querySelectorAll("[data-theme-component='product-card']")).toHaveLength(products.length);
+    expect(landing.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+    const restore = [...landing.querySelectorAll("script")].find((script) => script.textContent?.includes("localStorage.getItem"))!;
+    new Function("document", "localStorage", restore.textContent!)(
+      { currentScript: restore }, { getItem: () => "list" },
+    );
+    expect(shelfFrame.getAttribute("data-catalog-results")).toBe("list");
 
     const filtered = await renderListing(theme, {
       ...listingProps("https://shop.test/categories/sarees?size=M"), products, subListings, listingTemplate: "shelves",

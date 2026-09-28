@@ -55,7 +55,7 @@ if (results === "list") {
 } else if (results === "quick") {
   const grid = quickGridSpec(productGridSpec(layout.grid, theme.tokens.imageRatio));
   const fluid = productGridFluidCss(grid);
-  sizes = productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context, "grid", Infinity, columnPx);
+  sizes = restoreView ? LIST_ROW_IMAGE_SIZES : productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context, "grid", Infinity, columnPx);
   style = [
     `--theme-card-min-phone:${grid.cardMin.phone}`,
     `--theme-card-min-tablet:${grid.cardMin.tablet}`,
@@ -73,7 +73,7 @@ const viewStorageKey = catalogViewStorageKey(kind);
 const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list"){f.setAttribute("data-catalog-results",v);if(v==="grid")f.querySelector(".product-grid").removeAttribute("data-phone-layout")}}catch(e){}})(document.currentScript)`;
 ---
 
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-kind={kind} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={restoreView && results === "quick" ? "grid" : marked || results !== "grid" ? results : undefined} data-catalog-kind={kind} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}
