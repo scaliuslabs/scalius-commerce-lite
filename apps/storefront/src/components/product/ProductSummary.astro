@@ -331,7 +331,7 @@ function optionAriaLabel(
             <div class="variant-option-panel">
               <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
                 <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
-                <div class="flex flex-wrap gap-1.5">
+                <div class="variant-option-values flex flex-wrap gap-1.5" data-option-overflow={option.values.length > 8 ? "" : undefined}>
                   {option.values.map((value) => {
                     const selected = initialSelection[option.id] === value.id;
                     const status = availability.get(value.id) ?? "sold_out";
@@ -540,6 +540,16 @@ function optionAriaLabel(
   }
   [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-btn {
     border-radius: 9999px;
+    max-width: 100%;
+    height: auto;
+    min-height: 2.75rem;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-values[data-option-overflow] {
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: 2px;
   }
   [data-cta-layout="stack"][data-cta-phone-layout="row"] #quantity-minus {
     border-radius: 9999px 0 0 9999px;

@@ -270,6 +270,7 @@ const breadcrumbVisible = piece("breadcrumb");
         : !marketplacePhoneFilters && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
     data-catalog-phone-bar
+    data-catalog-fashion-phone-bar={fashionRail ? "" : undefined}
   >
     {marketplacePhoneFilters ? (
       <Fragment>

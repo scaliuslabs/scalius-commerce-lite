@@ -254,7 +254,7 @@ const BASELINES: Record<string, () => Record<string, unknown>> = {
   filtered: () =>
     listingProps("https://shop.test/categories/sarees?size=M&fabric=Fabric+11&minPrice=600&hasDiscount=true&page=2&sortBy=price-asc"),
   search: () =>
-    listingProps("https://shop.test/search?q=linen", { pathname: "/search", resetPath: "/search?q=linen", searchLabel: "Search products", countEndpoint: "/products" }),
+    listingProps("https://shop.test/search?q=linen", { kind: "search", pathname: "/search", resetPath: "/search?q=linen", searchLabel: "Search products", countEndpoint: "/products" }),
   empty: () =>
     listingProps("https://shop.test/categories/sarees?size=L", { products: [], pagination: { page: 1, totalPages: 0, total: 0 } }),
 };
@@ -929,6 +929,7 @@ describe("listing page", () => {
       if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
       if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='4']")).not.toBeNull();
       expect(document.querySelector("[data-catalog-rail='fashion']") !== null, id).toBe(id === "fashion-value");
+      expect(document.querySelector("[data-catalog-fashion-phone-bar]") !== null, id).toBe(id === "fashion-value");
     }
   });
 
@@ -937,6 +938,7 @@ describe("listing page", () => {
     theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true };
     const document = await categoryPage(theme);
     expect(document.querySelector("[data-catalog-rail='fashion']")).toBeNull();
+    expect(document.querySelector("[data-catalog-fashion-phone-bar]")).toBeNull();
     expect(document.querySelector("[data-filter-style='sidebar-dense']")).not.toBeNull();
   });
 });

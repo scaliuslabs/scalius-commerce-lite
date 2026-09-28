@@ -549,6 +549,13 @@ describe("product card matrix", () => {
     expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
   });
 
+  it("asks for options on a spec card only when a SKU choice is required", async () => {
+    const cards = await renderCards(themeWith("spec", {}));
+    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
+    expect(cards.withOptions.querySelector("a[href^='/buy/']")).toBeNull();
+    expect(text(cards.onSale.querySelector("a[href^='/buy/']"))).toContain("Buy now");
+  });
+
   it("uses the store's rows on phones when the listing asks for list rows", async () => {
     const theme = themeWith("retail", { density: "comfortable" });
     const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme)) };

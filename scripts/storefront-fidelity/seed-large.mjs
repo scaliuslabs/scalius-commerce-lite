@@ -50,6 +50,33 @@ export async function syncPlatform(db, ports) {
   db.prepare(platformSyncSql(origins(ports))).all();
 }
 
+/** Give every template's home page the same real, published category rail. */
+export function seedHomepageCategories(db, mediaUrl) {
+  const categories = db.prepare("SELECT id, image_url FROM categories WHERE status = 'published' AND deleted_at IS NULL AND parent_id IS NULL ORDER BY id LIMIT 12").all();
+  const image = db.prepare(`SELECT m.object_key, m.variant_width FROM products AS p INDEXED BY products_category_id_idx
+    CROSS JOIN product_media pm CROSS JOIN media m
+    WHERE p.category_id = ? AND pm.product_id = p.id AND m.id = pm.media_id
+      AND m.kind = 'image' AND m.variant_width IS NOT NULL
+    ORDER BY p.id, pm.is_primary DESC, pm.sort_order LIMIT 1`);
+  const update = db.prepare("UPDATE categories SET image_url = ? WHERE id = ?");
+  const base = mediaUrl.replace(/\/$/, "");
+  tx(db, () => {
+    for (const category of categories) {
+      if (category.image_url) continue;
+      const match = image.get(category.id);
+      if (match) update.run(`${base}/${match.object_key}/${match.variant_width}.webp`, category.id);
+    }
+    db.prepare(`INSERT OR REPLACE INTO settings (id, key, value, type, category, revision)
+      VALUES ('set_fid_homepage', 'document', ?, 'json', 'homepage', 1)`).run(JSON.stringify({
+      categoryRail: { enabled: categories.length > 0, title: "Shop by category", categoryIds: categories.map((category) => category.id) },
+      trustStrip: { enabled: false },
+      homeMode: "catalog",
+      landingProductId: null,
+    }));
+  });
+  return categories.map((category) => category.id);
+}
+
 function shapeStore(stateDir, pool, ports, log) {
   const db = openDb(stateDir);
   const q = (sql, ...a) => db.prepare(sql).all(...a);
@@ -110,6 +137,8 @@ function shapeStore(stateDir, pool, ports, log) {
   });
   const depth = q("SELECT max(c.depth) AS d, count(*) AS n FROM category_closure c");
   log(`  categories: 4-level tree (closure rows ${depth[0].n}, max depth ${depth[0].d})`);
+  const featuredCategories = seedHomepageCategories(db, origins(ports).mediaUrl);
+  log(`  homepage: ${featuredCategories.length} published categories`);
 
   // Brand entities from the Brand attribute.
   tx(db, () => {

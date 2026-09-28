@@ -145,6 +145,32 @@ describe("menu overflow", () => {
     expect(inRow(list)).toEqual(["0", "1", "2"]);
     expect(inMore(list)).toEqual(["3", "Item 4", "All categories"]);
   });
+
+  it("moves a long category and its nested menu into More without duplicating links", () => {
+    document.body.innerHTML = `
+      <ul data-nav-overflow>
+        <li data-nav-index="0"><a href="/categories/laptop">Laptop</a></li>
+        <li data-nav-index="1"><a href="/categories/components"><span class="nav-label">Components and Peripherals for Professional Creators</span></a>
+          <details data-menu="popup"><summary>Components submenu</summary><div><a href="/categories/processors">Processors</a></div></details>
+        </li>
+        <li data-nav-more hidden><details><summary>More</summary><ul data-nav-more-list>
+          <li><a href="/categories">All categories</a></li>
+        </ul></details></li>
+      </ul>`;
+    const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: 250 });
+    width(list.querySelector('[data-nav-index="0"]')!, 100);
+    width(list.querySelector('[data-nav-index="1"]')!, 208);
+    width(list.querySelector("[data-nav-more]")!, 80);
+    fitNavOverflow(list);
+
+    expect(inRow(list)).toEqual(["0"]);
+    expect(inMore(list)[0]).toBe("1");
+    expect(list.querySelectorAll('a[href="/categories/components"]')).toHaveLength(1);
+    expect(list.querySelector('[data-nav-more-list] a[href="/categories/components"]')!.textContent)
+      .toBe("Components and Peripherals for Professional Creators");
+    expect(list.querySelector('[data-nav-more-list] details a[href="/categories/processors"]')).not.toBeNull();
+  });
 });
 
 describe("menu row keys", () => {

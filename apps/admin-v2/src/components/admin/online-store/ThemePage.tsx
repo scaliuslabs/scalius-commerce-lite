@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   postApiV1AdminSettingsFooter,
@@ -39,6 +39,7 @@ import { apiData } from "~/lib/api";
 import {
   footerQueryOptions,
   headerQueryOptions,
+  homepageSectionsQueryOptions,
   themeQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { formatNumber, useMessages } from "~/i18n";
@@ -498,6 +499,9 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
   });
   const option = (key: string) => t(key as MessageKey);
   const resolved = resolveThemeForStore(theme, storeShape);
+  const hasCategoryTiles = theme.pages.home.some((section) => section.type === "category-tiles");
+  const { data: homepagePresentation } = useQuery({ ...homepageSectionsQueryOptions(), enabled: hasCategoryTiles });
+  const categoryRail = homepagePresentation?.config.categoryRail;
   const fitReason = useFitReason(resolved.facts);
   const problems = themeContrastProblems(theme);
   const { headerDraft } = site;
@@ -528,7 +532,14 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
   const sectionNotes = Object.fromEntries(theme.pages.home.flatMap((section) => {
     if (storefrontSectionRenderer(section) === null) return [[section.id, t("sectionNotYet")]];
     const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
-    return fallback ? [[section.id, t("sectionHidden", { reason: fitReason(fallback) })]] : [];
+    if (fallback) return [[section.id, t("sectionHidden", { reason: fitReason(fallback) })]];
+    if (section.type === "category-tiles" && categoryRail) {
+      if (!categoryRail.enabled) return [[section.id, t("categoryTilesDisabled")]];
+      if (categoryRail.categoryIds.length < (section.settings.style === "photo" ? 1 : 2)) {
+        return [[section.id, t("categoryTilesNeedsCategories", { count: section.settings.style === "photo" ? 1 : 2 })]];
+      }
+    }
+    return [];
   }));
 
   return (
@@ -880,7 +891,7 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
         description={
           <>
             {t("homepageSectionsHelp")}
-            {theme.pages.home.some((section) => section.type === "category-tiles") && <>
+            {hasCategoryTiles && <>
               {" "}{t("featuredCategoriesSetup")}{" "}
               <Link to="/admin/online-store/banners" className="text-link hover:underline">
                 {t("featuredCategories")}

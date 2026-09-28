@@ -176,6 +176,24 @@ const link = (item: NavigationItem) => ({
     font-size: 0.875rem;
   }
 
+  /* Keep the 50px category row flat. The full label stays in the link and
+     reads without truncation when overflow moves the item into More. */
+  .cnav[data-cnav-layout="bar"] .cnav-bar > .cnav-item > .cnav-link > .nav-label {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    -webkit-line-clamp: unset;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-bar > .cnav-item > .cnav-menu:first-child > .cnav-link > span {
+    min-width: 0;
+    max-width: 13rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
   .cnav[data-cnav-layout="bar"] a.cnav-link:has(+ .cnav-menu) {
     padding-right: 0.5rem;
   }
@@ -380,8 +398,34 @@ const link = (item: NavigationItem) => ({
     color: var(--accent-foreground);
   }
 
-  .cnav-more-list > .cnav-item:has(> a) > .cnav-menu {
-    display: none;
+  .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > a.cnav-link {
+    padding-right: 2.75rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu {
+    position: static;
+    inset: auto;
+    pointer-events: auto;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu > .cnav-toggle {
+    position: absolute;
+    top: 0.125rem;
+    right: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    translate: none;
+    opacity: 1;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu > .cnav-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu .fly-list {
+    min-width: 0;
   }
 
   .cnav-more-list > .cnav-item > .cnav-menu {
@@ -396,6 +440,8 @@ const link = (item: NavigationItem) => ({
     padding-inline: 0.75rem;
     color: var(--popover-foreground);
     text-transform: none !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .cnav-more-list > .cnav-item > .cnav-menu > .cnav-panel {

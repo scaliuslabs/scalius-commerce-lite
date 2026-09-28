@@ -111,9 +111,20 @@ describe("product summary browser payload", () => {
     const panels = doc.querySelector(".variant-option-panels");
     expect([...panels!.children].map((panel) => panel.querySelector("legend")?.textContent)).toEqual(["Model", "Color"]);
     expect(panels?.querySelectorAll(".variant-option-btn")).toHaveLength(20);
+    expect(panels?.querySelectorAll(".variant-option-values[data-option-overflow]")).toHaveLength(2);
     expect(doc.querySelector("[data-product-summary]")?.getAttribute("data-cta-phone-layout")).toBe("row");
     expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
     expect(doc.querySelector("#product-variant-noscript")?.getAttribute("form")).toBe("product-buy-form");
+
+    const fewOptions = options.map((option) => ({ ...option, values: option.values.slice(0, 3) }));
+    const fewHtml = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: variants.filter((variant) => variant.selectedOptions.every((choice) => Number(choice.optionValueId.slice(1)) < 3)), options: fewOptions, details: false, look: STOREFRONT_BUY_BOX_LOOKS.tech },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    const fewDoc = new Window().document;
+    fewDoc.write(`<body>${fewHtml}</body>`);
+    expect(fewDoc.querySelectorAll(".variant-option-btn")).toHaveLength(6);
+    expect(fewDoc.querySelector(".variant-option-values[data-option-overflow]")).toBeNull();
   });
 
   it("keeps exact SKU selection, prices and availability in a compact 100-SKU payload", async () => {

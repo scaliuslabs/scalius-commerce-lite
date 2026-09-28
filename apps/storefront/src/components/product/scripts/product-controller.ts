@@ -173,7 +173,7 @@ export function init() {
   initQuantity();
   bindOptions();
   bindActions();
-  refresh();
+  refresh(true);
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -241,7 +241,7 @@ function bindOptions() {
       }
       if (cache.status)
         cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
-      refresh();
+      refresh(true);
       replaceVariantUrl();
     };
     button.addEventListener("click", choose);
@@ -315,13 +315,25 @@ function replaceVariantUrl() {
   history.replaceState(null, "", url.toString());
 }
 
-function refresh() {
+function refresh(revealSelection = false) {
   requestAnimationFrame(() => {
     state.buyerInputs?.setVariant(exactVariant()?.id ?? null);
     updateOptionButtons();
+    if (revealSelection) revealSelectedOptions();
     updateStockAndActions();
     updatePrice();
     updateVariantImage();
+  });
+}
+
+export function revealSelectedOptions() {
+  document.querySelectorAll<HTMLElement>(".variant-option-values[data-option-overflow]").forEach((list) => {
+    const selected = list.querySelector<HTMLElement>('.variant-option-btn[aria-pressed="true"]');
+    if (!selected) return;
+    const listRect = list.getBoundingClientRect();
+    const selectedRect = selected.getBoundingClientRect();
+    if (selectedRect.top < listRect.top) list.scrollTop += selectedRect.top - listRect.top;
+    else if (selectedRect.bottom > listRect.bottom) list.scrollTop += selectedRect.bottom - listRect.bottom;
   });
 }
 

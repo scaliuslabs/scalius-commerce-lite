@@ -11,9 +11,11 @@ import {
   storefrontTemplateTheme,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { DEFAULT_HOMEPAGE_PRESENTATION } from "@scalius/shared/homepage-presentation";
 import {
   footerQueryOptions,
   headerQueryOptions,
+  homepageSectionsQueryOptions,
   themeQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { ThemePage } from "./ThemePage";
@@ -73,9 +75,12 @@ const SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
-function render(theme: StorefrontThemeDocument, storeShape = SHAPE) {
+function render(theme: StorefrontThemeDocument, storeShape = SHAPE, categoryRail = DEFAULT_HOMEPAGE_PRESENTATION.categoryRail) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape, sectionMedia: [] } as never);
+  queryClient.setQueryData(homepageSectionsQueryOptions().queryKey, {
+    config: { ...DEFAULT_HOMEPAGE_PRESENTATION, categoryRail }, revision: 1,
+  } as never);
   queryClient.setQueryData(headerQueryOptions().queryKey, {
     config: { logo: { src: "", alt: "" }, favicon: { src: "", alt: "" }, topBar: { isEnabled: false } },
     revision: 1,
@@ -354,6 +359,23 @@ describe("theme page", () => {
     expect(rows).toContain("NewsletterNot on your store yet.");
     expect(rows).toContain("Product grid");
     expect(rows).toContain("Banners");
+  });
+
+  it.each([
+    ["department-mall", false, ["cat_a"], "Turn on Featured categories"],
+    ["department-mall", true, [], "Select published categories under Home content (1 needed)"],
+    ["marketplace", true, ["cat_a"], "Select published categories under Home content (2 needed)"],
+  ] as const)("explains when %s category tiles are hidden by Home content", (template, enabled, categoryIds, reason) => {
+    render(storefrontTemplateTheme(template), SHAPE, { enabled, title: "Categories", categoryIds: [...categoryIds] });
+    const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
+    expect(row?.textContent).toContain(`Hidden on your store. ${reason}`);
+    expect(container.querySelector('a[href="/admin/online-store/banners"]')?.textContent).toBe("Featured categories");
+  });
+
+  it("does not mark configured category tiles hidden", () => {
+    render(storefrontTemplateTheme("marketplace"), SHAPE, { enabled: true, title: "Categories", categoryIds: ["cat_a", "cat_b"] });
+    const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
+    expect(row?.textContent).toBe("Featured categories");
   });
 
   it("names unreadable text in plain words and will not save it", async () => {
