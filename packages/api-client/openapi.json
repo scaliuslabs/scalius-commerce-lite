@@ -2190,7 +2190,8 @@
                                 "icons",
                                 "round",
                                 "photo",
-                                "quad"
+                                "quad",
+                                "square"
                               ]
                             }
                           },

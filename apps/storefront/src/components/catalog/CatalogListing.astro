@@ -293,12 +293,8 @@ const breadcrumbVisible = piece("breadcrumb");
           ))}
           {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
           {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
+          {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
         </div>
-        {phoneChips && (
-          <div class="catalog-marketplace-phone-aspects catalog-chip-row">
-            <CatalogAspectChips chips={aspectChips} inline />
-          </div>
-        )}
       </Fragment>
     ) : (
       <Fragment>

@@ -692,15 +692,15 @@ describe("filter styles (fidelity slice 3)", () => {
     expect([less.textContent!.trim(), less.getAttribute("href"), less.getAttribute("aria-expanded")]).toEqual(["See less", "/categories/sarees", "true"]);
   });
 
-  it("marketplace phones get two filter rows and a split rail over the same GET form", async () => {
+  it("marketplace phones get one scrolling filter row and a split rail over the same GET form", async () => {
     const document = await renderListing(storefrontTemplateTheme("marketplace"), plain(), TREE_STORE_SHAPE);
     const bar = document.querySelector("[data-catalog-phone-bar]")!;
     expect(bar.className).toContain("catalog-marketplace-phone-bar");
-    expect(bar.querySelectorAll(".catalog-marketplace-phone-controls, .catalog-marketplace-phone-aspects")).toHaveLength(2);
+    expect(bar.querySelectorAll(".catalog-marketplace-phone-controls")).toHaveLength(1);
     expect(bar.querySelector("#mobile-filter-toggle[aria-controls='filter-section']")!.textContent).toContain("Filters");
     expect(Array.from(bar.querySelectorAll(".catalog-marketplace-quick-filter")).map((link) => link.getAttribute("href")))
       .toEqual(["/categories/sarees?hasDiscount=true", "/categories/sarees?freeDelivery=true"]);
-    expect(bar.querySelector(".catalog-marketplace-phone-aspects a[href='#catalog-facet-size']")).not.toBeNull();
+    expect(bar.querySelector(".catalog-marketplace-phone-controls a[href='#catalog-facet-size']")).not.toBeNull();
     const rail = document.querySelector("#filter-section[data-marketplace-filter-rail]")!;
     const form = rail.querySelector("form")!;
     expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["get", "/categories/sarees"]);

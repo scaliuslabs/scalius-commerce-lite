@@ -89,6 +89,14 @@ describe("homepage section editor", () => {
     expect(dialog()).toBeNull();
   });
 
+  it("saves the square category gallery choice", async () => {
+    render([section("category-tiles", "tiles")]);
+    act(() => button("Edit Featured categories").click());
+    choose(document.querySelector<HTMLButtonElement>("#section-tiles-style")!, "Square photo grid");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.settings).toEqual({ style: "square" });
+  });
+
   it("keeps a card without a name or with a bad link out of the draft and says why", async () => {
     render([section("shop-by", "cards")]);
     act(() => button("Edit Shop-by cards").click());

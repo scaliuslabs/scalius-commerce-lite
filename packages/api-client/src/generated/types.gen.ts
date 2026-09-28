@@ -439,7 +439,7 @@ export type StorefrontThemeDocument = {
             type: 'category-tiles';
             version: 1;
             settings: {
-                style: 'icons' | 'round' | 'photo' | 'quad';
+                style: 'icons' | 'round' | 'photo' | 'quad' | 'square';
             };
         } | {
             id: string;

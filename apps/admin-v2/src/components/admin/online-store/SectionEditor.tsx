@@ -478,7 +478,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
           id={id("style")}
           label={t("sectionStyle")}
           value={section.settings.style}
-          options={(["icons", "round", "photo", "quad"] as const).map((value) => ({ value, label: t(`tileStyle_${value}`) }))}
+          options={(["icons", "round", "photo", "quad", "square"] as const).map((value) => ({ value, label: t(`tileStyle_${value}`) }))}
           onChange={(style) => update({ style })}
         />
       );

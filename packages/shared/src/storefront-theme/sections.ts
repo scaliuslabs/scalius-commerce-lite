@@ -82,7 +82,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
   }),
   "category-tiles": section({
     type: "category-tiles",
-    settings: z.object({ style: z.enum(["icons", "round", "photo", "quad"]) }).strict(),
+    settings: z.object({ style: z.enum(["icons", "round", "photo", "quad", "square"]) }).strict(),
     defaults: { style: "photo" },
     requires: [atLeast("topCategoryCount", 2)],
   }),

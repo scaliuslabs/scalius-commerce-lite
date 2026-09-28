@@ -469,7 +469,7 @@ describe("homepage section library", () => {
 
   it("keeps the photo category tiles for one category and the denser styles for two or more", async () => {
     const one: HomepageContent = { ...store("tiny"), categoryRail: { ...store("tiny").categoryRail, categories: store("tiny").categoryRail.categories.slice(0, 1) } };
-    for (const style of ["icons", "round", "quad"]) {
+    for (const style of ["icons", "round", "quad", "square"]) {
       expect(homepageSectionRenders(section("category-tiles", "tiles", { style }), one)).toBe(false);
     }
     expect(homepageSectionRenders(section("category-tiles", "tiles", { style: "photo" }), one)).toBe(true);
@@ -478,6 +478,10 @@ describe("homepage section library", () => {
     expect(quad.querySelectorAll("ul > li > ul")).toHaveLength(3);
     // A category without a photo shows its first letter in the same box.
     expect(text(quad.querySelector('a[href="/categories/category-0"] span'))).toBe("C");
+    const square = await render([section("category-tiles", "tiles", { style: "square" })], store("large"));
+    expect(square.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
+    expect(square.querySelector('a[href="/categories/category-0"] span')?.classList.contains("aspect-square")).toBe(true);
+    expect(text(square.querySelector('a[href="/categories/category-0"] > span:last-child'))).toBe("Category 0");
   });
 
   it("switches product tabs without script and keeps only tabs with products", async () => {

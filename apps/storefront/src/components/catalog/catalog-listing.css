@@ -596,8 +596,7 @@
     box-shadow: 0 2px 4px color-mix(in oklab, var(--foreground) 12%, transparent);
   }
 
-  .catalog-marketplace-phone-controls,
-  .catalog-marketplace-phone-aspects {
+  .catalog-marketplace-phone-controls {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -605,10 +604,6 @@
     overflow-x: auto;
     padding-inline: 0.5rem;
     white-space: nowrap;
-  }
-
-  .catalog-marketplace-phone-aspects {
-    padding-left: max(5.5rem, 25%);
   }
 
   .catalog-marketplace-filter-toggle {
