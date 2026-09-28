@@ -90,12 +90,15 @@ export function VisualChoice<Value extends string>({
 export function HomepageOrder<Section extends { id: string; type: StorefrontSectionType }>({
   sections,
   notes = {},
+  names = {},
   actions,
   onChange,
 }: {
   sections: readonly Section[];
   /** Why a section does not show on the store, by section id. */
   notes?: Readonly<Record<string, string>>;
+  /** A specific label when several sections share one type. */
+  names?: Readonly<Record<string, string>>;
   actions?: (section: Section, name: string) => ReactNode;
   onChange: (sections: Section[]) => void;
 }) {
@@ -123,7 +126,7 @@ export function HomepageOrder<Section extends { id: string; type: StorefrontSect
   return (
     <ol>
       {sections.map((section, index) => {
-        const name = t(`section_${section.type}`);
+        const name = names[section.id] ?? t(`section_${section.type}`);
         const note = notes[section.id];
         return (
           <li key={section.id} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
@@ -531,13 +534,14 @@ export function ProductTile({
         {/* The second photo that shows on hover. */}
         {spec.hoverImage ? <span className="ml-auto w-1/3 bg-(--sk-edge)" /> : null}
         {badge && spec.badge !== "price" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {spec.quickBuy && spec.action === "round" ? <span data-card-sketch-round-action className="absolute right-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
       </span>
       <Line className="w-full" />
       <span className="flex items-center gap-0.5">
         <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
         {badge && spec.badge !== "image" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
-      {spec.quickBuy ? <span className={cn("h-1.5 w-full bg-(--sk-accent)", CORNERS[radius])} /> : null}
+      {spec.quickBuy && spec.action !== "round" ? <span data-card-sketch-full-action={spec.action === "outline" ? "" : undefined} className={cn("h-1.5 w-full", spec.action === "outline" ? "border border-(--sk-accent)" : "bg-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
   );
 }

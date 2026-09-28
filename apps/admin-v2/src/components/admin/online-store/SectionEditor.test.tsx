@@ -67,6 +67,13 @@ function type(input: HTMLInputElement, value: string) {
   });
 }
 
+function typeArea(input: HTMLTextAreaElement, value: string) {
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 describe("homepage section editor", () => {
   it("flags sections with nothing to show", () => {
     render([section("shop-by", "cards"), section("product-rail", "rail")]);
@@ -128,6 +135,51 @@ describe("homepage section editor", () => {
       layout: "contained-banners",
       sideBanners: [{ mediaId: "m-1", alt: "Fresh honey jars", href: "/collections/honey" }],
     });
+  });
+
+  it("lets a merchant fill the showcase story and questions that start hidden", async () => {
+    render([
+      section("editorial", "feature", { layout: "image-with-text", heading: "", body: "", mediaId: null, imageSide: "end" }),
+      section("faq", "faq"),
+    ]);
+    expect(rows()).toEqual([
+      "Image with textHidden until you add its content.",
+      "Questions and answersHidden until you add its content.",
+    ]);
+    act(() => button("Edit Image with text").click());
+    type(document.querySelector<HTMLInputElement>("#section-feature-heading")!, "Our honey story");
+    typeArea(document.querySelector<HTMLTextAreaElement>("#section-feature-body")!, "Collected in the Sundarbans.");
+    choose(document.querySelector<HTMLButtonElement>("#section-feature-image-side")!, "Before text");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.settings).toEqual({ layout: "image-with-text", heading: "Our honey story", body: "Collected in the Sundarbans.", mediaId: null, imageSide: "start" });
+
+    act(() => button("Edit Questions and answers").click());
+    act(() => button("Add question").click());
+    type(document.querySelector<HTMLInputElement>("#section-faq-question-0")!, "Where is it collected?");
+    typeArea(document.querySelector<HTMLTextAreaElement>("#section-faq-question-0-answer")!, "In the Sundarbans.");
+    await act(async () => button("Done").click());
+    expect(seen.sections[1]?.settings).toEqual({ heading: "", items: [{ question: "Where is it collected?", answer: "In the Sundarbans." }] });
+    expect(rows()).toEqual(["Our honey story", "Questions and answers"]);
+  });
+
+  it("edits the showcase highlights and customer quotes", async () => {
+    render([
+      { id: "highlights", type: "editorial", version: 1, settings: { layout: "multicolumn", heading: "", columns: [] } },
+      { id: "testimonials", type: "editorial", version: 1, settings: { layout: "testimonial", quotes: [] } },
+    ]);
+    expect(rows()).toEqual(["ColumnsHidden until you add its content.", "Customer quotesHidden until you add its content."]);
+    act(() => button("Edit Columns").click());
+    act(() => button("Add column").click());
+    type(document.querySelector<HTMLInputElement>("#section-highlights-column-0-title")!, "Raw honey");
+    typeArea(document.querySelector<HTMLTextAreaElement>("#section-highlights-column-0-text")!, "From the forest.");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.settings).toEqual({ layout: "multicolumn", heading: "", columns: [{ title: "Raw honey", text: "From the forest." }] });
+
+    act(() => button("Edit Customer quotes").click());
+    act(() => button("Add quote").click());
+    typeArea(document.querySelector<HTMLTextAreaElement>("#section-testimonials-quote-0")!, "Lovely honey.");
+    await act(async () => button("Done").click());
+    expect(seen.sections[1]?.settings).toEqual({ layout: "testimonial", quotes: [{ quote: "Lovely honey.", author: "" }] });
   });
 
   it("keeps a card without a name or with a bad link out of the draft and says why", async () => {

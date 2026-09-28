@@ -62,6 +62,8 @@ const EDITABLE = new Set<StorefrontSectionType>([
   "brand-wall",
   "recently-viewed",
   "banner",
+  "editorial",
+  "faq",
   "endless-grid",
   "seo-text",
 ]);
@@ -78,6 +80,8 @@ const ADDABLE: readonly StorefrontSectionType[] = [
   "shop-by",
   "banner-mosaic",
   "banner",
+  "editorial",
+  "faq",
   "brand-wall",
   "recently-viewed",
   "usp-strip",
@@ -764,6 +768,66 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
         </>
       );
     }
+    case "editorial": {
+      const settings = section.settings;
+      const changeLayout = (layout: Settings<"editorial">["layout"]) => {
+        const heading = "heading" in settings ? settings.heading : "";
+        if (layout === "rich-text") update({ layout, heading, body: "body" in settings ? settings.body : "" });
+        if (layout === "image-with-text") update({ layout, heading, body: "body" in settings ? settings.body : "", mediaId: null, imageSide: "start" });
+        if (layout === "multicolumn") update({ layout, heading, columns: [] });
+        if (layout === "testimonial") update({ layout, quotes: [] });
+      };
+      return (
+        <>
+          <ChoiceField id={id("layout")} label={t("editorialLayout")} value={settings.layout} options={(["rich-text", "image-with-text", "multicolumn", "testimonial"] as const).map((value) => ({ value, label: t(`editorialLayout_${value}`) }))} onChange={changeLayout} />
+          {"heading" in settings && <TextField id={id("heading")} label={t("sectionTitle")} value={settings.heading} error={error("heading")} onChange={(heading) => update({ ...settings, heading })} />}
+          {(settings.layout === "rich-text" || settings.layout === "image-with-text") && <TextField id={id("body")} label={t("sectionBannerText")} multiline value={settings.body} error={error("body")} onChange={(body) => update({ ...settings, body })} />}
+          {settings.layout === "image-with-text" && (
+            <>
+              <MediaField label={t("sectionImage")} mediaId={settings.mediaId} previews={previews} onPick={pick((image) => update({ ...settings, mediaId: image.id }))} error={error("mediaId")} />
+              {settings.mediaId && <Button type="button" variant="ghost" size="sm" onClick={() => update({ ...settings, mediaId: null })}>{t("remove")}</Button>}
+              <ChoiceField id={id("image-side")} label={t("editorialImageSide")} value={settings.imageSide} options={(["start", "end"] as const).map((value) => ({ value, label: t(`editorialImageSide_${value}`) }))} onChange={(imageSide) => update({ ...settings, imageSide })} />
+            </>
+          )}
+          {settings.layout === "multicolumn" && (
+            <ItemList label={t("editorialColumns")} help="" count={settings.columns.length} max={4} addLabel={t("addColumn")} onAdd={() => update({ ...settings, columns: [...settings.columns, { title: "", text: "" }] })} error={error("columns")}>
+              {settings.columns.map((column, index) => (
+                <ItemRow key={index} removeLabel={t("removeColumn", { number: index + 1 })} onRemove={() => update({ ...settings, columns: removeAt(settings.columns, index) })}>
+                  <TextField id={id(`column-${index}-title`)} label={t("columnTitle", { number: index + 1 })} value={column.title} error={error(`columns.${index}.title`)} onChange={(title) => update({ ...settings, columns: replaceAt(settings.columns, index, { ...column, title }) })} />
+                  <TextField id={id(`column-${index}-text`)} label={t("sectionBannerText")} multiline value={column.text} error={error(`columns.${index}.text`)} onChange={(text) => update({ ...settings, columns: replaceAt(settings.columns, index, { ...column, text }) })} />
+                </ItemRow>
+              ))}
+            </ItemList>
+          )}
+          {settings.layout === "testimonial" && (
+            <ItemList label={t("editorialQuotes")} help="" count={settings.quotes.length} max={6} addLabel={t("addQuote")} onAdd={() => update({ ...settings, quotes: [...settings.quotes, { quote: "", author: "" }] })} error={error("quotes")}>
+              {settings.quotes.map((item, index) => (
+                <ItemRow key={index} removeLabel={t("removeQuote", { number: index + 1 })} onRemove={() => update({ ...settings, quotes: removeAt(settings.quotes, index) })}>
+                  <TextField id={id(`quote-${index}`)} label={t("quoteNumber", { number: index + 1 })} multiline value={item.quote} error={error(`quotes.${index}.quote`)} onChange={(quote) => update({ ...settings, quotes: replaceAt(settings.quotes, index, { ...item, quote }) })} />
+                  <TextField id={id(`quote-${index}-author`)} label={t("quoteAuthor")} value={item.author} error={error(`quotes.${index}.author`)} onChange={(author) => update({ ...settings, quotes: replaceAt(settings.quotes, index, { ...item, author }) })} />
+                </ItemRow>
+              ))}
+            </ItemList>
+          )}
+        </>
+      );
+    }
+    case "faq": {
+      const settings = section.settings;
+      return (
+        <>
+          <TextField id={id("heading")} label={t("sectionTitle")} value={settings.heading} error={error("heading")} onChange={(heading) => update({ ...settings, heading })} />
+          <ItemList label={t("faqItems")} help="" count={settings.items.length} max={20} addLabel={t("addQuestion")} onAdd={() => update({ ...settings, items: [...settings.items, { question: "", answer: "" }] })} error={error("items")}>
+            {settings.items.map((item, index) => (
+              <ItemRow key={index} removeLabel={t("removeQuestion", { number: index + 1 })} onRemove={() => update({ ...settings, items: removeAt(settings.items, index) })}>
+                <TextField id={id(`question-${index}`)} label={t("questionNumber", { number: index + 1 })} value={item.question} error={error(`items.${index}.question`)} onChange={(question) => update({ ...settings, items: replaceAt(settings.items, index, { ...item, question }) })} />
+                <TextField id={id(`question-${index}-answer`)} label={t("answer")} multiline value={item.answer} error={error(`items.${index}.answer`)} onChange={(answer) => update({ ...settings, items: replaceAt(settings.items, index, { ...item, answer }) })} />
+              </ItemRow>
+            ))}
+          </ItemList>
+        </>
+      );
+    }
     default:
       return <p className="text-body text-muted-foreground">{t("sectionNoSettings")}</p>;
   }
@@ -832,6 +896,11 @@ export function SectionEditor({ sections, notes, media, onChange }: {
     if (notes[section.id]) return [[section.id, notes[section.id]!]];
     return storefrontSectionNeedsContent(section) ? [[section.id, t("sectionNeedsContent")]] : [];
   }));
+  const rowNames = Object.fromEntries(sections.flatMap((section) => {
+    if (section.type !== "editorial") return [];
+    const heading = "heading" in section.settings ? section.settings.heading.trim() : "";
+    return [[section.id, heading || t(`editorialLayout_${section.settings.layout}` as MessageKey)]];
+  }));
   const full = sections.length >= STOREFRONT_MAX_SECTIONS;
   const hasHero = sections.some((section) => section.type === "hero");
   const editingName = editing ? t(`section_${editing.section.type}` as MessageKey) : "";
@@ -841,6 +910,7 @@ export function SectionEditor({ sections, notes, media, onChange }: {
       <HomepageOrder
         sections={sections}
         notes={rowNotes}
+        names={rowNames}
         onChange={onChange}
         actions={(section, name) => (
           <>

@@ -334,9 +334,13 @@ describe("theme page", () => {
     render(essentials);
     expect(essentials.blocks.listing.layout.variant).toBe("grid");
     expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
+    expect(radio("Daily essentials").querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(3);
+    const groceryCard = container.querySelector<HTMLButtonElement>('[role="radio"][value="quick-add"]')!;
+    expect(groceryCard.querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(2);
     const quick = container.querySelector<HTMLButtonElement>("#theme-essentials-full-action")!;
     expect(quick.getAttribute("aria-checked")).toBe("true");
     act(() => quick.click());
+    expect(groceryCard.querySelectorAll("[data-card-sketch-round-action]")).toHaveLength(2);
     await pressSave();
     const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false, showBuyNow: false } });

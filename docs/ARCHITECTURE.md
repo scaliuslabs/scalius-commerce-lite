@@ -25,6 +25,9 @@ in Theme settings.
 Theme edits save to a private draft; merchants can preview real storefront
 routes through a one-time continuation before explicitly publishing. Logo,
 announcement bar, and footer settings on that page still save live.
+The homepage section editor can fill Showcase story, highlights, quotes, and
+FAQ blocks; empty blocks stay hidden until the merchant adds content. The
+Daily Essentials card sketch follows its saved full or compact cart action.
 
 
 ## System Overview

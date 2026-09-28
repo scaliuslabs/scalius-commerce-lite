@@ -774,8 +774,8 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           label={t("productCards")}
           value={blockVariant(theme, "card")}
           className="sm:grid-cols-3"
-          options={blockOptions<Omit<ResolvedStorefrontThemeLayout["productCard"], "imageRatio">>("card", "cardStyle", (card) => (
-            <CardStyleSketch card={{ ...card, imageRatio: resolved.layout.productCard.imageRatio }} />
+          options={blockOptions<Omit<ResolvedStorefrontThemeLayout["productCard"], "imageRatio">>("card", "cardStyle", (card, variant) => (
+            <CardStyleSketch card={{ ...(variant === "quick-add" && theme.blocks.card.variant === variant ? resolved.layout.productCard : card), imageRatio: resolved.layout.productCard.imageRatio }} />
           ), true)}
           onChange={setBlock("card")}
         />
