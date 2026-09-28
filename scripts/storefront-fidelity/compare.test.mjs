@@ -392,6 +392,45 @@ describe("filters, verdict and exit code", () => {
     expect(report).toContain("mass-retail/home/desktop | target-home-d-top.jpg | known blocked reference capture");
   });
 
+  it("uses measured Chaldal references without claiming missing visual evidence", () => {
+    expect(Object.values(reference.templates["daily-essentials"].refs)).toEqual(Array(5).fill("ghorerbazar"));
+    expect(reference.templates["daily-essentials"].visualRefs).toEqual({ home: "chaldal", plp: "chaldal" });
+    expect(reference.sites.chaldal.shots).toEqual({ home: "chaldal-home", plp: "chaldal-popular" });
+    expect(reference.sites.chaldal.desktop["card.cols"].v).toBe(6);
+    expect(compareTemplate("daily-essentials", { desktop: {}, phone: {} }, reference).some((c) => c.refSite === "chaldal")).toBe(false);
+    expect(referenceShotIssue("/shots/chaldal-popular-d-top.jpg")).toBe("product images missing from reference capture");
+    expect(referenceShotIssue("/shots/chaldal-popular-m-top.jpg")).toBeNull();
+  });
+
+  it("uses Walmart's measured desktop home without promoting blocked listing captures", async () => {
+    expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target", listing: "target", pdp: "target" });
+    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: "walmart" });
+    expect(reference.sites.walmart.shots).toEqual({ home: "walmart-home" });
+    expect(reference.sites.walmart.desktop["header.h"].v).toBe(132);
+    expect(reference.sites.walmart.phone).toEqual({});
+    expect(referenceShotIssue("/shots/walmart-home-d-top.jpg")).toBeNull();
+    expect(referenceShotIssue("/shots/walmart-search-m-full.jpg")).toBe("known blocked reference capture");
+    const dir = mkdtempSync(join(tmpdir(), "fidelity-walmart-home-"));
+    try {
+      const sharp = await loadSharp();
+      const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer();
+      writeFileSync(join(dir, "walmart-home-d-top.jpg"), photo);
+      writeFileSync(join(dir, "target-home-d-top.jpg"), "blocked capture");
+      writeFileSync(join(dir, "ours-mass-retail-home-d-top.jpg"), photo);
+      const pairs = await writePairs({ reference, matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["mass-retail"] });
+      expect(pairs.made.map((file) => basename(file))).toEqual(["mass-retail-home-d.jpg"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("scores only like-for-like default mass-retail measurements", () => {
+    const checks = compareTemplate("mass-retail", { desktop: {}, phone: {} }, reference);
+    expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop")).toMatchObject({ refSite: "target", ref: 80 });
+    expect(checks.some((c) => c.metric === "card.h" && c.viewport === "phone")).toBe(false);
+    expect(checks.filter((c) => c.refSite === "walmart")).toHaveLength(0);
+  });
+
   it("pairs spec search separately from its category page", async () => {
     const dir = mkdtempSync(join(tmpdir(), "fidelity-spec-search-"));
     try {

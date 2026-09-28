@@ -86,7 +86,7 @@ const money = { currencySymbol, currencyCode };
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id}>
         {section.type === "hero" && (
-          <section class="w-full">
+          <section class:list={["w-full", section.settings.layout === "wide-editorial" && "md:mb-5"]}>
             <Hero
               hero={content.hero}
               priority={lead}

@@ -37,9 +37,9 @@
     "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
     "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
-    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" } },
+    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": "walmart" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
-    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" } },
+    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "chaldal" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" } }
   },
   "sites": {
@@ -287,8 +287,20 @@
         "card.ratio": { "v": 0.75, "src": "study: 179x239 images" }
       }
     },
+    "walmart": {
+      "name": "Walmart desktop home",
+      "$comment": "Only the desktop home and its product carousel were measurable. Search and browse captures show a robot challenge; phone home and product page have no usable capture.",
+      "shots": { "home": "walmart-home" },
+      "desktop": {
+        "header.h": { "v": 132, "src": "study: two sticky rows, 84 + 48px" },
+        "header.search.w": { "v": 666, "src": "study: home search pill 666x52" },
+        "header.search.h": { "v": 52, "src": "study: home search pill 666x52" }
+      },
+      "phone": {}
+    },
     "target": {
       "name": "Target /s?searchTerm=towels",
+      "$comment": "Phone card height is not scored: the measured 267px towel row contains rich rating and delivery detail absent from the sparse current fixture. Other measured geometry remains the default mass-retail reference; saved page captures are blocked.",
       "shots": { "home": "target-home", "plp": "target-search", "pdp": "target-pdp" },
       "desktop": {
         "header.h": { "v": 80, "src": "study: white 80px main row (below a 50px red utility bar)" },
@@ -307,7 +319,6 @@
       },
       "phone": {
         "card.w": { "v": 334, "src": "study: one product per row, 334x267" },
-        "card.h": { "v": 267, "src": "study: 334x267" },
         "card.cols": { "v": 1, "src": "study: list layout" }
       }
     },
@@ -340,13 +351,14 @@
     },
     "ghorerbazar": {
       "name": "Ghorer Bazar (geometry pending measured capture)",
-      "$comment": "Official home, shop and product pages were viewed live on 2026-09-28 at desktop and 390px phone sizes: nested category navigation, full outlined Add To Cart card actions, sidebar filters and numbered results, and a phone product gallery with vertical thumbnails beside the image. The saved phone home capture is blocked; no repeatable pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
+      "$comment": "The saved home capture is blocked and no repeatable pixel measurements are asserted. See storefront-study/sites/reference-access-2026-09-28.md for the access audit.",
       "shots": { "home": "ghorerbazar-home" },
       "desktop": {},
       "phone": {}
     },
     "chaldal": {
       "name": "Chaldal /popular",
+      "$comment": "Alternate visual reference for the optional compact quick-add card and quick-grid listing, not the full-action daily-essentials default. The phone listing capture is usable; the desktop listing capture lacks product images. No product-page capture or measurements exist.",
       "shots": { "home": "chaldal-home", "plp": "chaldal-popular" },
       "desktop": {
         "header.h": { "v": 90, "src": "study: fixed 90px header" },

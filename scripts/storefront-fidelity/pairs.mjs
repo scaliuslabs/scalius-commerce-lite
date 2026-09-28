@@ -12,13 +12,19 @@ const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 // out of visual pairs until each site can be captured and reviewed again.
 const BLOCKED_REFERENCE_SHOTS = new Set([
   ...["home", "search", "pdp"].flatMap((page) => ["d", "m"].flatMap((viewport) => ["top", "full"].map((crop) => `target-${page}-${viewport}-${crop}.jpg`))),
+  ...["plp-d", "search-d", "search-m"].flatMap((page) => ["top", "full"].map((crop) => `walmart-${page}-${crop}.jpg`)),
   "ghorerbazar-home-m-top.jpg",
   "ghorerbazar-home-m-full.jpg",
 ]);
+// The desktop Popular capture has text and actions but none of its product images.
+const INCOMPLETE_REFERENCE_SHOTS = new Set(["chaldal-popular-d-top.jpg", "chaldal-popular-d-full.jpg"]);
 
 export function referenceShotIssue(ref) {
   if (!ref) return "reference screenshot missing";
-  return BLOCKED_REFERENCE_SHOTS.has(basename(ref)) ? "known blocked reference capture" : null;
+  const name = basename(ref);
+  if (BLOCKED_REFERENCE_SHOTS.has(name)) return "known blocked reference capture";
+  if (INCOMPLETE_REFERENCE_SHOTS.has(name)) return "product images missing from reference capture";
+  return null;
 }
 
 function findRef(dirs, base, v) {
@@ -62,7 +68,7 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
     const counts = checks.filter((c) => c.template === template);
     for (const page of ["home", "plp", "pdp", ...(template === "spec-catalogue" ? ["search"] : [])]) {
       const block = page === "plp" || page === "search" ? "listing" : page === "pdp" ? "pdp" : "header";
-      const siteKey = page === "plp" || page === "search" ? tpl.refs.listing : tpl.refs.card;
+      const siteKey = tpl.visualRefs?.[page] ?? (page === "plp" || page === "search" ? tpl.refs.listing : page === "pdp" ? tpl.refs.pdp : tpl.refs.header);
       const site = reference.sites[siteKey];
       const base = site?.shots?.[page];
       for (const v of ["d", "m"]) {
@@ -82,7 +88,7 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
         const failed = blockChecks.filter((c) => !c.pass).length;
         const probe = matrix?.[template]?.[`${oursPage}-${viewport}`];
         const lines = [
-          { text: `REFERENCE ${site.name} (${viewport})`, color: "#c80000" },
+          { text: `REFERENCE ${site.name} (${viewport}${tpl.visualRefs?.[page] ? ", alternate visual" : ""})`, color: "#c80000" },
           { text: page === "plp" ? refFmt(site[viewport]) : page === "search" ? `${site.search?.[viewport]?.cols?.v ?? "-"} cards per row` : "", color: "#c80000" },
         ];
         const oursLines = [

@@ -72,6 +72,7 @@ it("keeps Amazon's default while saving an eBay-style marketplace combination", 
   expect(amazon.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("story-cards");
 
   const ebay = structuredClone(amazon);
+  ebay.blocks.topBar = { variant: "utility", settings: {} };
   ebay.blocks.header = { variant: "marketplace-light", settings: {} };
   const hero = ebay.pages.home.find((section) => section.type === "hero");
   const categories = ebay.pages.home.find((section) => section.type === "category-tiles");
@@ -81,6 +82,7 @@ it("keeps Amazon's default while saving an eBay-style marketplace combination", 
 
   const saved = storefrontThemeDocumentSchema.parse(JSON.parse(JSON.stringify(ebay)));
   const resolved = resolveStorefrontTheme(saved, SEED_30K);
+  expect(resolved.blocks.topBar.variant).toBe("utility");
   expect(resolved.blocks.header.variant).toBe("marketplace-light");
   expect(resolved.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("wide-editorial");
   expect(resolved.pages.home.find((section) => section.type === "category-tiles")?.settings.style).toBe("square");
