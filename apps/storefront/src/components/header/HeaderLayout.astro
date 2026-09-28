@@ -152,7 +152,7 @@ const {
   }
 
   function updateHeaderHeight() {
-    if (document.getElementById("main-header")?.dataset.headerVariant === "marketplace-search") {
+    if (["marketplace-search", "marketplace-light"].includes(document.getElementById("main-header")?.dataset.headerVariant ?? "")) {
       setHeaderHeight(0);
       return;
     }

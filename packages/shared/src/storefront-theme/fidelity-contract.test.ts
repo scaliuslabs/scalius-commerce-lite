@@ -66,6 +66,27 @@ const HUGE: StoreShape = storeShapeFromFacts({
 
 const SHAPES = { empty: EMPTY_STORE_SHAPE, tiny: TINY, liveSmall: LIVE_SMALL, seed30k: SEED_30K, huge: HUGE };
 
+it("keeps Amazon's default while saving an eBay-style marketplace combination", () => {
+  const amazon = storefrontTemplateTheme("marketplace");
+  expect(amazon.blocks.header.variant).toBe("marketplace-search");
+  expect(amazon.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("story-cards");
+
+  const ebay = structuredClone(amazon);
+  ebay.blocks.header = { variant: "marketplace-light", settings: {} };
+  const hero = ebay.pages.home.find((section) => section.type === "hero");
+  const categories = ebay.pages.home.find((section) => section.type === "category-tiles");
+  if (hero?.type !== "hero" || categories?.type !== "category-tiles") throw new Error("Marketplace sections missing");
+  hero.settings.layout = "wide-editorial";
+  categories.settings.style = "square";
+
+  const saved = storefrontThemeDocumentSchema.parse(JSON.parse(JSON.stringify(ebay)));
+  const resolved = resolveStorefrontTheme(saved, SEED_30K);
+  expect(resolved.blocks.header.variant).toBe("marketplace-light");
+  expect(resolved.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("wide-editorial");
+  expect(resolved.pages.home.find((section) => section.type === "category-tiles")?.settings.style).toBe("square");
+  expect(storefrontTemplateTheme("marketplace").blocks.header.variant).toBe("marketplace-search");
+});
+
 const SLOTS: StorefrontBlockSlot[] = ["topBar", "header", "desktopNav", "mobileNav", "card", "listing", "gallery", "buyBox", "footer"];
 
 function renderedBlocks(resolved: ResolvedStorefrontTheme) {

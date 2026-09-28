@@ -556,6 +556,8 @@ export const STOREFRONT_HEADER_VARIANTS = {
     contrastPairs: [["foreground", "muted"]],
     renders: "marketplace",
   }),
+  // eBay: light utility and category rows, search scoped at the right.
+  "marketplace-light": variant({ renders: "marketplace" }),
   // Game Ghor: big logo, search with a category select, cart with its total.
   "mall-departments": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "classic" }),
   "mall-search": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "marketplace" }),

@@ -709,6 +709,27 @@
                       "variant": {
                         "type": "string",
                         "enum": [
+                          "marketplace-light"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
                           "mall-departments"
                         ]
                       },
@@ -1483,6 +1504,20 @@
                       },
                       "openByDefault": {
                         "type": "boolean"
+                      },
+                      "order": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "category",
+                            "availability",
+                            "price",
+                            "rating",
+                            "brand",
+                            "other"
+                          ]
+                        }
                       },
                       "column": {
                         "type": "integer",

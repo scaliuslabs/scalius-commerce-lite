@@ -125,7 +125,7 @@ const desktopMenu = hasNavigation && !railAlways;
 const spec = header.variant === "mall-departments" ? null : headerSpec(header.variant, header.settings as Record<string, unknown>);
 const retailPill = header.variant === "retail-pill";
 const shortcutRow = Boolean(spec?.phoneShortcuts) && hasNavigation;
-const rowLinks = desktopDrill && !retailPill ? 8 : 0;
+const rowLinks = desktopDrill && !retailPill ? (header.variant === "marketplace-light" ? 12 : 8) : 0;
 const menuPlacement: "inline" | "row" =
   !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
 
@@ -196,6 +196,7 @@ const stickyMenuRow =
 const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }))
   + (header.variant === "tech-rounded" || header.variant === "boutique-inline" ? "; --hdr-phone-bar: 4rem" : "")
   + (header.variant === "spec-two-row" ? "; --hdr-phone-bar: 3.125rem" : "")
+  + (header.variant === "marketplace-light" ? "; --hdr-phone-bar: 3.25rem; --hdr-phone-bar-condensed: 3.25rem" : "")
   + (header.variant === "showcase-simple" ? "; --hdr-phone-bar: 4.125rem" : "");
 ---
 
@@ -331,6 +332,10 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
 </header>
 
 <style is:global>
+  #site-header[data-header-variant="marketplace-light"] .top-utility-inner {
+    max-width: 93rem;
+  }
+
   /* The menus' chevrons, painted by CSS (masks in currentColor) instead of an
      inline <svg> per row, and the menus' styles are global (no per-element
      scope attribute): both keep the header HTML within its budget. */

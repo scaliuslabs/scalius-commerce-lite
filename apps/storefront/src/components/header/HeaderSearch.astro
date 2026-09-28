@@ -13,10 +13,12 @@
 // - pill: a fully rounded field (Apple Gadgets 584x48, Target 628x44).
 // - scoped: department select, field and a filled button as one unit
 //   (Amazon 790x40).
+// - scoped-right: outlined field, department select at the right, separate
+//   pill submit (eBay).
 import type { NavigationItem } from "@/lib/api";
 
 interface Props {
-  shape: "icon" | "field" | "pill" | "scoped";
+  shape: "icon" | "field" | "pill" | "scoped" | "scoped-right";
   /** Unique per instance (ids of the field and its label). */
   id: string;
   /** Top-level menu items that link a category: the scope choices. */
@@ -47,34 +49,50 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
       class:list={["hsearch", `hsearch--${shape}`, className]}
       data-header-search
     >
-      {shape === "scoped" && scopes.length > 0 && (
-        <select class="hsearch-scope" aria-label="Search in" data-search-scope>
-          <option value="">All</option>
-          {scopes.map((item) => (
-            <option value={item.href}>{item.title}</option>
-          ))}
-        </select>
-      )}
-      <label for={id} class="sr-only">
-        Search products
-      </label>
-      <input
-        id={id}
-        class="hsearch-input"
-        type="search"
-        name="q"
-        value={currentQuery}
-        placeholder="Search products"
-        autocomplete="off"
-        enterkeyhint="search"
-        maxlength="200"
-        data-search-inline={shape === "scoped" ? undefined : ""}
-      />
+      <div class:list={["hsearch-field", shape !== "scoped-right" && "hsearch-field--contents"]}>
+        {shape === "scoped-right" && (
+          <svg class="hsearch-leading-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+        )}
+        {shape === "scoped" && scopes.length > 0 && (
+          <select class="hsearch-scope" aria-label="Search in" data-search-scope>
+            <option value="">All</option>
+            {scopes.map((item) => (
+              <option value={item.href}>{item.title}</option>
+            ))}
+          </select>
+        )}
+        <label for={id} class="sr-only">Search products</label>
+        <input
+          id={id}
+          class="hsearch-input"
+          type="search"
+          name="q"
+          value={currentQuery}
+          placeholder="Search products"
+          autocomplete="off"
+          enterkeyhint="search"
+          maxlength="200"
+          data-search-inline={shape === "scoped" || shape === "scoped-right" ? undefined : ""}
+        />
+        {shape === "scoped-right" && scopes.length > 0 && (
+          <select class="hsearch-scope" aria-label="Search in" data-search-scope>
+            <option value="">All categories</option>
+            {scopes.map((item) => (
+              <option value={item.href}>{item.title}</option>
+            ))}
+          </select>
+        )}
+      </div>
       <button type="submit" class="hsearch-submit" aria-label="Search">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
+        {shape === "scoped-right" ? "Search" : (
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+        )}
       </button>
     </form>
   )
@@ -125,6 +143,66 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
   .hsearch:focus-within {
     outline: 2px solid var(--ring, var(--foreground));
     outline-offset: 1px;
+  }
+
+  .hsearch-field--contents {
+    display: contents;
+  }
+
+  .hsearch--scoped-right {
+    gap: 0.75rem;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .hsearch--scoped-right:focus-within {
+    outline: none;
+  }
+
+  .hsearch--scoped-right .hsearch-field {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    border: 1.5px solid var(--foreground);
+    border-radius: 9999px;
+    background: var(--card);
+  }
+
+  .hsearch--scoped-right .hsearch-field:focus-within {
+    outline: 2px solid var(--ring, var(--foreground));
+    outline-offset: 1px;
+  }
+
+  .hsearch-leading-icon {
+    align-self: center;
+    flex-shrink: 0;
+    margin-left: 1rem;
+    color: var(--muted-foreground);
+  }
+
+  .hsearch--scoped-right .hsearch-scope {
+    order: 1;
+    max-width: 10rem;
+    border-left: 1px solid var(--border);
+    border-right: 0;
+    background: var(--card);
+  }
+
+  .hsearch--scoped-right .hsearch-submit {
+    width: 8.5rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .hsearch--scoped-right .hsearch-submit:hover {
+    color: var(--primary-foreground);
+    background: color-mix(in srgb, var(--primary) 88%, var(--foreground));
   }
 
   .hsearch--field {

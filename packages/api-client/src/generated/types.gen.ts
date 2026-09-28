@@ -150,6 +150,11 @@ export type StorefrontThemeDocument = {
                 trendingQueries: boolean;
             };
         } | {
+            variant: 'marketplace-light';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
             variant: 'mall-departments';
             settings: {
                 cartTotal: boolean;
@@ -306,6 +311,7 @@ export type StorefrontThemeDocument = {
             filters: {
                 style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
                 openByDefault: boolean;
+                order?: Array<'category' | 'availability' | 'price' | 'rating' | 'brand' | 'other'>;
                 column?: number;
                 rowPitch?: number;
                 label?: number;

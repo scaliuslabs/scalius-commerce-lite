@@ -139,6 +139,10 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
         }
       </a>
 
+      {variantId === "marketplace-light" && (
+        <a class="hdr-shop-categories" href="/categories">Shop by category</a>
+      )}
+
       {inlineMenu && (
         <div class="hdr-inline-menu">
           <slot name="menu" />
@@ -226,7 +230,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
 {
   spec.phoneSearch === "in-page" && !compactCategorySearch && (
-    <div class="hdr-phone-search hdr-phone-search--page">
+    <div class:list={["hdr-phone-search", "hdr-phone-search--page", variantId === "marketplace-light" && "hdr-phone-search--marketplace-light"]}>
       <HeaderSearch shape="field" id="header-search-input-phone" />
     </div>
   )
@@ -246,6 +250,10 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   .hdr[data-header-variant="marketplace-search"] {
+    position: relative;
+  }
+
+  .hdr[data-header-variant="marketplace-light"] {
     position: relative;
   }
 
@@ -385,6 +393,29 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     white-space: nowrap;
   }
 
+  .hdr-shop-categories {
+    display: none;
+  }
+
+  @media (max-width: 63.99rem) {
+    .hdr[data-header-variant="marketplace-light"] .hdr-phone-start {
+      order: 3;
+      margin-left: 0;
+      margin-right: -0.5rem;
+    }
+
+    .hdr[data-header-variant="marketplace-light"] .hdr-logo {
+      left: 1rem;
+      max-width: calc(100% - 10rem);
+      transform: translateY(-50%);
+    }
+
+    .hdr[data-header-variant="marketplace-light"] .hdr-actions {
+      order: 2;
+      margin-right: 0;
+    }
+  }
+
   .hdr-inline-menu,
   .hdr-search,
   .hdr-util.hdr-util--desktop,
@@ -475,6 +506,18 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     border-bottom: 1px solid var(--border);
   }
 
+  .hdr-phone-search--marketplace-light {
+    padding-block: 0.75rem;
+    background: var(--background);
+  }
+
+  .hdr-phone-search--marketplace-light :global(.hsearch) {
+    height: 2.5rem;
+    border-color: var(--border);
+    border-radius: 9999px;
+    background: var(--card);
+  }
+
   .hdr.is-scrolled > .hdr-phone-search {
     height: 0;
     padding-bottom: 0;
@@ -517,6 +560,23 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       max-width: var(--header-logo-width);
     }
 
+    .hdr[data-header-variant="marketplace-light"] .hdr-inner {
+      max-width: 93rem;
+    }
+
+    .hdr[data-header-variant="marketplace-light"] .hdr-shop-categories {
+      display: inline-flex;
+      flex: 0 0 5.5rem;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      line-height: 1.15;
+    }
+
+    .hdr[data-header-variant="marketplace-light"] .hdr-shop-categories:hover {
+      text-decoration: underline;
+    }
+
     .hdr[data-header-variant="mall-search"] .hdr-logo-image {
       max-height: 6.25rem;
     }
@@ -537,6 +597,11 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       flex: 1 1 36rem;
       min-width: 12rem;
       max-width: 50rem;
+    }
+
+    .hdr[data-header-variant="marketplace-light"] .hdr-search {
+      flex-basis: 65rem;
+      max-width: 65rem;
     }
 
     .hdr[data-header-variant="tech-rounded"] .hdr-search {

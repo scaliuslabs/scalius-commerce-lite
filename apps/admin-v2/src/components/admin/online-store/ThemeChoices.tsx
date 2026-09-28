@@ -289,6 +289,22 @@ export function HeaderRows({ kind }: { kind: StorefrontHeaderRenderer }) {
 }
 
 export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer; variant?: string }) {
+  if (variant === "marketplace-light") {
+    return (
+      <Sketch>
+        <span className="flex justify-end border-b border-(--sk-line) py-0.5"><Line className="h-0.5 w-1/4" /></span>
+        <span className="flex items-center gap-1.5 py-1">
+          <Logo className="h-3 w-6" />
+          <span className="flex h-2.5 flex-1 items-center rounded-full border border-(--sk-ink) px-1">
+            <span className="ml-auto h-1 w-5 border-l border-(--sk-line)" />
+          </span>
+          <span className="h-2.5 w-4 rounded-full bg-(--sk-accent)" />
+        </span>
+        <span className="flex gap-1 border-t border-(--sk-line) pt-1"><Line /><Line /><Line /><Line /></span>
+        <Filler className="mt-1" />
+      </Sketch>
+    );
+  }
   if (variant === "mall-search") {
     return (
       <Sketch>

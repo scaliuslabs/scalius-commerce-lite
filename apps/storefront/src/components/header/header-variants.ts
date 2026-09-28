@@ -25,7 +25,7 @@ export interface HeaderSpec {
   /** Top-level menu items in capitals (fashion departments). */
   uppercaseMenu: boolean;
   /** icon: a 44px button; field: a filled field; pill: a rounded field; scoped: department select + field + button. */
-  search: "icon" | "field" | "pill" | "scoped";
+  search: "icon" | "field" | "pill" | "scoped" | "scoped-right";
   /** How account, track order and cart read on computers. */
   utilities: "icons" | "stacked" | "two-line" | "round";
   /** A running cart total beside the cart (unless the settings turn it off). */
@@ -142,6 +142,21 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     phoneShortcuts: true,
     mainHeight: 3.75,
     menuHeight: 2.5,
+  },
+  // eBay: utility strip, 84px light search row, 54px category row. On
+  // phones, a 52px bar followed by an in-page search, neither sticky.
+  "marketplace-light": {
+    toneRow: false,
+    menuRowTone: "surface",
+    menu: "row",
+    uppercaseMenu: false,
+    search: "scoped-right",
+    utilities: "icons",
+    cartTotal: false,
+    phoneSearch: "in-page",
+    phoneShortcuts: false,
+    mainHeight: 5.25,
+    menuHeight: 3.375,
   },
   // Department mall: a prominent logo and scoped search over a department rail.
   "mall-search": {
