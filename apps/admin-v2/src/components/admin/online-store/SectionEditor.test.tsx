@@ -97,6 +97,30 @@ describe("homepage section editor", () => {
     expect(seen.sections[0]?.settings).toEqual({ style: "square" });
   });
 
+  it("edits the homepage banner layout and restores a removed banner section", async () => {
+    render([section("hero", "hero", { layout: "story-cards" })]);
+    act(() => button("Edit Banners").click());
+    choose(document.querySelector<HTMLButtonElement>("#section-hero-layout")!, "Contained banner with side promos");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.settings).toEqual({ layout: "contained-banners" });
+    act(() => button("Remove Banners").click());
+    choose(container.querySelector<HTMLButtonElement>('button[aria-label="Add section"]')!, "Banners");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.type).toBe("hero");
+  });
+
+  it("saves side promotion copy and link with a contained banner", async () => {
+    render([section("hero", "hero", { layout: "contained-banners", sideBanners: [{ mediaId: "m-1", alt: "Honey jars", href: null }] })]);
+    act(() => button("Edit Banners").click());
+    type(document.querySelector<HTMLInputElement>("#section-hero-side-banner-0-alt")!, "Fresh honey jars");
+    type(document.querySelector<HTMLInputElement>("#section-hero-side-banner-0-link")!, "/collections/honey");
+    await act(async () => button("Done").click());
+    expect(seen.sections[0]?.settings).toEqual({
+      layout: "contained-banners",
+      sideBanners: [{ mediaId: "m-1", alt: "Fresh honey jars", href: "/collections/honey" }],
+    });
+  });
+
   it("keeps a card without a name or with a bad link out of the draft and says why", async () => {
     render([section("shop-by", "cards")]);
     act(() => button("Edit Shop-by cards").click());

@@ -50,6 +50,7 @@ export interface SectionMediaPreview {
 
 /** Section types with a settings form here. The rest show store data only. */
 const EDITABLE = new Set<StorefrontSectionType>([
+  "hero",
   "usp-strip",
   "category-tiles",
   "product-rail",
@@ -67,6 +68,7 @@ const EDITABLE = new Set<StorefrontSectionType>([
 
 /** What "Add section" offers: every editable type, plus the data-only ones. */
 const ADDABLE: readonly StorefrontSectionType[] = [
+  "hero",
   "category-tiles",
   "collections",
   "product-rail",
@@ -418,6 +420,47 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
   };
 
   switch (section.type) {
+    case "hero": {
+      const settings = section.settings;
+      const banners = settings.sideBanners ?? [];
+      const setBanners = (sideBanners: NonNullable<Settings<"hero">["sideBanners"]>) => update({ ...settings, sideBanners });
+      return (
+        <>
+          <ChoiceField
+            id={id("layout")}
+            label={t("heroLayout")}
+            value={settings.layout}
+            options={(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"] as const).map((value) => ({ value, label: t(`heroLayout_${value}`) }))}
+            onChange={(layout) => update({ ...settings, layout })}
+          />
+          <p className="text-body text-muted-foreground">{t("heroImagesHelp")}</p>
+          {settings.layout === "contained-banners" && (
+            <ItemList
+              label={t("heroSideBanners")}
+              help={t("heroSideBannersHelp")}
+              count={banners.length}
+              max={2}
+              addLabel={t("addSideBanner")}
+              onAdd={() => setBanners([...banners, { mediaId: "", alt: "", href: null }])}
+            >
+              {banners.map((banner, index) => (
+                <ItemRow key={index} removeLabel={t("removeSideBanner", { number: index + 1 })} onRemove={() => setBanners(removeAt(banners, index))}>
+                  <MediaField
+                    label={t("sideBannerNumber", { number: index + 1 })}
+                    mediaId={banner.mediaId || null}
+                    previews={previews}
+                    error={error(`sideBanners.${index}.mediaId`)}
+                    onPick={pick((image) => setBanners(replaceAt(banners, index, { ...banner, mediaId: image.id, alt: banner.alt || image.alt })))}
+                  />
+                  <TextField id={id(`side-banner-${index}-alt`)} label={t("sectionImageAlt")} value={banner.alt} error={error(`sideBanners.${index}.alt`)} onChange={(alt) => setBanners(replaceAt(banners, index, { ...banner, alt }))} />
+                  <TextField id={id(`side-banner-${index}-link`)} label={t("sectionLink")} value={banner.href ?? ""} error={error(`sideBanners.${index}.href`)} onChange={(href) => setBanners(replaceAt(banners, index, { ...banner, href: href.trim() ? href : null }))} />
+                </ItemRow>
+              ))}
+            </ItemList>
+          )}
+        </>
+      );
+    }
     case "usp-strip": {
       const settings = section.settings;
       const set = (next: Partial<Settings<"usp-strip">>) => update({ ...settings, ...next });
