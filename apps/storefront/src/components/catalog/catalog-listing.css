@@ -419,6 +419,10 @@
   .site-root .product-grid-frame[data-catalog-card="portrait"]:not([data-catalog-results="list"]) > .product-grid {
     column-gap: 2.5rem;
   }
+
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) > .product-grid {
+    gap: 0;
+  }
 }
 
 /* ─── Computers ──────────────────────────────────────────────────────── */

@@ -39,7 +39,7 @@ interface Props {
 
 const { products, results, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
 const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
-const maxColumns = resolved.template === "mass-retail" && resolved.tokens.density === "comfortable" ? 4 : undefined;
+const maxColumns = resolved.blocks.card.variant === "spec" || (resolved.template === "mass-retail" && resolved.tokens.density === "comfortable") ? 4 : undefined;
 // Only a grid beside the filters loses their column.
 const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 
@@ -69,7 +69,7 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
 ---
 
 {restoreView && <script is:inline set:html={restoreScript} />}
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}
