@@ -111,10 +111,11 @@ numbers come from the storefront study
   A template may set its reference's own numbers over the style's:
   `column` (180-340px), `rowPitch` (16-36px) and `label` (12-18px);
   `resolved.blocks.listing.filters.spec` carries the result
-  (`storefrontListingFilterSpec`). Marketplace is Daraz's 190/18/13,
-  spec-catalogue Star Tech's 225/32/14, rounded-tech Apple Gadgets'
-  316/28/16 and department-mall Amazon's 262/22/14 (sidebar-dense).
-  Phones always use a Filter button and a 288px sheet. The small-catalogue
+  (`storefrontListingFilterSpec`). Marketplace is Amazon's 262/22/14,
+  spec-catalogue Star Tech's 225/32/14 and rounded-tech Apple Gadgets'
+  316/28/16. Other templates use a Filter button and a 288px phone sheet;
+  Marketplace uses persistent filter chips and a full-width split sheet.
+  The small-catalogue
   rule is `storefrontListingFiltersShown`: filters need 8 results and a
   facet with two values, unless the buyer already refined; a store with
   fewer than 8 products resolves `shown: false`. The listing `layout` is
@@ -181,7 +182,7 @@ numbers come from the storefront study
 | `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6 | compact, retail, uppercase, square, flat |
 | `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (list rows on phones) / thumbs-below / spec / support-dark; nav category-tree, 18 | dense, flat type, subtle, dark header, contain, 1290 |
 | `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, dark header |
-| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / marketplace / grid + sidebar-dense / thumbs-below / marketplace-3col / directory; nav tree+menu, 18 | dense, flat type, brand header, full width |
+| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / detailed / list + sidebar-dense (list rows on phones) / thumbs-left / marketplace-3col / directory; nav tree+menu, 18 | compact, flat type, dark header, full width |
 | `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + sidebar-dense (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
 | `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / grid + sidebar-comfortable / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
 | `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid + drawer / thumbs-below / classic / minimal-columns; nav tree+menu, 16 | compact, rounded, pill, contain, full width |
@@ -255,7 +256,8 @@ border or a shadow, never both on the same element.
 | Palette | References | Rationale |
 |---|---|---|
 | `retail` | Shopify Horizon/Dawn, Allbirds | Warm white paper, charcoal ink and charcoal buttons; sand neutrals carry the warmth, and the merchant's brand colour is the only accent. |
-| `marketplace` | Amazon, Daraz, Target | Density done cleanly: bright white, near-black ink, cool neutral panels, one saturated orange reserved for buying; compact bold grotesque. |
+| `marketplace` | Target, Daraz | Bright white, near-black ink, cool neutral panels, orange actions. |
+| `marketplaceAmazon` | Amazon | Dark header, white content, amber search and cart actions, orange buy action. |
 | `boutique` | COS, Aesop, Ssense | No colour at all: linen page, espresso ink, flat cards and square corners; an editorial serif over a neutral grotesque carries the hierarchy. |
 | `fresh` | Instacart, Chaldal, Ocado | Clean white, a leaf green for buying, green-tinted panels for categories and delivery facts; friendly rounded sans and pill buttons for thumb use. |
 | `beauty` | Glossier, Sephora | Black type and black pill buttons on white, a blush accent used only on surfaces; a soft display serif over a geometric sans. |
@@ -275,6 +277,9 @@ border or a shadow, never both on the same element.
 | accent surface | #e9e3d8 | #fff1e6 | #e3ddd2 | #e3f4e6 | #f8e1e1 | #ecdfc9 | #232327 |
 | border | #e5e0d6 | #e3e6e6 | #d9d3c7 | #dde8de | #f0e2e1 | #e2d5bf | #27272b |
 | destructive (error) | #b42318 | #b12704 | #9b1c1c | #c0262d | #b4232c | #a3191b | #f87171 |
+
+`marketplaceAmazon` shares `marketplace`'s white and neutral surfaces,
+uses #131921 ink, and replaces its pale accent with #ffd814 and dark accent text.
 
 ### Typography pairings
 
@@ -315,4 +320,3 @@ new family fails the type check until both have its file).
   a shadow.
 - **Skeletons:** loading states mirror the final layout (the same aspect
   ratios and rows).
-

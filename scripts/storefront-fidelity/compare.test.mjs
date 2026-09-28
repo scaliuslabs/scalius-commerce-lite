@@ -143,10 +143,10 @@ describe("template comparison", () => {
     expect(compareTemplate("spec-catalogue", ours, small).some((c) => c.metric === "listing.filtersVisible")).toBe(false);
   });
 
-  it("uses a different reference per block (marketplace: Amazon header, Daraz cards)", () => {
+  it("uses Amazon for the marketplace header and cards", () => {
     const checks = compareTemplate("marketplace", ours, reference);
     expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop").refSite).toBe("amazon");
-    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop").refSite).toBe("daraz");
+    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop").refSite).toBe("amazon");
   });
 
   it("refuses an unmapped template", () => {

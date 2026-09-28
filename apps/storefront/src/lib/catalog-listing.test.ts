@@ -34,15 +34,15 @@ describe("listing presentation", () => {
     expect(presentation("department-mall")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
     expect(presentation("rounded-tech")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
     expect(presentation("spec-catalogue")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
-    expect(presentation("marketplace")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
+    expect(presentation("marketplace")).toEqual({ layout: "list", placement: "sidebar", style: "sidebar-dense", open: true, results: "list", shelves: false });
     expect(presentation("mass-retail")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
     expect(presentation("boutique")).toEqual({ layout: "grid", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: false });
     expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: true });
     expect(presentation("daily-essentials")).toEqual({ layout: "quick-grid", placement: "drawer", style: "drawer", open: false, results: "quick", shelves: false });
-    // Each template carries its reference's numbers: Daraz 190/18/13, Star Tech 225/32/14, Amazon 262/22/14.
+    // Each template carries its reference's numbers: Amazon 262/22/14, Star Tech 225/32/14.
     expect(catalogListingPresentation(resolve("marketplace")).filters).toMatchObject({
-      styleVars: "--catalog-filter-column:190px;--catalog-filter-row:18px;--catalog-filter-label:13px",
-      columnPx: 190,
+      styleVars: "--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px",
+      columnPx: 262,
     });
     expect(catalogListingPresentation(resolve("spec-catalogue")).filters.styleVars)
       .toBe("--catalog-filter-column:225px;--catalog-filter-row:32px;--catalog-filter-label:14px");

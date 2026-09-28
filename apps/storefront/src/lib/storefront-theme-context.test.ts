@@ -48,7 +48,7 @@ describe("request theme", () => {
     expect(first.theme).toEqual(published);
     expect(first.layout.header).toBe("marketplace");
     expect(first.layout.navigation).toBe("drawer");
-    expect(first.resolved.blocks.card.variant).toBe("marketplace");
+    expect(first.resolved.blocks.card.variant).toBe("detailed");
     expect(await resolveRequestTheme({ request: request(), locals }, {})).toBe(first);
     expect(await currentRequestTheme(locals)).toBe(first);
     expect(resolveThemePreview).not.toHaveBeenCalled();

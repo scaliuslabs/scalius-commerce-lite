@@ -196,6 +196,7 @@ function optionAriaLabel(
 
 <div
   class="lg:col-span-5 xl:col-span-6"
+  data-product-summary
   data-buy-box-look={look ? "" : undefined}
   data-cta-shape={look?.cta.shape}
   data-cta-layout={look?.cta.layout}
@@ -206,11 +207,22 @@ function optionAriaLabel(
   style={lookStyle}
 >
   <div class="buy-box-body flex h-full flex-col">
+    <div
+      id="product-actions"
+      data-add-to-cart-text={actionCopy.addToCartText}
+      data-buy-now-text={actionCopy.buyNowText}
+      data-unavailable-text={actionCopy.unavailableText}
+      data-choose-option-text={actionCopy.chooseOptionText}
+      data-quantity-limit-text={actionCopy.quantityLimitText}
+    >
+    <div class="buy-box-main">
     <div class="mb-2 border-b border-border pb-2">
-      <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
-      <slot name="after-title" />
+      <div class="buy-box-title">
+        <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
+        <slot name="after-title" />
+      </div>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1">
         <p class="product-price whitespace-nowrap text-xl font-semibold text-foreground lg:text-3xl" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
           {showsStartingPrice
             ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
@@ -232,12 +244,14 @@ function optionAriaLabel(
         </ul>
       ) : null}
       <slot name="after-price" />
-      <div class="mt-2 flex flex-wrap items-center gap-2">
-        <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-          <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+      {!factsColumn && (
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+            <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+          </div>
+          {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
-        {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
-      </div>
+      )}
       {offers.length > 0 && (
         <ul class="mt-2 space-y-1" data-product-offers>
           {offers.map((offer) => (
@@ -257,15 +271,7 @@ function optionAriaLabel(
     <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
     <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
-    <div
-      id="product-actions"
-      class="space-y-3 pt-1 lg:pt-2"
-      data-add-to-cart-text={actionCopy.addToCartText}
-      data-buy-now-text={actionCopy.buyNowText}
-      data-unavailable-text={actionCopy.unavailableText}
-      data-choose-option-text={actionCopy.chooseOptionText}
-      data-quantity-limit-text={actionCopy.quantityLimitText}
-    >
+    <div class="space-y-3 pt-1 lg:pt-2">
       <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
         {initialUnavailableVariant ? `${unavailableLabel}: ${buyerStockSummary.text}` : ""}
       </div>
@@ -340,6 +346,24 @@ function optionAriaLabel(
         </noscript>
       ) : null}
 
+    </div>
+    </div>
+      <div class="buy-box-purchase">
+      {factsColumn && (
+        <p class="purchase-price product-price text-2xl text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
+          {showsStartingPrice
+            ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
+            : formatPrice(pricing.finalPrice)}
+        </p>
+      )}
+      {factsColumn && (
+        <div class="flex flex-wrap items-center gap-2">
+          <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+            <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+          </div>
+          {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
+        </div>
+      )}
       <div>
         <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
@@ -359,12 +383,14 @@ function optionAriaLabel(
           <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>
+      {factsColumn && (
+        <aside class="buy-box-facts">
+          <slot name="after-actions" />
+        </aside>
+      )}
+      </div>
     </div>
-    {factsColumn ? (
-      <aside class="buy-box-facts">
-        <slot name="after-actions" />
-      </aside>
-    ) : (
+    {!factsColumn && (
       <slot name="after-actions" />
     )}
     {details && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} />}
@@ -388,6 +414,14 @@ function optionAriaLabel(
   [data-buy-box-look] .buy-box-ctas {
     max-width: var(--bb-cta-max);
   }
+  .buy-box-purchase {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  [data-facts-column] .purchase-price {
+    display: none;
+  }
   [data-buy-box-look] .buy-box-ctas > button {
     min-height: var(--bb-cta-height);
     font-size: 0.9375rem;
@@ -400,6 +434,29 @@ function optionAriaLabel(
   }
   [data-cta-first="buy-now"] .buy-box-ctas > [data-action="buy-now"] {
     order: -1;
+  }
+  [data-facts-column] .buy-box-ctas > [data-action="add-to-cart"] {
+    order: -2;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  [data-facts-column] .buy-box-ctas > [data-action="buy-now"] {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  [data-facts-column] .buy-box-ctas > button:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+  [data-facts-column] .buy-box-ctas > button:disabled {
+    border-color: var(--border);
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  [data-facts-column][data-price-tone] .purchase-price {
+    color: var(--foreground);
+    font-size: 1.5rem;
   }
   [data-buy-box-card] > .buy-box-body {
     border: 1px solid var(--border);
@@ -417,21 +474,31 @@ function optionAriaLabel(
       padding: 1.5rem;
     }
   }
-  /* Daraz / Amazon: delivery, cash on delivery, returns and warranty in a
-     284px column at the right of the buy box on wide screens. */
+  @media (max-width: 63.999rem) {
+    [data-facts-column] .buy-box-title,
+    [data-facts-column] .buy-box-main-price {
+      display: none;
+    }
+    [data-facts-column] .purchase-price {
+      display: block;
+    }
+  }
+  /* Keep the variant selectors in the detail column while the existing form,
+     quantity buttons, purchase buttons and delivery facts share one card. */
   @media (min-width: 80rem) {
-    [data-facts-column] > .buy-box-body {
+    [data-facts-column] #product-actions {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 284px;
-      column-gap: 1.5rem;
+      grid-template-columns: minmax(0, 1fr) 15.25rem;
+      gap: 1.5rem;
       align-items: start;
     }
-    [data-facts-column] .buy-box-body > * {
-      grid-column: 1;
+    [data-facts-column] .buy-box-purchase {
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
     }
-    [data-facts-column] .buy-box-body > .buy-box-facts {
-      grid-column: 2;
-      grid-row: 1 / span 3;
+    [data-facts-column] .purchase-price {
+      display: block;
     }
   }
 </style>

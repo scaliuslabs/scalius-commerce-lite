@@ -4,12 +4,12 @@
 // columns). `stacked` (Dawn) and `grid` (Target) keep every photo in the
 // wide column and the details in a sticky column beside it (345px, 400px),
 // so the buy box starts at the top of the first screen. A buy box with a
-// delivery column (Daraz, Amazon) takes 7 of 12 columns from 80rem.
+// delivery column takes the space beside the gallery from 80rem.
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
 
 interface Props {
   gallery: ResolvedStorefrontThemeLayout["productPage"]["gallery"];
-  /** The buy box carries a 284px delivery column at the right (from 80rem). */
+  /** The buy box carries a purchase column at the right (from 80rem). */
   factsColumn?: boolean;
 }
 
@@ -37,22 +37,30 @@ const { gallery, factsColumn = false } = Astro.props;
     .product-layout[data-gallery="grid"] {
       --product-info-column: 400px;
     }
-    .product-layout[data-gallery="stacked"] > :global(*),
-    .product-layout[data-gallery="grid"] > :global(*) {
+    .product-layout[data-gallery="stacked"] > :global([data-product-gallery]),
+    .product-layout[data-gallery="stacked"] > :global([data-product-summary]),
+    .product-layout[data-gallery="grid"] > :global([data-product-gallery]),
+    .product-layout[data-gallery="grid"] > :global([data-product-summary]) {
       grid-column: auto;
     }
-    .product-layout[data-gallery="stacked"] > :global(:nth-child(2)),
-    .product-layout[data-gallery="grid"] > :global(:nth-child(2)) {
+    .product-layout[data-gallery="stacked"] > :global([data-product-summary]),
+    .product-layout[data-gallery="grid"] > :global([data-product-summary]) {
       position: sticky;
       top: calc(var(--header-height, 4rem) + 1rem);
     }
   }
   @media (min-width: 80rem) {
-    .product-layout[data-gallery="beside"][data-facts-column] > :global(:nth-child(1)) {
-      grid-column: span 5 / span 5;
+    .product-layout[data-gallery="beside"][data-facts-column] {
+      grid-template-columns: minmax(0, 35%) minmax(0, 1fr);
+      column-gap: 1.5rem;
     }
-    .product-layout[data-gallery="beside"][data-facts-column] > :global(:nth-child(2)) {
-      grid-column: span 7 / span 7;
+    .product-layout[data-gallery="beside"][data-facts-column] > :global([data-product-gallery]) {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .product-layout[data-gallery="beside"][data-facts-column] > :global([data-product-summary]) {
+      grid-column: 2;
+      grid-row: 1;
     }
   }
 </style>

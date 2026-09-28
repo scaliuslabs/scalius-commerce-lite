@@ -253,7 +253,7 @@ export const STOREFRONT_THEME_PALETTES = {
     destructive: "#b42318", "destructive-foreground": "#ffffff",
     border: "#e5e0d6", input: "#d3ccbf", ring: "#1d1c1a",
   }),
-  // Amazon/Daraz/Target: bright white, near-black ink, cool neutral panels
+  // Daraz/Target: bright white, near-black ink, cool neutral panels
   // for density, one saturated orange reserved for buying actions.
   marketplace: palette({
     background: "#ffffff", foreground: "#0f1111", card: "#ffffff", "card-foreground": "#0f1111",
@@ -261,6 +261,17 @@ export const STOREFRONT_THEME_PALETTES = {
     secondary: "#f2f4f5", "secondary-foreground": "#0f1111",
     muted: "#f2f4f5", "muted-foreground": "#565959",
     accent: "#fff1e6", "accent-foreground": "#7a2e0e",
+    destructive: "#b12704", "destructive-foreground": "#ffffff",
+    border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
+  }),
+  // Amazon-style purchase hierarchy: dark header, orange primary action,
+  // yellow secondary action. Kept separate from Target's shared palette.
+  marketplaceAmazon: palette({
+    background: "#ffffff", foreground: "#131921", card: "#ffffff", "card-foreground": "#0f1111",
+    primary: "#c2410c", "primary-foreground": "#ffffff",
+    secondary: "#f2f4f5", "secondary-foreground": "#0f1111",
+    muted: "#f2f4f5", "muted-foreground": "#565959",
+    accent: "#ffd814", "accent-foreground": "#0f1111",
     destructive: "#b12704", "destructive-foreground": "#ffffff",
     border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
   }),

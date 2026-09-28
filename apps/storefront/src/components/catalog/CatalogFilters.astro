@@ -61,6 +61,8 @@ interface Props {
   currencySymbol: string;
   currencyCode: string;
   presentation: CatalogFilterPresentation;
+  /** Marketplace phones show the existing facets as a split rail when JavaScript is ready. */
+  mobileFacetRail?: boolean;
   /** Leave the category group out (the sub-category pills above the results carry it). */
   withoutCategories?: boolean;
   /** The Customer rating group's "N★ & up" rows (catalogRatingRows); empty hides the group. */
@@ -82,6 +84,7 @@ const {
   currencySymbol,
   currencyCode,
   presentation,
+  mobileFacetRail = false,
   withoutCategories = false,
   ratingRows = [],
 } = Astro.props;
@@ -216,6 +219,9 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
           open={isOpen(section, index)}
           id={anchorOf(section)}
           data-catalog-dropdown={bar ? "" : undefined}
+          data-catalog-mobile-facet={mobileFacetRail ? "" : undefined}
+          data-selected={mobileFacetRail && section.selectedCount > 0 ? "true" : undefined}
+          data-initial-open={mobileFacetRail ? String(isOpen(section, index)) : undefined}
           data-bar-overflow={bar && index >= presentation.barFacets ? "" : undefined}
           class="catalog-facet group"
         >
@@ -229,6 +235,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
             )}
             <svg class="catalog-facet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
           </summary>
+          {mobileFacetRail && <strong class="catalog-mobile-facet-title" aria-hidden="true">{section.name}</strong>}
 
           {section.kind === "availability" ? (
             <fieldset class="catalog-facet-body">

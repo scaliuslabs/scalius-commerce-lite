@@ -134,6 +134,7 @@ const controls = catalogListingControls({
 });
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
+const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
 const showPhoneBar = showSort || showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
@@ -178,7 +179,7 @@ const popularFilters = piece("popular-filter-chips") && products.length > 0
   : [];
 // Aspect chips share the phone bar's line when there is one.
 const phoneChips = aspectChips.length > 0 && showFilters;
-const quickFilters = drawer && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
+const quickFilters = (drawer || marketplacePhoneFilters) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
 // sorted or later page (those list products in the grid).
@@ -250,39 +251,75 @@ const breadcrumbVisible = piece("breadcrumb");
 {showPhoneBar && (
   <div
     class:list={[
-      "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
+      "sticky z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
+      marketplacePhoneFilters ? "catalog-marketplace-phone-bar top-0" : "top-[calc(var(--header-height,3.5rem)+0.5rem)]",
       // eBay's phone row: Filters, sort and one chip per facet on one
       // scrolling line, so the results start one row higher.
-      phoneChips
+      !marketplacePhoneFilters && phoneChips
         ? "catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1"
-        : ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
+        : !marketplacePhoneFilters && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
     data-catalog-phone-bar
   >
-    {showFilters && (
-      <button
-        type="button"
-        id="mobile-filter-toggle"
-        aria-controls="filter-section"
-        aria-expanded="false"
-        class:list={[
-          "relative flex min-h-11 shrink-0 items-center justify-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm",
-          phoneChips ? "rounded-full" : "rounded-lg",
-        ]}
-      >
-        <SlidersHorizontal className="h-4 w-4" />
-        <span>Filters</span>
-        {refinementCount > 0 && (
-          <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-            {refinementCount}
-          </span>
+    {marketplacePhoneFilters ? (
+      <Fragment>
+        <div class="catalog-marketplace-phone-controls catalog-chip-row">
+          <button
+            type="button"
+            id="mobile-filter-toggle"
+            aria-controls="filter-section"
+            aria-expanded="false"
+            class="catalog-marketplace-filter-toggle relative flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span class="sr-only">Filters</span>
+            {refinementCount > 0 && (
+              <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+                {refinementCount}
+              </span>
+            )}
+          </button>
+          {quickFilters.map((link) => (
+            <a
+              href={link.href}
+              aria-current={link.active ? "true" : undefined}
+              class:list={["catalog-marketplace-quick-filter", link.active && "is-active"]}
+            >{link.label}</a>
+          ))}
+          {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
+        </div>
+        {phoneChips && (
+          <div class="catalog-marketplace-phone-aspects catalog-chip-row">
+            <CatalogAspectChips chips={aspectChips} inline />
+          </div>
         )}
-      </button>
+      </Fragment>
+    ) : (
+      <Fragment>
+        {showFilters && (
+          <button
+            type="button"
+            id="mobile-filter-toggle"
+            aria-controls="filter-section"
+            aria-expanded="false"
+            class:list={[
+              "relative flex min-h-11 shrink-0 items-center justify-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm",
+              phoneChips ? "rounded-full" : "rounded-lg",
+            ]}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span>Filters</span>
+            {refinementCount > 0 && (
+              <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+                {refinementCount}
+              </span>
+            )}
+          </button>
+        )}
+        {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
+        {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
+      </Fragment>
     )}
-    {showSort && (
-      <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />
-    )}
-    {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
   </div>
 )}
 
@@ -296,6 +333,7 @@ const breadcrumbVisible = piece("breadcrumb");
       id="filter-section"
       aria-labelledby="mobile-filter-title"
       data-catalog-dialog={drawer ? "drawer" : undefined}
+      data-marketplace-filter-rail={marketplacePhoneFilters ? "" : undefined}
       data-placement={placement}
       style={presentation.filters.styleVars || undefined}
       class:list={[
@@ -337,6 +375,7 @@ const breadcrumbVisible = piece("breadcrumb");
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
           presentation={presentation.filters}
+          mobileFacetRail={marketplacePhoneFilters}
           withoutCategories={pillLinks.length > 0 && pills.length === 0}
           ratingRows={ratingRows}
         />
@@ -414,7 +453,51 @@ const breadcrumbVisible = piece("breadcrumb");
   import { setupCatalogSorts } from "@/lib/catalog-sort";
   import { setupCatalogPaging, setupCatalogViewToggle } from "@/lib/catalog-paging";
 
+  let railCleanup: (() => void) | undefined;
+  let railNode: HTMLElement | null = null;
+  const setupMarketplaceFacetRail = () => {
+    const section = document.querySelector<HTMLElement>("#filter-section[data-marketplace-filter-rail]");
+    if (section === railNode) return;
+    railCleanup?.();
+    railNode = section;
+    if (!section) return;
+    const facets = [...section.querySelectorAll<HTMLDetailsElement>("details[data-catalog-mobile-facet]")];
+    if (facets.length === 0) return;
+    const mobile = window.matchMedia("(max-width: 1023px)");
+    const sync = () => {
+      if (mobile.matches) {
+        const active = facets.find((facet) => facet.dataset.selected === "true") ?? facets[0];
+        facets.forEach((facet) => {
+          facet.open = facet === active;
+          facet.setAttribute("name", "catalog-mobile-facets");
+        });
+        section.setAttribute("data-mobile-facet-rail", "");
+      } else {
+        section.removeAttribute("data-mobile-facet-rail");
+        facets.forEach((facet) => {
+          facet.removeAttribute("name");
+          facet.open = facet.dataset.initialOpen === "true";
+        });
+      }
+    };
+    const keepOneOpen = (event: MouseEvent) => {
+      if (!mobile.matches || !(event.target instanceof Element)) return;
+      const facet = event.target.closest("summary")?.parentElement;
+      if (!(facet instanceof HTMLDetailsElement) || !facets.includes(facet)) return;
+      event.preventDefault();
+      facets.forEach((item) => { item.open = item === facet; });
+    };
+    sync();
+    section.addEventListener("click", keepOneOpen);
+    mobile.addEventListener("change", sync);
+    railCleanup = () => {
+      section.removeEventListener("click", keepOneOpen);
+      mobile.removeEventListener("change", sync);
+    };
+  };
+
   const setupCatalog = () => {
+    setupMarketplaceFacetRail();
     setupCatalogFilterDialog();
     setupCatalogFilters();
     setupCatalogSorts();

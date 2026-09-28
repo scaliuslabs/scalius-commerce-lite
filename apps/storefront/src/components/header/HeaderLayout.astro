@@ -152,6 +152,10 @@ const {
   }
 
   function updateHeaderHeight() {
+    if (document.getElementById("main-header")?.dataset.headerVariant === "marketplace-search") {
+      setHeaderHeight(0);
+      return;
+    }
     const part = stickyPart();
     if (part) setHeaderHeight(part.offsetHeight);
   }

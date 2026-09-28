@@ -15,8 +15,8 @@
     const topR = main.getBoundingClientRect();
     out.header = { ...R(main), top: Math.round(topR.top + scrollY) };
     out.headerRows = [...main.querySelectorAll(":scope > div, :scope > nav")].filter(vis).map((d) => ({ cls: (d.className || "").toString().split(" ")[0], h: Math.round(d.getBoundingClientRect().height) }));
-    const s = main.querySelector("[data-header-search] input, .hsearch-input, [data-header-search]");
-    out.search = s && vis(s) ? R(s.closest("form") || s) : null;
+    const s = [...main.querySelectorAll("[data-header-search] input, .hsearch-input, [data-header-search]")].find(vis);
+    out.search = s ? R(s.closest("form") || s) : null;
     const logo = main.querySelector(".hdr-logo"); out.logo = logo && vis(logo) ? R(logo) : null;
     // above the header (top bar)
     const above = [...document.body.querySelectorAll("body > *, body > * > *")].filter((e) => vis(e) && e.getBoundingClientRect().bottom <= topR.top + 1 && e.getBoundingClientRect().height > 8 && !e.contains(main));
@@ -87,7 +87,7 @@
     };
     const bar = document.querySelector("[data-catalog-filter-bar]"); out.listing.phoneBar = bar && vis(bar) ? R(bar) : null;
   }
-  const h1 = document.querySelector("main h1, h1"); out.h1 = h1 ? { font: font(h1), text: h1.innerText.trim().slice(0, 60), ...R(h1) } : null;
+  const h1 = [...document.querySelectorAll("main h1, h1")].find(vis); out.h1 = h1 ? { font: font(h1), text: h1.innerText.trim().slice(0, 60), ...R(h1) } : null;
   // pdp
   const gal = document.getElementById("product-gallery");
   if (gal) {
@@ -95,7 +95,7 @@
     const thumbs = [...gal.querySelectorAll("[data-gallery-thumbnail]")].filter(vis);
     const buy = document.getElementById("product-actions");
     const buttons = [...document.querySelectorAll("[data-action=add-to-cart], [data-action=buy-now]")].filter(vis).map((b) => ({ text: b.innerText.trim().slice(0, 16), w: Math.round(b.getBoundingClientRect().width), h: Math.round(b.getBoundingClientRect().height), radius: getComputedStyle(b).borderRadius }));
-    const h1p = document.querySelector("main h1, h1");
+    const h1p = h1;
     const col = h1p ? h1p.parentElement : null;
     const priceEl = [...document.querySelectorAll("main span, main p, main div")].filter((e) => vis(e) && /৳/.test(e.textContent) && e.children.length <= 1 && e.getBoundingClientRect().top < (h1p ? h1p.getBoundingClientRect().bottom + 300 : 900) && !e.closest("s, del, [data-theme-component]")).sort((a, b) => parseFloat(getComputedStyle(b).fontSize) - parseFloat(getComputedStyle(a).fontSize))[0];
     const chips = [...document.querySelectorAll("[data-option-definition-id] button, [data-option-definition-id] label, [data-option-value]")].filter(vis);

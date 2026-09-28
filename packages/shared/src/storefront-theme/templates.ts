@@ -277,13 +277,13 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     ],
   },
   {
-    // Daraz and Amazon: very large mixed catalogues. Brand header, drill-in menus.
+    // Amazon: very large mixed catalogues. Dark scoped-search header, dense list results.
     id: "marketplace",
-    palette: "marketplace",
+    palette: "marketplaceAmazon",
     tokens: {
-      typography: "market", typeScale: "flat", headingCase: "sentence", density: "dense",
+      typography: "market", typeScale: "flat", headingCase: "sentence", density: "compact",
       radius: "subtle", buttonShape: "radius", surface: "flat", imageRatio: "square", imageFit: "contain",
-      headerTone: "brand", container: "full",
+      headerTone: "dark", container: "full",
     },
     blocks: blocks({
       topBar: "utility",
@@ -291,15 +291,15 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       navigation: { source: "tree+menu", maxTopItems: 18 },
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
-      card: ["marketplace"],
+      card: ["detailed"],
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 190, rowPitch: 18, label: 13 }, // Daraz
-        toolbar: ["breadcrumb", "aspect-chips", "result-count", "sort", "grid-list-toggle"],
-        phoneLayout: "grid",
+        layout: ["list"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
+        toolbar: ["aspect-chips", "result-count", "sort", "applied-chips"],
+        phoneLayout: "list-row",
         paging: "numbered",
       },
       product: {
-        gallery: "thumbs-below",
+        gallery: "thumbs-left",
         buyBox: ["marketplace-3col"],
         below: ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "questions", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "none" },
@@ -307,9 +307,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       footer: "directory",
     }),
     home: [
-      home("hero", "hero", { layout: "app-panel" }),
+      home("hero", "hero", { layout: "story-cards" }),
+      home("category-tiles", "categories", { style: "quad" }),
       home("deal-block", "flash-sale"),
-      home("category-tiles", "categories", { style: "icons" }),
       home("endless-grid", "for-you"),
     ],
   },

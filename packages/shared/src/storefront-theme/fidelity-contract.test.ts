@@ -148,7 +148,7 @@ describe("listing filters", () => {
       "fashion-value": { style: "sidebar-comfortable", openByDefault: true }, // Fabrilife
       "spec-catalogue": { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
       "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, // Apple Gadgets
-      marketplace: { style: "sidebar-dense", openByDefault: true, column: 190, rowPitch: 18, label: 13 }, // Daraz
+      marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "mass-retail": { style: "sidebar-dense", openByDefault: true }, // large catalogue (owner rule)
       "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "daily-essentials": { style: "drawer", openByDefault: false }, // Chaldal
@@ -173,7 +173,7 @@ describe("listing filters", () => {
 
   it("resolves a template's own column, row pitch and label over its style's, within bounds", () => {
     const spec = (template: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(template), LIVE_SMALL).blocks.listing.filters.spec;
-    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 190, rowPitch: 18, label: 13 });
+    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 22, label: 14 });
     expect(spec("spec-catalogue")).toMatchObject({ placement: "sidebar", column: 225, rowPitch: 32, label: 14 });
     expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
     expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 22, label: 14 });

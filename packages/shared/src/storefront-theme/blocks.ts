@@ -379,13 +379,12 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     bundles: "rows",
     card: false,
   },
-  // Daraz / Amazon: h1 22/400, price 30/400 in the brand colour, Buy Now then
-  // Add to Cart; delivery, cash on delivery, returns and warranty in a 284px
-  // column at the right.
+  // Amazon: h1 18/400, price 30/400, stacked Add to Cart and Buy Now; the
+  // delivery and purchase facts sit in the right column.
   "marketplace-3col": {
-    title: { size: { desktop: 22, phone: 16 }, weight: 400 },
+    title: { size: { desktop: 18, phone: 14 }, weight: 400 },
     price: { size: { desktop: 30, phone: 22 }, weight: 400, tone: "primary" },
-    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "buy-now" },
+    cta: { height: 44, shape: "pill", layout: "stack", maxWidth: null, first: "add-to-cart" },
     facts: "column",
     factPills: false,
     features: "none",

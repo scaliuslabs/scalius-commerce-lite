@@ -658,13 +658,20 @@ const productCategoryAnalytics = productCategory
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
-    <div class="lg:pt-2">
+    <div class:list={["lg:pt-2", buyBoxLook?.facts === "column" && "hidden lg:block"]}>
       <ProductBreadcrumbs product={product} category={productCategory} />
     </div>
 
     <section
-      class="mx-auto max-w-7xl px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
+      class:list={["mx-auto px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6", buyBoxLook?.facts === "column" ? "max-w-[1500px]" : "max-w-7xl"]}
     >
+      {buyBoxLook?.facts === "column" && (
+        <div class="mb-3 lg:hidden">
+          {product.brand?.slug && <a href={`/brands/${encodeURIComponent(product.brand.slug)}`} class="text-sm text-primary">{product.brand.name}</a>}
+          <h1 class="mt-1 font-normal leading-snug text-foreground" style={`font-size: ${buyBoxLook.title.size.phone}px`}>{product.name}</h1>
+          <ReviewsSummary product={product} copy={reviewCopy} />
+        </div>
+      )}
       <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={buyBoxLook?.facts === "column"}>
         <ProductGallery
           product={product}

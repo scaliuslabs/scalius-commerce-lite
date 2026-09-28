@@ -442,7 +442,7 @@ export function quickGridSpec(grid: ThemeGrid): ThemeGrid {
  * `sizes` for a list row's photo (theme-listing.css `--listing-row-media`:
  * 120px in a narrow list, 224px from the tablet step). Rows never need more.
  */
-export const LIST_ROW_IMAGE_SIZES = "(max-width: 639px) 120px, 224px";
+export const LIST_ROW_IMAGE_SIZES = "(max-width: 639px) 160px, (max-width: 1023px) 176px, 256px";
 
 /** The image context of a card beside a sidebar or across the page. */
 export function catalogCardContext(presentation: Pick<CatalogListingPresentation, "filters">, filtersShown: boolean): ProductGridContext {

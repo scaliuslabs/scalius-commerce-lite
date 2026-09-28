@@ -33,7 +33,7 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
 
 {style !== "photo" && categories.length >= 2 && (
   <section class="home-section w-full" aria-labelledby={headingId}>
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class:list={["mx-auto px-4 sm:px-6 lg:px-8", style === "quad" ? "max-w-[100rem]" : "max-w-7xl"]}>
       <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{rail.title}</h2>
 
       {style === "icons" && (
