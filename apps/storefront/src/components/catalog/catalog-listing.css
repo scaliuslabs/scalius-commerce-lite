@@ -119,7 +119,33 @@
   white-space: nowrap;
 }
 
+.catalog-mass-retail-phone-bar {
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+
+.catalog-mass-retail-phone-bar label:has([data-catalog-sort]) {
+  flex: none;
+  width: 8rem;
+}
+
+.catalog-mass-retail-phone-bar select {
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.catalog-mass-retail-phone-bar nav a {
+  padding-inline: 0.75rem;
+}
+
+.catalog-mass-retail-desktop-chips.catalog-chip-row {
+  display: none;
+}
+
 @media (min-width: 64rem) {
+  .catalog-mass-retail-desktop-chips.catalog-chip-row {
+    display: flex;
+  }
   .catalog-band[data-boutique-bar] {
     padding-block: 2.5rem 0;
   }

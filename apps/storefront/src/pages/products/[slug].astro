@@ -44,6 +44,7 @@ import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resolveProductPageTheme } from "@/components/product/lib/product-page-theme";
+import { storeContactLinks } from "@/lib/store-contact";
 import { productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "@/components/product/lib/gallery-media";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -131,6 +132,9 @@ const resolvedTheme = resolveProductPageTheme(
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
+const contactLinks = (product.pageTemplate === "daily-essentials" || (!product.pageTemplate && resolvedTheme.template === "daily-essentials"))
+  ? storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")
+  : [];
 const wideProductSummary = buyBoxLook?.cta.layout === "stack" && buyBoxLook.cta.phoneLayout === "row";
 // The EMI line shows only in a buy box that asks for it (spec, tech); the
 // classic buy box has no such setting and stays as it is.
@@ -731,6 +735,19 @@ const productCategoryAnalytics = productCategory
           {buyBoxShowsEmi && product.emi && (
             <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={currencyCode} currencySymbol={currencySymbol} />
           )}
+          {contactLinks.length > 0 && (
+            <nav slot="after-actions" data-product-contact aria-label="Contact the store" class="mt-3 flex flex-wrap gap-2">
+              {contactLinks.map((link) => (
+                <a
+                  href={link.href}
+                  data-product-contact-link={link.kind}
+                  class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label={link.kind === "phone" ? `Call ${link.label}` : "Contact on WhatsApp"}
+                  {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                >{link.kind === "phone" ? "Call" : "WhatsApp"}</a>
+              ))}
+            </nav>
+          )}
           <DigitalPromise slot="after-actions" product={product} fulfilment={pageFulfilment} />
           <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
           <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
@@ -738,7 +755,7 @@ const productCategoryAnalytics = productCategory
       </ProductPageLayout>
     </section>
 
-    <StickyBuyBar productName={product.name} />
+    {resolvedTheme.blocks.product.sticky.phoneBottom === "buy-bar" && <StickyBuyBar productName={product.name} />}
 
     {buyBoxLook?.facts === "column" && (
       <ProductSectionNav detailsId={detailAnchorId} exploreId={exploreAnchorId} reviewsId={reviewsAnchorId} />

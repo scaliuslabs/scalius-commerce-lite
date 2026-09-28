@@ -872,6 +872,31 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
   });
 
+  it("puts truthful mass-retail phone filters, sort, and popular values in one scroll row", async () => {
+    const theme = storefrontTemplateTheme("mass-retail");
+    for (const [kind, url] of [
+      ["category", "https://shop.test/categories/sarees"],
+      ["search", "https://shop.test/search?q=linen&hasDiscount=true"],
+    ] as const) {
+      const document = await renderListing(theme, { ...listingProps(url), kind }, TREE_STORE_SHAPE);
+      const bar = document.querySelector("[data-catalog-phone-bar]")!;
+      expect(bar.className).toContain("catalog-mass-retail-phone-bar");
+      expect(bar.className).toContain("overflow-x-auto");
+      expect(bar.querySelector("#mobile-filter-toggle[aria-controls='filter-section']")).not.toBeNull();
+      expect(bar.querySelector("select#sortByMobile")).not.toBeNull();
+      const phoneChips = bar.querySelector("nav[aria-label='Product filters']")!;
+      expect(phoneChips.className).not.toContain("overflow-x-auto");
+      expect(Array.from(phoneChips.querySelectorAll("a")).map((link) => link.textContent!.trim())).toEqual(
+        expect.arrayContaining(["On sale", "Free delivery", "M"]),
+      );
+      expect(document.querySelector("nav[aria-label='Popular filters']")!.className).toContain("catalog-mass-retail-desktop-chips");
+      if (kind === "search") {
+        expect(phoneChips.querySelector("a[aria-current='true']")!.textContent).toContain("On sale");
+        expect(phoneChips.querySelector("a[href*='q=linen']")).not.toBeNull();
+      }
+    }
+  });
+
   it("renders department tiles in a capped grid with the merchant's card choice", async () => {
     const theme = storefrontTemplateTheme("department-mall");
     theme.blocks.card = { variant: "mall", settings: {} };

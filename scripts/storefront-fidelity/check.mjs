@@ -28,7 +28,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Chrome } from "./lib/cdp.mjs";
 import {
-  compareTemplate, exitCode, extractOurs, hoverChecks, navChecks, parseOnly, perfChecks, selected, summarize, variantChecks,
+  compareTemplate, exitCode, extractOurs, hoverChecks, judge, navChecks, parseOnly, perfChecks, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { DEFAULT_PORTS, HARNESS_DIR, ROOT, TEMPLATES, assertLocalDatabase, assertOwnedState, mainCheckoutRoot, openDb } from "./lib/context.mjs";
 import { freeMemoryPct, killAllTracked, listeners, rssSampler, sleep, swapUsedMb } from "./lib/proc.mjs";
@@ -91,6 +91,22 @@ export function stagesFor(filter) {
     hover: wants(["hover"]) && (!filter.templates.length || filter.templates.some((t) => ["boutique", "heritage-editorial", "department-mall"].includes(t))),
     tiny: wants(["tiny"]),
   };
+}
+
+/** Marketplace categories use cards in a grid; searches use a list. */
+export function marketplaceLayoutChecks(matrixRows = {}) {
+  const checks = [];
+  for (const viewport of ["desktop", "phone"]) {
+    for (const [page, metric, rule, ref, src] of [
+      ["plp", "listing.categoryGridCols", "min", 2, "Marketplace category pages show a multi-column card grid"],
+      ["search", "listing.searchListCols", "exact", 1, "Marketplace search pages show a single-column list"],
+    ]) {
+      const ours = matrixRows[`${page}-${viewport}`]?.density?.cols ?? null;
+      const { pass, detail } = judge(rule, ours, ref);
+      checks.push({ id: `marketplace/listing/${viewport}/${metric}`, template: "marketplace", block: "listing", viewport, metric, rule, ours, ref, refSite: "bar", src, pass, detail });
+    }
+  }
+  return checks;
 }
 
 /** Invalidates a cached seeded state when the seed code or the migrations change. */
@@ -334,6 +350,7 @@ async function main() {
       if (m) {
         const ours = Object.fromEntries(["desktop", "phone"].map((v) => [v, extractOurs({ home: m[`home-${v}`], plp: m[`plp-${v}`], pdp: m[`pdp-${v}`], cardPage: template === "marketplace" ? m[`search-${v}`] : m[`plp-${v}`] })]));
         checks.push(...compareTemplate(template, ours, reference));
+        if (template === "marketplace") checks.push(...marketplaceLayoutChecks(m));
       }
       const perfRows = results.perf?.[template] ?? {};
       const rows = {};

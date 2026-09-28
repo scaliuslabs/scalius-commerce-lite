@@ -235,10 +235,9 @@ describe("theme page", () => {
     render(storefrontTemplateTheme(template));
     const control = container.querySelector("[data-listing-default]")!;
     expect(control.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toContain(selected);
-    expect(control.querySelector("#theme-listing-view-toggle")).toBeNull();
+    expect(control.querySelector("#theme-listing-view-toggle")).not.toBeNull();
     const list = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("List"))!;
     act(() => list.click());
-    expect(control.querySelector("#theme-listing-view-toggle")).not.toBeNull();
     await pressSave();
     const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
@@ -267,15 +266,16 @@ describe("theme page", () => {
     expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: false } });
   });
 
-  it("removes the shopper grid/list switch when choosing category shelves", async () => {
+  it.each(["shelves", "quick-grid"] as const)("keeps the shopper grid/list switch for search when choosing %s", async (layout) => {
     render(storefrontTemplateTheme("marketplace"));
     const control = container.querySelector("[data-listing-default]")!;
-    const shelves = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("Category shelves"))!;
-    act(() => shelves.click());
+    const choice = control.querySelector<HTMLButtonElement>(`[role=radio][value="${layout}"]`)!;
+    act(() => choice.click());
+    expect(control.querySelector("#theme-listing-view-toggle")?.getAttribute("aria-checked")).toBe("true");
     await pressSave();
     const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.blocks.listing.layout.variant).toBe("shelves");
-    expect(saved.blocks.listing.toolbar).not.toContain("grid-list-toggle");
+    expect(saved.blocks.listing.layout.variant).toBe(layout);
+    expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
 
   it("lets a mass-retail merchant replace the filter drawer with a category sidebar", async () => {

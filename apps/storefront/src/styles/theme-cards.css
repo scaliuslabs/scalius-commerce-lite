@@ -825,12 +825,19 @@
 @media (max-width: 39.999rem) {
   .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="retail"],
   .site-root .product-grid-frame .product-grid[data-phone-layout="list-row"] .product-card[data-card-variant="retail"] {
-    min-height: 16.6875rem;
+    min-height: 0;
   }
 }
 
 .site-root .product-grid-frame .product-card[data-card-variant="retail"] .product-card-action {
   margin-top: auto;
+}
+
+@media (max-width: 39.999rem) {
+  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="retail"] .product-card-action,
+  .site-root .product-grid-frame .product-grid[data-phone-layout="list-row"] .product-card[data-card-variant="retail"] .product-card-action {
+    margin-top: 0.75rem;
+  }
 }
 
 /* Quick retail keeps the buy decision beside the image, before the price. */
@@ -1185,12 +1192,13 @@
     font-size: 0.8125rem;
   }
 
-  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="detailed"] {
-    min-height: 15.8125rem;
+  .site-root :is(.product-grid-frame[data-catalog-results="list"], .product-grid[data-phone-layout="list-row"]) .product-card[data-card-variant="detailed"] {
+    height: auto;
+    min-height: 0;
   }
 
-  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="detailed"] .product-card-action {
-    margin-top: auto;
+  .site-root :is(.product-grid-frame[data-catalog-results="list"], .product-grid[data-phone-layout="list-row"]) .product-card[data-card-variant="detailed"] .product-card-action {
+    margin-top: 0.5rem;
   }
 }
 

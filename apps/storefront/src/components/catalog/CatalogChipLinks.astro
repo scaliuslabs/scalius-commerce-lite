@@ -7,13 +7,15 @@ interface Props {
   label: string;
   links: Array<{ label: string; href: string; active?: boolean }>;
   class?: string;
+  /** Let a containing phone toolbar own the horizontal scroll. */
+  inline?: boolean;
 }
 
-const { label, links, class: className } = Astro.props;
+const { label, links, class: className, inline = false } = Astro.props;
 ---
 
 {links.length > 0 && (
-  <nav aria-label={label} class:list={["catalog-chip-row flex items-center gap-2 overflow-x-auto lg:flex-wrap", className]}>
+  <nav aria-label={label} class:list={[inline ? "flex shrink-0 items-center gap-2" : "catalog-chip-row flex items-center gap-2 overflow-x-auto lg:flex-wrap", className]}>
     {links.map((link) => (
       <a
         href={link.href}

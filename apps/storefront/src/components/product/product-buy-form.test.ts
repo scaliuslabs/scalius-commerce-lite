@@ -55,4 +55,20 @@ describe("quantity tiers beside the price", () => {
     expect(summary).toContain("const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);");
   });
 });
+
+describe("product page purchase aids", () => {
+  const page = read("../../pages/products/[slug].astro");
+
+  it("mounts the phone buy bar only from the product's resolved sticky choice", () => {
+    expect(page).toContain('resolvedTheme.blocks.product.sticky.phoneBottom === "buy-bar" && <StickyBuyBar productName={product.name} />');
+    expect(page).not.toMatch(/^\s*<StickyBuyBar productName=\{product\.name\} \/>/m);
+  });
+
+  it("shows pantry contact actions after purchase only from valid merchant phone links", () => {
+    expect(page).toContain('product.pageTemplate === "daily-essentials" || (!product.pageTemplate && resolvedTheme.template === "daily-essentials")');
+    expect(page).toContain('storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")');
+    expect(page).toMatch(/contactLinks\.length > 0 && \(\s*<nav slot="after-actions" data-product-contact/);
+    expect(page).toContain('data-product-contact-link={link.kind}');
+  });
+});
 });

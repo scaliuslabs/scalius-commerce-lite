@@ -117,6 +117,7 @@ const piece = (name: Parameters<typeof presentation.toolbar.has>[0]) => presenta
 const placement = presentation.filters.placement;
 const drawer = placement === "drawer";
 const boutiqueBar = resolved.template === "boutique" && placement === "bar";
+const massRetailPhoneBar = resolved.template === "mass-retail";
 
 // Filters beyond the search itself (a search is undone by its chip).
 const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
@@ -184,7 +185,7 @@ const popularFilters = piece("popular-filter-chips") && products.length > 0
   : [];
 // Aspect chips share the phone bar's line when there is one.
 const phoneChips = aspectChips.length > 0 && showFilters;
-const quickFilters = (drawer || marketplacePhoneFilters) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
+const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
 // sorted or later page (those list products in the grid).
@@ -265,11 +266,12 @@ const breadcrumbVisible = piece("breadcrumb");
       "sticky z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
       marketplacePhoneFilters ? "catalog-marketplace-phone-bar top-0" : "top-[calc(var(--header-height,3.5rem)+0.5rem)]",
       boutiqueBar && "catalog-boutique-phone-bar",
+      massRetailPhoneBar && "catalog-mass-retail-phone-bar catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1",
       // eBay's phone row: Filters, sort and one chip per facet on one
       // scrolling line, so the results start one row higher.
-      boutiqueBar ? "flex items-center gap-2" : !marketplacePhoneFilters && (phoneChips || showViewToggle)
+      boutiqueBar ? "flex items-center gap-2" : !marketplacePhoneFilters && !massRetailPhoneBar && (phoneChips || showViewToggle)
         ? "catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1"
-        : !marketplacePhoneFilters && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
+        : !marketplacePhoneFilters && !massRetailPhoneBar && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
     data-catalog-phone-bar
     data-catalog-fashion-phone-bar={fashionRail ? "" : undefined}
@@ -303,6 +305,29 @@ const breadcrumbVisible = piece("breadcrumb");
           ))}
           {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
         </div>
+      </Fragment>
+    ) : massRetailPhoneBar ? (
+      <Fragment>
+        {showFilters && (
+          <button
+            type="button"
+            id="mobile-filter-toggle"
+            aria-controls="filter-section"
+            aria-expanded="false"
+            class="relative inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold text-foreground"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span>Filter</span>
+            {refinementCount > 0 && (
+              <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+                {refinementCount}<span class="sr-only"> applied</span>
+              </span>
+            )}
+          </button>
+        )}
+        {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
+        {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
+        <CatalogChipLinks label="Product filters" links={[...quickFilters, ...popularFilters]} inline />
       </Fragment>
     ) : (
       <Fragment>
@@ -338,7 +363,7 @@ const breadcrumbVisible = piece("breadcrumb");
 
 <CatalogChipLinks label={pills.length > 0 ? "Categories" : "Sub-categories"} links={pillLinks} class="mb-3 pb-1" />
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
-<CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
+<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={fashionRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
   {showFilters && (

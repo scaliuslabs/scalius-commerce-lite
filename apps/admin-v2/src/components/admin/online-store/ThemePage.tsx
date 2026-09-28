@@ -741,14 +741,11 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                   listing: {
                     ...current.blocks.listing,
                     layout: storefrontBlockDefault("listing", layout) as Theme["blocks"]["listing"]["layout"],
-                    toolbar: layout === "grid" || layout === "list"
-                      ? current.blocks.listing.toolbar
-                      : current.blocks.listing.toolbar.filter((piece) => piece !== "grid-list-toggle"),
                   },
                 },
               }))}
             />
-            {(theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list") && <SwitchField
+            <SwitchField
               id="theme-listing-view-toggle"
               label={t("listingViewSwitch")}
               help={t("listingViewSwitchHelp")}
@@ -765,7 +762,7 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                   },
                 },
               }))}
-            />}
+            />
             <VisualChoice
               label={t("listingSearchDefault")}
               showLabel

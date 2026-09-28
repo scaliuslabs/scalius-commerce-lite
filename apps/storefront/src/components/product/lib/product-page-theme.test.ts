@@ -66,4 +66,12 @@ describe("product page template", () => {
     expect(resolved.layout.buyBox).toEqual(requestTheme.resolved.layout.buyBox);
     expect(resolved.tokens).toEqual(boutique.tokens);
   });
+
+  it("resolves phone buy-bar visibility from each product's page override", () => {
+    const pantry = storefrontTemplateTheme("daily-essentials");
+    const pantryRequest = { theme: pantry, resolved: resolveStorefrontTheme(pantry, EMPTY_STORE_SHAPE) };
+    expect(resolveProductPageTheme(pantryRequest, { pageTemplate: null }, EMPTY_STORE_SHAPE).blocks.product.sticky.phoneBottom).toBe("none");
+    expect(resolveProductPageTheme(pantryRequest, { pageTemplate: "department-mall" }, EMPTY_STORE_SHAPE).blocks.product.sticky.phoneBottom).toBe("buy-bar");
+    expect(resolveProductPageTheme(requestTheme, { pageTemplate: "daily-essentials" }, EMPTY_STORE_SHAPE).blocks.product.sticky.phoneBottom).toBe("none");
+  });
 });

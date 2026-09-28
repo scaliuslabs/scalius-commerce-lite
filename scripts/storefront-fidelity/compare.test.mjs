@@ -8,7 +8,7 @@ import {
   parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { TEMPLATES } from "./lib/context.mjs";
-import { BLOCKS, markdownSummary, parseArgs, stagesFor } from "./check.mjs";
+import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, stagesFor } from "./check.mjs";
 import { referenceShotIssue, writePairs } from "./pairs.mjs";
 import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
@@ -163,6 +163,38 @@ describe("template comparison", () => {
 
   it("refuses an unmapped template", () => {
     expect(() => compareTemplate("nope", ours, reference)).toThrow(/no reference mapping/);
+  });
+});
+
+describe("marketplace category and search layout", () => {
+  const rows = {
+    "plp-desktop": { density: { cols: 5 } },
+    "search-desktop": { density: { cols: 1 } },
+    "plp-phone": { density: { cols: 2 } },
+    "search-phone": { density: { cols: 1 } },
+  };
+
+  it("checks category grid and search list separately at both widths", () => {
+    const checks = marketplaceLayoutChecks(rows);
+    expect(checks).toHaveLength(4);
+    expect(checks.every((check) => check.pass && check.block === "listing")).toBe(true);
+    expect(checks.map((check) => [check.id, check.ours, check.ref])).toEqual([
+      ["marketplace/listing/desktop/listing.categoryGridCols", 5, 2],
+      ["marketplace/listing/desktop/listing.searchListCols", 1, 1],
+      ["marketplace/listing/phone/listing.categoryGridCols", 2, 2],
+      ["marketplace/listing/phone/listing.searchListCols", 1, 1],
+    ]);
+  });
+
+  it("fails a collapsed category grid, multi-column search, or missing probe", () => {
+    const checks = marketplaceLayoutChecks({
+      ...rows,
+      "plp-desktop": { density: { cols: 1 } },
+      "search-phone": { density: { cols: 2 } },
+      "plp-phone": {},
+    });
+    expect(checks.map((check) => check.pass)).toEqual([false, true, false, false]);
+    expect(checks[2].detail).toBe("missing on our page");
   });
 });
 
