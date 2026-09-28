@@ -38,8 +38,8 @@ const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
 const parts = anatomy.body.filter((part) => part === "title" || part === "price" || cardFactPresent(facts, part));
-// The part that takes the free space, so prices and buttons line up across a
-// row: the price when it follows the title, else the action.
+// Most cards push the price or action down to align rows. Amazon's detailed
+// card keeps the price beside its variable product facts instead.
 const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
 const roundAction = anatomy.quickBuy && anatomy.action === "round";
@@ -162,7 +162,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
             <p
               class:list={[
                 "product-card-price-row pc-price flex flex-wrap items-baseline",
-                priceFollowsTitle && "product-card-push mt-auto",
+                priceFollowsTitle && variant !== "detailed" && "product-card-push mt-auto",
               ]}
             >
               {/* Amazon's deal box sits on its own line above the price. */}

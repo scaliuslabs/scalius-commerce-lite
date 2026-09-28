@@ -429,6 +429,9 @@ describe("product card matrix", () => {
 
   it("draws Amazon's superscript price and the delivery line from the stored rate", async () => {
     const cards = await renderCards(themeWith("detailed", {}));
+    for (const card of [cards.onSale, cards.allFacts, cards.withOptions, cards.soldOut]) {
+      expect(card.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
+    }
     const price = cards.onSale.querySelector(".pc-price-super")!;
     expect(text(price.querySelector(".pc-price-symbol"))).toBe("৳");
     expect(text(price.querySelector(".pc-price-whole"))).toBe("960");
