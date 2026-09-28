@@ -5,17 +5,19 @@ import { describe, expect, it } from "vitest";
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { STOREFRONT_DENSITY_SPECS } from "@scalius/shared/storefront-theme";
+import { productCardImageSizes } from "./product-card-layout";
 import { DENSITY_CAP_SCALE, capImageSrcSet, capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
 
 describe("capSizesDensity", () => {
   it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
     expect(capSizesDensity("calc(100vw - 2rem)")).toBe(
-      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.666), calc(100vw - 2rem)",
+      "(min-resolution: 2.5dppx) calc(66.6vw - 1.332rem), calc(100vw - 2rem)",
     );
     expect(capSizesDensity("(max-width: 407px) calc(100vw - 24px), (max-width: 1023px) 384px, 468px")).toBe([
-      "(min-resolution: 2.5dppx) and (max-width: 407px) calc((100vw - 24px) * 0.666)",
-      "(min-resolution: 2.5dppx) and (max-width: 1023px) calc((384px) * 0.666)",
-      "(min-resolution: 2.5dppx) calc((468px) * 0.666)",
+      "(min-resolution: 2.5dppx) and (max-width: 407px) calc(66.6vw - 15.984px)",
+      "(min-resolution: 2.5dppx) and (max-width: 1023px) 255.744px",
+      "(min-resolution: 2.5dppx) 311.688px",
       "(max-width: 407px) calc(100vw - 24px)",
       "(max-width: 1023px) 384px",
       "468px",
@@ -24,11 +26,36 @@ describe("capSizesDensity", () => {
 
   it("keeps compound conditions and nested math intact", () => {
     expect(capSizesDensity("(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem), min(50vw, 30rem)")).toBe([
-      "(min-resolution: 2.5dppx) and (min-width: 64rem) and (max-width: 80rem) calc((100vw - 4rem) * 0.666)",
+      "(min-resolution: 2.5dppx) and (min-width: 64rem) and (max-width: 80rem) calc(66.6vw - 2.664rem)",
       "(min-resolution: 2.5dppx) calc((min(50vw, 30rem)) * 0.666)",
       "(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem)",
       "min(50vw, 30rem)",
     ].join(", "));
+  });
+
+  it("keeps the marketplace card's selected rendition at every viewport and DPR", () => {
+    const base = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 262);
+    const compact = capSizesDensity(scaleSizes(base, 0.9));
+    const widthAt = (sizes: string, viewport: number, dpr: number) => {
+      for (const entry of sizes.split(", ")) {
+        if (entry.includes("min-resolution: 2.5dppx") && dpr < 2.5) continue;
+        const max = /\(max-width: (\d+)px\)/.exec(entry);
+        if (max && viewport > Number(max[1])) continue;
+        const length = entry.replace(/^(?:\(min-resolution: 2\.5dppx\)(?: and )?)?(?:\(max-width: \d+px\) )?/, "");
+        const linear = /^calc\(([\d.]+)vw - ([\d.]+)px\)$/.exec(length);
+        return linear ? Number(linear[1]) * viewport / 100 - Number(linear[2]) : Number.parseFloat(length);
+      }
+      throw new Error("Missing card image size");
+    };
+    const source = (width: number) => [144, 172, 206, 247, 296, 355, 426, 511, 613].find((candidate) => candidate >= width) ?? 613;
+    for (let viewport = 320; viewport <= 2560; viewport++) {
+      for (const dpr of [1, 1.25, 1.5, 2, 2.5, 3]) {
+        const expected = widthAt(base, viewport, dpr) * 0.9 * (dpr >= 2.5 ? Number(DENSITY_CAP_SCALE) : 1);
+        const actual = widthAt(compact, viewport, dpr);
+        expect(actual, `${viewport}px at ${dpr} DPR`).toBeCloseTo(expected, 5);
+        expect(source(actual * dpr), `${viewport}px at ${dpr} DPR`).toBe(source(expected * dpr));
+      }
+    }
   });
 });
 
@@ -125,7 +152,7 @@ describe("productImageSources", () => {
 describe("scaleSizes", () => {
   it("shrinks every entry to the share of the slot the photo fills, conditions kept", () => {
     expect(scaleSizes("(max-width: 639px) calc(50vw - 20px), 246px", 0.8)).toBe(
-      "(max-width: 639px) calc((50vw - 20px) * 0.8), calc((246px) * 0.8)",
+      "(max-width: 639px) calc(40vw - 16px), 196.8px",
     );
   });
 

@@ -95,9 +95,19 @@ function splitSizesEntry(entry: string): { condition: string | null; length: str
   return { condition: condition || null, length: entry.slice(lengthStart) };
 }
 
+/** Multiply a simple slot length directly, avoiding a nested calc in every card. */
+function scaledLength(length: string, factor: number): string {
+  const number = (value: number) => String(Number(value.toFixed(10)));
+  const linear = /^calc\(([\d.]+)vw - ([\d.]+)(px|rem)\)$/.exec(length);
+  if (linear) return `calc(${number(Number(linear[1]) * factor)}vw - ${number(Number(linear[2]) * factor)}${linear[3]})`;
+  const simple = /^([\d.]+)(px|vw|rem)$/.exec(length);
+  if (simple) return `${number(Number(simple[1]) * factor)}${simple[2]}`;
+  const inner = /^calc\((.*)\)$/.exec(length)?.[1] ?? length;
+  return `calc((${inner}) * ${factor})`;
+}
+
 /**
- * `sizes` scaled by `factor`: every entry's length becomes
- * `calc((length) * factor)`, conditions kept. A card photo drawn inside a
+ * `sizes` scaled by `factor`, conditions kept. A card photo drawn inside a
  * padded box (a contained photo with a margin) is narrower than the slot
  * the grid gives it; scaling by the share it fills keeps the chosen
  * rendition at the width actually drawn.
@@ -107,8 +117,7 @@ export function scaleSizes(sizes: string, factor: number): string {
   const scale = Number(factor.toFixed(3));
   return splitTopLevel(sizes).map((entry) => {
     const { condition, length } = splitSizesEntry(entry);
-    const inner = /^calc\((.*)\)$/.exec(length)?.[1] ?? length;
-    return `${condition ? `${condition} ` : ""}calc((${inner}) * ${scale})`;
+    return `${condition ? `${condition} ` : ""}${scaledLength(length, scale)}`;
   }).join(", ");
 }
 
@@ -126,9 +135,8 @@ export function capSizesDensity(sizes: string): string {
   const entries = splitTopLevel(sizes);
   const capped = entries.map((entry) => {
     const { condition, length } = splitSizesEntry(entry);
-    const inner = /^calc\((.*)\)$/.exec(length)?.[1] ?? length;
     const media = condition ? `${DENSITY_CAP_MEDIA} and ${condition}` : DENSITY_CAP_MEDIA;
-    return `${media} calc((${inner}) * ${DENSITY_CAP_SCALE})`;
+    return `${media} ${scaledLength(length, Number(DENSITY_CAP_SCALE))}`;
   });
   return [...capped, ...entries].join(", ");
 }
