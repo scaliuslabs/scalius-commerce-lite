@@ -42,6 +42,7 @@ const parts = anatomy.body.filter((part) => part === "title" || part === "price"
 // card keeps the price beside its variable product facts instead.
 const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const quickRetail = variant === "retail" && anatomy.action === "outline";
+const fullEssentials = variant === "quick-add" && anatomy.action === "block";
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : quickRetail ? "Add" : "Add to cart";
 const roundAction = anatomy.quickBuy && anatomy.action === "round";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
@@ -84,6 +85,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
   data-card-badge={anatomy.badge}
   data-card-fit={look.image.fit}
   data-card-quick-retail={quickRetail ? "" : undefined}
+  data-card-full-essentials={fullEssentials ? "" : undefined}
   style={lookStyle}
   class="product-card group relative flex flex-col h-full overflow-hidden"
 >

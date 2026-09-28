@@ -39,7 +39,7 @@
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
     "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
-    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "chaldal", "card": "chaldal", "listing": "chaldal", "pdp": "chaldal", "footer": "chaldal" } },
+    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" } }
   },
   "sites": {
@@ -325,6 +325,12 @@
         "card.cols": { "v": 2, "src": "study" },
         "footer.h": { "v": 405, "src": "study: phone footer 405px" }
       }
+    },
+    "ghorerbazar": {
+      "name": "Ghorer Bazar (geometry pending browser access)",
+      "$comment": "Official pages https://ghorerbazar.com/ and /shop/ were read on 2026-09-28: nested category navigation, full Add To Cart product actions, shop sidebar filters and numbered results. Cloudflare blocked browser screenshots, so no pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
+      "desktop": {},
+      "phone": {}
     },
     "chaldal": {
       "name": "Chaldal /popular",

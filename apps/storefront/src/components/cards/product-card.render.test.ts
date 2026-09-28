@@ -258,6 +258,20 @@ describe("product card matrix", () => {
     expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).not.toBeNull();
   });
 
+  it("renders pantry cards with full purchase actions and only available facts", async () => {
+    const theme = themeWith("quick-add", {});
+    if (theme.blocks.card.variant !== "quick-add") throw new Error("Expected essentials card");
+    theme.blocks.card.settings.fullAction = true;
+    const cards = await renderCards(theme);
+    const sale = cards.onSale;
+    expect(sale.hasAttribute("data-card-full-essentials")).toBe(true);
+    expect(sale.querySelector(".product-card-name")?.nextElementSibling?.classList.contains("product-card-price-row")).toBe(true);
+    expect(text(sale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
+    expect(sale.querySelector(".product-card-round-action")).toBeNull();
+    expect(cards.allFacts.querySelector("[data-card-fact='pack-size'], [data-card-fact='delivery']")).toBeNull();
+    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
+  });
+
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
     const theme = themeWith(card, { density, imageRatio, imageFit });
     const anatomy = requestThemeFor(theme).layout.productCard;

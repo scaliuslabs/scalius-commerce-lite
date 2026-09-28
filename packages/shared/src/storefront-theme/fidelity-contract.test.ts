@@ -151,7 +151,7 @@ describe("listing filters", () => {
       marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "mass-retail": { style: "drawer", openByDefault: false }, // full-width retail grid; merchants can choose a sidebar
       "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
-      "daily-essentials": { style: "drawer", openByDefault: false }, // Chaldal
+      "daily-essentials": { style: "sidebar-comfortable", openByDefault: true }, // Ghorer Bazar shop
       "showcase-landing": { style: "drawer", openByDefault: false },
     });
   });

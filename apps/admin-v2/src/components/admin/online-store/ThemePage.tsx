@@ -675,6 +675,22 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
             };
           })}
         />}
+        {theme.blocks.card.variant === "quick-add" && <SwitchField
+          id="theme-essentials-full-action"
+          label={t("essentialsFullAction")}
+          help={t("essentialsFullActionHelp")}
+          checked={Boolean(theme.blocks.card.settings.fullAction)}
+          onCheckedChange={(checked) => setDraft((current) => {
+            if (current.blocks.card.variant !== "quick-add") return current;
+            return {
+              ...current,
+              blocks: {
+                ...current.blocks,
+                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, fullAction: checked } },
+              },
+            };
+          })}
+        />}
       </SectionCard>
 
       <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>

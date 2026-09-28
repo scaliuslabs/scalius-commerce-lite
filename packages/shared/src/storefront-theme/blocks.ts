@@ -208,6 +208,14 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 18, phone: 12 }, weight: 700 },
   },
+  // Ghorer Bazar's food catalog keeps the photo and full purchase action in one tile.
+  "quick-add-full": {
+    image: { ratio: 1, fit: "contain" },
+    radius: 8,
+    surface: "hairline",
+    title: { size: { desktop: 15, phone: 14 }, weight: 500, lines: 2 },
+    price: { size: { desktop: 20, phone: 16 }, weight: 700 },
+  },
   // A department mall's dense four-column tiles: blue merchant-accent title
   // and a quieter 20px price, separated by fine rules rather than gutters.
   mall: {
@@ -691,14 +699,16 @@ export const STOREFRONT_CARD_VARIANTS = {
   // Chaldal: ruled tiles, a "৳81 OFF" tag and the round + on the photo,
   // price first (red on sale), name 16/400, pack size, delivery chip.
   "quick-add": variant({
+    settings: { fullAction: z.boolean().optional() },
+    defaults: { fullAction: false },
     contrastPairs: [["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS["quick-add"], {
+    renders: (settings) => card(settings.fullAction ? STOREFRONT_CARD_LOOKS["quick-add-full"] : STOREFRONT_CARD_LOOKS["quick-add"], {
       quickBuy: true,
       discount: "off",
       discountStyle: "tag",
       priceTone: "sale",
-      body: ["price", "title", "pack-size", "delivery"],
-      action: "round",
+      body: settings.fullAction ? ["title", "price"] : ["price", "title", "pack-size", "delivery"],
+      action: settings.fullAction ? "block" : "round",
     }),
   }),
   mall: variant({ renders: card(STOREFRONT_CARD_LOOKS.mall, {}) }),

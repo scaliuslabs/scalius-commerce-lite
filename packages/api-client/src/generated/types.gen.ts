@@ -266,7 +266,7 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'quick-add';
             settings: {
-                [key: string]: never;
+                fullAction?: boolean;
             };
         } | {
             variant: 'mall';

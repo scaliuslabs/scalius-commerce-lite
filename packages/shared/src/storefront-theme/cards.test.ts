@@ -79,6 +79,8 @@ describe("card anatomy", () => {
     // Target: the colour circles, then the price before the title.
     expect(anatomy("retail").body.slice(0, 2)).toEqual(["swatches", "price"]);
     expect(anatomy("quick-add")).toMatchObject({ action: "round", body: ["price", "title", "pack-size", "delivery"] });
+    const pantry = (storefrontVariantSpec("card", "quick-add").renders as (settings: { fullAction: boolean }) => StorefrontCardRenderer)({ fullAction: true });
+    expect(pantry).toMatchObject({ action: "block", body: ["title", "price"], look: STOREFRONT_CARD_LOOKS["quick-add-full"] });
     expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 2, badge: "both" });
     expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
     expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale" });

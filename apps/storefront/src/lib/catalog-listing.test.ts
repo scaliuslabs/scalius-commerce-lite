@@ -38,7 +38,7 @@ describe("listing presentation", () => {
     expect(presentation("mass-retail")).toEqual({ layout: "grid", placement: "drawer", style: "drawer", open: false, results: "grid", shelves: false });
     expect(presentation("boutique")).toEqual({ layout: "grid", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: false });
     expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: true });
-    expect(presentation("daily-essentials")).toEqual({ layout: "quick-grid", placement: "drawer", style: "drawer", open: false, results: "quick", shelves: false });
+    expect(presentation("daily-essentials")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
     // Each template carries its reference's numbers: Amazon 262/22/14, Star Tech 225/32/14.
     expect(catalogListingPresentation(resolve("marketplace")).filters).toMatchObject({
       styleVars: "--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px",

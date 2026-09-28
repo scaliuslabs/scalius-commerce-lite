@@ -957,6 +957,29 @@
   box-shadow: inset 0 0 0 2px var(--primary);
 }
 
+/* Pantry merchants can use a full purchase action and a roomier two-column card. */
+.site-root .product-card[data-card-full-essentials] .product-card-stack {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.site-root .product-card[data-card-full-essentials] .product-card-stack > * {
+  flex: initial;
+}
+
+.site-root .product-card[data-card-full-essentials] .product-card-well {
+  background: var(--card);
+}
+
+.site-root .product-card[data-card-full-essentials] .pc-price {
+  margin-top: auto;
+}
+
+.site-root .product-card[data-card-full-essentials] .product-card-action {
+  margin-top: 0.625rem;
+  font-weight: 600;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .site-root .product-card[data-card-variant="quick-add"] .product-card-round-action:hover {
     background: var(--primary);

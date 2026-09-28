@@ -194,7 +194,6 @@ describe("theme page", () => {
 
   it.each([
     ["heritage-editorial", "Category shelves"],
-    ["daily-essentials", "Quick add grid"],
   ] as const)("lets %s stores choose card or list layouts", async (template, selected) => {
     render(storefrontTemplateTheme(template));
     const control = container.querySelector("[data-listing-default]")!;
@@ -206,6 +205,19 @@ describe("theme page", () => {
     await pressSave();
     const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
+  });
+
+  it("lets an essentials merchant restore the compact quick-add card", async () => {
+    const essentials = storefrontTemplateTheme("daily-essentials");
+    render(essentials);
+    expect(essentials.blocks.listing.layout.variant).toBe("grid");
+    expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true } });
+    const quick = container.querySelector<HTMLButtonElement>("#theme-essentials-full-action")!;
+    expect(quick.getAttribute("aria-checked")).toBe("true");
+    act(() => quick.click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false } });
   });
 
   it("removes the shopper grid/list switch when choosing category shelves", async () => {
