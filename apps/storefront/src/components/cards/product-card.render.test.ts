@@ -518,6 +518,9 @@ describe("product card matrix", () => {
     for (const card of [cards.onSale, cards.allFacts, cards.withOptions, cards.soldOut]) {
       expect(card.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
     }
+    expect(cards.onSale.querySelector(".product-card-action")?.classList.contains("product-card-push")).toBe(true);
+    expect(cards.withOptions.querySelector("[data-card-action-hint]")?.classList.contains("product-card-push")).toBe(true);
+    expect(cards.soldOut.querySelector(".product-card-action")).toBeNull();
     const price = cards.onSale.querySelector(".pc-price-super")!;
     expect(text(price.querySelector(".pc-price-symbol"))).toBe("৳");
     expect(text(price.querySelector(".pc-price-whole"))).toBe("960");

@@ -1,6 +1,6 @@
 // Fidelity matrix (AUDIT §1, §2): every template x page x viewport -> probe
 // JSON (layout, type, card, listing density, facet column, buy box, footer,
-// weights) plus a first-screen screenshot. Run through check.mjs.
+// weights) plus first-screen and homepage footer screenshots. Run through check.mjs.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESS_DIR } from "./lib/context.mjs";
@@ -53,6 +53,10 @@ export async function runMatrix(ctx, { templates, pages, extraPages = {}, viewpo
           // Full-page captures otherwise leave offscreen content-visibility regions blank.
           await page.eval(`document.querySelectorAll('.storefront-deferred-region').forEach((section) => { section.style.contentVisibility = 'visible'; })`);
           await page.shot(`${prefix}-${template}-home-${viewport === "phone" ? "m" : "d"}-full`, { full: true, quality: 60 });
+          if (m.footer) {
+            await page.eval("document.querySelector('footer').scrollIntoView(); true");
+            await page.shot(`${prefix}-${template}-home-${viewport === "phone" ? "m" : "d"}-footer`, { clip: { x: 0, y: m.footer.y, width: m.vw, height: m.footer.h } });
+          }
         }
         if (viewport === "desktop") {
           weights[name] = await htmlWeights(base, path);

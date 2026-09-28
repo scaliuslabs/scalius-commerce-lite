@@ -416,6 +416,36 @@ describe("storefront theme render matrix", () => {
     const otherFooter = other.querySelector('footer[data-footer-variant="directory"]')!;
     expect(otherFooter.hasAttribute("data-footer-marketplace")).toBe(false);
     expect(otherFooter.querySelector("[data-footer-back-to-top], [data-footer-lower], [data-footer-identity]")).toBeNull();
+    expect(otherFooter.querySelector(".directory-more")).toBeNull();
+  });
+
+  it("keeps long directory menus reachable without a phone link wall", async () => {
+    const data = layoutData({ business: true });
+    data.footer.menus = FOOTER_MENUS.slice(0, 2).map((menu, index) => ({
+      ...menu,
+      links: Array.from({ length: index === 0 ? 20 : 12 }, (_, linkIndex) => ({
+        id: `${menu.id}-${linkIndex}`,
+        title: `${menu.title} link ${linkIndex + 1}`,
+        href: `/${menu.title.toLowerCase()}-${linkIndex + 1}`,
+      })),
+    }));
+    const page = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("daily-essentials"), {
+      title: "Home", layoutData: data,
+    }));
+    const directory = page.querySelector('nav[aria-label="Store directory"]')!;
+    const sections = Array.from(directory.querySelectorAll("section"));
+    expect(sections).toHaveLength(2);
+    expect(directory.querySelectorAll(".directory-more")).toHaveLength(2);
+    for (const [index, section] of sections.entries()) {
+      expect(section.querySelectorAll(":scope > ul > li")).toHaveLength(4);
+      expect(section.querySelector("details.directory-more")?.hasAttribute("open")).toBe(false);
+      expect(Array.from(section.querySelectorAll("a")).map((link) => link.getAttribute("href")))
+        .toEqual(expect.arrayContaining(data.footer.menus[index]!.links.map((link) => link.href)));
+    }
+    const marketplace = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
+      title: "Home", layoutData: data,
+    }));
+    expect(marketplace.querySelector(".directory-more")).toBeNull();
   });
 
   it("covers every pair of desktop menu, phone menu and header", () => {

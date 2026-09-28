@@ -48,7 +48,7 @@ const quickRetail = variant === "retail" && anatomy.action === "outline";
 const showcaseAdd = variant === "showcase" && model.quickAddEligible;
 const showcaseDetail = variant === "showcase" && !showcaseAdd && !model.soldOut && !model.needsOptions;
 const cartAction = variant === "retail" || variant === "quick-add" || (variant === "boutique" && anatomy.quickBuy) || showcaseAdd;
-const pushAction = (!priceFollowsTitle && variant !== "retail") || variant === "showcase";
+const pushAction = (!priceFollowsTitle && variant !== "retail") || variant === "showcase" || variant === "detailed";
 const fullEssentials = variant === "quick-add" && anatomy.action === "outline";
 const quickAdd = variant === "quick-add";
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : quickRetail || variant === "showcase" ? "Add" : "Add to cart";

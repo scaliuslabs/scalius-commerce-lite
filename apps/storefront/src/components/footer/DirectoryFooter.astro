@@ -54,20 +54,42 @@ const directory = directoryLinks(model.menus);
   {
     directory.length > 0 && (
       <nav class="directory-links" aria-label="Store directory">
-        {directory.map((menu) => (
-          <section>
-            <h2 class="footer-heading">{menu.title}</h2>
-            <ul>
-              {menu.links.map((link) => (
-                <li>
-                  <a href={link.href} {...(link.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
-                    {link.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+        {directory.map((menu) => {
+          const compact = !marketplace && menu.links.length > 8;
+          const visible = compact ? menu.links.slice(0, 4) : menu.links;
+          const more = compact ? menu.links.slice(4) : [];
+          return (
+            <section>
+              <h2 class="footer-heading">{menu.title}</h2>
+              <ul>
+                {visible.map((link) => (
+                  <li>
+                    <a href={link.href} {...(link.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                      {link.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              {compact && (
+                <details class="directory-more">
+                  <summary>
+                    <span class="when-closed">Show {more.length} more {menu.title} links</span>
+                    <span class="when-open">Hide extra {menu.title} links</span>
+                  </summary>
+                  <ul>
+                    {more.map((link) => (
+                      <li>
+                        <a href={link.href} {...(link.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                          {link.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </section>
+          );
+        })}
       </nav>
     )
   }
@@ -143,6 +165,27 @@ const directory = directoryLinks(model.menus);
 
   .directory-links a {
     font-size: 0.8125rem;
+  }
+
+  .directory-more summary {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    list-style: none;
+  }
+
+  .directory-more summary::-webkit-details-marker,
+  .directory-more[open] .when-closed,
+  .directory-more:not([open]) .when-open {
+    display: none;
+  }
+
+  .directory-more summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
   }
 
   .directory-footer a:hover {
@@ -227,3 +270,14 @@ const directory = directoryLinks(model.menus);
     }
   }
 </style>
+
+<script>
+  const wideDirectory = window.matchMedia("(min-width: 40rem)");
+  const syncDirectoryMenus = () => {
+    document.querySelectorAll<HTMLDetailsElement>(".directory-footer:not([data-marketplace]) .directory-more").forEach((menu) => {
+      menu.open = wideDirectory.matches;
+    });
+  };
+  syncDirectoryMenus();
+  wideDirectory.addEventListener("change", syncDirectoryMenus);
+</script>
