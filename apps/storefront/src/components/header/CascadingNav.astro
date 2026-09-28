@@ -169,9 +169,8 @@ const link = (item: NavigationItem) => ({
     cursor: pointer;
   }
 
-  /* Star Tech's category bar: 14px labels spread across the row, no
-     chevrons (hover or Down opens a department; its toggle shows on
-     keyboard focus), a dropdown column of 27-36px rows. */
+  /* Star Tech's category bar: labels spread across the row, no chevrons
+     (hover or Down opens a department; its toggle shows on keyboard focus). */
   .cnav[data-cnav-layout="bar"] .cnav-link {
     padding-inline: 0.5rem;
     font-size: 0.875rem;
@@ -209,12 +208,17 @@ const link = (item: NavigationItem) => ({
   }
 
   .cnav[data-cnav-layout="bar"] .fly-link {
-    min-height: 2rem;
-    padding-block: 0.25rem;
+    min-height: 1.6875rem;
+    padding-block: 0.125rem;
   }
 
   .cnav[data-cnav-layout="bar"] .fly-toggle {
-    height: 2rem;
+    height: 1.6875rem;
+  }
+
+  .cnav[data-cnav-layout="bar"] :is(.cnav-panel, .fly-panel) {
+    width: 12.5rem;
+    max-width: 12.5rem;
   }
 
   @media (pointer: coarse) {
