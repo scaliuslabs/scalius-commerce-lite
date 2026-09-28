@@ -259,7 +259,7 @@
       "shots": { "home": "aarong-home", "plp": "aarong-plp", "pdp": "aarong-pdp" },
       "desktop": {
         "header.h": { "v": 100, "src": "study: about 100px at rest" },
-        "card.w": { "v": 350, "src": "study: 350px wide shelf cards with 40px gutters" },
+        "card.w": { "v": 310, "src": "saved 1440px Aarong screenshot: first shelf image spans x40–350, with 40px gutters" },
         "card.gap": { "v": 40, "src": "study: 40px gutters" },
         "card.ratio": { "v": 0.75, "src": "study: portrait 3:4 images (310x413)" },
         "card.title": { "v": "16/700", "src": "study: product names 16/700" },
@@ -271,7 +271,7 @@
       },
       "phone": {
         "header.h": { "v": 60, "src": "study: sticky 60px bar" },
-        "card.w": { "v": 187, "src": "study: 187px shelf cards (2.1 visible)" },
+        "card.w": { "v": 180, "src": "saved 390px Aarong screenshot: first shelf image is about 180px wide" },
         "card.ratio": { "v": 0.75, "src": "study: 179x239 images" }
       }
     },

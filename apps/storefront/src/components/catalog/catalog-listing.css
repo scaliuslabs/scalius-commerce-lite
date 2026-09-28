@@ -1081,10 +1081,20 @@
   scroll-snap-align: start;
 }
 
+@media (max-width: 39.999rem) {
+  [data-catalog-heritage] .catalog-shelf-track {
+    grid-auto-columns: 50%;
+  }
+}
+
 @media (min-width: 40rem) {
   .catalog-shelf-track {
     --shelf-gap: var(--theme-grid-gap-desktop, 1rem);
     grid-auto-columns: calc((100% - 2 * var(--shelf-gap)) / 3);
+  }
+
+  [data-catalog-heritage] .catalog-shelf-track {
+    --shelf-gap: 2.5rem;
   }
 }
 

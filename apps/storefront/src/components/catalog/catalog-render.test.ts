@@ -448,6 +448,19 @@ describe("listing layouts", () => {
     expect(shelves[1]!.querySelectorAll("[data-theme-component='product-card']")).toHaveLength(3);
   });
 
+  it("marks heritage shelves for their wider card spacing", async () => {
+    const theme = storefrontTemplateTheme("heritage-editorial");
+    const document = await renderListing(theme, {
+      ...plain(),
+      products: PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "silk" : "cotton" })),
+      subListings: [
+        { id: "cotton", label: "Cotton", href: "/categories/cotton" },
+        { id: "silk", label: "Silk", href: "/categories/silk" },
+      ],
+    });
+    expect(document.querySelector("[data-catalog-shelves][data-catalog-heritage]")).not.toBeNull();
+  });
+
   it("hides the grid/list switch when a category overrides a grid theme with shelves", async () => {
     const theme = themeWith({ toolbar: ["grid-list-toggle"] });
     const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "c-silk" : "c-cotton" }));

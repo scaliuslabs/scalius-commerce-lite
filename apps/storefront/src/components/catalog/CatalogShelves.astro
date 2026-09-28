@@ -8,17 +8,18 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 
 interface Props {
   shelves: CatalogShelf<Product>[];
+  heritage?: boolean;
   currencySymbol: string;
   currencyCode: string;
 }
 
-const { shelves, currencySymbol, currencyCode } = Astro.props;
-// Card widths: 46% of the page on phones, a third on tablets, a quarter
-// from 1024px, capped by the 80rem page.
+const { shelves, heritage = false, currencySymbol, currencyCode } = Astro.props;
+// The shared rail shows 46% on phones, a third on tablets, and a quarter
+// on computers; Heritage widens phone cards and uses its own gutters.
 const SHELF_IMAGE_SIZES = "(max-width: 639px) 46vw, (max-width: 1023px) 32vw, (max-width: 1279px) 24vw, 300px";
 ---
 
-<div class="mb-8 space-y-8 sm:space-y-10" data-catalog-shelves>
+<div class="mb-8 space-y-8 sm:space-y-10" data-catalog-shelves data-catalog-heritage={heritage ? "" : undefined}>
   {shelves.map((shelf, shelfIndex) => (
     <section aria-labelledby={`catalog-shelf-${shelfIndex}`}>
       <div class="mb-3 flex items-baseline justify-between gap-4">

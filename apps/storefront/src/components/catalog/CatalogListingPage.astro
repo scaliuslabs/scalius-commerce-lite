@@ -55,7 +55,7 @@ const guide = content && hasRenderableHtmlContent(content.html) ? content : null
 ---
 
 <div class:list={["min-h-screen", resolved.template === "boutique" ? "bg-background" : "bg-muted/30"]} {...data}>
-  <div class="mx-auto max-w-7xl px-4 pb-8 pt-1 sm:px-6 lg:px-8">
+  <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", resolved.template === "heritage-editorial" ? "px-2 lg:px-0" : "px-4 lg:px-8"]}>
     {banner && (
       <img
         src={banner.src}

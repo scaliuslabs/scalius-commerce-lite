@@ -439,7 +439,7 @@ const breadcrumbVisible = piece("breadcrumb");
       <slot name="empty" />
     ) : shelves.length > 0 ? (
       <Fragment>
-        <CatalogShelves shelves={shelves} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+        <CatalogShelves shelves={shelves} heritage={resolved.template === "heritage-editorial"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
         <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} shown={products.length} limit={limit} getPageUrl={pageUrl} />
       </Fragment>
     ) : (
