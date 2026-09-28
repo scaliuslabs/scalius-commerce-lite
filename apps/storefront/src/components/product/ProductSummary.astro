@@ -165,16 +165,34 @@ const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
     currencyCode,
   );
   return {
-    ...variant,
+    id: variant.id,
+    imageId: variant.imageId,
+    imageUrl: variant.imageUrl,
+    imageMediaId: variant.imageMediaId,
+    selectedOptions: variant.selectedOptions.map((option) => ({
+      optionDefinitionId: option.optionDefinitionId,
+      optionValueId: option.optionValueId,
+      name: option.name,
+      value: option.value,
+    })),
     price: variantPrice,
+    stock: variant.stock,
+    reservedStock: variant.reservedStock,
+    trackInventory: variant.trackInventory,
+    lowStockThreshold: variant.lowStockThreshold,
+    availabilityBand: variant.availabilityBand,
     discountedPrice,
-    discount: variantPrice > 0 ? Math.round(((variantPrice - discountedPrice) / variantPrice) * 100) : 0,
     discountType: variant.discountType || product.discountType || "percentage",
     discountPercentage: variant.discountPercentage ?? product.discountPercentage ?? 0,
     discountAmount: variant.discountAmount ?? product.discountAmount ?? 0,
+    fulfillmentKind: variant.fulfillmentKind,
   };
 }));
-const optionsJson = serializeJsonForInlineScript(options);
+const optionsJson = serializeJsonForInlineScript(options.map((option) => ({
+  id: option.id,
+  name: option.name,
+  values: option.values.map((value) => ({ id: value.id })),
+})));
 const unavailableLabel = initialUnavailableVariant?.selectedOptions
   .map((option) => `${option.name} ${option.value}`)
   .join(" / ");
