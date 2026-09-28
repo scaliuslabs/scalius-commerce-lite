@@ -752,6 +752,20 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                 blocks: { ...current.blocks, listing: { ...current.blocks.listing, searchLayout } },
               }))}
             />
+            <VisualChoice
+              label={t("listingPhoneLayout")}
+              showLabel
+              value={theme.blocks.listing.phoneLayout}
+              className="grid-cols-2"
+              options={([
+                { value: "grid", label: t("listingPhoneGrid") },
+                { value: "list-row", label: t("listingPhoneRows") },
+              ] as const).map((option) => ({ ...option, sketch: <ListingLayoutSketch layout={option.value === "grid" ? "grid" : "list"} theme={theme} /> }))}
+              onChange={(phoneLayout) => setDraft((current) => ({
+                ...current,
+                blocks: { ...current.blocks, listing: { ...current.blocks.listing, phoneLayout } },
+              }))}
+            />
           </div>
       </SectionCard>
 

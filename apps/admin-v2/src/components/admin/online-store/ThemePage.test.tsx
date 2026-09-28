@@ -192,6 +192,18 @@ describe("theme page", () => {
     expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
 
+  it("lets a merchant choose one card per row on phones", async () => {
+    render(storefrontTemplateTheme("marketplace"));
+    const control = container.querySelector("[data-listing-default]")!;
+    const phoneRows = control.querySelector<HTMLButtonElement>('[role=radio][value="list-row"]')!;
+    expect(phoneRows.getAttribute("aria-checked")).toBe("false");
+    act(() => phoneRows.click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.phoneLayout).toBe("list-row");
+    expect(saved.blocks.listing.searchLayout).toBe("list");
+  });
+
   it.each([
     ["heritage-editorial", "Category shelves"],
   ] as const)("lets %s stores choose card or list layouts", async (template, selected) => {
