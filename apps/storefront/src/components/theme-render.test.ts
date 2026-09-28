@@ -602,6 +602,7 @@ describe("storefront theme render matrix", () => {
     }));
     expect(mall.querySelector('#main-header[data-header-variant="mall-search"]')).not.toBeNull();
     expect(mall.querySelector('.hdr-search form.hsearch--scoped select[data-search-scope]')).not.toBeNull();
+    expect(mall.querySelector('.hsearch--scoped input[data-search-inline]')).toBeNull();
     expect(mall.querySelector('details[data-menu-home-open][open] .drail-panel')).not.toBeNull();
     expect(mall.querySelector('#mall-shortcuts-nav')).not.toBeNull();
     const classicTheme = storefrontTemplateTheme("department-mall");

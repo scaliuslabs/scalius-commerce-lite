@@ -2,10 +2,10 @@
 // The header's search, in the shape a header variant asks for. Fields are a
 // real GET form to /search, so searching works before hydration and without
 // JavaScript; with it, a pointer press on the field opens the typeahead
-// palette instead (keyboard users type in place and press Enter). The
-// department select scopes the search to a category page (?q= there), with
-// JavaScript only: without it the select is inert and the whole store is
-// searched.
+// palette instead (keyboard users type in place and press Enter). Scoped
+// fields keep native input focus so pointer users can use the selected
+// department. The select scopes search to a category page (?q= there) with
+// JavaScript; without it, the whole store is searched.
 // - icon: a 44px button (Dawn) that opens the palette (a link to /search
 //   before hydration).
 // - field: a filled field with a button inside (Star Tech 580x42, Fabrilife
@@ -66,7 +66,7 @@ const scopes = departments
         autocomplete="off"
         enterkeyhint="search"
         maxlength="200"
-        data-search-inline
+        data-search-inline={shape === "scoped" ? undefined : ""}
       />
       <button type="submit" class="hsearch-submit" aria-label="Search">
         <svg viewBox="0 0 24 24" aria-hidden="true">
