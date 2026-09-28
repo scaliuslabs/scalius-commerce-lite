@@ -83,6 +83,23 @@ const variants: ProductVariant[] = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 describe("product summary browser payload", () => {
+  it("groups arbitrary merchant options in rounded-tech panels without changing purchase controls", async () => {
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
+    const html = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.tech },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    const doc = new Window().document;
+    doc.write(`<body>${html}</body>`);
+
+    const panels = doc.querySelector(".variant-option-panels");
+    expect([...panels!.children].map((panel) => panel.querySelector("legend")?.textContent)).toEqual(["Model", "Color"]);
+    expect(panels?.querySelectorAll(".variant-option-btn")).toHaveLength(20);
+    expect(doc.querySelector("[data-product-summary]")?.getAttribute("data-cta-phone-layout")).toBe("row");
+    expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
+    expect(doc.querySelector("#product-variant-noscript")?.getAttribute("form")).toBe("product-buy-form");
+  });
+
   it("keeps exact SKU selection, prices and availability in a compact 100-SKU payload", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300, discountType: null, discountPercentage: null, discountAmount: null } as Product;
     const html = await container.renderToString(ProductSummary, {

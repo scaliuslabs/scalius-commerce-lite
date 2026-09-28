@@ -29,7 +29,7 @@ describe("product buy form", () => {
 
   it("lets a buyer without JavaScript choose the SKU in the same form", () => {
     expect(summary).toMatch(
-      /<noscript>\s*<style is:inline>\.variant-option-selector\{display:none\}<\/style>[\s\S]*<select id="product-variant-noscript" name="variant" form=\{buyFormId\}/,
+      /<noscript>\s*<style is:inline>\.variant-option-panels\{display:none\}<\/style>[\s\S]*<select id="product-variant-noscript" name="variant" form=\{buyFormId\}/,
     );
   });
 

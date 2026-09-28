@@ -305,43 +305,47 @@ function optionAriaLabel(
         {initialUnavailableVariant ? `${unavailableLabel}: ${buyerStockSummary.text}` : ""}
       </div>
 
-      {options.map((option) => {
-        const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
-        return (
-          <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
-            <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
-            <div class="flex flex-wrap gap-1.5">
-              {option.values.map((value) => {
-                const selected = initialSelection[option.id] === value.id;
-                const status = availability.get(value.id) ?? "sold_out";
-                return (
-                  <button
-                    type="button"
-                    class:list={[
-                      "variant-option-btn flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:h-10",
-                      {
-                        "border-primary bg-primary text-primary-foreground": selected && status !== "sold_out",
-                        "border-input bg-background text-foreground": !selected && status === "available",
-                        "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
-                        "cursor-not-allowed border-input bg-background text-muted-foreground line-through": status === "sold_out",
-                        "ring-2 ring-destructive": selected && status === "sold_out",
-                      },
-                    ]}
-                    data-option-definition-id={option.id}
-                    data-option-value-id={value.id}
-                    data-option-value={value.value}
-                    data-option-availability={status}
-                    aria-pressed={selected ? "true" : "false"}
-                    aria-label={optionAriaLabel(option, value.value, status)}
-                    aria-disabled={status === "sold_out" ? "true" : undefined}
-                  >{value.value}</button>
-                );
-              })}
+      {options.length > 0 && <div class="variant-option-panels">
+        {options.map((option) => {
+          const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
+          return (
+            <div class="variant-option-panel">
+              <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
+                <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
+                <div class="flex flex-wrap gap-1.5">
+                  {option.values.map((value) => {
+                    const selected = initialSelection[option.id] === value.id;
+                    const status = availability.get(value.id) ?? "sold_out";
+                    return (
+                      <button
+                        type="button"
+                        class:list={[
+                          "variant-option-btn flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:h-10",
+                          {
+                            "border-primary bg-primary text-primary-foreground": selected && status !== "sold_out",
+                            "border-input bg-background text-foreground": !selected && status === "available",
+                            "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
+                            "cursor-not-allowed border-input bg-background text-muted-foreground line-through": status === "sold_out",
+                            "ring-2 ring-destructive": selected && status === "sold_out",
+                          },
+                        ]}
+                        data-option-definition-id={option.id}
+                        data-option-value-id={value.id}
+                        data-option-value={value.value}
+                        data-option-availability={status}
+                        aria-pressed={selected ? "true" : "false"}
+                        aria-label={optionAriaLabel(option, value.value, status)}
+                        aria-disabled={status === "sold_out" ? "true" : undefined}
+                      >{value.value}</button>
+                    );
+                  })}
+                </div>
+                <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
+              </fieldset>
             </div>
-            <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
-          </fieldset>
-        );
-      })}
+          );
+        })}
+      </div>}
 
       {compactFacts.length > 0 && (
         <dl class="hidden space-y-1 pt-1 text-sm leading-5 lg:block" data-product-compact-facts>
@@ -376,7 +380,7 @@ function optionAriaLabel(
 
       {noScriptVariants.length > 0 ? (
         <noscript>
-          <style is:inline>.variant-option-selector{display:none}</style>
+          <style is:inline>.variant-option-panels{display:none}</style>
           <label for="product-variant-noscript" class="mb-1 block text-sm font-medium text-foreground">{options.map((option) => option.name).join(" / ")}</label>
           <select id="product-variant-noscript" name="variant" form={buyFormId} class="block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground">
             {noScriptVariants.map((variant) => (
@@ -480,6 +484,23 @@ function optionAriaLabel(
   [data-cta-first="buy-now"] .buy-box-ctas > [data-action="buy-now"] {
     order: -1;
   }
+  .variant-option-panels > * + * {
+    margin-top: 0.75rem;
+  }
+  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panel {
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-btn {
+    border-radius: 9999px;
+  }
+  [data-cta-layout="stack"][data-cta-phone-layout="row"] #quantity-minus {
+    border-radius: 9999px 0 0 9999px;
+  }
+  [data-cta-layout="stack"][data-cta-phone-layout="row"] #quantity-plus {
+    border-radius: 0 9999px 9999px 0;
+  }
   [data-facts-column] .buy-box-ctas > [data-action="add-to-cart"] {
     order: -2;
     border-color: var(--accent);
@@ -509,6 +530,21 @@ function optionAriaLabel(
     padding: 1rem;
   }
   @media (min-width: 64rem) {
+    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels > * + * {
+      margin-top: 0;
+    }
+    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels > :only-child {
+      grid-column: 1 / -1;
+    }
+    [data-cta-layout="stack"][data-cta-phone-layout="row"] .buy-box-ctas {
+      flex-direction: row;
+      max-width: none;
+    }
     [data-buy-box-look] h1 {
       font-size: var(--bb-title-desktop);
     }
