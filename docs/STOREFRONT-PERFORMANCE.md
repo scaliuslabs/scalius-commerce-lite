@@ -548,7 +548,8 @@ What one run does, sequentially:
    four-level tree with long and Bangla names, 240 generated photos with real
    rendition ladders (`pool.mjs`, sharp), 1% legacy primaries with no
    renditions, 2% products without a photo, three video products (ffmpeg),
-   hero sliders, the five scale menus (`menus.mjs`: 20, 150, 136 on 3 levels,
+   a 12-category homepage rail with available category photos, hero sliders,
+   the five scale menus (`menus.mjs`: 20, 150, 136 on 3 levels,
    1,150, and the live store's flat 12), and the catalogue projections
    (migration 0091's statements). `--state-cache <dir>` keeps a pristine copy
    keyed by a fingerprint of the seed code and the migrations, and later runs

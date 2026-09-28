@@ -209,9 +209,9 @@ function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["
   const cssVar = (name: string) => new RegExp(`--${name}:([^;]+)`).exec(style)?.[1] ?? "theme";
   const body = card.querySelector(".product-card-body")!;
   const order = Array.from(body.children).map((child) =>
-    child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("p.mt-auto") ? "price" : null)
+    child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("[data-card-price]") ? "price" : null)
     .filter(Boolean);
-  const price = card.querySelector(".product-card-price") ?? body.querySelector("p.mt-auto > span:last-child")!;
+  const price = card.querySelector(".product-card-price") ?? body.querySelector("[data-card-price] > span:last-child")!;
   const regular = card.querySelector(".pc-price-regular, s")!;
   const strikeAt = regular.compareDocumentPosition(price) & 4 ? "before" : "after";
   const marks = Array.from(card.querySelectorAll("[data-card-discount]")).map((mark) =>
@@ -418,11 +418,11 @@ describe("product card matrix", () => {
       } else {
         expect(buy.classList.contains("product-card-action")).toBe(true);
         // Options are chosen on the product page (a hint under the card
-        // link, not a second tab stop); sold out keeps the action's space.
+        // link, not a second tab stop); sold out has no ghost action.
         const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
         expect(hint.getAttribute("aria-hidden")).toBe("true");
         expect(hint.className).toContain("pointer-events-none");
-        expect(Boolean(cards.soldOut.querySelector("[data-quick-buy-spacer]"))).toBe(card !== "retail");
+        expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
       }
     } else {
       expect(cards.withOptions.querySelector("[data-card-action-hint], [data-quick-buy-spacer]")).toBeNull();
@@ -554,6 +554,23 @@ describe("product card matrix", () => {
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
     expect(cards.withOptions.querySelector("a[href^='/buy/']")).toBeNull();
     expect(text(cards.onSale.querySelector("a[href^='/buy/']"))).toContain("Buy now");
+  });
+
+  it("keeps prices beside sparse facts and removes empty buy slots", async () => {
+    const tech = await renderCards(themeWith("tech-rounded", {}));
+    for (const fixture of ["onSale", "withOptions", "noPhoto", "bangla"] as const) {
+      expect(tech[fixture].querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
+    }
+    expect(tech.noPhoto.querySelector("[data-card-placeholder]")).not.toBeNull();
+    expect(tech.bangla.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(tech.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+
+    const spec = await renderCards(themeWith("spec", {}));
+    expect(spec.allFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(true);
+    expect(spec.zeroFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
+    expect(spec.zeroFacts.classList.contains("self-start")).toBe(true);
+    expect(spec.zeroFacts.getAttribute("style")).toContain("min-height:0");
+    expect((await renderCards(themeWith("standard", {}))).zeroFacts.querySelector("[data-card-price]")?.classList.contains("mt-auto")).toBe(false);
   });
 
   it("uses the store's rows on phones when the listing asks for list rows", async () => {

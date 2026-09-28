@@ -329,12 +329,14 @@ describe("listing layouts", () => {
     expect(category.querySelector("[data-catalog-kind]")!.getAttribute("data-catalog-kind")).toBe("category");
     expect(category.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
     expect(category.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    expect(category.querySelector("[data-catalog-layout='sidebar'] > #filter-section[data-placement='sidebar']")).not.toBeNull();
     expect(category.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
 
     const search = await renderListing(theme, {
       ...listingProps("https://shop.test/search?q=keyboard"), kind: "search",
     }, TREE_STORE_SHAPE);
     expect(search.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(search.querySelector("[data-catalog-layout='sidebar'] > #filter-section[data-placement='sidebar']")).not.toBeNull();
     expect(search.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toBe(LIST_ROW_IMAGE_SIZES);
     expect(search.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
     expect(search.querySelector("[data-catalog-view-toggle] button[data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
@@ -428,9 +430,46 @@ describe("listing layouts", () => {
     expect(flat.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
   });
 
+  it("hides the grid/list switch when a category overrides a grid theme with shelves", async () => {
+    const theme = themeWith({ toolbar: ["grid-list-toggle"] });
+    const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "c-silk" : "c-cotton" }));
+    const subListings = [
+      { id: "c-cotton", label: "Cotton", href: "/categories/cotton" },
+      { id: "c-silk", label: "Silk", href: "/categories/silk" },
+    ];
+    const page = { ...plain(), products, subListings, listingTemplate: "shelves" };
+    const landing = await renderListing(theme, page, TREE_STORE_SHAPE);
+    expect(landing.querySelector("[data-catalog-shelves]")).not.toBeNull();
+    expect(landing.querySelector("[data-catalog-view-toggle]")).toBeNull();
+
+    const filtered = await renderListing(theme, {
+      ...listingProps("https://shop.test/categories/sarees?size=M"), products, subListings, listingTemplate: "shelves",
+    }, TREE_STORE_SHAPE);
+    expect(filtered.querySelector("[data-catalog-shelves]")).toBeNull();
+    expect(filtered.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+  });
+
   it("uses list rows on phones when the theme asks for them", async () => {
     const document = await renderListing(themeWith({ phoneLayout: "list-row" }), plain());
     expect(document.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+  });
+
+  it("lets the shopper's Grid choice use phone columns despite a merchant phone-row setting", async () => {
+    const theme = themeWith({ phoneLayout: "list-row", toolbar: ["grid-list-toggle"] });
+    const document = await renderListing(theme, plain());
+    expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+    expect(document.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    expect(document.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+  });
+
+  it("shows the phone view switch when a small listing has no sort or filters", async () => {
+    const theme = themeWith({ toolbar: ["grid-list-toggle"] });
+    const document = await renderListing(theme, {
+      ...plain(), products: PRODUCTS.slice(0, 2), pagination: { page: 1, totalPages: 1, total: 2 },
+    });
+    expect(document.querySelector("#filter-section")).toBeNull();
+    expect(document.querySelector("select#sortByMobile")).toBeNull();
+    expect(document.querySelector("[data-catalog-phone-bar] [data-catalog-view-toggle]")).not.toBeNull();
   });
 });
 

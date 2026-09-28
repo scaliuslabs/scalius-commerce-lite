@@ -130,4 +130,24 @@ describe("grid/list toggle", () => {
     expect(toggle.querySelector("[data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
     expect(toggle.querySelector("[data-view='grid']")!.getAttribute("aria-pressed")).toBe("false");
   });
+
+  it("keeps phone and desktop controls synced and separates search from browse choices", () => {
+    const renderControls = (kind: "search" | "browse", initial: "grid" | "list") => `
+      <div data-catalog-view-toggle><button data-view="grid"></button><button data-view="list"></button></div>
+      <div data-catalog-view-toggle><button data-view="grid"></button><button data-view="list"></button></div>
+      <div class="product-grid-frame" data-catalog-results="${initial}" data-catalog-view-storage-key="${catalogViewStorageKey(kind)}"></div>`;
+
+    document.body.innerHTML = renderControls("search", "list");
+    setupCatalogViewToggle();
+    document.querySelectorAll<HTMLButtonElement>("[data-view='grid']")[1]!.click();
+    expect(localStorage.getItem(catalogViewStorageKey("search"))).toBe("grid");
+    expect([...document.querySelectorAll("[data-view='grid']")].every((button) => button.getAttribute("aria-pressed") === "true")).toBe(true);
+
+    document.body.innerHTML = renderControls("browse", "grid");
+    setupCatalogViewToggle();
+    document.querySelector<HTMLButtonElement>("[data-view='list']")!.click();
+    expect(localStorage.getItem(catalogViewStorageKey("browse"))).toBe("list");
+    expect(localStorage.getItem(catalogViewStorageKey("search"))).toBe("grid");
+    expect([...document.querySelectorAll("[data-view='list']")].every((button) => button.getAttribute("aria-pressed") === "true")).toBe(true);
+  });
 });

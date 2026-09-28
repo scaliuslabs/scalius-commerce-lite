@@ -64,8 +64,9 @@ if (results === "list") {
     `--grid-gap-fluid:${fluid.gap}`,
   ].join(";");
 }
-// The quick grid keeps its columns on phones; list rows are rows everywhere.
-const gridPhoneLayout = results === "grid" ? phoneLayout : "grid";
+// A shopper choosing Grid must get columns on phones too. Without a view
+// switch, the merchant's phone row choice still applies to a grid listing.
+const gridPhoneLayout = restoreView ? "grid" : results === "grid" ? phoneLayout : "grid";
 const viewStorageKey = catalogViewStorageKey(kind);
 const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list")s.nextElementSibling.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
 ---

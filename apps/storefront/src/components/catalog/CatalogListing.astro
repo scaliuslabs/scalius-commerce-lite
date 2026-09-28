@@ -142,7 +142,6 @@ const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
 const fashionRail = showFilters && resolved.template === "fashion-value" && presentation.filters.style === "sidebar-comfortable";
 const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
-const showPhoneBar = showSort || showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
   { value: "newest", label: newestLabel },
@@ -157,7 +156,6 @@ const sortOptions = [
 const viewSelect = { pathname, defaultSort, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);
-const showViewToggle = piece("grid-list-toggle") && results !== "quick" && products.length > 1;
 const pageUrl = (page: number) =>
   buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
 
@@ -199,6 +197,10 @@ const shelves = presentation.shelves && landing
       restTitle: `More from ${listingName}`,
     })
   : [];
+// Shelves render their own product rails, so there is no results frame for a
+// grid/list switch until the listing falls back to ordinary results.
+const showViewToggle = piece("grid-list-toggle") && results !== "quick" && products.length > 1 && shelves.length === 0;
+const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
 const breadcrumbVisible = piece("breadcrumb");

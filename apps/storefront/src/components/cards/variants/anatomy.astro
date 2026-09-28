@@ -39,9 +39,11 @@ const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
 const parts = anatomy.body.filter((part) => part === "title" || part === "price" || cardFactPresent(facts, part));
-// Most cards push the price or action down to align rows. Amazon's detailed
-// card keeps the price beside its variable product facts instead.
+// Only the spec card reserves a shared footer for its price, Buy now and
+// Compare. Other cards keep the price beside whatever facts this product has.
 const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
+const compactSpec = variant === "spec" && facts.keySpecs.length < 3;
+const pushPrice = variant === "spec" && !compactSpec && priceFollowsTitle;
 const quickRetail = variant === "retail" && anatomy.action === "outline";
 const cartAction = variant === "retail" || variant === "quick-add";
 const pushAction = !priceFollowsTitle && variant !== "retail";
@@ -74,6 +76,7 @@ const lookStyle = [
   `--pc-inset:${Number((inset * 100).toFixed(2))}%`,
   look.title && `--pc-title-d:${look.title.size.desktop}px;--pc-title-m:${look.title.size.phone}px;--pc-title-w:${look.title.weight}`,
   look.price && `--pc-price-d:${look.price.size.desktop}px;--pc-price-m:${look.price.size.phone}px;--pc-price-w:${look.price.weight}`,
+  compactSpec && "min-height:0",
 ].filter(Boolean).join(";");
 const cartIcon = "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2M9.5 20.5h.01M17.5 20.5h.01";
 const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4zM7.5 7.5h.01";
@@ -91,7 +94,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
   data-card-quick-retail={quickRetail ? "" : undefined}
   data-card-full-essentials={fullEssentials ? "" : undefined}
   style={lookStyle}
-  class="product-card group relative flex flex-col h-full overflow-hidden"
+  class:list={["product-card group relative flex flex-col overflow-hidden", compactSpec ? "self-start" : "h-full"]}
 >
   <CardMedia
     model={model}
@@ -172,7 +175,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
             <p
               class:list={[
                 "product-card-price-row pc-price flex flex-wrap items-baseline",
-                priceFollowsTitle && variant !== "detailed" && "product-card-push mt-auto",
+                pushPrice && "product-card-push mt-auto",
               ]}
             >
               {/* Amazon's deal box sits on its own line above the price. */}
@@ -322,12 +325,6 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
         >
           {optionsHint}
         </span>
-      )
-    }
-    {
-      /* Most cards reserve the missing action's place; retail stays compact. */
-      bodyAction && !model.quickBuyHref && !model.needsOptions && variant !== "retail" && (
-        <span aria-hidden="true" data-quick-buy-spacer class:list={["product-card-action block", pushAction && "product-card-push mt-auto"]}></span>
       )
     }
     {
