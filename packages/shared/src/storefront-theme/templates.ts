@@ -254,7 +254,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       header: ["tech-rounded"],
       navigation: { source: "category-tree", maxTopItems: 9 },
       desktopNav: ["dropdown"],
-      mobileNav: ["bottom-tabs"],
+      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" }],
       card: ["tech-rounded"],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: {

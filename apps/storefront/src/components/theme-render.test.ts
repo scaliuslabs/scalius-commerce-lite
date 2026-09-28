@@ -1239,7 +1239,12 @@ describe("navigation", () => {
       const page = parse(html);
       const site = page.querySelector("#site-header")!;
       expect(site.getAttribute("data-nav-source"), template).toBe(resolved.blocks.navigation.source);
-      if (template === "rounded-tech") expect(site.getAttribute("style")).toContain("--hdr-phone-bar: 4rem");
+      if (template === "rounded-tech") {
+        expect(site.getAttribute("style")).toContain("--hdr-phone-bar: 4rem");
+        expect(page.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("account");
+        expect(Array.from(page.querySelectorAll("#mobile-tab-bar .mobile-tab")).map((tab) => tab.textContent!.trim()))
+          .toEqual(["Home", "Categories", "Offers", "Account"]);
+      }
       expect(headerLinks(page), template).toBeLessThanOrEqual(resolved.blocks.navigation.linkBudget);
       expect(duplicateIds(page), template).toEqual([]);
       // The phone drawer: at most maxTopItems departments, each once, then "All categories".
