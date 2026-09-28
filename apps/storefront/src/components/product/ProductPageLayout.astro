@@ -48,6 +48,14 @@ const { gallery, factsColumn = false } = Astro.props;
       position: sticky;
       top: calc(var(--header-height, 4rem) + 1rem);
     }
+    .product-layout[data-gallery="beside"][data-facts-column] > :global([data-product-gallery]) {
+      position: sticky;
+      top: calc(var(--header-height, 0px) + 1rem);
+      align-self: start;
+    }
+    .product-layout[data-gallery="beside"][data-facts-column] > :global([data-product-gallery] .gallery-layout) {
+      position: static;
+    }
   }
   @media (min-width: 80rem) {
     .product-layout[data-gallery="beside"][data-facts-column] {

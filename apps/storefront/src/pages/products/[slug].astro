@@ -14,6 +14,7 @@ import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductPageLayout from "@/components/product/ProductPageLayout.astro";
+import ProductSectionNav from "@/components/product/ProductSectionNav.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import RecentlyViewedRecord from "@/components/homepage/RecentlyViewedRecord.astro";
@@ -37,7 +38,7 @@ import {
 } from "@/components/product/lib/product-page-modules";
 import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
 import { reviewStructuredData } from "@/lib/review-structured-data";
-import { pickReviewCopy } from "@/components/product/reviews/review-format";
+import { pickReviewCopy, readProductReviews } from "@/components/product/reviews/review-format";
 import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -140,6 +141,16 @@ const pageModules = productPageModules(resolvedTheme.blocks.product.below, produ
   look: buyBoxLook,
   hasRelated: recommendations.products.length > 0,
 });
+const detailAnchorIds: Record<string, string> = {
+  "about-bullets": "about",
+  "key-attributes": "highlights",
+  "spec-table": "specifications",
+  description: "description",
+  "content-blocks": "content",
+};
+const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
+const exploreAnchorId = pageModules.includes("related") ? "related-products" : null;
+const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
 const featuresAt = featuresPlacement(pageModules, buyBoxLook);
 const specificationRows = product.attributes ?? [];
@@ -648,6 +659,7 @@ const productCategoryAnalytics = productCategory
     data-product-discount-amount={String(product.discountAmount || 0)}
     data-currency-decimal-places={String(currencyDecimalPlaces)}
     data-product-free-delivery={product.freeDelivery.toString()}
+    data-marketplace-pdp={buyBoxLook?.facts === "column" ? "" : undefined}
     data-product-has-variants={product.hasVariants.toString()}
     data-fb-product-details={JSON.stringify({
       id: product.id,
@@ -717,6 +729,10 @@ const productCategoryAnalytics = productCategory
     </section>
 
     <StickyBuyBar productName={product.name} />
+
+    {buyBoxLook?.facts === "column" && (
+      <ProductSectionNav detailsId={detailAnchorId} exploreId={exploreAnchorId} reviewsId={reviewsAnchorId} />
+    )}
 
     {/* The template's modules below the fold, in its order. */}
     {pageModules.map((module) => {

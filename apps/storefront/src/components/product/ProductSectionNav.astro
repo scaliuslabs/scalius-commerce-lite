@@ -1,0 +1,90 @@
+---
+// Marketplace phone navigation stays at the top while the product's real
+// below-fold sections pass underneath it. Every link remains a native anchor.
+import { ChevronUp } from "lucide-react";
+
+interface Props {
+  detailsId?: string | null;
+  exploreId?: string | null;
+  reviewsId?: string | null;
+}
+
+const { detailsId = null, exploreId = null, reviewsId = null } = Astro.props;
+const links = [
+  detailsId && { id: detailsId, label: "Details" },
+  exploreId && { id: exploreId, label: "Explore" },
+  reviewsId && { id: reviewsId, label: "Reviews" },
+].filter((link): link is { id: string; label: string } => Boolean(link));
+---
+
+{links.length > 0 && (
+  <nav
+    data-product-section-nav
+    aria-label="Product sections"
+    class="sticky top-0 z-40 flex h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)] lg:hidden"
+  >
+    <a href="#product-container" class="flex w-[72px] shrink-0 flex-col items-center justify-center bg-muted/50 text-sm leading-tight text-foreground">
+      <ChevronUp className="h-4 w-4" aria-hidden="true" />
+      Top
+    </a>
+    {links.map((link, index) => (
+      <a
+        href={`#${link.id}`}
+        data-section-anchor={link.id}
+        aria-current={index === 0 ? "location" : undefined}
+        class="flex min-w-0 flex-1 items-center justify-center border-b-4 border-transparent px-1 pt-1 text-base font-medium text-foreground"
+      >{link.label}</a>
+    ))}
+  </nav>
+)}
+
+<style is:global>
+  [data-product-section-nav] [data-section-anchor][aria-current="location"] {
+    border-bottom-color: var(--primary);
+    color: var(--primary);
+  }
+  @media (max-width: 63.999rem) {
+    #product-container[data-marketplace-pdp] :is([data-product-module], #reviews, #related-products) {
+      scroll-margin-top: 3.75rem;
+    }
+  }
+</style>
+
+<script>
+  let cleanup: (() => void) | null = null;
+
+  function bind() {
+    cleanup?.();
+    const nav = document.querySelector<HTMLElement>("[data-product-section-nav]");
+    if (!nav) return;
+    const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>("[data-section-anchor]"));
+    let frame = 0;
+    const update = () => {
+      const boundary = nav.getBoundingClientRect().bottom + 12;
+      let active = links[0];
+      for (const link of links) {
+        const section = document.getElementById(link.dataset.sectionAnchor ?? "");
+        if (section && section.getBoundingClientRect().top <= boundary) active = link;
+      }
+      for (const link of links) {
+        if (link === active) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      }
+    };
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; update(); });
+    };
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("hashchange", schedule);
+    cleanup = () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("hashchange", schedule);
+      cancelAnimationFrame(frame);
+    };
+    update();
+  }
+
+  bind();
+  document.addEventListener("astro:page-load", bind);
+</script>

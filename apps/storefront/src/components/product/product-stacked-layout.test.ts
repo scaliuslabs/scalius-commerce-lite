@@ -16,7 +16,12 @@ describe("stacked and grid product pages", () => {
     expect(layout).toMatch(/grid-template-columns: minmax\(0, 1fr\) var\(--product-info-column\);/);
     expect(layout).toMatch(/\[data-gallery="stacked"\] \{\s*--product-info-column: 345px;/);
     expect(layout).toMatch(/\[data-gallery="grid"\] \{\s*--product-info-column: 400px;/);
-    expect(layout).toMatch(/:nth-child\(2\)\) \{\s*position: sticky;/);
+    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*position: sticky;/);
+  });
+
+  it("sticks the marketplace gallery within the product grid without changing classic beside pages", () => {
+    expect(layout).toMatch(/\[data-gallery="beside"\]\[data-facts-column\] > :global\(\[data-product-gallery\]\) \{\s*position: sticky;/);
+    expect(layout).toMatch(/\[data-gallery="beside"\]\[data-facts-column\] > :global\(\[data-product-gallery\] \.gallery-layout\) \{\s*position: static;/);
   });
 
   it("lists every photo on computers, two across on the grid", () => {
