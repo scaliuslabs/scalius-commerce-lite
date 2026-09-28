@@ -411,6 +411,13 @@ describe("homepage section library", () => {
     const classicTile = classic.querySelector('a[href="/categories/category-1"]')!;
     expect(classicTile.querySelector("span")!.classList.contains("max-w-28")).toBe(true);
     expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
+
+    const retail = await render(sections, store("large"), storefrontTemplateTheme("mass-retail"));
+    const retailRow = retail.querySelector("[data-home-section='category-tiles'] ul")!;
+    expect(retailRow.className).toContain("overflow-x-auto");
+    expect(retailRow.className).toContain("md:grid");
+    expect(retailRow.firstElementChild!.className).toContain("shrink-0");
+    expect(classic.querySelector("[data-home-section='category-tiles'] ul")!.className).not.toContain("overflow-x-auto");
   });
 
   it("fills a product grid with columns x rows and caps its columns", async () => {

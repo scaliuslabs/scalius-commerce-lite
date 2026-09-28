@@ -68,7 +68,7 @@ const guide = content && hasRenderableHtmlContent(content.html) ? content : null
         fetchpriority="high"
         decoding="async"
         data-catalog-banner
-        class="mt-3 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:aspect-[1344/296]"
+        class:list={["mt-3 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:aspect-[1344/296]", resolved.template === "rounded-tech" && "hidden sm:block"]}
       />
     )}
     <slot name="intro" />

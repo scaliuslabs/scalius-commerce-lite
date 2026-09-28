@@ -248,7 +248,8 @@ describe("product summary browser payload", () => {
     });
     const flatDoc = new Window().document;
     flatDoc.write(`<body>${flatHtml}</body>`);
-    expect(flatDoc.querySelectorAll("[data-option-price]:not([hidden])")).toHaveLength(0);
+    expect(flatDoc.querySelectorAll("[data-option-price]:not([hidden])")).toHaveLength(19);
+    expect(flatDoc.querySelector('[data-option-definition-id="model"][data-option-value-id="m1"].variant-option-btn [data-option-price]')?.textContent).toContain("300");
 
     const withoutFacts = { ...product, brand: null, attributes: [] };
     const emptyHtml = await container.renderToString(ProductSummary, {

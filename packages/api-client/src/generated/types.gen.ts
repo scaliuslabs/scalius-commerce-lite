@@ -237,6 +237,7 @@ export type StorefrontThemeDocument = {
             variant: 'boutique';
             settings: {
                 hoverImage: boolean;
+                quickAction?: boolean;
             };
         } | {
             variant: 'portrait';

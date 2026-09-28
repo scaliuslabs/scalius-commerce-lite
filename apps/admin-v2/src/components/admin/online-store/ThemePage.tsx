@@ -821,6 +821,22 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           ), true)}
           onChange={setBlock("card")}
         />
+        {theme.blocks.card.variant === "boutique" && <SwitchField
+          id="theme-boutique-quick-action"
+          label={t("boutiqueQuickAction")}
+          help={t("boutiqueQuickActionHelp")}
+          checked={Boolean(theme.blocks.card.settings.quickAction)}
+          onCheckedChange={(checked) => setDraft((current) => {
+            if (current.blocks.card.variant !== "boutique") return current;
+            return {
+              ...current,
+              blocks: {
+                ...current.blocks,
+                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, quickAction: checked } },
+              },
+            };
+          })}
+        />}
         {theme.blocks.card.variant === "retail" && <SwitchField
           id="theme-retail-quick-action"
           label={t("retailQuickAction")}

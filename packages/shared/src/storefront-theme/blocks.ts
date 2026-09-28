@@ -631,10 +631,11 @@ export const STOREFRONT_CARD_VARIANTS = {
   // Dawn: title 13/400, stars when reviewed, the struck price before the
   // 16/400 price, a "Sale" / "Sold out" pill on the photo.
   boutique: variant({
-    settings: hoverImage,
-    defaults: { hoverImage: true },
+    settings: { ...hoverImage, quickAction: z.boolean().optional() },
+    defaults: { hoverImage: true, quickAction: false },
     renders: (settings) => card(STOREFRONT_CARD_LOOKS.boutique, {
       hoverImage: settings.hoverImage,
+      quickBuy: settings.quickAction === true,
       discount: "sale",
       strike: "before",
       body: ["title", "rating", "price"],

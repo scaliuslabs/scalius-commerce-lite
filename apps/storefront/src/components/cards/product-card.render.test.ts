@@ -19,6 +19,7 @@ import {
   STOREFRONT_IMAGE_RATIOS,
   storefrontBlockDefault,
   storefrontBlockVariants,
+  storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
   type StorefrontCardRenderer,
   type StorefrontThemeDocument,
@@ -256,6 +257,16 @@ describe("product card matrix", () => {
     expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
     expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+  });
+
+  it("gives showcase cards a guarded purchase action without bypassing option choice", async () => {
+    const cards = await renderCards(storefrontTemplateTheme("showcase-landing"));
+    expect(cards.onSale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
+    expect(text(cards.onSale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
+    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
+    expect(cards.withOptions.querySelector("a[data-card-quick-add]")).toBeNull();
+    expect(cards.soldOut.querySelector(".product-card-action")).toBeNull();
+    expect((await renderCards(themeWith("boutique", {}))).onSale.querySelector(".product-card-action")).toBeNull();
   });
 
   it("keeps sparse retail cards compact and shows the real review score", async () => {

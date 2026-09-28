@@ -1159,6 +1159,9 @@
                         "properties": {
                           "hoverImage": {
                             "type": "boolean"
+                          },
+                          "quickAction": {
+                            "type": "boolean"
                           }
                         },
                         "required": [

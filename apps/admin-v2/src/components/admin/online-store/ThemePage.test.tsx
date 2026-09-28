@@ -444,6 +444,16 @@ describe("theme page", () => {
     expect(saved.blocks.card).toEqual({ variant: "retail", settings: { quickAction: true } });
   });
 
+  it("lets a showcase merchant turn off card purchase actions without changing card style", async () => {
+    render(storefrontTemplateTheme("showcase-landing"));
+    const quick = container.querySelector<HTMLButtonElement>("#theme-boutique-quick-action")!;
+    expect(quick.getAttribute("aria-checked")).toBe("true");
+    act(() => quick.click());
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.card).toEqual({ variant: "boutique", settings: { hoverImage: false, quickAction: false } });
+  });
+
   it("selecting a template sets and saves the whole document", async () => {
     render(DEFAULT_STOREFRONT_THEME);
     act(() => radio("Fashion value").click());

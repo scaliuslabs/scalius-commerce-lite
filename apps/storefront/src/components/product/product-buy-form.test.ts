@@ -65,7 +65,8 @@ describe("product page purchase aids", () => {
   });
 
   it("shows essentials and showcase contact actions after purchase only from valid merchant phone links", () => {
-    expect(page).toContain('resolvedTheme.blocks.product.buyBox.variant === "essentials" || resolvedTheme.blocks.product.buyBox.variant === "showcase"');
+    expect(page).toContain('const essentialsBuyBox = resolvedTheme.blocks.product.buyBox.variant === "essentials";');
+    expect(page).toContain('essentialsBuyBox || resolvedTheme.blocks.product.buyBox.variant === "showcase"');
     expect(page).toContain('storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")');
     expect(page).toMatch(/contactLinks\.length > 0 && \(\s*<nav slot="after-actions" data-product-contact/);
     expect(page).toContain('data-product-contact-link={link.kind}');

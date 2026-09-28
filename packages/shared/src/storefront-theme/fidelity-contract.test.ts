@@ -406,7 +406,7 @@ describe("slice 5: product page per template", () => {
     const theme = storefrontTemplateTheme("marketplace");
     theme.blocks.product.gallery = { variant: "thumbs-left", settings: {} };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productPage).toMatchObject({ thumbnails: "beside", thumbnailSize: 48 });
-    expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: true });
+    expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: false });
     expect(resolved("daily-essentials").blocks.product.sticky.phoneBottom).toBe("none");
   });
 

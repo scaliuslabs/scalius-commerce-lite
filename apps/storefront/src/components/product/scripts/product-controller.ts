@@ -368,7 +368,6 @@ function updateOptionButtons() {
         if (variant?.discountedPrice != null) optionPrices.set(value.id, variant.discountedPrice);
       }
     }
-    const showOptionPrices = new Set(optionPrices.values()).size > 1;
     for (const button of buttons) {
       const valueId = button.dataset.optionValueId!;
       const status = availability.get(valueId) ?? "sold_out";
@@ -376,7 +375,7 @@ function updateOptionButtons() {
       const priceNode = button.querySelector<HTMLElement>("[data-option-price]");
       let optionPrice: string | null = null;
       if (priceNode) {
-        optionPrice = showOptionPrices && optionPrices.has(valueId) ? formatPrice(optionPrices.get(valueId)!) : null;
+        optionPrice = optionPrices.has(valueId) ? formatPrice(optionPrices.get(valueId)!) : null;
         priceNode.textContent = optionPrice ?? "";
         priceNode.hidden = !optionPrice;
       }

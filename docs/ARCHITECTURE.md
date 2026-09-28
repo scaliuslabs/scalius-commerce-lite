@@ -18,15 +18,16 @@ choices and keeps desktop sidebar filters sticky. Product cards render only
 facts present on each product; variant-specific minimum heights keep sparse
 cards aligned without inventing missing facts. Check rendered geometry with
 `pnpm fidelity:check` and the catalog/theme render tests.
-Marketplace option tiles show a price only when the other selected axes
-identify one available SKU and that choice changes the price. Fashion and
+Marketplace option tiles show a price when the other selected axes identify
+one available SKU. Fashion and
 Heritage buy boxes start with one purchase button; merchants can add Buy now
 in Theme settings.
 Theme edits save to a private draft; merchants can preview real storefront
 routes through a one-time continuation before explicitly publishing. Logo,
 announcement bar, and footer settings on that page still save live.
 The homepage section editor can fill Showcase story, highlights, quotes, and
-FAQ blocks; empty blocks stay hidden until the merchant adds content. The
+FAQ blocks; empty blocks stay hidden until the merchant adds content. Showcase
+cards can opt into guarded Add to cart; optioned products open their detail page. The
 Daily Essentials card sketch follows its saved full or compact cart action.
 
 

@@ -401,7 +401,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "cart", "search", "account"], drawer: "drill-in" }],
       card: ["quick-add", { fullAction: true }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: ["thumbs-left", { phoneSideThumbnails: true }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
+      product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
       footer: "directory",
     }),
     home: [
@@ -427,7 +427,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
-      card: ["boutique", { hoverImage: false }],
+      card: ["boutique", { hoverImage: false, quickAction: true }],
       listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",

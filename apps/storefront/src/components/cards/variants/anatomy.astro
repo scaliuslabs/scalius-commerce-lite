@@ -45,7 +45,7 @@ const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const compactSpec = variant === "spec" && facts.keySpecs.length < 3;
 const pushPrice = variant === "spec" && !compactSpec && priceFollowsTitle;
 const quickRetail = variant === "retail" && anatomy.action === "outline";
-const cartAction = variant === "retail" || variant === "quick-add";
+const cartAction = variant === "retail" || variant === "quick-add" || (variant === "boutique" && anatomy.quickBuy);
 const pushAction = !priceFollowsTitle && variant !== "retail";
 const fullEssentials = variant === "quick-add" && anatomy.action === "outline";
 const quickAdd = variant === "quick-add";

@@ -1200,6 +1200,12 @@ describe("listing page", () => {
     expect(breadcrumb.getAttribute("aria-label")).toBe("Breadcrumb");
   });
 
+  it("keeps rounded-tech category banners off phone listings", async () => {
+    const document = await categoryPage(storefrontTemplateTheme("rounded-tech"));
+    const banner = document.querySelector("img[data-catalog-banner]")!;
+    expect(banner.className).toContain("hidden sm:block");
+  });
+
   it("renders every template's listing without duplicate ids", async () => {
     for (const id of ["boutique", "heritage-editorial", "fashion-value", "spec-catalogue", "rounded-tech", "marketplace", "mass-retail", "department-mall", "daily-essentials", "showcase-landing"] as const) {
       const document = parse(await render(PAGE, storefrontTemplateTheme(id), { kind: "search", hero: { title: "Search results", count: 50 }, listing: plain() }, EMPTY_SLOT, TREE_STORE_SHAPE));

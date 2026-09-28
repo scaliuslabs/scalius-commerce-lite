@@ -346,7 +346,6 @@ function optionAriaLabel(
               currencyCode,
             )] as const] : [];
           }));
-          const showOptionPrices = new Set(optionPrices.values()).size > 1;
           return (
             <div class="variant-option-panel">
               <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
@@ -355,7 +354,7 @@ function optionAriaLabel(
                   {option.values.map((value) => {
                     const selected = initialSelection[option.id] === value.id;
                     const status = availability.get(value.id) ?? "sold_out";
-                    const optionPrice = showOptionPrices && optionPrices.has(value.id)
+                    const optionPrice = optionPrices.has(value.id)
                       ? formatPrice(optionPrices.get(value.id)!)
                       : null;
                     return (

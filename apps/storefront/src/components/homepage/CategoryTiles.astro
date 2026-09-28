@@ -22,6 +22,7 @@ const { section, rail } = Astro.props;
 const style = section.settings.style;
 const template = (await currentRequestTheme(Astro.locals)).resolved.template;
 const compactRound = style === "round" && template === "rounded-tech";
+const retailRound = style === "round" && template === "mass-retail";
 const categories = rail.enabled ? rail.categories : [];
 const headingId = `home-${section.id}-title`;
 const hrefOf = (category: (typeof categories)[number]) =>
@@ -60,9 +61,13 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
       )}
 
       {style === "round" && (
-        <ul class="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+        <ul class:list={[
+          retailRound
+            ? "flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-6 md:gap-y-4 lg:grid-cols-8"
+            : "grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8",
+        ]}>
           {categories.map((category) => (
-            <li>
+            <li class={retailRound ? "w-[30%] shrink-0 md:w-auto" : undefined}>
               <a href={hrefOf(category)} class="group flex flex-col items-center gap-2 text-center">
                 <span class:list={["grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-shadow group-hover:ring-2 group-hover:ring-primary", compactRound ? "size-14" : "aspect-square w-full max-w-28"]} aria-hidden="true">
                   {category.imageUrl ? (
