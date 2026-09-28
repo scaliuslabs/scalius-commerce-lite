@@ -12,7 +12,9 @@
 //      long and Bangla names; the 300 brands as brand entities;
 //   5. three video products (video first with a poster, video second, a raw
 //      27 MB video with no poster), two hero sliders, the five scale menus;
-//   6. the catalogue projections (migration 0091's statements).
+//   6. three isolated apparel, grocery, and home-goods PDP fixtures (one
+//      product per category; dense listing checks still use the scale catalog);
+//   7. the catalogue projections (migration 0091's statements).
 // Writes <state>/fidelity-store.json with the page paths the checks measure.
 //
 //   node scripts/storefront-fidelity/seed-large.mjs --state <new dir> [--api-port 9001 --media-port 4603]
@@ -75,6 +77,108 @@ export function seedHomepageCategories(db, mediaUrl) {
     }));
   });
   return categories.map((category) => category.id);
+}
+
+/** Small non-electronics fixtures for theme PDPs; the scale catalogue remains intact. */
+export function seedReferenceProducts(db, mediaUrl) {
+  const now = 1_780_000_000;
+  const materialAttributeId = db.prepare("SELECT id FROM product_attributes WHERE name = 'Material' AND deleted_at IS NULL LIMIT 1").get()?.id;
+  if (!materialAttributeId) throw new Error("scale seed is missing its Material attribute");
+  const fixtures = [
+    {
+      key: "apparel", category: "Women's Clothing", brand: "Fidelity Atelier",
+      name: "Everyday Longline Cotton Tunic", description: "<p>A soft cotton tunic with a relaxed silhouette for everyday wear. Machine wash cold and dry in shade.</p>",
+      price: 129_000, images: [7, 16], axes: [["Size", "size", ["M", "L", "XL", "XXL"]], ["Color", "color", ["Pink", "Blue"]]],
+      attributes: [["Material", "Cotton"], ["Care", "Machine wash cold"]],
+    },
+    {
+      key: "grocery", category: "Pantry & Groceries", brand: "Fidelity Pantry",
+      name: "Cold Pressed Mustard Oil", description: "<p>Cold pressed mustard oil for cooking. Choose a sealed 500 ml or 1 litre bottle.</p>",
+      price: 35000, images: [14, 22], axes: [["Pack Size", "none", ["500 ml", "1 litre"]]],
+      attributes: [["Ingredients", "Mustard seed"], ["Origin", "Bangladesh"]],
+    },
+    {
+      key: "home", category: "Home Storage", brand: "Fidelity Home",
+      name: "Colourful Storage Box", description: "<p>A compact storage box for shelves, stationery and small home essentials.</p>",
+      price: 89000, images: [15, 23], axes: [],
+      attributes: [["Material", "Polypropylene"], ["Dimensions", "30 × 20 × 15 cm"]],
+    },
+  ];
+  const insert = (sql) => db.prepare(sql);
+  const category = insert(`INSERT INTO categories (id, name, slug, description, image_url, meta_title, meta_description, status, revision, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'published', 1, ?, ?)`);
+  const brand = insert(`INSERT INTO brands (id, name, slug, status, created_at, updated_at) VALUES (?, ?, ?, 'published', ?, ?)`);
+  const product = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description,
+    product_condition, is_active, discount_bps, discount_type, created_at, updated_at, brand_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 1, 0, 'percentage', ?, ?, ?)`);
+  const productMedia = insert(`INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  const attribute = insert(`INSERT INTO product_attributes (id, name, slug, filterable, options, key_spec, created_at, updated_at)
+    VALUES (?, ?, ?, 0, NULL, 1, ?, ?)`);
+  const attributeValue = insert(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value, created_at) VALUES (?, ?, ?, ?, ?)`);
+  const option = insert(`INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  const value = insert(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const variant = insert(`INSERT INTO product_variants (id, product_id, option_combination_key, image_id, sku, price_minor, stock, reserved_stock,
+    preorder_stock, is_default, track_inventory, version, stock_version, discount_bps, discount_type, discount_amount_minor, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 12, 0, 0, ?, 1, 1, 2, ?, 'percentage', 0, ?, ?)`);
+  const assignment = insert(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)`);
+  const movement = insert(`INSERT INTO inventory_movements (id, variant_id, order_id, type, quantity, previous_stock, new_stock, notes,
+    created_by, ledger_version, pool, reservation_generation, stock_version_before, stock_version_after, stock_delta,
+    previous_reserved_stock, new_reserved_stock, reserved_stock_delta, previous_preorder_stock, new_preorder_stock,
+    preorder_stock_delta, created_at)
+    VALUES (?, ?, NULL, 'adjusted', 12, 0, 12, 'Stocktake: fidelity fixture', NULL, 2, 'regular', NULL, 1, 2, 12, 0, 0, 0, 0, 0, 0, ?)`);
+  tx(db, () => {
+    for (const name of ["Care", "Ingredients", "Origin", "Dimensions"]) {
+      const id = `attr_fid_${slugify(name)}`;
+      attribute.run(id, name, `fid-${slugify(name)}`, now, now);
+    }
+    for (const fixture of fixtures) {
+      const { key } = fixture;
+      const categoryId = `cat_fid_${key}`;
+      const brandId = `brd_fid_${key}`;
+      const productId = `prod_fid_${key}`;
+      const slug = `fidelity-${key}-${slugify(fixture.name)}`;
+      const imageIds = fixture.images.map((_, position) => `pmed_fid_${key}_${position}`);
+      const firstMedia = `med_pool_${String(fixture.images[0]).padStart(3, "0")}`;
+      const mediaPath = db.prepare("SELECT object_key, variant_width FROM media WHERE id = ?").get(firstMedia);
+      if (!mediaPath) throw new Error(`missing fixture image ${firstMedia}`);
+      category.run(categoryId, fixture.category, `fidelity-${key}`, `<p>Explore ${fixture.category.toLowerCase()}.</p>`,
+        `${mediaUrl.replace(/\/$/, "")}/${mediaPath.object_key}/${mediaPath.variant_width}.webp`, fixture.category,
+        `Shop ${fixture.category.toLowerCase()} online.`, now, now);
+      brand.run(brandId, fixture.brand, `fidelity-${key}-brand`, now, now);
+      product.run(productId, fixture.name, fixture.description, fixture.price, categoryId, slug, fixture.name,
+        fixture.description.replace(/<[^>]*>/g, "").trim(), now, now, brandId);
+      fixture.images.forEach((index, position) => productMedia.run(imageIds[position], productId,
+        `med_pool_${String(index).padStart(3, "0")}`, `${fixture.name} view ${position + 1}`, position === 0 ? 1 : 0,
+        position, now, now));
+      for (const [name, text] of fixture.attributes) {
+        const attributeId = name === "Material" ? materialAttributeId : `attr_fid_${slugify(name)}`;
+        attributeValue.run(`val_fid_${key}_${slugify(name)}`, productId, attributeId, text, now);
+      }
+      const axes = fixture.axes.map(([name, mapping, labels], axisIndex) => {
+        const id = `popt_fid_${key}_${axisIndex}`;
+        option.run(id, productId, name, name.toLowerCase(), axisIndex, mapping, now, now);
+        return labels.map((label, valueIndex) => {
+          const valueId = `pval_fid_${key}_${axisIndex}_${valueIndex}`;
+          value.run(valueId, id, label, label.toLowerCase(), valueIndex, now, now);
+          return [id, valueId];
+        });
+      });
+      const combinations = axes.length === 0 ? [[]] : axes.length === 1 ? axes[0].map((a) => [a]) : axes[0].flatMap((a) => axes[1].map((b) => [a, b]));
+      combinations.forEach((selected, index) => {
+        const variantId = `var_fid_${key}_${index}`;
+        const price = key === "grocery" && index === 1 ? 65000 : key === "apparel" && index >= 6 ? 139000 : fixture.price;
+        const imageId = key === "apparel" ? imageIds[index % 2] : null;
+        variant.run(variantId, productId, selected.length ? selected.map(([, id]) => id).join("|") : null,
+          imageId, `FID-${key.toUpperCase()}-${index}`, price, selected.length === 0 ? 1 : 0,
+          key === "apparel" ? 1500 : 0, now, now);
+        for (const [definitionId, valueId] of selected) assignment.run(variantId, definitionId, valueId);
+        movement.run(`mov_fid_${key}_${index}`, variantId, now);
+      });
+    }
+  });
 }
 
 function shapeStore(stateDir, pool, ports, log) {
@@ -151,7 +255,14 @@ function shapeStore(stateDir, pool, ports, log) {
   });
   log(`  brands: ${q("SELECT count(*) AS n FROM brands")[0].n}`);
 
+  seedReferenceProducts(db, origins(ports).mediaUrl);
+  log("  reference products: apparel, grocery, home storage");
+
   fillProjections(db);
+  const publicFixtures = q(`SELECT count(*) AS n FROM products p
+    JOIN product_buyer_state s ON s.product_id = p.id
+    WHERE p.id LIKE 'prod_fid_%' AND s.is_public = 1 AND s.available_for_sale = 1`)[0].n;
+  if (publicFixtures !== 3) throw new Error(`expected 3 buyer-resolvable reference products, got ${publicFixtures}`);
 
   // Video products: the three newest public products.
   const video = {};

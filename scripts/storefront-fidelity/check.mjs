@@ -48,19 +48,18 @@ import { runVariants } from "./variants.mjs";
 export const BLOCKS = Object.freeze(["header", "card", "listing", "pdp", "footer", "size", "perf", "nav", "variants", "hover", "tiny"]);
 const MATRIX_BLOCKS = ["header", "card", "listing", "pdp", "footer", "size"];
 
-// One PDP per template keeps the matrix bounded. The scale seed has only
-// electronics, so apparel, grocery, and digital-goods references use the
-// closest available option/media shape until those product types are seeded.
+// One PDP per template keeps the matrix bounded. The three exact fixtures
+// exercise apparel, pantry, and home goods; electronics use the scale seed.
 const PDP_PROFILES = {
-  boutique: { kind: "Headphone", images: [3, 4], axes: [1, 1] },
-  "heritage-editorial": { kind: "Leather Phone Case", images: [1, 1], axes: [0, 0] },
-  "fashion-value": { kind: "Smart Watch", images: [1, 1], axes: [2, 2], discount: true },
+  boutique: { slug: "fidelity-home-colourful-storage-box", images: [2, 2], axes: [0, 0] },
+  "heritage-editorial": { slug: "fidelity-apparel-everyday-longline-cotton-tunic", images: [2, 2], axes: [2, 2], discount: true },
+  "fashion-value": { slug: "fidelity-apparel-everyday-longline-cotton-tunic", images: [2, 2], axes: [2, 2], discount: true },
   "spec-catalogue": { kind: "Laptop", images: [2, 4], axes: [0, 2], keySpecs: 4, namedProcessor: true },
   "rounded-tech": { kind: "Smartphone", images: [3, 4], axes: [2, 2] },
   marketplace: { kind: "SSD", images: [3, 4], axes: [1, 1] },
-  "mass-retail": { kind: "Smart Watch", images: [3, 4], axes: [2, 2], discount: true },
+  "mass-retail": { slug: "fidelity-home-colourful-storage-box", images: [2, 2], axes: [0, 0] },
   "department-mall": { kind: "Graphics Card", images: [3, 4], axes: [0, 0] },
-  "daily-essentials": { kind: "Power Bank", images: [1, 1], axes: [0, 0] },
+  "daily-essentials": { slug: "fidelity-grocery-cold-pressed-mustard-oil", images: [2, 2], axes: [1, 1] },
   "showcase-landing": { kind: "Camera", images: [3, 4], axes: [1, 1] },
 };
 
@@ -74,7 +73,7 @@ export function resolveTemplatePdpCandidates(db, templates) {
       (SELECT count(*) FROM product_attribute_values v JOIN product_attributes a ON a.id = v.attribute_id WHERE v.product_id = p.id AND a.key_spec = 1) AS keySpecs
     FROM products p JOIN categories c ON c.id = p.category_id AND c.parent_id IS NULL
       JOIN product_buyer_state s ON s.product_id = p.id AND s.is_public = 1 AND s.available_for_sale = 1
-    WHERE p.name LIKE ? AND p.page_template IS NULL AND p.is_active = 1 AND p.deleted_at IS NULL
+    WHERE (p.slug = ? OR p.name LIKE ?) AND p.page_template IS NULL AND p.is_active = 1 AND p.deleted_at IS NULL
       AND (SELECT count(*) FROM product_media m WHERE m.product_id = p.id) BETWEEN ? AND ?
       AND (SELECT count(*) FROM product_option_definitions o WHERE o.product_id = p.id AND o.deleted_at IS NULL) BETWEEN ? AND ?
       AND EXISTS (SELECT 1 FROM product_media m JOIN media i ON i.id = m.media_id WHERE m.product_id = p.id AND m.is_primary = 1 AND i.kind = 'image')
@@ -89,8 +88,8 @@ export function resolveTemplatePdpCandidates(db, templates) {
   return Object.fromEntries(templates.map((template) => {
     const profile = PDP_PROFILES[template];
     if (!profile) throw new Error(`No PDP profile for ${template}`);
-    const row = find.get(`% ${profile.kind}%`, ...profile.images, ...profile.axes, Number(!!profile.discount), profile.keySpecs ?? 0, Number(!!profile.namedProcessor));
-    if (!row) throw new Error(`No buyer-resolvable ${profile.kind} PDP for ${template}`);
+    const row = find.get(profile.slug ?? "", profile.kind ? `% ${profile.kind}%` : "", ...profile.images, ...profile.axes, Number(!!profile.discount), profile.keySpecs ?? 0, Number(!!profile.namedProcessor));
+    if (!row) throw new Error(`No buyer-resolvable ${profile.slug ?? profile.kind} PDP for ${template}`);
     return [template, { ...row, path: `/products/${encodeURIComponent(row.slug)}` }];
   }));
 }

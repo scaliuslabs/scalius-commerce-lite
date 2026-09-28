@@ -34,6 +34,12 @@ it("selects a buyer-resolvable inheriting PDP with the template's option and med
     INSERT INTO product_option_definitions VALUES ('a', NULL), ('b', NULL);
     INSERT INTO product_variants VALUES ('a', NULL), ('b', NULL);`);
   expect(resolveTemplatePdpCandidates(db, ["marketplace"]).marketplace).toMatchObject({ path: "/products/inherited", images: 3, axes: 1 });
+  db.exec(`INSERT INTO categories VALUES ('home', 'Home Storage', NULL);
+    INSERT INTO products VALUES ('home', 'fidelity-home-colourful-storage-box', 'Colourful Storage Box', 'home', NULL, 1, NULL);
+    INSERT INTO product_buyer_state VALUES ('home', 1, 1, 0);
+    INSERT INTO product_media VALUES ('home', 'photo', 1), ('home', 'photo', 0);
+    INSERT INTO product_variants VALUES ('home', NULL);`);
+  expect(resolveTemplatePdpCandidates(db, ["boutique"]).boutique).toMatchObject({ path: "/products/fidelity-home-colourful-storage-box", images: 2, axes: 0 });
   db.exec("UPDATE products SET page_template = 'classic' WHERE id = 'b'");
   expect(() => resolveTemplatePdpCandidates(db, ["marketplace"])).toThrow("No buyer-resolvable SSD PDP for marketplace");
   db.close();
