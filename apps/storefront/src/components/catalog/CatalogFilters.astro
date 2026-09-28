@@ -144,15 +144,23 @@ const categorySections = facetSections.filter((section) => section.kind === "gro
 const brandSections = facetSections.filter((section) => section.kind === "group" && section.group.facets[0]!.kind === "brand");
 const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
 const price = priceSection ? [priceSection] : [];
+const order = resolved.blocks.listing.filters.order;
 const sections: Section[] = dense
   ? resolved.template === "spec-catalogue"
     ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
     : [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
   : bar
-    ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections]
+    ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections, ...(order ? categorySections : [])]
     : resolved.template === "rounded-tech" && presentation.style === "sidebar-comfortable"
       ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
       : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
+if (order) {
+  const groupOf = (section: Section) => section.kind !== "group" ? section.kind
+    : section.group.kind === "category" ? "category"
+    : section.group.facets[0]?.kind === "brand" ? "brand" : "other";
+  // Stable sorting keeps the category's saved facet order within each group.
+  sections.sort((left, right) => order.indexOf(groupOf(left)) - order.indexOf(groupOf(right)));
+}
 // A column opens its first groups (and any in use) so the page does not
 // start with a wall; a bar's dropdowns open on demand.
 const OPEN_GROUPS = 6;

@@ -457,6 +457,23 @@ describe("homepage section library", () => {
     expect(noPhoto.querySelectorAll("ul > li")).toHaveLength(3);
   });
 
+  it("keeps photo-led fashion lookbooks compact without overriding other card choices", async () => {
+    const look = section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } });
+    const fashion = storefrontTemplateTheme("fashion-value");
+    const page = await render([look], store("large"), fashion);
+    expect(page.querySelector("[data-lookbook-compact]")).not.toBeNull();
+    expect(page.querySelector("figure img")?.className).toContain("aspect-square");
+    expect(page.querySelectorAll("[data-lookbook-compact] .product-card-link")).toHaveLength(7);
+    expect(page.querySelector("[data-lookbook-compact] .product-card-link")?.textContent).toContain("Product");
+
+    const noPhoto = await render([section("lookbook", "look", { mediaId: "missing", source: { kind: "collection", collectionId: "col-eid" } })], store("large"), fashion);
+    expect(noPhoto.querySelector("[data-lookbook-compact]")).toBeNull();
+    const merchantCard = structuredClone(fashion);
+    merchantCard.blocks.card.variant = "standard";
+    const customized = await render([look], store("large"), merchantCard);
+    expect(customized.querySelector("[data-lookbook-compact]")).toBeNull();
+  });
+
   it("puts consecutive two-up banners in one row and draws text over a scrim", async () => {
     const page = await render([
       section("banner", "b1", { layout: "two-up", heading: "Eid sale", text: "", mediaId: "m-banner", cta: { label: "Shop", href: "/sale" } }),

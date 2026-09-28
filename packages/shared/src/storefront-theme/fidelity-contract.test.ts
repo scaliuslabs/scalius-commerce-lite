@@ -10,6 +10,7 @@ import {
   STOREFRONT_CARD_LOOKS,
   STOREFRONT_FILTER_MIN_RESULTS,
   STOREFRONT_LISTING_FILTER_SPECS,
+  STOREFRONT_LISTING_FILTER_GROUPS,
   STOREFRONT_LISTING_FILTER_STYLES,
   STOREFRONT_NAVIGATION_LINK_BUDGET,
   STOREFRONT_NAVIGATION_SOURCES,
@@ -211,6 +212,20 @@ describe("listing filters", () => {
     theme.blocks.listing.filters = { style: "sidebar", openByDefault: true } as never;
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(false);
     theme.blocks.listing.filters = { style: "drawer", openByDefault: true, extra: 1 } as never;
+    expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(false);
+  });
+
+  it("accepts one saved position per filter group and resolves it without changing template defaults", () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    const original = resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.filters;
+    expect(original.order).toBeUndefined();
+    const order = [...STOREFRONT_LISTING_FILTER_GROUPS].reverse();
+    theme.blocks.listing.filters.order = order;
+    expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.filters.order).toEqual(order);
+    theme.blocks.listing.filters.order = ["category", "category", ...order.slice(2)];
+    expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(false);
+    theme.blocks.listing.filters.order = order.slice(1);
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ import {
 import {
   STOREFRONT_DENSITIES,
   STOREFRONT_LISTING_FILTER_STYLES,
+  storefrontListingFilterDefaultOrder,
   STOREFRONT_NAVIGATION_SOURCES,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
@@ -33,6 +35,7 @@ import {
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
   type StorefrontListingFilterStyle,
+  type StorefrontListingFilterGroup,
   type StorefrontNavigationSource,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
@@ -569,6 +572,20 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
     }
   };
   const option = (key: string) => t(key as MessageKey);
+  const filterOrder = theme.blocks.listing.filters.order
+    ?? storefrontListingFilterDefaultOrder(theme.template, theme.blocks.listing.filters.style);
+  const filterGroupName = (group: StorefrontListingFilterGroup) => t(`filterGroup_${group}` as MessageKey);
+  const moveFilterGroup = (group: StorefrontListingFilterGroup, delta: -1 | 1) => setDraft((current) => {
+    const next = [...(current.blocks.listing.filters.order
+      ?? storefrontListingFilterDefaultOrder(current.template, current.blocks.listing.filters.style))];
+    const from = next.indexOf(group);
+    const to = from + delta;
+    if (to < 0 || to >= next.length) return current;
+    [next[from], next[to]] = [next[to]!, next[from]!];
+    return { ...current, blocks: { ...current.blocks, listing: {
+      ...current.blocks.listing, filters: { ...current.blocks.listing.filters, order: next },
+    } } };
+  });
   const resolved = resolveThemeForStore(theme, storeShape);
   const hasCategoryTiles = theme.pages.home.some((section) => section.type === "category-tiles");
   const { data: homepagePresentation } = useQuery({ ...homepageSectionsQueryOptions(), enabled: hasCategoryTiles });
@@ -958,6 +975,33 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
               },
             }))}
           />
+        </div>
+        <div className="mt-5 space-y-2" data-listing-filter-order>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-body font-medium">{t("filterOrder")}</p>
+              <p className="text-caption text-muted-foreground">{t("filterOrderHelp")}</p>
+            </div>
+            {theme.blocks.listing.filters.order && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setDraft((current) => {
+                const filters = { ...current.blocks.listing.filters };
+                delete filters.order;
+                return { ...current, blocks: { ...current.blocks, listing: { ...current.blocks.listing, filters } } };
+              })}>{t("filterOrderReset")}</Button>
+            )}
+          </div>
+          <ol className="divide-y rounded-lg border">
+            {filterOrder.map((group, index) => {
+              const name = filterGroupName(group);
+              return <li key={group} className="flex min-h-11 items-center gap-2 px-3" data-filter-group={group}>
+                <span className="min-w-0 flex-1 text-body">{name}</span>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionUp", { name })}
+                  aria-disabled={index === 0} onClick={() => moveFilterGroup(group, -1)}><ArrowUp aria-hidden="true" /></Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionDown", { name })}
+                  aria-disabled={index === filterOrder.length - 1} onClick={() => moveFilterGroup(group, 1)}><ArrowDown aria-hidden="true" /></Button>
+              </li>;
+            })}
+          </ol>
         </div>
       </SectionCard>
 

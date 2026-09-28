@@ -22,6 +22,7 @@ import {
   type StorefrontHeaderRenderer,
   type StorefrontListingFilterSpec,
   type StorefrontListingFilterStyle,
+  type StorefrontListingFilters,
   type StorefrontListingToolbarPiece,
   type StorefrontMobileNavigationRenderer,
   type StorefrontNavigation,
@@ -83,6 +84,8 @@ export interface ResolvedStorefrontNavigation extends StorefrontNavigation {
 export interface ResolvedStorefrontListingFilters {
   style: StorefrontListingFilterStyle;
   openByDefault: boolean;
+  /** Merchant order, when it replaces the template's original arrangement. */
+  order?: StorefrontListingFilters["order"];
   /** The measured facet UI: the style's, with the template's own column, row pitch and label. */
   spec: StorefrontListingFilterSpec;
   /**
@@ -231,7 +234,7 @@ function resolveFilters(
 ): ResolvedStorefrontListingFilters {
   const failed = failedFitConditions(STOREFRONT_FILTERS_REQUIRE, context);
   if (failed.length > 0) fallbacks.push({ kind: "filters", key: "listing", requested: filters.style, resolved: null, failed });
-  return { style: filters.style, openByDefault: filters.openByDefault, spec: storefrontListingFilterSpec(filters), shown: failed.length === 0 };
+  return { style: filters.style, openByDefault: filters.openByDefault, ...(filters.order ? { order: filters.order } : {}), spec: storefrontListingFilterSpec(filters), shown: failed.length === 0 };
 }
 
 function keepFitting<Item extends string>(

@@ -787,6 +787,18 @@ export const STOREFRONT_LISTING_VARIANTS = {
  */
 export const STOREFRONT_LISTING_FILTER_STYLES = ["sidebar-dense", "sidebar-comfortable", "bar-dropdowns", "drawer"] as const;
 export type StorefrontListingFilterStyle = (typeof STOREFRONT_LISTING_FILTER_STYLES)[number];
+export const STOREFRONT_LISTING_FILTER_GROUPS = ["category", "availability", "price", "rating", "brand", "other"] as const;
+export type StorefrontListingFilterGroup = (typeof STOREFRONT_LISTING_FILTER_GROUPS)[number];
+
+/** The merchant editor's starting order; an unset order keeps the renderer's exact template arrangement. */
+export function storefrontListingFilterDefaultOrder(template: string, style: StorefrontListingFilterStyle): StorefrontListingFilterGroup[] {
+  if (style === "sidebar-dense") return template === "spec-catalogue"
+    ? ["price", "availability", "rating", "brand", "other", "category"]
+    : ["availability", "rating", "brand", "other", "price", "category"];
+  if (style === "bar-dropdowns") return ["availability", "price", "rating", "brand", "other", "category"];
+  if (template === "rounded-tech" && style === "sidebar-comfortable") return ["price", "availability", "rating", "brand", "other", "category"];
+  return ["category", "price", "availability", "rating", "brand", "other"];
+}
 
 export interface StorefrontListingFilterSpec {
   placement: "sidebar" | "bar" | "drawer";
@@ -842,6 +854,9 @@ export const storefrontListingFiltersSchema = z.object({
   style: z.enum(STOREFRONT_LISTING_FILTER_STYLES),
   /** Facet groups start open (sidebars and the drawer); bar dropdowns always open on demand. */
   openByDefault: z.boolean(),
+  /** Optional merchant order. Unset preserves the reference template, including interleaved facets. */
+  order: z.array(z.enum(STOREFRONT_LISTING_FILTER_GROUPS)).length(STOREFRONT_LISTING_FILTER_GROUPS.length)
+    .refine((order) => new Set(order).size === STOREFRONT_LISTING_FILTER_GROUPS.length, "Each filter group appears once.").optional(),
   /** Desktop column width in px (sidebars), over the style's. */
   column: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.column),
   /** Facet value row pitch in px, over the style's. */

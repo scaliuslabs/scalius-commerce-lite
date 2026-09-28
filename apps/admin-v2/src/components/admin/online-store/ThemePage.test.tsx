@@ -415,6 +415,23 @@ describe("theme page", () => {
     expect(saved.blocks.listing.layout).toEqual(retail.blocks.listing.layout);
   });
 
+  it("saves a merchant filter order in the theme draft and can restore the template order", async () => {
+    render(storefrontTemplateTheme("marketplace"));
+    const control = container.querySelector("[data-listing-filter-order]")!;
+    const groups = () => [...control.querySelectorAll("[data-filter-group]")].map((row) => row.getAttribute("data-filter-group"));
+    expect(groups()).toEqual(["availability", "rating", "brand", "other", "price", "category"]);
+    act(() => control.querySelector<HTMLButtonElement>("[aria-label='Move Price up']")!.click());
+    expect(groups()).toEqual(["availability", "rating", "brand", "price", "other", "category"]);
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.filters.order).toEqual(groups());
+    act(() => [...control.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Use template order")!.click());
+    expect(groups()).toEqual(["availability", "rating", "brand", "other", "price", "category"]);
+    await pressSave();
+    expect((api.draft.mock.calls[1]![0].body.theme as StorefrontThemeDocument).blocks.listing.filters.order).toBeUndefined();
+  });
+
   it("offers the quick action on the retail card without changing its default", async () => {
     const retail = storefrontTemplateTheme("mass-retail");
     render(retail);

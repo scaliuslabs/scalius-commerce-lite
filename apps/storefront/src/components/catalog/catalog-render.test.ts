@@ -1100,6 +1100,32 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Availability", "Price", "Size"]);
   });
 
+  it("uses the merchant's group order while keeping facet order and omitting absent groups", async () => {
+    const theme = storefrontTemplateTheme("rounded-tech");
+    theme.blocks.listing.filters.order = ["other", "price", "category", "availability", "brand", "rating"];
+    const brand = facet("brand", "Brand", [["samsung", 8], ["apple", 5]]);
+    const page = { ...plain(), facets: [CATEGORY_FACET, brand, ...FACETS] };
+    const document = await renderListing(theme, page, TREE_STORE_SHAPE);
+    const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
+      .map((span) => span.textContent!.trim());
+    expect(names(document)).toEqual(["Size", "Fabric", "Price", "Category", "Availability", "Brand"]);
+    const search = await renderListing(theme, {
+      ...listingProps("https://shop.test/search?q=phone", { kind: "search" }, [brand, ...FACETS]),
+      kind: "search",
+    }, TREE_STORE_SHAPE);
+    expect(names(search)).toEqual(["Size", "Fabric", "Price", "Availability", "Brand"]);
+  });
+
+  it("offers a saved category group in the filter bar without changing its template default", async () => {
+    const theme = storefrontTemplateTheme("boutique");
+    const page = { ...plain(), facets: [CATEGORY_FACET, ...FACETS] };
+    const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
+      .map((span) => span.textContent!.trim());
+    expect(names(await renderListing(theme, page, TREE_STORE_SHAPE))).not.toContain("Category");
+    theme.blocks.listing.filters.order = ["category", "availability", "price", "rating", "brand", "other"];
+    expect(names(await renderListing(theme, page, TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Category", "Availability", "Price"]);
+  });
+
   it("shows rounded-tech buying filters before category links in its comfortable rail", async () => {
     const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
       .map((span) => span.textContent!.trim());
