@@ -1254,7 +1254,11 @@
                       },
                       "settings": {
                         "type": "object",
-                        "properties": {},
+                        "properties": {
+                          "quickAction": {
+                            "type": "boolean"
+                          }
+                        },
                         "additionalProperties": false
                       }
                     },

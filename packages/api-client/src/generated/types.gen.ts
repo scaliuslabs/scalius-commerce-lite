@@ -256,7 +256,7 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'retail';
             settings: {
-                [key: string]: never;
+                quickAction?: boolean;
             };
         } | {
             variant: 'marketplace';

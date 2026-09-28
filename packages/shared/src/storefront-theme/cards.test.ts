@@ -82,6 +82,8 @@ describe("card anatomy", () => {
     expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 2, badge: "both" });
     expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
     expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale" });
+    const quickRetail = (storefrontVariantSpec("card", "retail").renders as (settings: { quickAction: boolean }) => StorefrontCardRenderer)({ quickAction: true });
+    expect(quickRetail).toMatchObject({ quickBuy: true, action: "outline", body: ["price", "title", "rating", "delivery"] });
     expect(anatomy("detailed")).toMatchObject({ strike: "list", discountStyle: "deal", action: "compact" });
     expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "sale-always" });
     expect(anatomy("detailed")).toMatchObject({

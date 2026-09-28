@@ -234,6 +234,18 @@ describe("theme page", () => {
     expect(saved.blocks.listing.layout).toEqual(retail.blocks.listing.layout);
   });
 
+  it("offers the quick action on the retail card without changing its default", async () => {
+    const retail = storefrontTemplateTheme("mass-retail");
+    render(retail);
+    expect(retail.blocks.card.variant).toBe("retail");
+    const quick = container.querySelector<HTMLButtonElement>("#theme-retail-quick-action")!;
+    expect(quick.getAttribute("aria-checked")).toBe("false");
+    act(() => quick.click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.card).toEqual({ variant: "retail", settings: { quickAction: true } });
+  });
+
   it("selecting a template sets and saves the whole document", async () => {
     render(DEFAULT_STOREFRONT_THEME);
     act(() => radio("Fashion value").click());

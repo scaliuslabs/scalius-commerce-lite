@@ -182,6 +182,14 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 14, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 22, phone: 22 }, weight: 700 },
   },
+  // Walmart home: square image, small outline Add/Options above a bold price.
+  "retail-quick": {
+    image: { ratio: 1, fit: "contain" },
+    radius: 12,
+    surface: "flat",
+    title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
+    price: { size: { desktop: 24, phone: 20 }, weight: 700 },
+  },
   // Daraz ?q=ssd: 250×421, square 200px photo, white on grey with no
   // border, 2px corners; title 13/400 in two lines, price 18/400 (orange).
   marketplace: {
@@ -654,15 +662,18 @@ export const STOREFRONT_CARD_VARIANTS = {
   // "reg ৳1,200" while discounted), brand 14/700, title 14/400, stars,
   // delivery, a full-width Add to cart pill.
   retail: variant({
-    contrastPairs: [["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS.retail, {
+    settings: { quickAction: z.boolean().optional() },
+    defaults: { quickAction: false },
+    contrastPairs: [["primary", "card"], ["destructive", "card"]],
+    renders: (settings) => card(settings.quickAction ? STOREFRONT_CARD_LOOKS["retail-quick"] : STOREFRONT_CARD_LOOKS.retail, {
       quickBuy: true,
       badge: "price",
-      discount: "sale",
+      discount: settings.quickAction ? "percent" : "sale",
       discountStyle: "text",
-      strike: "reg",
+      strike: settings.quickAction ? "after" : "reg",
       priceTone: "sale",
-      body: ["swatches", "price", "brand", "title", "rating", "delivery"],
+      body: settings.quickAction ? ["price", "title", "rating", "delivery"] : ["swatches", "price", "brand", "title", "rating", "delivery"],
+      action: settings.quickAction ? "outline" : "block",
     }),
   }),
   // Daraz: title 13/400, the 18/400 price always in its orange-red (the sale

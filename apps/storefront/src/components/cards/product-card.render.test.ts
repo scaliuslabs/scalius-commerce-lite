@@ -245,6 +245,19 @@ describe("product card matrix", () => {
     expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "mall", "detailed"]);
   });
 
+  it("renders the merchant's compact retail action above the price in the card layout", async () => {
+    const theme = themeWith("retail", {});
+    if (theme.blocks.card.variant !== "retail") throw new Error("Expected retail card");
+    theme.blocks.card.settings.quickAction = true;
+    const cards = await renderCards(theme);
+    const sale = cards.onSale;
+    expect(sale.hasAttribute("data-card-quick-retail")).toBe(true);
+    expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
+    expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
+    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
+    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).not.toBeNull();
+  });
+
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
     const theme = themeWith(card, { density, imageRatio, imageFit });
     const anatomy = requestThemeFor(theme).layout.productCard;
