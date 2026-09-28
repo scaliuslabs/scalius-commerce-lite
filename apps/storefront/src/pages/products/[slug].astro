@@ -130,6 +130,7 @@ const resolvedTheme = resolveProductPageTheme(
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
+const wideProductSummary = buyBoxLook?.cta.layout === "stack" && buyBoxLook.cta.phoneLayout === "row";
 // The EMI line shows only in a buy box that asks for it (spec, tech); the
 // classic buy box has no such setting and stays as it is.
 const buyBoxShowsEmi = themeLayout.buyBox.emi;
@@ -675,7 +676,7 @@ const productCategoryAnalytics = productCategory
     </div>
 
     <section
-      class:list={["mx-auto px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6", buyBoxLook?.facts === "column" ? "max-w-[1500px]" : "max-w-7xl"]}
+      class:list={["mx-auto px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6", buyBoxLook?.facts === "column" ? "max-w-[1500px]" : wideProductSummary ? "max-w-[1408px]" : "max-w-7xl"]}
     >
       {buyBoxLook?.facts === "column" && (
         <div class="mb-3 lg:hidden">
@@ -684,7 +685,7 @@ const productCategoryAnalytics = productCategory
           <ReviewsSummary product={product} copy={reviewCopy} />
         </div>
       )}
-      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={buyBoxLook?.facts === "column"}>
+      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={buyBoxLook?.facts === "column"} wideSummary={wideProductSummary}>
         <ProductGallery
           product={product}
           media={media}

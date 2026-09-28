@@ -11,21 +11,33 @@ interface Props {
   gallery: ResolvedStorefrontThemeLayout["productPage"]["gallery"];
   /** The buy box carries a purchase column at the right (from 80rem). */
   factsColumn?: boolean;
+  /** A paired purchase row needs the wider detail column of the tech page. */
+  wideSummary?: boolean;
 }
 
-const { gallery, factsColumn = false } = Astro.props;
+const { gallery, factsColumn = false, wideSummary = false } = Astro.props;
 ---
 
 <div
   class="product-layout grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8"
   data-gallery={gallery}
   data-facts-column={factsColumn ? "" : undefined}
+  data-wide-summary={wideSummary ? "" : undefined}
 >
   <slot />
 </div>
 
 <style>
   @media (min-width: 64rem) {
+    .product-layout[data-gallery="beside"][data-wide-summary] {
+      grid-template-columns: minmax(0, 39.1%) minmax(0, 1fr);
+    }
+    .product-layout[data-gallery="beside"][data-wide-summary] > :global([data-product-gallery]) {
+      grid-column: 1;
+    }
+    .product-layout[data-gallery="beside"][data-wide-summary] > :global([data-product-summary]) {
+      grid-column: 2;
+    }
     .product-layout[data-gallery="stacked"],
     .product-layout[data-gallery="grid"] {
       grid-template-columns: minmax(0, 1fr) var(--product-info-column);
