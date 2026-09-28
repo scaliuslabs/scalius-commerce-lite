@@ -145,6 +145,11 @@ export type StorefrontThemeDocument = {
                 cartTotal: boolean;
             };
         } | {
+            variant: 'mall-search';
+            settings: {
+                cartTotal: boolean;
+            };
+        } | {
             variant: 'retail-pill';
             settings: {
                 cartTotal: boolean;

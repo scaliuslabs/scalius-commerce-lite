@@ -284,7 +284,26 @@ export function HeaderRows({ kind }: { kind: StorefrontHeaderRenderer }) {
   );
 }
 
-export function HeaderSketch({ kind }: { kind: StorefrontHeaderRenderer }) {
+export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer; variant?: string }) {
+  if (variant === "mall-search") {
+    return (
+      <Sketch>
+        <span className="flex items-center gap-1 py-1">
+          <Logo className="h-3 w-6" />
+          <span className="flex h-2.5 flex-1 rounded-xs border border-(--sk-accent)">
+            <span className="w-5 border-r border-(--sk-line) bg-(--sk-soft)" />
+            <span className="ml-auto w-3 bg-(--sk-accent)" />
+          </span>
+          <Dot /><Dot />
+        </span>
+        <span className="flex items-center gap-1 border-t border-(--sk-line)">
+          <Block className="h-1.5 w-1/3 bg-(--sk-accent)" />
+          <Line /><Line />
+        </span>
+        <Filler className="mt-1" />
+      </Sketch>
+    );
+  }
   return (
     <Sketch>
       <HeaderRows kind={kind} />

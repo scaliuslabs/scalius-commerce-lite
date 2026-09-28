@@ -148,7 +148,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       </div>
 
       <div class="hdr-actions">
-        <a href="/track-order" data-astro-prefetch="false" class="hdr-util hdr-util--desktop">
+        <a href="/track-order" data-astro-prefetch="false" class="hdr-util hdr-util--desktop" data-mall-hide="">
           <span class="hdr-util-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-.1M17.5 19a2 2 0 1 0 0-.1" /></svg>
           </span>
@@ -509,6 +509,14 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       max-width: var(--header-logo-width);
     }
 
+    .hdr[data-header-variant="mall-search"] .hdr-logo-image {
+      max-height: 6.25rem;
+    }
+
+    .hdr[data-header-variant="mall-search"] [data-mall-hide] {
+      display: none;
+    }
+
     .hdr-inline-menu {
       display: flex;
       flex: 1 1 auto;
@@ -525,6 +533,10 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
     .hdr[data-header-variant="tech-rounded"] .hdr-search {
       max-width: 36.5rem;
+    }
+
+    .hdr[data-header-variant="mall-search"] .hdr-search {
+      max-width: 45rem;
     }
 
     .hdr-search--icon {

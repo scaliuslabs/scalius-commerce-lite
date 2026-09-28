@@ -695,6 +695,34 @@
                       "variant": {
                         "type": "string",
                         "enum": [
+                          "mall-search"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {
+                          "cartTotal": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "cartTotal"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
                           "retail-pill"
                         ]
                       },

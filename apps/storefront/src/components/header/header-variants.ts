@@ -1,8 +1,8 @@
 /**
  * The header variants as data (theme block `header`). Every variant except
  * `mall-departments` renders through ComposedHeader.astro from this spec;
- * `mall-departments` is today's classic header (ClassicHeader.astro), kept
- * pixel-identical because the default template uses it. Sizes are the
+ * `mall-departments` is the merchant-selectable classic header (ClassicHeader.astro),
+ * kept pixel-identical. Sizes are the
  * measured desktop anatomy (SYNTHESIS.md section 2.2); colours, radius and
  * type come from the theme tokens, never from here.
  *
@@ -114,6 +114,20 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     phoneShortcuts: true,
     mainHeight: 3.75,
     menuHeight: 2.5,
+  },
+  // Department mall: a prominent logo and scoped search over a department rail.
+  "mall-search": {
+    toneRow: false,
+    menuRowTone: "surface",
+    menu: "row",
+    uppercaseMenu: false,
+    search: "scoped",
+    utilities: "round",
+    cartTotal: true,
+    phoneSearch: "none",
+    phoneShortcuts: false,
+    mainHeight: 7.5,
+    menuHeight: 2.8125,
   },
   // Target, Walmart: an 80px row with the menu as pills, a 628x44 pill
   // search, account and cart (optionally with its total).

@@ -496,6 +496,7 @@ export const STOREFRONT_HEADER_VARIANTS = {
   }),
   // Game Ghor: big logo, search with a category select, cart with its total.
   "mall-departments": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "classic" }),
+  "mall-search": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "marketplace" }),
   // Target/Walmart: Categories and Deals pills, pill search.
   "retail-pill": variant({ settings: cartTotal, defaults: { cartTotal: false }, renders: "marketplace" }),
   // Chaldal: fixed header, delivery-city selector, wide search.
@@ -522,7 +523,7 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
   "departments-rail": variant({
     settings: { open: z.enum(["home", "always"]) },
     defaults: { open: "home" },
-    requires: [between("navTopItems", 4, 16)],
+    requires: [atLeast("navTopItems", 4)],
     fallback: "dropdown",
     renders: (settings) => (settings.open === "always" ? "sidebar" : "menu"),
   }),

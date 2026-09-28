@@ -495,12 +495,12 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
   };
   const setBlock = (slot: ThemeBlockSlot) => (variant: string) =>
     setDraft((current) => setBlockVariant(current, slot, variant));
-  const blockOptions = <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render) => ReactNode, help = false) =>
+  const blockOptions = <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render, variant: string) => ReactNode, help = false) =>
     storefrontBlockVariants(slot).map((value) => ({
       value,
       label: option(`${prefix}_${value}`),
       help: help ? option(`${prefix}_${value}Help`) : undefined,
-      sketch: sketch(variantRenders<Render>(slot, value)),
+      sketch: sketch(variantRenders<Render>(slot, value), value),
     }));
   const fitNote = (slot: ThemeBlockSlot, prefix: string) => (
     <FitNote
@@ -574,7 +574,7 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
           label={t("header")}
           value={blockVariant(theme, "header")}
           className="grid-cols-2 sm:grid-cols-4"
-          options={blockOptions<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind) => <HeaderSketch kind={kind} />)}
+          options={blockOptions<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind, variant) => <HeaderSketch kind={kind} variant={variant} />)}
           onChange={setBlock("header")}
         />
         {fitNote("header", "header")}

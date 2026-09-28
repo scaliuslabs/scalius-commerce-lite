@@ -575,10 +575,10 @@ describe("storefront theme render matrix", () => {
     expect(duplicateIds(productPage)).toEqual([]);
   });
 
-  it("renders the default theme's product page and homepage as the classic store", () => {
+  it("keeps the compact product page while giving the default theme a department header", () => {
     const { layout, resolved } = requestThemeFor(DEFAULT_STOREFRONT_THEME, STORE_SHAPE);
     expect(layout).toMatchObject({
-      header: "classic",
+      header: "marketplace",
       navigation: "menu",
       mobileNavigation: "drawer",
       footer: "columns",
@@ -589,19 +589,29 @@ describe("storefront theme render matrix", () => {
       topBar: true,
     });
     expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category-tiles", "usp-strip"]);
-    // Today's announcement bar, classic header, dropdown row, drawer and columns footer.
-    expect(resolved.blocks.topBar.variant).toBe("announcement");
-    expect(resolved.blocks.header.variant).toBe("mall-departments");
-    expect(resolved.blocks.desktopNav.variant).toBe("dropdown");
+    expect(resolved.blocks.topBar.variant).toBe("utility");
+    expect(resolved.blocks.header.variant).toBe("mall-search");
+    expect(resolved.blocks.desktopNav).toMatchObject({ variant: "departments-rail", settings: { open: "home" } });
     expect(resolved.blocks.mobileNav.variant).toBe("accordion-drawer");
     expect(["product-widgets", "minimal-columns"]).toContain(resolved.blocks.footer.variant);
   });
 
-  it("renders the default header as the classic header, markup for markup", async () => {
+  it("renders the default mall search and rail, with the classic header still selectable", async () => {
+    const mall = parse(await render("/src/layouts/Layout.astro", DEFAULT_STOREFRONT_THEME, {
+      title: "Home", layoutData: { ...layoutData({ business: true }), navigation: [...LONG_MENU, { id: "home", title: "Home", href: "/" }] },
+    }));
+    expect(mall.querySelector('#main-header[data-header-variant="mall-search"]')).not.toBeNull();
+    expect(mall.querySelector('.hdr-search form.hsearch--scoped select[data-search-scope]')).not.toBeNull();
+    expect(mall.querySelector('details[data-menu-home-open][open] .drail-panel')).not.toBeNull();
+    expect(mall.querySelector('#mall-shortcuts-nav')).not.toBeNull();
+    const classicTheme = storefrontTemplateTheme("department-mall");
+    classicTheme.blocks.topBar = { variant: "announcement", settings: {} };
+    classicTheme.blocks.header = { variant: "mall-departments", settings: { cartTotal: true } };
+    classicTheme.blocks.desktopNav = { variant: "dropdown", settings: {} };
     const page = parse(
       await render(
         "/src/layouts/Layout.astro",
-        DEFAULT_STOREFRONT_THEME,
+        classicTheme,
         { title: "Home", layoutData: { ...layoutData({ business: true }), navigation: LONG_MENU } },
       ),
     );
@@ -1258,8 +1268,8 @@ describe("navigation", () => {
       expect(new Set(roots).size, template).toBe(roots.length);
       expect(drawer.querySelectorAll('a[href="/track-order"]').length, template).toBeLessThanOrEqual(1);
       // The desktop row: at most maxTopItems items, the rest named in "More", never a department twice.
-      const row = page.querySelector("#site-header [data-nav-overflow]:not(#drill-row-nav [data-nav-overflow])");
-      if (row && !row.closest("#drill-row-nav")) {
+      const row = page.querySelector("#site-header [data-nav-overflow]");
+      if (row && !row.closest("#drill-row-nav, #mall-shortcuts-nav")) {
         expect(row.querySelectorAll(":scope > [data-nav-index]").length, template).toBeLessThanOrEqual(resolved.blocks.navigation.maxTopItems);
         const more = Array.from(row.querySelectorAll("[data-nav-more-list] > li > a")).map((link) => link.textContent!.trim());
         expect(more.at(-1), template).toBe("All categories");

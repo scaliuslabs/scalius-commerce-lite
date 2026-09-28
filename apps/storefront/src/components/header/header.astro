@@ -99,6 +99,9 @@ const hasNavigation = tree.length > 0;
 // Shortcut rows (beside "All", the phone's pills) lead with the merchant's
 // own links when the departments come from the tree (Amazon's Deals, Sell...).
 const menuTree = sourceNavigation("menu", menuItems, []);
+const mallLinks = header.variant === "mall-search"
+  ? navigationShortcuts(menuTree.filter((item) => !item.href?.startsWith("/categories/")), 7)
+  : [];
 const shortcutTree = navigation.source === "tree+menu" && menuTree.length > 0
   ? [...menuTree, ...tree.filter((item) => !menuTree.some((entry) => entry.href && entry.href === item.href))]
   : tree;
@@ -132,7 +135,7 @@ const desktopRendering = desktopMenu && !sharedDrawer;
 const topBarShown = headerData.topBar.isEnabled && topBar.variant !== "none";
 // Logo, account, track order, search icon, the drawer's own rows and phone.
 const reserved =
-  8 + social.length + (tabs?.length ?? 0) + (topBarShown ? 3 : 0) + (shortcutRow ? 10 : 0) + rowLinks;
+  8 + social.length + (tabs?.length ?? 0) + (topBarShown ? 3 : 0) + (shortcutRow ? 10 : 0) + rowLinks + mallLinks.length;
 const plan = planHeaderNavigation(
   tree,
   {
@@ -260,7 +263,10 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
         />
       )}
       {desktopMenu && desktopKind === "departments-rail" && (
-        <DepartmentsRail navigation={desktopTree} allCategories={plan.allCategories} />
+        <>
+          <DepartmentsRail navigation={desktopTree} allCategories={plan.allCategories} />
+          {mallLinks.length > 0 && <DesktopNav navigation={mallLinks} id="mall-shortcuts-nav" navStyle="menu" align="start" label="Store links" />}
+        </>
       )}
       {desktopDrill && (
         <div class="drill-row-menu">

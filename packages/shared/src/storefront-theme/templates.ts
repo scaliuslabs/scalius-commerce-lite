@@ -353,7 +353,8 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
   },
   {
     // Game Ghor, the common BD WooCommerce shape: 50-3,000 SKUs across departments.
-    // The default template: it renders today's classic store and product page.
+    // The default template keeps the classic product page but gives the store
+    // a department-scoped search and a browsable departments rail.
     id: "department-mall",
     palette: "retail",
     tokens: {
@@ -362,14 +363,13 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       headerTone: "light", container: "1440",
     },
     blocks: blocks({
-      topBar: "announcement",
-      header: ["mall-departments"],
+      topBar: "utility",
+      header: ["mall-search"],
       navigation: { source: "tree+menu", maxTopItems: 8 },
-      desktopNav: ["dropdown"],
+      desktopNav: ["departments-rail", { open: "home" }],
       mobileNav: ["accordion-drawer"],
       card: ["standard"],
-      // No per-page: the default listing stays today's (pixel-identical), and
-      // most stores get no extra crawl variant.
+      // No per-page: the default listing stays compact, without extra crawl variants.
       listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["classic"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
@@ -469,8 +469,8 @@ export function storefrontTemplateTheme(
 }
 
 /**
- * Every store without a saved theme renders this: Department mall, which
- * renders today's classic store and the owner-protected product page.
+ * Every store without a saved theme renders this: Department mall, with a
+ * department search and the owner-protected classic product page.
  */
 export const DEFAULT_STOREFRONT_TEMPLATE: StorefrontTemplateId = "department-mall";
 export const DEFAULT_STOREFRONT_THEME: StorefrontThemeDocument = deepFreeze(storefrontTemplateTheme(DEFAULT_STOREFRONT_TEMPLATE));
