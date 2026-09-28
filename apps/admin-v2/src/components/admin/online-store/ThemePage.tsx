@@ -647,9 +647,9 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
         />
       </SectionCard>
 
-      {theme.template === "marketplace" && (
+      {(theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list") && (
         <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
-          <div data-marketplace-listing-default>
+          <div data-listing-default className="space-y-4">
             <VisualChoice
               label={t("listingDefault")}
               value={theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list"
@@ -672,6 +672,25 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                 },
               }))}
             />
+            <SwitchField
+              id="theme-listing-view-toggle"
+              label={t("listingViewSwitch")}
+              help={t("listingViewSwitchHelp")}
+              checked={theme.blocks.listing.toolbar.includes("grid-list-toggle")}
+              onCheckedChange={(checked) => setDraft((current) => ({
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  listing: {
+                    ...current.blocks.listing,
+                    toolbar: checked
+                      ? [...current.blocks.listing.toolbar, "grid-list-toggle"]
+                      : current.blocks.listing.toolbar.filter((piece) => piece !== "grid-list-toggle"),
+                  },
+                },
+              }))}
+            />
+            {theme.template === "marketplace" && <p className="text-body text-muted-foreground">{t("listingMarketplaceHelp")}</p>}
           </div>
         </SectionCard>
       )}

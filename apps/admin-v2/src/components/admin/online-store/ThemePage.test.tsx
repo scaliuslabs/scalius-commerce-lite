@@ -122,6 +122,7 @@ describe("theme page", () => {
       "Navigation",
       "Footer",
       "Product cards",
+      "Listing default",
       "Filters on computers",
       "Density",
       "Product page",
@@ -154,7 +155,7 @@ describe("theme page", () => {
   it("lets a Marketplace merchant change the catalog starting view without changing the shopper search default", async () => {
     const marketplace = storefrontTemplateTheme("marketplace");
     render(marketplace);
-    const control = container.querySelector("[data-marketplace-listing-default]")!;
+    const control = container.querySelector("[data-listing-default]")!;
     const grid = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("Grid"))!;
     const list = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("List"))!;
 
@@ -172,6 +173,17 @@ describe("theme page", () => {
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
     expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
     expect(saved.tokens).toEqual(marketplace.tokens);
+  });
+
+  it("lets a Department mall merchant offer grid and list views to shoppers", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    const control = container.querySelector("[data-listing-default]")!;
+    expect(control.querySelector("#theme-listing-view-toggle")?.getAttribute("aria-checked")).toBe("false");
+    act(() => (control.querySelector("#theme-listing-view-toggle") as HTMLButtonElement).click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.layout.variant).toBe("grid");
+    expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
 
   it("lets a mass-retail merchant replace the filter drawer with a category sidebar", async () => {
