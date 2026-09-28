@@ -430,6 +430,24 @@ describe("listing layouts", () => {
     expect(flat.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
   });
 
+  it("shows child shelves whose products fall after the normal first page", async () => {
+    const theme = themeWith({ variant: "shelves", settings: { maxShelves: 8 } });
+    const products = PRODUCTS.map((item) => ({ ...item, categoryId: "c-cotton" }));
+    const silk = PRODUCTS.slice(0, 3).map((item, index) => ({
+      ...item, id: `late-silk-${index}`, categoryId: "c-silk",
+    }));
+    const subListings = [
+      { id: "c-cotton", label: "Cotton", href: "/categories/cotton" },
+      { id: "c-silk", label: "Silk", href: "/categories/silk" },
+    ];
+    const document = await renderListing(theme, {
+      ...plain(), products, shelfProducts: [...products, ...silk], subListings,
+    });
+    const shelves = Array.from(document.querySelectorAll("[data-catalog-shelves] section"));
+    expect(shelves.map((shelf) => shelf.querySelector("h2")!.textContent!.trim())).toEqual(["Cotton", "Silk"]);
+    expect(shelves[1]!.querySelectorAll("[data-theme-component='product-card']")).toHaveLength(3);
+  });
+
   it("hides the grid/list switch when a category overrides a grid theme with shelves", async () => {
     const theme = themeWith({ toolbar: ["grid-list-toggle"] });
     const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "c-silk" : "c-cotton" }));

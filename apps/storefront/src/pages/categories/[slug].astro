@@ -57,7 +57,7 @@ const productListOptions: ProductListOptions = initialQueryState.options;
 try {
   [layoutData, productsResponse] = await Promise.all([
     getLayoutData(),
-    getProductsByCategory(slug, productListOptions),
+    getProductsByCategory(slug, { ...productListOptions, shelfPreview: true }),
   ]);
   setRuntimeImageCdnPolicy(layoutData?.media);
 
@@ -238,6 +238,7 @@ const collectionJsonLd =
     }}
     listing={{
       products,
+      shelfProducts: productsResponse.shelfProducts ?? [],
       pagination,
       facets,
       priceRange: productsResponse.priceRange,

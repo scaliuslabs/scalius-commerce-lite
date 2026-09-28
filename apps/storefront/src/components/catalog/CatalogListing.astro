@@ -60,6 +60,8 @@ export interface CatalogBand {
 interface Props {
   kind?: "category" | "collection" | "brand" | "search";
   products: Product[];
+  /** Extra bounded child samples for a category shelf landing. */
+  shelfProducts?: Product[];
   pagination: { page: number; totalPages: number; total: number };
   facets: ProductFacet[];
   /** "N★ & up" rows of the listing's scope (the API's `ratingFacet`). */
@@ -89,6 +91,7 @@ interface Props {
 const {
   kind,
   products,
+  shelfProducts = [],
   pagination,
   facets,
   ratingFacet = [],
@@ -193,7 +196,7 @@ const landing = pagination.page === 1 && refinementCount === 0 && !query && sort
 const shelves = presentation.shelves && landing
   ? catalogShelves({
       groups: subListings,
-      items: products,
+      items: shelfProducts.length > 0 ? shelfProducts : products,
       maxShelves: presentation.maxShelves,
       restTitle: `More from ${listingName}`,
     })

@@ -64048,6 +64048,19 @@
             "description": "List products of the category's published sub-categories too (default). \"false\" lists the category's own products only.",
             "name": "includeSubcategories",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Include bounded child-category product previews on the plain first page."
+            },
+            "required": false,
+            "description": "Include bounded child-category product previews on the plain first page.",
+            "name": "shelfPreview",
+            "in": "query"
           }
         ],
         "responses": {
@@ -64359,6 +64372,150 @@
                             ]
                           }
                         },
+                        "shelfProducts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountedPrice": {
+                                "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
+                              },
+                              "freeDelivery": {
+                                "type": "boolean"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "hasVariants": {
+                                "type": "boolean"
+                              },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
+                              "category": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug"
+                                ]
+                              },
+                              "subcategoryId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself)."
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "rating": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "average": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5,
+                                    "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "Published reviews."
+                                  }
+                                },
+                                "required": [
+                                  "average",
+                                  "count"
+                                ],
+                                "description": "Published-review rating; null when the product has no published review."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "price",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "discountedPrice",
+                              "priceVaries",
+                              "freeDelivery",
+                              "categoryId",
+                              "hasVariants",
+                              "availableForSale",
+                              "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
+                              "secondaryImageUrl",
+                              "category",
+                              "createdAt",
+                              "rating"
+                            ]
+                          },
+                          "maxItems": 52
+                        },
                         "pagination": {
                           "type": "object",
                           "properties": {
@@ -64634,6 +64791,7 @@
                       "required": [
                         "category",
                         "products",
+                        "shelfProducts",
                         "pagination",
                         "priceRange",
                         "facets",

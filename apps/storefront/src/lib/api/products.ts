@@ -552,6 +552,7 @@ export async function getProductsByCategory(
         const d = unwrapData<{
           category: Category;
           products: Product[];
+          shelfProducts?: Product[];
           pagination: PaginatedResponse<Product>["pagination"];
           priceRange?: BuyerPriceRange;
           facets?: ProductFacet[];
@@ -561,6 +562,7 @@ export async function getProductsByCategory(
           ? {
               category: d.category,
               data: d.products,
+              shelfProducts: Array.isArray(d.shelfProducts) ? d.shelfProducts : [],
               pagination: d.pagination,
               priceRange: normalizeBuyerPriceRange(d.priceRange),
               facets: normalizeProductFacets(d.facets),

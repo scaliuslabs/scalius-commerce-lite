@@ -308,6 +308,48 @@ describe("category tree reads", () => {
             ["prod_leaf", store.android],
         ]);
     });
+
+    it("samples later child categories for shelves without changing the first page", async () => {
+        const reads: string[] = [];
+        const db = database((query) => reads.push(query));
+        const root = await create(db, "Sarees", "sarees");
+        const cotton = await create(db, "Cotton", "cotton", root);
+        const silk = await create(db, "Silk", "silk", root);
+        const rows = Array.from({ length: 25 }, (_, index) => ({
+            id: `cotton_${index}`, categoryId: cotton, createdAt: 1700001000 + index,
+        }));
+        rows.push(...Array.from({ length: 3 }, (_, index) => ({
+            id: `silk_${index}`, categoryId: silk, createdAt: 1700000000 + index,
+        })));
+        sqlite!.exec(`INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES ${
+            rows.map(({ id, categoryId, createdAt }) => `('${id}', '${id}', 1000, '${id}', '${categoryId}', 1, ${createdAt})`).join(",")
+        }`);
+        sqlite!.exec(`INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES ${
+            rows.map(({ id }) => `('variant_${id}', '${id}', 'SKU-${id}', 1000, 3, 1, 1)`).join(",")
+        }`);
+        await rebuildCatalogProjections(db);
+        const category = await getPublicCategoryBySlug(db, "sarees");
+
+        reads.length = 0;
+        const ordinary = await getStorefrontCategoryProducts(db, category!, { page: 1, limit: 20 }, { includeDescendants: true });
+        const ordinaryReads = reads.length;
+        reads.length = 0;
+
+        const landing = await getStorefrontCategoryProducts(db, category!, { page: 1, limit: 20 }, {
+            includeDescendants: true, shelfPreview: true, shelfChildIds: [cotton, silk],
+        });
+        expect(reads).toHaveLength(ordinaryReads);
+        expect(landing.products).toHaveLength(20);
+        expect(landing.products.map((product) => product.id)).toEqual(ordinary.products.map((product) => product.id));
+        expect(landing.products.every((product) => product.categoryId === cotton)).toBe(true);
+        expect(landing.shelfProducts.filter((product) => product.categoryId === silk)).toHaveLength(3);
+        expect(landing.pagination.total).toBe(28);
+
+        const secondPage = await getStorefrontCategoryProducts(db, category!, { page: 2, limit: 20 }, {
+            includeDescendants: true, shelfPreview: true, shelfChildIds: [cotton, silk],
+        });
+        expect(secondPage.shelfProducts).toEqual([]);
+    });
 });
 
 describe("category tree read plans", () => {

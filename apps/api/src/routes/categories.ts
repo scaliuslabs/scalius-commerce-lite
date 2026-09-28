@@ -69,6 +69,7 @@ const categoryProductFilterSchema = z.object({
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
   inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
   includeSubcategories: includeSubcategoriesSchema,
+  shelfPreview: z.enum(["true"]).optional().openapi({ description: "Include bounded child-category product previews on the plain first page." }),
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&
@@ -482,6 +483,7 @@ const getCategoryProductsRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         category: storefrontCategoryDetailSchema.omit({ updatedAt: true }),
         products: z.array(storefrontCategoryProductSchema),
+        shelfProducts: z.array(storefrontCategoryProductSchema).max(52),
         pagination: paginationSchema,
         priceRange: z.object({
           min: z.number().min(0),
@@ -534,7 +536,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     createdAt: category.createdAt,
   };
 
-  const { includeSubcategories, ...filters } = params;
+  const { includeSubcategories, shelfPreview, ...filters } = params;
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
     ...filters,
     search,
@@ -542,6 +544,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   }, {
     // Only a category with published children has a subtree to list.
     includeDescendants: includeSubcategories === "true" && category.children.length > 0,
+    shelfPreview: shelfPreview === "true" && category.children.length > 1,
+    shelfChildIds: category.children.map((child) => child.id),
   });
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
@@ -559,6 +563,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   return ok(c, {
     category: categoryForProducts,
     products: result.products,
+    shelfProducts: result.shelfProducts,
     pagination: result.pagination,
     priceRange: result.priceRange,
     facets: result.facets,

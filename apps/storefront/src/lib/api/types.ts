@@ -514,6 +514,8 @@ export interface CategorySummary {
 
 export interface CategoryProductsResponse extends PaginatedResponse<Product> {
   category: Category | null;
+  /** Bounded child samples for a category shelf landing; empty on refined views. */
+  shelfProducts?: Product[];
   categoryNotFound?: boolean;
 }
 

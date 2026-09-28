@@ -162,6 +162,8 @@ type StorefrontCatalogScope = {
      * by default the categories the listed products sit in.
      */
     categoryFacet?: CatalogFacetCountInput["categoryFacet"] | null;
+    /** Published category landing shelves sample children beyond the normal first page. */
+    shelfChildIds?: readonly string[];
 };
 
 /**
@@ -239,6 +241,42 @@ async function readStorefrontCatalogResults(
             ? [...productSearchRelevanceOrder(db, search), desc(buyerState.productCreatedAt)]
             : [getStorefrontProductOrderBy(sort, scope.sortAfterScope)];
     const offset = (page - 1) * limit;
+    const shelfPreview = Boolean(
+        scope.shelfChildIds?.length && page === 1 && limit === 20 && sort === "newest"
+        && !search && params.minPrice === undefined && params.maxPrice === undefined
+        && params.minRating === undefined && !params.freeDelivery && !params.hasDiscount && !params.inStock
+        && !params.attributeFilters?.length,
+    );
+
+    // The first page alone can be dominated by one child. Fold up to four
+    // newest products from each of eight children into the page's existing
+    // product statement; card media/facts then enrich the union in its usual
+    // second wave. This adds no D1 round trip or batch part.
+    const shelfIds = shelfPreview ? sql`
+        SELECT preview.product_id FROM (
+            SELECT ${buyerState.productId} AS product_id,
+                child.name AS child_name,
+                row_number() OVER (
+                    PARTITION BY child.id
+                    ORDER BY ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
+                ) AS shelf_rank
+            FROM ${buyerState}
+            INNER JOIN category_closure AS child_link ON child_link.descendant_id = ${buyerState.categoryId}
+            INNER JOIN categories AS child ON child.id = child_link.ancestor_id
+                AND child.id IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scope.shelfChildIds)}))
+                AND child.status = 'published' AND child.deleted_at IS NULL
+            WHERE ${publicBuyerStateCondition()} AND ${scope.condition!}
+        ) AS preview
+        WHERE preview.shelf_rank <= 4
+        ORDER BY preview.child_name, preview.product_id
+        LIMIT 32
+    ` : null;
+    const pageIds = shelfPreview ? sql`
+        SELECT ${buyerState.productId} FROM ${buyerState}
+        WHERE ${and(...conditions)}
+        ORDER BY ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
+        LIMIT ${limit}
+    ` : null;
 
     const cardSku = buyerStateCardSku();
     let query = db
@@ -261,7 +299,13 @@ async function readStorefrontCatalogResults(
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
-        .where(and(...conditions))
+        .where(and(...conditions,
+            shelfPreview ? sql`${buyerState.productId} IN (
+                SELECT product_id FROM (${pageIds}) AS page_sample
+                UNION ALL
+                SELECT product_id FROM (${shelfIds}) AS shelf_sample
+            )` : undefined,
+        ))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search
         ? productSearchRankJoin(db, search)
@@ -319,7 +363,8 @@ async function readStorefrontCatalogResults(
     // A scoped listing counts its facets in the first wave; the unscoped one
     // learns the catalogue size from its count first (see the limit above).
     const [productsList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
-        query.orderBy(...orderBy, buyerState.productId).limit(limit).offset(offset).all() as Promise<StorefrontProductListRowWithVariants[]>,
+        (shelfPreview ? query.orderBy(...orderBy, buyerState.productId).all()
+            : query.orderBy(...orderBy, buyerState.productId).limit(limit).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
         countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? noFacets : facetReads(),
@@ -424,7 +469,8 @@ async function readStorefrontCatalogResults(
     });
 
     return {
-        products: productsWithImages,
+        products: shelfPreview ? productsWithImages.slice(0, limit) : productsWithImages,
+        shelfProducts: shelfPreview ? productsWithImages : [],
         pagination: getPagination(page, limit, totalCount?.count ?? 0),
         priceRange: {
             min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
@@ -467,6 +513,7 @@ export async function getStorefrontCategoryProducts(
         fixedCategory: category,
         // Its sub-categories with their subtree counts; a leaf has none.
         categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
+        shelfChildIds: options.shelfPreview && options.includeDescendants ? options.shelfChildIds : undefined,
     });
 }
 
@@ -480,6 +527,10 @@ export interface StorefrontCategoryListingOptions {
      * draft or internal descendant's products stay out of the parent).
      */
     includeDescendants?: boolean;
+    /** Include bounded child-category previews for an unfiltered landing. */
+    shelfPreview?: boolean;
+    /** Only the children included in the public category detail. */
+    shelfChildIds?: readonly string[];
 }
 
 /** A brand page's products: the storefront catalogue scoped to one brand. */

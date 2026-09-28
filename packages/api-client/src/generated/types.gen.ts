@@ -17540,6 +17540,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
          * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
          */
         includeSubcategories?: 'true' | 'false';
+        /**
+         * Include bounded child-category product previews on the plain first page.
+         */
+        shelfPreview?: 'true';
     };
     url: '/api/v1/categories/{slug}/products';
 };
@@ -17627,6 +17631,49 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 }>;
             };
             products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
+                createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
+            }>;
+            shelfProducts: Array<{
                 id: string;
                 name: string;
                 slug: string;
