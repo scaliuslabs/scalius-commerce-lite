@@ -7,13 +7,12 @@ import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 
 const CARD = "document.querySelectorAll('[data-theme-component=product-card]')";
 
-/** `targets`: "boutique", or "department-mall:hover" to force hoverImage on. */
+/** `targets`: templates whose selected card supports hoverImage. */
 export async function runHover(ctx, { targets, path, net = { latency: 60, mbps: 10 } }) {
   const { page, base, log } = ctx;
   const all = {};
-  for (const target of targets) {
-    const [template, force] = target.split(":");
-    await applyTheme(ctx, template, { menu: TEMPLATE_MENUS[template] ?? MENUS["150"], sets: force ? { "blocks.card.settings.hoverImage": true } : {} });
+  for (const template of targets) {
+    await applyTheme(ctx, template, { menu: TEMPLATE_MENUS[template] ?? MENUS["150"] });
     await page.profile("desktop");
     await page.send("Network.emulateNetworkConditions", { offline: false, latency: net.latency, downloadThroughput: (net.mbps * 1024 * 1024) / 8, uploadThroughput: (5 * 1024 * 1024) / 8 });
     await page.send("Network.clearBrowserCache");
@@ -42,9 +41,9 @@ export async function runHover(ctx, { targets, path, net = { latency: 60, mbps: 
         await sleep(200);
       }
       const reqs = [...got.values()].filter((r) => /\/media\//.test(r.url));
-      all[target] = { cardsWithHover: hoverCards.length, lazyAttr: hoverCards[0]?.loading ?? null, completeAtLoad: before.filter((b) => b.complete).length, results,
+      all[template] = { cardsWithHover: hoverCards.length, lazyAttr: hoverCards[0]?.loading ?? null, completeAtLoad: before.filter((b) => b.complete).length, results,
         imageRequests: reqs.length, imageKB: Math.round(reqs.reduce((a, r) => a + (r.bytes || 0), 0) / 1024) };
-      log(`  hover ${target}: ${results.map((r) => `#${r.idx} ${r.visibleAfterMs}ms${r.preloadedBeforeHover ? " (preloaded)" : ""}`).join(", ") || "no hover photos"} | ${all[target].imageKB}KB images`);
+      log(`  hover ${template}: ${results.map((r) => `#${r.idx} ${r.visibleAfterMs}ms${r.preloadedBeforeHover ? " (preloaded)" : ""}`).join(", ") || "no hover photos"} | ${all[template].imageKB}KB images`);
     } finally {
       off();
       await page.profile("desktop");

@@ -134,7 +134,7 @@ export function stagesFor(filter) {
     variants: wants(["variants"]) && (!filter.templates.length || filter.templates.includes("department-mall")),
     nav: wants(["nav"]),
     perf: wants(["perf", "size"]),
-    hover: wants(["hover"]) && (!filter.templates.length || filter.templates.some((t) => ["boutique", "heritage-editorial", "department-mall"].includes(t))),
+    hover: wants(["hover"]) && (!filter.templates.length || filter.templates.some((t) => ["boutique", "heritage-editorial"].includes(t))),
     tiny: wants(["tiny"]),
   };
 }
@@ -380,7 +380,7 @@ async function main() {
       }
     }
     if (stages.hover) {
-      const targets = ["boutique", "heritage-editorial", "department-mall:hover"].filter((t) => templates.includes(t.split(":")[0]));
+      const targets = ["boutique", "heritage-editorial"].filter((t) => templates.includes(t));
       log(`hover: ${targets.join(", ")}`);
       results.hover = await runStage("hover", "hover", () => runHover(ctx, { targets, path: pages.plp }));
     }
