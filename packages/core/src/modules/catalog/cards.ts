@@ -4,7 +4,7 @@
 // own richer projection (listing.ts).
 import { products } from "@scalius/database/schema";
 import { sql } from "drizzle-orm";
-import type { BuyerCatalogPricingProjection } from "../products/buyer-projection";
+import { quickAddEligibleSql, type BuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
     buyerPricingSelection,
     presentBuyerPricing,
@@ -27,6 +27,7 @@ export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingPr
     slug: products.slug,
     ...buyerPricingSelection(buyerPricing),
     availableForSale: buyerPricing.availableForSale,
+    quickAddEligible: quickAddEligibleSql(buyerPricing).as("collection_quick_add_eligible"),
     freeDelivery: products.freeDelivery,
     categoryId: products.categoryId,
     hasVariants: buyerPricing.hasCustomerOptions,
@@ -46,6 +47,7 @@ export type RawProduct = BuyerPricingMinor & {
     name: string;
     slug: string;
     availableForSale: number;
+    quickAddEligible: number;
     freeDelivery: boolean;
     categoryId: string | null;
     hasVariants: number;
@@ -67,6 +69,7 @@ export type ResolvedProduct = {
     categoryId: string | null;
     hasVariants: boolean;
     availableForSale: boolean;
+    quickAddEligible: boolean;
     priceVaries: boolean;
     /** Published-review average and count; null without a published review. */
     rating: CardRating;
@@ -83,6 +86,7 @@ function enrichProduct(
     const {
         hasVariants,
         availableForSale,
+        quickAddEligible,
         storeCurrencyCode: _storeCurrencyCode,
         ratingAvgCenti,
         reviewCount,
@@ -92,6 +96,7 @@ function enrichProduct(
         ...presentBuyerPricing(product, decimalPlaces),
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
+        quickAddEligible: Boolean(quickAddEligible),
         rating: presentCardRating(ratingAvgCenti, reviewCount),
         ...images,
         cardFacts,

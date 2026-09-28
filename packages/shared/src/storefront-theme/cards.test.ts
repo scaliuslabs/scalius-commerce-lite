@@ -82,6 +82,18 @@ describe("card anatomy", () => {
     expect(card.look.price).toEqual({ size: { desktop: 20, phone: 20 }, weight: 400 });
   });
 
+  it("starts showcase with its own centered purchase card while preserving merchant overrides", () => {
+    const theme = storefrontTemplateTheme("showcase-landing");
+    expect(theme.blocks.card).toEqual({ variant: "showcase", settings: {} });
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard).toMatchObject({
+      quickBuy: true,
+      body: ["title", "pack-size", "price"],
+      look: STOREFRONT_CARD_LOOKS.showcase,
+    });
+    theme.blocks.card = { variant: "boutique", settings: { hoverImage: false, quickAction: false } };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("boutique");
+  });
+
   it("puts each measured anatomy on its own id", () => {
     const shapes = Object.keys(STOREFRONT_CARD_VARIANTS).map((id) => JSON.stringify({ ...anatomy(id), hoverImage: null }));
     expect(new Set(shapes).size).toBe(shapes.length);
@@ -132,6 +144,7 @@ describe("card looks (fidelity AUDIT.md section 2.1)", () => {
     expect(STOREFRONT_CARD_LOOKS.marketplace.price).toEqual({ size: { desktop: 18, phone: 18 }, weight: 400 });
     expect(STOREFRONT_CARD_LOOKS.retail.price.size.desktop).toBe(22);
     expect(STOREFRONT_CARD_LOOKS.boutique.title).toMatchObject({ size: { desktop: 13 }, weight: 400 });
+    expect(STOREFRONT_CARD_LOOKS.showcase).toMatchObject({ radius: 12, surface: "flat", title: { lines: 2, weight: 600, size: { phone: 14 } } });
     expect(STOREFRONT_CARD_LOOKS["quick-add"].price.size).toEqual({ desktop: 18, phone: 12 });
     expect(STOREFRONT_CARD_LOOKS.detailed).toMatchObject({ title: { size: { desktop: 16, phone: 14 }, lines: 3 }, price: { size: { desktop: 28 } } });
     for (const [id, look] of Object.entries(STOREFRONT_CARD_LOOKS)) {

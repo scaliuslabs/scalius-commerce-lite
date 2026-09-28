@@ -10,6 +10,7 @@ import { publicProductBaseConditions } from "../modules/products/public-eligibil
 import {
   buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
+  quickAddEligibleSql,
 } from "../modules/products/buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
 import {
@@ -31,6 +32,7 @@ export type ProductSearchResult = {
   discountedPrice: number;
   priceVaries: boolean;
   availableForSale: boolean;
+  quickAddEligible: boolean;
   hasVariants: boolean;
   slug: string;
   imageUrl: string | null;
@@ -234,6 +236,7 @@ async function runSearch(
         effectivePriceMinor: buyerPricing.effectivePriceMinor,
         maxBuyerPriceMinor: buyerPricing.maxBuyerPriceMinor,
         availableForSale: buyerPricing.availableForSale,
+        quickAddEligible: quickAddEligibleSql(buyerPricing).as("search_quick_add_eligible"),
         hasVariants: buyerPricing.hasCustomerOptions,
         slug: sql<string>`${products.slug}`.as("search_product_slug"),
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
@@ -316,6 +319,7 @@ async function runSearch(
       effectivePriceMinor,
       maxBuyerPriceMinor,
       availableForSale,
+      quickAddEligible,
       hasVariants,
       imageProjection,
       storeCurrencyCode: _storeCurrencyCode,
@@ -327,6 +331,7 @@ async function runSearch(
         price: fromMinor(basePriceMinor, decimalPlaces),
         discountedPrice: fromMinor(effectivePriceMinor, decimalPlaces),
         availableForSale: Boolean(availableForSale),
+        quickAddEligible: Boolean(quickAddEligible),
         hasVariants: Boolean(hasVariants),
         priceVaries: maxBuyerPriceMinor > effectivePriceMinor,
         imageUrl: image ? getCurrentMediaUrl(image.objectKey, image.variantWidth) : null,

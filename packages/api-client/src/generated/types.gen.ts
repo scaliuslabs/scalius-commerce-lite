@@ -240,6 +240,11 @@ export type StorefrontThemeDocument = {
                 quickAction?: boolean;
             };
         } | {
+            variant: 'showcase';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
             variant: 'portrait';
             settings: {
                 hoverImage: boolean;
@@ -2680,6 +2685,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
@@ -2713,6 +2719,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
@@ -3103,6 +3110,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 categoryId: string | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
@@ -3492,6 +3500,7 @@ export type GetApiV1SearchResponses = {
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 hasVariants: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
@@ -4936,6 +4945,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     discountedPrice: number;
                     priceVaries: boolean;
                     availableForSale: boolean;
+                    quickAddEligible: boolean;
                     freeDelivery: boolean;
                     categoryId: string | null;
                     hasVariants: boolean;
@@ -4963,6 +4973,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     discountedPrice: number;
                     priceVaries: boolean;
                     availableForSale: boolean;
+                    quickAddEligible: boolean;
                     freeDelivery: boolean;
                     categoryId: string | null;
                     hasVariants: boolean;
@@ -5019,6 +5030,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                         discountedPrice: number;
                         priceVaries: boolean;
                         availableForSale: boolean;
+                        quickAddEligible: boolean;
                         freeDelivery: boolean;
                         categoryId: string | null;
                         hasVariants: boolean;
@@ -5583,6 +5595,7 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                     discountedPrice: number;
                     priceVaries: boolean;
                     availableForSale: boolean;
+                    quickAddEligible: boolean;
                     freeDelivery: boolean;
                     categoryId: string | null;
                     hasVariants: boolean;
@@ -15732,6 +15745,7 @@ export type GetApiV1ProductsResponses = {
                 categoryId: string | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
@@ -16237,6 +16251,7 @@ export type GetApiV1ProductsRecommendationsResponses = {
                 discountedPrice: number;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 priceVaries: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
@@ -16586,6 +16601,7 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 discountedPrice: number;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 priceVaries: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
@@ -16899,6 +16915,7 @@ export type GetApiV1ProductsBySlugResponses = {
                     discountedPrice: number;
                     hasVariants: boolean;
                     availableForSale: boolean;
+                    quickAddEligible: boolean;
                     priceVaries: boolean;
                     freeDelivery: boolean;
                     categoryId: string | null;
@@ -17652,6 +17669,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 categoryId: string | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
@@ -17695,6 +17713,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 categoryId: string | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
@@ -17915,6 +17934,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 categoryId: string | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
+                quickAddEligible: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;

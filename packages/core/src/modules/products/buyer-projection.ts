@@ -1,11 +1,33 @@
 import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./money";
 
 type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
+
+/** A card can add one unit without asking the buyer to choose an SKU or fill any input. */
+export function quickAddEligibleSql(buyer: {
+    availableForSale: SQLWrapper;
+    hasCustomerOptions: SQLWrapper;
+    effectivePriceMinor: SQLWrapper;
+}): SQL<number> {
+    return sql<number>`CASE WHEN ${buyer.availableForSale} = 1
+        AND ${buyer.hasCustomerOptions} = 0
+        AND ${buyer.effectivePriceMinor} > 0
+        AND ${products.isGiftCard} = 0
+        AND (CASE
+            WHEN ${products.customizationSchema} IS NULL THEN 1
+            WHEN json_valid(${products.customizationSchema}) = 1 THEN
+                CASE WHEN json_type(${products.customizationSchema}) = 'object'
+                    AND json_type(${products.customizationSchema}, '$.fields') = 'array'
+                    AND json_array_length(${products.customizationSchema}, '$.fields') = 0
+                THEN 1 ELSE 0 END
+            ELSE 0
+        END) = 1
+    THEN 1 ELSE 0 END`;
+}
 
 /**
  * The discount a buyer card shows for one SKU: a valid SKU discount overrides

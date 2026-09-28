@@ -281,6 +281,8 @@ export interface Product {
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
+  /** Public card projection: one priced, available SKU with no buyer choices or inputs. */
+  quickAddEligible?: boolean;
   variants?: ProductVariant[];
   /** Automatic Buy X get Y discounts this product counts toward (product page only). */
   offers?: ProductBuyGetOffer[];

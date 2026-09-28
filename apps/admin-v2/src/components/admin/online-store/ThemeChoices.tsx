@@ -528,12 +528,14 @@ export function ProductTile({
   card,
   radius = "subtle",
   badge = false,
+  showcase = false,
   className,
 }: {
   card: CardFacts;
   radius?: StorefrontThemeTokens["radius"];
   /** Draw the discount badge on this tile. */
   badge?: boolean;
+  showcase?: boolean;
   /** Width cap, so a tall photo still fits the sketch. */
   className: string;
 }) {
@@ -552,21 +554,25 @@ export function ProductTile({
         {badge && spec.badge !== "price" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
         {spec.quickBuy && spec.action === "round" ? <span data-card-sketch-round-action className="absolute right-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
       </span>
-      <Line className="w-full" />
+      {showcase ? <span data-card-sketch-showcase-title className="flex flex-col items-center gap-0.5"><Line className="w-4/5" /><Line className="w-2/3" /></span> : <Line className="w-full" />}
       <span className="flex items-center gap-0.5">
         <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
         {badge && spec.badge !== "image" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
-      {spec.quickBuy && spec.action !== "round" ? <span data-card-sketch-full-action={spec.action === "outline" ? "" : undefined} className={cn("h-1.5 w-full", spec.action === "outline" ? "border border-(--sk-accent)" : "bg-(--sk-accent)", CORNERS[radius])} /> : null}
+      {spec.quickBuy && spec.action !== "round" ? showcase ? (
+        <span data-card-sketch-showcase-action className={cn("flex h-1.5 w-full items-center justify-center gap-0.5 bg-(--sk-accent)", CORNERS[radius])}>
+          <span className="h-0.5 w-1 bg-(--sk-paper)" /><span className="h-0.5 w-1.5 bg-(--sk-paper)" />
+        </span>
+      ) : <span data-card-sketch-full-action={spec.action === "outline" ? "" : undefined} className={cn("h-1.5 w-full", spec.action === "outline" ? "border border-(--sk-accent)" : "bg-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
   );
 }
 
-export function CardStyleSketch({ card }: { card: CardFacts }) {
+export function CardStyleSketch({ card, variant }: { card: CardFacts; variant?: string }) {
   return (
     <Sketch className="flex-row items-start justify-center gap-2">
-      <ProductTile card={card} badge className="max-w-9" />
-      <ProductTile card={card} className="max-w-9" />
+      <ProductTile card={card} badge showcase={variant === "showcase"} className="max-w-9" />
+      <ProductTile card={card} showcase={variant === "showcase"} className="max-w-9" />
     </Sketch>
   );
 }

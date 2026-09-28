@@ -98,6 +98,8 @@ export interface ProductCardModel {
   amountOff: string | null;
   /** The buy link when the card has a buy action and the product needs no choice. */
   quickBuyHref: string | null;
+  /** True only when the card projection explicitly proves a simple product needs no buyer inputs. */
+  quickAddEligible: boolean;
   /** The product has options, so the card's action is "choose options" on the product page. */
   needsOptions: boolean;
   facts: ProductCardFactValues;
@@ -230,6 +232,10 @@ export function productCardModel(
   const hoverPhoto = photo ? cardPhoto(product.secondaryImageUrl) : null;
   const saved = amountOff(product, money, options.currencyCode);
   const current = money(product.discountedPrice);
+  const simpleBuyable = options.quickBuy && product.quickAddEligible === true && !soldOut && !product.hasVariants &&
+    product.priceVaries !== true && product.discountedPrice > 0 &&
+    !product.isGiftCard && !product.requiresCustomization && !product.customizationUnavailable &&
+    (product.customization?.fields.length ?? 0) === 0;
   return {
     name: product.name,
     condition: product.productCondition ? PRODUCT_CONDITION_LABELS[product.productCondition] : null,
@@ -262,9 +268,10 @@ export function productCardModel(
     percentOff: formatDiscountBadge(product.price, product.discountedPrice),
     amountOff: saved,
     // "Buy now" needs no choice from the buyer: in stock and without options.
-    quickBuyHref: options.quickBuy && !soldOut && !product.hasVariants
+    quickBuyHref: simpleBuyable
       ? `/buy/${encodeURIComponent(product.slug)}`
       : null,
+    quickAddEligible: simpleBuyable,
     needsOptions: !soldOut && product.hasVariants,
     facts: cardFactValues(product.cardFacts, options.ratings === false ? { ...product, rating: null } : product, money, saved),
   };

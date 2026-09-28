@@ -10,6 +10,7 @@ import { suggestSearchCorrection } from "../../search/correct";
 import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
+import { quickAddEligibleSql } from "../products/buyer-projection";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
@@ -93,6 +94,7 @@ type StorefrontProductListRow = {
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
     hasCustomerOptions: number | boolean;
     availableForSale: number | boolean;
+    quickAddEligible: number | boolean;
 };
 
 export interface StorefrontCategoryProductCategory {
@@ -291,6 +293,11 @@ async function readStorefrontCatalogResults(
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
+            quickAddEligible: quickAddEligibleSql({
+                availableForSale: buyerState.availableForSale,
+                hasCustomerOptions: buyerState.hasCustomerOptions,
+                effectivePriceMinor: buyerState.fromMinor,
+            }).as("listing_quick_add_eligible"),
             ratingAvgCenti: reviewStats.ratingAvgCenti,
             reviewCount: reviewStats.reviewCount,
         })
@@ -443,6 +450,7 @@ async function readStorefrontCatalogResults(
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
+        quickAddEligible,
         ratingAvgCenti,
         reviewCount,
         ...product
@@ -457,6 +465,7 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
+            quickAddEligible: Boolean(quickAddEligible),
             ...resolveProductCardImages(cardData.media.get(product.id) ?? []),
             rating: presentCardRating(ratingAvgCenti, reviewCount),
             cardFacts: cardData.facts(product.id),

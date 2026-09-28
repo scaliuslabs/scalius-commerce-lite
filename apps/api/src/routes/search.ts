@@ -106,6 +106,7 @@ const searchRoute = createRoute({
           discountedPrice: z.number(),
           priceVaries: z.boolean(),
           availableForSale: z.boolean(),
+          quickAddEligible: z.boolean(),
           hasVariants: z.boolean(),
           imageUrl: z.string().url().nullable(),
           imageMediaId: z.string().nullable(),

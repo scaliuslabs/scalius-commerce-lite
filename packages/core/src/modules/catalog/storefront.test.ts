@@ -39,6 +39,35 @@ function setup() {
 }
 
 describe("storefront product reads", () => {
+    it("only offers immediate card add for a priced, available product without buyer choices", async () => {
+        const { db, sqlite } = setup();
+        sqlite.exec(`
+            INSERT INTO products (id, name, price_minor, slug, customization_schema, is_gift_card) VALUES
+                ('p_input', 'Engraved', 1000, 'engraved', '{"fields":[{"key":"name","label":"Name","type":"text"}]}', 0),
+                ('p_empty', 'No inputs', 1000, 'no-inputs', '{"fields":[]}', 0),
+                ('p_unknown', 'Unknown inputs', 1000, 'unknown-inputs', '{}', 0),
+                ('p_gift', 'Gift card', 1000, 'gift-card', NULL, 1),
+                ('p_zero', 'Zero price', 0, 'zero-price', NULL, 0),
+                ('p_sold', 'Sold out', 1000, 'sold-out', NULL, 0);
+            INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES
+                ('v_input', 'p_input', 'INPUT-1', 1000, 0, 1, 0),
+                ('v_empty', 'p_empty', 'EMPTY-1', 1000, 0, 1, 0),
+                ('v_unknown', 'p_unknown', 'UNKNOWN-1', 1000, 0, 1, 0),
+                ('v_gift', 'p_gift', 'GIFT-1', 1000, 0, 1, 0),
+                ('v_zero', 'p_zero', 'ZERO-1', 0, 0, 1, 0),
+                ('v_sold', 'p_sold', 'SOLD-1', 1000, 0, 1, 1);
+        `);
+
+        const { products } = await getStorefrontProducts(db, { limit: 20 });
+        const eligible = new Map(products.map((product) => [product.id, product.quickAddEligible]));
+        expect(eligible.get("p_z")).toBe(true);
+        expect(eligible.get("p_a")).toBe(true);
+        expect(eligible.get("p_empty")).toBe(true);
+        for (const id of ["p_input", "p_unknown", "p_gift", "p_zero", "p_sold"]) {
+            expect(eligible.get(id), id).toBe(false);
+        }
+    });
+
     it("lists only buyer-resolvable products sorted by raw effective SKU price", async () => {
         const { db } = setup();
 
@@ -141,6 +170,13 @@ function optionedCatalog(onQuery?: (params: readonly unknown[]) => void) {
 }
 
 describe("storefront catalog search and option facets", () => {
+    it("never marks a product with a customer option axis eligible for immediate card add", async () => {
+        const { db } = optionedCatalog();
+        const result = await getStorefrontProducts(db, { limit: 10 });
+        expect(result.products.find((product) => product.id === "p_runner")?.quickAddEligible).toBe(false);
+        expect(result.products.find((product) => product.id === "p_kettle")?.quickAddEligible).toBe(true);
+    });
+
     it("ranks title matches above description-only matches unless the buyer picks a sort", async () => {
         const { db } = optionedCatalog();
 

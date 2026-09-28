@@ -1182,6 +1182,27 @@
                       "variant": {
                         "type": "string",
                         "enum": [
+                          "showcase"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
                           "portrait"
                         ]
                       },
@@ -11240,6 +11261,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "freeDelivery": {
                                 "type": "boolean"
                               },
@@ -11288,6 +11312,7 @@
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
+                              "quickAddEligible",
                               "freeDelivery",
                               "categoryId",
                               "hasVariants",
@@ -11350,6 +11375,9 @@
                             "availableForSale": {
                               "type": "boolean"
                             },
+                            "quickAddEligible": {
+                              "type": "boolean"
+                            },
                             "freeDelivery": {
                               "type": "boolean"
                             },
@@ -11398,6 +11426,7 @@
                             "discountedPrice",
                             "priceVaries",
                             "availableForSale",
+                            "quickAddEligible",
                             "freeDelivery",
                             "categoryId",
                             "hasVariants",
@@ -12586,6 +12615,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -12666,6 +12698,7 @@
                               "categoryId",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
@@ -13912,6 +13945,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "hasVariants": {
                                 "type": "boolean"
                               },
@@ -13945,6 +13981,7 @@
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
+                              "quickAddEligible",
                               "hasVariants",
                               "imageUrl",
                               "imageMediaId",
@@ -18991,6 +19028,9 @@
                                     "availableForSale": {
                                       "type": "boolean"
                                     },
+                                    "quickAddEligible": {
+                                      "type": "boolean"
+                                    },
                                     "freeDelivery": {
                                       "type": "boolean"
                                     },
@@ -19049,6 +19089,7 @@
                                     "discountedPrice",
                                     "priceVaries",
                                     "availableForSale",
+                                    "quickAddEligible",
                                     "freeDelivery",
                                     "categoryId",
                                     "hasVariants",
@@ -19096,6 +19137,9 @@
                                     "type": "boolean"
                                   },
                                   "availableForSale": {
+                                    "type": "boolean"
+                                  },
+                                  "quickAddEligible": {
                                     "type": "boolean"
                                   },
                                   "freeDelivery": {
@@ -19156,6 +19200,7 @@
                                   "discountedPrice",
                                   "priceVaries",
                                   "availableForSale",
+                                  "quickAddEligible",
                                   "freeDelivery",
                                   "categoryId",
                                   "hasVariants",
@@ -19329,6 +19374,9 @@
                                         "availableForSale": {
                                           "type": "boolean"
                                         },
+                                        "quickAddEligible": {
+                                          "type": "boolean"
+                                        },
                                         "freeDelivery": {
                                           "type": "boolean"
                                         },
@@ -19387,6 +19435,7 @@
                                         "discountedPrice",
                                         "priceVaries",
                                         "availableForSale",
+                                        "quickAddEligible",
                                         "freeDelivery",
                                         "categoryId",
                                         "hasVariants",
@@ -21462,6 +21511,9 @@
                                     "availableForSale": {
                                       "type": "boolean"
                                     },
+                                    "quickAddEligible": {
+                                      "type": "boolean"
+                                    },
                                     "freeDelivery": {
                                       "type": "boolean"
                                     },
@@ -21520,6 +21572,7 @@
                                     "discountedPrice",
                                     "priceVaries",
                                     "availableForSale",
+                                    "quickAddEligible",
                                     "freeDelivery",
                                     "categoryId",
                                     "hasVariants",
@@ -57247,6 +57300,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -57333,6 +57389,7 @@
                               "categoryId",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
@@ -58965,6 +59022,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "priceVaries": {
                                 "type": "boolean"
                               },
@@ -59029,6 +59089,7 @@
                               "discountedPrice",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "priceVaries",
                               "freeDelivery",
                               "categoryId",
@@ -60457,6 +60518,9 @@
                                   "availableForSale": {
                                     "type": "boolean"
                                   },
+                                  "quickAddEligible": {
+                                    "type": "boolean"
+                                  },
                                   "priceVaries": {
                                     "type": "boolean"
                                   },
@@ -60521,6 +60585,7 @@
                                   "discountedPrice",
                                   "hasVariants",
                                   "availableForSale",
+                                  "quickAddEligible",
                                   "priceVaries",
                                   "freeDelivery",
                                   "categoryId",
@@ -61742,6 +61807,9 @@
                                   "availableForSale": {
                                     "type": "boolean"
                                   },
+                                  "quickAddEligible": {
+                                    "type": "boolean"
+                                  },
                                   "priceVaries": {
                                     "type": "boolean"
                                   },
@@ -61806,6 +61874,7 @@
                                   "discountedPrice",
                                   "hasVariants",
                                   "availableForSale",
+                                  "quickAddEligible",
                                   "priceVaries",
                                   "freeDelivery",
                                   "categoryId",
@@ -64331,6 +64400,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -64416,6 +64488,7 @@
                               "categoryId",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
@@ -64474,6 +64547,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -64559,6 +64635,7 @@
                               "categoryId",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
@@ -65265,6 +65342,9 @@
                               "availableForSale": {
                                 "type": "boolean"
                               },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -65350,6 +65430,7 @@
                               "categoryId",
                               "hasVariants",
                               "availableForSale",
+                              "quickAddEligible",
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",

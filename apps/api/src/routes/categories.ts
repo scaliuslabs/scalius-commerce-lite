@@ -140,6 +140,7 @@ const storefrontCategoryProductSchema = z.object({
   categoryId: z.string().nullable(),
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
+  quickAddEligible: z.boolean(),
   imageUrl: z.string().nullable(),
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),

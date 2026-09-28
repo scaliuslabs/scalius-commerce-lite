@@ -40,6 +40,7 @@ import {
     storeDecimalPlacesFromCode,
 } from "../products/money";
 import { operationalSkuRowPredicate } from "../products/public-eligibility";
+import { quickAddEligibleSql } from "../products/buyer-projection";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import {
@@ -85,6 +86,7 @@ export interface ProductRecommendationItem {
     categoryId: string | null;
     hasVariants: boolean;
     availableForSale: boolean;
+    quickAddEligible: boolean;
     imageUrl: string | null;
     imageMediaId: string | null;
     imageAlt: string | null;
@@ -212,6 +214,7 @@ type RecommendationCardRow = {
     categoryId: string | null;
     hasCustomerOptions: number | boolean;
     availableForSale: number | boolean;
+    quickAddEligible: number | boolean;
     createdAt: number;
     storeCurrencyCode: string | null;
     ratingAvgCenti: number | null;
@@ -441,6 +444,11 @@ async function loadRecommendationCards(
             categoryId: products.categoryId,
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
+            quickAddEligible: quickAddEligibleSql({
+                availableForSale: buyerState.availableForSale,
+                hasCustomerOptions: buyerState.hasCustomerOptions,
+                effectivePriceMinor: buyerState.fromMinor,
+            }).as("recommendation_quick_add_eligible"),
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
             storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
             ratingAvgCenti: reviewStats.ratingAvgCenti,
@@ -519,6 +527,11 @@ async function readStoredRecommendations(
             categoryId: products.categoryId,
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
+            quickAddEligible: quickAddEligibleSql({
+                availableForSale: buyerState.availableForSale,
+                hasCustomerOptions: buyerState.hasCustomerOptions,
+                effectivePriceMinor: buyerState.fromMinor,
+            }).as("stored_recommendation_quick_add_eligible"),
             isPublic: buyerState.isPublic,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
             reason: productRecommendations.reason,
@@ -589,6 +602,7 @@ export async function getStorefrontProductRecommendations(
         products: rows.map(({
             hasCustomerOptions,
             availableForSale,
+            quickAddEligible,
             createdAt,
             storeCurrencyCode: _storeCurrencyCode,
             ratingAvgCenti,
@@ -600,6 +614,7 @@ export async function getStorefrontProductRecommendations(
             freeDelivery: Boolean(row.freeDelivery),
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
+            quickAddEligible: Boolean(quickAddEligible),
             ...resolveProductCardImages(mediaMap.get(row.id) ?? []),
             createdAt: unixToDate(createdAt)?.toISOString() ?? null,
         })),

@@ -483,14 +483,21 @@ describe("theme page", () => {
     expect(saved.blocks.card).toEqual({ variant: "retail", settings: { quickAction: true } });
   });
 
-  it("lets a showcase merchant turn off card purchase actions without changing card style", async () => {
-    render(storefrontTemplateTheme("showcase-landing"));
-    const quick = container.querySelector<HTMLButtonElement>("#theme-boutique-quick-action")!;
-    expect(quick.getAttribute("aria-checked")).toBe("true");
-    act(() => quick.click());
+  it("previews and saves the Showcase card with a centered title and price action", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    const choice = container.querySelector<HTMLButtonElement>('[role="radio"][value="showcase"]')!;
+    expect(choice.textContent).toContain("Showcase");
+    expect(choice.querySelectorAll("[data-card-sketch-showcase-action]")).toHaveLength(2);
+    expect(choice.querySelectorAll("[data-card-sketch-showcase-title]")).toHaveLength(2);
+    act(() => choice.click());
     await pressSave();
-    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.blocks.card).toEqual({ variant: "boutique", settings: { hoverImage: false, quickAction: false } });
+    expect((api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument).blocks.card.variant).toBe("showcase");
+  });
+
+  it("starts Showcase with its dedicated product card", () => {
+    render(storefrontTemplateTheme("showcase-landing"));
+    expect(container.querySelector('[role="radio"][value="showcase"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector("#theme-boutique-quick-action")).toBeNull();
   });
 
   it("selecting a template sets and saves the whole document", async () => {

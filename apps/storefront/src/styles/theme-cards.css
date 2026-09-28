@@ -487,6 +487,28 @@
   }
 }
 
+/* Showcase: Graza's centred, short product story with the action at the
+   bottom of every card. The title remains two lines for arbitrary names. */
+.site-root .product-card[data-card-variant="showcase"] {
+  --pc-pad-y: 0.625rem;
+  --pc-gap: 0.25rem;
+  --pc-action-h: 2.5rem;
+  text-align: center;
+}
+
+.site-root .product-card[data-card-variant="showcase"] .product-card-name {
+  min-height: 2.8em;
+}
+
+.site-root .product-card[data-card-variant="showcase"] .product-card-price-row,
+.site-root .product-card[data-card-variant="showcase"] .pc-rating-stars {
+  justify-content: center;
+}
+
+.site-root .product-card[data-card-variant="showcase"] .product-card-action {
+  overflow-wrap: anywhere;
+}
+
 /* ─── portrait: Aarong ─────────────────────────────────────────────────────
    Tall 3:4 photo, no chrome; bold 16/700 name in two lines, price 16/400. */
 .site-root .product-card[data-card-variant="portrait"] {

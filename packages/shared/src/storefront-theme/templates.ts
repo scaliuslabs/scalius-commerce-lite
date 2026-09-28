@@ -427,7 +427,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
-      card: ["boutique", { hoverImage: false, quickAction: true }],
+      card: ["showcase"],
       listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["subcategory-pills", "facet-value-chips", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",

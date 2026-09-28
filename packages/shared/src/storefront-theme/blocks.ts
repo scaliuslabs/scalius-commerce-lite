@@ -135,6 +135,15 @@ export const STOREFRONT_CARD_LOOKS = {
     title: { size: { desktop: 13, phone: 14 }, weight: 400, lines: 2 },
     price: { size: { desktop: 16, phone: 16 }, weight: 400 },
   },
+  // Graza /collections/all: square lifestyle photos, centred copy and a
+  // full-width purchase pill. Keep the phone title above the 14px floor.
+  showcase: {
+    image: { ratio: 1, fit: "cover" },
+    radius: 12,
+    surface: "flat",
+    title: { size: { desktop: 15, phone: 14 }, weight: 600, lines: 2 },
+    price: { size: { desktop: 16, phone: 15 }, weight: 500 },
+  },
   // Aarong /women/saree: 3:4 photos (310×413, 179×239 on phones), radius 0;
   // name 16/700 in two lines, price 16/400.
   portrait: {
@@ -639,6 +648,14 @@ export const STOREFRONT_CARD_VARIANTS = {
       discount: "sale",
       strike: "before",
       body: ["title", "rating", "price"],
+    }),
+  }),
+  showcase: variant({
+    renders: card(STOREFRONT_CARD_LOOKS.showcase, {
+      quickBuy: true,
+      discount: "sale",
+      strike: "before",
+      body: ["title", "pack-size", "price"],
     }),
   }),
   // Aarong: portrait photo, name 16/700 in two lines, price 16/400 in the

@@ -88,6 +88,7 @@ const collectionProductSchema = z.object({
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   availableForSale: z.boolean(),
+  quickAddEligible: z.boolean(),
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   hasVariants: z.boolean(),

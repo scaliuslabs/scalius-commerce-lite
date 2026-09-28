@@ -45,11 +45,13 @@ const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const compactSpec = variant === "spec" && facts.keySpecs.length < 3;
 const pushPrice = variant === "spec" && !compactSpec && priceFollowsTitle;
 const quickRetail = variant === "retail" && anatomy.action === "outline";
-const cartAction = variant === "retail" || variant === "quick-add" || (variant === "boutique" && anatomy.quickBuy);
-const pushAction = !priceFollowsTitle && variant !== "retail";
+const showcaseAdd = variant === "showcase" && model.quickAddEligible;
+const showcaseDetail = variant === "showcase" && !showcaseAdd && !model.soldOut && !model.needsOptions;
+const cartAction = variant === "retail" || variant === "quick-add" || (variant === "boutique" && anatomy.quickBuy) || showcaseAdd;
+const pushAction = (!priceFollowsTitle && variant !== "retail") || variant === "showcase";
 const fullEssentials = variant === "quick-add" && anatomy.action === "outline";
 const quickAdd = variant === "quick-add";
-const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : quickRetail ? "Add" : "Add to cart";
+const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : quickRetail || variant === "showcase" ? "Add" : "Add to cart";
 const roundAction = anatomy.quickBuy && anatomy.action === "round";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
 const titleClamp = { 1: "line-clamp-1", 2: "line-clamp-2", 3: "line-clamp-3" }[anatomy.titleLines];
@@ -159,7 +161,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
               >
                 <a href={model.href} class="product-card-link after:absolute after:inset-0 after:content-['']">
                   {model.name}
-                  {variant === "fashion-value" && model.needsOptions && <span class="sr-only"> — Choose options</span>}
+                  {(variant === "fashion-value" || variant === "showcase") && model.needsOptions && <span class="sr-only"> — Choose options</span>}
                 </a>
               </TitleTag>
               {model.condition && <p class="pc-condition text-muted-foreground" data-card-fact="condition">{model.condition}</p>}
@@ -167,6 +169,9 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
           );
         }
         if (part === "price") {
+          // Exact full-price Showcase cards carry their price in Add; keep
+          // the row when there is an original price to disclose or no Add.
+          if (variant === "showcase" && showcaseAdd && !discounted) return null;
           const regular = model.price.regular && (
             anatomy.strike === "reg" ? (
               <span class="product-card-meta pc-price-regular pc-price-reg text-muted-foreground">
@@ -292,7 +297,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
     }
 
     {
-      bodyAction && model.quickBuyHref && (
+      bodyAction && model.quickBuyHref && (variant !== "showcase" || showcaseAdd) && (
         <a
           href={cartAction ? model.href : model.quickBuyHref}
           data-card-quick-add={cartAction ? "" : undefined}
@@ -309,10 +314,15 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
             <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={cartIcon} /></svg>
           )}
           {/* The name starts with the visible words (WCAG 2.5.3). */}
-          {quickRetail && <span aria-hidden="true">+</span>}{actionText}<span class="sr-only">: {model.name}</span>
+          {quickRetail && <span aria-hidden="true">+</span>}{actionText}{showcaseAdd && <> – {model.price.current}</>}<span class="sr-only">: {model.name}</span>
         </a>
       )
     }
+    {showcaseDetail && (
+      <a href={model.href} class="product-card-action pc-action-solid product-card-push relative z-10 inline-flex w-full items-center justify-center px-3 text-sm font-semibold">
+        View product<span class="sr-only">: {model.name}</span>
+      </a>
+    )}
     {
       quickAdd && showBuyNow && model.quickBuyHref && (
         <a href={model.quickBuyHref} rel="nofollow" data-astro-prefetch="false" class="pc-buy-now relative z-10 self-end text-sm font-medium text-primary underline-offset-2 hover:underline">

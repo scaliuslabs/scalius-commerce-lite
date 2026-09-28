@@ -119,6 +119,13 @@ function variantOf(template: StorefrontTemplateId, change: (theme: StorefrontThe
 }
 
 describe("contract matrix: template x card x filters x navigation source", () => {
+  it("keeps Showcase's own card by default and accepts a merchant's card override", () => {
+    const theme = storefrontTemplateTheme("showcase-landing");
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("showcase");
+    theme.blocks.card = { variant: "boutique", settings: { hoverImage: false, quickAction: false } };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("boutique");
+  });
+
   it("parses, passes AA, resolves to fitting blocks and keeps each choice's identity on every store", () => {
     let documents = 0;
     for (const template of STOREFRONT_TEMPLATE_IDS) {

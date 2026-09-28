@@ -107,6 +107,8 @@ function product(id: string, overrides: Record<string, unknown> = {}) {
     imageAlt: null,
     hasVariants: false,
     availableForSale: true,
+    priceVaries: false,
+    quickAddEligible: true,
     ...overrides,
   };
 }
@@ -242,7 +244,7 @@ function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["
 describe("product card matrix", () => {
   it("covers every card variant with every density, image ratio and fit", () => {
     expect(MATRIX).toHaveLength(CARD_VARIANTS.length * STOREFRONT_DENSITIES.length * STOREFRONT_IMAGE_RATIOS.length * STOREFRONT_IMAGE_FITS.length);
-    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "mall", "detailed"]);
+    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "showcase", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "mall", "detailed"]);
   });
 
   it("renders the merchant's compact retail action above the price in the card layout", async () => {
@@ -258,16 +260,42 @@ describe("product card matrix", () => {
     expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("data-card-quick-add")).toBe("");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
     expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+    const ineligible = (await renderCards(theme, { product: { ...PRODUCTS.onSale, quickAddEligible: false } })).onSale;
+    expect(ineligible.querySelector("[data-card-quick-add]")).toBeNull();
+    expect(ineligible.querySelector(".product-card-link")?.getAttribute("href")).toBe("/products/product-sale");
   });
 
-  it("gives showcase cards a guarded purchase action without bypassing option choice", async () => {
+  it("gives showcase cards an exact-price Add only when the projection proves quick add", async () => {
     const cards = await renderCards(storefrontTemplateTheme("showcase-landing"));
     expect(cards.onSale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
-    expect(text(cards.onSale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
+    expect(text(cards.onSale.querySelector(".product-card-action"))).toBe("Add – ৳960: Product sale");
+    expect(text(cards.onSale.querySelector(".product-card-price-row"))).toContain("৳1,200");
+    expect(cards.noPhoto.querySelector(".product-card-price-row")).toBeNull();
+    expect(text(cards.noPhoto.querySelector(".product-card-action"))).toBe("Add – ৳1,200: Product nophoto");
+    expect(text(cards.onSale.querySelector("[data-card-fact='pack-size']"))).toBe("");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
+    expect(text(cards.withOptions.querySelector(".product-card-link"))).toContain("Choose options");
     expect(cards.withOptions.querySelector("a[data-card-quick-add]")).toBeNull();
     expect(cards.soldOut.querySelector(".product-card-action")).toBeNull();
     expect((await renderCards(themeWith("boutique", {}))).onSale.querySelector(".product-card-action")).toBeNull();
+    expect(text(cards.allFacts.querySelector("[data-card-fact='pack-size']"))).toBe("400 gm");
+    expect(text(cards.bangla.querySelector(".product-card-link"))).toContain(BANGLA_TITLE);
+
+    for (const blocked of [
+      { quickAddEligible: false },
+      { quickAddEligible: undefined },
+      { priceVaries: true },
+      { requiresCustomization: true },
+      { customizationUnavailable: true },
+      { discountedPrice: 0 },
+    ]) {
+      const fallback = (await renderCards(storefrontTemplateTheme("showcase-landing"), {
+        product: { ...PRODUCTS.onSale, ...blocked },
+      })).onSale;
+      expect(fallback.querySelector("a[data-card-quick-add]"), JSON.stringify(blocked)).toBeNull();
+      expect(fallback.querySelector("a.product-card-action")?.getAttribute("href")).toBe("/products/product-sale");
+      expect(text(fallback.querySelector(".product-card-action"))).toBe("View product: Product sale");
+    }
   });
 
   it("keeps sparse retail cards compact and shows the real review score", async () => {
@@ -411,7 +439,7 @@ describe("product card matrix", () => {
 
     // The buy action: in stock without options only, above the card link,
     // named with its visible words first (WCAG 2.5.3).
-    const cartAction = card === "quick-add" || card === "retail";
+    const cartAction = card === "quick-add" || card === "retail" || card === "showcase";
     const action = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
     const label = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
     for (const fixture of ["onSale", "noPhoto", "allFacts"] as const) {
@@ -425,7 +453,7 @@ describe("product card matrix", () => {
       expect(buy.getAttribute("rel")).toBe("nofollow");
       expect(buy.className).toMatch(/\bz-10\b/);
       expect(buy.hasAttribute("aria-label")).toBe(false);
-      expect(text(buy)).toBe(`${label}: Product sale`);
+      expect(text(buy)).toBe(card === "showcase" ? "Add – ৳960: Product sale" : `${label}: Product sale`);
       if (anatomy.action === "round") {
         expect(buy.classList.contains("product-card-round-action")).toBe(true);
         expect(buy.parentElement!.classList.contains("product-card-media")).toBe(true);
