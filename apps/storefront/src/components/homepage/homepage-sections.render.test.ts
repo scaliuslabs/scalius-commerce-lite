@@ -19,6 +19,7 @@ import {
   buildStorefrontThemeTokens,
   STOREFRONT_SECTION_RENDERERS,
   STOREFRONT_SECTION_TYPES,
+  storefrontTemplateTheme,
   storefrontSectionDefault,
   storefrontSectionRenderer,
   type StorefrontSection,
@@ -386,6 +387,17 @@ describe("homepage section library", () => {
     expect(tiny.querySelectorAll(".product-grid > *")).toHaveLength(3);
     // Popular has no listing to link to.
     expect(tiny.querySelector('a[href^="/search"]')).toBeNull();
+  });
+
+  it("sizes rounded-tech collection carousels as shelves without changing collection presentations", async () => {
+    const sections = [section("collections", "collections")];
+    const rounded = await render(sections, store("large"), storefrontTemplateTheme("rounded-tech"));
+    expect(rounded.querySelectorAll(".product-grid")).toHaveLength(1);
+    expect(rounded.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(12);
+
+    const classic = await render(sections, store("large"));
+    expect(classic.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(0);
+    expect(classic.querySelector("[data-product-rail-track] > div")!.className).toContain("w-[72%]");
   });
 
   it("fills a product grid with columns x rows and caps its columns", async () => {

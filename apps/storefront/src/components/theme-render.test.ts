@@ -1217,6 +1217,29 @@ describe("navigation", () => {
     expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open]")).not.toBeNull();
   });
 
+  it("uses a search action instead of the spec phone search band on category pages", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    for (const path of ["/categories", "/categories/laptop"]) {
+      const page = await renderNavigationPage(theme, {}, `https://shop.test${path}`);
+      expect(page.querySelector(".hdr-phone-search--page")).toBeNull();
+      const search = page.querySelector("#main-header .hdr-actions a.hdr-category-search")!;
+      expect(search.getAttribute("href")).toBe("/search");
+      expect(search.getAttribute("aria-label")).toBe("Search");
+      expect(search.hasAttribute("data-search-open")).toBe(true);
+      expect(page.querySelector("#main-header #cart-button")).not.toBeNull();
+    }
+    for (const path of ["/", "/search?q=ssd"]) {
+      const page = await renderNavigationPage(theme, {}, `https://shop.test${path}`);
+      expect(page.querySelector(".hdr-phone-search--page form[action='/search']")).not.toBeNull();
+      expect(page.querySelector(".hdr-category-search")).toBeNull();
+    }
+
+    theme.blocks.header = storefrontBlockDefault("header", "tech-rounded") as never;
+    const merchantPage = await renderNavigationPage(theme);
+    expect(merchantPage.querySelector("#main-header .hdr-phone-search form[action='/search']")).not.toBeNull();
+    expect(merchantPage.querySelector(".hdr-category-search")).toBeNull();
+  });
+
   it("keeps the header within 150 links for a Star Tech-size tree, whatever the menus", async () => {
     for (const desktop of DESKTOP_MENUS) {
       for (const phone of PHONE_MENUS) {

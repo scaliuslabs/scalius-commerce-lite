@@ -335,6 +335,25 @@ function setActiveData(
   root.dataset.activeMediaAlt = item.altText;
   if (zoomUrl) root.dataset.activeMediaZoomUrl = zoomUrl;
   else delete root.dataset.activeMediaZoomUrl;
+  updateMobilePosition(root, item);
+}
+
+function updateMobilePosition(root: HTMLElement, item: GalleryItem): void {
+  const position = root.querySelector<HTMLElement>("[data-gallery-position]");
+  if (!position) return;
+  const images = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-thumbnail-rail="mobile"] [data-gallery-thumbnail][data-media-kind="image"]'));
+  const index = item.kind === "image"
+    ? images.findIndex((button) => button.dataset.productMediaId === item.productMediaId)
+    : -1;
+  position.hidden = index < 0;
+  const label = position.querySelector<HTMLElement>("[data-gallery-position-label]");
+  if (label && index >= 0) label.textContent = `Image ${index + 1} of ${images.length}`;
+  const count = position.querySelector<HTMLElement>("[data-gallery-position-count]");
+  if (count && index >= 0) count.textContent = `${index + 1} / ${images.length}`;
+  position.querySelectorAll<HTMLElement>("[data-gallery-dot]").forEach((dot, dotIndex) => {
+    dot.classList.toggle("bg-foreground", dotIndex === index);
+    dot.classList.toggle("bg-muted-foreground/40", dotIndex !== index);
+  });
 }
 
 /**
@@ -543,6 +562,54 @@ function bindThumbnailRail(
       );
     }
   });
+}
+
+function bindMobileSwipe(
+  root: HTMLElement,
+  signal: AbortSignal,
+  select: (button: HTMLButtonElement, source: ProductMediaSelectionSource) => void,
+): void {
+  if (!root.hasAttribute("data-mobile-swipe")) return;
+  const stage = root.querySelector<HTMLButtonElement>("[data-mobile-image-trigger]");
+  const images = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-thumbnail-rail="mobile"] [data-gallery-thumbnail][data-media-kind="image"]'));
+  if (!stage || images.length < 2) return;
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  let suppressClick = false;
+
+  stage.addEventListener("touchstart", (event) => {
+    tracking = event.touches.length === 1;
+    suppressClick = false;
+    if (tracking) {
+      startX = event.touches[0]!.clientX;
+      startY = event.touches[0]!.clientY;
+    }
+  }, { passive: true, signal });
+  stage.addEventListener("touchcancel", () => { tracking = false; }, { passive: true, signal });
+  stage.addEventListener("touchend", (event) => {
+    if (!tracking || event.changedTouches.length !== 1) return;
+    tracking = false;
+    const deltaX = event.changedTouches[0]!.clientX - startX;
+    const deltaY = event.changedTouches[0]!.clientY - startY;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+    suppressClick = true;
+    const current = images.findIndex((button) => root.dataset.activeMediaKey === `image:${button.dataset.productMediaId}`);
+    const next = current < 0
+      ? deltaX < 0 ? 0 : images.length - 1
+      : Math.max(0, Math.min(images.length - 1, current + (deltaX < 0 ? 1 : -1)));
+    const target = images[next];
+    if (target) {
+      select(target, "gallery");
+      target.scrollIntoView({ behavior: scrollBehavior(), block: "nearest", inline: "nearest" });
+    }
+  }, { passive: true, signal });
+  stage.addEventListener("click", (event) => {
+    if (!suppressClick || event.detail === 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    suppressClick = false;
+  }, { capture: true, signal });
 }
 
 /**
@@ -851,6 +918,7 @@ export function initProductMediaGallery(
     .forEach((rail) => {
       bindThumbnailRail(rail, signal, selectButton, warmButton);
     });
+  bindMobileSwipe(root, signal, selectButton);
   for (const rail of ["desktop", "mobile"] as const) {
     bindScrollIndicator(root, rail, "up", signal);
     bindScrollIndicator(root, rail, "down", signal);

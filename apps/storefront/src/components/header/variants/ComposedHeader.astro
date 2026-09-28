@@ -60,6 +60,8 @@ const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
 const inlineMenu = hasMenu && menuPlacement === "inline";
 const menuRow = hasMenu && menuPlacement === "row";
 const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
+const compactCategorySearch = variantId === "spec-two-row" &&
+  (Astro.url.pathname === "/categories" || Astro.url.pathname.startsWith("/categories/"));
 const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight || 2.75}rem; --header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`;
 ---
 
@@ -148,6 +150,11 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       </div>
 
       <div class="hdr-actions">
+        {compactCategorySearch && (
+          <a href="/search" class="hdr-icon-button hdr-category-search" aria-label="Search" aria-haspopup="dialog" data-search-open>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          </a>
+        )}
         <a href="/track-order" data-astro-prefetch="false" class="hdr-util hdr-util--desktop" data-mall-hide="">
           <span class="hdr-util-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-.1M17.5 19a2 2 0 1 0 0-.1" /></svg>
@@ -218,7 +225,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 </div>
 
 {
-  spec.phoneSearch === "in-page" && (
+  spec.phoneSearch === "in-page" && !compactCategorySearch && (
     <div class="hdr-phone-search hdr-phone-search--page">
       <HeaderSearch shape="field" id="header-search-input-phone" />
     </div>
@@ -477,6 +484,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   @media (min-width: 64rem) {
+    .hdr-category-search,
     .hdr-phone-search,
     .hdr-phone-start,
     .hdr-phone-search--page {

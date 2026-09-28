@@ -119,27 +119,39 @@ export function fitNavOverflow(list: HTMLElement): void {
   const view = list.ownerDocument.defaultView;
   const gap = view ? Number.parseFloat(view.getComputedStyle(list).columnGap) || 0 : 0;
   const moreWidth = more.offsetWidth;
-  const widths = items.map((item) => item.offsetWidth);
-  const total = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, items.length - 1);
+  // A category label clipped by the bar's one-line cap belongs in More,
+  // where its full text and nested menu remain available.
+  const clipped = list.closest('.cnav[data-cnav-layout="bar"]')
+    ? new Set(items.filter((item) => {
+        const label = item.querySelector<HTMLElement>(
+          ":scope > a > .nav-label, :scope > details:first-child > summary > span",
+        );
+        return label && label.clientWidth > 0 && label.scrollWidth > label.clientWidth + 1;
+      }))
+    : new Set<HTMLElement>();
+  const candidates = items.filter((item) => !clipped.has(item));
+  const widths = candidates.map((item) => item.offsetWidth);
+  const total = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, candidates.length - 1);
 
-  let cut = items.length;
-  if (extras ? total + gap + moreWidth > available : total > available) {
+  let cut = candidates.length;
+  if (extras || clipped.size > 0 ? total + gap + moreWidth > available : total > available) {
     let used = moreWidth;
     cut = 0;
-    while (cut < items.length && used + gap + widths[cut]! <= available) {
+    while (cut < candidates.length && used + gap + widths[cut]! <= available) {
       used += gap + widths[cut]!;
       cut += 1;
     }
   }
+  const shown = new Set(candidates.slice(0, cut));
   const firstExtra = moreList.firstElementChild;
-  for (const item of items.slice(cut)) moreList.insertBefore(item, firstExtra);
-  more.hidden = cut === items.length && !extras;
+  for (const item of items) if (!shown.has(item)) moreList.insertBefore(item, firstExtra);
+  more.hidden = shown.size === items.length && !extras;
   list.toggleAttribute("data-nav-overflowing", !more.hidden);
 
   // Dropdowns that would pass the row's end open towards its start.
   if (typeof list.getBoundingClientRect !== "function") return;
   const listLeft = list.getBoundingClientRect().left;
-  items.slice(0, cut).forEach((item) => {
+  candidates.slice(0, cut).forEach((item) => {
     item.toggleAttribute("data-align-end", item.getBoundingClientRect().left - listLeft + DROPDOWN_WIDTH_PX > available);
   });
 }

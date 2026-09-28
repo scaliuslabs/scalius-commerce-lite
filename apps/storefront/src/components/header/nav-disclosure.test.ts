@@ -171,6 +171,30 @@ describe("menu overflow", () => {
       .toBe("Components and Peripherals for Professional Creators");
     expect(list.querySelector('[data-nav-more-list] details a[href="/categories/processors"]')).not.toBeNull();
   });
+
+  it("moves a visually clipped category into More before fitting later short categories", () => {
+    document.body.innerHTML = `
+      <nav class="cnav" data-cnav-layout="bar"><ul data-nav-overflow>
+        <li data-nav-index="0"><a href="/categories/air-conditioning"><span class="nav-label">Air Conditioner, Air Cooler & Ceiling Fan (Inverter / Non-Inverter)</span></a></li>
+        <li data-nav-index="1"><a href="/categories/camera">Camera</a></li>
+        <li data-nav-index="2"><a href="/categories/desktop">Desktop PC</a></li>
+        <li data-nav-more hidden><details><summary>More</summary><ul data-nav-more-list><li><a href="/categories">All categories</a></li></ul></details></li>
+      </ul></nav>`;
+    const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: 350 });
+    const items = list.querySelectorAll(":scope > [data-nav-index]");
+    [208, 100, 100].forEach((value, index) => width(items[index]!, value));
+    width(list.querySelector("[data-nav-more]")!, 80);
+    const label = list.querySelector(".nav-label")!;
+    Object.defineProperty(label, "clientWidth", { configurable: true, value: 208 });
+    Object.defineProperty(label, "scrollWidth", { configurable: true, value: 460 });
+
+    fitNavOverflow(list);
+    expect(inRow(list)).toEqual(["1", "2"]);
+    expect(inMore(list)[0]).toBe("0");
+    expect(list.querySelector('[data-nav-more-list] a[href="/categories/air-conditioning"]')!.textContent)
+      .toBe("Air Conditioner, Air Cooler & Ceiling Fan (Inverter / Non-Inverter)");
+  });
 });
 
 describe("menu row keys", () => {

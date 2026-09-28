@@ -19,6 +19,12 @@ Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-
 
 Page colors come from `src/styles/theme-foundation.css` and the published or preview theme tokens in `Layout.astro`. Components must not override the global page canvas: imported component CSS also reaches routes that omit that component, including checkout without a footer.
 
+## Template fidelity checkpoint (2026-09-28)
+
+The built 30,000-product fidelity stack passed 70/70 selected card, listing, and product-page checks for spec-catalogue, rounded-tech, and marketplace, producing 18 visual pairs under `.wrangler/fidelity/pairs/`. Reproduce with `pnpm fidelity:check --only spec-catalogue,rounded-tech,marketplace,listing,card,pdp --report-only`. This is a selected checkpoint; the ten-template visual review remains open.
+
+The marketplace size check still exceeds its raw HTML targets (203/150 KB category, 169/120 KB product). Do not remove buyer-visible products, filters, navigation, or truthful SKU data merely to meet that byte gate. The next proof needs representative content for every template and a real touch-browser check of the marketplace product gallery.
+
 ## Local Dev Runtime Notes
 
 `astro.config.mjs` treats React, React DOM, and their JSX runtime entrypoints as Vite singleton dependencies. Keep those entries together in `resolve.dedupe`, including `react-dom/server`. If Vite resolves one React copy for `react-dom/server` and another for SSR-rendered islands, local `astro dev` can blank React account/cart shells with invalid-hook errors even when `astro preview` and production builds are healthy. Do not exclude React from the SSR dependency optimizer for this Cloudflare target; the worker-like dev runner still needs Vite to bundle React instead of externalizing it through `require()`.

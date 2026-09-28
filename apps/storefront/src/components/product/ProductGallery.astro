@@ -75,6 +75,8 @@ const galleryItems = galleryMedia.map((item) => {
       : null,
   };
 });
+const galleryImages = galleryItems.filter(({ item }) => item.kind === "image");
+const mobileSwipe = layout.gallery === "beside" && layout.thumbnails === "beside" && layout.thumbnailSize === 48 && !layout.phoneSideThumbnails && galleryImages.length > 1;
 
 const initialMedia =
   galleryItems.find(({ item }) => item.id === featuredMedia?.id) ?? null;
@@ -87,6 +89,7 @@ const initialImageUrl = initialImage?.url ?? productFallbackUrl;
 const initialImageSources = responsiveImageSources(initialImageUrl, mainSlot);
 const initialImageAlt =
   initialImage?.altText ?? product.imageAlt?.trim() ?? product.name;
+const initialImageIndex = galleryImages.findIndex(({ item }) => item.id === featuredMedia?.id);
 // The video stage holds one facade: the featured video, else the first one
 // (a thumbnail swaps its file and poster in). No video, no stage.
 const stageVideo = videoFirst
@@ -124,6 +127,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
   data-thumbnails={thumbnails}
   data-gallery={layout.gallery}
   data-phone-thumbnails={layout.phoneSideThumbnails ? "beside" : undefined}
+  data-mobile-swipe={mobileSwipe ? "" : undefined}
   class="group/gallery relative w-full lg:col-span-7 xl:col-span-6"
 >
   <div
@@ -151,6 +155,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             data-mobile-image-trigger
             class:list={[
               "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-muted text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden motion-reduce:transition-none",
+              mobileSwipe && "touch-pan-y",
               videoFirst && "hidden",
             ]}
             style={stageStyle}
@@ -238,6 +243,20 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                 duration={stageVideo.duration}
                 gallery
               />
+            </div>
+          )}
+          {mobileSwipe && (
+            <div data-gallery-position class:list={["pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center lg:hidden", initialImageIndex < 0 && "hidden"]} hidden={initialImageIndex < 0}>
+              {galleryImages.length <= 9 ? (
+                <div class="flex items-center gap-1.5 rounded-full bg-background/85 px-2 py-1 shadow-sm" aria-hidden="true">
+                  {galleryImages.map(({ item }, index) => (
+                    <span data-gallery-dot data-product-media-id={item.id} class:list={["h-1.5 w-1.5 rounded-full", index === initialImageIndex ? "bg-foreground" : "bg-muted-foreground/40"]} />
+                  ))}
+                </div>
+              ) : (
+                <span data-gallery-position-count class="rounded-full bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm" aria-hidden="true">{initialImageIndex + 1} / {galleryImages.length}</span>
+              )}
+              <span data-gallery-position-label class="sr-only" role="status" aria-live="polite">Image {initialImageIndex + 1} of {galleryImages.length}</span>
             </div>
           )}
         </div>
@@ -541,6 +560,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
 </div>
 
 <style>
+  [data-gallery-position][hidden] { display: none; }
   /* No `contain` on #product-gallery: layout/paint containment makes it the
      containing block and stacking context of the fixed zoom dialog below,
      which then opened inside the photo box under the header on phones. */

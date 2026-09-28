@@ -38,6 +38,7 @@ import {
 import {
   catalogAspectChips,
   catalogCardContext,
+  catalogCategoryFacetLinks,
   catalogListingControls,
   catalogListingPresentation,
   catalogPopularFilters,
@@ -145,6 +146,7 @@ const controls = catalogListingControls({
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
 const fashionRail = showFilters && resolved.template === "fashion-value" && presentation.filters.style === "sidebar-comfortable";
+const specRail = resolved.template === "spec-catalogue" && placement === "sidebar";
 const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
@@ -171,7 +173,14 @@ const liveChildren = categoryFacet ? new Set(categoryFacet.values.filter(({ coun
 const childPills = piece("subcategory-pills") && subListings.length > 1
   ? subListings.filter((link) => !liveChildren || liveChildren.has(decodeURIComponent(link.href.split("/").at(-1) ?? "")))
   : [];
-const pillLinks = pills.length > 0 ? pills : childPills.length > 1 ? childPills : [];
+const searchPills = specRail && kind === "search" && categoryFacet
+  ? catalogCategoryFacetLinks(categoryFacet, currentFilters)
+      .filter((link) => link.href)
+      .slice(0, STOREFRONT_FILTER_VALUES_IN_HTML)
+      .map((link) => ({ id: link.href, label: link.label, href: link.href }))
+  : [];
+const pillLinks = pills.length > 0 ? pills : childPills.length > 1 ? childPills : searchPills;
+const pillLabel = pills.length > 0 || searchPills.length > 0 ? "Categories" : "Sub-categories";
 
 const groups = catalogFacetGroups(shownFacets, {
   valuesInHtml: STOREFRONT_FILTER_VALUES_IN_HTML,
@@ -208,9 +217,24 @@ const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
 const breadcrumbVisible = piece("breadcrumb");
+const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
 ---
 
-<div
+{specRail && band.breadcrumb && band.breadcrumb.length > 0 && (
+  <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs mb-3 py-3", !breadcrumbVisible && "sr-only"]}>
+    <ol>
+      {band.breadcrumb.map((crumb) => (
+        <Fragment>
+          <li><a href={crumb.href}>{crumb.label}</a></li>
+          <li aria-hidden="true">›</li>
+        </Fragment>
+      ))}
+      <li class="sr-only" aria-current="page">{band.title}</li>
+    </ol>
+  </nav>
+)}
+
+{!specRail && <div
   class="catalog-band"
   data-catalog-band
   data-placement={placement}
@@ -261,7 +285,9 @@ const breadcrumbVisible = piece("breadcrumb");
     {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
     {countLabel && boutiqueBar && showPhoneBar && <p class="catalog-band-count">{countLabel}</p>}
   </div>
-</div>
+</div>}
+
+{specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class="catalog-spec-pills mb-3 pb-1" />}
 
 {showPhoneBar && (
   <div
@@ -364,7 +390,7 @@ const breadcrumbVisible = piece("breadcrumb");
   </div>
 )}
 
-<CatalogChipLinks label={pills.length > 0 ? "Categories" : "Sub-categories"} links={pillLinks} class="mb-3 pb-1" />
+{!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class="mb-3 pb-1" />}
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
 
@@ -417,7 +443,7 @@ const breadcrumbVisible = piece("breadcrumb");
           currencyCode={currencyCode}
           presentation={presentation.filters}
           mobileFacetRail={marketplacePhoneFilters}
-          withoutCategories={pillLinks.length > 0 && pills.length === 0}
+          withoutCategories={pillLinks.length > 0 && pills.length === 0 && searchPills.length === 0}
           ratingRows={ratingRows}
         />
       </div>
@@ -425,6 +451,19 @@ const breadcrumbVisible = piece("breadcrumb");
   )}
 
   <div class="min-w-0 flex-1">
+    {specRail && (
+      <div class="catalog-band catalog-spec-results-band" data-catalog-band data-catalog-kind={kind} data-visible-breadcrumb={visibleBreadcrumb ? "" : undefined} data-placement={placement}>
+        <div class="catalog-band-heading">
+          <h1 class="catalog-band-title">{band.title}</h1>
+          {countLabel && <p class="catalog-band-count" aria-live="polite">{countLabel}</p>}
+        </div>
+        <div class="catalog-band-tools">
+          {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
+          {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
+          {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
+        </div>
+      </div>
+    )}
     <AppliedCatalogFilters
       facets={filterFacets}
       currentFilters={currentFilters}

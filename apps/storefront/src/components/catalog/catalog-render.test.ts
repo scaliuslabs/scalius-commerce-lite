@@ -940,16 +940,65 @@ describe("filter styles (fidelity slice 3)", () => {
     const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
       ...plain(),
       band: { title: "Laptop", breadcrumb: [{ label: "Home", href: "/" }, { label: "Computers", href: "/categories/computers" }], countLabel: "3,780 products" },
+      subListings: [{ id: "gaming", label: "Gaming Laptop", href: "/categories/gaming" }, { id: "ultrabook", label: "Premium Ultrabook", href: "/categories/ultrabook" }],
     }, TREE_STORE_SHAPE);
     const band = document.querySelector("[data-catalog-band]")!;
+    const breadcrumb = document.querySelector("nav[aria-label='Breadcrumb']")!;
+    const pills = document.querySelector("nav[aria-label='Sub-categories']")!;
+    const phoneBar = document.querySelector("[data-catalog-phone-bar]")!;
     expect(band.querySelector("h1")!.className).toBe("catalog-band-title");
-    expect(Array.from(band.querySelectorAll("nav[aria-label='Breadcrumb'] a")).map((link) => link.getAttribute("href"))).toEqual(["/", "/categories/computers"]);
-    expect(band.querySelector("[aria-current='page']")!.textContent).toBe("Laptop");
+    expect(band.hasAttribute("data-visible-breadcrumb")).toBe(true);
+    expect(Array.from(breadcrumb.querySelectorAll("a")).map((link) => link.getAttribute("href"))).toEqual(["/", "/categories/computers"]);
+    expect(breadcrumb.querySelector("[aria-current='page']")!.textContent).toBe("Laptop");
+    expect(breadcrumb.compareDocumentPosition(pills) & 4).toBe(4);
+    expect(pills.compareDocumentPosition(phoneBar) & 4).toBe(4);
+    expect(band.closest("[data-catalog-layout='sidebar'] > .min-w-0")).not.toBeNull();
     expect(band.querySelector(".catalog-band-count")!.textContent).toBe("3,780 products");
     expect(band.querySelector("select#sortByDesktop")).not.toBeNull();
     expect(band.querySelector("select#pageSizeDesktop")).not.toBeNull();
     // Nothing sits between the band and the results but the pills and the filters.
     expect(document.body.textContent).not.toContain("Showing 20 of");
+  });
+
+  it("keeps the normal toolbar when a merchant changes the spec filters to a bar", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    theme.blocks.listing.filters = { style: "bar-dropdowns", openByDefault: false };
+    const document = await renderListing(theme, plain(), TREE_STORE_SHAPE);
+    const band = document.querySelector("[data-catalog-band]")!;
+    expect(band.querySelector("nav[aria-label='Breadcrumb']")).not.toBeNull();
+    expect(band.closest("[data-catalog-layout]")).toBeNull();
+  });
+
+  it("keeps the spec category title visible on phones when breadcrumbs are disabled", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    theme.blocks.listing.toolbar = theme.blocks.listing.toolbar.filter((piece) => piece !== "breadcrumb");
+    const document = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    const band = document.querySelector(".catalog-spec-results-band")!;
+    expect(document.querySelector("nav[aria-label='Breadcrumb']")!.className).toContain("sr-only");
+    expect(band.hasAttribute("data-visible-breadcrumb")).toBe(false);
+    expect(band.querySelector("h1")!.textContent).toBe("Sarees");
+  });
+
+  it("offers matching search categories as wrapped pills without hiding the remaining facet", async () => {
+    const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
+      ...listingProps("https://shop.test/search?q=linen", {}, [CATEGORY_FACET, ...FACETS]),
+      kind: "search",
+    }, TREE_STORE_SHAPE);
+    const pills = document.querySelector("nav[aria-label='Categories'].catalog-spec-pills")!;
+    expect(Array.from(pills.querySelectorAll("a")).map((link) => [link.textContent!.trim(), link.getAttribute("href")]))
+      .toEqual([["Cotton", "/categories/cotton?q=linen"], ["Linen", "/categories/linen?q=linen"]]);
+    expect(document.querySelector("#catalog-facet-category")).not.toBeNull();
+    expect(pills.compareDocumentPosition(document.querySelector("[data-catalog-layout]")!) & 4).toBe(4);
+
+    const noCategoryFacet = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
+      ...listingProps("https://shop.test/search?q=linen"),
+      kind: "search",
+      band: { title: "Search results", countLabel: "50 results for linen" },
+    }, TREE_STORE_SHAPE);
+    expect(noCategoryFacet.querySelector("nav[aria-label='Categories']")).toBeNull();
+    const heading = noCategoryFacet.querySelector(".catalog-spec-results-band[data-catalog-kind='search'] h1")!;
+    expect(heading.textContent).toBe("Search results");
+    expect(heading.closest(".catalog-band")!.textContent).toContain("50 results for linen");
   });
 
   it("puts price first only in the spec catalogue's dense filter rail", async () => {

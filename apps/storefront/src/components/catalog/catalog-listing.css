@@ -61,6 +61,27 @@
   color: var(--muted-foreground);
 }
 
+.site-root .catalog-spec-pills {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+/* Category breadcrumbs name the page on phones. Search has no breadcrumb, so
+   its heading stays visible even when matching category chips are absent. */
+.catalog-spec-results-band[data-visible-breadcrumb] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.catalog-spec-results-band[data-catalog-kind="search"] {
+  margin-bottom: 0.5rem;
+}
+
 .catalog-band-tools {
   display: none;
 }
@@ -68,6 +89,24 @@
 @media (min-width: 64rem) {
   .catalog-band {
     flex-wrap: nowrap;
+  }
+
+  .catalog-spec-results-band[data-visible-breadcrumb] {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .catalog-spec-results-band {
+    min-height: 3rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--background);
   }
 
   .catalog-band-tools {

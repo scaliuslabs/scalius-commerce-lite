@@ -73,7 +73,7 @@ function thumbnail(
 
 function renderGallery(
   initial = "pmed_video",
-  options: { variants?: Array<{ imageId: string | null }> } = {},
+  options: { variants?: Array<{ imageId: string | null }>; mobileSwipe?: boolean } = {},
 ) {
   const buttons = [
     thumbnail("pmed_video", "med_video", "video", "/demo.mp4", {
@@ -100,6 +100,7 @@ function renderGallery(
       }
       <div
         data-product-gallery
+        ${options.mobileSwipe ? "data-mobile-swipe" : ""}
         data-initial-product-media-id="${initial}"
         data-main-sizes="${SIZES}"
         data-fallback-url="${media("primary")}"
@@ -115,6 +116,10 @@ function renderGallery(
         <button data-image-stage="mobile" data-mobile-image-trigger>
           <img data-mobile-main-image src="/placeholder-product.svg" />
         </button>
+        ${options.mobileSwipe ? `<div data-gallery-position>
+          ${["pmed_front", "pmed_side", "pmed_back", "pmed_legacy"].map((id) => `<span data-gallery-dot data-product-media-id="${id}"></span>`).join("")}
+          <span data-gallery-position-label role="status"></span>
+        </div>` : ""}
         <div data-video-stage class="hidden">
           <a data-video-facade data-gallery-video data-video-kind="file"
             data-video-src="/demo.mp4" data-video-title="Demonstration"
@@ -162,6 +167,12 @@ function button(root: HTMLElement, id: string, rail = "desktop") {
   )!;
 }
 
+function touch(target: Element, type: "touchstart" | "touchend", x: number, y: number) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, type === "touchstart" ? "touches" : "changedTouches", { value: [{ clientX: x, clientY: y }] });
+  target.dispatchEvent(event);
+}
+
 async function flush() {
   for (let index = 0; index < 5; index += 1) await Promise.resolve();
 }
@@ -207,6 +218,56 @@ afterEach(() => {
 });
 
 describe("product gallery photo switching", () => {
+  it("swipes marketplace photos, tracks their real position, and does not open zoom", async () => {
+    const root = renderGallery("pmed_front", { mobileSwipe: true });
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    const stage = root.querySelector<HTMLButtonElement>("[data-mobile-image-trigger]")!;
+    const position = root.querySelector<HTMLElement>("[data-gallery-position]")!;
+    const dots = Array.from(position.querySelectorAll<HTMLElement>("[data-gallery-dot]"));
+    expect(position.querySelector("[data-gallery-position-label]")?.textContent).toBe("Image 1 of 4");
+    expect(dots[0]?.classList.contains("bg-foreground")).toBe(true);
+
+    touch(stage, "touchstart", 250, 140);
+    touch(stage, "touchend", 130, 145);
+    stage.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    expect(root.querySelector("[data-mobile-zoom-modal]")?.getAttribute("aria-hidden")).toBe("true");
+    expect(button(root, "pmed_side", "mobile").getAttribute("aria-current")).toBe("true");
+    expect(position.querySelector("[data-gallery-position-label]")?.textContent).toBe("Image 2 of 4");
+    expect(dots[1]?.classList.contains("bg-foreground")).toBe(true);
+    FakeImage.created.at(-1)!.finishDecode();
+    await flush();
+    expect(mainImages(root)[0]?.getAttribute("srcset")).toBe(srcset("side"));
+
+    touch(stage, "touchstart", 130, 140);
+    touch(stage, "touchend", 250, 145);
+    expect(root.dataset.activeMediaKey).toBe("image:pmed_front");
+    expect(position.querySelector("[data-gallery-position-label]")?.textContent).toBe("Image 1 of 4");
+
+    button(root, "pmed_back", "mobile").click();
+    expect(position.querySelector("[data-gallery-position-label]")?.textContent).toBe("Image 3 of 4");
+    button(root, "pmed_video", "mobile").click();
+    expect(position.hidden).toBe(true);
+  });
+
+  it("leaves vertical scrolling and merchant gallery overrides alone", () => {
+    const root = renderGallery("pmed_front", { mobileSwipe: true });
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    const stage = root.querySelector<HTMLButtonElement>("[data-mobile-image-trigger]")!;
+    touch(stage, "touchstart", 250, 140);
+    touch(stage, "touchend", 240, 300);
+    expect(root.dataset.activeMediaKey).toBe("image:pmed_front");
+
+    const overridden = renderGallery("pmed_front");
+    renderSsrImage(overridden, "front");
+    initProductMediaGallery(overridden);
+    const otherStage = overridden.querySelector<HTMLButtonElement>("[data-mobile-image-trigger]")!;
+    touch(otherStage, "touchstart", 250, 140);
+    touch(otherStage, "touchend", 130, 145);
+    expect(overridden.dataset.activeMediaKey).toBe("image:pmed_front");
+  });
+
   it("adopts the SSR photo without rewriting it before LCP", () => {
     const root = renderGallery("pmed_front");
     renderSsrImage(root, "front");
