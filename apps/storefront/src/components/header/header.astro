@@ -195,6 +195,7 @@ const stickyMenuRow =
 // Heights and the scroll reserve, from the variant data (HeaderLayout's CSS).
 const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }))
   + (header.variant === "tech-rounded" || header.variant === "boutique-inline" ? "; --hdr-phone-bar: 4rem" : "")
+  + (header.variant === "spec-two-row" ? "; --hdr-phone-bar: 3.125rem" : "")
   + (header.variant === "showcase-simple" ? "; --hdr-phone-bar: 4.125rem" : "");
 ---
 

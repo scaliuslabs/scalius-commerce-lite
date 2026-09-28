@@ -126,6 +126,7 @@ describe("theme page", () => {
       "Filters on computers",
       "Density",
       "Product page",
+      "Purchase panel",
       "Homepage sections",
     ]);
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
@@ -236,7 +237,7 @@ describe("theme page", () => {
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
   });
 
-  it("says what buyers see when a choice does not fit the store, and why", () => {
+  it("keeps the boutique header on a large store while explaining hidden sections", () => {
     const big = storeShapeFromFacts({
       productCount: 900,
       skuCount: 4000,
@@ -247,9 +248,8 @@ describe("theme page", () => {
       hasDeliveryMethods: true,
     });
     render(storefrontTemplateTheme("boutique"), big);
-    expect(container.textContent).toContain(
-      "Your store shows Departments instead. Needs 500 or fewer products and options (you have 1,000).",
-    );
+    expect(radio("Inline menu").getAttribute("aria-checked")).toBe("true");
+    expect(container.textContent).not.toContain("Your store shows Departments instead.");
     // Sections that wait for their data (a subscriber list) say so; the
     // homepage section library renders the rest.
     const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);

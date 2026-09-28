@@ -236,7 +236,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
           return (
             <p class="product-card-meta pc-delivery" data-card-fact="delivery">
               <span class="pc-delivery-text">
-                {facts.delivery.free ? <><strong>Free</strong> delivery</> : <>Delivery from <strong>{facts.delivery.fee}</strong></>}
+                {facts.delivery.free ? <><strong>Free</strong> delivery</> : variant === "quick-add" ? <><strong>{facts.delivery.fee}</strong> delivery</> : <>Delivery from <strong>{facts.delivery.fee}</strong></>}
               </span>
             </p>
           );

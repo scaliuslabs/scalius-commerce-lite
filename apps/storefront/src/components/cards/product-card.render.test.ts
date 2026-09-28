@@ -447,6 +447,12 @@ describe("product card matrix", () => {
       request: new Request("https://shop.test/"),
     });
     expect(text(parse(retail).querySelector('[data-card-fact="delivery"]'))).toBe("Delivery from ৳60");
+    const quick = await container.renderToString(ProductCard, {
+      props: { product: { ...PRODUCTS.allFacts, freeDelivery: false }, currencySymbol: "৳", currencyCode: "BDT" },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(themeWith("quick-add", {}))) },
+      request: new Request("https://shop.test/"),
+    });
+    expect(text(parse(quick).querySelector('[data-card-fact="delivery"]'))).toBe("৳60 delivery");
   });
 
   it("shows no rating on any card while the store has no published review or reviews are off", async () => {

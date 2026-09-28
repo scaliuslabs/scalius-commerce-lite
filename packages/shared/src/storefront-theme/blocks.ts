@@ -348,7 +348,7 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
   // Star Tech product page: h1 22/400, price pills, "Key Features" list,
   // a 200×42 "Buy Now" beside the quantity.
   spec: {
-    title: { size: { desktop: 22, phone: 18 }, weight: 400 },
+    title: { size: { desktop: 22, phone: 20 }, weight: 400 },
     price: { size: { desktop: 20, phone: 18 }, weight: 700, tone: "primary" },
     cta: { height: 42, shape: "rect", layout: "row", maxWidth: 420, first: "buy-now" },
     facts: "list",
@@ -397,6 +397,17 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
   // cart" over a solid "Buy it now", collapsible rows.
   boutique: {
     title: { size: { desktop: 40, phone: 30 }, weight: 400 },
+    price: { size: { desktop: 18, phone: 16 }, weight: 400, tone: "foreground" },
+    cta: { height: 47, shape: "rect", layout: "stack", maxWidth: 345, first: "add-to-cart" },
+    facts: "rows",
+    factPills: false,
+    features: "none",
+    bundles: "rows",
+    card: false,
+  },
+  // A focused landing page gives its hero product a stronger title.
+  showcase: {
+    title: { size: { desktop: 48, phone: 31 }, weight: 700 },
     price: { size: { desktop: 18, phone: 16 }, weight: 400, tone: "foreground" },
     cta: { height: 47, shape: "rect", layout: "stack", maxWidth: 345, first: "add-to-cart" },
     facts: "rows",
@@ -899,6 +910,7 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
   retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.retail) }),
   // Dawn: outline Add to cart plus solid Buy it now, collapsible rows.
   boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
+  showcase: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.showcase) }),
   // Fabrilife: bordered card, size boxes, returns card.
   fashion: variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.fashion) }),
   heritage: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.heritage) }),

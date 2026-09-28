@@ -172,7 +172,7 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     mainHeight: 5,
     menuHeight: 0,
   },
-  // Chaldal: a 72px light shell header with a wide 48px search and the cart
+  // Chaldal: a 90px light shell header with a wide 48px search and the cart
   // total always in view; the departments column sits beside the page.
   "grocery-shell": {
     toneRow: false,
@@ -184,7 +184,7 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     cartTotal: true,
     phoneSearch: "sticky",
     phoneShortcuts: false,
-    mainHeight: 4.5,
+    mainHeight: 5.625,
     menuHeight: 2.75,
   },
 };

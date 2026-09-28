@@ -870,7 +870,9 @@
 }
 
 .site-root .product-card[data-card-variant="quick-add"] .product-card-stack > .pc-delivery {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   margin-inline-start: auto;
 }
 

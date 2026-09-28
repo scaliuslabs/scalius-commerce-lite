@@ -425,7 +425,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["accordion-drawer"],
       card: ["boutique", { hoverImage: false }],
       listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "stacked", buyBox: ["boutique"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
+      product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: "minimal-columns",
     }),
     // A landing page opens on its offer: the hero, the store's own delivery

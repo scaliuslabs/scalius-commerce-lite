@@ -338,6 +338,7 @@ describe("slice 5: product page per template", () => {
     expect(classic.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
     expect(classic.layout.buyBox).toEqual({ look: null, emi: false, whatsapp: false });
     expect(resolved("boutique").layout.buyBox.look).toEqual(STOREFRONT_BUY_BOX_LOOKS.boutique);
+    expect(resolved("showcase-landing").layout.buyBox.look?.title).toEqual({ size: { desktop: 48, phone: 31 }, weight: 700 });
     expect(resolved("spec-catalogue").layout.buyBox).toMatchObject({ look: STOREFRONT_BUY_BOX_LOOKS.spec, emi: true });
     expect(resolved("marketplace").layout.buyBox.look?.facts).toBe("column");
     expect(resolved("mass-retail").layout.buyBox.look?.facts).toBe("tiles");

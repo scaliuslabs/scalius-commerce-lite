@@ -1795,6 +1795,27 @@
                           "variant": {
                             "type": "string",
                             "enum": [
+                              "showcase"
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "variant",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "type": "string",
+                            "enum": [
                               "fashion"
                             ]
                           },

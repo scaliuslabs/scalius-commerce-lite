@@ -371,6 +371,11 @@ export type StorefrontThemeDocument = {
                     [key: string]: never;
                 };
             } | {
+                variant: 'showcase';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
                 variant: 'fashion';
                 settings: {
                     [key: string]: never;

@@ -222,6 +222,7 @@ describe("quick grid", () => {
     // 390px phone: 358px of grid; 1280px page: 1216px of grid.
     expect(productGridColumnCount(grid, 358)).toBe(3);
     expect(productGridColumnCount(grid, 1216)).toBe(6);
+    expect(productGridColumnCount(grid, 1100)).toBe(6);
     expect(productGridColumnCount(grid, 288)).toBe(2);
   });
 });

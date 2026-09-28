@@ -433,7 +433,7 @@ export function catalogChildLinks(category: unknown): CatalogListingLink[] {
 export function quickGridSpec(grid: ThemeGrid): ThemeGrid {
   return {
     ...grid,
-    cardMin: { phone: "6.5rem", tablet: "8.5rem", desktop: "11rem" },
+    cardMin: { phone: "6.5rem", tablet: "8.5rem", desktop: "10.5rem" },
     gap: { phone: "0.5rem", desktop: "0.75rem" },
   };
 }
