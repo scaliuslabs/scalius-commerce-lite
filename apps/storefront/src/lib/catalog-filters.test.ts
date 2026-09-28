@@ -201,8 +201,9 @@ describe("catalog filter form", () => {
   });
 
   it("fetches a group's other values for See more and its search, without submitting", async () => {
+    // Marketplace omits duplicate data hooks when the same classes identify rows, labels and counts.
     const row = (value: string, label: string, count: number) =>
-      `<label class="catalog-facet-row" data-catalog-facet-row><input type="checkbox" name="brand" value="${value}" data-catalog-facet /><span data-catalog-facet-label>${label}</span><span data-catalog-facet-count>${count}</span></label>`;
+      `<label class="catalog-facet-row"><input type="checkbox" name="brand" value="${value}" data-catalog-facet /><span class="catalog-facet-label">${label}</span><span class="catalog-facet-count">${count}</span></label>`;
     document.body.innerHTML = `
       <form data-catalog-filters data-count-endpoint="/categories/laptops/products">
         <fieldset data-catalog-facet-group data-facet-kind="values" data-facet-slugs="brand">
@@ -233,10 +234,12 @@ describe("catalog filter form", () => {
     const input = box.querySelector("input")!;
     const more = document.querySelector<HTMLAnchorElement>("a[data-catalog-facet-more]")!;
     expect(box.hidden).toBe(false);
+    applyCatalogFilterCounts(document.querySelector("form")!, [facet("brand", [["asus", 5], ["acer", 1], ["hp", 2]])], 6);
+    expect(document.querySelector(".catalog-facet-count")!.textContent).toBe("5");
 
-    const visible = () => [...document.querySelectorAll<HTMLElement>("fieldset [data-catalog-facet-row]")]
+    const visible = () => [...document.querySelectorAll<HTMLElement>("fieldset .catalog-facet-row")]
       .filter((element) => !element.hidden)
-      .map((element) => element.querySelector("[data-catalog-facet-label]")!.textContent);
+      .map((element) => element.querySelector(".catalog-facet-label")!.textContent);
     // Typing loads the values the HTML left out (once), then narrows by label.
     input.value = "LEN";
     input.dispatchEvent(new Event("input"));

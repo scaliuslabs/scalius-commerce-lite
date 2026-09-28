@@ -621,6 +621,31 @@ describe("filter styles (fidelity slice 3)", () => {
     ],
   };
 
+  it("keeps a ten-group Marketplace filter form compact and functional", async () => {
+    const facets = Array.from({ length: 10 }, (_, group) =>
+      facet(
+        group === 0 ? "brand" : `spec-${group}`,
+        group === 0 ? "Brand" : `Specification ${group}`,
+        Array.from({ length: 12 }, (_, value): [string, number, string] => [
+          `value-${group}-${value}`,
+          value + 1,
+          `Long value ${group}-${value} with a descriptive label`,
+        ]),
+      ));
+    const html = await render(LISTING, storefrontTemplateTheme("marketplace"), {
+      ...listingProps("https://shop.test/categories/sarees", {}, facets),
+    }, EMPTY_SLOT, TREE_STORE_SHAPE);
+    const aside = parse(html).querySelector("#filter-section")!;
+    expect(new TextEncoder().encode(aside.outerHTML).length).toBeLessThan(42_000);
+    expect(aside.querySelectorAll("fieldset[data-facet-kind='values']")).toHaveLength(10);
+    expect(aside.querySelectorAll("fieldset[data-facet-kind='values'] .catalog-facet-row")).toHaveLength(100);
+    expect(aside.querySelectorAll("fieldset[data-facet-kind='values'] [data-catalog-facet-row]")).toHaveLength(0);
+    expect(aside.querySelector("fieldset[data-facet-kind='values'] .catalog-facet-label")!.textContent).toContain("Long value");
+    const form = aside.querySelector("form")!;
+    expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["get", "/categories/sarees"]);
+    expect(form.querySelectorAll("fieldset[data-facet-kind='values'] input[type='checkbox'][name][value]")).toHaveLength(100);
+  });
+
   it("the dense column carries Amazon's numbers, sends ten values per group and fetches the rest on See more", async () => {
     const theme = storefrontTemplateTheme("marketplace");
     const document = await renderListing(theme, { ...plain(), facets: [FOURTEEN, ...FACETS.slice(0, 1)] }, TREE_STORE_SHAPE);

@@ -235,7 +235,7 @@ export function applyCatalogFilterCounts(
       if (!input.value) continue;
       const count = ratingCounts.get(input.value) ?? 0;
       input.disabled = count === 0 && !input.checked;
-      const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count]");
+      const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count], .catalog-facet-count");
       if (countLabel) countLabel.textContent = String(count);
     }
   }
@@ -247,7 +247,7 @@ export function applyCatalogFilterCounts(
   for (const input of inputs) {
     const count = counts.get(input.name)?.get(input.value) ?? 0;
     input.disabled = count === 0 && !input.checked;
-    const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count]");
+    const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count], .catalog-facet-count");
     if (countLabel) countLabel.textContent = String(count);
   }
   const ranges = new Map(facets?.map((facet) => [facet.slug, facet.range]));
@@ -288,7 +288,7 @@ export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
 
 /** What the buyer reads for a value row (its label, not its count). */
 const facetValueText = (row: Element) =>
-  row.querySelector("[data-catalog-facet-label]")?.textContent ??
+  row.querySelector("[data-catalog-facet-label], .catalog-facet-label")?.textContent ??
   row.textContent ??
   "";
 
@@ -334,7 +334,7 @@ function carriedListingQuery(): string {
 function appendFacetRows(group: HTMLElement, facets: readonly ProductFacet[]): HTMLElement[] {
   const slugs = (group.dataset.facetSlugs ?? "").split(" ").filter(Boolean);
   const category = group.dataset.facetKind === "category";
-  const rows = [...group.querySelectorAll<HTMLElement>("[data-catalog-facet-row]")];
+  const rows = [...group.querySelectorAll<HTMLElement>("[data-catalog-facet-row], .catalog-facet-row")];
   const template = rows.find((row) => (category ? row instanceof HTMLAnchorElement : row.querySelector("input")));
   const anchor = rows.at(-1);
   if (!template || !anchor) return [];
@@ -354,8 +354,8 @@ function appendFacetRows(group: HTMLElement, facets: readonly ProductFacet[]): H
       seenLabels.add(labelKey);
       const row = template.cloneNode(true) as HTMLElement;
       row.dataset.catalogFacetAdded = "";
-      const text = row.querySelector("[data-catalog-facet-label]");
-      const count = row.querySelector("[data-catalog-facet-count]");
+      const text = row.querySelector("[data-catalog-facet-label], .catalog-facet-label");
+      const count = row.querySelector("[data-catalog-facet-count], .catalog-facet-count");
       if (text) text.textContent = value.label;
       if (count) count.textContent = String(value.count);
       if (category) {
@@ -461,7 +461,7 @@ export function setupCatalogFacetSearch(root: ParentNode, expanders?: Map<HTMLEl
       const needle = input.value.trim().toLocaleLowerCase();
       if (needle) await expanders?.get(list)?.();
       let shown = 0;
-      list.querySelectorAll<HTMLElement>("[data-catalog-facet-row]").forEach((row) => {
+      list.querySelectorAll<HTMLElement>("[data-catalog-facet-row], .catalog-facet-row").forEach((row) => {
         const match = !needle || facetValueText(row).toLocaleLowerCase().includes(needle);
         row.hidden = !match;
         if (match) shown += 1;
