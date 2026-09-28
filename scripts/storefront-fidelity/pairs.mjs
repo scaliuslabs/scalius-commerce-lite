@@ -29,7 +29,7 @@ export function referenceShotIssue(ref) {
 
 function findRef(dirs, base, v) {
   for (const dir of dirs) {
-    for (const name of [`${base}-${v}-top.jpg`, `${base}-${v}.jpg`, `${base.replace("_", "-")}-${v}.jpg`]) {
+    for (const name of [`${base}-${v}-top.jpg`, `${base}-${v}.jpg`, `${base}-${v}-full.png`, `${base.replace("_", "-")}-${v}.jpg`]) {
       const f = join(dir, name);
       if (existsSync(f)) return f;
     }
@@ -68,11 +68,13 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
     const counts = checks.filter((c) => c.template === template);
     for (const page of ["home", "plp", "pdp", ...(template === "spec-catalogue" ? ["search"] : [])]) {
       const block = page === "plp" || page === "search" ? "listing" : page === "pdp" ? "pdp" : "header";
-      const siteKey = tpl.visualRefs?.[page] ?? (page === "plp" || page === "search" ? tpl.refs.listing : page === "pdp" ? tpl.refs.pdp : tpl.refs.header);
-      const site = reference.sites[siteKey];
-      const base = site?.shots?.[page];
+      const defaultSiteKey = page === "plp" || page === "search" ? tpl.refs.listing : page === "pdp" ? tpl.refs.pdp : tpl.refs.header;
       for (const v of ["d", "m"]) {
         const viewport = v === "d" ? "desktop" : "phone";
+        const visualRef = tpl.visualRefs?.[page];
+        const siteKey = (typeof visualRef === "string" ? visualRef : visualRef?.[viewport]) ?? defaultSiteKey;
+        const site = reference.sites[siteKey];
+        const base = site?.shots?.[page];
         const oursPage = template === "marketplace" && page === "plp" ? "search" : page;
         const ours = join(shotsDir, `ours-${template}-${oursPage}-${v}-top.jpg`);
         const ref = base ? findRef(refDirs, base, v) : null;
@@ -88,7 +90,7 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
         const failed = blockChecks.filter((c) => !c.pass).length;
         const probe = matrix?.[template]?.[`${oursPage}-${viewport}`];
         const lines = [
-          { text: `REFERENCE ${site.name} (${viewport}${tpl.visualRefs?.[page] ? ", alternate visual" : ""})`, color: "#c80000" },
+          { text: `REFERENCE ${site.name} (${viewport}${siteKey !== defaultSiteKey ? ", alternate visual" : ""})`, color: "#c80000" },
           { text: page === "plp" ? refFmt(site[viewport]) : page === "search" ? `${site.search?.[viewport]?.cols?.v ?? "-"} cards per row` : "", color: "#c80000" },
         ];
         const oursLines = [

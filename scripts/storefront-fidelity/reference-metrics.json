@@ -37,10 +37,10 @@
     "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
     "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
-    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": "walmart", "plp": "pickaboo", "pdp": "pickaboo" } },
-    "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
-    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "chaldal" } },
-    "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" } }
+    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": { "desktop": "walmart", "phone": "daraz" }, "plp": "pickaboo", "pdp": "pickaboo" } },
+    "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" }, "visualRefs": { "plp": "gameghor" } },
+    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": { "desktop": "omneemart", "phone": "chaldal" }, "pdp": "omneemart" } },
+    "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" }, "visualRefs": { "plp": "graza" } }
   },
   "sites": {
     "startech": {
@@ -302,6 +302,20 @@
       "name": "Pickaboo Computers (alternate retail visual)",
       "$comment": "Accessible desktop and phone category/product captures replace blocked Target visual pairs; different merchant styling is not scored as Target geometry.",
       "shots": { "plp": "pickaboo-plp", "pdp": "pickaboo-pdp" },
+      "desktop": {},
+      "phone": {}
+    },
+    "omneemart": {
+      "name": "OmneeMart Brown Atta (alternate grocery visual)",
+      "$comment": "Accessible desktop and phone product captures; no OmneeMart measurements are scored as Ghorer Bazar geometry.",
+      "shots": { "plp": "omneemart-groceries-plp", "pdp": "omneemart-pdp" },
+      "desktop": {},
+      "phone": {}
+    },
+    "graza": {
+      "name": "Graza All (alternate showcase visual)",
+      "$comment": "Accessible collection captures; Graza product media and typography are reference context, not measured template defaults.",
+      "shots": { "plp": "graza-plp" },
       "desktop": {},
       "phone": {}
     },

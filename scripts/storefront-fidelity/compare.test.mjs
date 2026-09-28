@@ -394,8 +394,9 @@ describe("filters, verdict and exit code", () => {
 
   it("uses measured Chaldal references without claiming missing visual evidence", () => {
     expect(Object.values(reference.templates["daily-essentials"].refs)).toEqual(Array(5).fill("ghorerbazar"));
-    expect(reference.templates["daily-essentials"].visualRefs).toEqual({ home: "chaldal", plp: "chaldal" });
+    expect(reference.templates["daily-essentials"].visualRefs).toEqual({ home: "chaldal", plp: { desktop: "omneemart", phone: "chaldal" }, pdp: "omneemart" });
     expect(reference.sites.chaldal.shots).toEqual({ home: "chaldal-home", plp: "chaldal-popular" });
+    expect(reference.sites.omneemart.shots).toEqual({ plp: "omneemart-groceries-plp", pdp: "omneemart-pdp" });
     expect(reference.sites.chaldal.desktop["card.cols"].v).toBe(6);
     expect(compareTemplate("daily-essentials", { desktop: {}, phone: {} }, reference).some((c) => c.refSite === "chaldal")).toBe(false);
     expect(referenceShotIssue("/shots/chaldal-popular-d-top.jpg")).toBe("product images missing from reference capture");
@@ -404,7 +405,7 @@ describe("filters, verdict and exit code", () => {
 
   it("uses Walmart's measured desktop home without promoting blocked listing captures", async () => {
     expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target", listing: "target", pdp: "target" });
-    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: "walmart", plp: "pickaboo", pdp: "pickaboo" });
+    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: { desktop: "walmart", phone: "daraz" }, plp: "pickaboo", pdp: "pickaboo" });
     expect(reference.sites.pickaboo.shots).toEqual({ plp: "pickaboo-plp", pdp: "pickaboo-pdp" });
     expect(reference.sites.walmart.shots).toEqual({ home: "walmart-home" });
     expect(reference.sites.walmart.desktop["header.h"].v).toBe(132);
@@ -416,10 +417,29 @@ describe("filters, verdict and exit code", () => {
       const sharp = await loadSharp();
       const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer();
       writeFileSync(join(dir, "walmart-home-d-top.jpg"), photo);
+      writeFileSync(join(dir, "daraz-home-m-top.jpg"), photo);
       writeFileSync(join(dir, "target-home-d-top.jpg"), "blocked capture");
       writeFileSync(join(dir, "ours-mass-retail-home-d-top.jpg"), photo);
+      writeFileSync(join(dir, "ours-mass-retail-home-m-top.jpg"), photo);
       const pairs = await writePairs({ reference, matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["mass-retail"] });
-      expect(pairs.made.map((file) => basename(file))).toEqual(["mass-retail-home-d.jpg"]);
+      expect(pairs.made.map((file) => basename(file))).toEqual(["mass-retail-home-d.jpg", "mass-retail-home-m.jpg"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the accessible Graza collection captures for showcase visual pairs", async () => {
+    expect(reference.templates["showcase-landing"].visualRefs).toEqual({ plp: "graza" });
+    const dir = mkdtempSync(join(tmpdir(), "fidelity-graza-plp-"));
+    try {
+      const sharp = await loadSharp();
+      const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).png().toBuffer();
+      for (const viewport of ["d", "m"]) {
+        writeFileSync(join(dir, `graza-plp-${viewport}-full.png`), photo);
+        writeFileSync(join(dir, `ours-showcase-landing-plp-${viewport}-top.jpg`), await sharp(photo).jpeg().toBuffer());
+      }
+      const pairs = await writePairs({ reference, matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["showcase-landing"] });
+      expect(pairs.made.map((file) => basename(file))).toEqual(["showcase-landing-plp-d.jpg", "showcase-landing-plp-m.jpg"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
