@@ -43,8 +43,6 @@ const parts = anatomy.body.filter((part) => part === "title" || part === "price"
 const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
 const roundAction = anatomy.quickBuy && anatomy.action === "round";
-// Fabrilife's round cart sits beside the price; Chaldal's "+" overlaps the photo.
-const roundInBody = variant === "fashion-value";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
 const titleClamp = { 1: "line-clamp-1", 2: "line-clamp-2", 3: "line-clamp-3" }[anatomy.titleLines];
 const titleWeight = { regular: "font-normal", medium: "font-medium", strong: "font-semibold" }[anatomy.titleWeight];
@@ -99,16 +97,16 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
     {
       /* Chaldal's "+" on every tile: a product with options gets the same
          button under the card link (its options are chosen on its page). */
-      roundAction && !roundInBody && !model.quickBuyHref && model.needsOptions && (
+      roundAction && !model.quickBuyHref && model.needsOptions && (
         <span aria-hidden="true" data-card-action-hint class="product-card-round-action pointer-events-none absolute inline-flex items-center justify-center rounded-full">
           <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
-            <path d="M12 5v14M5 12h14" />
+            <path d={variant === "fashion-value" ? cartIcon : "M12 5v14M5 12h14"} />
           </svg>
         </span>
       )
     }
     {
-      roundAction && !roundInBody && model.quickBuyHref && (
+      roundAction && model.quickBuyHref && (
         <a
           href={model.quickBuyHref}
           data-astro-prefetch="false"
@@ -116,7 +114,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
           class="product-card-round-action absolute z-10 inline-flex items-center justify-center rounded-full"
         >
           <svg aria-hidden="true" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
-            <path d="M12 5v14M5 12h14" />
+            <path d={variant === "fashion-value" ? cartIcon : "M12 5v14M5 12h14"} />
           </svg>
           <span class="sr-only">{actionText}: {model.name}</span>
         </a>
@@ -181,7 +179,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
               ) : (
                 <span class:list={["product-card-price", priceTone]}>
                   <span class="sr-only">{discounted ? "Sale price " : "Price "}</span>
-                  {model.price.prefix}{model.price.current}
+                  {model.price.prefix && variant === "fashion-value" ? <span class="pc-price-from">{model.price.prefix}</span> : model.price.prefix}{model.price.current}
                 </span>
               )}
               {/* Target reads "Sale" beside the price, then "reg ৳1,200" under it. */}
@@ -265,29 +263,6 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
         }
         return null;
       })
-    }
-
-    {
-      roundAction && roundInBody && (model.quickBuyHref ? (
-        <a
-          href={model.quickBuyHref}
-          data-astro-prefetch="false"
-          rel="nofollow"
-          class="product-card-round-action pc-round-body relative z-10 inline-flex items-center justify-center rounded-full"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d={cartIcon} />
-          </svg>
-          <span class="sr-only">{actionText}: {model.name}</span>
-        </a>
-      ) : model.needsOptions ? (
-        /* Options are chosen on the product page: the same button, under the card link. */
-        <span aria-hidden="true" data-card-action-hint class="product-card-round-action pc-round-body pointer-events-none inline-flex items-center justify-center rounded-full">
-          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d={cartIcon} />
-          </svg>
-        </span>
-      ) : null)
     }
 
     {

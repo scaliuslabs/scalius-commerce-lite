@@ -368,9 +368,7 @@ describe("product card matrix", () => {
       expect(text(buy)).toBe(`${label}: Product sale`);
       if (anatomy.action === "round") {
         expect(buy.classList.contains("product-card-round-action")).toBe(true);
-        // Chaldal's "+" sits on the photo; Fabrilife's cart beside the price.
-        const home = card === "fashion-value" ? "product-card-body" : "product-card-media";
-        expect(buy.parentElement!.classList.contains(home)).toBe(true);
+        expect(buy.parentElement!.classList.contains("product-card-media")).toBe(true);
       } else {
         expect(buy.classList.contains("product-card-action")).toBe(true);
         // Options are chosen on the product page (a hint under the card

@@ -539,17 +539,11 @@
 }
 
 .site-root .product-card[data-card-variant="fashion-value"] .product-card-stack {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title title" "savings action" "price action";
-  align-content: start;
   padding: var(--pc-pad-y) var(--pc-pad-x);
 }
 
-.site-root .product-card[data-card-variant="fashion-value"] .pc-title { grid-area: title; }
-.site-root .product-card[data-card-variant="fashion-value"] .pc-savings { grid-area: savings; font-size: 0.6875rem; }
-.site-root .product-card[data-card-variant="fashion-value"] .pc-price { grid-area: price; margin-top: 0; align-self: end; }
-.site-root .product-card[data-card-variant="fashion-value"] .pc-round-body { grid-area: action; align-self: center; }
+.site-root .product-card[data-card-variant="fashion-value"] .pc-savings { font-size: 0.6875rem; }
+.site-root .product-card[data-card-variant="fashion-value"] .pc-price { margin-top: 0; }
 
 .site-root .product-card[data-card-variant="fashion-value"] .pc-savings-chip {
   padding: 0.125rem 0.4375rem;
@@ -573,7 +567,15 @@
   column-gap: 0.375rem;
 }
 
+.site-root .product-card[data-card-variant="fashion-value"] .pc-price-from {
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
 .site-root .product-card[data-card-variant="fashion-value"] .product-card-round-action {
+  right: 0.625rem;
+  bottom: 0.625rem;
   width: 3.125rem;
   height: 3.125rem;
   background: var(--foreground);
