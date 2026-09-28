@@ -182,10 +182,15 @@ describe("listing filters", () => {
     expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
   });
 
-  it("defaults mass-retail browse to phone rows with a shopper card/list choice", () => {
+  it("defaults mass-retail categories to phone cards and searches to rows with a shopper view choice", () => {
     const listing = storefrontTemplateTheme("mass-retail").blocks.listing;
-    expect(listing.phoneLayout).toBe("list-row");
+    expect(listing.phoneLayout).toBe("grid");
+    expect(listing.searchLayout).toBe("list");
     expect(listing.toolbar).toContain("grid-list-toggle");
+  });
+
+  it("includes child-category pills in fashion-value's listing toolbar", () => {
+    expect(storefrontTemplateTheme("fashion-value").blocks.listing.toolbar).toContain("subcategory-pills");
   });
 
   it("maps each template to its reference's filter style; large catalogues get the open dense column", () => {

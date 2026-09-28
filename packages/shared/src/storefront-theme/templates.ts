@@ -185,7 +185,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["mega-panel", { promoImages: true }],
       mobileNav: ["bottom-tabs"],
       card: ["fashion-value"],
-      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite" },
       product: {
         gallery: "thumbs-below",
         buyBox: ["fashion"],
@@ -333,9 +333,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["drill-in-drawer"],
       card: ["retail"],
       listing: {
-        layout: ["grid"], filters: { style: "drawer", openByDefault: false },
+        layout: ["grid"], searchLayout: "list", filters: { style: "drawer", openByDefault: false },
         toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "grid-list-toggle", "applied-chips"],
-        phoneLayout: "list-row",
+        phoneLayout: "grid",
         paging: "numbered",
       },
       product: {

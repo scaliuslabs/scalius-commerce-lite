@@ -26,6 +26,15 @@ function rulesFor(file: string, className: string): string[] {
 }
 
 describe("header scroll geometry", () => {
+  it("places the fashion phone search below the sticky bar without reserving it on scroll", () => {
+    const spec = headerSpec("fashion-department", {});
+    expect(spec?.phoneSearch).toBe("in-page");
+    expect(headerCondense(spec, { foldsMenuRow: false }).phone).toBe(
+      "calc(var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed))",
+    );
+    expect(source("./variants/ComposedHeader.astro")).toContain('spec.phoneSearch === "in-page" && !compactCategorySearch');
+  });
+
   it("reserves exactly what each header loses when it condenses", () => {
     const bar = "var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed)";
     const classicBar = "var(--hdr-classic-bar) - var(--hdr-classic-bar-condensed)";

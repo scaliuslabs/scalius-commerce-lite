@@ -78,7 +78,7 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     search: "field",
     utilities: "stacked",
     cartTotal: false,
-    phoneSearch: "none",
+    phoneSearch: "in-page",
     phoneShortcuts: false,
     mainHeight: 5,
     menuHeight: 0,

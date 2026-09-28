@@ -943,18 +943,18 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
   });
 
-  it("defaults mass-retail categories to desktop cards and phone rows with a view choice", async () => {
+  it("defaults mass-retail categories to cards and searches to rows with a view choice", async () => {
     const theme = storefrontTemplateTheme("mass-retail");
     const page = await renderListing(theme, { ...plain(), kind: "category" });
-    expect(page.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+    expect(page.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
     expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
     expect(page.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
-    expect(page.querySelector("[data-catalog-view-mobile] [data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
-    expect(page.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toContain("120px");
+    expect(page.querySelector("[data-catalog-view-mobile] [data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
 
-    theme.blocks.listing.phoneLayout = "grid";
-    const merchantGrid = await renderListing(theme, { ...plain(), kind: "category" });
-    expect(merchantGrid.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    const search = await renderListing(theme, { ...listingProps("https://shop.test/search?q=linen"), kind: "search" });
+    expect(search.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(search.querySelector("[data-catalog-view-mobile] [data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+
     theme.blocks.listing.phoneLayout = "list-row";
     const rows = await renderListing(theme, { ...plain(), kind: "category" });
     const rowGrid = rows.querySelector(".product-grid")!;
@@ -966,10 +966,26 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(rowGrid.hasAttribute("data-phone-layout")).toBe(false);
     expect(rows.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
 
+    theme.blocks.listing.searchLayout = "grid";
+    const merchantSearch = await renderListing(theme, { ...listingProps("https://shop.test/search?q=linen"), kind: "search" });
+    expect(merchantSearch.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+
     theme.blocks.listing.toolbar = theme.blocks.listing.toolbar.filter((item) => item !== "grid-list-toggle");
     const merchantOnly = await renderListing(theme, { ...plain(), kind: "category" });
     expect(merchantOnly.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
     expect(merchantOnly.querySelector("[data-catalog-view-toggle]")).toBeNull();
+  });
+
+  it("shows fashion-value child categories when the listing has published children", async () => {
+    const page = await renderListing(storefrontTemplateTheme("fashion-value"), {
+      ...plain(), kind: "category",
+      subListings: [
+        { id: "cotton", label: "Cotton", href: "/categories/cotton" },
+        { id: "silk", label: "Silk", href: "/categories/silk" },
+      ],
+    }, TREE_STORE_SHAPE);
+    expect(Array.from(page.querySelectorAll("nav[aria-label='Sub-categories'] a")).map((link) => link.textContent!.trim()))
+      .toEqual(["Cotton", "Silk"]);
   });
 
   it("puts truthful mass-retail phone filters, sort, and popular values in one scroll row", async () => {

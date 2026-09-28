@@ -404,7 +404,7 @@ describe("filters, verdict and exit code", () => {
   });
 
   it("uses Walmart's measured desktop home without promoting blocked listing captures", async () => {
-    expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target", listing: "target", pdp: "target" });
+    expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target-pickaboo-card", listing: "target", pdp: "target" });
     expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: { desktop: "walmart", phone: "daraz" }, plp: "pickaboo", pdp: "pickaboo" });
     expect(reference.sites.pickaboo.shots).toEqual({ plp: "pickaboo-plp", pdp: "pickaboo-pdp" });
     expect(reference.sites.walmart.shots).toEqual({ home: "walmart-home" });
@@ -448,6 +448,12 @@ describe("filters, verdict and exit code", () => {
   it("scores only like-for-like default mass-retail measurements", () => {
     const checks = compareTemplate("mass-retail", { desktop: {}, phone: {} }, reference);
     expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop")).toMatchObject({ refSite: "target", ref: 80 });
+    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop")).toMatchObject({ refSite: "target-pickaboo-card", ref: 318 });
+    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "phone")).toMatchObject({ refSite: "target-pickaboo-card", ref: 163, src: expect.stringContaining("x14–171") });
+    expect(checks.find((c) => c.metric === "card.cols" && c.viewport === "phone")).toMatchObject({ refSite: "target-pickaboo-card", ref: 2 });
+    expect(reference.sites["target-pickaboo-card"].phone["card.w"].v).toBe(Math.round(157 * 390 / 375));
+    expect(judge("size", 173, 163).pass).toBe(true);
+    expect(reference.sites.target.phone).toMatchObject({ "card.w": { v: 334 }, "card.cols": { v: 1 } });
     expect(checks.some((c) => c.metric === "card.h")).toBe(false);
     expect(checks.filter((c) => c.refSite === "walmart")).toHaveLength(0);
   });

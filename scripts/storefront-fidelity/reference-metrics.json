@@ -37,7 +37,7 @@
     "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
     "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
-    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": { "desktop": "walmart", "phone": "daraz" }, "plp": "pickaboo", "pdp": "pickaboo" } },
+    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target-pickaboo-card", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": { "desktop": "walmart", "phone": "daraz" }, "plp": "pickaboo", "pdp": "pickaboo" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" }, "visualRefs": { "plp": "gameghor" } },
     "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "omneemart", "pdp": "omneemart" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" }, "visualRefs": { "plp": "graza" } }
@@ -304,6 +304,22 @@
       "shots": { "plp": "pickaboo-plp", "pdp": "pickaboo-pdp" },
       "desktop": {},
       "phone": {}
+    },
+    "target-pickaboo-card": {
+      "name": "Target desktop / Pickaboo phone category cards",
+      "$comment": "Desktop keeps measured Target search-card geometry. Phone uses the measured two-column Pickaboo category layout matching the mass-retail category default; Target's separate one-column search reference remains under target.",
+      "desktop": {
+        "card.w": { "v": 318, "src": "Target study: 4 columns of 318x616" },
+        "card.cols": { "v": 4, "src": "Target study: four-column search cards" },
+        "card.gap": { "v": 24, "src": "Target study: 24px gap" },
+        "card.ratio": { "v": 1, "src": "Target study: square 318px image" },
+        "card.title": { "v": "14/400", "src": "Target study: title 14/400 (brand 14/700 above it)" },
+        "card.price": { "v": "22/700", "src": "Target study: price 22/700" }
+      },
+      "phone": {
+        "card.w": { "v": 163, "src": "saved pickaboo-plp-m-top.jpg: 375px viewport, first card x14–171 = 157px; normalized to 390px: 157×390/375 ≈ 163px" },
+        "card.cols": { "v": 2, "src": "saved pickaboo-plp-m-top.jpg: two product cards per row at 375px" }
+      }
     },
     "omneemart": {
       "name": "OmneeMart Brown Atta (alternate grocery visual)",

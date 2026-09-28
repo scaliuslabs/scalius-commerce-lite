@@ -791,6 +791,10 @@ page 1,090 → 54 (1.73M → 2.7k), recommendations 1,045 → 13, manual collect
   metric-matched fallbacks, so they must not move LCP or CLS. If they do,
   `pnpm perf:storefront` shows it.
 
+## Production read smoke (2026-09-28)
+
+A read-only two-run `pnpm perf:storefront --base https://storefront.scalius.com --no-browser --runs 2 --no-binding-check` smoke measured 24–34 ms cache-hit TTFB. First category/product/search requests were 439/312/303 ms, above the 300 ms miss budget. This sample does not isolate a specific code change; the miss budget remains open for a controlled built-stack check. The Astro development server is not a valid performance baseline.
+
 ## Live-store quick wins (2026-09-25, local built stack)
 
 Built storefront served by `wrangler dev` plus the local API. The data is a
