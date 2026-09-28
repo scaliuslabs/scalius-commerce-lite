@@ -51,6 +51,7 @@ import {
   FooterSketch,
   HeaderRows,
   HeaderSketch,
+  BuyBoxSketch,
   MobileNavigationSketch,
   NavigationSketch,
   ProductPageSketch,
@@ -751,6 +752,17 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
           options={blockOptions<ResolvedStorefrontThemeLayout["productPage"]>("gallery", "productPage", (layout) => <ProductPageSketch layout={layout} />)}
           onChange={setBlock("gallery")}
         />
+      </SectionCard>
+
+      <SectionCard title={t("purchasePanel")}>
+        <VisualChoice
+          label={t("purchasePanel")}
+          value={blockVariant(theme, "buyBox")}
+          className="grid-cols-2 sm:grid-cols-4"
+          options={blockOptions<ResolvedStorefrontThemeLayout["buyBox"]>("buyBox", "buyBox", (box) => <BuyBoxSketch box={box} />)}
+          onChange={setBlock("buyBox")}
+        />
+        {fitNote("buyBox", "buyBox")}
       </SectionCard>
 
       <SectionCard

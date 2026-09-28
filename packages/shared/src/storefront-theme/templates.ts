@@ -149,13 +149,13 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "none",
-      header: ["fashion-department", { subBrandRow: true }],
+      header: ["heritage-nav"],
       navigation: { source: "tree+menu", maxTopItems: 11 },
       desktopNav: ["mega-panel"],
       mobileNav: ["accordion-drawer"],
       card: ["portrait"],
       listing: { layout: ["shelves"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "portrait", buyBox: ["fashion"], below: ["description", "reviews", "related", "recently-viewed"], sticky: NO_STICKY },
+      product: { gallery: "portrait", buyBox: ["heritage"], below: ["description", "reviews", "related", "recently-viewed"], sticky: NO_STICKY },
       footer: "newsletter-grey",
     }),
     home: [

@@ -869,6 +869,7 @@ describe("listing page", () => {
       expect(duplicateIds(document), id).toEqual([]);
       expect(document.querySelectorAll("[data-theme-component='product-card']").length, id).toBeGreaterThan(0);
       if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
+      if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
     }
   });
 });

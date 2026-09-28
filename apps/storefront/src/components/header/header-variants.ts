@@ -69,6 +69,20 @@ export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, He
     mainHeight: 5,
     menuHeight: 0,
   },
+  // Heritage: search and account above a separate row of departments.
+  "heritage-nav": {
+    toneRow: false,
+    menuRowTone: "surface",
+    menu: "row",
+    uppercaseMenu: true,
+    search: "field",
+    utilities: "icons",
+    cartTotal: false,
+    phoneSearch: "none",
+    phoneShortcuts: false,
+    mainHeight: 4,
+    menuHeight: 2.25,
+  },
   // Star Tech: an 82px toned row (580px search, two-line utilities), then a
   // 50px light category row that stays on its own; phones keep the search in
   // the page under a 50px bar.

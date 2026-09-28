@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import type {
   ResolvedStorefrontThemeLayout,
   StorefrontDensity,
+  StorefrontBuyBoxRenderer,
   StorefrontFooterRenderer,
   StorefrontGalleryRenderer,
   StorefrontHeaderRenderer,
@@ -308,6 +309,20 @@ export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer
     <Sketch>
       <HeaderRows kind={kind} />
       <Filler className="mt-1" />
+    </Sketch>
+  );
+}
+
+export function BuyBoxSketch({ box }: { box: StorefrontBuyBoxRenderer }) {
+  return (
+    <Sketch>
+      <Line className="h-1 w-3/4 bg-(--sk-ink)" />
+      <Line className="h-1 w-1/3 bg-(--sk-accent)" />
+      <Filler className="my-1" />
+      <span className={cn("flex gap-1", box.look?.cta.layout === "stack" && "flex-col")}>
+        <Block className="h-2 flex-1 bg-(--sk-accent)" />
+        {box.look?.cta.layout !== "stack" && <Block className="h-2 flex-1" />}
+      </span>
     </Sketch>
   );
 }

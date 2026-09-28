@@ -597,6 +597,27 @@
                       "variant": {
                         "type": "string",
                         "enum": [
+                          "heritage-nav"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "variant",
+                      "settings"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "enum": [
                           "spec-two-row"
                         ]
                       },
@@ -1754,6 +1775,27 @@
                             "type": "string",
                             "enum": [
                               "fashion"
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "variant",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "type": "string",
+                            "enum": [
+                              "heritage"
                             ]
                           },
                           "settings": {

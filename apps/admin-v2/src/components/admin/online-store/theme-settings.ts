@@ -115,18 +115,18 @@ export function moveSection<Section extends { id: string }>(
 }
 
 /** A single-variant block slot the Theme page offers as a picker. */
-export type ThemeBlockSlot = Exclude<StorefrontBlockSlot, "listing" | "buyBox">;
+export type ThemeBlockSlot = Exclude<StorefrontBlockSlot, "listing">;
 
 /** The variant a slot is set to in the document. */
 export function blockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlot): string {
-  return slot === "gallery" ? theme.blocks.product.gallery.variant : theme.blocks[slot].variant;
+  return slot === "gallery" || slot === "buyBox" ? theme.blocks.product[slot].variant : theme.blocks[slot].variant;
 }
 
 /** The document with a block switched to another variant (at that variant's default settings). */
 export function setBlockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlot, variant: string): StorefrontThemeDocument {
   const block = storefrontBlockDefault(slot, variant) as never;
-  const blocks = slot === "gallery"
-    ? { ...theme.blocks, product: { ...theme.blocks.product, gallery: block } }
+  const blocks = slot === "gallery" || slot === "buyBox"
+    ? { ...theme.blocks, product: { ...theme.blocks.product, [slot]: block } }
     : { ...theme.blocks, [slot]: block };
   return { ...theme, blocks };
 }

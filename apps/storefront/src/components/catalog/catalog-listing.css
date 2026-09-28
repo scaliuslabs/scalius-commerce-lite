@@ -415,6 +415,10 @@
   .site-root .product-grid-frame[data-catalog-card="tech-rounded"] > .product-grid {
     gap: 1rem;
   }
+
+  .site-root .product-grid-frame[data-catalog-card="portrait"]:not([data-catalog-results="list"]) > .product-grid {
+    column-gap: 2.5rem;
+  }
 }
 
 /* ─── Computers ──────────────────────────────────────────────────────── */

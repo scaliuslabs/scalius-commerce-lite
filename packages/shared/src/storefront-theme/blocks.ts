@@ -427,6 +427,17 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     bundles: "chips",
     card: true,
   },
+  // Heritage editorial: a quiet price and one wide primary purchase action.
+  heritage: {
+    title: { size: { desktop: 30, phone: 24 }, weight: 500 },
+    price: { size: { desktop: 20, phone: 18 }, weight: 400, tone: "foreground" },
+    cta: { height: 39, shape: "rect", layout: "stack", maxWidth: 492, first: "add-to-cart" },
+    facts: "rows",
+    factPills: false,
+    features: "none",
+    bundles: "rows",
+    card: false,
+  },
   // Game Ghor digital codes: h1 24/600, price 24/700, Buy Now first, the
   // delivery promise bullets.
   digital: {
@@ -483,6 +494,7 @@ export const STOREFRONT_HEADER_VARIANTS = {
     contrastPairs: [["foreground", "muted"]],
     renders: "classic",
   }),
+  "heritage-nav": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
   // Star Tech: dark row with a 580px search, light category row that stays.
   "spec-two-row": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
   // Apple Gadgets: dark row, pill search, round icons, category row.
@@ -898,6 +910,7 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
   boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
   // Fabrilife: bordered card, size boxes, returns card.
   fashion: variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.fashion) }),
+  heritage: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.heritage) }),
   // Game Ghor: promise bullets (delivery time, where to redeem).
   digital: variant({ requires: [has("hasDigitalLines")], fallback: "classic", renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.digital) }),
 };

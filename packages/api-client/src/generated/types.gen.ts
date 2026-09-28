@@ -125,6 +125,11 @@ export type StorefrontThemeDocument = {
                 subBrandRow: boolean;
             };
         } | {
+            variant: 'heritage-nav';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
             variant: 'spec-two-row';
             settings: {
                 [key: string]: never;
@@ -362,6 +367,11 @@ export type StorefrontThemeDocument = {
                 };
             } | {
                 variant: 'fashion';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'heritage';
                 settings: {
                     [key: string]: never;
                 };

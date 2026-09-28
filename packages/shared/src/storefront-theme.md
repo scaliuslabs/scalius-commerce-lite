@@ -178,7 +178,7 @@ numbers come from the storefront study
 | Id | Best for | Blocks (header / desktop menu / phone menu / card / listing / gallery / buy box / footer) | Tokens |
 |---|---|---|---|
 | `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / grid + bar-dropdowns / stacked / boutique / minimal-columns; nav menu, 6 | airy, display, square, flat, 1200 |
-| `heritage-editorial` | fashion, sarees, crafts | fashion-department / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns / portrait / fashion / newsletter-grey; nav tree+menu, 11 | airy, display, uppercase, portrait photos, 1360 |
+| `heritage-editorial` | fashion, sarees, crafts | heritage-nav / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns / portrait / heritage / newsletter-grey; nav tree+menu, 11 | airy, display, uppercase, portrait photos, 1360 |
 | `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6 | compact, retail, uppercase, square, flat |
 | `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (list rows on phones) / thumbs-below / spec / support-dark; nav category-tree, 18 | dense, flat type, subtle, dark header, contain, 1290 |
 | `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, light header |

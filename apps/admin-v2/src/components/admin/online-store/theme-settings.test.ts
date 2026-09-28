@@ -79,6 +79,14 @@ describe("templates", () => {
     expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
   });
 
+  it("lets a merchant change the purchase panel without changing the gallery", () => {
+    const theme = storefrontTemplateTheme("fashion-value");
+    const changed = setBlockVariant(theme, "buyBox", "heritage");
+    expect(blockVariant(changed, "buyBox")).toBe("heritage");
+    expect(changed.blocks.product.gallery).toEqual(theme.blocks.product.gallery);
+    expect(storefrontThemeDocumentSchema.safeParse(changed).success).toBe(true);
+  });
+
   it("still recognises a template when the saved document lists its keys in another order", () => {
     const applied = storefrontTemplateTheme("marketplace");
     const reloaded = JSON.parse(JSON.stringify({
