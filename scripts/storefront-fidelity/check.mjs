@@ -48,6 +48,53 @@ import { runVariants } from "./variants.mjs";
 export const BLOCKS = Object.freeze(["header", "card", "listing", "pdp", "footer", "size", "perf", "nav", "variants", "hover", "tiny"]);
 const MATRIX_BLOCKS = ["header", "card", "listing", "pdp", "footer", "size"];
 
+// One PDP per template keeps the matrix bounded. The scale seed has only
+// electronics, so apparel, grocery, and digital-goods references use the
+// closest available option/media shape until those product types are seeded.
+const PDP_PROFILES = {
+  boutique: { kind: "Headphone", images: [3, 4], axes: [1, 1] },
+  "heritage-editorial": { kind: "Leather Phone Case", images: [1, 1], axes: [0, 0] },
+  "fashion-value": { kind: "Smart Watch", images: [1, 1], axes: [2, 2], discount: true },
+  "spec-catalogue": { kind: "Laptop", images: [2, 4], axes: [0, 2], keySpecs: 4, namedProcessor: true },
+  "rounded-tech": { kind: "Smartphone", images: [3, 4], axes: [2, 2] },
+  marketplace: { kind: "SSD", images: [3, 4], axes: [1, 1] },
+  "mass-retail": { kind: "Smart Watch", images: [3, 4], axes: [2, 2], discount: true },
+  "department-mall": { kind: "Graphics Card", images: [3, 4], axes: [0, 0] },
+  "daily-essentials": { kind: "Power Bank", images: [1, 1], axes: [0, 0] },
+  "showcase-landing": { kind: "Camera", images: [3, 4], axes: [1, 1] },
+};
+
+/** Buyer-resolvable, inheriting-theme products with distinct PDP shapes. */
+export function resolveTemplatePdpCandidates(db, templates) {
+  const find = db.prepare(`
+    SELECT p.slug, p.name, c.name AS category, s.has_discount AS discounted,
+      (SELECT count(*) FROM product_media m WHERE m.product_id = p.id) AS images,
+      (SELECT count(*) FROM product_option_definitions o WHERE o.product_id = p.id AND o.deleted_at IS NULL) AS axes,
+      (SELECT count(*) FROM product_variants v WHERE v.product_id = p.id AND v.deleted_at IS NULL) AS variants,
+      (SELECT count(*) FROM product_attribute_values v JOIN product_attributes a ON a.id = v.attribute_id WHERE v.product_id = p.id AND a.key_spec = 1) AS keySpecs
+    FROM products p JOIN categories c ON c.id = p.category_id AND c.parent_id IS NULL
+      JOIN product_buyer_state s ON s.product_id = p.id AND s.is_public = 1 AND s.available_for_sale = 1
+    WHERE p.name LIKE ? AND p.page_template IS NULL AND p.is_active = 1 AND p.deleted_at IS NULL
+      AND (SELECT count(*) FROM product_media m WHERE m.product_id = p.id) BETWEEN ? AND ?
+      AND (SELECT count(*) FROM product_option_definitions o WHERE o.product_id = p.id AND o.deleted_at IS NULL) BETWEEN ? AND ?
+      AND EXISTS (SELECT 1 FROM product_media m JOIN media i ON i.id = m.media_id WHERE m.product_id = p.id AND m.is_primary = 1 AND i.kind = 'image')
+      AND (? = 0 OR s.has_discount = 1)
+      AND (SELECT count(*) FROM product_attribute_values v JOIN product_attributes a ON a.id = v.attribute_id WHERE v.product_id = p.id AND a.key_spec = 1) >= ?
+      AND (? = 0 OR EXISTS (
+        SELECT 1 FROM product_attribute_values v JOIN product_attributes a ON a.id = v.attribute_id AND a.name = 'Processor'
+        WHERE v.product_id = p.id AND instr(lower(p.name), lower(v.value)) > 0
+      ))
+    ORDER BY p.id LIMIT 1
+  `);
+  return Object.fromEntries(templates.map((template) => {
+    const profile = PDP_PROFILES[template];
+    if (!profile) throw new Error(`No PDP profile for ${template}`);
+    const row = find.get(`% ${profile.kind}%`, ...profile.images, ...profile.axes, Number(!!profile.discount), profile.keySpecs ?? 0, Number(!!profile.namedProcessor));
+    if (!row) throw new Error(`No buyer-resolvable ${profile.kind} PDP for ${template}`);
+    return [template, { ...row, path: `/products/${encodeURIComponent(row.slug)}` }];
+  }));
+}
+
 export function parseArgs(argv) {
   const o = { only: "", reportOnly: false, out: join(ROOT, ".wrangler", "fidelity"), stateCache: null, skipBuild: false, keepRun: false, refShots: null, maxSwapMb: 7000, minFreePct: 25, ports: { ...DEFAULT_PORTS } };
   for (let i = 0; i < argv.length; i += 1) {
@@ -262,9 +309,18 @@ async function main() {
     const page = await chrome.newPage(shotsDir);
     db = openDb(stateDir);
     const ctx = { db, stack, page, base: `http://localhost:${opts.ports.storefront}`, shotsDir, log, store };
+    const pdpCandidates = stages.matrix || stages.perf ? resolveTemplatePdpCandidates(db, templates) : {};
+    if (Object.keys(pdpCandidates).length) {
+      results.pdpCandidates = pdpCandidates;
+      log(`PDP candidates: ${Object.entries(pdpCandidates).map(([name, row]) => `${name}=${row.slug}`).join(", ")}`);
+    }
+    const extraPages = Object.fromEntries(templates.map((template) => [template, {
+      ...(template === "marketplace" ? { search: pages.search } : {}),
+      ...(pdpCandidates[template] ? { pdp: pdpCandidates[template].path } : {}),
+    }]));
     // Warm the isolates so the first template is not measured cold.
     await applyTheme(ctx, templates[0], { menu: MENUS["150"] });
-    for (const p of [pages.home, pages.plp, pages.pdp]) await fetch(ctx.base + p).then((r) => r.arrayBuffer());
+    for (const p of [pages.home, pages.plp, pdpCandidates[templates[0]]?.path ?? pages.pdp]) await fetch(ctx.base + p).then((r) => r.arrayBuffer());
 
     // A stage that dies with the stack restarts the stack once and resumes
     // where it stopped; a stage that still fails becomes a failing check.
@@ -290,25 +346,6 @@ async function main() {
     if (stages.matrix) {
       log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}} x {1440, 390}`);
       results.matrix = {};
-      // A spec-heavy template needs a product with actual saved specifications;
-      // the shared phone-case PDP exercises option choice but has none.
-      const specSlug = templates.includes("spec-catalogue") ? db.prepare(`
-        SELECT p.slug FROM products p
-        JOIN product_attribute_values v ON v.product_id = p.id
-        JOIN product_attributes a ON a.id = v.attribute_id AND a.key_spec = 1
-        WHERE p.is_active = 1 AND p.deleted_at IS NULL AND p.name LIKE '%Laptop%' AND p.price_minor > 0
-          AND EXISTS (
-            SELECT 1 FROM product_attribute_values cpu
-            JOIN product_attributes cpu_attribute ON cpu_attribute.id = cpu.attribute_id AND cpu_attribute.name = 'Processor'
-            WHERE cpu.product_id = p.id AND instr(lower(p.name), lower(cpu.value)) > 0
-          )
-        GROUP BY p.id HAVING count(DISTINCT a.id) >= 4
-        ORDER BY p.price_minor DESC, p.slug LIMIT 1
-      `).get()?.slug : null;
-      const extraPages = {
-        marketplace: { search: pages.search },
-        ...(specSlug ? { "spec-catalogue": { pdp: `/products/${encodeURIComponent(specSlug)}` } } : {}),
-      };
       await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages, into: results.matrix }));
     }
     if (stages.variants) {
@@ -323,7 +360,7 @@ async function main() {
     if (stages.perf) {
       log("perf: TTFB miss/hit, phone and desktop LCP/CLS");
       results.perf = {};
-      await runStage("perf", "perf", () => runPerf(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, into: results.perf }));
+      await runStage("perf", "perf", () => runPerf(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages: Object.fromEntries(templates.map((template) => [template, { pdp: pdpCandidates[template].path }])), into: results.perf }));
       if (templates.includes("department-mall")) {
         const special = Object.fromEntries(["pdp100", "pdplegacy", "pdpvideo", "pdprawvideo"].filter((k) => pages[k]).map((k) => [k, pages[k]]));
         await runStage("perf-special", "perf", () => runPerf(ctx, { templates: ["department-mall"], pages: special, into: results.perf }));

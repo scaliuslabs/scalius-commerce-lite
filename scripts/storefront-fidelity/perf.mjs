@@ -84,14 +84,15 @@ export async function browserRun(page, url, profile) {
  * @param {Record<string,string>} pages name -> path
  * @returns template -> page -> row
  */
-export async function runPerf(ctx, { templates, pages, runs = 1, ttfbRunsPerPage = 3, into = {} }) {
+export async function runPerf(ctx, { templates, pages, extraPages = {}, runs = 1, ttfbRunsPerPage = 3, into = {} }) {
   const { page, base, log } = ctx;
   const all = into;
   for (const template of templates) {
+    const templatePages = { ...pages, ...extraPages[template] };
     all[template] ??= {};
-    if (Object.keys(pages).every((name) => all[template][name])) continue; // done before a stack restart
+    if (Object.keys(templatePages).every((name) => all[template][name])) continue; // done before a stack restart
     await applyTheme(ctx, template, { menu: MENUS["150"] });
-    for (const [name, path] of Object.entries(pages)) {
+    for (const [name, path] of Object.entries(templatePages)) {
       if (all[template][name]) continue;
       const row = { path, ttfb: await ttfbRuns(ctx, path, ttfbRunsPerPage) };
       row.html = await htmlWeights(base, path);

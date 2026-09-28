@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { poolFile } from "./lib/media-server.mjs";
 import {
@@ -8,11 +9,35 @@ import {
   parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { TEMPLATES } from "./lib/context.mjs";
-import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, stagesFor } from "./check.mjs";
+import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, stagesFor } from "./check.mjs";
 import { referenceShotIssue, writePairs } from "./pairs.mjs";
 import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
 const reference = JSON.parse(readFileSync(new URL("./reference-metrics.json", import.meta.url), "utf8"));
+
+it("selects a buyer-resolvable inheriting PDP with the template's option and media shape", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE products (id TEXT, slug TEXT, name TEXT, category_id TEXT, page_template TEXT, is_active INTEGER, deleted_at INTEGER);
+    CREATE TABLE categories (id TEXT, name TEXT, parent_id TEXT);
+    CREATE TABLE product_buyer_state (product_id TEXT, is_public INTEGER, available_for_sale INTEGER, has_discount INTEGER);
+    CREATE TABLE product_media (product_id TEXT, media_id TEXT, is_primary INTEGER);
+    CREATE TABLE media (id TEXT, kind TEXT);
+    CREATE TABLE product_option_definitions (product_id TEXT, deleted_at INTEGER);
+    CREATE TABLE product_variants (product_id TEXT, deleted_at INTEGER);
+    CREATE TABLE product_attribute_values (product_id TEXT, attribute_id TEXT, value TEXT);
+    CREATE TABLE product_attributes (id TEXT, name TEXT, key_spec INTEGER);
+    INSERT INTO categories VALUES ('ssd', 'SSD', NULL);
+    INSERT INTO products VALUES ('a', 'overridden', 'Test SSD Override', 'ssd', 'classic', 1, NULL), ('b', 'inherited', 'Test SSD Inherited', 'ssd', NULL, 1, NULL);
+    INSERT INTO product_buyer_state VALUES ('a', 1, 1, 0), ('b', 1, 1, 0);
+    INSERT INTO media VALUES ('photo', 'image');
+    INSERT INTO product_media VALUES ('a', 'photo', 1), ('a', 'photo', 0), ('a', 'photo', 0), ('b', 'photo', 1), ('b', 'photo', 0), ('b', 'photo', 0);
+    INSERT INTO product_option_definitions VALUES ('a', NULL), ('b', NULL);
+    INSERT INTO product_variants VALUES ('a', NULL), ('b', NULL);`);
+  expect(resolveTemplatePdpCandidates(db, ["marketplace"]).marketplace).toMatchObject({ path: "/products/inherited", images: 3, axes: 1 });
+  db.exec("UPDATE products SET page_template = 'classic' WHERE id = 'b'");
+  expect(() => resolveTemplatePdpCandidates(db, ["marketplace"])).toThrow("No buyer-resolvable SSD PDP for marketplace");
+  db.close();
+});
 
 describe("tolerance rules (AUDIT §8 global bar)", () => {
   it("reads computed font strings", () => {
