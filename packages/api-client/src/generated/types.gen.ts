@@ -301,6 +301,7 @@ export type StorefrontThemeDocument = {
                     [key: string]: never;
                 };
             };
+            searchLayout?: 'same' | 'grid' | 'list';
             filters: {
                 style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
                 openByDefault: boolean;

@@ -1040,6 +1040,8 @@ export const storefrontThemeBlocksSchema = z.object({
   card: blockSchema(STOREFRONT_CARD_VARIANTS),
   listing: z.object({
     layout: blockSchema(STOREFRONT_LISTING_VARIANTS),
+    /** Search can follow the category layout or start in its own card/list view. */
+    searchLayout: z.enum(["same", "grid", "list"]).optional(),
     /** Where the facets live and whether their groups start open. */
     filters: storefrontListingFiltersSchema,
     toolbar: uniqueList(toolbarIds, toolbarIds.length, "toolbar piece"),

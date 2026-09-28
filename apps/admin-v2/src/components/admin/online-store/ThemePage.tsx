@@ -705,7 +705,21 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                 },
               }))}
             />}
-            {theme.template === "marketplace" && <p className="text-body text-muted-foreground">{t("listingMarketplaceHelp")}</p>}
+            <VisualChoice
+              label={t("listingSearchDefault")}
+              showLabel
+              value={theme.blocks.listing.searchLayout ?? (theme.template === "marketplace" ? "list" : "same")}
+              className="grid-cols-3"
+              options={(["same", "grid", "list"] as const).map((layout) => ({
+                value: layout,
+                label: t(({ same: "listingSearchSame", grid: "listingGrid", list: "listingList" } as const)[layout]),
+                sketch: <ListingLayoutSketch layout={layout === "same" ? (theme.blocks.listing.layout.variant === "list" ? "list" : "grid") : layout} theme={theme} />,
+              }))}
+              onChange={(searchLayout) => setDraft((current) => ({
+                ...current,
+                blocks: { ...current.blocks, listing: { ...current.blocks.listing, searchLayout } },
+              }))}
+            />
           </div>
       </SectionCard>
 

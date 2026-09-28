@@ -127,6 +127,7 @@ export function setupCatalogPaging(): void {
 }
 
 export const CATALOG_VIEW_STORAGE_KEY = "scalius:listing-view";
+export const catalogViewStorageKey = (kind: "search" | "browse") => `${CATALOG_VIEW_STORAGE_KEY}:${kind}`;
 
 /** The grid/list toggle (Daraz): a per-browser preference, applied before the grid paints. */
 export function setupCatalogViewToggle(): void {
@@ -143,7 +144,7 @@ export function setupCatalogViewToggle(): void {
       const view = button.dataset.view === "list" ? "list" : "grid";
       frame.dataset.catalogResults = view;
       try {
-        localStorage.setItem(CATALOG_VIEW_STORAGE_KEY, view);
+        localStorage.setItem(frame.dataset.catalogViewStorageKey ?? catalogViewStorageKey("browse"), view);
       } catch {
         // Private mode: the choice lasts for this page only.
       }

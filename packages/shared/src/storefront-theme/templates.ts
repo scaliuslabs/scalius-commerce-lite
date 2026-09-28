@@ -61,6 +61,7 @@ function blocks(spec: {
   card: [string, Record<string, unknown>?];
   listing: {
     layout: [string, Record<string, unknown>?];
+    searchLayout?: "same" | "grid" | "list";
     filters: StorefrontListingFilters;
     toolbar: StorefrontListingToolbarPiece[];
     phoneLayout: "grid" | "list-row";
@@ -81,7 +82,7 @@ function blocks(spec: {
     desktopNav: pick("desktopNav", ...spec.desktopNav),
     mobileNav: pick("mobileNav", ...spec.mobileNav),
     card: pick("card", ...spec.card),
-    listing: { ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
+    listing: { searchLayout: "same", ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
     product: {
       gallery: pick("gallery", spec.product.gallery),
       buyBox: pick("buyBox", ...spec.product.buyBox),
@@ -293,7 +294,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["drill-in-drawer"],
       card: ["detailed"],
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
+        layout: ["grid"], searchLayout: "list", filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
         toolbar: ["aspect-chips", "result-count", "sort", "applied-chips", "grid-list-toggle"],
         phoneLayout: "grid",
         paging: "numbered",

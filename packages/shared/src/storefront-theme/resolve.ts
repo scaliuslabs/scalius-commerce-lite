@@ -151,6 +151,7 @@ export interface ResolvedStorefrontTheme {
       layout: ResolvedStorefrontBlock;
       filters: ResolvedStorefrontListingFilters;
       toolbar: StorefrontListingToolbarPiece[];
+      searchLayout: "same" | "grid" | "list";
       phoneLayout: StorefrontThemeBlocks["listing"]["phoneLayout"];
       paging: StorefrontThemeBlocks["listing"]["paging"];
     };
@@ -313,7 +314,7 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       desktopNav: resolved.desktopNav,
       mobileNav: resolved.mobileNav,
       card: resolved.card,
-      listing: { layout: resolved.listing, filters, toolbar, phoneLayout: listing.phoneLayout, paging: listing.paging },
+      listing: { layout: resolved.listing, filters, toolbar, searchLayout: listing.searchLayout ?? (document.template === "marketplace" ? "list" : "same"), phoneLayout: listing.phoneLayout, paging: listing.paging },
       product: { gallery: resolved.gallery, buyBox: resolved.buyBox, below, sticky: product.sticky },
       footer: resolved.footer,
     },

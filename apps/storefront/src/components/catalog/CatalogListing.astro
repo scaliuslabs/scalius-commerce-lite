@@ -110,8 +110,8 @@ const {
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const presentation = catalogListingPresentation(resolved, listingTemplate);
-const results = resolved.template === "marketplace" && kind === "search" && query
-  ? "list"
+const results = kind === "search" && query && resolved.blocks.listing.searchLayout !== "same"
+  ? resolved.blocks.listing.searchLayout
   : presentation.results;
 const piece = (name: Parameters<typeof presentation.toolbar.has>[0]) => presentation.toolbar.has(name);
 const placement = presentation.filters.placement;
@@ -416,6 +416,7 @@ const breadcrumbVisible = piece("breadcrumb");
         <CatalogResults
           products={products}
           results={results}
+          kind={kind === "search" ? "search" : "browse"}
           phoneLayout={presentation.phoneLayout}
           context={catalogCardContext(presentation, showFilters)}
           filterColumnPx={presentation.filters.columnPx}

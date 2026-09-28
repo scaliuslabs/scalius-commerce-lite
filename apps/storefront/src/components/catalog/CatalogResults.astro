@@ -17,11 +17,12 @@ import {
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
 import { LIST_ROW_IMAGE_SIZES, quickGridSpec } from "@/lib/catalog-listing";
-import { CATALOG_VIEW_STORAGE_KEY } from "@/lib/catalog-paging";
+import { catalogViewStorageKey } from "@/lib/catalog-paging";
 
 interface Props {
   products: Product[];
   results: "grid" | "list" | "quick";
+  kind: "search" | "browse";
   phoneLayout: ProductGridPhoneLayout;
   context: ProductGridContext;
   /**
@@ -37,7 +38,7 @@ interface Props {
   currencyCode: string;
 }
 
-const { products, results, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+const { products, results, kind, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
 const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
 const maxColumns = ["spec", "mall"].includes(resolved.blocks.card.variant) || (resolved.template === "mass-retail" && resolved.tokens.density === "comfortable") ? 4 : undefined;
 // Only a grid beside the filters loses their column.
@@ -65,11 +66,12 @@ if (results === "list") {
 }
 // The quick grid keeps its columns on phones; list rows are rows everywhere.
 const gridPhoneLayout = results === "grid" ? phoneLayout : "grid";
-const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.stringify(CATALOG_VIEW_STORAGE_KEY)});if(v==="grid"||v==="list")s.nextElementSibling.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
+const viewStorageKey = catalogViewStorageKey(kind);
+const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list")s.nextElementSibling.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
 ---
 
 {restoreView && <script is:inline set:html={restoreScript} />}
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}

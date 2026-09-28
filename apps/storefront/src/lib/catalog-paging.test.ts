@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CATALOG_VIEW_STORAGE_KEY,
+  catalogViewStorageKey,
   catalogProgressLabel,
   setupCatalogPaging,
   setupCatalogViewToggle,
@@ -120,12 +120,13 @@ describe("grid/list toggle", () => {
       <div data-catalog-view-toggle>
         <button data-view="grid" aria-pressed="true"></button><button data-view="list" aria-pressed="false"></button>
       </div>
-      <div class="product-grid-frame" data-catalog-results="grid"></div>`;
+      <div class="product-grid-frame" data-catalog-results="grid" data-catalog-view-storage-key="${catalogViewStorageKey("search")}"></div>`;
     setupCatalogViewToggle();
     const toggle = document.querySelector<HTMLElement>("[data-catalog-view-toggle]")!;
     toggle.querySelector<HTMLButtonElement>("[data-view='list']")!.click();
     expect(document.querySelector<HTMLElement>("[data-catalog-results]")!.dataset.catalogResults).toBe("list");
-    expect(localStorage.getItem(CATALOG_VIEW_STORAGE_KEY)).toBe("list");
+    expect(localStorage.getItem(catalogViewStorageKey("search"))).toBe("list");
+    expect(localStorage.getItem(catalogViewStorageKey("browse"))).toBeNull();
     expect(toggle.querySelector("[data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
     expect(toggle.querySelector("[data-view='grid']")!.getAttribute("aria-pressed")).toBe("false");
   });

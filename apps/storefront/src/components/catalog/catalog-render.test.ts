@@ -333,6 +333,25 @@ describe("listing layouts", () => {
     expect(search.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toBe(LIST_ROW_IMAGE_SIZES);
     expect(search.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
     expect(search.querySelector("[data-catalog-view-toggle] button[data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+    expect(category.querySelector("[data-catalog-view-storage-key]")!.getAttribute("data-catalog-view-storage-key")).toBe("scalius:listing-view:browse");
+    expect(search.querySelector("[data-catalog-view-storage-key]")!.getAttribute("data-catalog-view-storage-key")).toBe("scalius:listing-view:search");
+  });
+
+  it("uses the merchant's search view without changing category cards", async () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    theme.blocks.listing.searchLayout = "grid";
+    theme.blocks.listing.layout = { variant: "list", settings: {} };
+    const category = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    const search = await renderListing(theme, { ...listingProps("https://shop.test/search?q=keyboard"), kind: "search" }, TREE_STORE_SHAPE);
+    expect(category.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(search.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+  });
+
+  it("keeps list search for saved Marketplace themes without the new setting", async () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    delete theme.blocks.listing.searchLayout;
+    const search = await renderListing(theme, { ...listingProps("https://shop.test/search?q=keyboard"), kind: "search" }, TREE_STORE_SHAPE);
+    expect(search.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
   });
 
   it("the drawer filter style puts the facets in a drawer behind a filter bar, over a full-width grid", async () => {
@@ -473,7 +492,7 @@ describe("listing controls", () => {
     expect(toggle.querySelector("button[data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
     // The restore script sits right before the grid it marks.
-    expect(html).toMatch(/localStorage\.getItem\("scalius:listing-view"\)[^<]*<\/script>\s*<div class="[^"]*product-grid-frame/);
+    expect(html).toMatch(/localStorage\.getItem\("scalius:listing-view:browse"\)[^<]*<\/script>\s*<div class="[^"]*product-grid-frame/);
   });
 
   it("shows phone aspect chips that open the filter sheet at each facet", async () => {

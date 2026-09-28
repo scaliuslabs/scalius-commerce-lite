@@ -1450,6 +1450,14 @@
                       }
                     ]
                   },
+                  "searchLayout": {
+                    "type": "string",
+                    "enum": [
+                      "same",
+                      "grid",
+                      "list"
+                    ]
+                  },
                   "filters": {
                     "type": "object",
                     "properties": {

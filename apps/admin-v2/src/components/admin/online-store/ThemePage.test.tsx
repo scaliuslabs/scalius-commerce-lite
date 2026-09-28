@@ -154,7 +154,7 @@ describe("theme page", () => {
     expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
   });
 
-  it("lets a Marketplace merchant change the catalog starting view without changing the shopper search default", async () => {
+  it("lets a Marketplace merchant set category and search starting views separately", async () => {
     const marketplace = storefrontTemplateTheme("marketplace");
     render(marketplace);
     const control = container.querySelector("[data-listing-default]")!;
@@ -166,13 +166,17 @@ describe("theme page", () => {
     expect(list.getAttribute("aria-checked")).toBe("false");
     expect(control.querySelector("[data-listing-layout-sketch=grid]")).not.toBeNull();
     expect(control.querySelector("[data-listing-layout-sketch=list]")).not.toBeNull();
-    expect(container.textContent).toContain("Marketplace search starts as a list; shoppers can switch between grid and list.");
+    expect(control.textContent).toContain("Search results start as");
+    expect(marketplace.blocks.listing.searchLayout).toBe("list");
 
     act(() => list.click());
+    const searchGrid = control.querySelectorAll("[role=radiogroup]")[1]!.querySelector<HTMLButtonElement>('[role=radio][value="grid"]')!;
+    act(() => searchGrid.click());
     expect(list.getAttribute("aria-checked")).toBe("true");
     await pressSave();
     const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
+    expect(saved.blocks.listing.searchLayout).toBe("grid");
     expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
     expect(saved.tokens).toEqual(marketplace.tokens);
   });
