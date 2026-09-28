@@ -322,6 +322,33 @@ describe("theme page", () => {
     expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
 
+  it("lets a Showcase merchant hide quick filter chips in the saved draft", async () => {
+    render(storefrontTemplateTheme("showcase-landing"));
+    const chips = container.querySelector<HTMLButtonElement>("#theme-listing-facet-chips")!;
+    expect(chips.getAttribute("aria-checked")).toBe("true");
+    act(() => chips.click());
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.toolbar).not.toContain("facet-value-chips");
+    expect(container.querySelector("#theme-listing-facet-chips")?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("lets a Showcase merchant hide category tabs in the saved draft", async () => {
+    render(storefrontTemplateTheme("showcase-landing"));
+    const tabs = container.querySelector<HTMLButtonElement>("#theme-listing-category-tabs")!;
+    expect(tabs.getAttribute("aria-checked")).toBe("true");
+    act(() => tabs.click());
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.toolbar).not.toContain("subcategory-pills");
+  });
+
+  it("shows quick filter chip settings only for Showcase", () => {
+    render(storefrontTemplateTheme("marketplace"));
+    expect(container.querySelector("#theme-listing-facet-chips")).toBeNull();
+    expect(container.querySelector("#theme-listing-category-tabs")).toBeNull();
+  });
+
   it("lets a merchant choose one card per row on phones", async () => {
     render(storefrontTemplateTheme("marketplace"));
     const control = container.querySelector("[data-listing-default]")!;

@@ -928,6 +928,42 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
                 },
               }))}
             />
+            {theme.template === "showcase-landing" && <SwitchField
+              id="theme-listing-category-tabs"
+              label={t("listingCategoryTabs")}
+              help={t("listingCategoryTabsHelp")}
+              checked={theme.blocks.listing.toolbar.includes("subcategory-pills")}
+              onCheckedChange={(checked) => setDraft((current) => ({
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  listing: {
+                    ...current.blocks.listing,
+                    toolbar: checked
+                      ? [...current.blocks.listing.toolbar, "subcategory-pills"]
+                      : current.blocks.listing.toolbar.filter((piece) => piece !== "subcategory-pills"),
+                  },
+                },
+              }))}
+            />}
+            {theme.template === "showcase-landing" && <SwitchField
+              id="theme-listing-facet-chips"
+              label={t("listingFacetChips")}
+              help={t("listingFacetChipsHelp")}
+              checked={theme.blocks.listing.toolbar.includes("facet-value-chips")}
+              onCheckedChange={(checked) => setDraft((current) => ({
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  listing: {
+                    ...current.blocks.listing,
+                    toolbar: checked
+                      ? [...current.blocks.listing.toolbar, "facet-value-chips"]
+                      : current.blocks.listing.toolbar.filter((piece) => piece !== "facet-value-chips"),
+                  },
+                },
+              }))}
+            />}
             <VisualChoice
               label={t("listingSearchDefault")}
               showLabel

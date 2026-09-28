@@ -621,6 +621,33 @@ describe("listing controls", () => {
     expect(today.querySelector("nav[aria-label='Sub-categories']")).toBeNull();
     expect(today.querySelector("nav[aria-label='Popular filters']")).toBeNull();
   });
+
+  it("puts Showcase's saved facet choices before products and marks the active value", async () => {
+    const theme = storefrontTemplateTheme("showcase-landing");
+    const document = await renderListing(theme, listingProps("https://shop.test/categories/sarees?size=M"));
+    const choices = document.querySelector("nav[aria-label='Size choices']")!;
+    expect(Array.from(choices.querySelectorAll("a")).map((link) => [link.textContent?.trim(), link.getAttribute("aria-current")])).toEqual([
+      ["S", null],
+      ["M", "true"],
+    ]);
+    expect(Boolean(choices.compareDocumentPosition(document.querySelector("[data-catalog-kind='browse']")!) & 4)).toBe(true);
+  });
+
+  it("renders Showcase child categories as a segmented strip with an All link", async () => {
+    const theme = storefrontTemplateTheme("showcase-landing");
+    const props = { ...plain(), subListings: [
+      { id: "cotton", label: "Cotton", href: "/categories/cotton" },
+      { id: "silk", label: "Silk", href: "/categories/silk" },
+    ] };
+    const document = await renderListing(theme, props, TREE_STORE_SHAPE);
+    const tabs = document.querySelector(".catalog-showcase-tabs")!;
+    expect(Array.from(tabs.querySelectorAll("a")).map((link) => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
+      ["All", "/categories/sarees"], ["Cotton", "/categories/cotton"], ["Silk", "/categories/silk"],
+    ]);
+    expect(tabs.querySelector("a[aria-current='true']")?.textContent?.trim()).toBe("All");
+    theme.blocks.listing.toolbar = theme.blocks.listing.toolbar.filter((piece) => piece !== "subcategory-pills");
+    expect((await renderListing(theme, props, TREE_STORE_SHAPE)).querySelector(".catalog-showcase-tabs")).toBeNull();
+  });
 });
 
 describe("facet display types", () => {

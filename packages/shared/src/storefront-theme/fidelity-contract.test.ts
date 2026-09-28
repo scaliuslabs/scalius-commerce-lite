@@ -344,6 +344,7 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
     expect(spec.blocks.product.below).toContain("spec-table");
     const showcase = resolveStorefrontTheme(storefrontTemplateTheme("showcase-landing"), SEED_30K);
     expect(showcase.blocks.listing.toolbar).toContain("subcategory-pills");
+    expect(showcase.blocks.listing.toolbar).toContain("facet-value-chips");
     const retail = resolveStorefrontTheme(storefrontTemplateTheme("mass-retail"), SEED_30K);
     expect(retail.blocks.listing.toolbar).toContain("popular-filter-chips");
     // A flat store without collections has no shelves: the grid renders, and the dashboard says why.

@@ -318,7 +318,7 @@ export type StorefrontThemeDocument = {
                 rowPitch?: number;
                 label?: number;
             };
-            toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
+            toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'facet-value-chips' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';
             paging: 'numbered' | 'load-more' | 'infinite';
         };

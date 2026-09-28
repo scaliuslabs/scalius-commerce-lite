@@ -37,6 +37,7 @@ import {
 } from "@/lib/catalog-filters";
 import {
   catalogAspectChips,
+  catalogFacetValueChips,
   catalogCardContext,
   catalogCategoryFacetLinks,
   catalogListingControls,
@@ -180,13 +181,17 @@ const liveChildren = categoryFacet ? new Set(categoryFacet.values.filter(({ coun
 const childPills = piece("subcategory-pills") && subListings.length > 1
   ? subListings.filter((link) => !liveChildren || liveChildren.has(decodeURIComponent(link.href.split("/").at(-1) ?? "")))
   : [];
+const showcaseTabs = resolved.template === "showcase-landing" && kind !== "search";
 const searchPills = specRail && kind === "search" && categoryFacet
   ? catalogCategoryFacetLinks(categoryFacet, currentFilters)
       .filter((link) => link.href)
       .slice(0, STOREFRONT_FILTER_VALUES_IN_HTML)
       .map((link) => ({ id: link.href, label: link.label, href: link.href }))
   : [];
-const pillLinks = pills.length > 0 ? pills : childPills.length > 1 ? childPills : searchPills;
+const rawPillLinks = showcaseTabs && !piece("subcategory-pills") ? [] : pills.length > 0 ? pills : childPills.length > 1 ? childPills : searchPills;
+const pillLinks = showcaseTabs && rawPillLinks.length > 1
+  ? [{ id: "all", label: "All", href: pathname, active: true }, ...rawPillLinks]
+  : rawPillLinks;
 const pillLabel = pills.length > 0 || searchPills.length > 0 ? "Categories" : "Sub-categories";
 
 const groups = catalogFacetGroups(shownFacets, {
@@ -202,6 +207,9 @@ const aspectChips = piece("aspect-chips") && showFilters
 const popularFilters = piece("popular-filter-chips") && products.length > 0
   ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, defaultSort, total: pagination.total })
   : [];
+const facetValueChips = piece("facet-value-chips")
+  ? catalogFacetValueChips({ facets: filterFacets, currentFilters, pathname, defaultSort })
+  : null;
 // Aspect chips share the phone bar's line when there is one.
 const phoneChips = aspectChips.length > 0 && showFilters;
 const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
@@ -398,7 +406,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </div>
 )}
 
-{!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class="mb-3 pb-1" />}
+{!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
 
@@ -488,6 +496,13 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       currencyCode={currencyCode}
       hideSearch={specSearchShowsQuery}
     />
+
+    {facetValueChips && (
+      <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap">
+        <span class="shrink-0 text-sm font-medium text-muted-foreground">{facetValueChips.label}</span>
+        <CatalogChipLinks label={`${facetValueChips.label} choices`} links={facetValueChips.links} inline />
+      </div>
+    )}
 
     {products.length === 0 ? (
       <slot name="empty" />

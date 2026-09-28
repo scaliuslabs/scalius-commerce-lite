@@ -266,6 +266,45 @@ export interface CatalogFilterLink {
   active: boolean;
 }
 
+/** A compact choice row from one real option or attribute facet. */
+export function catalogFacetValueChips({
+  facets,
+  currentFilters,
+  pathname,
+  defaultSort,
+}: {
+  facets: readonly ProductFacet[];
+  currentFilters: ProductListFilterState;
+  pathname: string;
+  defaultSort: ProductListSort;
+}): { label: string; links: CatalogFilterLink[] } | null {
+  for (const facet of facets) {
+    if ((facet.kind !== "option" && facet.kind !== "attribute") || facet.display === "range") continue;
+    const chosen = currentFilters[facet.slug];
+    const selected = chosen === undefined ? [] : Array.isArray(chosen) ? chosen : [chosen];
+    const values = facet.values.filter(({ value, count }) => count > 0 || selected.includes(value));
+    if (values.length < 2 || values.length > 8) continue;
+    return {
+      label: facet.name,
+      links: values.map(({ value, label }) => {
+        const active = selected.includes(value);
+        const next = active ? selected.filter((item) => item !== value) : [...selected, value];
+        return {
+          label,
+          active,
+          href: buildProductListHref({
+            pathname,
+            currentFilters,
+            overrides: { [facet.slug]: next.length ? next : null, page: null },
+            defaultSort,
+          }),
+        };
+      }),
+    };
+  }
+  return null;
+}
+
 /**
  * Target's "popular filters": one-tap links to the facet values that match
  * the most results without matching all of them (a value every product has

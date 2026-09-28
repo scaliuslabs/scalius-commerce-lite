@@ -20,7 +20,9 @@ cards aligned without inventing missing facts. Check rendered geometry with
 `pnpm fidelity:check` and the catalog/theme render tests.
 The listing theme places short category, collection, and brand descriptions
 above or below products; buying guides remain below. Showcase listings surface
-published child categories when the catalog has a category tree.
+published child categories in a segmented strip when the catalog has a
+category tree, and can show one compact row of real option or attribute values
+from listing facets. Merchants can hide either Showcase row in Theme settings.
 Marketplace option tiles show a price when the other selected axes identify
 one available SKU. Fashion and
 Heritage buy boxes start with one purchase button; merchants can add Buy now

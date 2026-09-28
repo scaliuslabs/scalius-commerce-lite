@@ -928,6 +928,7 @@ export const STOREFRONT_LISTING_TOOLBAR = {
   breadcrumb: { requires: [] },
   "category-banner": { requires: [] },
   "subcategory-pills": { requires: [atLeast("categoryDepth", 2)] },
+  "facet-value-chips": { requires: [] },
   "popular-filter-chips": { requires: [has("hasKeySpecs")] },
   // eBay's phone chips, one per filterable facet (today's attributes and
   // option axes); the storefront leaves them out without a multi-value facet.

@@ -1559,6 +1559,7 @@
                         "breadcrumb",
                         "category-banner",
                         "subcategory-pills",
+                        "facet-value-chips",
                         "popular-filter-chips",
                         "aspect-chips",
                         "result-count",
@@ -1568,7 +1569,7 @@
                         "grid-list-toggle"
                       ]
                     },
-                    "maxItems": 10
+                    "maxItems": 11
                   },
                   "phoneLayout": {
                     "type": "string",

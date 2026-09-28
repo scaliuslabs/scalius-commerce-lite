@@ -12,6 +12,7 @@ import {
   catalogChildLinks,
   catalogFacetAnchor,
   catalogFacetDisplay,
+  catalogFacetValueChips,
   catalogListingControls,
   catalogListingPresentation,
   catalogPopularFilters,
@@ -170,6 +171,25 @@ describe("toolbar chips", () => {
       { label: "Blue", href: "/categories/shirts?option.color=blue&size=m", active: false },
       { label: "Red", href: "/categories/shirts?option.color=red&size=m", active: false },
     ]);
+  });
+
+  it("uses the first small real option facet and toggles choices without losing other filters or sort", () => {
+    const brand = { ...facets[0]!, slug: "brand", kind: "brand" as const };
+    const wide = { ...facets[0]!, slug: "wide", values: Array.from({ length: 9 }, (_, index) => value(`Size ${index}`, 1)) };
+    const links = catalogFacetValueChips({
+      facets: [brand, facets[2]!, wide, facets[1]!],
+      currentFilters: { "option.color": "red", hasDiscount: "true", page: "3", sortBy: "price-asc" },
+      pathname: "/collections/summer",
+      defaultSort: "newest",
+    });
+    expect(links).toEqual({
+      label: "Colour",
+      links: [
+        { label: "Red", active: true, href: "/collections/summer?hasDiscount=true&sortBy=price-asc" },
+        { label: "Blue", active: false, href: "/collections/summer?hasDiscount=true&option.color=blue&option.color=red&sortBy=price-asc" },
+      ],
+    });
+    expect(catalogFacetValueChips({ facets: [brand, facets[2]!, wide], currentFilters: {}, pathname: "/search", defaultSort: "relevance" })).toBeNull();
   });
 
   it("toggles the shopping switches from page one", () => {
