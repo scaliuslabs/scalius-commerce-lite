@@ -74,6 +74,7 @@ const guide = content && hasRenderableHtmlContent(content.html) ? content : null
     <slot name="intro" />
     <CatalogListing
       {...listing}
+      kind={kind}
       band={{ title: hero.title, breadcrumb, countLabel }}
       pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
     >

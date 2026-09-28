@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
+import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { resolveExactVariantSelection, validateSelection } from "./lib/variant-state-machine";
 
@@ -106,5 +107,48 @@ describe("product summary browser payload", () => {
     expect(validateSelection({ model: "m4", color: "c2" }, browserOptions, browserVariants).valid).toBe(true);
     expect(getBuyerStockSummary([browserVariants[1]!]).text).toBe("Out of Stock");
     expect(doc.querySelectorAll("#product-variant-noscript option")).toHaveLength(99);
+  });
+
+  it("shows only saved Marketplace facts after desktop option selectors, with key specs first", async () => {
+    const attributes: NonNullable<Product["attributes"]> = [
+      { name: "Material", value: "Aluminium", slug: "material", group: null, unit: null, keySpec: false },
+      { name: "Capacity", value: "2", slug: "capacity", group: null, unit: "TB", keySpec: true },
+      { name: "Empty", value: " ", slug: "empty", group: null, unit: null, keySpec: false },
+      { name: "Warranty", value: "2 years", slug: "warranty", group: null, unit: null, keySpec: true },
+      { name: "Brand", value: "Example", slug: "brand", group: null, unit: null, keySpec: false },
+      { name: "Interface", value: "PCIe", slug: "interface", group: null, unit: null, keySpec: false },
+      { name: "Feature", value: "Long description", slug: "feature", group: null, unit: null, keySpec: false },
+    ];
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300, brand: { name: "Record Brand" }, attributes } as Product;
+    const html = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    const doc = new Window().document;
+    doc.write(`<body>${html}</body>`);
+    const facts = doc.querySelector("[data-product-compact-facts]");
+
+    expect(facts?.classList.contains("hidden")).toBe(true);
+    expect(facts?.classList.contains("lg:block")).toBe(true);
+    expect([...facts!.querySelectorAll("dt")].map((row) => row.textContent)).toEqual([
+      "Brand", "Capacity", "Warranty", "Material", "Interface",
+    ]);
+    expect(facts?.querySelector("dd")?.textContent).toBe("Record Brand");
+    expect([...facts!.querySelectorAll("dd")].map((row) => row.textContent)).toContain("2 TB");
+    expect(doc.querySelectorAll(".variant-option-selector")).toHaveLength(2);
+    expect(doc.querySelectorAll(".variant-option-selector")[1]!.compareDocumentPosition(facts!) & 4).toBe(4);
+
+    const withoutFacts = { ...product, brand: null, attributes: [] };
+    const emptyHtml = await container.renderToString(ProductSummary, {
+      props: { product: withoutFacts, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    expect(emptyHtml).not.toContain("data-product-compact-facts");
+
+    const otherHtml = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    expect(otherHtml).not.toContain("data-product-compact-facts");
   });
 });

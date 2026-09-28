@@ -35,7 +35,7 @@ export async function htmlWeights(base, path) {
 /**
  * @returns {Promise<Record<string, Record<string, object>>>} template -> "page-viewport" -> probe
  */
-export async function runMatrix(ctx, { templates, pages, viewports = ["desktop", "phone"], menu = MENUS["150"], prefix = "ours", into = {} }) {
+export async function runMatrix(ctx, { templates, pages, extraPages = {}, viewports = ["desktop", "phone"], menu = MENUS["150"], prefix = "ours", into = {} }) {
   const { page, base, log } = ctx;
   const all = into;
   for (const template of templates) {
@@ -45,7 +45,7 @@ export async function runMatrix(ctx, { templates, pages, viewports = ["desktop",
     const weights = {};
     for (const viewport of viewports) {
       await page.profile(viewport);
-      for (const [name, path] of Object.entries(pages)) {
+      for (const [name, path] of Object.entries({ ...pages, ...extraPages[template] })) {
         const m = await probePage(page, base + path);
         all[template][`${name}-${viewport}`] = m;
         await page.shot(`${prefix}-${template}-${name}-${viewport === "phone" ? "m" : "d"}-top`);

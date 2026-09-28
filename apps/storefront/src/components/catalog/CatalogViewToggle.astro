@@ -8,18 +8,19 @@ import { LayoutGrid, List } from "lucide-react";
 
 interface Props {
   defaultView: "grid" | "list";
+  mobile?: boolean;
 }
 
-const { defaultView } = Astro.props;
+const { defaultView, mobile = false } = Astro.props;
 const button =
-  "inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground";
+  `inline-flex ${mobile ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground`;
 ---
 
 <div
   role="group"
   aria-label="Show products as"
   data-catalog-view-toggle
-  class="hidden items-center gap-0.5 rounded-lg border border-border bg-background p-0.5 lg:inline-flex"
+  class:list={["items-center gap-0.5 rounded-lg border border-border bg-background p-0.5", mobile ? "inline-flex lg:hidden" : "hidden lg:inline-flex"]}
 >
   <button type="button" data-view="grid" aria-pressed={defaultView === "grid" ? "true" : "false"} class={button}>
     <LayoutGrid className="h-4 w-4" aria-hidden="true" />

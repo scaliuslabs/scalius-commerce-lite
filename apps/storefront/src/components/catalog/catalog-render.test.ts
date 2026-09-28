@@ -318,6 +318,23 @@ const gridSizes = (context: "grid" | "beside-filters") => {
 };
 
 describe("listing layouts", () => {
+  it("defaults Marketplace categories to cards and searches to rows, with both view controls", async () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    const category = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    expect(category.querySelector("[data-catalog-kind]")!.getAttribute("data-catalog-kind")).toBe("category");
+    expect(category.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+    expect(category.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    expect(category.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+
+    const search = await renderListing(theme, {
+      ...listingProps("https://shop.test/search?q=keyboard"), kind: "search",
+    }, TREE_STORE_SHAPE);
+    expect(search.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(search.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toBe(LIST_ROW_IMAGE_SIZES);
+    expect(search.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+    expect(search.querySelector("[data-catalog-view-toggle] button[data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("the drawer filter style puts the facets in a drawer behind a filter bar, over a full-width grid", async () => {
     const document = await renderListing(themeWith({ filters: { style: "drawer", openByDefault: false }, toolbar: ["result-count", "sort", "per-page"] }), plain());
     const drawer = document.querySelector("#filter-section")!;

@@ -136,15 +136,41 @@ describe("theme page", () => {
     expect(saveBar()).toBeNull();
   });
 
-  it("previews Marketplace with its dark search header and list results", () => {
+  it("previews Marketplace category grids and search rows in its own colors", () => {
     render(DEFAULT_STOREFRONT_THEME);
     const marketplace = radio("Marketplace").querySelector<HTMLElement>("[data-marketplace-preview]")!;
     expect(marketplace.style.getPropertyValue("--sk-purchase"))
       .toBe(storefrontTemplateTheme("marketplace").tokens.colors.accent);
     expect(marketplace.querySelector("[data-marketplace-header]")!.className).toContain("bg-(--sk-ink)");
+    expect(marketplace.querySelector("[data-marketplace-category-grid]")?.children).toHaveLength(4);
+    expect(marketplace.querySelector("[data-marketplace-search-list]")).not.toBeNull();
     expect(marketplace.querySelectorAll("[data-marketplace-result-row]")).toHaveLength(2);
+    expect(radio("Marketplace").textContent).toContain("Category and deal cards start in a grid; search starts in a list.");
     expect(radio("Department mall").querySelector("[data-marketplace-preview]")).toBeNull();
     expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
+  });
+
+  it("lets a Marketplace merchant change the catalog starting view without changing the shopper search default", async () => {
+    const marketplace = storefrontTemplateTheme("marketplace");
+    render(marketplace);
+    const control = container.querySelector("[data-marketplace-listing-default]")!;
+    const grid = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("Grid"))!;
+    const list = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("List"))!;
+
+    expect(marketplace.blocks.listing.layout.variant).toBe("grid");
+    expect(grid.getAttribute("aria-checked")).toBe("true");
+    expect(list.getAttribute("aria-checked")).toBe("false");
+    expect(control.querySelector("[data-listing-layout-sketch=grid]")).not.toBeNull();
+    expect(control.querySelector("[data-listing-layout-sketch=list]")).not.toBeNull();
+    expect(container.textContent).toContain("Marketplace search starts as a list; shoppers can switch between grid and list.");
+
+    act(() => list.click());
+    expect(list.getAttribute("aria-checked")).toBe("true");
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
+    expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
+    expect(saved.tokens).toEqual(marketplace.tokens);
   });
 
   it("selecting a template sets and saves the whole document", async () => {

@@ -58,6 +58,7 @@ export interface CatalogBand {
 }
 
 interface Props {
+  kind?: "category" | "collection" | "brand" | "search";
   products: Product[];
   pagination: { page: number; totalPages: number; total: number };
   facets: ProductFacet[];
@@ -86,6 +87,7 @@ interface Props {
 }
 
 const {
+  kind = "category",
   products,
   pagination,
   facets,
@@ -108,6 +110,9 @@ const {
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const presentation = catalogListingPresentation(resolved, listingTemplate);
+const results = resolved.template === "marketplace" && kind === "search" && query
+  ? "list"
+  : presentation.results;
 const piece = (name: Parameters<typeof presentation.toolbar.has>[0]) => presentation.toolbar.has(name);
 const placement = presentation.filters.placement;
 const drawer = placement === "drawer";
@@ -150,7 +155,7 @@ const sortOptions = [
 const viewSelect = { pathname, defaultSort, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);
-const showViewToggle = piece("grid-list-toggle") && presentation.results !== "quick" && products.length > 1;
+const showViewToggle = piece("grid-list-toggle") && results !== "quick" && products.length > 1;
 const pageUrl = (page: number) =>
   buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
 
@@ -244,7 +249,7 @@ const breadcrumbVisible = piece("breadcrumb");
     )}
     {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
     {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
-    {showViewToggle && <CatalogViewToggle defaultView={presentation.results === "list" ? "list" : "grid"} />}
+    {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
   </div>
 </div>
 
@@ -255,7 +260,7 @@ const breadcrumbVisible = piece("breadcrumb");
       marketplacePhoneFilters ? "catalog-marketplace-phone-bar top-0" : "top-[calc(var(--header-height,3.5rem)+0.5rem)]",
       // eBay's phone row: Filters, sort and one chip per facet on one
       // scrolling line, so the results start one row higher.
-      !marketplacePhoneFilters && phoneChips
+      !marketplacePhoneFilters && (phoneChips || showViewToggle)
         ? "catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1"
         : !marketplacePhoneFilters && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
@@ -287,6 +292,7 @@ const breadcrumbVisible = piece("breadcrumb");
             >{link.label}</a>
           ))}
           {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
+          {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
         </div>
         {phoneChips && (
           <div class="catalog-marketplace-phone-aspects catalog-chip-row">
@@ -317,6 +323,7 @@ const breadcrumbVisible = piece("breadcrumb");
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
+        {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
         {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
       </Fragment>
     )}
@@ -327,7 +334,7 @@ const breadcrumbVisible = piece("breadcrumb");
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
-<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement}>
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={resolved.template === "marketplace" ? kind : undefined}>
   {showFilters && (
     <aside
       id="filter-section"
@@ -412,7 +419,7 @@ const breadcrumbVisible = piece("breadcrumb");
         )}
         <CatalogResults
           products={products}
-          results={presentation.results}
+          results={results}
           phoneLayout={presentation.phoneLayout}
           context={catalogCardContext(presentation, showFilters)}
           filterColumnPx={presentation.filters.columnPx}

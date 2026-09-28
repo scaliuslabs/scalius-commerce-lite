@@ -263,9 +263,9 @@ async function main() {
       return null;
     };
     if (stages.matrix) {
-      log(`matrix: ${templates.length} templates x {home, category, product} x {1440, 390}`);
+      log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}} x {1440, 390}`);
       results.matrix = {};
-      await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, into: results.matrix }));
+      await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages: { marketplace: { search: pages.search } }, into: results.matrix }));
     }
     if (stages.variants) {
       log("variants: card and listing swaps on department-mall");
@@ -304,7 +304,7 @@ async function main() {
     for (const template of templates) {
       const m = results.matrix?.[template];
       if (m) {
-        const ours = Object.fromEntries(["desktop", "phone"].map((v) => [v, extractOurs({ home: m[`home-${v}`], plp: m[`plp-${v}`], pdp: m[`pdp-${v}`] })]));
+        const ours = Object.fromEntries(["desktop", "phone"].map((v) => [v, extractOurs({ home: m[`home-${v}`], plp: m[`plp-${v}`], pdp: m[`pdp-${v}`], cardPage: template === "marketplace" ? m[`search-${v}`] : m[`plp-${v}`] })]));
         checks.push(...compareTemplate(template, ours, reference));
       }
       const perfRows = results.perf?.[template] ?? {};

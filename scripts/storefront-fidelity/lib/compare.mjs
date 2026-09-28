@@ -110,16 +110,16 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
  * Our metrics for one template and viewport from the probe results of its
  * home, category (plp) and product (pdp) pages. Keys match METRIC_RULES.
  */
-export function extractOurs({ home, plp, pdp } = {}) {
+export function extractOurs({ home, plp, pdp, cardPage = plp } = {}) {
   const out = {};
   const rows = home?.headerRows ?? [];
   out["header.h"] = rows.length ? rows.reduce((n, r) => n + (r.h ?? 0), 0) : num(home?.header?.h) || null;
   out["header.search.w"] = num(home?.search?.w);
   out["header.search.h"] = num(home?.search?.h);
-  const card = plp?.card;
-  out["card.w"] = num(card?.w) ?? num(plp?.density?.cardW);
-  out["card.h"] = num(card?.h) ?? num(plp?.density?.cardH);
-  out["card.cols"] = num(plp?.density?.cols) || num(card?.cols);
+  const card = cardPage?.card;
+  out["card.w"] = num(card?.w) ?? num(cardPage?.density?.cardW);
+  out["card.h"] = num(card?.h) ?? num(cardPage?.density?.cardH);
+  out["card.cols"] = num(cardPage?.density?.cols) || num(card?.cols);
   out["card.gap"] = num(card?.gap) ?? (out["card.cols"] === 1 ? 0 : null);
   out["card.ratio"] = num(card?.media?.ratio);
   out["card.title"] = card?.title?.font ?? null;

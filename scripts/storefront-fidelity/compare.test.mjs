@@ -120,6 +120,12 @@ describe("our metrics from probe results", () => {
     expect(ours["pdp.h1"]).toBeNull();
     expect(extractOurs()["card.w"]).toBeNull();
   });
+
+  it("can measure search cards while keeping category listing metrics", () => {
+    const search = { card: { w: 1100, h: 280, title: { font: "18/400" } }, density: { cols: 1 } };
+    const ours = extractOurs({ plp: plpProbe, cardPage: search });
+    expect(ours).toMatchObject({ "card.w": 1100, "card.h": 280, "card.cols": 1, "card.title": "18/400", "listing.firstCardY": 441 });
+  });
 });
 
 describe("template comparison", () => {

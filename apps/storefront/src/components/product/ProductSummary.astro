@@ -26,6 +26,7 @@ import {
 } from "./lib/product-actions";
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
+import { specificationValue } from "./lib/product-page-modules";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 
 interface Props {
@@ -83,6 +84,15 @@ const lookStyle = look
     ].join("; ")
   : undefined;
 const factsColumn = look?.facts === "column";
+const savedFacts = (product.attributes ?? []).filter((row) => row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand");
+const savedBrand = product.brand?.name?.trim();
+const compactFacts = factsColumn
+  ? [
+      ...(savedBrand ? [{ name: "Brand", value: savedBrand, unit: null }] : []),
+      ...savedFacts.filter((row) => row.keySpec),
+      ...savedFacts.filter((row) => !row.keySpec),
+    ].slice(0, 5)
+  : [];
 
 const pageCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
 const actionCopy: ProductActionCopy = pageCopy;
@@ -331,6 +341,17 @@ function optionAriaLabel(
           </fieldset>
         );
       })}
+
+      {compactFacts.length > 0 && (
+        <dl class="hidden space-y-1 pt-1 text-sm leading-5 lg:block" data-product-compact-facts>
+          {compactFacts.map((row) => (
+            <div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-3">
+              <dt class="min-w-0 break-words font-semibold text-foreground">{row.name}</dt>
+              <dd class="min-w-0 break-words text-foreground">{specificationValue(row)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {customizationUnavailable ? (
         <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>

@@ -16,6 +16,7 @@ import {
   STOREFRONT_DENSITIES,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
+  storefrontBlockDefault,
   storefrontBlockVariants,
   storefrontSectionRenderer,
   storefrontVariantSpec,
@@ -122,10 +123,16 @@ function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStor
             </span>
           </span>
           <span className="flex min-h-0 flex-1 gap-1">
-            <span className="flex w-1/4 shrink-0 flex-col gap-1 border-r border-(--sk-edge) pr-1">
-              {[0, 1, 2, 3, 4].map((index) => <span key={index} className="h-0.5 w-full bg-(--sk-line)" />)}
+            <span data-marketplace-category-grid className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-r border-(--sk-edge) pr-1">
+              {[0, 1, 2, 3].map((index) => (
+                <span key={index} className="flex min-h-0 flex-col gap-0.5 rounded-xs border border-(--sk-edge) p-0.5">
+                  <span className="min-h-0 flex-1 bg-(--sk-soft)" />
+                  <span className="h-0.5 w-3/4 bg-(--sk-line)" />
+                  <span className="h-0.5 w-1/2 bg-(--sk-ink)" />
+                </span>
+              ))}
             </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span data-marketplace-search-list className="flex min-w-0 flex-1 flex-col gap-1">
               {[0, 1].map((index) => (
                 <span key={index} data-marketplace-result-row className="flex min-h-0 flex-1 gap-1 border-b border-(--sk-edge) pb-0.5 last:border-0">
                   <span className="aspect-square h-full max-h-7 shrink-0 rounded-xs bg-(--sk-soft)" />
@@ -150,6 +157,31 @@ function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStor
           </span>
         </>
       )}
+    </Sketch>
+  );
+}
+
+function ListingLayoutSketch({ layout, theme }: { layout: "grid" | "list"; theme: Theme }) {
+  const { colors } = theme.tokens;
+  return (
+    <Sketch palette={{
+      paper: colors.background,
+      ink: colors.foreground,
+      line: colors["muted-foreground"],
+      soft: colors.muted,
+      edge: colors.border,
+      accent: colors.primary,
+    }} className="h-16">
+      <span data-listing-layout-sketch={layout} className={layout === "grid" ? "grid min-h-0 flex-1 grid-cols-3 gap-1" : "flex min-h-0 flex-1 flex-col gap-1"}>
+        {[0, 1, 2].map((index) => (
+          <span key={index} className={layout === "grid" ? "flex min-h-0 flex-col gap-0.5 rounded-xs border border-(--sk-edge) p-0.5" : "flex min-h-0 flex-1 gap-1 border-b border-(--sk-edge) pb-0.5 last:border-0"}>
+            <span className={layout === "grid" ? "min-h-0 flex-1 bg-(--sk-soft)" : "aspect-square h-full shrink-0 bg-(--sk-soft)"} />
+            <span className={layout === "grid" ? "h-0.5 w-3/4 bg-(--sk-ink)" : "flex min-w-0 flex-1 flex-col justify-center gap-0.5"}>
+              {layout === "list" && <><span className="h-0.5 w-4/5 bg-(--sk-line)" /><span className="h-0.5 w-1/3 bg-(--sk-ink)" /></>}
+            </span>
+          </span>
+        ))}
+      </span>
     </Sketch>
   );
 }
@@ -590,6 +622,35 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
           onChange={setBlock("card")}
         />
       </SectionCard>
+
+      {theme.template === "marketplace" && (
+        <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
+          <div data-marketplace-listing-default>
+            <VisualChoice
+              label={t("listingDefault")}
+              value={theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list"
+                ? theme.blocks.listing.layout.variant
+                : null}
+              className="grid-cols-2"
+              options={(["grid", "list"] as const).map((layout) => ({
+                value: layout,
+                label: t(layout === "grid" ? "listingGrid" : "listingList"),
+                sketch: <ListingLayoutSketch layout={layout} theme={theme} />,
+              }))}
+              onChange={(layout) => setDraft((current) => ({
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  listing: {
+                    ...current.blocks.listing,
+                    layout: storefrontBlockDefault("listing", layout) as Theme["blocks"]["listing"]["layout"],
+                  },
+                },
+              }))}
+            />
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard title={t("density")} description={t("densityHelp")}>
         <VisualChoice

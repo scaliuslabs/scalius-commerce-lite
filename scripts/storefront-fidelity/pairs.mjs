@@ -54,7 +54,8 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
       const base = site?.shots?.[page];
       for (const v of ["d", "m"]) {
         const viewport = v === "d" ? "desktop" : "phone";
-        const ours = join(shotsDir, `ours-${template}-${page}-${v}-top.jpg`);
+        const oursPage = template === "marketplace" && page === "plp" ? "search" : page;
+        const ours = join(shotsDir, `ours-${template}-${oursPage}-${v}-top.jpg`);
         const ref = base ? findRef(refDirs, base, v) : null;
         if (!ref || !existsSync(ours)) {
           missing.push(`${template}-${page}-${v}`);
@@ -65,7 +66,7 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
         const [a, b] = [await firstScreen(sharp, ref, H, vw), await firstScreen(sharp, ours, H, vw)];
         const blockChecks = counts.filter((c) => c.block === block && c.viewport === viewport);
         const failed = blockChecks.filter((c) => !c.pass).length;
-        const probe = matrix?.[template]?.[`${page}-${viewport}`];
+        const probe = matrix?.[template]?.[`${oursPage}-${viewport}`];
         const lines = [
           { text: `REFERENCE ${site.name} (${viewport})`, color: "#c80000" },
           { text: page === "plp" ? refFmt(site[viewport]) : "", color: "#c80000" },

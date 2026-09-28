@@ -44,7 +44,9 @@ const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 let sizes: string | undefined;
 let style: string | undefined;
 if (results === "list") {
-  sizes = LIST_ROW_IMAGE_SIZES;
+  // The same cards may become a grid without a reload; keep their source
+  // candidates sized for that wider photo when the buyer has the switch.
+  sizes = restoreView ? undefined : LIST_ROW_IMAGE_SIZES;
 } else if (results === "quick") {
   const { theme, layout } = await currentRequestTheme(Astro.locals);
   const grid = quickGridSpec(productGridSpec(layout.grid, theme.tokens.imageRatio));

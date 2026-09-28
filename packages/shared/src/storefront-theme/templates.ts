@@ -277,7 +277,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     ],
   },
   {
-    // Amazon: very large mixed catalogues. Dark scoped-search header, dense list results.
+    // Large mixed catalogues: category grids, search rows, scoped search.
     id: "marketplace",
     palette: "marketplaceAmazon",
     tokens: {
@@ -293,9 +293,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["drill-in-drawer"],
       card: ["detailed"],
       listing: {
-        layout: ["list"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
-        toolbar: ["aspect-chips", "result-count", "sort", "applied-chips"],
-        phoneLayout: "list-row",
+        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
+        toolbar: ["aspect-chips", "result-count", "sort", "applied-chips", "grid-list-toggle"],
+        phoneLayout: "grid",
         paging: "numbered",
       },
       product: {

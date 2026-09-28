@@ -130,22 +130,25 @@ export const CATALOG_VIEW_STORAGE_KEY = "scalius:listing-view";
 
 /** The grid/list toggle (Daraz): a per-browser preference, applied before the grid paints. */
 export function setupCatalogViewToggle(): void {
-  const toggle = document.querySelector<HTMLElement>("[data-catalog-view-toggle]");
+  const toggles = [...document.querySelectorAll<HTMLElement>("[data-catalog-view-toggle]")];
   const frame = document.querySelector<HTMLElement>(RESULTS);
-  if (!toggle || !frame || toggle.dataset.toggleBound === "true") return;
-  toggle.dataset.toggleBound = "true";
-  const buttons = [...toggle.querySelectorAll<HTMLButtonElement>("button[data-view]")];
+  if (toggles.length === 0 || !frame) return;
+  const buttons = toggles.flatMap((toggle) => [...toggle.querySelectorAll<HTMLButtonElement>("button[data-view]")]);
   const sync = () => buttons.forEach((button) =>
     button.setAttribute("aria-pressed", String(button.dataset.view === frame.dataset.catalogResults)));
-  buttons.forEach((button) => button.addEventListener("click", () => {
-    const view = button.dataset.view === "list" ? "list" : "grid";
-    frame.dataset.catalogResults = view;
-    try {
-      localStorage.setItem(CATALOG_VIEW_STORAGE_KEY, view);
-    } catch {
-      // Private mode: the choice lasts for this page only.
-    }
-    sync();
-  }));
+  for (const toggle of toggles) {
+    if (toggle.dataset.toggleBound === "true") continue;
+    toggle.dataset.toggleBound = "true";
+    toggle.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((button) => button.addEventListener("click", () => {
+      const view = button.dataset.view === "list" ? "list" : "grid";
+      frame.dataset.catalogResults = view;
+      try {
+        localStorage.setItem(CATALOG_VIEW_STORAGE_KEY, view);
+      } catch {
+        // Private mode: the choice lasts for this page only.
+      }
+      sync();
+    }));
+  }
   sync();
 }

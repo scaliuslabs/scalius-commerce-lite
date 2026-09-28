@@ -264,16 +264,16 @@ export const STOREFRONT_THEME_PALETTES = {
     destructive: "#b12704", "destructive-foreground": "#ffffff",
     border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
   }),
-  // Amazon-style purchase hierarchy: dark header, orange primary action,
-  // yellow secondary action. Kept separate from Target's shared palette.
+  // Marketplace purchase hierarchy with its own ink, terracotta and warm
+  // gold defaults. Merchants can still edit every colour in the dashboard.
   marketplaceAmazon: palette({
-    background: "#ffffff", foreground: "#131921", card: "#ffffff", "card-foreground": "#0f1111",
-    primary: "#c2410c", "primary-foreground": "#ffffff",
+    background: "#ffffff", foreground: "#1c2530", card: "#ffffff", "card-foreground": "#1c2530",
+    primary: "#b84724", "primary-foreground": "#ffffff",
     secondary: "#f2f4f5", "secondary-foreground": "#0f1111",
     muted: "#f2f4f5", "muted-foreground": "#565959",
-    accent: "#ffd814", "accent-foreground": "#0f1111",
+    accent: "#f1c65a", "accent-foreground": "#1c2530",
     destructive: "#b12704", "destructive-foreground": "#ffffff",
-    border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
+    border: "#e3e6e6", input: "#c7cccc", ring: "#b84724",
   }),
   // COS/Aesop/Ssense: linen page, espresso ink, no colour at all; hierarchy
   // comes from type and space.
