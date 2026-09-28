@@ -37,7 +37,7 @@
     "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
     "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
-    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": "walmart" } },
+    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": "walmart", "plp": "pickaboo", "pdp": "pickaboo" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" } },
     "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "chaldal" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" } }
@@ -298,16 +298,22 @@
       },
       "phone": {}
     },
+    "pickaboo": {
+      "name": "Pickaboo Computers (alternate retail visual)",
+      "$comment": "Accessible desktop and phone category/product captures replace blocked Target visual pairs; different merchant styling is not scored as Target geometry.",
+      "shots": { "plp": "pickaboo-plp", "pdp": "pickaboo-pdp" },
+      "desktop": {},
+      "phone": {}
+    },
     "target": {
       "name": "Target /s?searchTerm=towels",
-      "$comment": "Phone card height is not scored: the measured 267px towel row contains rich rating and delivery detail absent from the sparse current fixture. Other measured geometry remains the default mass-retail reference; saved page captures are blocked.",
+      "$comment": "Card height is not scored: the measured towel cards include product-specific facts absent from the sparse current fixture. Other measured geometry remains the default mass-retail reference; saved page captures are blocked.",
       "shots": { "home": "target-home", "plp": "target-search", "pdp": "target-pdp" },
       "desktop": {
         "header.h": { "v": 80, "src": "study: white 80px main row (below a 50px red utility bar)" },
         "header.search.w": { "v": 628, "src": "study: 628x44 pill search" },
         "header.search.h": { "v": 44, "src": "study: 628x44" },
         "card.w": { "v": 318, "src": "study: 4 columns of 318x616" },
-        "card.h": { "v": 616, "src": "study: 318x616" },
         "card.cols": { "v": 4, "src": "study" },
         "card.gap": { "v": 24, "src": "study: 24px gap" },
         "card.ratio": { "v": 1, "src": "study: square 318px image" },

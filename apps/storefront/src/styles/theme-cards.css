@@ -815,13 +815,6 @@
   font-weight: 700;
 }
 
-/* Sparse and richly attributed retail goods share a steady listing rhythm. */
-@media (min-width: 64rem) {
-  .site-root .product-grid-frame:not([data-catalog-results="list"]) .product-card[data-card-variant="retail"] {
-    min-height: 38.5rem;
-  }
-}
-
 @media (max-width: 39.999rem) {
   .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="retail"],
   .site-root .product-grid-frame .product-grid[data-phone-layout="list-row"] .product-card[data-card-variant="retail"] {

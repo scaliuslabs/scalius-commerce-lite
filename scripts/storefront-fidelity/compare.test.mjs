@@ -404,7 +404,8 @@ describe("filters, verdict and exit code", () => {
 
   it("uses Walmart's measured desktop home without promoting blocked listing captures", async () => {
     expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target", listing: "target", pdp: "target" });
-    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: "walmart" });
+    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: "walmart", plp: "pickaboo", pdp: "pickaboo" });
+    expect(reference.sites.pickaboo.shots).toEqual({ plp: "pickaboo-plp", pdp: "pickaboo-pdp" });
     expect(reference.sites.walmart.shots).toEqual({ home: "walmart-home" });
     expect(reference.sites.walmart.desktop["header.h"].v).toBe(132);
     expect(reference.sites.walmart.phone).toEqual({});
@@ -427,7 +428,7 @@ describe("filters, verdict and exit code", () => {
   it("scores only like-for-like default mass-retail measurements", () => {
     const checks = compareTemplate("mass-retail", { desktop: {}, phone: {} }, reference);
     expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop")).toMatchObject({ refSite: "target", ref: 80 });
-    expect(checks.some((c) => c.metric === "card.h" && c.viewport === "phone")).toBe(false);
+    expect(checks.some((c) => c.metric === "card.h")).toBe(false);
     expect(checks.filter((c) => c.refSite === "walmart")).toHaveLength(0);
   });
 
