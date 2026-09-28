@@ -228,6 +228,7 @@ function optionAriaLabel(
   data-buy-box-look={look ? "" : undefined}
   data-cta-shape={look?.cta.shape}
   data-cta-layout={look?.cta.layout}
+  data-cta-phone-layout={look?.cta.phoneLayout}
   data-cta-first={look?.cta.first}
   data-price-tone={look?.price.tone}
   data-buy-box-card={look?.card ? "" : undefined}
@@ -470,6 +471,11 @@ function optionAriaLabel(
   }
   [data-cta-layout="stack"] .buy-box-ctas {
     flex-direction: column;
+  }
+  @media (max-width: 39.999rem) {
+    [data-cta-phone-layout="row"] .buy-box-ctas {
+      flex-direction: row;
+    }
   }
   [data-cta-first="buy-now"] .buy-box-ctas > [data-action="buy-now"] {
     order: -1;

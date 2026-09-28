@@ -336,7 +336,7 @@ export interface StorefrontBuyBoxLook {
    * Height in px; `pill` or the theme radius; `row` side by side or `stack`
    * full width up to `maxWidth`; which button comes first.
    */
-  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now" };
+  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now" };
   /**
    * Delivery, cash on delivery, returns and warranty: a list under the
    * buttons, a 284px column at the right (Daraz, Amazon), tiles (Target) or
@@ -370,9 +370,9 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
   // Apple Gadgets: h1 28/600, price 24/700, twin 380×48 pills stacked, EMI
   // and WhatsApp strips.
   tech: {
-    title: { size: { desktop: 28, phone: 20 }, weight: 600 },
+    title: { size: { desktop: 32, phone: 24 }, weight: 600 },
     price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 48, shape: "pill", layout: "stack", maxWidth: 380, first: "buy-now" },
+    cta: { height: 48, shape: "pill", layout: "stack", phoneLayout: "row", maxWidth: 380, first: "buy-now" },
     facts: "list",
     factPills: false,
     features: "none",

@@ -704,6 +704,17 @@
   margin-top: 0.25rem;
 }
 
+@media (max-width: 39.999rem) {
+  .site-root .product-card[data-card-variant="tech-rounded"] {
+    --pc-pad-x: 0.625rem;
+  }
+
+  .site-root .product-card[data-card-variant="tech-rounded"] .product-card-action {
+    padding-inline: 0.25rem;
+    white-space: nowrap;
+  }
+}
+
 /* ─── retail: Target ───────────────────────────────────────────────────────
    No card chrome; the photo rounded 8px on grey; price first 22/700 with
    "Sale" in red, the brand bold, title 14/400, the delivery line, a

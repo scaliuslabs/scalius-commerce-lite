@@ -243,7 +243,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
   {
     // Apple Gadgets: premium gadgets and phones. Soft corners, pills, raised cards, rails.
     id: "rounded-tech",
-    palette: "midnight",
+    palette: "retail",
     tokens: {
       typography: "tech", typeScale: "retail", headingCase: "sentence", density: "comfortable",
       radius: "soft", buttonShape: "pill", surface: "raised", imageRatio: "square", imageFit: "contain",
