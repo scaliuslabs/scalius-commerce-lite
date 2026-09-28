@@ -136,8 +136,10 @@ const priceSection: Section | null = showPrice
 //   rating, brand and the first specs before price. Category links come last
 //   (pills or the breadcrumb carry the tree above);
 // - bar (Dawn): availability, price, the rating, then the facets;
-// - comfortable column and drawer (Apple Gadgets, Fabrilife, Target): the
-//   category links, price, availability, the rating, then the facets.
+// - Apple Gadgets: price and availability precede specs; category links
+//   follow them because the category tree is already in its navigation;
+// - other comfortable columns and drawers: category links, price,
+//   availability, the rating, then the facets.
 const categorySections = facetSections.filter((section) => section.kind === "group" && section.group.kind === "category");
 const brandSections = facetSections.filter((section) => section.kind === "group" && section.group.facets[0]!.kind === "brand");
 const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
@@ -148,7 +150,9 @@ const sections: Section[] = dense
     : [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
   : bar
     ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections]
-    : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
+    : resolved.template === "rounded-tech" && presentation.style === "sidebar-comfortable"
+      ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
+      : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
 // A column opens its first groups (and any in use) so the page does not
 // start with a wall; a bar's dropdowns open on demand.
 const OPEN_GROUPS = 6;

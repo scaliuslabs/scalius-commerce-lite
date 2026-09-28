@@ -949,6 +949,18 @@ describe("filter styles (fidelity slice 3)", () => {
     spec.blocks.listing.filters = { style: "bar-dropdowns", openByDefault: false };
     expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Availability", "Price", "Size"]);
   });
+
+  it("shows rounded-tech buying filters before category links in its comfortable rail", async () => {
+    const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
+      .map((span) => span.textContent!.trim());
+    const theme = storefrontTemplateTheme("rounded-tech");
+    const page = { ...plain(), facets: [CATEGORY_FACET, ...FACETS] };
+    const comfortable = names(await renderListing(theme, page, TREE_STORE_SHAPE));
+    expect(comfortable.slice(0, 3)).toEqual(["Price", "Availability", "Size"]);
+    expect(comfortable.at(-1)).toBe("Category");
+    theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true };
+    expect(names(await renderListing(theme, page, TREE_STORE_SHAPE))[0]).toBe("Availability");
+  });
 });
 
 describe("paging", () => {
