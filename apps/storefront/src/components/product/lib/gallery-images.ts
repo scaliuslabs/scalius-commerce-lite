@@ -37,8 +37,8 @@ const MOBILE_SIDE_MAIN_SIZES = ["(max-width: 463px) calc(100vw - 80px)", "(max-w
 function desktopMainSizes(layout: ProductGalleryLayout, railBeside: boolean): string[] {
   // Stacked: the column left of a 345px info column and a 40px gap.
   if (layout.gallery === "stacked") return ["(max-width: 1279px) calc(100vw - 449px)", "831px"];
-  // Grid: two photos across (8px apart) left of a 400px info column.
-  if (layout.gallery === "grid") return ["(max-width: 1279px) calc(50vw - 256px)", "384px"];
+  // Grid: two photos across (8px apart) left of a 400px/480px info column.
+  if (layout.gallery === "grid") return ["(max-width: 1279px) calc(50vw - 256px)", "344px"];
   if (railBeside && layout.thumbnailSize !== null) {
     // A narrow strip (Amazon): its width plus a 12px gap.
     const rail = layout.thumbnailSize + 12;

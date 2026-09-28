@@ -230,6 +230,7 @@ function optionAriaLabel(
   data-cta-layout={look?.cta.layout}
   data-cta-phone-layout={look?.cta.phoneLayout}
   data-cta-first={look?.cta.first}
+  data-quantity-inline={look?.cta.inlineQuantity ? "" : undefined}
   data-price-tone={look?.price.tone}
   data-buy-box-card={look?.card ? "" : undefined}
   data-facts-column={factsColumn ? "" : undefined}
@@ -409,7 +410,7 @@ function optionAriaLabel(
         </div>
       )}
       <div>
-        <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
+        <label for="quantity" class:list={["mb-1 block text-sm font-medium text-foreground", look?.cta.inlineQuantity && "lg:sr-only"]}>{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
           <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Minus className="h-4 w-4" aria-hidden="true" /></button>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
@@ -530,6 +531,22 @@ function optionAriaLabel(
     padding: 1rem;
   }
   @media (min-width: 64rem) {
+    [data-quantity-inline] .buy-box-purchase {
+      display: grid;
+      grid-template-columns: 140px minmax(0, 1fr);
+      align-items: end;
+      gap: 8px;
+      max-width: calc(148px + var(--bb-cta-max));
+    }
+    [data-quantity-inline] .buy-box-ctas {
+      width: 100%;
+      padding-top: 0;
+    }
+    [data-quantity-inline] #quantity-minus,
+    [data-quantity-inline] #quantity-plus,
+    [data-quantity-inline] #quantity {
+      height: 45px;
+    }
     [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -219,8 +219,7 @@ function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["
   const rating = card.querySelector('[data-card-fact="rating"]');
   const action = card.querySelector("a[href^='/buy/']");
   return {
-    // The standard card follows the template's tokens (department-mall: a
-    // square cover photo, 15/500 titles, an 18px price), in the same units.
+    // The standard card follows the template's tokens in the same units.
     ratio: String(anatomy.look.image.ratio),
     fit: `${anatomy.look.image.fit}/${cssVar("pc-inset") === "theme" ? "0%" : cssVar("pc-inset")}`,
     surface: `${anatomy.look.surface}/${anatomy.look.radius}`,
@@ -496,17 +495,17 @@ describe("product card matrix", () => {
 
   it("shows no rating on any card while the store has no published review or reviews are off", async () => {
     for (const card of ["standard", "retail", "marketplace", "detailed"]) {
-      const cards = await renderCards(card === "standard" ? DEFAULT_STOREFRONT_THEME : themeWith(card, {}), {}, EMPTY_STORE_SHAPE);
+      const cards = await renderCards(themeWith(card, {}), {}, EMPTY_STORE_SHAPE);
       expect(cards.allFacts.querySelector('[data-card-fact="rating"]'), card).toBeNull();
       expect(cards.allFacts.querySelector(".sc-stars"), card).toBeNull();
     }
-    const standard = await renderCards(DEFAULT_STOREFRONT_THEME);
+    const standard = await renderCards(themeWith("standard", {}));
     expect(text(standard.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("(128)");
     expect(standard.zeroFacts.querySelector('[data-card-fact="rating"]')).toBeNull();
   });
 
-  it("keeps the standard card's markup (the protected Department mall look)", async () => {
-    const cards = await renderCards(DEFAULT_STOREFRONT_THEME);
+  it("keeps the standard card's markup when selected by a merchant", async () => {
+    const cards = await renderCards(themeWith("standard", {}));
     const card = cards.onSale;
     expect(card.className).toBe("group relative flex flex-col h-full bg-card overflow-hidden");
     expect(card.querySelector(".product-card-media")!.className).toBe("product-card-media relative overflow-hidden bg-muted");
@@ -517,6 +516,16 @@ describe("product card matrix", () => {
     );
     expect(text(card.querySelector("p"))).toBe("Regular price ৳1,200Sale price ৳960");
     expect(card.querySelector("a[href^='/buy/']")).toBeNull();
+  });
+
+  it("renders the department mall's measured card by default", async () => {
+    const { onSale } = await renderCards(DEFAULT_STOREFRONT_THEME);
+    expect(onSale.getAttribute("data-card-variant")).toBe("mall");
+    expect(onSale.getAttribute("style")).toContain("--pc-title-d:14px");
+    expect(onSale.getAttribute("style")).toContain("--pc-title-w:700");
+    expect(onSale.getAttribute("style")).toContain("--pc-price-d:20px");
+    expect(onSale.getAttribute("style")).toContain("--pc-price-w:400");
+    expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
   });
 
   it("uses the store's rows on phones when the listing asks for list rows", async () => {

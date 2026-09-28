@@ -594,6 +594,13 @@
   font-weight: 600;
 }
 
+@media (max-width: 39.999rem) {
+  .site-root .product-card[data-card-variant="fashion-value"] {
+    --pc-pad-y: 0.25rem;
+    --pc-gap: 0.25rem;
+  }
+}
+
 /* ─── spec: Star Tech ──────────────────────────────────────────────────────
    A white tile with a hairline (its look's surface) and its photo inset,
    the 14/600 title, four spec bullets, a rule, the bold 17/600 price always
@@ -675,6 +682,35 @@
   font-weight: 600;
 }
 
+/* A spec listing keeps its actions level while descriptions vary by SKU. */
+@media (min-width: 64rem) {
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) .product-card[data-card-variant="spec"] {
+    min-height: 41.25rem;
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) > .product-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) .product-card[data-card-variant="spec"] {
+    min-height: 36.5rem;
+  }
+
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) .product-card[data-card-variant="spec"] .product-card-well {
+    height: 14.25rem;
+    aspect-ratio: auto;
+  }
+
+  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) .product-card[data-card-variant="spec"] .product-card-photo {
+    display: block;
+    width: min(14.25rem, 100%);
+    padding: 0;
+    margin-inline: auto;
+  }
+}
+
 /* ─── tech-rounded: Apple Gadgets ──────────────────────────────────────────
    A 20px raised card with a hairline; a 1.31 landscape photo contained on
    white; title and price 18/600, a "৳500 OFF" chip, an outline pill. */
@@ -709,11 +745,14 @@
 @media (max-width: 39.999rem) {
   .site-root .product-card[data-card-variant="tech-rounded"] {
     --pc-pad-x: 0.625rem;
+    --pc-pad-y: 0.5rem;
+    --pc-gap: 0.25rem;
   }
 
   .site-root .product-card[data-card-variant="tech-rounded"] .product-card-action {
     padding-inline: 0.25rem;
     white-space: nowrap;
+    margin-top: 0;
   }
 }
 
@@ -774,6 +813,24 @@
   border-radius: 999px;
   margin-top: 0.75rem;
   font-weight: 700;
+}
+
+/* Sparse and richly attributed retail goods share a steady listing rhythm. */
+@media (min-width: 64rem) {
+  .site-root .product-grid-frame:not([data-catalog-results="list"]) .product-card[data-card-variant="retail"] {
+    min-height: 38.5rem;
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="retail"],
+  .site-root .product-grid-frame .product-grid[data-phone-layout="list-row"] .product-card[data-card-variant="retail"] {
+    min-height: 16.6875rem;
+  }
+}
+
+.site-root .product-grid-frame .product-card[data-card-variant="retail"] .product-card-action {
+  margin-top: auto;
 }
 
 /* Quick retail keeps the buy decision beside the image, before the price. */
@@ -1000,6 +1057,39 @@
   color: var(--primary);
 }
 
+/* Department tiles lead with the product name, then a restrained centred
+   photo; their price remains aligned at the foot even for short names. */
+.site-root .product-card[data-card-variant="mall"] .product-card-body {
+  display: contents;
+}
+
+.site-root .product-card[data-card-variant="mall"] .pc-title {
+  order: -2;
+  margin: 0.75rem 0.75rem 0;
+}
+
+.site-root .product-card[data-card-variant="mall"] .product-card-well {
+  order: -1;
+  aspect-ratio: 1;
+}
+
+.site-root .product-card[data-card-variant="mall"] .product-card-photo {
+  display: block;
+  width: min(10.625rem, 100%);
+  padding: 0;
+  margin-inline: auto;
+}
+
+.site-root .product-card[data-card-variant="mall"] .pc-price {
+  margin: auto 0.75rem 0.75rem;
+}
+
+@media (min-width: 64rem) {
+  .site-root .product-grid-frame[data-catalog-card="mall"]:not([data-catalog-results="list"]) .product-card[data-card-variant="mall"] {
+    min-height: 20.3125rem;
+  }
+}
+
 /* ─── detailed: Amazon ─────────────────────────────────────────────────────
    The photo contained on a grey well; colour dots; title 16/400 in three
    lines; "Options: 4 sizes"; "1K+ bought in past month"; the superscript
@@ -1078,6 +1168,16 @@
 
 .site-root .product-card[data-card-variant="detailed"] .pc-delivery strong {
   text-transform: uppercase;
+}
+
+@media (max-width: 39.999rem) {
+  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="detailed"] {
+    min-height: 15.8125rem;
+  }
+
+  .site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="detailed"] .product-card-action {
+    margin-top: auto;
+  }
 }
 
 /* ─── List rows ────────────────────────────────────────────────────────────

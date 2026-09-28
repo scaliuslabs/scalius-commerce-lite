@@ -731,6 +731,11 @@ function assertFooter(page: Document, variant: string, options: { business: bool
     const directory = footer.querySelector('nav[aria-label="Store directory"]')!;
     expect(directory.querySelectorAll("a").length).toBeLessThanOrEqual(60);
     expect(headings).toEqual(expect.arrayContaining(["Customer care", ...FOOTER_MENUS.map((menu) => menu.title)]));
+  } else if (variant === "product-widgets") {
+    const menus = Array.from(footer.querySelectorAll("details.footer-menu-details"));
+    expect(menus).toHaveLength(FOOTER_MENUS.length);
+    expect(menus.every((menu) => !menu.hasAttribute("open") && menu.querySelector("summary h2") && menu.querySelector("a"))).toBe(true);
+    expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
   } else {
     expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
   }

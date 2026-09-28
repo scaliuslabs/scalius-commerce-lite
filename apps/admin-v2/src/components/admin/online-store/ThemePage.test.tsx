@@ -136,7 +136,7 @@ describe("theme page", () => {
     // All ten templates are offered.
     const templates = container.querySelector("[role=radiogroup]")!;
     expect(templates.querySelectorAll("[role=radio]")).toHaveLength(10);
-    expect(radio("Department tiles").getAttribute("aria-checked")).toBe("false");
+    expect(radio("Department tiles").getAttribute("aria-checked")).toBe("true");
     expect(saveBar()).toBeNull();
   });
 
@@ -179,6 +179,17 @@ describe("theme page", () => {
     expect(saved.blocks.listing.searchLayout).toBe("grid");
     expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
     expect(saved.tokens).toEqual(marketplace.tokens);
+  });
+
+  it.each(["shelves", "quick-grid"] as const)("previews search using the selected %s category layout", (layout) => {
+    const theme = storefrontTemplateTheme("marketplace");
+    theme.blocks.listing.layout = layout === "shelves"
+      ? { variant: "shelves", settings: { maxShelves: 8 } }
+      : { variant: "quick-grid", settings: {} };
+    theme.blocks.listing.searchLayout = "same";
+    render(theme);
+    const searchChoices = container.querySelector("[data-listing-default]")?.querySelectorAll("[role=radiogroup]")[1];
+    expect(searchChoices?.querySelector(`[role=radio][value=same] [data-listing-layout-sketch=${layout}]`)).not.toBeNull();
   });
 
   it("lets a Department mall merchant offer grid and list views to shoppers", async () => {

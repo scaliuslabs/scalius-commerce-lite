@@ -150,7 +150,7 @@ describe("listing filters", () => {
       "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, // Apple Gadgets
       marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "mass-retail": { style: "drawer", openByDefault: false }, // full-width retail grid; merchants can choose a sidebar
-      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
+      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14 }, // compact department rail
       "daily-essentials": { style: "sidebar-comfortable", openByDefault: true }, // Ghorer Bazar shop
       "showcase-landing": { style: "drawer", openByDefault: false },
     });
@@ -176,7 +176,7 @@ describe("listing filters", () => {
     expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 22, label: 14 });
     expect(spec("spec-catalogue")).toMatchObject({ placement: "sidebar", column: 225, rowPitch: 32, label: 14 });
     expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
-    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 22, label: 14 });
+    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 21, label: 14 });
     // No override: the style's own numbers.
     expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS.drawer);
     const theme = storefrontTemplateTheme("marketplace");
@@ -333,10 +333,10 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
 describe("slice 5: product page per template", () => {
   const resolved = (id: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(id), EMPTY_STORE_SHAPE);
 
-  it("keeps the classic page on the default template and gives every other buy box its reference look", () => {
-    const classic = resolved("department-mall");
-    expect(classic.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
-    expect(classic.layout.buyBox).toEqual({ look: null, emi: false, whatsapp: false });
+  it("gives each template its reference buy box while keeping the department gallery", () => {
+    const mall = resolved("department-mall");
+    expect(mall.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
+    expect(mall.layout.buyBox).toEqual({ look: STOREFRONT_BUY_BOX_LOOKS.mall, emi: false, whatsapp: false });
     expect(resolved("boutique").layout.buyBox.look).toEqual(STOREFRONT_BUY_BOX_LOOKS.boutique);
     expect(resolved("showcase-landing").layout.buyBox.look?.title).toEqual({ size: { desktop: 48, phone: 31 }, weight: 700 });
     expect(resolved("spec-catalogue").layout.buyBox).toMatchObject({ look: STOREFRONT_BUY_BOX_LOOKS.spec, emi: true });

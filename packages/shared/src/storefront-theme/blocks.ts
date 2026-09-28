@@ -353,7 +353,7 @@ export interface StorefrontBuyBoxLook {
    * Height in px; `pill` or the theme radius; `row` side by side or `stack`
    * full width up to `maxWidth`; which button comes first.
    */
-  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now" };
+  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now"; inlineQuantity?: boolean };
   /**
    * Delivery, cash on delivery, returns and warranty: a list under the
    * buttons, a 284px column at the right (Daraz, Amazon), tiles (Target) or
@@ -372,6 +372,16 @@ export interface StorefrontBuyBoxLook {
 
 /** Each buy box's measured look; `classic` is null and keeps today's CSS. */
 export const STOREFRONT_BUY_BOX_LOOKS = {
+  mall: {
+    title: { size: { desktop: 25, phone: 20 }, weight: 500 },
+    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
+    cta: { height: 55, shape: "pill", layout: "row", maxWidth: 302, first: "buy-now", inlineQuantity: true },
+    facts: "list",
+    factPills: false,
+    features: "none",
+    bundles: "chips",
+    card: false,
+  },
   // Star Tech product page: h1 22/400, price pills, "Key Features" list,
   // a 200×42 "Buy Now" beside the quantity.
   spec: {
@@ -609,8 +619,8 @@ export const STOREFRONT_MOBILE_NAV_VARIANTS = {
 
 /** One card per store: listing, rails, related and search share it (mix rule 2). */
 export const STOREFRONT_CARD_VARIANTS = {
-  // Today's classic card (department-mall, pixel-identical): badge on the
-  // photo, title 2 lines, price below.
+  // The classic card remains available to merchants: badge on the photo,
+  // title 2 lines, price below.
   standard: variant({
     settings: hoverImage,
     defaults: { hoverImage: false },
@@ -957,6 +967,7 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
   "marketplace-3col": variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"]) }),
   // Target: fulfilment tiles, at-a-glance chips.
   retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.retail) }),
+  mall: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.mall) }),
   essentials: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.essentials) }),
   // Dawn: outline Add to cart plus solid Buy it now, collapsible rows.
   boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),

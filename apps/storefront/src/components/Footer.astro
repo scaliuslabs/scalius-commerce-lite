@@ -55,7 +55,7 @@ const TONES: Record<string, string | undefined> = {
 >
   {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">Back to top</a>}
   <div class:list={["relative mx-auto w-full px-4 sm:px-6", marketplaceDirectory ? "directory-main max-w-5xl py-8 lg:py-10" : "max-w-7xl py-5 lg:py-6"]}>
-    {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} />}
+    {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} collapsibleMenus={variant === "product-widgets"} />}
     {variant === "support-dark" && <SupportFooter model={model} />}
     {variant === "brand-black" && <BrandFooter model={model} />}
     {variant === "newsletter-grey" && <NewsletterFooter model={model} />}

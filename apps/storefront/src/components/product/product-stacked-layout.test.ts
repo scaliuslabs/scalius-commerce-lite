@@ -12,10 +12,11 @@ describe("stacked and grid product pages", () => {
   const layout = read("./ProductPageLayout.astro");
   const gallery = read("./ProductGallery.astro");
 
-  it("puts the details in a sticky 345px (stacked) or 400px (grid) column", () => {
+  it("puts the details in a sticky 345px (stacked) or 400–480px (grid) column", () => {
     expect(layout).toMatch(/grid-template-columns: minmax\(0, 1fr\) var\(--product-info-column\);/);
     expect(layout).toMatch(/\[data-gallery="stacked"\] \{\s*--product-info-column: 345px;/);
     expect(layout).toMatch(/\[data-gallery="grid"\] \{\s*--product-info-column: 400px;/);
+    expect(layout).toMatch(/@media \(min-width: 80rem\) \{\s*\.product-layout\[data-gallery="grid"\] \{\s*--product-info-column: 480px;/);
     expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*position: sticky;/);
   });
 

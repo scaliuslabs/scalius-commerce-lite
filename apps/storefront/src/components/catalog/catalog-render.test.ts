@@ -3,7 +3,7 @@
  * Render-only listing coverage (no browser): renders the real catalog Astro
  * components with Astro's container API for every listing layout, toolbar
  * piece, phone layout and paging mode, and checks the markup each promises.
- * The default listing (department-mall: Amazon's dense column) is pinned
+ * The default listing (department-mall: compact department tiles) is pinned
  * as whole-markup baselines in __fixtures__ (`UPDATE_CATALOG_BASELINE=1`
  * rewrites them after an intended change).
  */
@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ViteDevServer } from "vite";
 import { Window } from "happy-dom";
 import {
+  buildStorefrontThemeTokens,
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
   storefrontTemplateTheme,
@@ -22,6 +23,8 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
 import { LIST_ROW_IMAGE_SIZES } from "@/lib/catalog-listing";
+import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { CARD_PHOTO_INSET } from "@/components/cards/card-model";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
 import type { ProductFacet } from "@/lib/api";
@@ -256,7 +259,7 @@ const BASELINES: Record<string, () => Record<string, unknown>> = {
     listingProps("https://shop.test/categories/sarees?size=L", { products: [], pagination: { page: 1, totalPages: 0, total: 0 } }),
 };
 
-describe("default listing (department-mall: Amazon's dense column)", () => {
+describe("default listing (department-mall: compact department tiles)", () => {
   it.each(Object.keys(BASELINES))("renders the %s state as its baseline", async (name) => {
     const html = normalize(
       await render("/src/components/catalog/CatalogListing.astro", DEFAULT_STOREFRONT_THEME, BASELINES[name]!(), EMPTY_SLOT),
@@ -314,7 +317,9 @@ async function renderListing(
 const plain = () => listingProps("https://shop.test/categories/sarees");
 const gridSizes = (context: "grid" | "beside-filters") => {
   const layout = requestThemeFor(DEFAULT_STOREFRONT_THEME, STORE_SHAPE).layout;
-  return productCardImageSizes(productGridSpec(layout.grid, "square"), "90rem", context);
+  const width = buildStorefrontThemeTokens(DEFAULT_STOREFRONT_THEME)["theme-container-width"]!;
+  const slot = productCardImageSizes(productGridSpec(layout.grid, layout.productCard.imageRatio), width, context, "grid", 4);
+  return capSizesDensity(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET.mall ?? 0)));
 };
 
 describe("listing layouts", () => {
@@ -381,7 +386,7 @@ describe("listing layouts", () => {
     const document = await renderListing(themeWith({ variant: "list" }), plain());
     expect(document.querySelector("#filter-section")!.className).toContain("lg:static");
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
-    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(LIST_ROW_IMAGE_SIZES);
+    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toContain(LIST_ROW_IMAGE_SIZES);
   });
 
   it("quick-grid needs the quick-add card and packs its own denser grid", async () => {
@@ -717,6 +722,10 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(bar.className).toContain("catalog-marketplace-phone-bar");
     expect(bar.querySelectorAll(".catalog-marketplace-phone-controls")).toHaveLength(1);
     expect(bar.querySelector("#mobile-filter-toggle[aria-controls='filter-section']")!.textContent).toContain("Filters");
+    expect(bar.querySelector("#sortByMobile")!.closest("label")!.nextElementSibling!.matches("[data-catalog-view-toggle]")).toBe(true);
+    const controls = Array.from(bar.querySelectorAll(".catalog-marketplace-phone-controls > *"));
+    expect(controls.indexOf(bar.querySelector("[data-catalog-view-toggle]")!))
+      .toBeLessThan(controls.indexOf(bar.querySelector(".catalog-marketplace-quick-filter")!));
     expect(Array.from(bar.querySelectorAll(".catalog-marketplace-quick-filter")).map((link) => link.getAttribute("href")))
       .toEqual(["/categories/sarees?hasDiscount=true", "/categories/sarees?freeDelivery=true"]);
     expect(bar.querySelector(".catalog-marketplace-phone-controls a[href='#catalog-facet-size']")).not.toBeNull();
@@ -740,6 +749,26 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(form.querySelector("button[data-catalog-bar-more]")!.textContent!.trim()).toBe(`More filters (${dropdowns.length - 4})`);
     // The bar sits above the grid (no column beside it).
     expect(document.querySelector("[data-catalog-layout]")!.getAttribute("data-catalog-layout")).toBe("bar");
+  });
+
+  it("keeps boutique counts with the desktop and phone controls only for its bar layout", async () => {
+    const theme = storefrontTemplateTheme("boutique");
+    const category = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    expect(category.querySelector("[data-catalog-band][data-boutique-bar]")).not.toBeNull();
+    expect(category.querySelector(".catalog-band-heading .catalog-band-count")).toBeNull();
+    expect(category.querySelector(".catalog-band-tools .catalog-band-count")!.textContent).toBe("50 products");
+    expect(category.querySelector(".catalog-boutique-phone-bar .catalog-band-count")!.textContent).toBe("50 products");
+    expect(category.querySelector(".catalog-boutique-phone-bar #mobile-filter-toggle")!.getAttribute("aria-controls")).toBe("filter-section");
+    expect(category.querySelector(".catalog-boutique-phone-bar select[name='sortBy']")).not.toBeNull();
+
+    const search = await renderListing(theme, { ...listingProps("https://shop.test/search?q=linen"), kind: "search" }, TREE_STORE_SHAPE);
+    expect(search.querySelector("[data-catalog-band][data-boutique-bar] h1")!.textContent).toBe("Sarees");
+    expect(search.querySelector(".catalog-band-tools .catalog-band-count")!.textContent).toBe("50 products");
+
+    theme.blocks.listing.filters = { style: "sidebar-comfortable", openByDefault: true };
+    const sidebar = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
+    expect(sidebar.querySelector("[data-boutique-bar], [data-catalog-boutique]")).toBeNull();
+    expect(sidebar.querySelector(".catalog-band-heading .catalog-band-count")!.textContent).toBe("50 products");
   });
 
   it("links the category tree with counts, carrying the buyer's filters, and moves it to pills when the template has them", async () => {
@@ -895,6 +924,7 @@ describe("listing page", () => {
       const document = parse(await render(PAGE, storefrontTemplateTheme(id), { kind: "search", hero: { title: "Search results", count: 50 }, listing: plain() }, EMPTY_SLOT, TREE_STORE_SHAPE));
       expect(duplicateIds(document), id).toEqual([]);
       expect(document.querySelectorAll("[data-theme-component='product-card']").length, id).toBeGreaterThan(0);
+      if (id === "boutique") expect(document.querySelector(".min-h-screen")!.classList.contains("bg-background")).toBe(true);
       if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
       if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
       if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='4']")).not.toBeNull();

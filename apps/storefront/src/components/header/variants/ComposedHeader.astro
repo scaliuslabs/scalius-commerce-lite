@@ -553,6 +553,15 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       flex: 0 1 19rem;
     }
 
+    .hdr[data-header-variant="retail-pill"] .hdr-inline-menu {
+      flex: 0 1 auto;
+    }
+
+    .hdr[data-header-variant="retail-pill"] .hdr-inline-menu ~ .hdr-search {
+      flex: 1 1 39.25rem;
+      max-width: 39.25rem;
+    }
+
     .hdr-actions {
       gap: 0.25rem;
       margin-right: 0;

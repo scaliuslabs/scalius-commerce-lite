@@ -42,6 +42,7 @@ describe("card anatomy", () => {
 
   it.each(STOREFRONT_IMAGE_RATIOS)("resolves the %s photo ratio token for the standard card only", (imageRatio) => {
     const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.card = { variant: "standard", settings: { hoverImage: false } };
     theme.tokens.imageRatio = imageRatio;
     const standard = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard;
     expect(standard.imageRatio).toBe(imageRatio);
@@ -69,6 +70,16 @@ describe("card anatomy", () => {
       actionLabel: "add-to-cart",
       compare: false,
     });
+  });
+
+  it("starts the department mall with its measured card", () => {
+    const theme = storefrontTemplateTheme("department-mall");
+    expect(theme.blocks.card.variant).toBe("mall");
+    const card = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard;
+    expect(card.look).toEqual(STOREFRONT_CARD_LOOKS.mall);
+    expect(card.titleLines).toBe(2);
+    expect(card.look.title).toEqual({ size: { desktop: 14, phone: 14 }, weight: 700, lines: 2 });
+    expect(card.look.price).toEqual({ size: { desktop: 20, phone: 20 }, weight: 400 });
   });
 
   it("puts each measured anatomy on its own id", () => {

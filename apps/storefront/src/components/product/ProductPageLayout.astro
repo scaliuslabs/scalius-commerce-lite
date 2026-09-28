@@ -2,7 +2,7 @@
 // The product page's photo + details grid (Theme -> Layout -> Product page).
 // `beside` puts the gallery next to the details from 64rem (today's 12
 // columns). `stacked` (Dawn) and `grid` (Target) keep every photo in the
-// wide column and the details in a sticky column beside it (345px, 400px),
+// wide column and the details in a sticky column beside it (345px, 400–480px),
 // so the buy box starts at the top of the first screen. A buy box with a
 // delivery column takes the space beside the gallery from 80rem.
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
@@ -70,6 +70,9 @@ const { gallery, factsColumn = false, wideSummary = false } = Astro.props;
     }
   }
   @media (min-width: 80rem) {
+    .product-layout[data-gallery="grid"] {
+      --product-info-column: 480px;
+    }
     .product-layout[data-gallery="beside"][data-facts-column] {
       grid-template-columns: minmax(0, 35%) minmax(0, 1fr);
       column-gap: 1.5rem;

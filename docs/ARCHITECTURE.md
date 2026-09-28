@@ -10,6 +10,15 @@ budgets, API placement, and `pnpm perf:storefront` are in
 Public cache validity, dependency triggers, and the one-second edge freshness
 contract are in [CACHE-FRESHNESS.md](./platform/CACHE-FRESHNESS.md).
 
+Storefront template defaults live in `packages/shared/src/storefront-theme/templates.ts`;
+the dashboard's Online store theme page edits those blocks and tokens. Category
+and search starting views are separate, and a buyer's grid/list choice is saved
+separately for browsing and searching. `CatalogListing.astro` applies those
+choices and keeps desktop sidebar filters sticky. Product cards render only
+facts present on each product; variant-specific minimum heights keep sparse
+cards aligned without inventing missing facts. Check rendered geometry with
+`pnpm fidelity:check` and the catalog/theme render tests.
+
 
 ## System Overview
 

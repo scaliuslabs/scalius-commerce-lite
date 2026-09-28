@@ -223,7 +223,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       listing: {
         layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
         toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page"],
-        phoneLayout: "list-row",
+        phoneLayout: "grid",
         paging: "numbered",
       },
       product: {
@@ -363,7 +363,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     tokens: {
       typography: "retail", typeScale: "retail", headingCase: "sentence", density: "compact",
       radius: "subtle", buttonShape: "radius", surface: "hairline", imageRatio: "square", imageFit: "cover",
-      headerTone: "light", container: "1440",
+      headerTone: "light", container: "1200",
     },
     blocks: blocks({
       topBar: "utility",
@@ -371,10 +371,10 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       navigation: { source: "tree+menu", maxTopItems: 8 },
       desktopNav: ["departments-rail", { open: "home" }],
       mobileNav: ["accordion-drawer"],
-      card: ["standard"],
+      card: ["mall"],
       // No per-page: the default listing stays compact, without extra crawl variants.
-      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "classic", buyBox: ["classic"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
+      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      product: { gallery: "classic", buyBox: ["mall"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
     }),
     home: [

@@ -54,7 +54,7 @@ const description = hero.description && hasRenderableHtmlContent(hero.descriptio
 const guide = content && hasRenderableHtmlContent(content.html) ? content : null;
 ---
 
-<div class="min-h-screen bg-muted/30" {...data}>
+<div class:list={["min-h-screen", resolved.template === "boutique" ? "bg-background" : "bg-muted/30"]} {...data}>
   <div class="mx-auto max-w-7xl px-4 pb-8 pt-1 sm:px-6 lg:px-8">
     {banner && (
       <img

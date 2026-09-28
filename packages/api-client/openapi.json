@@ -1815,6 +1815,27 @@
                           "variant": {
                             "type": "string",
                             "enum": [
+                              "mall"
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "variant",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "type": "string",
+                            "enum": [
                               "essentials"
                             ]
                           },

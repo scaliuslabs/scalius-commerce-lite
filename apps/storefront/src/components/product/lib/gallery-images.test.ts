@@ -61,7 +61,7 @@ function renderedMainWidth(
   const column = (content - 11 * 40) / 12;
   const xl = viewport >= 1280;
   if (layout.gallery === "stacked") return content - 345 - 40;
-  if (layout.gallery === "grid") return (content - 400 - 40 - 8) / 2;
+  if (layout.gallery === "grid") return (content - (xl ? 480 : 400) - 40 - 8) / 2;
   const span = xl ? 6 * column + 5 * 40 : 7 * column + 6 * 40;
   if (!railBeside) return span;
   return span - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);

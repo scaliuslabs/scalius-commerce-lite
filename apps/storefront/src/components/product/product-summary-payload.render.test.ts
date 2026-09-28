@@ -83,6 +83,22 @@ const variants: ProductVariant[] = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 describe("product summary browser payload", () => {
+  it("keeps mall quantity and purchase buttons in one opt-in desktop row", async () => {
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
+    const html = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.mall },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    const doc = new Window().document;
+    doc.write(`<body>${html}</body>`);
+
+    expect(doc.querySelector("[data-product-summary]")?.hasAttribute("data-quantity-inline")).toBe(true);
+    expect(doc.querySelector("label[for=quantity]")?.classList.contains("lg:sr-only")).toBe(true);
+    expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
+    expect(doc.querySelector("#quantity")?.getAttribute("form")).toBe("product-buy-form");
+    expect(doc.querySelector("[data-action=buy-now]")?.getAttribute("form")).toBe("product-buy-form");
+  });
+
   it("groups arbitrary merchant options in rounded-tech panels without changing purchase controls", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
     const html = await container.renderToString(ProductSummary, {

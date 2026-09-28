@@ -79,6 +79,82 @@
   }
 }
 
+/* Boutique bar listings give the title and controls separate breathing room. */
+.catalog-band[data-boutique-bar] {
+  display: block;
+  padding-block: 2rem 1.5rem;
+}
+
+.catalog-band[data-boutique-bar] .catalog-band-heading {
+  display: block;
+}
+
+.catalog-band[data-boutique-bar] .catalog-band-crumbs {
+  margin-bottom: 0.75rem;
+}
+
+.catalog-boutique-phone-bar {
+  min-height: 3rem;
+  margin-bottom: 1.5rem;
+  background: var(--background);
+  backdrop-filter: none;
+}
+
+.catalog-boutique-phone-bar label:has([data-catalog-sort]) {
+  min-width: 0;
+  max-width: 8rem;
+}
+
+.catalog-boutique-phone-bar .catalog-boutique-filter-toggle,
+.catalog-boutique-phone-bar select {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 400;
+}
+
+.catalog-boutique-phone-bar .catalog-band-count {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 64rem) {
+  .catalog-band[data-boutique-bar] {
+    padding-block: 2.5rem 0;
+  }
+
+  .catalog-band[data-boutique-bar] .catalog-band-tools {
+    margin-top: 2rem;
+    justify-content: flex-end;
+  }
+
+  .catalog-band[data-boutique-bar] .catalog-band-count {
+    margin-left: 1.25rem;
+  }
+
+  .catalog-band[data-boutique-bar] select {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-catalog-layout="bar"][data-catalog-boutique] {
+    gap: 1.5rem;
+  }
+
+  [data-catalog-layout="bar"][data-catalog-boutique] .catalog-filter-groups::before {
+    content: "Filter:";
+    font-size: 0.875rem;
+  }
+
+  .site-root [data-catalog-layout="bar"][data-catalog-boutique] .catalog-facet-summary {
+    border: 0;
+    background: transparent;
+    font-weight: 400;
+  }
+}
+
 /* ─── Filter form ────────────────────────────────────────────────────────
    One GET form; its placement (sidebar, bar or drawer) is decided on
    computers. On phones and tablets it is a bottom sheet with 44px rows. */
@@ -684,10 +760,12 @@
 
   .catalog-marketplace-phone-controls label {
     flex: 0 0 auto;
+    max-width: 8rem;
   }
 
   .catalog-marketplace-phone-controls select {
     min-width: 8rem;
+    max-width: 8rem;
     border-radius: 999px;
   }
 
