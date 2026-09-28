@@ -898,6 +898,15 @@ describe("listing page", () => {
       if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
       if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
       if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='4']")).not.toBeNull();
+      expect(document.querySelector("[data-catalog-rail='fashion']") !== null, id).toBe(id === "fashion-value");
     }
+  });
+
+  it("keeps a fashion merchant's filter-style override", async () => {
+    const theme = storefrontTemplateTheme("fashion-value");
+    theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true };
+    const document = await categoryPage(theme);
+    expect(document.querySelector("[data-catalog-rail='fashion']")).toBeNull();
+    expect(document.querySelector("[data-filter-style='sidebar-dense']")).not.toBeNull();
   });
 });

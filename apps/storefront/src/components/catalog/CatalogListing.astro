@@ -139,6 +139,7 @@ const controls = catalogListingControls({
 });
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
+const fashionRail = showFilters && resolved.template === "fashion-value" && presentation.filters.style === "sidebar-comfortable";
 const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
 const showPhoneBar = showSort || showFilters;
 const sortOptions = [
@@ -330,7 +331,7 @@ const breadcrumbVisible = piece("breadcrumb");
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
-<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind}>
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={fashionRail ? "fashion" : undefined}>
   {showFilters && (
     <aside
       id="filter-section"

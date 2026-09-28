@@ -519,6 +519,41 @@
     font-size: 1rem;
   }
 
+  /* Fabrilife's department rail is a flat, independently scrolling list.
+     Keep the merchant's filter width, row pitch, colours and radius tokens. */
+  [data-catalog-layout="sidebar"][data-catalog-rail="fashion"] > #filter-section[data-placement="sidebar"] {
+    top: var(--header-height, 0px);
+    max-height: calc(100dvh - var(--header-height, 0px));
+    padding-right: 0.5rem;
+    border-right: 1px solid var(--border);
+    background: var(--background);
+  }
+
+  [data-catalog-rail="fashion"] .catalog-filter-groups {
+    gap: 0;
+  }
+
+  [data-catalog-rail="fashion"] .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet {
+    padding: 0.25rem 0.75rem 0.375rem 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-catalog-rail="fashion"] .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet-summary {
+    min-height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  [data-catalog-rail="fashion"] .catalog-facet-count {
+    min-width: 1.75rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 999px;
+    background: var(--muted);
+    text-align: center;
+  }
+
   .catalog-filter-form:is([data-placement="sidebar"], [data-placement="bar"]) :is(.catalog-filter-input, .catalog-filter-go) {
     height: 2rem;
     font-size: 0.875rem;
