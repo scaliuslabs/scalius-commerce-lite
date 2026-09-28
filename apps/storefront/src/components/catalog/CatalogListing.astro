@@ -551,23 +551,6 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </div>
 </div>
 
-<style is:global>
-  .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track {
-    --listing-row-media: min(40%, 10rem);
-    grid-auto-flow: row;
-    grid-auto-columns: auto;
-    grid-template-columns: minmax(0, 1fr);
-    overflow-x: visible;
-    scroll-snap-type: none;
-  }
-  @container product-grid (min-width: 36rem) {
-    .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track { --listing-row-media: 11rem; }
-  }
-  @container product-grid (min-width: 60rem) {
-    .product-grid-frame[data-catalog-shelf-view][data-catalog-results="list"] .catalog-shelf-track { --listing-row-media: 16rem; }
-  }
-</style>
-
 {showFilters && (
   <noscript>
     <style>
