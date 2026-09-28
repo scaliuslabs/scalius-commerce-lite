@@ -1288,7 +1288,9 @@ describe("navigation", () => {
       layout: "wide-editorial",
     }));
     expect(page.querySelector('[data-hero-layout="wide-editorial"]')).not.toBeNull();
+    expect(page.querySelector('[data-hero-layout="wide-editorial"]')?.className).not.toMatch(/\bpt-/);
     const carousel = page.querySelector('.desktop-carousel[data-carousel-layout="wide-editorial"]')!;
+    expect(carousel.className).toContain("rounded-2xl");
     expect(carousel.querySelector(".wide-editorial-copy")?.textContent).toContain("Find your next favorite");
     expect(carousel.querySelector("picture")?.className).toContain("md:w-[48%]");
     expect(carousel.querySelector("source")?.getAttribute("sizes")).toBe(heroImageCandidate(campaign.url, "desktop", "wide-editorial").sizes);

@@ -49,7 +49,7 @@ const {
   rounded = true,
   overlay = "gradient",
 } = Astro.props;
-const corner = rounded ? " rounded-xl" : "";
+const corner = rounded ? (layout === "wide-editorial" ? " rounded-2xl" : " rounded-xl") : "";
 const canRotate = autoRotate && images.length > 1;
 const presentation = HERO_SLIDE_PRESENTATION[type];
 const transparentPixel =
