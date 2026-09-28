@@ -97,8 +97,9 @@ const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, c
 // margin, and DPR 3 phones fetch about 2x pixels, so a card photo is never
 // much wider than drawn.
 const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
-const sizes = variant === "standard" ? slotSizes : capSizesDensity(scaleSizes(slotSizes, 1 - 2 * inset));
-const imageMaxWidth = sizesOverride ? undefined : Math.ceil(
+// Mall photos have a fixed 170px CSS cap even when the surrounding tile grows.
+const sizes = variant === "standard" ? slotSizes : capSizesDensity(variant === "mall" ? "170px" : scaleSizes(slotSizes, 1 - 2 * inset));
+const imageMaxWidth = variant === "mall" ? 340 : sizesOverride ? undefined : Math.ceil(
   productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx)
   * (variant === "standard" ? 3 : 2) * (1 - 2 * inset),
 );

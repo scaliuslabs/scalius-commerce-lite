@@ -626,6 +626,7 @@ describe("product card matrix", () => {
     expect(onSale.getAttribute("style")).toContain("--pc-price-d:20px");
     expect(onSale.getAttribute("style")).toContain("--pc-price-w:400");
     expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(onSale.querySelector(".product-card-photo")?.getAttribute("sizes")).toContain("170px");
   });
 
   it("asks for options on a spec card only when a SKU choice is required", async () => {
