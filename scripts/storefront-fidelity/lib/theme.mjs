@@ -3,6 +3,7 @@
 import { importTs, tx } from "./context.mjs";
 import { sleep } from "./proc.mjs";
 import { FORCE_MISS_SQL } from "../../storefront-perf.mjs";
+import { REFERENCE_MENUS } from "../menus.mjs";
 
 let modules;
 export async function themeModules() {
@@ -73,7 +74,10 @@ export async function variantNames() {
 
 /** Writes tracked theme/menu rows, then outwaits the frontier freshness window. */
 export async function applyTheme({ db }, template, { sets = {}, menu = null } = {}) {
-  const doc = await buildThemeDocument(template, sets);
+  // Reference captures use the merchant menu as their navigation source; the
+  // large category tree belongs to the scale checks, not fashion/pantry shots.
+  const referenceMenu = Object.values(REFERENCE_MENUS).includes(menu);
+  const doc = await buildThemeDocument(template, { ...(referenceMenu ? { "blocks.navigation.source": "menu" } : {}), ...sets });
   const now = Math.floor(Date.now() / 1000);
   tx(db, () => {
     db.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, ?, ?) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors, revision = theme_settings.revision + 1, updated_at = excluded.updated_at").run(JSON.stringify(doc), now, now);

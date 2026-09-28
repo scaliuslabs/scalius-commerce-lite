@@ -9,11 +9,18 @@ import {
   parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { TEMPLATES } from "./lib/context.mjs";
+import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, stagesFor } from "./check.mjs";
 import { referenceShotIssue, writePairs } from "./pairs.mjs";
 import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
 const reference = JSON.parse(readFileSync(new URL("./reference-metrics.json", import.meta.url), "utf8"));
+
+it("uses relevant category menus for reference captures while retaining scale navigation", () => {
+  expect(TEMPLATE_MENUS["fashion-value"]).toBe("menu_fid_fashion");
+  expect(TEMPLATE_MENUS["daily-essentials"]).toBe("menu_fid_pantry");
+  expect(TEMPLATE_MENUS.marketplace ?? MENUS["150"]).toBe(MENUS["150"]);
+});
 
 it("selects a buyer-resolvable inheriting PDP with the template's option and media shape", () => {
   const db = new DatabaseSync(":memory:");

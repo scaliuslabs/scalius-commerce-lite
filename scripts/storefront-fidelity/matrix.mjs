@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESS_DIR } from "./lib/context.mjs";
 import { applyTheme } from "./lib/theme.mjs";
-import { MENUS } from "./menus.mjs";
+import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 
 export const PROBE = readFileSync(join(HARNESS_DIR, "probe.js"), "utf8");
 export const SCROLL_THROUGH = "(async () => { const H = Math.min(document.documentElement.scrollHeight, 12000); for (let y = 0; y < H; y += 700) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); } scrollTo(0, 0); await new Promise((r) => setTimeout(r, 250)); return true; })()";
@@ -35,12 +35,12 @@ export async function htmlWeights(base, path) {
 /**
  * @returns {Promise<Record<string, Record<string, object>>>} template -> "page-viewport" -> probe
  */
-export async function runMatrix(ctx, { templates, pages, extraPages = {}, viewports = ["desktop", "phone"], menu = MENUS["150"], prefix = "ours", into = {} }) {
+export async function runMatrix(ctx, { templates, pages, extraPages = {}, viewports = ["desktop", "phone"], menu = null, prefix = "ours", into = {} }) {
   const { page, base, log } = ctx;
   const all = into;
   for (const template of templates) {
     if (all[template]?.weights) continue; // done before a stack restart
-    await applyTheme(ctx, template, { menu });
+    await applyTheme(ctx, template, { menu: menu ?? TEMPLATE_MENUS[template] ?? MENUS["150"] });
     all[template] = {};
     const weights = {};
     for (const viewport of viewports) {

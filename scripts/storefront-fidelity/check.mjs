@@ -36,7 +36,7 @@ import { Stack, buildStorefront, storefrontBuilt } from "./lib/stack.mjs";
 import { applyTheme } from "./lib/theme.mjs";
 import { runHover } from "./hover.mjs";
 import { runMatrix } from "./matrix.mjs";
-import { MENUS } from "./menus.mjs";
+import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 import { runNavscale } from "./navscale.mjs";
 import { writePairs } from "./pairs.mjs";
 import { runPerf } from "./perf.mjs";
@@ -318,7 +318,7 @@ async function main() {
       ...(pdpCandidates[template] ? { pdp: pdpCandidates[template].path } : {}),
     }]));
     // Warm the isolates so the first template is not measured cold.
-    await applyTheme(ctx, templates[0], { menu: MENUS["150"] });
+    await applyTheme(ctx, templates[0], { menu: TEMPLATE_MENUS[templates[0]] ?? MENUS["150"] });
     for (const p of [pages.home, pages.plp, pdpCandidates[templates[0]]?.path ?? pages.pdp]) await fetch(ctx.base + p).then((r) => r.arrayBuffer());
 
     // A stage that dies with the stack restarts the stack once and resumes

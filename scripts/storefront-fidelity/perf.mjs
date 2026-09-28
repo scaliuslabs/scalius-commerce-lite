@@ -6,7 +6,7 @@ import { sleep } from "./lib/proc.mjs";
 import { applyTheme, forceCacheRefresh } from "./lib/theme.mjs";
 import { withSeenSeq } from "../storefront-perf.mjs";
 import { htmlWeights } from "./matrix.mjs";
-import { MENUS } from "./menus.mjs";
+import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 
 const OBSERVE = `(() => { window.__perf = { lcp: 0, lcpEl: null, cls: 0, events: [] };
   new PerformanceObserver((l) => { for (const e of l.getEntries()) { window.__perf.lcp = e.startTime; window.__perf.lcpEl = (e.element && (e.element.tagName + '.' + (e.element.className || '').toString().slice(0, 40))) || (e.url || '').slice(-60); } }).observe({ type: 'largest-contentful-paint', buffered: true });
@@ -91,7 +91,7 @@ export async function runPerf(ctx, { templates, pages, extraPages = {}, runs = 1
     const templatePages = { ...pages, ...extraPages[template] };
     all[template] ??= {};
     if (Object.keys(templatePages).every((name) => all[template][name])) continue; // done before a stack restart
-    await applyTheme(ctx, template, { menu: MENUS["150"] });
+    await applyTheme(ctx, template, { menu: TEMPLATE_MENUS[template] ?? MENUS["150"] });
     for (const [name, path] of Object.entries(templatePages)) {
       if (all[template][name]) continue;
       const row = { path, ttfb: await ttfbRuns(ctx, path, ttfbRunsPerPage) };

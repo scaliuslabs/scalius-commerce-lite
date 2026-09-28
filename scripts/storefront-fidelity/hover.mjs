@@ -3,7 +3,7 @@
 // 10 Mbps / 60 ms, and what hover costs in image bytes. Run through check.mjs.
 import { sleep } from "./lib/proc.mjs";
 import { applyTheme } from "./lib/theme.mjs";
-import { MENUS } from "./menus.mjs";
+import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
 
 const CARD = "document.querySelectorAll('[data-theme-component=product-card]')";
 
@@ -13,7 +13,7 @@ export async function runHover(ctx, { targets, path, net = { latency: 60, mbps: 
   const all = {};
   for (const target of targets) {
     const [template, force] = target.split(":");
-    await applyTheme(ctx, template, { menu: MENUS["150"], sets: force ? { "blocks.card.settings.hoverImage": true } : {} });
+    await applyTheme(ctx, template, { menu: TEMPLATE_MENUS[template] ?? MENUS["150"], sets: force ? { "blocks.card.settings.hoverImage": true } : {} });
     await page.profile("desktop");
     await page.send("Network.emulateNetworkConditions", { offline: false, latency: net.latency, downloadThroughput: (net.mbps * 1024 * 1024) / 8, uploadThroughput: (5 * 1024 * 1024) / 8 });
     await page.send("Network.clearBrowserCache");

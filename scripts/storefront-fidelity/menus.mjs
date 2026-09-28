@@ -7,12 +7,21 @@
 //   fid-1k    1,150 links, 3 levels, published directly as a re-publish allows
 //   fid-live  the live store's flat 12-item menu (duplicate "Footwear", junk
 //             collection names, a system "Track your order" link)
+// Reference captures also use small published menus with truthful categories.
 //
 //   node scripts/storefront-fidelity/menus.mjs --state <dir>
 import { pathToFileURL } from "node:url";
 import { openDb, tx } from "./lib/context.mjs";
 
 export const MENUS = Object.freeze({ "20": "menu_fid_20", "150": "menu_fid_150", mega: "menu_fid_mega", "1k": "menu_fid_1k", live: "menu_fid_live" });
+export const REFERENCE_MENUS = Object.freeze({ fashion: "menu_fid_fashion", pantry: "menu_fid_pantry" });
+export const TEMPLATE_MENUS = Object.freeze({
+  boutique: REFERENCE_MENUS.fashion,
+  "heritage-editorial": REFERENCE_MENUS.fashion,
+  "fashion-value": REFERENCE_MENUS.fashion,
+  "mass-retail": REFERENCE_MENUS.pantry,
+  "daily-essentials": REFERENCE_MENUS.pantry,
+});
 
 function publishMenu(db, id, name, handle, items, now) {
   const run = (sql, ...a) => db.prepare(sql).run(...a);
@@ -35,7 +44,7 @@ function publishMenu(db, id, name, handle, items, now) {
   return items.length;
 }
 
-/** Publishes all five menus and points the header at fid-150, the footer at fid-20 + fid-live. */
+/** Publishes the scale and reference menus; defaults the header to fid-150. */
 export function seedMenus(stateDir, { log = console.log } = {}) {
   const db = openDb(stateDir);
   const now = Math.floor(Date.now() / 1000);
@@ -43,6 +52,8 @@ export function seedMenus(stateDir, { log = console.log } = {}) {
   const cats = q("SELECT id, name FROM categories WHERE id LIKE 'cat_scale_%' ORDER BY id");
   const roots = q("SELECT id, name FROM categories WHERE id LIKE 'cat_scale_%' AND parent_id IS NULL ORDER BY id");
   if (roots.length < 10) throw new Error(`expected the 25-root category tree, found ${roots.length} roots (run seed-large first)`);
+  const references = new Map(q("SELECT id, name FROM categories WHERE id LIKE 'cat_fid_%' AND status = 'published' AND deleted_at IS NULL").map((row) => [row.id, row.name]));
+  for (const key of ["apparel", "grocery", "home"]) if (!references.has(`cat_fid_${key}`)) throw new Error(`missing published fidelity category: ${key}`);
   const kids = (id) => q("SELECT id, name FROM categories WHERE parent_id = ? ORDER BY id", id);
   let seq = 0;
   const nid = (p) => `nmi_${p}_${String(seq++).padStart(5, "0")}`;
@@ -113,6 +124,16 @@ export function seedMenus(stateDir, { log = console.log } = {}) {
       { id: nid("live"), label: "Track your order", type: "system", target: "track-order" },
     ];
     counts.live = publishMenu(db, MENUS.live, "Fidelity live", "fid-live", live, now);
+
+    const reference = (menu, key) => cat(menu, references.get(`cat_fid_${key}`), `cat_fid_${key}`);
+    counts.fashion = publishMenu(db, REFERENCE_MENUS.fashion, "Fidelity fashion", "fid-fashion", [
+      reference("fashion", "apparel"), reference("fashion", "home"),
+      { id: nid("fashion"), label: "Shop", type: "system", target: "shop" },
+    ], now);
+    counts.pantry = publishMenu(db, REFERENCE_MENUS.pantry, "Fidelity pantry", "fid-pantry", [
+      reference("pantry", "grocery"), reference("pantry", "home"), reference("pantry", "apparel"),
+      { id: nid("pantry"), label: "Shop", type: "system", target: "shop" },
+    ], now);
 
     db.prepare("DELETE FROM navigation_placements").run();
     const place = db.prepare("INSERT INTO navigation_placements (id, surface, slot, position, menu_id, is_enabled, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)");

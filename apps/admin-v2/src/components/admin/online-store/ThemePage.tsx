@@ -18,6 +18,7 @@ import {
 import {
   STOREFRONT_DENSITIES,
   STOREFRONT_LISTING_FILTER_STYLES,
+  STOREFRONT_NAVIGATION_SOURCES,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
   storefrontBlockDefault,
@@ -32,11 +33,13 @@ import {
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
   type StorefrontListingFilterStyle,
+  type StorefrontNavigationSource,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { SaveBarProvider, SaveConflict, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
@@ -740,6 +743,28 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           </>
         }
       >
+        <div className="space-y-1">
+          <Label htmlFor="theme-navigation-source">{t("menuSource")}</Label>
+          <SearchableSelect
+            id="theme-navigation-source"
+            value={theme.blocks.navigation.source}
+            options={STOREFRONT_NAVIGATION_SOURCES.map((source) => ({
+              value: source,
+              label: option(`menuSource_${source}`),
+              description: option(`menuSource_${source}Help`),
+            }))}
+            onValueChange={(source) => setDraft((current) => ({
+              ...current,
+              blocks: { ...current.blocks, navigation: { ...current.blocks.navigation, source: source as StorefrontNavigationSource } },
+            }))}
+            triggerClassName="w-full"
+          />
+          <FitNote
+            fallback={resolved.fallbacks.find((fallback) => fallback.kind === "navigation" && fallback.key === "source") ?? null}
+            name={(source) => option(`menuSource_${source}`)}
+            reason={fitReason}
+          />
+        </div>
         <VisualChoice
           label={t("menuStyleDesktop")}
           showLabel

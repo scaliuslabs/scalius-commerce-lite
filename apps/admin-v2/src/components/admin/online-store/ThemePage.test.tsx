@@ -29,7 +29,7 @@ const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn(), rebase: vi.fn(
 const fonts = vi.hoisted(() => ({ register: vi.fn() }));
 
 vi.mock("./type-preview-fonts", () => ({ registerTypePreviewFonts: fonts.register }));
-vi.mock("./ThemePreviewAction", () => ({ ThemePreviewAction: () => <section><h2>Storefront preview</h2></section> }));
+vi.mock("./ThemePreviewAction", () => ({ ThemePreviewAction: ({ draftRevision }: { draftRevision: number }) => <section data-draft-revision={draftRevision}><h2>Storefront preview</h2></section> }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -176,6 +176,25 @@ describe("theme page", () => {
     expect(radio("Marketplace").textContent).toContain("Category and deal cards start in a grid; search starts in a list.");
     expect(radio("Department mall").querySelector("[data-marketplace-preview]")).toBeNull();
     expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
+  });
+
+  it("saves the header link source in the private draft used by preview", async () => {
+    const saved = storefrontTemplateTheme("marketplace");
+    const queryClient = render(saved);
+    const source = container.querySelector<HTMLButtonElement>("#theme-navigation-source")!;
+    expect(source.textContent).toContain("Categories and custom links");
+    act(() => source.click());
+    const choices = [...document.querySelectorAll<HTMLElement>("[role=option]")];
+    expect(choices.map((choice) => choice.textContent?.split(" · ")[0])).toEqual([
+      "Custom menu", "Published categories", "Categories and custom links",
+    ]);
+    act(() => choices[1]!.click());
+    expect(source.textContent).toContain("Published categories");
+    await pressSave();
+    expect(api.draft.mock.calls[0]![0].body.theme.blocks.navigation.source).toBe("category-tree");
+    expect(queryClient.getQueryData<ThemeWorkspaceDocument>(themeWorkspaceQueryOptions().queryKey)?.draft.theme.blocks.navigation.source)
+      .toBe("category-tree");
+    expect(container.querySelector("[data-draft-revision]")?.getAttribute("data-draft-revision")).toBe("2");
   });
 
   it("saves a chosen grocery template with its merchant defaults", async () => {
