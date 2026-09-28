@@ -14,6 +14,7 @@ import {
   PRODUCT_GRID_STEPS_REM,
   productGridSpec,
   productCardImageLoading,
+  productCardImageMaxCssWidth,
   productCardImageSizes,
   productGridCardMin,
   productGridColumnCount,
@@ -223,8 +224,20 @@ describe("productCardImageSizes", () => {
 
   it("sizes rail cards by the rail's card width", () => {
     expect(productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "90rem", "rail")).toBe(
-      "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw",
+      "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, min(20vw, 256px)",
     );
+  });
+
+  it("caps sources above every declared card width", () => {
+    for (const grid of Object.values(STOREFRONT_DENSITY_SPECS)) {
+      for (const context of ["grid", "beside-filters", "rail", "shelf"] as const) {
+        const sizes = productCardImageSizes(grid, "90rem", context);
+        const max = productCardImageMaxCssWidth(grid, "90rem", context);
+        for (let viewport = 320; viewport <= 2560; viewport += 7) {
+          expect(max, `${context} ${viewport}px`).toBeGreaterThanOrEqual(evaluateSizes(sizes, viewport) - 0.01);
+        }
+      }
+    }
   });
 });
 
@@ -236,6 +249,9 @@ function evaluateSizes(sizes: string, viewport: number): number {
     const value = match[2]!;
     const calc = /^calc\(([\d.]+)vw - (\d+)px\)$/.exec(value);
     if (calc) return (Number(calc[1]) / 100) * viewport - Number(calc[2]);
+    const min = /^min\(([\d.]+)vw, (\d+)px\)$/.exec(value);
+    if (min) return Math.min(Number(min[1]) / 100 * viewport, Number(min[2]));
+    if (value.endsWith("vw")) return Number.parseFloat(value) / 100 * viewport;
     return Number.parseFloat(value);
   }
   throw new Error(`No sizes entry matched ${viewport}px`);

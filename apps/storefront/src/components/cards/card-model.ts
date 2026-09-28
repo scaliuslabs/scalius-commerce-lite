@@ -11,6 +11,7 @@ import { formatMoney, getDecimalPlaces } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
+import { capImageSrcSet } from "@/lib/responsive-image";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
 import type {
@@ -216,6 +217,8 @@ export function productCardModel(
     currencyCode: string;
     hoverImage: boolean;
     quickBuy: boolean;
+    /** Largest rendered image width at the supported screen densities. */
+    imageMaxWidth?: number;
     /** False while the store has no published review or reviews are off (`hasReviews`): no card shows a rating. */
     ratings?: boolean;
   },
@@ -235,7 +238,9 @@ export function productCardModel(
     image: photo
       ? {
           src: getProductImageUrl(photo, 480),
-          srcset: getProductImageSrcSet(photo),
+          srcset: options.imageMaxWidth
+            ? capImageSrcSet(getProductImageSrcSet(photo), options.imageMaxWidth)
+            : getProductImageSrcSet(photo),
           alt: product.imageAlt || product.name,
         }
       : null,
@@ -243,7 +248,9 @@ export function productCardModel(
     hoverImage: options.hoverImage && hoverPhoto
       ? {
           src: getProductImageUrl(hoverPhoto, 480),
-          srcset: getProductImageSrcSet(hoverPhoto),
+          srcset: options.imageMaxWidth
+            ? capImageSrcSet(getProductImageSrcSet(hoverPhoto), options.imageMaxWidth)
+            : getProductImageSrcSet(hoverPhoto),
         }
       : null,
     price: {

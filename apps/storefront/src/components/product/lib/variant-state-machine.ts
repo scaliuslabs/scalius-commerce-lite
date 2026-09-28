@@ -34,6 +34,21 @@ export function filterVariantsBySelection(
   return variants.filter((variant) => variantMatchesSelection(variant, selection));
 }
 
+/** Show an option price only when the other chosen axes identify one sellable SKU. */
+export function pricedVariantForOption(
+  variants: Variant[],
+  selection: VariantSelection,
+  definitionId: string,
+  valueId: string,
+  axisCount: number,
+): Variant | null {
+  const otherAxes = { ...selection };
+  delete otherAxes[definitionId];
+  if (Object.keys(otherAxes).length !== axisCount - 1) return null;
+  const matches = filterVariantsBySelection(variants, { ...otherAxes, [definitionId]: valueId });
+  return matches.length === 1 && isVariantPurchasable(matches[0]!) ? matches[0]! : null;
+}
+
 export function resolveVariantImageForSelection(
   variants: Variant[],
   selection: VariantSelection,

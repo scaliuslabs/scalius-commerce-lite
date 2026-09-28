@@ -4,6 +4,7 @@ import {
   filterVariantsBySelection,
   getVariantOptionAvailabilityMap,
   initialVariantPresentation,
+  pricedVariantForOption,
   reconcileSelectionForValue,
   resolveExactVariantSelection,
   resolveVariantImageForSelection,
@@ -65,6 +66,13 @@ describe("generic product option selection", () => {
   it("reports contextual availability without hiding globally valid values", () => {
     expect(getVariantOptionAvailabilityMap(variants, "finish", ["matte", "gloss"], { size: "small" }).get("gloss")).toBe("sold_out");
     expect(getVariantOptionAvailabilityMap(variants, "finish", ["matte", "gloss"], { size: "large" }).get("gloss")).toBe("available");
+  });
+
+  it("prices an option only when the other axes identify one sellable SKU", () => {
+    expect(pricedVariantForOption(variants, { size: "small", finish: "matte" }, "size", "large", 2)?.id).toBe("lm");
+    expect(pricedVariantForOption(variants, { size: "small", finish: "matte" }, "finish", "gloss", 2)).toBeNull();
+    expect(pricedVariantForOption(variants, { size: "small" }, "size", "large", 2)).toBeNull();
+    expect(pricedVariantForOption([...variants, variant("lm2", "large", "matte")], { size: "small", finish: "matte" }, "size", "large", 2)).toBeNull();
   });
 
   it("clears conflicting selections when choosing a valid value", () => {

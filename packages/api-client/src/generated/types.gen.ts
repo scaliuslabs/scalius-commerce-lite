@@ -395,12 +395,12 @@ export type StorefrontThemeDocument = {
             } | {
                 variant: 'fashion';
                 settings: {
-                    [key: string]: never;
+                    showBuyNow?: boolean;
                 };
             } | {
                 variant: 'heritage';
                 settings: {
-                    [key: string]: never;
+                    showBuyNow?: boolean;
                 };
             } | {
                 variant: 'digital';

@@ -353,7 +353,7 @@ export interface StorefrontBuyBoxLook {
    * Height in px; `pill` or the theme radius; `row` side by side or `stack`
    * full width up to `maxWidth`; which button comes first.
    */
-  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now"; inlineQuantity?: boolean };
+  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now"; inlineQuantity?: boolean; showBuyNow?: boolean };
   /**
    * Delivery, cash on delivery, returns and warranty: a list under the
    * buttons, a 284px column at the right (Daraz, Amazon), tiles (Target) or
@@ -469,7 +469,7 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
   fashion: {
     title: { size: { desktop: 20, phone: 18 }, weight: 700 },
     price: { size: { desktop: 22, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 37, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
+    cta: { height: 37, shape: "rect", layout: "row", maxWidth: 115, first: "add-to-cart", inlineQuantity: true, showBuyNow: false },
     facts: "list",
     factPills: false,
     features: "none",
@@ -480,7 +480,7 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
   heritage: {
     title: { size: { desktop: 30, phone: 24 }, weight: 500 },
     price: { size: { desktop: 20, phone: 18 }, weight: 400, tone: "foreground" },
-    cta: { height: 39, shape: "rect", layout: "stack", maxWidth: 492, first: "add-to-cart" },
+    cta: { height: 39, shape: "rect", layout: "stack", maxWidth: 492, first: "add-to-cart", showBuyNow: false },
     facts: "rows",
     factPills: false,
     features: "none",
@@ -973,8 +973,28 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
   boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
   showcase: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.showcase) }),
   // Fabrilife: bordered card, size boxes, returns card.
-  fashion: variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.fashion) }),
-  heritage: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.heritage) }),
+  fashion: variant({
+    settings: { showBuyNow: z.boolean().optional() },
+    defaults: { showBuyNow: false },
+    contrastPairs: [["foreground", "muted"]],
+    renders: (settings) => buyBox({
+      ...STOREFRONT_BUY_BOX_LOOKS.fashion,
+      cta: {
+        ...STOREFRONT_BUY_BOX_LOOKS.fashion.cta,
+        maxWidth: settings.showBuyNow ? null : 115,
+        inlineQuantity: !settings.showBuyNow,
+        showBuyNow: settings.showBuyNow ?? false,
+      },
+    }),
+  }),
+  heritage: variant({
+    settings: { showBuyNow: z.boolean().optional() },
+    defaults: { showBuyNow: false },
+    renders: (settings) => buyBox({
+      ...STOREFRONT_BUY_BOX_LOOKS.heritage,
+      cta: { ...STOREFRONT_BUY_BOX_LOOKS.heritage.cta, showBuyNow: settings.showBuyNow ?? false },
+    }),
+  }),
   // Game Ghor: promise bullets (delivery time, where to redeem).
   digital: variant({ requires: [has("hasDigitalLines")], fallback: "classic", renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.digital) }),
 };

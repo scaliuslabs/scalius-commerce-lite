@@ -352,6 +352,19 @@ describe("theme page", () => {
     expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: false } });
   });
 
+  it.each(["fashion-value", "heritage-editorial"] as const)("lets %s merchants add a Buy now button to the product page", async (template) => {
+    render(storefrontTemplateTheme(template));
+    const buyNow = container.querySelector<HTMLButtonElement>("#theme-product-buy-now")!;
+    expect(buyNow.getAttribute("aria-checked")).toBe("false");
+    act(() => buyNow.click());
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const box = saved.blocks.product.buyBox;
+    expect(box.variant).toBe(template === "fashion-value" ? "fashion" : "heritage");
+    if (box.variant !== "fashion" && box.variant !== "heritage") throw new Error("wrong purchase panel");
+    expect(box.settings.showBuyNow).toBe(true);
+  });
+
   it.each(["shelves", "quick-grid"] as const)("keeps the shopper grid/list switch for search when choosing %s", async (layout) => {
     render(storefrontTemplateTheme("marketplace"));
     const control = container.querySelector("[data-listing-default]")!;

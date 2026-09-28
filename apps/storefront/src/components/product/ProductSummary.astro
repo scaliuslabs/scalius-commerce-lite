@@ -17,6 +17,7 @@ import { getBuyerStockSummary, isVariantAvailable } from "@/lib/product-sellable
 import {
   getVariantOptionAvailabilityMap,
   initialVariantPresentation,
+  pricedVariantForOption,
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
@@ -327,6 +328,24 @@ function optionAriaLabel(
       {options.length > 0 && <div class="variant-option-panels">
         {options.map((option) => {
           const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
+          const optionPrices = new Map(option.values.flatMap((value) => {
+            const variant = factsColumn
+              ? pricedVariantForOption(variants, initialSelection, option.id, value.id, options.length)
+              : null;
+            return variant ? [[value.id, getVariantDiscountedPrice(
+              variant.price,
+              product.price,
+              variant.discountType,
+              variant.discountPercentage,
+              variant.discountAmount,
+              product.discountType,
+              product.discountPercentage,
+              product.discountAmount,
+              currencyDecimalPlaces,
+              currencyCode,
+            )] as const] : [];
+          }));
+          const showOptionPrices = new Set(optionPrices.values()).size > 1;
           return (
             <div class="variant-option-panel">
               <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
@@ -335,6 +354,9 @@ function optionAriaLabel(
                   {option.values.map((value) => {
                     const selected = initialSelection[option.id] === value.id;
                     const status = availability.get(value.id) ?? "sold_out";
+                    const optionPrice = showOptionPrices && optionPrices.has(value.id)
+                      ? formatPrice(optionPrices.get(value.id)!)
+                      : null;
                     return (
                       <button
                         type="button"
@@ -353,9 +375,12 @@ function optionAriaLabel(
                         data-option-value={value.value}
                         data-option-availability={status}
                         aria-pressed={selected ? "true" : "false"}
-                        aria-label={optionAriaLabel(option, value.value, status)}
+                        aria-label={`${optionAriaLabel(option, value.value, status)}${optionPrice ? ` ${optionPrice}.` : ""}`}
                         aria-disabled={status === "sold_out" ? "true" : undefined}
-                      >{value.value}</button>
+                      >
+                        <span>{value.value}</span>
+                        {factsColumn && <span data-option-price hidden={!optionPrice}>{optionPrice ?? ""}</span>}
+                      </button>
                     );
                   })}
                 </div>
@@ -440,11 +465,13 @@ function optionAriaLabel(
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="buy-box-ctas flex gap-2 pt-1">
         <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+          {look?.cta.showBuyNow !== false && <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
-          <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
-        </button>
+        {look?.cta.showBuyNow !== false && (
+          <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+            <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
+          </button>
+        )}
       </div>
       {factsColumn && (
         <aside class="buy-box-facts">
@@ -516,6 +543,10 @@ function optionAriaLabel(
     min-height: var(--bb-cta-height);
     font-size: 0.9375rem;
   }
+  [data-buy-box-look] .buy-box-ctas > button:only-child {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
   [data-cta-shape="pill"] .buy-box-ctas > button {
     border-radius: 9999px;
   }
@@ -532,6 +563,17 @@ function optionAriaLabel(
   }
   .variant-option-panels > * + * {
     margin-top: 0.75rem;
+  }
+  [data-facts-column] .variant-option-btn {
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+    min-height: 2.75rem;
+    text-align: left;
+  }
+  [data-option-price]:not([hidden]) {
+    font-size: 0.75rem;
+    font-weight: 700;
   }
   [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panel {
     border: 1px solid var(--border);
@@ -584,6 +626,7 @@ function optionAriaLabel(
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1rem;
+    height: auto;
   }
   @media (min-width: 64rem) {
     [data-quantity-inline] .buy-box-purchase {
@@ -596,6 +639,22 @@ function optionAriaLabel(
     [data-quantity-inline] .buy-box-ctas {
       width: 100%;
       padding-top: 0;
+    }
+    [data-buy-box-card][data-quantity-inline] .buy-box-purchase {
+      display: flex;
+      flex-flow: row wrap;
+      align-items: flex-end;
+      gap: 8px;
+      max-width: 100%;
+    }
+    [data-buy-box-card][data-quantity-inline] .buy-box-ctas {
+      flex: 0 1 auto;
+      width: max-content;
+      max-width: calc(100% - 148px);
+    }
+    [data-buy-box-card][data-quantity-inline] .buy-box-ctas > button {
+      min-width: 115px;
+      overflow-wrap: anywhere;
     }
     [data-quantity-inline] #quantity-minus,
     [data-quantity-inline] #quantity-plus,

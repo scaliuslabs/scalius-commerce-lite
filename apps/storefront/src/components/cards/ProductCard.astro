@@ -9,6 +9,7 @@ import { buildStorefrontThemeTokens, type ResolvedStorefrontCard } from "@scaliu
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import {
   listingFilterColumnPx,
+  productCardImageMaxCssWidth,
   productCardImageLoading,
   productCardImageSizes,
   productGridFirstRow,
@@ -97,11 +98,16 @@ const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, c
 // much wider than drawn.
 const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
 const sizes = variant === "standard" ? slotSizes : capSizesDensity(scaleSizes(slotSizes, 1 - 2 * inset));
+const imageMaxWidth = sizesOverride ? undefined : Math.ceil(
+  productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx)
+  * (variant === "standard" ? 3 : 2) * (1 - 2 * inset),
+);
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,
   hoverImage: anatomy.hoverImage,
   quickBuy: anatomy.quickBuy,
+  imageMaxWidth,
   // Ratings show only while the store takes reviews and has a published one.
   ratings: resolved.facts.hasReviews,
 });

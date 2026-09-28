@@ -18,6 +18,7 @@ import {
   getVariantOptionAvailabilityMap,
   loadOptionsFromDOM,
   loadVariantsFromDOM,
+  pricedVariantForOption,
   reconcileSelectionForValue,
   resolveExactVariantSelection,
   resolveVariantImageForSelection,
@@ -359,12 +360,26 @@ function updateOptionButtons() {
       option.values.map((value) => value.id),
       state.selection,
     );
-    for (const button of cache.optionButtons.filter(
-      (candidate) => candidate.dataset.optionDefinitionId === option.id,
-    )) {
+    const buttons = cache.optionButtons.filter((button) => button.dataset.optionDefinitionId === option.id);
+    const optionPrices = new Map<string, number>();
+    if (buttons.some((button) => button.querySelector("[data-option-price]"))) {
+      for (const value of option.values) {
+        const variant = pricedVariantForOption(state.variants, state.selection, option.id, value.id, state.options.length);
+        if (variant?.discountedPrice != null) optionPrices.set(value.id, variant.discountedPrice);
+      }
+    }
+    const showOptionPrices = new Set(optionPrices.values()).size > 1;
+    for (const button of buttons) {
       const valueId = button.dataset.optionValueId!;
       const status = availability.get(valueId) ?? "sold_out";
       const selected = state.selection[option.id] === valueId;
+      const priceNode = button.querySelector<HTMLElement>("[data-option-price]");
+      let optionPrice: string | null = null;
+      if (priceNode) {
+        optionPrice = showOptionPrices && optionPrices.has(valueId) ? formatPrice(optionPrices.get(valueId)!) : null;
+        priceNode.textContent = optionPrice ?? "";
+        priceNode.hidden = !optionPrice;
+      }
       button.classList.remove(...OPTION_CLASSES);
       button.classList.add("bg-background", "text-foreground", "border-input");
       if (selected && status !== "sold_out") {
@@ -398,7 +413,7 @@ function updateOptionButtons() {
           button.dataset.optionValue || "",
           status,
           selected,
-        ),
+        ) + (optionPrice ? ` ${optionPrice}.` : ""),
       );
     }
   }

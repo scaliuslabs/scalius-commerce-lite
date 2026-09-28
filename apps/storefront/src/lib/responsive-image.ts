@@ -25,7 +25,8 @@ export interface ResponsiveImageSources {
   sizes?: string;
 }
 
-function capCandidates(srcset: string, maxWidth: number): string {
+export function capImageSrcSet(srcset: string | undefined, maxWidth: number): string | undefined {
+  if (!srcset) return srcset;
   // Media URLs never contain ", " (spaces are not valid in a URL), and the
   // shared helper lists candidates by ascending width.
   const kept: string[] = [];
@@ -48,7 +49,7 @@ export function responsiveImageSources(
   const src = mediaImageUrl(url, slot.width);
   const all = mediaImageSrcSet(url);
   if (!src || !all) return { src };
-  const srcset = slot.maxWidth ? capCandidates(all, slot.maxWidth) : all;
+  const srcset = slot.maxWidth ? capImageSrcSet(all, slot.maxWidth) : all;
   return { src, srcset, sizes: slot.sizes };
 }
 

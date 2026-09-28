@@ -183,7 +183,7 @@ export function productGridFluidCss(grid: ThemeGrid): { cardMin: string; gap: st
 export type ProductGridContext = "grid" | "beside-filters" | "rail" | "shelf";
 
 /** Shelf card widths (components/homepage/ProductRail.astro) as image `sizes`. */
-export const SHELF_CARD_SIZES = "(max-width: 639px) 44vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 19vw";
+export const SHELF_CARD_SIZES = "(max-width: 639px) 44vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, min(19vw, 256px)";
 /**
  * How a listing grid lays cards out in a container narrower than the tablet
  * step: the density's columns, or one card per row with the photo beside
@@ -215,7 +215,20 @@ export function productGridWidth(
     : content;
 }
 
-const sizesCache = new Map<string, string>();
+const sizesCache = new Map<string, { sizes: string; maxCssWidth: number }>();
+
+const RAIL_MAX_WIDTH = 256; // ProductRail's max-w-7xl container, five cards across.
+
+function railImagePlan(context: "rail" | "shelf") {
+  if (context === "rail") return {
+    sizes: `(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, min(20vw, ${RAIL_MAX_WIDTH}px)`,
+    maxCssWidth: Math.max(639 * 0.72, 1023 * 0.33, 1279 * 0.25, RAIL_MAX_WIDTH),
+  };
+  return {
+    sizes: SHELF_CARD_SIZES,
+    maxCssWidth: Math.max(639 * 0.44, 1023 * 0.3, 1279 * 0.23, RAIL_MAX_WIDTH),
+  };
+}
 
 /**
  * `sizes` for a product card image. For grids it follows the fluid columns:
@@ -226,24 +239,21 @@ const sizesCache = new Map<string, string>();
  * `list-row` phone layout, a grid narrower than the tablet step shows one
  * card per row with a fixed-width photo.
  */
-export function productCardImageSizes(
+function cardImagePlan(
   grid: ThemeGrid,
   containerWidth: string,
   context: ProductGridContext = "grid",
   phoneLayout: ProductGridPhoneLayout = "grid",
   maxColumns = Infinity,
   filterColumnPx = 0,
-): string {
-  if (context === "rail") {
-    return "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw";
-  }
-  if (context === "shelf") return SHELF_CARD_SIZES;
+): { sizes: string; maxCssWidth: number } {
+  if (context === "rail" || context === "shelf") return railImagePlan(context);
   const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}|${maxColumns}|${filterColumnPx}`;
   const cached = sizesCache.get(key);
   if (cached) return cached;
 
   const containerMaxPx = remToPx(containerWidth);
-  const ranges: Array<{ signature: string; until: number; size: string }> = [];
+  const ranges: Array<{ signature: string; until: number; size: string; slope: number; offset: number }> = [];
   for (let viewport = 320; viewport <= containerMaxPx; viewport += 1) {
     const width = productGridWidth(viewport, containerMaxPx, context, filterColumnPx);
     const rows = phoneLayout === "list-row" && width < PRODUCT_GRID_STEPS_REM.tablet * PX_PER_REM;
@@ -264,13 +274,45 @@ export function productCardImageSizes(
       : capped
         ? `${Math.ceil((width - gap * (columns - 1)) / columns)}px`
         : `calc(${Number((100 / columns).toFixed(2))}vw - ${Math.floor((fixed + gap * (columns - 1)) / columns)}px)`;
-    ranges.push({ signature, until: viewport, size });
+    ranges.push({
+      signature,
+      until: viewport,
+      size,
+      slope: rows || capped ? 0 : Number((100 / columns).toFixed(2)) / 100,
+      offset: rows ? LIST_ROW_MEDIA_PX : capped
+        ? Math.ceil((width - gap * (columns - 1)) / columns)
+        : -Math.floor((fixed + gap * (columns - 1)) / columns),
+    });
   }
   const sizes = ranges
     .map((range, index) => (index === ranges.length - 1 ? range.size : `(max-width: ${range.until}px) ${range.size}`))
     .join(", ");
-  sizesCache.set(key, sizes);
-  return sizes;
+  const plan = { sizes, maxCssWidth: Math.max(...ranges.map((range) => range.slope * range.until + range.offset)) };
+  sizesCache.set(key, plan);
+  return plan;
+}
+
+export function productCardImageSizes(
+  grid: ThemeGrid,
+  containerWidth: string,
+  context: ProductGridContext = "grid",
+  phoneLayout: ProductGridPhoneLayout = "grid",
+  maxColumns = Infinity,
+  filterColumnPx = 0,
+): string {
+  return cardImagePlan(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx).sizes;
+}
+
+/** Largest CSS source width the card's `sizes` can request at any viewport. */
+export function productCardImageMaxCssWidth(
+  grid: ThemeGrid,
+  containerWidth: string,
+  context: ProductGridContext = "grid",
+  phoneLayout: ProductGridPhoneLayout = "grid",
+  maxColumns = Infinity,
+  filterColumnPx = 0,
+): number {
+  return cardImagePlan(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx).maxCssWidth;
 }
 
 export interface ProductCardImageLoading {

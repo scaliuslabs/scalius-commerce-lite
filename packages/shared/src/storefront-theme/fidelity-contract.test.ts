@@ -348,6 +348,13 @@ describe("slice 5: product page per template", () => {
     });
   });
 
+  it.each(["fashion-value", "heritage-editorial"] as const)("starts %s with one purchase action and accepts a merchant's Buy now choice", (id) => {
+    const theme = storefrontTemplateTheme(id);
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(false);
+    theme.blocks.product.buyBox.settings.showBuyNow = true;
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(true);
+  });
+
   it("renders real gallery variants: Dawn stacked, Target grid, Amazon's narrow strip, a 3:4 stage", () => {
     expect(resolved("boutique").layout.productPage.gallery).toBe("stacked");
     expect(resolved("mass-retail").layout.productPage.gallery).toBe("grid");

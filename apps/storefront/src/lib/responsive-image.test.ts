@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { DENSITY_CAP_SCALE, capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
+import { DENSITY_CAP_SCALE, capImageSrcSet, capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
 
 describe("capSizesDensity", () => {
   it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
@@ -57,6 +57,14 @@ const at = (width: number) => `https://cdn.example.test/media/bag.jpg/${width}.w
 const slot = { width: 960, sizes: "(max-width: 1023px) 384px, 468px" };
 
 describe("responsiveImageSources", () => {
+  it("keeps the first rendition that covers a card's largest source width", () => {
+    const full = responsiveImageSources(MASTER, slot).srcset!;
+    const capped = capImageSrcSet(full, 820)!;
+    expect(capped.endsWith(`${at(882)} 882w`)).toBe(true);
+    expect(capped).not.toContain(at(960));
+    expect(capImageSrcSet(undefined, 820)).toBeUndefined();
+  });
+
   it("serves renditions with the slot's srcset and sizes", () => {
     expect(responsiveImageSources(MASTER, slot)).toEqual({
       src: at(960),

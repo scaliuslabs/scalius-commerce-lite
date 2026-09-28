@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
-import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_BUY_BOX_LOOKS, type StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { resolveExactVariantSelection, validateSelection } from "./lib/variant-state-machine";
 
@@ -181,6 +181,19 @@ describe("product summary browser payload", () => {
     expect([...facts!.querySelectorAll("dd")].map((row) => row.textContent)).toContain("2 TB");
     expect(doc.querySelectorAll(".variant-option-selector")).toHaveLength(2);
     expect(doc.querySelectorAll(".variant-option-selector")[1]!.compareDocumentPosition(facts!) & 4).toBe(4);
+    const largeModel = doc.querySelector('[data-option-definition-id="model"][data-option-value-id="m1"].variant-option-btn');
+    expect(largeModel?.querySelector("[data-option-price]")?.textContent).toContain("310");
+    expect(largeModel?.getAttribute("aria-label")).toContain("310");
+    const soldOutColor = doc.querySelector('[data-option-definition-id="color"][data-option-value-id="c1"].variant-option-btn');
+    expect(soldOutColor?.querySelector("[data-option-price]")?.hasAttribute("hidden")).toBe(true);
+
+    const flatHtml = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: variants.map((variant) => ({ ...variant, price: 300, discountType: null })), options, details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
+      request: new Request("https://shop.test/products/sample"),
+    });
+    const flatDoc = new Window().document;
+    flatDoc.write(`<body>${flatHtml}</body>`);
+    expect(flatDoc.querySelectorAll("[data-option-price]:not([hidden])")).toHaveLength(0);
 
     const withoutFacts = { ...product, brand: null, attributes: [] };
     const emptyHtml = await container.renderToString(ProductSummary, {
@@ -233,5 +246,32 @@ describe("product summary browser payload", () => {
     expect(variableFacts.textContent).not.toContain("Product Code:");
     expect(variableFacts.textContent).not.toContain("Brand:");
     expect(variableDoc.querySelector(".product-original-price")?.classList.contains("hidden")).toBe(true);
+  });
+
+  it("keeps a single apparel purchase action with sparse or option-rich products, unless the merchant enables Buy now", async () => {
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
+    const sparseVariant = { ...variants[0]!, selectedOptions: [], optionCombinationKey: null };
+    const renderActions = async (look: StorefrontBuyBoxLook, rich: boolean, addToCartText?: string) => {
+      const html = await container.renderToString(ProductSummary, {
+        props: { product, category: null, variants: rich ? variants : [sparseVariant], options: rich ? options : [], details: false, look, actionCopy: addToCartText ? { addToCartText } : undefined },
+        request: new Request("https://shop.test/products/sample"),
+      });
+      const doc = new Window().document;
+      doc.write(`<body>${html}</body>`);
+      return doc;
+    };
+    for (const look of [STOREFRONT_BUY_BOX_LOOKS.fashion, STOREFRONT_BUY_BOX_LOOKS.heritage]) {
+      for (const rich of [false, true]) {
+        const doc = await renderActions(look, rich);
+        expect(doc.querySelectorAll('[data-action="add-to-cart"]')).toHaveLength(1);
+        expect(doc.querySelector('[data-action="buy-now"]')).toBeNull();
+        expect(doc.querySelector('[data-action="add-to-cart"] svg')).toBeNull();
+        expect(doc.querySelectorAll(".variant-option-selector")).toHaveLength(rich ? 2 : 0);
+      }
+    }
+    const longLabel = "Add this handwoven item to my bag";
+    expect((await renderActions(STOREFRONT_BUY_BOX_LOOKS.fashion, false, longLabel)).querySelector('[data-action-label="add-to-cart"]')?.textContent).toBe(longLabel);
+    const merchantLook = { ...STOREFRONT_BUY_BOX_LOOKS.fashion, cta: { ...STOREFRONT_BUY_BOX_LOOKS.fashion.cta, showBuyNow: true } };
+    expect((await renderActions(merchantLook, false)).querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
   });
 });

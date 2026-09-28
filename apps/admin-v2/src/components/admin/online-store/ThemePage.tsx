@@ -988,6 +988,28 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           onChange={setBlock("buyBox")}
         />
         {fitNote("buyBox", "buyBox")}
+        {(theme.blocks.product.buyBox.variant === "fashion" || theme.blocks.product.buyBox.variant === "heritage") && (
+          <SwitchField
+            id="theme-product-buy-now"
+            label={t("productBuyNow")}
+            help={t("productBuyNowHelp")}
+            checked={theme.blocks.product.buyBox.settings.showBuyNow === true}
+            onCheckedChange={(showBuyNow) => setDraft((current) => {
+              const buyBox = current.blocks.product.buyBox;
+              if (buyBox.variant !== "fashion" && buyBox.variant !== "heritage") return current;
+              return {
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  product: {
+                    ...current.blocks.product,
+                    buyBox: { ...buyBox, settings: { ...buyBox.settings, showBuyNow } },
+                  },
+                },
+              };
+            })}
+          />
+        )}
       </SectionCard>
 
       <SectionCard

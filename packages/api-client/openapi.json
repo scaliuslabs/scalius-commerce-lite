@@ -1907,7 +1907,11 @@
                           },
                           "settings": {
                             "type": "object",
-                            "properties": {},
+                            "properties": {
+                              "showBuyNow": {
+                                "type": "boolean"
+                              }
+                            },
                             "additionalProperties": false
                           }
                         },
@@ -1928,7 +1932,11 @@
                           },
                           "settings": {
                             "type": "object",
-                            "properties": {},
+                            "properties": {
+                              "showBuyNow": {
+                                "type": "boolean"
+                              }
+                            },
                             "additionalProperties": false
                           }
                         },
