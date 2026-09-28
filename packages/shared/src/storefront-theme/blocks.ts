@@ -415,12 +415,12 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     bundles: "rows",
     card: false,
   },
-  // Fabrilife: a bordered card, h1 24/600, price 22/700, size boxes, a
+  // Fabrilife: a bordered card, h1 20/700, price 22/700, size boxes, a
   // returns card under the buttons.
   fashion: {
-    title: { size: { desktop: 24, phone: 18 }, weight: 600 },
+    title: { size: { desktop: 20, phone: 18 }, weight: 700 },
     price: { size: { desktop: 22, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
+    cta: { height: 37, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
     facts: "list",
     factPills: false,
     features: "none",

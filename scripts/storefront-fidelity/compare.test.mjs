@@ -112,6 +112,11 @@ describe("our metrics from probe results", () => {
     for (const key of Object.keys(METRIC_RULES)) expect(key in ours).toBe(true);
   });
 
+  it("measures the whole sidebar, including its padding", () => {
+    const ours = extractOurs({ plp: { ...plpProbe, listing: { filterBox: { w: 270 } } } });
+    expect(ours["listing.filterColumnW"]).toBe(270);
+  });
+
   it("reports missing elements as null, and a one-column list as gap 0", () => {
     const ours = extractOurs({ home: { headerRows: [] }, plp: { density: { cols: 1 }, card: { w: 358 } }, pdp: {} });
     expect(ours["header.h"]).toBeNull();

@@ -129,7 +129,7 @@ export function extractOurs({ home, plp, pdp, cardPage = plp } = {}) {
   out["listing.productsVisible"] = num(d?.productsFullyHalfVisible);
   out["listing.filtersVisible"] = num(d?.filterControlsVisible);
   out["listing.bottomOf20"] = num(d?.bottomOf20);
-  out["listing.filterColumnW"] = num(plp?.facets?.columnW) ?? num(plp?.listing?.filterBox?.w);
+  out["listing.filterColumnW"] = num(plp?.listing?.filterBox?.w) ?? num(plp?.facets?.columnW);
   out["listing.filterRowPitch"] = num(plp?.facets?.rowPitch);
   out["pdp.h1"] = pdp?.h1?.font ?? null;
   out["pdp.price"] = pdp?.pdp?.price ?? null;
