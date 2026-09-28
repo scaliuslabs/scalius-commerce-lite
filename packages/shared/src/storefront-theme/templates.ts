@@ -330,7 +330,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["drill-in-drawer"],
       card: ["retail"],
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true },
+        layout: ["grid"], filters: { style: "drawer", openByDefault: false },
         toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "applied-chips"],
         phoneLayout: "list-row",
         paging: "numbered",

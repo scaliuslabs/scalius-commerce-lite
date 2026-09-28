@@ -149,7 +149,7 @@ describe("listing filters", () => {
       "spec-catalogue": { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
       "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, // Apple Gadgets
       marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
-      "mass-retail": { style: "sidebar-dense", openByDefault: true }, // large catalogue (owner rule)
+      "mass-retail": { style: "drawer", openByDefault: false }, // full-width retail grid; merchants can choose a sidebar
       "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 }, // Amazon
       "daily-essentials": { style: "drawer", openByDefault: false }, // Chaldal
       "showcase-landing": { style: "drawer", openByDefault: false },
@@ -178,7 +178,7 @@ describe("listing filters", () => {
     expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
     expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 22, label: 14 });
     // No override: the style's own numbers.
-    expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"]);
+    expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS.drawer);
     const theme = storefrontTemplateTheme("marketplace");
     for (const [key, value] of [["column", 179], ["column", 341], ["rowPitch", 15], ["rowPitch", 37], ["label", 11], ["label", 19], ["rowPitch", 18.5]] as const) {
       const next = structuredClone(theme);

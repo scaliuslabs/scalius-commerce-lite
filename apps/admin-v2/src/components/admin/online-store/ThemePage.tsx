@@ -14,6 +14,7 @@ import {
 } from "@scalius/shared/brand-presentation";
 import {
   STOREFRONT_DENSITIES,
+  STOREFRONT_LISTING_FILTER_STYLES,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
   storefrontBlockDefault,
@@ -27,6 +28,7 @@ import {
   type StorefrontTemplateId,
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
+  type StorefrontListingFilterStyle,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -181,6 +183,28 @@ function ListingLayoutSketch({ layout, theme }: { layout: "grid" | "list"; theme
             </span>
           </span>
         ))}
+      </span>
+    </Sketch>
+  );
+}
+
+function ListingFilterSketch({ filterStyle, theme }: { filterStyle: StorefrontListingFilterStyle; theme: Theme }) {
+  const colors = theme.tokens.colors;
+  const sidebar = filterStyle.startsWith("sidebar");
+  return (
+    <Sketch palette={{ paper: colors.background, ink: colors.foreground, line: colors["muted-foreground"], soft: colors.muted, edge: colors.border, accent: colors.primary }} className="h-16">
+      <span data-listing-filter-sketch={filterStyle} className="flex min-h-0 flex-1 flex-col gap-1">
+        {!sidebar && <span className="flex h-3 gap-1 border-b border-(--sk-edge) pb-1">
+          {(filterStyle === "drawer" ? [0] : [0, 1, 2]).map((item) => <span key={item} className="w-1/4 rounded-full bg-(--sk-soft)" />)}
+        </span>}
+        <span className="flex min-h-0 flex-1 gap-1">
+          {sidebar && <span className="flex w-1/3 flex-col gap-1 border-r border-(--sk-edge) pr-1">
+            {[0, 1, 2, 3].map((item) => <span key={item} className="h-1 rounded-full bg-(--sk-line)" />)}
+          </span>}
+          <span className="grid min-w-0 flex-1 grid-cols-3 gap-1">
+            {[0, 1, 2].map((item) => <span key={item} className="rounded-xs bg-(--sk-soft)" />)}
+          </span>
+        </span>
       </span>
     </Sketch>
   );
@@ -651,6 +675,40 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
           </div>
         </SectionCard>
       )}
+
+      <SectionCard title={t("listingFilters")} description={t("listingFiltersHelp")}>
+        <div data-listing-filter-style>
+          <VisualChoice
+            label={t("listingFilters")}
+            value={theme.blocks.listing.filters.style}
+            className="grid-cols-2 sm:grid-cols-4"
+            options={STOREFRONT_LISTING_FILTER_STYLES.map((style) => ({
+              value: style,
+              label: t(({
+                "sidebar-dense": "filterStyle_dense",
+                "sidebar-comfortable": "filterStyle_comfortable",
+                "bar-dropdowns": "filterStyle_bar",
+                drawer: "filterStyle_drawer",
+              } as const)[style]),
+              sketch: <ListingFilterSketch filterStyle={style} theme={theme} />,
+            }))}
+            onChange={(style) => setDraft((current) => ({
+              ...current,
+              blocks: {
+                ...current.blocks,
+                listing: {
+                  ...current.blocks.listing,
+                  filters: {
+                    ...current.blocks.listing.filters,
+                    style,
+                    openByDefault: style === "sidebar-dense" || style === "sidebar-comfortable",
+                  },
+                },
+              },
+            }))}
+          />
+        </div>
+      </SectionCard>
 
       <SectionCard title={t("density")} description={t("densityHelp")}>
         <VisualChoice

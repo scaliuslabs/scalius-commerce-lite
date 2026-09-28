@@ -38,6 +38,8 @@ interface Props {
 }
 
 const { products, results, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
+const maxColumns = resolved.template === "mass-retail" && resolved.tokens.density === "comfortable" ? 4 : undefined;
 // Only a grid beside the filters loses their column.
 const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 
@@ -48,7 +50,6 @@ if (results === "list") {
   // candidates sized for that wider photo when the buyer has the switch.
   sizes = restoreView ? undefined : LIST_ROW_IMAGE_SIZES;
 } else if (results === "quick") {
-  const { theme, layout } = await currentRequestTheme(Astro.locals);
   const grid = quickGridSpec(productGridSpec(layout.grid, theme.tokens.imageRatio));
   const fluid = productGridFluidCss(grid);
   sizes = productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context, "grid", Infinity, columnPx);
@@ -68,7 +69,7 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
 ---
 
 {restoreView && <script is:inline set:html={restoreScript} />}
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} style={style}>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}
@@ -80,6 +81,7 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
       filterColumnPx={columnPx}
       phoneLayout={gridPhoneLayout}
       sizes={sizes}
+      maxColumns={maxColumns}
       headingLevel="h2"
     />
   ))}

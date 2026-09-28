@@ -87,7 +87,7 @@ interface Props {
 }
 
 const {
-  kind = "category",
+  kind,
   products,
   pagination,
   facets,
@@ -330,7 +330,7 @@ const breadcrumbVisible = piece("breadcrumb");
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
-<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={resolved.template === "marketplace" ? kind : undefined}>
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind}>
   {showFilters && (
     <aside
       id="filter-section"

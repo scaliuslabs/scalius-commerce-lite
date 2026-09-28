@@ -773,6 +773,18 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(unknown.querySelector("#filter-section")!.getAttribute("data-placement")).toBe("sidebar");
   });
 
+  it("lets mass-retail merchants choose sticky category sidebars without losing its four-column grid", async () => {
+    const theme = storefrontTemplateTheme("mass-retail");
+    const defaultPage = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(defaultPage.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
+    expect(defaultPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+
+    theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true };
+    const sidebarPage = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(sidebarPage.querySelector("[data-catalog-kind='category'][data-catalog-layout='sidebar'] > #filter-section")).not.toBeNull();
+    expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+  });
+
   it("opens with one compact band: breadcrumb, h1 at the theme's title size, count and sort", async () => {
     const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
       ...plain(),

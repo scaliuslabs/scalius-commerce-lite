@@ -392,6 +392,20 @@
   display: none;
 }
 
+/* The mass-retail listing gives each desktop photo room while preserving the
+   density's natural column count on narrower screens. */
+@container product-grid (min-width: 36rem) {
+  .product-grid-frame[data-catalog-grid-columns="4"]:not([data-catalog-results="list"]) .product-grid {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(
+        max(min(var(--card-min), 100%), calc((100% - 3 * var(--theme-grid-gap-desktop, 1.5rem)) / 4)),
+        1fr
+      )
+    );
+  }
+}
+
 /* ─── Computers ──────────────────────────────────────────────────────── */
 @media (min-width: 64rem) {
   /* The column: sidebar-dense (Amazon, Daraz, Star Tech) is flat rows under

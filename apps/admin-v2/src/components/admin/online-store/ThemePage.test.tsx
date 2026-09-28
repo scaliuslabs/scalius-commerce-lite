@@ -122,6 +122,7 @@ describe("theme page", () => {
       "Navigation",
       "Footer",
       "Product cards",
+      "Filters on computers",
       "Density",
       "Product page",
       "Homepage sections",
@@ -171,6 +172,21 @@ describe("theme page", () => {
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
     expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
     expect(saved.tokens).toEqual(marketplace.tokens);
+  });
+
+  it("lets a mass-retail merchant replace the filter drawer with a category sidebar", async () => {
+    const retail = storefrontTemplateTheme("mass-retail");
+    render(retail);
+    const control = container.querySelector("[data-listing-filter-style]")!;
+    const drawer = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("Filter drawer"))!;
+    const sidebar = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("Compact sidebar"))!;
+    expect(drawer.getAttribute("aria-checked")).toBe("true");
+    expect(control.querySelector("[data-listing-filter-sketch=drawer]")).not.toBeNull();
+    act(() => sidebar.click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.listing.filters).toEqual({ style: "sidebar-dense", openByDefault: true });
+    expect(saved.blocks.listing.layout).toEqual(retail.blocks.listing.layout);
   });
 
   it("selecting a template sets and saves the whole document", async () => {
