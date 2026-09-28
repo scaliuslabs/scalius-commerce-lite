@@ -295,7 +295,41 @@ describe("product card matrix", () => {
       expect(fallback.querySelector("a[data-card-quick-add]"), JSON.stringify(blocked)).toBeNull();
       expect(fallback.querySelector("a.product-card-action")?.getAttribute("href")).toBe("/products/product-sale");
       expect(text(fallback.querySelector(".product-card-action"))).toBe("View product: Product sale");
+      expect(fallback.querySelectorAll(".product-card-action")).toHaveLength(1);
     }
+  });
+
+  it("shows a product-page action when an available simple product cannot be added from a card", async () => {
+    const personalized = { ...PRODUCTS.onSale, quickAddEligible: false, requiresCustomization: true };
+    for (const variant of ["fashion-value", "spec", "tech-rounded", "retail", "quick-add", "detailed"]) {
+      const card = (await renderCards(themeWith(variant, {}), { product: personalized })).onSale;
+      const hint = card.querySelector("[data-card-action-hint]")!;
+      expect(hint, variant).not.toBeNull();
+      expect(hint.getAttribute("aria-hidden")).toBe("true");
+      expect(card.querySelector("[data-card-quick-add], a[href^='/buy/']"), variant).toBeNull();
+      expect(card.querySelector(".product-card-link")?.getAttribute("href")).toBe("/products/product-sale");
+      if (variant === "quick-add") expect(hint.querySelector("path")?.getAttribute("d")).toBe("M5 12h14m-6-6 6 6-6 6");
+      else expect(text(hint)).toBe("View product");
+    }
+
+    const boutique = themeWith("boutique", {});
+    if (boutique.blocks.card.variant !== "boutique") throw new Error("Expected boutique card");
+    boutique.blocks.card.settings.quickAction = true;
+    expect(text((await renderCards(boutique, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
+    expect((await renderCards(themeWith("boutique", {}), { product: personalized })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
+    expect((await renderCards(themeWith("standard", {}), { product: personalized })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
+    const retail = themeWith("retail", {});
+    if (retail.blocks.card.variant !== "retail") throw new Error("Expected retail card");
+    retail.blocks.card.settings.quickAction = true;
+    expect(text((await renderCards(retail, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
+    const essentials = themeWith("quick-add", {});
+    if (essentials.blocks.card.variant !== "quick-add") throw new Error("Expected essentials card");
+    essentials.blocks.card.settings.fullAction = true;
+    expect(text((await renderCards(essentials, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
+    expect(text((await renderCards(themeWith("detailed", {}), {
+      product: { ...PRODUCTS.onSale, quickAddEligible: false },
+    })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
+    expect((await renderCards(themeWith("quick-add", {}), { product: { ...personalized, availableForSale: false } })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
   });
 
   it("keeps sparse retail cards compact and shows the real review score", async () => {

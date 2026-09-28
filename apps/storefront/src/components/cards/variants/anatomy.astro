@@ -69,6 +69,8 @@ const soldText = facts.sold === null
   ? ""
   : variant === "detailed" ? `${boughtInPastMonth(facts.sold)} bought in past month` : `${facts.sold} sold in 30 days`;
 const optionsHint = quickRetail ? "Options" : anatomy.action === "compact" ? "See options" : "Choose options";
+const productPageHint = model.needsOptions ? optionsHint : "View product";
+const productPageOnly = !model.quickBuyHref && !model.soldOut;
 // The card's own look as custom properties; theme-cards.css draws with them.
 const { look } = anatomy;
 const lookStyle = [
@@ -108,8 +110,8 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
     class="product-card-well"
   >
     {
-      /* Products with options open their page for the buyer's SKU choice. */
-      roundAction && !model.quickBuyHref && model.needsOptions && (
+      /* A product that cannot be added here opens its detail page. */
+      roundAction && productPageOnly && (
         <span
           aria-hidden="true"
           data-card-action-hint
@@ -120,9 +122,9 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
               : "product-card-round-action",
           ]}
         >
-          {variant === "fashion-value" ? "Choose options" : (
+          {variant === "fashion-value" ? productPageHint : (
             <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
-              <path d="M12 5v14M5 12h14" />
+              <path d={model.needsOptions ? "M12 5v14M5 12h14" : "M5 12h14m-6-6 6 6-6 6"} />
             </svg>
           )}
         </span>
@@ -331,9 +333,8 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
       )
     }
     {
-      /* A product with options is chosen on its page: the hint sits under the
-         stretched card link, so it is not a second tab stop. */
-      bodyAction && !model.quickBuyHref && model.needsOptions && (
+      /* The hint sits under the stretched product link, not in a second tab stop. */
+      bodyAction && productPageOnly && !showcaseDetail && (
         <span
           aria-hidden="true"
           data-card-action-hint
@@ -344,7 +345,7 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
             anatomy.action === "compact" && "pc-action-compact",
           ]}
         >
-          {optionsHint}
+          {productPageHint}
         </span>
       )
     }
