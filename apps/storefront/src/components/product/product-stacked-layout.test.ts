@@ -29,4 +29,9 @@ describe("stacked and grid product pages", () => {
     expect(gallery).toContain('<ul class="gallery-list hidden gap-2 lg:grid"');
     expect(gallery).toMatch(/\[data-gallery="grid"\] \.gallery-list \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   });
+
+  it("centres only the resolved 3:4 portrait stage at Aarong's desktop width", () => {
+    expect(gallery).toContain('data-portrait-stage={layout.stageRatio === 0.75 ? "" : undefined}');
+    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\] \{\s*max-width: 404px;\s*justify-self: center;/);
+  });
 });
