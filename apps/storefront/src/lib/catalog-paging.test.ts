@@ -131,6 +131,31 @@ describe("grid/list toggle", () => {
     expect(toggle.querySelector("[data-view='grid']")!.getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("lets a shopper choose phone cards over merchant phone rows", () => {
+    document.body.innerHTML = `
+      <div data-catalog-view-toggle>
+        <button data-view="grid" aria-pressed="true"></button><button data-view="list" aria-pressed="false"></button>
+      </div>
+      <div data-catalog-view-toggle data-catalog-view-mobile>
+        <button data-view="grid" aria-pressed="false"></button><button data-view="list" aria-pressed="true"></button>
+      </div>
+      <div class="product-grid-frame" data-catalog-results="grid" data-catalog-view-storage-key="${catalogViewStorageKey("browse")}">
+        <div class="product-grid" data-phone-layout="list-row"></div>
+      </div>`;
+    setupCatalogViewToggle();
+    const frame = document.querySelector<HTMLElement>(".product-grid-frame")!;
+    const grid = frame.querySelector(".product-grid")!;
+    expect(grid.getAttribute("data-phone-layout")).toBe("list-row");
+    expect(document.querySelector("[data-catalog-view-mobile] [data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+    document.querySelector<HTMLButtonElement>("[data-catalog-view-mobile] [data-view='list']")!.click();
+    expect(frame.dataset.catalogResults).toBe("list");
+    document.querySelector<HTMLButtonElement>("[data-view='grid']")!.click();
+    expect(frame.dataset.catalogResults).toBe("grid");
+    expect(grid.hasAttribute("data-phone-layout")).toBe(false);
+    expect(localStorage.getItem(catalogViewStorageKey("browse"))).toBe("grid");
+    expect(document.querySelector("[data-catalog-view-mobile] [data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("keeps phone and desktop controls synced and separates search from browse choices", () => {
     const renderControls = (kind: "search" | "browse", initial: "grid" | "list") => `
       <div data-catalog-view-toggle><button data-view="grid"></button><button data-view="list"></button></div>

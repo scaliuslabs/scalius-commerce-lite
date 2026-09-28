@@ -2,7 +2,7 @@
 // Grid or list (Daraz), on computers. The choice is a per-browser
 // preference (lib/catalog-paging.ts), never a URL, so it adds no crawl
 // variant; CatalogResults applies it before the grid paints. It is in the
-// first paint (no layout shift when its script runs), and a `<noscript>`
+// initial markup, and a `<noscript>`
 // style removes it where it could not work.
 import { LayoutGrid, List } from "lucide-react";
 
@@ -20,6 +20,7 @@ const button =
   role="group"
   aria-label="Show products as"
   data-catalog-view-toggle
+  data-catalog-view-mobile={mobile ? "" : undefined}
   class:list={["items-center gap-0.5 rounded-lg border border-border bg-background p-0.5", mobile ? "inline-flex lg:hidden" : "hidden lg:inline-flex"]}
 >
   <button type="button" data-view="grid" aria-pressed={defaultView === "grid" ? "true" : "false"} class={button}>

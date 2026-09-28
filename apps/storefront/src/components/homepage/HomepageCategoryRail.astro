@@ -6,9 +6,10 @@ type CategoryRail = HomepageData["presentation"]["categoryRail"];
 
 interface Props {
   rail: CategoryRail;
+  heritage?: boolean;
 }
 
-const { rail } = Astro.props;
+const { rail, heritage = false } = Astro.props;
 const categories = rail.enabled ? rail.categories : [];
 ---
 
@@ -19,10 +20,14 @@ const categories = rail.enabled ? rail.categories : [];
         <h2 id="homepage-category-rail-title" class="section-heading text-foreground">
           {rail.title}
         </h2>
-        <span class="hidden text-xs text-muted-foreground sm:block">Explore by department</span>
+        {!heritage && <span class="hidden text-xs text-muted-foreground sm:block">Explore by department</span>}
       </div>
 
-      <div class="homepage-category-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 md:grid-cols-5">
+      <div class:list={[
+        heritage
+          ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-5"
+          : "homepage-category-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 md:grid-cols-5",
+      ]} data-heritage-departments={heritage ? "" : undefined}>
         {categories.map((category) => {
           const href = category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`;
           const src = category.imageUrl ? mediaImageUrl(category.imageUrl, 480) : null;
@@ -30,14 +35,19 @@ const categories = rail.enabled ? rail.categories : [];
           return (
             <a
               href={href}
-              class="group relative block aspect-[4/5] w-[42vw] max-w-44 shrink-0 snap-start overflow-hidden rounded-xl bg-muted sm:w-auto sm:max-w-none"
+              class:list={[
+                "group relative block aspect-[4/5] overflow-hidden bg-muted",
+                heritage ? "w-full rounded-[var(--radius)]" : "w-[42vw] max-w-44 shrink-0 snap-start rounded-xl sm:w-auto sm:max-w-none",
+              ]}
               aria-label={`Browse ${category.name}`}
             >
               {src ? (
                 <img
                   src={src}
                   srcset={mediaImageSrcSet(category.imageUrl)}
-                  sizes="(max-width: 639px) min(42vw, 176px), (max-width: 767px) 33vw, 20vw"
+                  sizes={heritage
+                    ? "(max-width: 639px) calc((100vw - 2.75rem) / 2), (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 295px"
+                    : "(max-width: 639px) min(42vw, 176px), (max-width: 767px) 33vw, 20vw"}
                   alt=""
                   width="520"
                   height="620"
@@ -50,7 +60,7 @@ const categories = rail.enabled ? rail.categories : [];
               )}
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent"></div>
               <div class="absolute inset-x-0 bottom-0 p-3 md:p-4">
-                <span class="text-sm font-semibold leading-tight text-white drop-shadow-sm md:text-base">
+                <span class="text-sm font-semibold leading-tight text-white drop-shadow-sm [overflow-wrap:anywhere] md:text-base">
                   {category.name}
                 </span>
               </div>

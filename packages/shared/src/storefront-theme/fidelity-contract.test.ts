@@ -141,6 +141,12 @@ describe("contract matrix: template x card x filters x navigation source", () =>
 describe("listing filters", () => {
   const filtersOf = (template: StorefrontTemplateId) => storefrontTemplateTheme(template).blocks.listing.filters;
 
+  it("defaults mass-retail browse to phone rows with a shopper card/list choice", () => {
+    const listing = storefrontTemplateTheme("mass-retail").blocks.listing;
+    expect(listing.phoneLayout).toBe("list-row");
+    expect(listing.toolbar).toContain("grid-list-toggle");
+  });
+
   it("maps each template to its reference's filter style; large catalogues get the open dense column", () => {
     expect(Object.fromEntries(STOREFRONT_TEMPLATE_IDS.map((id) => [id, filtersOf(id)]))).toEqual({
       boutique: { style: "bar-dropdowns", openByDefault: false }, // Dawn

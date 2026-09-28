@@ -220,6 +220,7 @@ const shelves = presentation.shelves && landing
 // Shelves render their own product rails, so there is no results frame for a
 // grid/list switch until the listing falls back to ordinary results.
 const showViewToggle = piece("grid-list-toggle") && results !== "quick" && products.length > 1 && shelves.length === 0;
+const phoneDefaultView = results === "list" || presentation.phoneLayout === "list-row" ? "list" : "grid";
 const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
@@ -331,7 +332,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
             )}
           </button>
           {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
-          {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
+          {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
           {quickFilters.map((link) => (
             <a
               href={link.href}
@@ -362,7 +363,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
-        {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
+        {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
         <CatalogChipLinks label="Product filters" links={[...quickFilters, ...popularFilters]} inline />
       </Fragment>
     ) : (
@@ -389,7 +390,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
-        {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} mobile />}
+        {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
         {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
         {countLabel && boutiqueBar && <p class="catalog-band-count ml-auto shrink-0">{countLabel}</p>}
       </Fragment>

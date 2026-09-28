@@ -20,7 +20,8 @@ interface Props {
 
 const { section, rail } = Astro.props;
 const style = section.settings.style;
-const compactRound = style === "round" && (await currentRequestTheme(Astro.locals)).resolved.template === "rounded-tech";
+const template = (await currentRequestTheme(Astro.locals)).resolved.template;
+const compactRound = style === "round" && template === "rounded-tech";
 const categories = rail.enabled ? rail.categories : [];
 const headingId = `home-${section.id}-title`;
 const hrefOf = (category: (typeof categories)[number]) =>
@@ -32,7 +33,7 @@ const letter = (name: string) => {
 const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
 ---
 
-{style === "photo" && <HomepageCategoryRail rail={rail} />}
+{style === "photo" && <HomepageCategoryRail rail={rail} heritage={template === "heritage-editorial"} />}
 
 {style !== "photo" && categories.length >= 2 && (
   <section class="home-section w-full" aria-labelledby={headingId}>

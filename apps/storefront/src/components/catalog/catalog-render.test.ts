@@ -485,11 +485,13 @@ describe("listing layouts", () => {
     expect(document.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
   });
 
-  it("lets the shopper's Grid choice use phone columns despite a merchant phone-row setting", async () => {
+  it("keeps merchant phone rows until the shopper chooses Grid", async () => {
     const theme = themeWith({ phoneLayout: "list-row", toolbar: ["grid-list-toggle"] });
     const document = await renderListing(theme, plain());
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
-    expect(document.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    expect(document.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+    expect(document.querySelector("[data-catalog-view-mobile] [data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("[data-catalog-view-toggle]:not([data-catalog-view-mobile]) [data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
   });
 
@@ -566,8 +568,19 @@ describe("listing controls", () => {
     expect(html).toContain("<noscript><style>[data-catalog-view-toggle] { display: none !important; }</style></noscript>");
     expect(toggle.querySelector("button[data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
-    // The restore script sits right before the grid it marks.
-    expect(html).toMatch(/localStorage\.getItem\("scalius:listing-view:browse"\)[^<]*<\/script>\s*<div class="[^"]*product-grid-frame/);
+    // The grid exists when the inline restore runs.
+    const restore = [...document.querySelectorAll("script")].find((script) => script.textContent?.includes("localStorage.getItem"))!;
+    const frame = restore.previousElementSibling!;
+    expect(frame.className).toContain("product-grid-frame");
+    const runRestore = (choice: string | null) => {
+      new Function("document", "localStorage", restore.textContent!)(
+        { currentScript: restore }, { getItem: () => choice },
+      );
+    };
+    runRestore("list");
+    expect(frame.getAttribute("data-catalog-results")).toBe("list");
+    runRestore("grid");
+    expect(frame.getAttribute("data-catalog-results")).toBe("grid");
   });
 
   it("shows phone aspect chips that open the filter sheet at each facet", async () => {
@@ -901,6 +914,35 @@ describe("filter styles (fidelity slice 3)", () => {
     const sidebarPage = await renderListing(theme, { ...plain(), kind: "category" });
     expect(sidebarPage.querySelector("[data-catalog-kind='category'][data-catalog-layout='sidebar'] > #filter-section")).not.toBeNull();
     expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+  });
+
+  it("defaults mass-retail categories to desktop cards and phone rows with a view choice", async () => {
+    const theme = storefrontTemplateTheme("mass-retail");
+    const page = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(page.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+    expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+    expect(page.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
+    expect(page.querySelector("[data-catalog-view-mobile] [data-view='list']")!.getAttribute("aria-pressed")).toBe("true");
+    expect(page.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toContain("120px");
+
+    theme.blocks.listing.phoneLayout = "grid";
+    const merchantGrid = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(merchantGrid.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    theme.blocks.listing.phoneLayout = "list-row";
+    const rows = await renderListing(theme, { ...plain(), kind: "category" });
+    const rowGrid = rows.querySelector(".product-grid")!;
+    expect(rowGrid.getAttribute("data-phone-layout")).toBe("list-row");
+    const restore = [...rows.querySelectorAll("script")].find((script) => script.textContent?.includes("localStorage.getItem"))!;
+    new Function("document", "localStorage", restore.textContent!)(
+      { currentScript: restore }, { getItem: () => "grid" },
+    );
+    expect(rowGrid.hasAttribute("data-phone-layout")).toBe(false);
+    expect(rows.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+
+    theme.blocks.listing.toolbar = theme.blocks.listing.toolbar.filter((item) => item !== "grid-list-toggle");
+    const merchantOnly = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(merchantOnly.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+    expect(merchantOnly.querySelector("[data-catalog-view-toggle]")).toBeNull();
   });
 
   it("puts truthful mass-retail phone filters, sort, and popular values in one scroll row", async () => {

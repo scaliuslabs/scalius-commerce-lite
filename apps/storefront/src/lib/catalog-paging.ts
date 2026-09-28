@@ -134,15 +134,18 @@ export function setupCatalogViewToggle(): void {
   const toggles = [...document.querySelectorAll<HTMLElement>("[data-catalog-view-toggle]")];
   const frame = document.querySelector<HTMLElement>(RESULTS);
   if (toggles.length === 0 || !frame) return;
-  const buttons = toggles.flatMap((toggle) => [...toggle.querySelectorAll<HTMLButtonElement>("button[data-view]")]);
-  const sync = () => buttons.forEach((button) =>
-    button.setAttribute("aria-pressed", String(button.dataset.view === frame.dataset.catalogResults)));
+  const sync = () => {
+    const phoneRows = frame.dataset.catalogResults === "grid" && Boolean(frame.querySelector(".product-grid[data-phone-layout='list-row']"));
+    toggles.forEach((toggle) => toggle.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((button) =>
+      button.setAttribute("aria-pressed", String(button.dataset.view === (phoneRows && toggle.hasAttribute("data-catalog-view-mobile") ? "list" : frame.dataset.catalogResults)))));
+  };
   for (const toggle of toggles) {
     if (toggle.dataset.toggleBound === "true") continue;
     toggle.dataset.toggleBound = "true";
     toggle.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((button) => button.addEventListener("click", () => {
       const view = button.dataset.view === "list" ? "list" : "grid";
       frame.dataset.catalogResults = view;
+      if (view === "grid") frame.querySelector(".product-grid")?.removeAttribute("data-phone-layout");
       try {
         localStorage.setItem(frame.dataset.catalogViewStorageKey ?? catalogViewStorageKey("browse"), view);
       } catch {

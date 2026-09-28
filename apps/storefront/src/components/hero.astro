@@ -22,6 +22,7 @@ import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 
 export interface HeroSideBanner {
   asset: HomepageMediaAsset;
@@ -66,6 +67,10 @@ const FRAME_HEIGHT = {
   },
 } as const;
 const frame = layout === "full-bleed" || layout === "full-screen" ? FRAME_HEIGHT[layout] : null;
+const compactHeritagePhone = layout === "full-screen"
+  && (await currentRequestTheme(Astro.locals)).resolved.template === "heritage-editorial"
+  && hero.mobile.length > 0
+  && hero.mobile.every((slide) => !slide.heading?.trim() && !slide.supportingText?.trim() && !(slide.link && slide.buttonLabel?.trim()));
 const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
 ---
 
@@ -145,7 +150,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
           type="mobile"
           priority={phonePriority}
           layout={layout}
-          frameHeight={frame.mobile}
+          frameHeight={compactHeritagePhone ? "clamp(23rem, 65svh, 35rem)" : frame.mobile}
           rounded={false}
           overlay="band"
         />

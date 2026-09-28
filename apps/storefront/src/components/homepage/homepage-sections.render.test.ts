@@ -523,6 +523,41 @@ describe("homepage section library", () => {
     expect(text(square.querySelector('a[href="/categories/category-0"] > span:last-child'))).toBe("Category 0");
   });
 
+  it("shows heritage photo departments as a grid while merchant layouts and other templates keep their own shape", async () => {
+    const categories = section("category-tiles", "tiles", { style: "photo" });
+    const heritage = await render([categories], store("large"), storefrontTemplateTheme("heritage-editorial"));
+    const grid = heritage.querySelector("[data-heritage-departments]")!;
+    expect(grid.classList.contains("grid-cols-2")).toBe(true);
+    expect(grid.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
+    expect(grid.querySelector('a[href="/categories/category-0"]')!.classList.contains("rounded-[var(--radius)]")).toBe(true);
+    expect(grid.querySelector("img")!.getAttribute("sizes")).toContain("/ 2");
+
+    const classic = await render([categories], store("large"));
+    expect(classic.querySelector("[data-heritage-departments]")).toBeNull();
+    expect(classic.querySelector(".homepage-category-scroll")).not.toBeNull();
+    const merchantRound = await render([section("category-tiles", "tiles", { style: "round" })], store("large"), storefrontTemplateTheme("heritage-editorial"));
+    expect(merchantRound.querySelector("[data-heritage-departments]")).toBeNull();
+  });
+
+  it("shortens only an image-only heritage phone hero so departments appear sooner", async () => {
+    const fullScreen = [section("hero", "hero", { layout: "full-screen" })];
+    const heritage = storefrontTemplateTheme("heritage-editorial");
+    const linkedBlank = store("tiny");
+    linkedBlank.hero.mobile = linkedBlank.hero.mobile.map((slide) => ({ ...slide, link: "/search?q=phone" }));
+    const imageOnly = await render(fullScreen, linkedBlank, heritage);
+    expect(imageOnly.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
+      .toContain("65svh");
+    expect(imageOnly.querySelector('.desktop-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
+      .toContain("100svh");
+
+    const promoted = await render(fullScreen, store("large"), heritage);
+    expect(promoted.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
+      .toContain("100svh");
+    const otherTemplate = await render(fullScreen, store("tiny"));
+    expect(otherTemplate.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
+      .toContain("100svh");
+  });
+
   it("switches product tabs without script and keeps only tabs with products", async () => {
     const tabs = EVERY_SECTION.find((each) => each.id === "tabs")!;
     const page = await render([tabs], store("large"));

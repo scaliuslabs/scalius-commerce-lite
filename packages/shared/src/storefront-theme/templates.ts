@@ -334,7 +334,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["retail"],
       listing: {
         layout: ["grid"], filters: { style: "drawer", openByDefault: false },
-        toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "applied-chips"],
+        toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "grid-list-toggle", "applied-chips"],
         phoneLayout: "list-row",
         paging: "numbered",
       },

@@ -49,6 +49,11 @@ export async function runMatrix(ctx, { templates, pages, extraPages = {}, viewpo
         const m = await probePage(page, base + path);
         all[template][`${name}-${viewport}`] = m;
         await page.shot(`${prefix}-${template}-${name}-${viewport === "phone" ? "m" : "d"}-top`);
+        if (name === "home") {
+          // Full-page captures otherwise leave offscreen content-visibility regions blank.
+          await page.eval(`document.querySelectorAll('.storefront-deferred-region').forEach((section) => { section.style.contentVisibility = 'visible'; })`);
+          await page.shot(`${prefix}-${template}-home-${viewport === "phone" ? "m" : "d"}-full`, { full: true, quality: 60 });
+        }
         if (viewport === "desktop") {
           weights[name] = await htmlWeights(base, path);
           weights[name].headerBytes = m.bytes?.siteHeader ?? null;

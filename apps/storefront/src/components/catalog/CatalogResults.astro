@@ -3,7 +3,7 @@
 // row (list), or Chaldal's dense quick-add grid. The frame carries
 // `data-catalog-results` for the paging script (appends the next page's
 // cards) and the list styles; the grid/list toggle's stored choice is
-// applied by an inline script before the grid paints (no layout shift).
+// applied by an inline script as soon as the result grid has parsed.
 import type { Product } from "@/lib/api";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
@@ -66,14 +66,13 @@ if (results === "list") {
     `--grid-gap-fluid:${fluid.gap}`,
   ].join(";");
 }
-// A shopper choosing Grid must get columns on phones too. Without a view
-// switch, the merchant's phone row choice still applies to a grid listing.
-const gridPhoneLayout = restoreView ? "grid" : results === "grid" ? phoneLayout : "grid";
+// Merchant phone rows stay the default. A saved or clicked Grid choice
+// removes that row marker so the buyer gets columns on phones too.
+const gridPhoneLayout = results === "grid" ? phoneLayout : "grid";
 const viewStorageKey = catalogViewStorageKey(kind);
-const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list")s.nextElementSibling.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
+const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list"){f.setAttribute("data-catalog-results",v);if(v==="grid")f.querySelector(".product-grid").removeAttribute("data-phone-layout")}}catch(e){}})(document.currentScript)`;
 ---
 
-{restoreView && <script is:inline set:html={restoreScript} />}
 <ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-kind={kind} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
@@ -84,10 +83,11 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
       aboveFold
       context={context}
       filterColumnPx={columnPx}
-      phoneLayout={gridPhoneLayout}
+      phoneLayout={restoreView ? "grid" : gridPhoneLayout}
       sizes={sizes}
       maxColumns={maxColumns}
       headingLevel="h2"
     />
   ))}
 </ProductGrid>
+{restoreView && <script is:inline set:html={restoreScript} />}
