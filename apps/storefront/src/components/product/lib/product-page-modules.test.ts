@@ -36,6 +36,12 @@ describe("product page modules", () => {
     expect(descriptionInInfoColumn(null)).toBe(true);
   });
 
+  it("keeps fashion description beside the gallery without a duplicate below", () => {
+    const look = STOREFRONT_BUY_BOX_LOOKS.fashion;
+    expect(descriptionInInfoColumn(look)).toBe(true);
+    expect(productPageModules(["description", "related"], product(), { look, hasRelated: true })).toEqual(["related"]);
+  });
+
   it("follows the template list and drops modules this product has no data for", () => {
     const below = ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "questions", "related"] as const;
     const look = STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"];

@@ -86,6 +86,7 @@ const lookStyle = look
   : undefined;
 const factsColumn = look?.facts === "column";
 const factPills = look?.factPills === true;
+const plainDetails = details && look?.card === true;
 const savedFacts = (product.attributes ?? []).filter((row) => row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand");
 const savedBrand = product.brand?.name?.trim();
 const compactFacts = factsColumn
@@ -483,8 +484,9 @@ function optionAriaLabel(
     {!factsColumn && (
       <slot name="after-actions" />
     )}
-    {details && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} />}
+    {details && !plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} />}
   </div>
+  {plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} plain />}
 </div>
 
 <style>

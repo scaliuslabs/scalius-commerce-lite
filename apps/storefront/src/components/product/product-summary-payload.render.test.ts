@@ -83,6 +83,27 @@ const variants: ProductVariant[] = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 describe("product summary browser payload", () => {
+  it("places fashion copy after its purchase card in the photo's info column", async () => {
+    const product = {
+      id: "prod_1", slug: "tunic", name: "Cotton tunic", price: 300,
+      description: "<p>Soft cotton for everyday wear.</p>",
+      additionalInfo: [{ id: "fabric", title: "Fabric & care", content: "<p>Machine wash cold.</p>" }],
+    } as Product;
+    const html = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [], options: [], details: true, look: STOREFRONT_BUY_BOX_LOOKS.fashion },
+      request: new Request("https://shop.test/products/tunic"),
+    });
+    const doc = new Window().document;
+    doc.write(`<body>${html}</body>`);
+    const summary = doc.querySelector("[data-product-summary]")!;
+    const details = summary.querySelector("[data-product-details-plain]")!;
+    expect(details.parentElement).toBe(summary);
+    expect(summary.querySelector(".buy-box-body #product-details")).toBeNull();
+    expect(details.textContent).toContain("Soft cotton for everyday wear.");
+    expect(details.textContent).toContain("Fabric & care");
+    expect(details.querySelector("[role=tab]")).toBeNull();
+  });
+
   it("keeps mall quantity and purchase buttons in one opt-in desktop row", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
     const html = await container.renderToString(ProductSummary, {

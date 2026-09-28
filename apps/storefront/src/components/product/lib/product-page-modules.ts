@@ -34,12 +34,11 @@ export const RENDERED_CONTENT_BLOCK_TYPES = new Set<ProductPageContentBlock["typ
 export const KEY_ATTRIBUTES_MAX = 8;
 
 /**
- * Today's classic buy box and Dawn's keep the description in the info
- * column (Dawn's collapsible rows); every other template renders it full
- * width at its place in the module list, as Star Tech, Daraz and Target do.
+ * Classic, Dawn and the bordered fashion buy box keep the description beside
+ * the gallery; other templates render it full width in the module list.
  */
 export function descriptionInInfoColumn(look: StorefrontBuyBoxLook | null): boolean {
-  return look === null || look.facts === "rows";
+  return look === null || look.facts === "rows" || look.card;
 }
 
 export function renderedContentBlocks(product: Pick<Product, "contentBlocks">): ProductPageContentBlock[] {

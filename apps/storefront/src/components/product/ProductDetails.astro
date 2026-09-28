@@ -12,9 +12,11 @@ interface Props {
   copy?: Partial<CheckoutLanguageData>;
   /** False when the buy box or "About this item" already lists the key features. */
   features?: boolean;
+  /** The fashion info column reads as continuous product copy, not tabs. */
+  plain?: boolean;
 }
 
-const { product, copy, features: showFeatures = true } = Astro.props;
+const { product, copy, features: showFeatures = true, plain = false } = Astro.props;
 const features = showFeatures ? (product.features ?? []) : [];
 // The spec table's Warranty row; until the spec table lands it sits in the description tab.
 const warrantyRow = warrantySpecRow(product, pickWarrantyCopy(copy, ENGLISH_CHECKOUT_LANGUAGE_DATA));
@@ -34,7 +36,21 @@ if (product.additionalInfo && product.additionalInfo.length > 0) {
 const hasManyTabs = tabs.length > 4;
 ---
 
-{
+{plain ? (
+  (product.description || features.length > 0 || product.additionalInfo?.length || warrantyRow) ? (
+    <div id="product-details" class="space-y-5 border-t border-border pt-4 text-sm leading-6 text-foreground" data-product-details-plain>
+      {features.length > 0 && <ul class="list-inside list-disc">{features.map((feature) => <li>{feature}</li>)}</ul>}
+      {product.description && <div class="prose prose-sm max-w-none text-foreground"><RichContent content={product.description} /></div>}
+      {product.additionalInfo?.map((section) => (
+        <section>
+          <h3 class="mb-2 font-semibold">{section.title}</h3>
+          <div class="prose prose-sm max-w-none text-foreground"><RichContent content={section.content} /></div>
+        </section>
+      ))}
+      {warrantyRow && <p><strong>{warrantyRow.label}:</strong> {warrantyRow.value}</p>}
+    </div>
+  ) : null
+) : (
   tabs.length > 0 && (
     <div
       id="product-details"
@@ -168,7 +184,7 @@ const hasManyTabs = tabs.length > 4;
       </div>
     </div>
   )
-}
+)}
 
 <script src="./scripts/product-tabs.ts"></script>
 
