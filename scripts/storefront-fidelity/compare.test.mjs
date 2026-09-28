@@ -392,9 +392,9 @@ describe("filters, verdict and exit code", () => {
     expect(report).toContain("mass-retail/home/desktop | target-home-d-top.jpg | known blocked reference capture");
   });
 
-  it("uses measured Chaldal references without claiming missing visual evidence", () => {
+  it("keeps compact Chaldal cards separate from the full-action grocery default", () => {
     expect(Object.values(reference.templates["daily-essentials"].refs)).toEqual(Array(5).fill("ghorerbazar"));
-    expect(reference.templates["daily-essentials"].visualRefs).toEqual({ home: "chaldal", plp: { desktop: "omneemart", phone: "chaldal" }, pdp: "omneemart" });
+    expect(reference.templates["daily-essentials"].visualRefs).toEqual({ home: "chaldal", plp: "omneemart", pdp: "omneemart" });
     expect(reference.sites.chaldal.shots).toEqual({ home: "chaldal-home", plp: "chaldal-popular" });
     expect(reference.sites.omneemart.shots).toEqual({ plp: "omneemart-groceries-plp", pdp: "omneemart-pdp" });
     expect(reference.sites.chaldal.desktop["card.cols"].v).toBe(6);

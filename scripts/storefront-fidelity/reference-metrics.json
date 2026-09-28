@@ -39,7 +39,7 @@
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
     "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": { "desktop": "walmart", "phone": "daraz" }, "plp": "pickaboo", "pdp": "pickaboo" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" }, "visualRefs": { "plp": "gameghor" } },
-    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": { "desktop": "omneemart", "phone": "chaldal" }, "pdp": "omneemart" } },
+    "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "omneemart", "pdp": "omneemart" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" }, "visualRefs": { "plp": "graza" } }
   },
   "sites": {
@@ -307,7 +307,7 @@
     },
     "omneemart": {
       "name": "OmneeMart Brown Atta (alternate grocery visual)",
-      "$comment": "Accessible desktop and phone product captures; no OmneeMart measurements are scored as Ghorer Bazar geometry.",
+      "$comment": "Accessible desktop and phone category/product captures; two-column full-action phone cards match the Daily Essentials default. No OmneeMart measurements are scored as Ghorer Bazar geometry.",
       "shots": { "plp": "omneemart-groceries-plp", "pdp": "omneemart-pdp" },
       "desktop": {},
       "phone": {}
