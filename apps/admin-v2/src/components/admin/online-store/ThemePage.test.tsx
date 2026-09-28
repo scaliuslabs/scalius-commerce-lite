@@ -136,6 +136,17 @@ describe("theme page", () => {
     expect(saveBar()).toBeNull();
   });
 
+  it("previews Marketplace with its dark search header and list results", () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    const marketplace = radio("Marketplace").querySelector<HTMLElement>("[data-marketplace-preview]")!;
+    expect(marketplace.style.getPropertyValue("--sk-purchase"))
+      .toBe(storefrontTemplateTheme("marketplace").tokens.colors.accent);
+    expect(marketplace.querySelector("[data-marketplace-header]")!.className).toContain("bg-(--sk-ink)");
+    expect(marketplace.querySelectorAll("[data-marketplace-result-row]")).toHaveLength(2);
+    expect(radio("Department mall").querySelector("[data-marketplace-preview]")).toBeNull();
+    expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
+  });
+
   it("selecting a template sets and saves the whole document", async () => {
     render(DEFAULT_STOREFRONT_THEME);
     act(() => radio("Fashion value").click());

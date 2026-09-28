@@ -100,12 +100,56 @@ function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStor
       }}
       className="h-28"
     >
-      <HeaderRows kind={layout.header} />
-      <span className="mt-1 flex justify-center gap-1.5">
-        {[0, 1, 2].map((index) => (
-          <ProductTile key={index} card={layout.productCard} radius={radius} badge={index === 0} className="max-w-11" />
-        ))}
-      </span>
+      {theme.template === "marketplace" ? (
+        <span
+          data-marketplace-preview
+          style={{ "--sk-purchase": colors.accent } as CSSProperties}
+          className="flex min-h-0 flex-1 flex-col gap-1"
+        >
+          <span data-marketplace-header className="flex h-7 shrink-0 flex-col gap-1 rounded-xs bg-(--sk-ink) p-1">
+            <span className="flex items-center gap-1">
+              <span className="h-1 w-4 bg-(--sk-paper)" />
+              <span className="flex h-2 flex-1 overflow-clip rounded-xs bg-(--sk-paper)">
+                <span className="ml-auto w-2 bg-(--sk-purchase)" />
+              </span>
+              <span className="size-1 rounded-full bg-(--sk-paper)" />
+              <span className="size-1 rounded-full bg-(--sk-paper)" />
+            </span>
+            <span className="flex gap-1">
+              <span className="h-0.5 w-4 bg-(--sk-paper)" />
+              <span className="h-0.5 w-3 bg-(--sk-paper)" />
+              <span className="h-0.5 w-3 bg-(--sk-paper)" />
+            </span>
+          </span>
+          <span className="flex min-h-0 flex-1 gap-1">
+            <span className="flex w-1/4 shrink-0 flex-col gap-1 border-r border-(--sk-edge) pr-1">
+              {[0, 1, 2, 3, 4].map((index) => <span key={index} className="h-0.5 w-full bg-(--sk-line)" />)}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              {[0, 1].map((index) => (
+                <span key={index} data-marketplace-result-row className="flex min-h-0 flex-1 gap-1 border-b border-(--sk-edge) pb-0.5 last:border-0">
+                  <span className="aspect-square h-full max-h-7 shrink-0 rounded-xs bg-(--sk-soft)" />
+                  <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                    <span className="h-1 w-4/5 bg-(--sk-line)" />
+                    <span className="h-0.5 w-2/3 bg-(--sk-line)" />
+                    <span className="h-1 w-1/3 bg-(--sk-ink)" />
+                    <span className="h-1 w-1/2 rounded-full bg-(--sk-purchase)" />
+                  </span>
+                </span>
+              ))}
+            </span>
+          </span>
+        </span>
+      ) : (
+        <>
+          <HeaderRows kind={layout.header} />
+          <span className="mt-1 flex justify-center gap-1.5">
+            {[0, 1, 2].map((index) => (
+              <ProductTile key={index} card={layout.productCard} radius={radius} badge={index === 0} className="max-w-11" />
+            ))}
+          </span>
+        </>
+      )}
     </Sketch>
   );
 }
