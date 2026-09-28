@@ -18,6 +18,9 @@ choices and keeps desktop sidebar filters sticky. Product cards render only
 facts present on each product; variant-specific minimum heights keep sparse
 cards aligned without inventing missing facts. Check rendered geometry with
 `pnpm fidelity:check` and the catalog/theme render tests.
+Theme edits save to a private draft; merchants can preview real storefront
+routes through a one-time continuation before explicitly publishing. Logo,
+announcement bar, and footer settings on that page still save live.
 
 
 ## System Overview

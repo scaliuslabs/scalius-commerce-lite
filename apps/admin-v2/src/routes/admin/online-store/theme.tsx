@@ -4,6 +4,7 @@ import {
   footerQueryOptions,
   headerQueryOptions,
   themeQueryOptions,
+  themeWorkspaceQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { pageHead } from "~/i18n/page-titles";
@@ -11,6 +12,7 @@ import { pageHead } from "~/i18n/page-titles";
 export const Route = createFileRoute("/admin/online-store/theme")({
   loader: ({ context: { queryClient } }) => Promise.all([
     queryClient.ensureQueryData(themeQueryOptions()),
+    queryClient.ensureQueryData(themeWorkspaceQueryOptions()),
     queryClient.ensureQueryData(headerQueryOptions()),
     queryClient.ensureQueryData(footerQueryOptions()),
   ]),

@@ -1,10 +1,13 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   postApiV1AdminSettingsFooter,
   postApiV1AdminSettingsHeader,
-  postApiV1AdminSettingsTheme,
+  postApiV1AdminSettingsThemeDraft,
+  postApiV1AdminSettingsThemeDraftRebase,
+  postApiV1AdminSettingsThemePublish,
 } from "@scalius/api-client/sdk";
 import {
   HEADER_LOGO_WIDTH_DEFAULT,
@@ -31,21 +34,26 @@ import {
   type StorefrontListingFilterStyle,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
+import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { SaveBarProvider, useServerFieldError } from "~/components/admin/shared/SaveBar";
+import { SaveBarProvider, SaveConflict, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
+import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import {
   footerQueryOptions,
   headerQueryOptions,
   homepageSectionsQueryOptions,
   themeQueryOptions,
+  themeWorkspaceQueryOptions,
+  type ThemeWorkspaceDocument,
 } from "~/lib/api-query-options/online-store";
 import { formatNumber, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
-import { OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
+import { OnlineStorePage, SectionCard, actionErrorText, failSave, useDocumentDraft } from "./shared";
+import { ThemePreviewAction } from "./ThemePreviewAction";
 import {
   CardStyleSketch,
   DensitySketch,
@@ -467,36 +475,96 @@ function FitNote({ fallback, name, reason }: {
  * with the storefront's own resolver, so a choice that does not fit the
  * store says what buyers see instead.
  */
-function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }: {
-  saved: Theme;
-  revision: number;
+function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
+  workspace: ThemeWorkspaceDocument;
   storeShape: StoreShape;
   sectionMedia: readonly SectionMediaPreview[];
-  refetch: () => unknown;
+  refetch: () => Promise<unknown>;
   site: SiteDrafts;
 }) {
   const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
-  const { draft: theme, setDraft } = useDocumentDraft<Theme>({
+  const [publishing, setPublishing] = useState(false);
+  const [rebasing, setRebasing] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [confirmRebase, setConfirmRebase] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { draft: theme, dirty, setDraft } = useDocumentDraft<Theme>({
     label: t("themeTitle"),
-    saved,
+    saved: workspace.draft.theme as Theme,
     fields: (path) => colorFieldForPath(path),
     invalid: themeDraftInvalid,
+    reload: refetch,
     save: async (next) => {
       try {
-        const result = await apiData(postApiV1AdminSettingsTheme({
-          body: { expectedRevision: revision, theme: next },
+        const result = await apiData(postApiV1AdminSettingsThemeDraft({
+          body: {
+            expectedDraftRevision: workspace.draft.revision,
+            basePublishedRevision: workspace.draft.basePublishedRevision,
+            theme: next,
+          },
         }));
-        queryClient.setQueryData(themeQueryOptions().queryKey, (previous) => previous && {
+        queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && {
           ...previous,
-          theme: result.theme,
-          revision: result.revision,
+          draft: result,
         });
+        setActionError(null);
       } catch (error) {
-        failSave(error, () => void refetch());
+        if (isAdminApiConflictError(error)) throw new SaveConflict();
+        throw error;
       }
     },
   });
+  const hasSavedDraft = workspace.draft.revision > 0;
+  const hasUnpublishedDraft = hasSavedDraft && JSON.stringify(workspace.draft.theme) !== JSON.stringify(workspace.published.theme);
+  const draftIsStale = workspace.draft.basePublishedRevision !== workspace.published.revision;
+  const actionDisabled = dirty || publishing || rebasing;
+  const publish = async () => {
+    setPublishing(true);
+    setActionError(null);
+    try {
+      const result = await apiData(postApiV1AdminSettingsThemePublish({
+        body: {
+          expectedPublishedRevision: workspace.published.revision,
+          expectedDraftRevision: workspace.draft.revision,
+        },
+      }));
+      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, result);
+      queryClient.setQueryData(themeQueryOptions().queryKey, (previous) => previous && {
+        ...previous,
+        theme: result.published.theme,
+        revision: result.published.revision,
+      });
+      toast.success(t("themePublished"));
+    } catch (error) {
+      if (isAdminApiConflictError(error)) await refetch();
+      setActionError(isAdminApiConflictError(error) ? t("themeActionConflict") : actionErrorText(error));
+    } finally {
+      setPublishing(false);
+    }
+  };
+  const rebase = async () => {
+    setRebasing(true);
+    setActionError(null);
+    try {
+      const result = await apiData(postApiV1AdminSettingsThemeDraftRebase({
+        body: {
+          theme: workspace.draft.theme,
+          expectedDraftRevision: workspace.draft.revision,
+          basePublishedRevision: workspace.published.revision,
+        },
+      }));
+      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && {
+        ...previous,
+        draft: result,
+      });
+    } catch (error) {
+      if (isAdminApiConflictError(error)) await refetch();
+      setActionError(isAdminApiConflictError(error) ? t("themeActionConflict") : actionErrorText(error));
+    } finally {
+      setRebasing(false);
+    }
+  };
   const option = (key: string) => t(key as MessageKey);
   const resolved = resolveThemeForStore(theme, storeShape);
   const hasCategoryTiles = theme.pages.home.some((section) => section.type === "category-tiles");
@@ -544,6 +612,45 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+        <div className="space-y-1">
+          <p role="status" className="text-body text-muted-foreground">
+            {dirty ? t("themeSaveDraftFirst") : draftIsStale && hasUnpublishedDraft
+              ? t("themeDraftStale") : hasUnpublishedDraft ? t("themeDraftNotLive") : t("themeLive")}
+          </p>
+          <p className="text-caption text-muted-foreground">{t("themeOtherSettingsLive")}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {draftIsStale && hasUnpublishedDraft ? (
+            <Button type="button" variant="outline" disabled={actionDisabled} loading={rebasing} onClick={() => setConfirmRebase(true)}>
+              {t("themeRebase")}
+            </Button>
+          ) : null}
+          <Button type="button" disabled={actionDisabled || !hasUnpublishedDraft || draftIsStale} loading={publishing} onClick={() => setConfirmPublish(true)}>
+            {t("themePublish")}
+          </Button>
+        </div>
+      </div>
+      {actionError ? <p role="alert" className="text-body text-destructive">{actionError}</p> : null}
+      <ThemePreviewAction draftRevision={workspace.draft.revision} disabled={actionDisabled} />
+      <ConfirmDialog
+        open={confirmPublish}
+        onOpenChange={setConfirmPublish}
+        title={t("themePublishConfirmTitle")}
+        description={t("themePublishConfirmBody")}
+        confirmLabel={t("themePublish")}
+        variant="default"
+        onConfirm={() => { setConfirmPublish(false); void publish(); }}
+      />
+      <ConfirmDialog
+        open={confirmRebase}
+        onOpenChange={setConfirmRebase}
+        title={t("themeRebaseConfirmTitle")}
+        description={t("themeRebaseConfirmBody")}
+        confirmLabel={t("themeRebase")}
+        variant="default"
+        onConfirm={() => { setConfirmRebase(false); void rebase(); }}
+      />
       <SectionCard title={t("themeTemplates")} description={t("themeTemplatesHelp")}>
         {selected === null ? (
           <p className="text-body text-muted-foreground" role="status">
@@ -910,12 +1017,12 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
 }
 
 function ThemeSettings() {
-  const { data, refetch } = useSuspenseQuery(themeQueryOptions());
+  const { data } = useSuspenseQuery(themeQueryOptions());
+  const { data: workspace, refetch } = useSuspenseQuery(themeWorkspaceQueryOptions());
   const site = useSiteDrafts();
   return (
     <ThemeCards
-      saved={data.theme as Theme}
-      revision={data.revision}
+      workspace={workspace}
       storeShape={data.storeShape as StoreShape}
       sectionMedia={data.sectionMedia}
       refetch={refetch}

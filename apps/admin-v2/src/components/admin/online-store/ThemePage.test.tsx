@@ -17,22 +17,29 @@ import {
   headerQueryOptions,
   homepageSectionsQueryOptions,
   themeQueryOptions,
+  themeWorkspaceQueryOptions,
+  type ThemeWorkspaceDocument,
 } from "~/lib/api-query-options/online-store";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { ThemePage } from "./ThemePage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const api = vi.hoisted(() => ({ theme: vi.fn(), header: vi.fn(), footer: vi.fn() }));
+const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn(), rebase: vi.fn(), header: vi.fn(), footer: vi.fn() }));
 const fonts = vi.hoisted(() => ({ register: vi.fn() }));
 
 vi.mock("./type-preview-fonts", () => ({ registerTypePreviewFonts: fonts.register }));
+vi.mock("./ThemePreviewAction", () => ({ ThemePreviewAction: () => <section><h2>Storefront preview</h2></section> }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminSettingsTheme: vi.fn(),
+  getApiV1AdminSettingsThemeWorkspace: vi.fn(),
   getApiV1AdminSettingsHeader: vi.fn(),
   getApiV1AdminSettingsFooter: vi.fn(),
-  postApiV1AdminSettingsTheme: api.theme,
+  postApiV1AdminSettingsThemeDraft: api.draft,
+  postApiV1AdminSettingsThemeDraftRebase: api.rebase,
+  postApiV1AdminSettingsThemePublish: api.publish,
   postApiV1AdminSettingsHeader: api.header,
   postApiV1AdminSettingsFooter: api.footer,
 }));
@@ -50,9 +57,10 @@ let container: HTMLDivElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.theme.mockImplementation(async ({ body }: { body: { theme: StorefrontThemeDocument } }) => ({
+  api.draft.mockImplementation(async ({ body }: { body: { theme: StorefrontThemeDocument } }) => ({
     theme: body.theme,
     revision: 2,
+    basePublishedRevision: 1,
   }));
   container = document.createElement("div");
   document.body.append(container);
@@ -75,9 +83,18 @@ const SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
-function render(theme: StorefrontThemeDocument, storeShape = SHAPE, categoryRail = DEFAULT_HOMEPAGE_PRESENTATION.categoryRail) {
+function render(
+  theme: StorefrontThemeDocument,
+  storeShape = SHAPE,
+  categoryRail = DEFAULT_HOMEPAGE_PRESENTATION.categoryRail,
+  workspace: ThemeWorkspaceDocument = {
+    published: { theme, revision: 1 },
+    draft: { theme, revision: 1, basePublishedRevision: 1 },
+  },
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape, sectionMedia: [] } as never);
+  queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, workspace);
   queryClient.setQueryData(homepageSectionsQueryOptions().queryKey, {
     config: { ...DEFAULT_HOMEPAGE_PRESENTATION, categoryRail }, revision: 1,
   } as never);
@@ -95,6 +112,7 @@ function render(theme: StorefrontThemeDocument, storeShape = SHAPE, categoryRail
       </QueryClientProvider>,
     );
   });
+  return queryClient;
 }
 
 const headings = () => [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
@@ -119,6 +137,7 @@ describe("theme page", () => {
   it("shows one card per choice, with the saved template selected", () => {
     render(DEFAULT_STOREFRONT_THEME);
     expect(headings()).toEqual([
+      "Storefront preview",
       "Template",
       "Logo",
       "Colors",
@@ -163,9 +182,76 @@ describe("theme page", () => {
     render(DEFAULT_STOREFRONT_THEME);
     act(() => radio("Daily essentials").click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.template).toBe("daily-essentials");
     expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
+  });
+
+  it("saves privately, then publishes only the saved revision after confirmation", async () => {
+    const queryClient = render(DEFAULT_STOREFRONT_THEME);
+    const fashion = storefrontTemplateTheme("fashion-value");
+    const publishButton = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Publish theme")!;
+    expect(publishButton().disabled).toBe(true);
+
+    act(() => radio("Fashion value").click());
+    expect(publishButton().disabled).toBe(true);
+    await pressSave();
+    expect(api.draft.mock.calls[0]![0].body).toEqual({
+      theme: fashion, expectedDraftRevision: 1, basePublishedRevision: 1,
+    });
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData<ThemeWorkspaceDocument>(themeWorkspaceQueryOptions().queryKey)?.published.theme)
+      .toEqual(DEFAULT_STOREFRONT_THEME);
+    expect(container.textContent).toContain("Draft saved. Your storefront still shows the live theme.");
+
+    api.publish.mockResolvedValue({
+      published: { theme: fashion, revision: 2 },
+      draft: { theme: fashion, revision: 3, basePublishedRevision: 2 },
+    });
+    act(() => publishButton().click());
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Publish this saved theme?");
+    await act(async () => {
+      [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")]
+        .find((button) => button.textContent === "Publish theme")!.click();
+    });
+    expect(api.publish.mock.calls[0]![0].body).toEqual({ expectedPublishedRevision: 1, expectedDraftRevision: 2 });
+    expect(queryClient.getQueryData<ThemeWorkspaceDocument>(themeWorkspaceQueryOptions().queryKey)?.published.theme)
+      .toEqual(fashion);
+  });
+
+  it("keeps unsaved edits after another session changes the draft", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    act(() => radio("Fashion value").click());
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "CONFLICT"));
+    await pressSave();
+    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("true");
+    expect(saveBar()).not.toBeNull();
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicit draft rebase when the live theme changed", async () => {
+    const published = storefrontTemplateTheme("boutique");
+    const draft = storefrontTemplateTheme("marketplace");
+    render(published, SHAPE, DEFAULT_HOMEPAGE_PRESENTATION.categoryRail, {
+      published: { theme: published, revision: 2 },
+      draft: { theme: draft, revision: 4, basePublishedRevision: 1 },
+    });
+    const publishButton = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Publish theme")!;
+    expect(publishButton.disabled).toBe(true);
+    expect(container.textContent).toContain("The live theme changed since this draft started.");
+    api.rebase.mockResolvedValue({ theme: draft, revision: 5, basePublishedRevision: 2 });
+    act(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Use current live version")!.click());
+    await act(async () => {
+      [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")]
+        .find((button) => button.textContent === "Use current live version")!.click();
+    });
+    expect(api.rebase.mock.calls[0]![0].body).toEqual({
+      theme: draft, expectedDraftRevision: 4, basePublishedRevision: 2,
+    });
+    expect(api.publish).not.toHaveBeenCalled();
   });
 
   it("lets a Marketplace merchant set category and search starting views separately", async () => {
@@ -188,7 +274,7 @@ describe("theme page", () => {
     act(() => searchGrid.click());
     expect(list.getAttribute("aria-checked")).toBe("true");
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
     expect(saved.blocks.listing.searchLayout).toBe("grid");
     expect(saved.blocks.listing.toolbar).toEqual(marketplace.blocks.listing.toolbar);
@@ -212,7 +298,7 @@ describe("theme page", () => {
     expect(control.querySelector("#theme-listing-view-toggle")?.getAttribute("aria-checked")).toBe("false");
     act(() => (control.querySelector("#theme-listing-view-toggle") as HTMLButtonElement).click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout.variant).toBe("grid");
     expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
@@ -224,7 +310,7 @@ describe("theme page", () => {
     expect(phoneRows.getAttribute("aria-checked")).toBe("false");
     act(() => phoneRows.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.phoneLayout).toBe("list-row");
     expect(saved.blocks.listing.searchLayout).toBe("list");
   });
@@ -239,7 +325,7 @@ describe("theme page", () => {
     const list = [...control.querySelectorAll<HTMLButtonElement>("[role=radio]")].find((item) => item.textContent?.startsWith("List"))!;
     act(() => list.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout).toEqual({ variant: "list", settings: {} });
   });
 
@@ -252,7 +338,7 @@ describe("theme page", () => {
     expect(quick.getAttribute("aria-checked")).toBe("true");
     act(() => quick.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false, showBuyNow: false } });
   });
 
@@ -262,7 +348,7 @@ describe("theme page", () => {
     expect(side.getAttribute("aria-checked")).toBe("true");
     act(() => side.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: false } });
   });
 
@@ -273,7 +359,7 @@ describe("theme page", () => {
     act(() => choice.click());
     expect(control.querySelector("#theme-listing-view-toggle")?.getAttribute("aria-checked")).toBe("true");
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.layout.variant).toBe(layout);
     expect(saved.blocks.listing.toolbar).toContain("grid-list-toggle");
   });
@@ -288,7 +374,7 @@ describe("theme page", () => {
     expect(control.querySelector("[data-listing-filter-sketch=drawer]")).not.toBeNull();
     act(() => sidebar.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.listing.filters).toEqual({ style: "sidebar-dense", openByDefault: true });
     expect(saved.blocks.listing.layout).toEqual(retail.blocks.listing.layout);
   });
@@ -301,7 +387,7 @@ describe("theme page", () => {
     expect(quick.getAttribute("aria-checked")).toBe("false");
     act(() => quick.click());
     await pressSave();
-    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.blocks.card).toEqual({ variant: "retail", settings: { quickAction: true } });
   });
 
@@ -311,9 +397,10 @@ describe("theme page", () => {
     expect(radio("Fashion value").getAttribute("aria-checked")).toBe("true");
 
     await pressSave();
-    expect(api.theme).toHaveBeenCalledTimes(1);
-    expect(api.theme.mock.calls[0]![0].body).toEqual({
-      expectedRevision: 1,
+    expect(api.draft).toHaveBeenCalledTimes(1);
+    expect(api.draft.mock.calls[0]![0].body).toEqual({
+      expectedDraftRevision: 1,
+      basePublishedRevision: 1,
       theme: storefrontTemplateTheme("fashion-value"),
     });
   });
@@ -391,13 +478,13 @@ describe("theme page", () => {
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("false");
 
     await pressSave();
-    expect(api.theme).not.toHaveBeenCalled();
+    expect(api.draft).not.toHaveBeenCalled();
 
     // A readable colour clears the error and saves.
     type(buttonText, "#fafafa");
     expect(buttonText.hasAttribute("aria-invalid")).toBe(false);
     await pressSave();
-    expect(api.theme).toHaveBeenCalledTimes(1);
+    expect(api.draft).toHaveBeenCalledTimes(1);
   });
 
   describe("typography", () => {
@@ -486,9 +573,10 @@ describe("theme page", () => {
       expect(container.textContent).toContain("Changed (based on Department mall)");
 
       await pressSave();
-      expect(api.theme).toHaveBeenCalledTimes(1);
-      expect(api.theme.mock.calls[0]![0].body).toEqual({
-        expectedRevision: 1,
+      expect(api.draft).toHaveBeenCalledTimes(1);
+      expect(api.draft.mock.calls[0]![0].body).toEqual({
+        expectedDraftRevision: 1,
+        basePublishedRevision: 1,
         theme: { ...DEFAULT_STOREFRONT_THEME, tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, typography: "editorial" } },
       });
     });
@@ -509,7 +597,7 @@ describe("theme page", () => {
 
       choose("Heading size", "Small");
       await pressSave();
-      expect(api.theme.mock.calls[0]![0].body.theme.tokens).toEqual({ ...DEFAULT_STOREFRONT_THEME.tokens, typeScale: "flat" });
+      expect(api.draft.mock.calls[0]![0].body.theme.tokens).toEqual({ ...DEFAULT_STOREFRONT_THEME.tokens, typeScale: "flat" });
     });
   });
 
@@ -544,9 +632,10 @@ describe("theme page", () => {
     expect(card.textContent).toContain("Your store shows Dropdown instead. Needs 2 or more navigation groups with two or more links (you have 0).");
 
     await pressSave();
-    expect(api.theme).toHaveBeenCalledTimes(1);
-    expect(api.theme.mock.calls[0]![0].body).toEqual({
-      expectedRevision: 1,
+    expect(api.draft).toHaveBeenCalledTimes(1);
+    expect(api.draft.mock.calls[0]![0].body).toEqual({
+      expectedDraftRevision: 1,
+      basePublishedRevision: 1,
       theme: {
         ...saved,
         blocks: {

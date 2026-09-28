@@ -9,6 +9,7 @@ import {
   getApiV1AdminSettingsHomepagePresentation,
   getApiV1AdminSettingsSeoFeedDiagnostics,
   getApiV1AdminSettingsTheme,
+  getApiV1AdminSettingsThemeWorkspace,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
@@ -18,6 +19,7 @@ import type {
 } from "./navigation";
 
 export type ThemeDocument = ApiResult<typeof getApiV1AdminSettingsTheme>;
+export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsThemeWorkspace>;
 export type HeaderDocument = ApiResult<typeof getApiV1AdminSettingsHeader>;
 export type FooterDocument = ApiResult<typeof getApiV1AdminSettingsFooter>;
 export type HeroSliderDocument = ApiResult<typeof getApiV1AdminSettingsHeroSliders>[number];
@@ -32,6 +34,12 @@ export const themeQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.theme(),
     queryFn: () => apiData(getApiV1AdminSettingsTheme()),
+  });
+
+export const themeWorkspaceQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.settings.theme(), "workspace"] as const,
+    queryFn: () => apiData(getApiV1AdminSettingsThemeWorkspace()),
   });
 
 export const headerQueryOptions = () =>
