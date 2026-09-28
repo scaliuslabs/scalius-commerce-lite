@@ -47,6 +47,8 @@ interface Props {
   fulfilmentBadge?: string | null;
   /** The template's buy-box look; null keeps today's classic buy box untouched. */
   look?: StorefrontBuyBoxLook | null;
+  /** Grocery purchase actions use a quantity + cart row over the direct-buy button. */
+  essentials?: boolean;
   /** The description tabs sit in the buy box (classic, Dawn); false moves them below the fold. */
   details?: boolean;
   /** The key features show in the buy box or in "About this item": the tabs leave them out. */
@@ -66,6 +68,7 @@ const {
   actionCopy: providedCopy = {},
   fulfilmentBadge = null,
   look = null,
+  essentials = false,
   details = true,
   detailsFeatures = true,
 } = Astro.props;
@@ -240,6 +243,7 @@ function optionAriaLabel(
   data-buy-box-card={look?.card ? "" : undefined}
   data-facts-column={factsColumn ? "" : undefined}
   data-fact-pills={factPills ? "" : undefined}
+  data-essentials-buy-box={essentials ? "" : undefined}
   style={lookStyle}
 >
   <div class="buy-box-body flex h-full flex-col">
@@ -536,6 +540,21 @@ function optionAriaLabel(
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+  [data-essentials-buy-box] .buy-box-purchase {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: end;
+    max-width: 380px;
+  }
+  [data-essentials-buy-box] .buy-box-ctas {
+    display: contents;
+  }
+  [data-essentials-buy-box] .buy-box-ctas > [data-action="add-to-cart"] {
+    grid-column: 2;
+  }
+  [data-essentials-buy-box] .buy-box-ctas > [data-action="buy-now"] {
+    grid-column: 1 / -1;
   }
   [data-facts-column] .purchase-price {
     display: none;

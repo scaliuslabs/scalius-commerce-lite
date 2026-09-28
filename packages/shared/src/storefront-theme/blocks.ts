@@ -394,7 +394,7 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     bundles: "rows",
     card: false,
   },
-  // Ghorer Bazar: restrained title and accent price beside a compact two-button purchase row.
+  // Ghorer Bazar: restrained title and accent price with quantity and cart above direct buy.
   essentials: {
     title: { size: { desktop: 22, phone: 20 }, weight: 600 },
     price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "primary" },

@@ -4,9 +4,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
-import { STOREFRONT_BUY_BOX_LOOKS, type StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
+import { EMPTY_STORE_SHAPE, STOREFRONT_BUY_BOX_LOOKS, resolveStorefrontTheme, storefrontTemplateTheme, type StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { buyBoxFeatures } from "./lib/product-page-modules";
+import { resolveProductPageTheme } from "./lib/product-page-theme";
 import { resolveExactVariantSelection, validateSelection } from "./lib/variant-state-machine";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
@@ -152,6 +153,46 @@ describe("product summary browser payload", () => {
     expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
     expect(doc.querySelector("#quantity")?.getAttribute("form")).toBe("product-buy-form");
     expect(doc.querySelector("[data-action=buy-now]")?.getAttribute("form")).toBe("product-buy-form");
+  });
+
+  it("renders the grocery purchase modifier only for a resolved Essentials buy box", async () => {
+    const product = { id: "prod_1", slug: "mustard-oil", name: "Mustard oil", price: 350 } as Product;
+    const pantry = storefrontTemplateTheme("daily-essentials");
+    const merchantOverride = {
+      ...pantry,
+      blocks: {
+        ...pantry.blocks,
+        product: { ...pantry.blocks.product, buyBox: storefrontTemplateTheme("department-mall").blocks.product.buyBox },
+      },
+    };
+    for (const [theme, expected] of [[pantry, true], [merchantOverride, false]] as const) {
+      const resolved = resolveProductPageTheme(
+        { theme, resolved: resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE) },
+        { pageTemplate: null },
+        EMPTY_STORE_SHAPE,
+      );
+      const html = await container.renderToString(ProductSummary, {
+        props: {
+          product, category: null, variants: [variants[0]], options: [], details: false,
+          look: resolved.layout.buyBox.look,
+          essentials: resolved.blocks.product.buyBox.variant === "essentials",
+        },
+        request: new Request("https://shop.test/products/mustard-oil"),
+      });
+      const doc = new Window().document;
+      doc.write(`<body>${html}</body>`);
+      const summary = doc.querySelector("[data-product-summary]")!;
+      const purchase = summary.querySelector(".buy-box-purchase")!;
+      const quantity = purchase.querySelector("#quantity")!;
+      const addToCart = purchase.querySelector('[data-action="add-to-cart"]')!;
+      const buyNow = purchase.querySelector('[data-action="buy-now"]')!;
+      expect(summary.hasAttribute("data-essentials-buy-box")).toBe(expected);
+      expect(quantity.compareDocumentPosition(addToCart) & 4).toBe(4);
+      expect(addToCart.compareDocumentPosition(buyNow) & 4).toBe(4);
+      expect([quantity, addToCart, buyNow].map((control) => control.getAttribute("form"))).toEqual([
+        "product-buy-form", "product-buy-form", "product-buy-form",
+      ]);
+    }
   });
 
   it("groups arbitrary merchant options in rounded-tech panels without changing purchase controls", async () => {

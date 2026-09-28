@@ -23,6 +23,8 @@ above or below products; buying guides remain below. Showcase listings surface
 published child categories in a segmented strip when the catalog has a
 category tree, and can show one compact row of real option or attribute values
 from listing facets. Merchants can hide either Showcase row in Theme settings.
+The Daily Essentials product buy box keeps quantity beside Add to cart and
+places Buy now below; its actions still follow the resolved product template.
 Marketplace option tiles show a price when the other selected axes identify
 one available SKU. Fashion and
 Heritage buy boxes start with one purchase button; merchants can add Buy now
