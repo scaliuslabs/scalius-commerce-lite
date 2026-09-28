@@ -77,10 +77,11 @@ if (images.length === 0) return;
         images.map((image: Props["images"][0], index: number) => {
           const SlideFrame = image.link ? "a" : "div";
           const isExternal = image.link?.startsWith("https://");
-          // Alt text describes the artwork; heading and button are optional overlay copy.
+          // Alt text describes the artwork; heading, supporting text, and button are overlay copy.
           const headline = image.heading?.trim();
+          const supportingText = image.supportingText?.trim();
           const buttonLabel = image.link ? image.buttonLabel?.trim() : "";
-          const editorial = layout === "wide-editorial" && Boolean(headline || buttonLabel);
+          const editorial = layout === "wide-editorial" && Boolean(headline || supportingText || buttonLabel);
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           // Every rendition with the rendered width, built by the same helper
           // as the LCP preload in pages/index.astro, so the browser picks one
@@ -149,9 +150,10 @@ if (images.length === 0) return;
                     </div>
                   </div>
                 )}
-                {(headline || buttonLabel) && overlay === "editorial" && (
+                {(headline || supportingText || buttonLabel) && overlay === "editorial" && (
                   <div class="wide-editorial-copy">
                     {headline && <p class="wide-editorial-heading [overflow-wrap:anywhere]">{headline}</p>}
+                    {supportingText && <p class="wide-editorial-support [overflow-wrap:anywhere]">{supportingText}</p>}
                     {buttonLabel && <span class="wide-editorial-button">{buttonLabel}</span>}
                   </div>
                 )}
@@ -696,10 +698,24 @@ if (images.length === 0) return;
   }
 
   .wide-editorial-heading {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
     max-width: 34rem;
     font-size: clamp(1.5rem, 2.1vw, 2.25rem);
     font-weight: 700;
     line-height: 1.16;
+  }
+
+  .wide-editorial-support {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    max-width: 34rem;
+    font-size: clamp(0.875rem, 1.1vw, 1rem);
+    line-height: 1.5;
   }
 
   .wide-editorial-button {

@@ -22,7 +22,7 @@ import { NavigationResourcePicker } from "./NavigationResourcePicker";
 import { Field } from "./shared";
 
 /** Control ids of one banner, so server errors mark the right field. */
-export const bannerFieldId = (slideId: string, field: "text" | "heading" | "button" | "link") => `banner-${field}-${slideId}`;
+export const bannerFieldId = (slideId: string, field: "text" | "heading" | "supporting-text" | "button" | "link") => `banner-${field}-${slideId}`;
 
 export function SlideRow({
   slide,
@@ -44,6 +44,7 @@ export function SlideRow({
   const textId = bannerFieldId(slide.id, "text");
   const linkId = bannerFieldId(slide.id, "link");
   const headingId = bannerFieldId(slide.id, "heading");
+  const supportingTextId = bannerFieldId(slide.id, "supporting-text");
   const buttonId = bannerFieldId(slide.id, "button");
   return (
     <div
@@ -115,6 +116,14 @@ export function SlideRow({
             value={slide.heading}
             maxLength={HERO_SLIDE_TITLE_LIMIT}
             onChange={(event) => onChange({ heading: event.target.value })}
+          />
+        </Field>
+        <Field id={supportingTextId} label={t("bannerSupportingText")} help={t("bannerSupportingTextHelp")}>
+          <Input
+            id={supportingTextId}
+            value={slide.supportingText ?? ""}
+            maxLength={HERO_SLIDE_TITLE_LIMIT}
+            onChange={(event) => onChange({ supportingText: event.target.value })}
           />
         </Field>
         <Field

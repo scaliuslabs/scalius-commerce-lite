@@ -1303,6 +1303,9 @@
                         "properties": {
                           "fullAction": {
                             "type": "boolean"
+                          },
+                          "showBuyNow": {
+                            "type": "boolean"
                           }
                         },
                         "additionalProperties": false
@@ -2207,6 +2210,12 @@
                                 "story-cards",
                                 "full-screen",
                                 "wide-editorial"
+                              ]
+                            },
+                            "phonePlacement": {
+                              "type": "string",
+                              "enum": [
+                                "after-categories"
                               ]
                             },
                             "sideBanners": {
@@ -13112,6 +13121,9 @@
                                   "heading": {
                                     "type": "string"
                                   },
+                                  "supportingText": {
+                                    "type": "string"
+                                  },
                                   "buttonLabel": {
                                     "type": "string"
                                   },
@@ -13143,6 +13155,7 @@
                                   "url",
                                   "title",
                                   "heading",
+                                  "supportingText",
                                   "buttonLabel",
                                   "link",
                                   "focalPoint"
@@ -13193,6 +13206,9 @@
                                   "heading": {
                                     "type": "string"
                                   },
+                                  "supportingText": {
+                                    "type": "string"
+                                  },
                                   "buttonLabel": {
                                     "type": "string"
                                   },
@@ -13224,6 +13240,7 @@
                                   "url",
                                   "title",
                                   "heading",
+                                  "supportingText",
                                   "buttonLabel",
                                   "link",
                                   "focalPoint"
@@ -13274,6 +13291,9 @@
                                   "heading": {
                                     "type": "string"
                                   },
+                                  "supportingText": {
+                                    "type": "string"
+                                  },
                                   "buttonLabel": {
                                     "type": "string"
                                   },
@@ -13305,6 +13325,7 @@
                                   "url",
                                   "title",
                                   "heading",
+                                  "supportingText",
                                   "buttonLabel",
                                   "link",
                                   "focalPoint"
@@ -13341,6 +13362,9 @@
                               "heading": {
                                 "type": "string"
                               },
+                              "supportingText": {
+                                "type": "string"
+                              },
                               "buttonLabel": {
                                 "type": "string"
                               },
@@ -13372,6 +13396,7 @@
                               "url",
                               "title",
                               "heading",
+                              "supportingText",
                               "buttonLabel",
                               "link",
                               "focalPoint"
@@ -13520,6 +13545,9 @@
                                   "heading": {
                                     "type": "string"
                                   },
+                                  "supportingText": {
+                                    "type": "string"
+                                  },
                                   "buttonLabel": {
                                     "type": "string"
                                   },
@@ -13551,6 +13579,7 @@
                                   "url",
                                   "title",
                                   "heading",
+                                  "supportingText",
                                   "buttonLabel",
                                   "link",
                                   "focalPoint"
@@ -169160,6 +169189,9 @@
                                 "heading": {
                                   "type": "string"
                                 },
+                                "supportingText": {
+                                  "type": "string"
+                                },
                                 "buttonLabel": {
                                   "type": "string"
                                 },
@@ -169192,6 +169224,7 @@
                                 "url",
                                 "title",
                                 "heading",
+                                "supportingText",
                                 "buttonLabel",
                                 "link",
                                 "focalPoint"
@@ -169553,6 +169586,10 @@
                           "type": "string",
                           "maxLength": 160
                         },
+                        "supportingText": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
                         "buttonLabel": {
                           "type": "string",
                           "maxLength": 40
@@ -169653,6 +169690,9 @@
                               "heading": {
                                 "type": "string"
                               },
+                              "supportingText": {
+                                "type": "string"
+                              },
                               "buttonLabel": {
                                 "type": "string"
                               },
@@ -169685,6 +169725,7 @@
                               "url",
                               "title",
                               "heading",
+                              "supportingText",
                               "buttonLabel",
                               "link",
                               "focalPoint"
@@ -170108,6 +170149,9 @@
                               "heading": {
                                 "type": "string"
                               },
+                              "supportingText": {
+                                "type": "string"
+                              },
                               "buttonLabel": {
                                 "type": "string"
                               },
@@ -170140,6 +170184,7 @@
                               "url",
                               "title",
                               "heading",
+                              "supportingText",
                               "buttonLabel",
                               "link",
                               "focalPoint"
@@ -170507,6 +170552,10 @@
                           "type": "string",
                           "maxLength": 160
                         },
+                        "supportingText": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
                         "buttonLabel": {
                           "type": "string",
                           "maxLength": 40
@@ -170606,6 +170655,9 @@
                               "heading": {
                                 "type": "string"
                               },
+                              "supportingText": {
+                                "type": "string"
+                              },
                               "buttonLabel": {
                                 "type": "string"
                               },
@@ -170638,6 +170690,7 @@
                               "url",
                               "title",
                               "heading",
+                              "supportingText",
                               "buttonLabel",
                               "link",
                               "focalPoint"
@@ -171078,6 +171131,9 @@
                               "heading": {
                                 "type": "string"
                               },
+                              "supportingText": {
+                                "type": "string"
+                              },
                               "buttonLabel": {
                                 "type": "string"
                               },
@@ -171110,6 +171166,7 @@
                               "url",
                               "title",
                               "heading",
+                              "supportingText",
                               "buttonLabel",
                               "link",
                               "focalPoint"

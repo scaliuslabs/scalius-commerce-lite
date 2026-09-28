@@ -33,7 +33,7 @@ import { apiFetch } from "./transport";
 // HOMEPAGE DATA TYPES
 // =============================================
 
-/** One banner: `title` is the image's alt text; `heading`/`buttonLabel` are optional overlay copy. */
+/** One banner: `title` is image alt text; `heading`/`supportingText`/`buttonLabel` are overlay copy. */
 export type HeroSliderImage = HeroSlide;
 
 export interface HeroSlider {

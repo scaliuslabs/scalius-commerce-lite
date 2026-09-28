@@ -21,7 +21,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 
 /**
- * The four colours a merchant picks; each writes every token that shares its
+ * The colours a merchant picks; each writes every token that shares its
  * role. Background also moves the card and popover surfaces, keeping the
  * template's own card-to-page relationship (see setThemeColor).
  */
@@ -30,6 +30,8 @@ export const COLOR_ROLES = {
   text: ["foreground", "card-foreground", "popover-foreground"],
   buttons: ["primary", "ring"],
   buttonText: ["primary-foreground"],
+  highlight: ["accent"],
+  highlightText: ["accent-foreground"],
 } as const satisfies Record<string, readonly StorefrontThemeColorKey[]>;
 
 export type ColorRole = keyof typeof COLOR_ROLES;
@@ -40,6 +42,8 @@ export const COLOR_ROLE_TOKEN: Record<ColorRole, StorefrontThemeColorKey> = {
   text: "foreground",
   buttons: "primary",
   buttonText: "primary-foreground",
+  highlight: "accent",
+  highlightText: "accent-foreground",
 };
 
 /** DOM id of each colour field, so save errors and contrast problems mark it. */
@@ -48,6 +52,8 @@ export const COLOR_FIELD_IDS: Record<ColorRole, string> = {
   text: "theme-color-text",
   buttons: "theme-color-buttons",
   buttonText: "theme-color-button-text",
+  highlight: "theme-color-highlight",
+  highlightText: "theme-color-highlight-text",
 };
 
 function hexChannels(hex: string): [number, number, number] {
@@ -173,7 +179,7 @@ const CONTRAST_MESSAGES: Record<string, { message: ContrastMessage; role: ColorR
   "muted-foreground/muted": { message: "contrastMuted", role: "background" },
   "muted-foreground/card": { message: "contrastMuted", role: "background" },
   "secondary-foreground/secondary": { message: "contrastSecondary", role: "background" },
-  "accent-foreground/accent": { message: "contrastAccent", role: "background" },
+  "accent-foreground/accent": { message: "contrastAccent", role: "highlightText" },
   "destructive-foreground/destructive": { message: "contrastError", role: "background" },
   "destructive/background": { message: "contrastError", role: "background" },
   "destructive/card": { message: "contrastError", role: "background" },

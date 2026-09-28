@@ -22,6 +22,7 @@ const sliderImageSchema = z.object({
     /** Alt text: describes the image; not drawn over the banner. */
     title: z.string().min(1).max(HERO_SLIDE_TITLE_LIMIT),
     heading: z.string().max(HERO_SLIDE_TITLE_LIMIT).optional(),
+    supportingText: z.string().max(HERO_SLIDE_TITLE_LIMIT).optional(),
     buttonLabel: z.string().max(HERO_SLIDE_BUTTON_LABEL_LIMIT).optional(),
     link: z.string().max(2_048),
     focalPoint: z.object({
@@ -32,6 +33,7 @@ const sliderImageSchema = z.object({
 
 const normalizedSliderImageSchema = sliderImageSchema.extend({
     heading: z.string(),
+    supportingText: z.string(),
     buttonLabel: z.string(),
     focalPoint: z.object({
         x: z.number().min(0).max(100),

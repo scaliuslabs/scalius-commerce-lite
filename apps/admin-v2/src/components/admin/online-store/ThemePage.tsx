@@ -419,6 +419,8 @@ const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
   { role: "text", label: "colorText" },
   { role: "buttons", label: "colorButtons" },
   { role: "buttonText", label: "colorButtonText" },
+  { role: "highlight", label: "colorHighlight" },
+  { role: "highlightText", label: "colorHighlightText" },
 ];
 
 /**

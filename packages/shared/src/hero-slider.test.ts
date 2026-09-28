@@ -33,6 +33,7 @@ describe("hero slider document", () => {
           url: "https://cdn.example.com/hero%20image.jpg",
           title: "New arrivals",
           heading: "",
+          supportingText: "",
           buttonLabel: "",
           link: "/collections/new",
           focalPoint: HERO_SLIDE_DEFAULT_FOCAL_POINT,
@@ -41,17 +42,19 @@ describe("hero slider document", () => {
     });
   });
 
-  it("keeps alt text apart from the optional heading and button drawn over the banner", () => {
+  it("keeps alt text apart from the optional editorial copy and button", () => {
     const result = validateAndNormalizeHeroSlides([{
       ...baseSlide,
       title: "Eid offer: 20% off panjabi",
       heading: "  ঈদ অফার  ",
+      supportingText: "  Enjoy free delivery on selected items.  ",
       buttonLabel: " Shop now ",
     }]);
     expect(result).toMatchObject({
       ok: true,
-      slides: [{ title: "Eid offer: 20% off panjabi", heading: "ঈদ অফার", buttonLabel: "Shop now" }],
+      slides: [{ title: "Eid offer: 20% off panjabi", heading: "ঈদ অফার", supportingText: "Enjoy free delivery on selected items.", buttonLabel: "Shop now" }],
     });
+    expect(validateAndNormalizeHeroSlides([{ ...baseSlide, supportingText: "x".repeat(161) }])).toMatchObject({ ok: false });
     expect(validateAndNormalizeHeroSlides([{ ...baseSlide, buttonLabel: "x".repeat(41) }])).toMatchObject({ ok: false });
   });
 

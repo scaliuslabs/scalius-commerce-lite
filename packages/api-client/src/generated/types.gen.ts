@@ -267,6 +267,7 @@ export type StorefrontThemeDocument = {
             variant: 'quick-add';
             settings: {
                 fullAction?: boolean;
+                showBuyNow?: boolean;
             };
         } | {
             variant: 'mall';
@@ -453,6 +454,7 @@ export type StorefrontThemeDocument = {
             version: 1;
             settings: {
                 layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                phonePlacement?: 'after-categories';
                 sideBanners?: Array<{
                     mediaId: string;
                     alt: string;
@@ -3255,6 +3257,7 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     heading: string;
+                    supportingText: string;
                     buttonLabel: string;
                     link: string;
                     focalPoint: {
@@ -3273,6 +3276,7 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     heading: string;
+                    supportingText: string;
                     buttonLabel: string;
                     link: string;
                     focalPoint: {
@@ -3291,6 +3295,7 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     heading: string;
+                    supportingText: string;
                     buttonLabel: string;
                     link: string;
                     focalPoint: {
@@ -3306,6 +3311,7 @@ export type GetApiV1HeroSlidersResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {
@@ -3372,6 +3378,7 @@ export type GetApiV1HeroSlidersByIdResponses = {
                     url: string;
                     title: string;
                     heading: string;
+                    supportingText: string;
                     buttonLabel: string;
                     link: string;
                     focalPoint: {
@@ -46965,6 +46972,7 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {
@@ -46992,6 +47000,7 @@ export type PostApiV1AdminSettingsHeroSlidersData = {
             url: string;
             title: string;
             heading?: string;
+            supportingText?: string;
             buttonLabel?: string;
             link: string;
             focalPoint?: {
@@ -47102,6 +47111,7 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {
@@ -47228,6 +47238,7 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {
@@ -47341,6 +47352,7 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {
@@ -47368,6 +47380,7 @@ export type PutApiV1AdminSettingsHeroSlidersByIdData = {
             url: string;
             title: string;
             heading?: string;
+            supportingText?: string;
             buttonLabel?: string;
             link: string;
             focalPoint?: {
@@ -47480,6 +47493,7 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 heading: string;
+                supportingText: string;
                 buttonLabel: string;
                 link: string;
                 focalPoint: {

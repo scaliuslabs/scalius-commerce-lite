@@ -58,7 +58,7 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
       const [group, index, field] = path.split(".");
       const slide = group === "images" ? value.images[Number(index)] : undefined;
       if (!slide) return undefined;
-      const control = { title: "text", heading: "heading", buttonLabel: "button", link: "link" } as const;
+      const control = { title: "text", heading: "heading", supportingText: "supporting-text", buttonLabel: "button", link: "link" } as const;
       return field in control ? bannerFieldId(slide.id, control[field as keyof typeof control]) : undefined;
     },
     invalid: (value) =>
@@ -100,6 +100,7 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
           url: file.url,
           title: file.altText?.trim() || "",
           heading: "",
+          supportingText: "",
           buttonLabel: "",
           link: "",
           focalPoint: { ...HERO_SLIDE_DEFAULT_FOCAL_POINT },

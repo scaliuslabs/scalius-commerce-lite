@@ -217,7 +217,7 @@ function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["
   const marks = Array.from(card.querySelectorAll("[data-card-discount]")).map((mark) =>
     `${mark.closest(".product-card-media") ? "photo" : "price"}:${text(mark)}:${Array.from(mark.classList).filter((name) => /^pc-(badge|discount)-/.test(name)).join("+")}`);
   const rating = card.querySelector('[data-card-fact="rating"]');
-  const action = card.querySelector("a[href^='/buy/']");
+  const action = card.querySelector("a.product-card-action[href], a.product-card-round-action[href]");
   return {
     // The standard card follows the template's tokens in the same units.
     ratio: String(anatomy.look.image.ratio),
@@ -253,6 +253,7 @@ describe("product card matrix", () => {
     expect(sale.hasAttribute("data-card-quick-retail")).toBe(true);
     expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
+    expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
     expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
   });
@@ -396,7 +397,8 @@ describe("product card matrix", () => {
 
     // The buy action: in stock without options only, above the card link,
     // named with its visible words first (WCAG 2.5.3).
-    const action = (element: Element) => element.querySelector(card === "quick-add" ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
+    const cartAction = card === "quick-add" || card === "retail";
+    const action = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
     const label = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
     for (const fixture of ["onSale", "noPhoto", "allFacts"] as const) {
       expect(Boolean(action(cards[fixture])), fixture).toBe(anatomy.quickBuy);
@@ -405,8 +407,8 @@ describe("product card matrix", () => {
     expect(action(cards.soldOut)).toBeNull();
     if (anatomy.quickBuy) {
       const buy = action(cards.onSale)!;
-      expect(buy.getAttribute("href")).toBe(card === "quick-add" ? "/products/product-sale" : "/buy/product-sale");
-      if (card !== "quick-add") expect(buy.getAttribute("rel")).toBe("nofollow");
+      expect(buy.getAttribute("href")).toBe(cartAction ? "/products/product-sale" : "/buy/product-sale");
+      expect(buy.getAttribute("rel")).toBe("nofollow");
       expect(buy.className).toMatch(/\bz-10\b/);
       expect(buy.hasAttribute("aria-label")).toBe(false);
       expect(text(buy)).toBe(`${label}: Product sale`);

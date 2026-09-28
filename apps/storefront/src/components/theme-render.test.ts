@@ -808,7 +808,8 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   // A purchase action only on cards with one, only in stock without options;
   // grocery quick add keeps the shelf open instead of entering /buy. The card matrix
   // (cards/product-card.render.test.ts) covers each anatomy in detail.
-  const buyAction = (element: Element) => element.querySelector(resolved.blocks.card.variant === "quick-add" ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
+  const cartAction = ["quick-add", "retail"].includes(resolved.blocks.card.variant);
+  const buyAction = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
   expect(Boolean(buyAction(onSale))).toBe(card.quickBuy);
   expect(Boolean(buyAction(plain))).toBe(card.quickBuy);
   expect(buyAction(withOptions)).toBeNull();
@@ -1199,6 +1200,23 @@ describe("navigation", () => {
     expect(await compareTab("detailed")).toBeNull();
   });
 
+  it("keeps Cart in the spec catalogue phone header unless the merchant puts it in the tabs", async () => {
+    const theme = storefrontTemplateTheme("spec-catalogue");
+    const pageFor = async () => parse(await render("/src/layouts/Layout.astro", theme, {
+      title: "Home", layoutData: layoutData({ business: true }),
+    }));
+    const page = await pageFor();
+    expect(page.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("account");
+    expect(page.querySelector("#main-header #cart-button")).not.toBeNull();
+    expect(page.querySelector("#mobile-tab-bar [data-cart-open]")).toBeNull();
+    expect(page.querySelector("#mobile-tab-bar a[href='/search?hasDiscount=true']")).not.toBeNull();
+
+    theme.blocks.mobileNav.settings.tabs = ["home", "categories", "compare", "cart", "account"];
+    const merchantPage = await pageFor();
+    expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("cart account");
+    expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open]")).not.toBeNull();
+  });
+
   it("keeps the header within 150 links for a Star Tech-size tree, whatever the menus", async () => {
     for (const desktop of DESKTOP_MENUS) {
       for (const phone of PHONE_MENUS) {
@@ -1288,7 +1306,7 @@ describe("navigation", () => {
   }, 120_000);
 
   it("renders the wide editorial campaign with its merchant copy and right-hand image", async () => {
-    const campaign = { ...slide("campaign"), url: "https://cdn.shop.test/media/campaign.webp/1080.webp", heading: "Find your next favorite", buttonLabel: "Shop now", link: "/sale" };
+    const campaign = { ...slide("campaign"), url: "https://cdn.shop.test/media/campaign.webp/1080.webp", heading: "Find your next favorite", supportingText: "Discover items from around the world.", buttonLabel: "Shop now", link: "/sale" };
     const page = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
       hero: { desktop: [campaign], mobile: [campaign] },
       layout: "wide-editorial",
@@ -1298,6 +1316,7 @@ describe("navigation", () => {
     const carousel = page.querySelector('.desktop-carousel[data-carousel-layout="wide-editorial"]')!;
     expect(carousel.className).toContain("rounded-2xl");
     expect(carousel.querySelector(".wide-editorial-copy")?.textContent).toContain("Find your next favorite");
+    expect(carousel.querySelector(".wide-editorial-support")?.textContent).toBe("Discover items from around the world.");
     expect(carousel.querySelector("picture")?.className).toContain("md:w-[48%]");
     expect(carousel.querySelector("source")?.getAttribute("sizes")).toBe(heroImageCandidate(campaign.url, "desktop", "wide-editorial").sizes);
     const imageOnly = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
@@ -1305,6 +1324,11 @@ describe("navigation", () => {
       layout: "wide-editorial",
     }));
     expect(imageOnly.querySelector(".desktop-carousel picture")?.className).not.toContain("md:w-[48%]");
+    const plainBanner = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
+      hero: { desktop: [campaign], mobile: [campaign] },
+      layout: "contained-banners",
+    }));
+    expect(plainBanner.querySelector(".wide-editorial-support")).toBeNull();
   });
 
   it("opens the departments rail over the hero on the home page only", async () => {

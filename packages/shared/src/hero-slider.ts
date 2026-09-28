@@ -31,18 +31,22 @@ export interface HeroSlide {
   title: string;
   /** Optional words drawn over the banner; empty for artwork that has its own text. */
   heading: string;
+  /** Optional supporting sentence for the wide editorial layout. */
+  supportingText?: string;
   /** Optional button over the banner; shown only with a link. */
   buttonLabel: string;
   link: string;
   focalPoint: HeroSlideFocalPoint;
 }
 
+export type NormalizedHeroSlide = HeroSlide & { supportingText: string };
+
 function optionalText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 export type HeroSlidesValidationResult =
-  | { ok: true; slides: HeroSlide[] }
+  | { ok: true; slides: NormalizedHeroSlide[] }
   | { ok: false; errors: string[] };
 
 /**
@@ -104,7 +108,7 @@ export function validateAndNormalizeHeroSlides(
   }
 
   const errors: string[] = [];
-  const slides: HeroSlide[] = [];
+  const slides: NormalizedHeroSlide[] = [];
   const ids = new Set<string>();
 
   value.forEach((entry, index) => {
@@ -141,6 +145,10 @@ export function validateAndNormalizeHeroSlides(
     if (heading.length > HERO_SLIDE_TITLE_LIMIT) {
       errors.push(`Slide ${position} heading must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`);
     }
+    const supportingText = optionalText(row.supportingText);
+    if (supportingText.length > HERO_SLIDE_TITLE_LIMIT) {
+      errors.push(`Slide ${position} supporting text must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`);
+    }
     const buttonLabel = optionalText(row.buttonLabel);
     if (buttonLabel.length > HERO_SLIDE_BUTTON_LABEL_LIMIT) {
       errors.push(`Slide ${position} button label must be ${HERO_SLIDE_BUTTON_LABEL_LIMIT} characters or fewer.`);
@@ -162,6 +170,7 @@ export function validateAndNormalizeHeroSlides(
         url,
         title,
         heading,
+        supportingText,
         buttonLabel,
         link: parsedLink.href ?? "",
         focalPoint,
@@ -175,7 +184,7 @@ export function validateAndNormalizeHeroSlides(
 }
 
 /** Public projections fail closed when persisted JSON is malformed or unsafe. */
-export function parseStoredHeroSlides(value: unknown): HeroSlide[] {
+export function parseStoredHeroSlides(value: unknown): NormalizedHeroSlide[] {
   if (typeof value !== "string") return [];
   try {
     const result = validateAndNormalizeHeroSlides(JSON.parse(value));

@@ -147,6 +147,17 @@ describe("theme colors", () => {
       .toEqual(["#111827", "#111827", "#111827"]);
   });
 
+  it("lets merchants recolour the marketplace search button without changing purchase buttons", () => {
+    const base = storefrontTemplateTheme("marketplace");
+    const theme = setThemeColor(setThemeColor(base, "highlight", "#123456"), "highlightText", "#ffffff");
+    expect(theme.tokens.colors.accent).toBe("#123456");
+    expect(theme.tokens.colors["accent-foreground"]).toBe("#ffffff");
+    expect(theme.tokens.colors.primary).toBe(base.tokens.colors.primary);
+    expect(themeDraftInvalid(theme)).toBe(false);
+    expect(colorFieldForPath("theme.tokens.colors.accent")).toBe("theme-color-highlight");
+    expect(colorFieldForPath("theme.tokens.colors.accent-foreground")).toBe("theme-color-highlight-text");
+  });
+
   it("moves the card by the template's own card-to-page step instead of flattening it", () => {
     // Retail: white cards (#ffffff) on a white page, so the card follows the page.
     const retail = setThemeColor(storefrontTemplateTheme("department-mall"), "background", "#f0ebe3");

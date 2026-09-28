@@ -218,7 +218,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       header: ["spec-two-row"],
       navigation: { source: "category-tree", maxTopItems: 18 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
-      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" }],
+      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "compare", "account"], drawer: "accordion" }],
       card: ["spec"],
       listing: {
         layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech

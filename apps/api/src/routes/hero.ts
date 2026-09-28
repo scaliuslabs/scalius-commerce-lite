@@ -15,6 +15,7 @@ const heroImageSchema = z.object({
   /** Alt text for the image. */
   title: z.string(),
   heading: z.string(),
+  supportingText: z.string(),
   buttonLabel: z.string(),
   link: z.string(),
   focalPoint: z.object({
