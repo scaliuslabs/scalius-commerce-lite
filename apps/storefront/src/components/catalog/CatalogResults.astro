@@ -69,7 +69,7 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
 ---
 
 {restoreView && <script is:inline set:html={restoreScript} />}
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} style={style}>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={marked || results !== "grid" ? results : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={resolved.blocks.card.variant === "tech-rounded" ? "tech-rounded" : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}

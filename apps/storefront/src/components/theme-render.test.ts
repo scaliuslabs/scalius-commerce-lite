@@ -1239,6 +1239,7 @@ describe("navigation", () => {
       const page = parse(html);
       const site = page.querySelector("#site-header")!;
       expect(site.getAttribute("data-nav-source"), template).toBe(resolved.blocks.navigation.source);
+      if (template === "rounded-tech") expect(site.getAttribute("style")).toContain("--hdr-phone-bar: 4rem");
       expect(headerLinks(page), template).toBeLessThanOrEqual(resolved.blocks.navigation.linkBudget);
       expect(duplicateIds(page), template).toEqual([]);
       // The phone drawer: at most maxTopItems departments, each once, then "All categories".

@@ -868,6 +868,7 @@ describe("listing page", () => {
       const document = parse(await render(PAGE, storefrontTemplateTheme(id), { kind: "search", hero: { title: "Search results", count: 50 }, listing: plain() }, EMPTY_SLOT, TREE_STORE_SHAPE));
       expect(duplicateIds(document), id).toEqual([]);
       expect(document.querySelectorAll("[data-theme-component='product-card']").length, id).toBeGreaterThan(0);
+      if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
     }
   });
 });

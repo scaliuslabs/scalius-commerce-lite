@@ -406,6 +406,17 @@
   }
 }
 
+@media (min-width: 64rem) {
+  /* Apple Gadgets uses roomier listing titles than its homepage rails. */
+  .site-root .product-grid-frame[data-catalog-card="tech-rounded"] .product-card-name {
+    font-size: 1.25rem;
+  }
+
+  .site-root .product-grid-frame[data-catalog-card="tech-rounded"] > .product-grid {
+    gap: 1rem;
+  }
+}
+
 /* ─── Computers ──────────────────────────────────────────────────────── */
 @media (min-width: 64rem) {
   /* The column: sidebar-dense (Amazon, Daraz, Star Tech) is flat rows under
