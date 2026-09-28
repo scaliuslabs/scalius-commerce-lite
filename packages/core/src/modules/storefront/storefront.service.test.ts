@@ -117,6 +117,31 @@ describe("storefront homepage data", () => {
     expect(homepage.collections.map((collection) => collection?.id)).toEqual(["col_home"]);
   });
 
+  it("skips homepage collection product reads when the theme has no collections section", async () => {
+    let batches = 0;
+    const { sqlite, db } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
+    sqlite.exec(`
+      INSERT INTO products (id, name, price_minor, slug) VALUES ('p_1', 'Visible', 1000, 'visible');
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
+        VALUES ('v_1', 'p_1', 'VIS-1', 1000, 0, 0, 1, 0);
+      INSERT INTO collections (id, name, presentation, config)
+        VALUES ('col_home', 'Home', 'grid', '{"source":"manual","productIds":["p_1"],"showOnHomepage":true}');
+    `);
+    const theme = storefrontTemplateTheme("boutique");
+    theme.pages.home = [{ id: "text", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Hi", body: "" } }];
+    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
+      .run(JSON.stringify(theme));
+
+    expect((await getHomepageData(db)).collections).toEqual([]);
+    expect(batches).toBe(1);
+
+    theme.pages.home = [{ id: "collections", type: "collections", version: 1, settings: {} }];
+    sqlite.prepare("UPDATE theme_settings SET colors = ?").run(JSON.stringify(theme));
+    batches = 0;
+    expect((await getHomepageData(db)).collections.map((collection) => collection?.id)).toEqual(["col_home"]);
+    expect(batches).toBe(2);
+  });
+
   it("projects the saved category rail and SEO documents in the homepage batch", async () => {
     const { db, sqlite } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO categories (id, name, slug, status) VALUES

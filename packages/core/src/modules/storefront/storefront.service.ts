@@ -351,10 +351,9 @@ export async function getHomepageData(db: Database, options: {
   // may be published, renamed or trashed later.
   deps.categories(homepageConfig.categoryRail.categoryIds);
   // An unreadable theme renders the default whole (as the layout read does).
-  const requests = options.requests ?? homeSectionRequests(
-    (parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
-      ?? DEFAULT_STOREFRONT_THEME).pages.home,
-  );
+  const homeSections = (parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
+    ?? DEFAULT_STOREFRONT_THEME).pages.home;
+  const requests = options.requests ?? homeSectionRequests(homeSections);
 
   // Process Hero
   const desktopSlider = (heroResults as { type: string }[]).find(
@@ -389,7 +388,9 @@ export async function getHomepageData(db: Database, options: {
     isActive: col.isActive as boolean,
     parsedConfig: normalizeCollectionConfig(col.config),
   }));
-  const parsedCollections = options.sectionsOnly
+  // Homepage collections are legacy data for the collections section. Other
+  // section sources still resolve their named collection independently below.
+  const parsedCollections = options.sectionsOnly || !homeSections.some((section) => section.type === "collections")
     ? []
     : activeCollections.filter((collection) => collection.parsedConfig.showOnHomepage);
   const collectionById = new Map(activeCollections.map((collection) => [collection.id, collection]));
