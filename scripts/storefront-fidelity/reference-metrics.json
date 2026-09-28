@@ -278,6 +278,8 @@
         "card.price": { "v": "16/400", "src": "study: prices 16/400" },
         "pdp.h1": { "v": "30/500", "src": "study: title 30/500" },
         "pdp.price": { "v": "20/400", "src": "study: price 20/400" },
+        "pdp.stage.w": { "v": 404, "src": "saved 1440px Aarong product screenshot: portrait photo width 404px" },
+        "pdp.stage.h": { "v": 539, "src": "saved 1440px Aarong product screenshot: portrait photo height 539px" },
         "pdp.cta.w": { "v": 492, "src": "study: ADD TO BAG 492x39" },
         "pdp.cta.h": { "v": 39, "src": "study: 492x39" }
       },

@@ -22,6 +22,8 @@ export const METRIC_RULES = Object.freeze({
   "listing.filterRowPitch": "size",
   "pdp.h1": "font",
   "pdp.price": "font",
+  "pdp.stage.w": "size",
+  "pdp.stage.h": "size",
   "pdp.cta.w": "size",
   "pdp.cta.h": "size",
   "footer.h": "size",
@@ -133,6 +135,8 @@ export function extractOurs({ home, plp, pdp, cardPage = plp } = {}) {
   out["listing.filterRowPitch"] = num(plp?.facets?.rowPitch);
   out["pdp.h1"] = pdp?.h1?.font ?? null;
   out["pdp.price"] = pdp?.pdp?.price ?? null;
+  out["pdp.stage.w"] = num(pdp?.pdp?.stage?.w);
+  out["pdp.stage.h"] = num(pdp?.pdp?.stage?.h);
   const cta = (pdp?.pdp?.buttons ?? []).find((b) => b.w > 0) ?? null;
   out["pdp.cta.w"] = num(cta?.w);
   out["pdp.cta.h"] = num(cta?.h);

@@ -138,7 +138,7 @@ const plpProbe = {
   density: { cols: 4, firstCardTop: 441, productsFullyHalfVisible: 4, filterControlsVisible: 2, bottomOf20: 2146 },
   facets: { columnW: 236, rowPitch: 44 },
 };
-const pdpProbe = { h1: { font: "30/600" }, pdp: { price: "30/600", buttons: [{ text: "Add to cart", w: 290, h: 44 }], buyTop: 520 } };
+const pdpProbe = { h1: { font: "30/600" }, pdp: { price: "30/600", stage: { w: 404, h: 539 }, buttons: [{ text: "Add to cart", w: 290, h: 44 }], buyTop: 520 } };
 
 describe("our metrics from probe results", () => {
   it("maps the probe onto the reference metric keys", () => {
@@ -146,7 +146,7 @@ describe("our metrics from probe results", () => {
     expect(ours).toMatchObject({
       "header.h": 134, "header.search.w": 679, "card.w": 213, "card.h": 333, "card.cols": 4, "card.gap": 10, "card.ratio": 1,
       "card.title": "14/600", "listing.firstCardY": 441, "listing.filtersVisible": 2, "listing.bottomOf20": 2146,
-      "listing.filterColumnW": 236, "listing.filterRowPitch": 44, "pdp.h1": "30/600", "pdp.cta.w": 290, "pdp.buyTop": 520, "footer.h": 1215,
+      "listing.filterColumnW": 236, "listing.filterRowPitch": 44, "pdp.h1": "30/600", "pdp.stage.w": 404, "pdp.stage.h": 539, "pdp.cta.w": 290, "pdp.buyTop": 520, "footer.h": 1215,
     });
     for (const key of Object.keys(METRIC_RULES)) expect(key in ours).toBe(true);
   });
@@ -197,6 +197,13 @@ describe("template comparison", () => {
     const checks = compareTemplate("marketplace", ours, reference);
     expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop").refSite).toBe("amazon");
     expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop").refSite).toBe("amazon");
+  });
+
+  it("catches an oversized Heritage portrait gallery against the saved product photo", () => {
+    const stage = (w, h) => ({ ...ours, desktop: extractOurs({ home: probe(), plp: plpProbe, pdp: { ...pdpProbe, pdp: { ...pdpProbe.pdp, stage: { w, h } } } }) });
+    const checks = (w, h) => compareTemplate("heritage-editorial", stage(w, h), reference).filter((c) => c.metric.startsWith("pdp.stage."));
+    expect(checks(404, 539).every((c) => c.pass)).toBe(true);
+    expect(checks(588, 784).map((c) => c.pass)).toEqual([false, false]);
   });
 
   it("refuses an unmapped template", () => {
