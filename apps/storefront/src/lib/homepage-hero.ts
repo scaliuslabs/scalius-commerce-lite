@@ -68,6 +68,10 @@ export function heroImageSizes(layout: StorefrontHeroLayout, viewport: HeroSlide
       return viewport === "desktop" ? "50vw" : "100vw";
     case "story-cards":
       return STORY_CARD_SIZES;
+    case "wide-editorial":
+      return viewport === "desktop"
+        ? "(min-width: 97rem) 93rem, calc(100vw - 4rem)"
+        : "calc(100vw - 2rem)";
     default:
       return HERO_IMAGE_SIZES[viewport];
   }

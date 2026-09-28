@@ -430,7 +430,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
             id={id("layout")}
             label={t("heroLayout")}
             value={settings.layout}
-            options={(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"] as const).map((value) => ({ value, label: t(`heroLayout_${value}`) }))}
+            options={(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen", "wide-editorial"] as const).map((value) => ({ value, label: t(`heroLayout_${value}`) }))}
             onChange={(layout) => update({ ...settings, layout })}
           />
           <p className="text-body text-muted-foreground">{t("heroImagesHelp")}</p>

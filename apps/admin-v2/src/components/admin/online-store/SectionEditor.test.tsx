@@ -100,9 +100,9 @@ describe("homepage section editor", () => {
   it("edits the homepage banner layout and restores a removed banner section", async () => {
     render([section("hero", "hero", { layout: "story-cards" })]);
     act(() => button("Edit Banners").click());
-    choose(document.querySelector<HTMLButtonElement>("#section-hero-layout")!, "Contained banner with side promos");
+    choose(document.querySelector<HTMLButtonElement>("#section-hero-layout")!, "Wide editorial banner");
     await act(async () => button("Done").click());
-    expect(seen.sections[0]?.settings).toEqual({ layout: "contained-banners" });
+    expect(seen.sections[0]?.settings).toEqual({ layout: "wide-editorial" });
     act(() => button("Remove Banners").click());
     choose(container.querySelector<HTMLButtonElement>('button[aria-label="Add section"]')!, "Banners");
     await act(async () => button("Done").click());

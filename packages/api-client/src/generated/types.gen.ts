@@ -441,7 +441,7 @@ export type StorefrontThemeDocument = {
             type: 'hero';
             version: 1;
             settings: {
-                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen';
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
                 sideBanners?: Array<{
                     mediaId: string;
                     alt: string;

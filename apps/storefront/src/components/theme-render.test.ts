@@ -1281,6 +1281,24 @@ describe("navigation", () => {
     }
   }, 120_000);
 
+  it("renders the wide editorial campaign with its merchant copy and right-hand image", async () => {
+    const campaign = { ...slide("campaign"), url: "https://cdn.shop.test/media/campaign.webp/1080.webp", heading: "Find your next favorite", buttonLabel: "Shop now", link: "/sale" };
+    const page = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
+      hero: { desktop: [campaign], mobile: [campaign] },
+      layout: "wide-editorial",
+    }));
+    expect(page.querySelector('[data-hero-layout="wide-editorial"]')).not.toBeNull();
+    const carousel = page.querySelector('.desktop-carousel[data-carousel-layout="wide-editorial"]')!;
+    expect(carousel.querySelector(".wide-editorial-copy")?.textContent).toContain("Find your next favorite");
+    expect(carousel.querySelector("picture")?.className).toContain("md:w-[48%]");
+    expect(carousel.querySelector("source")?.getAttribute("sizes")).toBe(heroImageCandidate(campaign.url, "desktop", "wide-editorial").sizes);
+    const imageOnly = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
+      hero: { desktop: [slide("image-only")], mobile: [slide("image-only")] },
+      layout: "wide-editorial",
+    }));
+    expect(imageOnly.querySelector(".desktop-carousel picture")?.className).not.toContain("md:w-[48%]");
+  });
+
   it("opens the departments rail over the hero on the home page only", async () => {
     const theme = navigationTheme({
       desktop: choice("desktopNav", "departments-rail", { open: "home" }),

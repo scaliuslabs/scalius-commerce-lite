@@ -2143,7 +2143,8 @@
                                 "app-panel",
                                 "split",
                                 "story-cards",
-                                "full-screen"
+                                "full-screen",
+                                "wide-editorial"
                               ]
                             },
                             "sideBanners": {

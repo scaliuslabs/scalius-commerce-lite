@@ -58,6 +58,7 @@ describe("heroLeadCandidates", () => {
       .toBe("(min-resolution: 2.5dppx) calc((100vw) * 0.666), 100vw");
     expect(heroImageSizes("split", "desktop")).toBe("50vw");
     expect(heroImageSizes("split", "mobile")).toBe("100vw");
+    expect(heroImageSizes("wide-editorial", "desktop")).toBe("(min-width: 97rem) 93rem, calc(100vw - 4rem)");
   });
 
   it("offers story cards one candidate for every screen", () => {

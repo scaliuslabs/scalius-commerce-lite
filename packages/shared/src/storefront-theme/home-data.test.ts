@@ -113,6 +113,7 @@ describe("homepage section data requests", () => {
     }
     const hero = (settings: object) => storefrontSectionListSchema.safeParse([{ id: "hero", type: "hero", version: 1, settings }]).success;
     expect(hero({ layout: "contained-banners" })).toBe(true);
+    expect(hero({ layout: "wide-editorial" })).toBe(true);
     expect(hero({ layout: "contained-banners", sideBanners: [{ mediaId: "m", alt: "Sale", href: "/sale" }] })).toBe(true);
     expect(hero({ layout: "contained-banners", sideBanners: [{ mediaId: "m", alt: "", href: "javascript:x" }] })).toBe(false);
     expect(hero({

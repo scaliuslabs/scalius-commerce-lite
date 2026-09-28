@@ -10,6 +10,7 @@
 // - full-screen: the first screen on phones (Aarong), tall on computers.
 // - split: the first two banners side by side on computers (Dawn).
 // - story-cards: a scroll-snap rail of portrait cards (Amazon).
+// - wide-editorial: eBay's contained, low campaign banner with copy beside imagery.
 // Only the first banner is the LCP image: high priority, and preloaded by
 // pages/index.astro from heroLeadCandidates() when the hero leads.
 import CustomCarousel from "./sliders/CustomCarousel.astro";
@@ -81,6 +82,37 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
     {hero.mobile[0] && (
       <div class="md:hidden">
         <HeroPicture slide={hero.mobile[0]} viewport="mobile" layout="split" index={0} priority={priority} frameClass="hero-split-frame" />
+      </div>
+    )}
+  </div>
+)}
+
+{hasBanners && layout === "wide-editorial" && (
+  <div class="mx-auto max-w-[97rem] px-4 pt-2 sm:px-6 lg:px-8 md:pt-4" data-hero-layout="wide-editorial">
+    {hero.desktop.length > 0 && (
+      <div class="hidden md:block">
+        <CustomCarousel
+          images={hero.desktop}
+          height={HERO_SLIDE_PRESENTATION.desktop.height}
+          type="desktop"
+          priority={priority}
+          layout={layout}
+          frameHeight="clamp(16rem, calc((100vw - 4rem) * 0.242), 22.5rem)"
+          overlay="editorial"
+        />
+      </div>
+    )}
+    {hero.mobile.length > 0 && (
+      <div class="md:hidden">
+        <CustomCarousel
+          images={hero.mobile}
+          height={HERO_SLIDE_PRESENTATION.mobile.height}
+          type="mobile"
+          priority={priority}
+          layout={layout}
+          frameHeight="min(24rem, 90vw)"
+          overlay="editorial"
+        />
       </div>
     )}
   </div>

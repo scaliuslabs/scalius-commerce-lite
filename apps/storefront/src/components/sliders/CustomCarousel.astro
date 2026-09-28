@@ -33,7 +33,7 @@ interface Props {
    * contained classic banner keeps its gradient; the other hero layouts use
    * the band.
    */
-  overlay?: "gradient" | "band";
+  overlay?: "gradient" | "band" | "editorial";
 }
 
 // Slides advance every 6 s (WCAG 2.2.2 needs a pause control, provided below).
@@ -66,6 +66,7 @@ if (images.length === 0) return;
   aria-roledescription="carousel"
   aria-label="Featured"
   data-carousel-type={type}
+  data-carousel-layout={layout}
   data-auto-rotate={canRotate}
   data-interval={interval}
 >
@@ -79,6 +80,7 @@ if (images.length === 0) return;
           // Alt text describes the artwork; heading and button are optional overlay copy.
           const headline = image.heading?.trim();
           const buttonLabel = image.link ? image.buttonLabel?.trim() : "";
+          const editorial = layout === "wide-editorial" && Boolean(headline || buttonLabel);
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           // Every rendition with the rendered width, built by the same helper
           // as the LCP preload in pages/index.astro, so the browser picks one
@@ -99,12 +101,12 @@ if (images.length === 0) return;
               <SlideFrame
                 href={image.link || undefined}
                 data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
-                class={`slide-link group relative block h-full w-full${corner} ${image.link ? "cursor-pointer" : "cursor-default"}`}
+                class={`slide-link group relative block h-full w-full${corner} ${editorial ? "bg-primary" : ""} ${image.link ? "cursor-pointer" : "cursor-default"}`}
                 aria-label={image.link && !headline && !image.title ? `Slide ${index + 1}` : undefined}
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
-                <picture class="block h-full w-full">
+                <picture class:list={["block h-full w-full", editorial && "md:absolute md:inset-y-0 md:right-0 md:w-[48%]"]}>
                   <source
                     media={candidate.media}
                     srcset={index === 0 ? source : undefined}
@@ -145,6 +147,12 @@ if (images.length === 0) return;
                         </span>
                       )}
                     </div>
+                  </div>
+                )}
+                {(headline || buttonLabel) && overlay === "editorial" && (
+                  <div class="wide-editorial-copy">
+                    {headline && <p class="wide-editorial-heading [overflow-wrap:anywhere]">{headline}</p>}
+                    {buttonLabel && <span class="wide-editorial-button">{buttonLabel}</span>}
                   </div>
                 )}
               </SlideFrame>
@@ -675,6 +683,58 @@ if (images.length === 0) return;
 </script>
 
 <style>
+  .wide-editorial-copy {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 3rem 1.25rem 3.5rem;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.85));
+    color: white;
+  }
+
+  .wide-editorial-heading {
+    max-width: 34rem;
+    font-size: clamp(1.5rem, 2.1vw, 2.25rem);
+    font-weight: 700;
+    line-height: 1.16;
+  }
+
+  .wide-editorial-button {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding-inline: 1.25rem;
+    border-radius: 999px;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  @media (min-width: 48rem) {
+    .wide-editorial-copy {
+      inset: 0 auto 0 0;
+      width: 52%;
+      justify-content: center;
+      padding: 2rem clamp(2rem, 5vw, 5.875rem);
+      background: none;
+      color: var(--primary-foreground);
+    }
+
+    [data-carousel-layout="wide-editorial"] .nav-button {
+      top: auto;
+      bottom: 0.25rem;
+      left: auto;
+      transform: none;
+    }
+
+    [data-carousel-layout="wide-editorial"] [data-nav="prev"] { right: 7rem; }
+    [data-carousel-layout="wide-editorial"] [data-nav="next"] { right: 3.75rem; }
+  }
+
   /* Ensure smooth transitions */
   .slide {
     will-change: opacity;
