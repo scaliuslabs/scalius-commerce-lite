@@ -14,11 +14,11 @@ function evaluateLength(length: string, viewport: number): number {
   const scaled = /^calc\(\((.+)\) \* ([\d.]+)\)$/.exec(length);
   if (scaled) return evaluateLength(scaled[1]!, viewport) * Number(scaled[2]);
   const expression = /^calc\((.+)\)$/.exec(length)?.[1] ?? length;
-  const difference = /^([\d.]+)vw - (\d+)px$/.exec(expression);
+  const difference = /^([\d.]+)vw - ([\d.]+)px$/.exec(expression);
   if (difference) return (Number(difference[1]) * viewport) / 100 - Number(difference[2]);
   const vw = /^([\d.]+)vw$/.exec(expression);
   if (vw) return (Number(vw[1]) * viewport) / 100;
-  const px = /^(\d+)px$/.exec(expression);
+  const px = /^([\d.]+)px$/.exec(expression);
   if (px) return Number(px[1]);
   throw new Error(`Unparsed length: ${length}`);
 }
@@ -63,8 +63,9 @@ function renderedMainWidth(
   if (layout.gallery === "stacked") return content - 345 - 40;
   if (layout.gallery === "grid") return (content - (xl ? 480 : 400) - 40 - 8) / 2;
   const span = xl ? 6 * column + 5 * 40 : 7 * column + 6 * 40;
-  if (!railBeside) return span;
-  return span - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);
+  const galleryWidth = layout.stageRatio === 0.75 ? Math.min(span, 404) : span;
+  if (!railBeside) return galleryWidth;
+  return galleryWidth - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);
 }
 
 /** What each gallery variant renders with today's gallery (classic, thumbnails below, stacked). */
@@ -105,6 +106,13 @@ describe("product gallery image slots", () => {
     expect(dpr3).toBeLessThan(960);
     // 1440px desktop: the 468px column, not the viewport.
     expect(evaluateSizes(sizes, 1440)).toBe(468);
+  });
+
+  it("advertises the capped portrait width to the gallery and its LCP preload", () => {
+    const { sizes } = productGalleryMainSlot(GALLERY.portrait, true);
+    expect(evaluateSizes(sizes, 390)).toBe(366);
+    expect(evaluateSizes(sizes, 1440)).toBe(404);
+    expect(evaluateSizes(sizes, 1440, 2)).toBe(404);
   });
 
   it("sizes thumbnails to their rail and caps their srcset at 296w", () => {

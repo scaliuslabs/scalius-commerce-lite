@@ -11,7 +11,7 @@
  * - From 1024px the gallery spans 7 of 12 columns (`gap-x-10`) of the
  *   `max-w-7xl px-8` section, 6 from 1280px, minus the thumbnail column
  *   (80px / 100px + `lg:gap-5`, or a narrow strip plus 12px) when
- *   thumbnails sit beside the photo.
+ *   thumbnails sit beside the photo. The portrait gallery stops at 404px.
  * - Stacked and grid galleries fill the column left of the sticky info
  *   column (ProductPageLayout); on phones they are one swipeable row.
  */
@@ -39,6 +39,8 @@ function desktopMainSizes(layout: ProductGalleryLayout, railBeside: boolean): st
   if (layout.gallery === "stacked") return ["(max-width: 1279px) calc(100vw - 449px)", "831px"];
   // Grid: two photos across (8px apart) left of a 400px/480px info column.
   if (layout.gallery === "grid") return ["(max-width: 1279px) calc(50vw - 256px)", "344px"];
+  // The 3:4 portrait gallery is centred inside its column at this width.
+  if (layout.stageRatio === 0.75 && !railBeside) return ["404px"];
   if (railBeside && layout.thumbnailSize !== null) {
     // A narrow strip (Amazon): its width plus a 12px gap.
     const rail = layout.thumbnailSize + 12;
