@@ -35,6 +35,7 @@ import {
   descriptionInInfoColumn,
   featuresPlacement,
   productPageModules,
+  publicSpecificationRows,
   renderedContentBlocks,
 } from "@/components/product/lib/product-page-modules";
 import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
@@ -159,7 +160,7 @@ const exploreAnchorId = pageModules.includes("related") ? "related-products" : n
 const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
 const featuresAt = featuresPlacement(pageModules, buyBoxLook);
-const specificationRows = product.attributes ?? [];
+const specificationRows = publicSpecificationRows(product.attributes ?? []);
 const keySpecificationRows = specificationRows.filter((row) => row.keySpec).slice(0, KEY_ATTRIBUTES_MAX);
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;

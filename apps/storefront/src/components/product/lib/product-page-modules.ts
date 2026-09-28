@@ -57,7 +57,7 @@ export function productPageModules(
   product: Product,
   context: { look: StorefrontBuyBoxLook | null; hasRelated: boolean },
 ): RenderedProductModule[] {
-  const attributes = product.attributes ?? [];
+  const attributes = publicSpecificationRows(product.attributes ?? []);
   const has: Partial<Record<StorefrontProductModule, boolean>> = {
     description: hasDescription(product) && !descriptionInInfoColumn(context.look),
     "spec-table": attributes.length > 0,
@@ -70,6 +70,11 @@ export function productPageModules(
     related: context.hasRelated,
   };
   return below.filter((module): module is RenderedProductModule => has[module] === true);
+}
+
+/** Only saved specifications buyers can read; brand comes from the published brand record. */
+export function publicSpecificationRows(rows: NonNullable<Product["attributes"]>): NonNullable<Product["attributes"]> {
+  return rows.filter((row) => row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand");
 }
 
 /**
@@ -105,8 +110,8 @@ export function specificationValue(row: { value: string; unit: string | null }):
 /** Merchant highlights win; saved key specifications fill an otherwise empty buy-box list. */
 export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">): string[] {
   if (product.features?.length) return product.features;
-  return (product.attributes ?? [])
-    .filter((row) => row.keySpec && row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand")
+  return publicSpecificationRows(product.attributes ?? [])
+    .filter((row) => row.keySpec)
     .slice(0, 6)
     .map((row) => `${row.name}: ${specificationValue(row)}`);
 }

@@ -7,6 +7,7 @@ import {
   featuresPlacement,
   groupSpecificationRows,
   productPageModules,
+  publicSpecificationRows,
 } from "./product-page-modules";
 
 const spec = (name: string, group: string | null, keySpec = false) => ({
@@ -57,6 +58,19 @@ describe("product page modules", () => {
   it("groups specification rows in the order they arrive", () => {
     expect(groupSpecificationRows([spec("A", "Body"), spec("B", "Body"), spec("C", null), spec("D", "Body")]).map((group) => [group.group, group.rows.length]))
       .toEqual([["Body", 2], [null, 1], ["Body", 1]]);
+  });
+
+  it("keeps legacy Brand and blank rows out of technical specification sections", () => {
+    const rows = [
+      { ...spec("Brand", null, true), value: "Old brand" },
+      { ...spec("Model", "Details", true), value: " " },
+      { ...spec("Memory", "Details", true), value: "16 GB" },
+    ];
+    expect(publicSpecificationRows(rows).map((row) => row.name)).toEqual(["Memory"]);
+    expect(productPageModules(["key-attributes", "spec-table"], product({ attributes: rows.slice(0, 2) }), {
+      look: STOREFRONT_BUY_BOX_LOOKS.spec,
+      hasRelated: false,
+    })).toEqual([]);
   });
 
   it("uses saved highlights, then truthful key specs when highlights are empty", () => {
