@@ -439,20 +439,19 @@
     width: var(--catalog-filter-column, 16.875rem);
   }
 
-  /* Category results can outgrow their filters. Keep the sidebar in view
-     while its long group list scrolls inside the available viewport. */
-  [data-catalog-kind="category"][data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] {
+  /* Keep long filter sidebars usable on category, collection, brand and search pages. */
+  [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] {
     position: sticky;
     top: calc(var(--header-height, 0px) + 1rem);
     align-self: flex-start;
     max-height: calc(100dvh - var(--header-height, 0px) - 2rem);
   }
 
-  [data-catalog-kind="category"][data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .filter-sheet {
+  [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .filter-sheet {
     max-height: inherit;
   }
 
-  [data-catalog-kind="category"][data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .catalog-filter-form {
+  [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .catalog-filter-form {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
