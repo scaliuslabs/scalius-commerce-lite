@@ -255,7 +255,15 @@ describe("product card matrix", () => {
     expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
-    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).not.toBeNull();
+    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+  });
+
+  it("keeps sparse retail cards compact and shows the real review score", async () => {
+    const cards = await renderCards(themeWith("retail", {}));
+    expect(cards.zeroFacts.querySelector("[data-card-fact]")).toBeNull();
+    expect(cards.zeroFacts.querySelector(".product-card-action")?.classList.contains("product-card-push")).toBe(false);
+    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+    expect(text(cards.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("★ 4.6 (128)");
   });
 
   it("renders pantry cards with full purchase actions and only available facts", async () => {
@@ -267,9 +275,13 @@ describe("product card matrix", () => {
     expect(sale.hasAttribute("data-card-full-essentials")).toBe(true);
     expect(sale.querySelector(".product-card-name")?.nextElementSibling?.classList.contains("product-card-price-row")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
+    expect(sale.querySelector(".product-card-action")?.classList.contains("pc-action-outline")).toBe(true);
     expect(sale.querySelector(".product-card-round-action")).toBeNull();
     expect(cards.allFacts.querySelector("[data-card-fact='pack-size'], [data-card-fact='delivery']")).toBeNull();
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
+    const compact = await renderCards(themeWith("quick-add", {}));
+    expect(compact.onSale.hasAttribute("data-card-full-essentials")).toBe(false);
+    expect(compact.onSale.querySelector(".product-card-round-action")).not.toBeNull();
   });
 
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
@@ -403,7 +415,7 @@ describe("product card matrix", () => {
         const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
         expect(hint.getAttribute("aria-hidden")).toBe("true");
         expect(hint.className).toContain("pointer-events-none");
-        expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")!.classList.contains("product-card-action")).toBe(true);
+        expect(Boolean(cards.soldOut.querySelector("[data-quick-buy-spacer]"))).toBe(card !== "retail");
       }
     } else {
       expect(cards.withOptions.querySelector("[data-card-action-hint], [data-quick-buy-spacer]")).toBeNull();

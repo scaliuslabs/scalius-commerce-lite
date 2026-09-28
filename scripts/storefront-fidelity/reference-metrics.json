@@ -327,8 +327,8 @@
       }
     },
     "ghorerbazar": {
-      "name": "Ghorer Bazar (geometry pending browser access)",
-      "$comment": "Official pages https://ghorerbazar.com/ and /shop/ were read on 2026-09-28: nested category navigation, full Add To Cart product actions, shop sidebar filters and numbered results. Cloudflare blocked browser screenshots, so no pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
+      "name": "Ghorer Bazar (geometry pending measured capture)",
+      "$comment": "Official home, shop and product pages were viewed live on 2026-09-28 at desktop and 390px phone sizes: nested category navigation, full outlined Add To Cart card actions, sidebar filters and numbered results, and a phone product gallery with vertical thumbnails beside the image. No repeatable pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
       "desktop": {},
       "phone": {}
     },

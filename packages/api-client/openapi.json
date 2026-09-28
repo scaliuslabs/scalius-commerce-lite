@@ -1605,7 +1605,11 @@
                           },
                           "settings": {
                             "type": "object",
-                            "properties": {},
+                            "properties": {
+                              "phoneSideThumbnails": {
+                                "type": "boolean"
+                              }
+                            },
                             "additionalProperties": false
                           }
                         },
@@ -1791,6 +1795,27 @@
                             "type": "string",
                             "enum": [
                               "retail"
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "variant",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "type": "string",
+                            "enum": [
+                              "essentials"
                             ]
                           },
                           "settings": {

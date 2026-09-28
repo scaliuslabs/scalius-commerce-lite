@@ -825,6 +825,25 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
           options={blockOptions<ResolvedStorefrontThemeLayout["productPage"]>("gallery", "productPage", (layout) => <ProductPageSketch layout={layout} />)}
           onChange={setBlock("gallery")}
         />
+        {theme.blocks.product.gallery.variant === "thumbs-left" && <SwitchField
+          id="theme-gallery-phone-side"
+          label={t("galleryPhoneSide")}
+          help={t("galleryPhoneSideHelp")}
+          checked={Boolean(theme.blocks.product.gallery.settings.phoneSideThumbnails)}
+          onCheckedChange={(checked) => setDraft((current) => {
+            if (current.blocks.product.gallery.variant !== "thumbs-left") return current;
+            return {
+              ...current,
+              blocks: {
+                ...current.blocks,
+                product: {
+                  ...current.blocks.product,
+                  gallery: { ...current.blocks.product.gallery, settings: { ...current.blocks.product.gallery.settings, phoneSideThumbnails: checked } },
+                },
+              },
+            };
+          })}
+        />}
       </SectionCard>
 
       <SectionCard title={t("purchasePanel")}>

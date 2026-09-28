@@ -80,10 +80,10 @@ describe("card anatomy", () => {
     expect(anatomy("retail").body.slice(0, 2)).toEqual(["swatches", "price"]);
     expect(anatomy("quick-add")).toMatchObject({ action: "round", body: ["price", "title", "pack-size", "delivery"] });
     const pantry = (storefrontVariantSpec("card", "quick-add").renders as (settings: { fullAction: boolean }) => StorefrontCardRenderer)({ fullAction: true });
-    expect(pantry).toMatchObject({ action: "block", body: ["title", "price"], look: STOREFRONT_CARD_LOOKS["quick-add-full"] });
+    expect(pantry).toMatchObject({ action: "outline", body: ["title", "price"], look: STOREFRONT_CARD_LOOKS["quick-add-full"] });
     expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 2, badge: "both" });
     expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
-    expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale" });
+    expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale", rating: "score" });
     const quickRetail = (storefrontVariantSpec("card", "retail").renders as (settings: { quickAction: boolean }) => StorefrontCardRenderer)({ quickAction: true });
     expect(quickRetail).toMatchObject({ quickBuy: true, action: "outline", body: ["price", "title", "rating", "delivery"] });
     expect(anatomy("detailed")).toMatchObject({ strike: "list", discountStyle: "deal", action: "compact" });

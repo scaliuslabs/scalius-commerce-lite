@@ -331,6 +331,8 @@ function card(
 export interface StorefrontGalleryRenderer {
   gallery: "beside" | "stacked" | "grid";
   thumbnails: "beside" | "below";
+  /** Keep a narrow thumbnail rail beside the stage on phones. */
+  phoneSideThumbnails?: boolean;
   /** The stage photo box, width / height: 1 square, 0.75 the 3:4 portrait. */
   stageRatio: number;
   /** Computer thumbnail edge in px; null keeps classic's 80/100px rail. */
@@ -379,6 +381,17 @@ export const STOREFRONT_BUY_BOX_LOOKS = {
     facts: "list",
     factPills: true,
     features: "list",
+    bundles: "rows",
+    card: false,
+  },
+  // Ghorer Bazar: restrained title and accent price beside a compact two-button purchase row.
+  essentials: {
+    title: { size: { desktop: 22, phone: 20 }, weight: 600 },
+    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "primary" },
+    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
+    facts: "list",
+    factPills: false,
+    features: "none",
     bundles: "rows",
     card: false,
   },
@@ -680,6 +693,7 @@ export const STOREFRONT_CARD_VARIANTS = {
       discountStyle: "text",
       strike: settings.quickAction ? "after" : "reg",
       priceTone: "sale",
+      rating: "score",
       body: settings.quickAction ? ["price", "title", "rating", "delivery"] : ["swatches", "price", "brand", "title", "rating", "delivery"],
       action: settings.quickAction ? "outline" : "block",
     }),
@@ -708,7 +722,7 @@ export const STOREFRONT_CARD_VARIANTS = {
       discountStyle: "tag",
       priceTone: "sale",
       body: settings.fullAction ? ["title", "price"] : ["price", "title", "pack-size", "delivery"],
-      action: settings.fullAction ? "block" : "round",
+      action: settings.fullAction ? "outline" : "round",
     }),
   }),
   mall: variant({ renders: card(STOREFRONT_CARD_LOOKS.mall, {}) }),
@@ -908,8 +922,12 @@ export const STOREFRONT_GALLERY_VARIANTS = {
   classic: gallery({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null }),
   // Star Tech / Apple Gadgets: a square stage over an 88px strip.
   "thumbs-below": gallery({ gallery: "beside", thumbnails: "below", stageRatio: 1, thumbnailSize: 88 }),
-  // Amazon: a narrow 48px strip (40-64 measured) at the left of the stage.
-  "thumbs-left": gallery({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: 48 }),
+  // Amazon on computers; merchants may also keep the rail beside phone photos.
+  "thumbs-left": variant({
+    settings: { phoneSideThumbnails: z.boolean().optional() },
+    defaults: { phoneSideThumbnails: false },
+    renders: (settings) => ({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: 48, phoneSideThumbnails: settings.phoneSideThumbnails }),
+  }),
   // Dawn "stacked": every photo full width beside a sticky info column.
   stacked: gallery({ gallery: "stacked", thumbnails: "below", stageRatio: 1, thumbnailSize: null }),
   // Aarong: a 3:4 portrait stage over the strip.
@@ -939,6 +957,7 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
   "marketplace-3col": variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"]) }),
   // Target: fulfilment tiles, at-a-glance chips.
   retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.retail) }),
+  essentials: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.essentials) }),
   // Dawn: outline Add to cart plus solid Buy it now, collapsible rows.
   boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
   showcase: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.showcase) }),

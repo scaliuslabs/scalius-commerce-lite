@@ -327,7 +327,7 @@ export type StorefrontThemeDocument = {
             } | {
                 variant: 'thumbs-left';
                 settings: {
-                    [key: string]: never;
+                    phoneSideThumbnails?: boolean;
                 };
             } | {
                 variant: 'stacked';
@@ -368,6 +368,11 @@ export type StorefrontThemeDocument = {
                 };
             } | {
                 variant: 'retail';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'essentials';
                 settings: {
                     [key: string]: never;
                 };

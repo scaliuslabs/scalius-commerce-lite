@@ -232,6 +232,16 @@ describe("theme page", () => {
     expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false } });
   });
 
+  it("lets an essentials merchant move phone thumbnails below the photo", async () => {
+    render(storefrontTemplateTheme("daily-essentials"));
+    const side = container.querySelector<HTMLButtonElement>("#theme-gallery-phone-side")!;
+    expect(side.getAttribute("aria-checked")).toBe("true");
+    act(() => side.click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: false } });
+  });
+
   it("removes the shopper grid/list switch when choosing category shelves", async () => {
     render(storefrontTemplateTheme("marketplace"));
     const control = container.querySelector("[data-listing-default]")!;

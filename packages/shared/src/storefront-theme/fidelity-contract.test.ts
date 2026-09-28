@@ -342,6 +342,10 @@ describe("slice 5: product page per template", () => {
     expect(resolved("spec-catalogue").layout.buyBox).toMatchObject({ look: STOREFRONT_BUY_BOX_LOOKS.spec, emi: true });
     expect(resolved("marketplace").layout.buyBox.look?.facts).toBe("column");
     expect(resolved("mass-retail").layout.buyBox.look?.facts).toBe("tiles");
+    expect(resolved("daily-essentials").layout.buyBox.look).toMatchObject({
+      title: { size: { phone: 20 } }, price: { size: { phone: 20 }, tone: "primary" },
+      cta: { layout: "row", first: "add-to-cart" },
+    });
   });
 
   it("renders real gallery variants: Dawn stacked, Target grid, Amazon's narrow strip, a 3:4 stage", () => {
@@ -351,6 +355,8 @@ describe("slice 5: product page per template", () => {
     const theme = storefrontTemplateTheme("marketplace");
     theme.blocks.product.gallery = { variant: "thumbs-left", settings: {} };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productPage).toMatchObject({ thumbnails: "beside", thumbnailSize: 48 });
+    expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: true });
+    expect(resolved("daily-essentials").blocks.product.sticky.phoneBottom).toBe("none");
   });
 
   it("lists reviews on every template that shows them and warranty where the reference does", () => {

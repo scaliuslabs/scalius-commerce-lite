@@ -4,8 +4,8 @@
  * or a preload picks exactly the rendition the visible slot would.
  *
  * `sizes` follow the gallery's CSS (in px, 16px per rem):
- * - Below 1024px the photo spans the row (thumbnails always sit in a strip
- *   under it, as in Dawn) inside the section's `px-3 sm:px-6`, and the
+ * - Below 1024px the photo spans the row unless a phone side rail is enabled.
+ *   It sits inside the section's `px-3 sm:px-6`, and the
  *   square stage is capped at `min(55vh, 24rem)` tall, so a square photo
  *   never renders wider than 384px.
  * - From 1024px the gallery spans 7 of 12 columns (`gap-x-10`) of the
@@ -32,6 +32,7 @@ const THUMBNAIL_MAX_WIDTH = 296;
 
 /** Below 1024px: full row width (12px gutters), capped at the 384px stage. */
 const MOBILE_MAIN_SIZES = ["(max-width: 407px) calc(100vw - 24px)", "(max-width: 1023px) 384px"];
+const MOBILE_SIDE_MAIN_SIZES = ["(max-width: 463px) calc(100vw - 80px)", "(max-width: 1023px) 384px"];
 
 function desktopMainSizes(layout: ProductGalleryLayout, railBeside: boolean): string[] {
   // Stacked: the column left of a 345px info column and a 40px gap.
@@ -62,18 +63,18 @@ export function productGalleryMainSlot(
   return {
     width: GALLERY_IMAGE_WIDTHS.main,
     // The LCP photo: DPR 3 phones fetch about 2x pixels (capSizesDensity).
-    sizes: capSizesDensity([...MOBILE_MAIN_SIZES, ...desktopMainSizes(layout, railBeside)].join(", ")),
+    sizes: capSizesDensity([...(railBeside && layout.phoneSideThumbnails ? MOBILE_SIDE_MAIN_SIZES : MOBILE_MAIN_SIZES), ...desktopMainSizes(layout, railBeside)].join(", ")),
   };
 }
 
-/** Thumbnails of the mobile (< 1024px, always a strip) or desktop rail. */
+/** Thumbnails of the mobile or desktop rail. */
 export function productGalleryThumbnailSlot(
   layout: ProductGalleryLayout,
   rail: "mobile" | "desktop",
 ): ImageSlot {
   const below = layout.thumbnails === "below";
   const sizes = rail === "mobile"
-    ? "68px"
+    ? layout.phoneSideThumbnails ? "48px" : "68px"
     : layout.thumbnailSize !== null
       ? `${layout.thumbnailSize}px`
       : below ? "88px" : "(min-width: 1280px) 96px, 76px";

@@ -725,6 +725,8 @@
   --pc-pad-y: 0.75rem;
   --pc-gap: 0.25rem;
   --pc-action-h: 2.5rem;
+  height: auto;
+  align-self: start;
 }
 
 .site-root .product-card[data-card-variant="retail"] .product-card-well {

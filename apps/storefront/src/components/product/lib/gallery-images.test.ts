@@ -45,8 +45,7 @@ function evaluateSizes(sizes: string, viewport: number, dppx = 1): number {
 /**
  * The rendered width of a square photo in the gallery's main slot, straight
  * from the CSS: section gutters, 12-column grid, thumbnail column, and the
- * mobile stage's 24rem height cap. Below 1024px the thumbnails always sit in
- * a strip under the photo, so the photo spans the row.
+ * mobile stage's 24rem height cap. A phone side rail takes 56px from the row.
  */
 function renderedMainWidth(
   layout: ProductGalleryLayout,
@@ -56,7 +55,7 @@ function renderedMainWidth(
   const railBeside = hasThumbnails && layout.thumbnails === "beside";
   if (viewport < 1024) {
     const content = viewport - 2 * (viewport < 640 ? 12 : 24);
-    return Math.min(content, 384);
+    return Math.min(content - (railBeside && layout.phoneSideThumbnails ? 56 : 0), 384);
   }
   const content = Math.min(viewport, 1280) - 64;
   const column = (content - 11 * 40) / 12;
@@ -124,5 +123,14 @@ describe("product gallery image slots", () => {
       expect(slot.width).toBe(144);
       expect(slot.maxWidth).toBe(296);
     }
+  });
+
+  it("sizes the Daily Essentials phone side rail and image without changing marketplace phones", () => {
+    const side = STOREFRONT_GALLERY_VARIANTS["thumbs-left"].renders({ phoneSideThumbnails: true });
+    const marketplace = GALLERY["thumbs-left"];
+    expect(evaluateSizes(productGalleryMainSlot(side, true).sizes, 390)).toBe(310);
+    expect(evaluateSizes(productGalleryThumbnailSlot(side, "mobile").sizes, 390)).toBe(48);
+    expect(evaluateSizes(productGalleryMainSlot(marketplace, true).sizes, 390)).toBe(366);
+    expect(evaluateSizes(productGalleryThumbnailSlot(marketplace, "mobile").sizes, 390)).toBe(68);
   });
 });

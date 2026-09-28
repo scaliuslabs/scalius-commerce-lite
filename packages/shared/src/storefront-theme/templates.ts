@@ -68,7 +68,7 @@ function blocks(spec: {
     paging: "numbered" | "load-more" | "infinite";
   };
   product: {
-    gallery: string;
+    gallery: string | [string, Record<string, unknown>];
     buyBox: [string, Record<string, unknown>?];
     below: StorefrontProductModule[];
     sticky: StorefrontThemeBlocks["product"]["sticky"];
@@ -84,7 +84,9 @@ function blocks(spec: {
     card: pick("card", ...spec.card),
     listing: { searchLayout: "same", ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
     product: {
-      gallery: pick("gallery", spec.product.gallery),
+      gallery: typeof spec.product.gallery === "string"
+        ? pick("gallery", spec.product.gallery)
+        : pick("gallery", ...spec.product.gallery),
       buyBox: pick("buyBox", ...spec.product.buyBox),
       below: spec.product.below,
       sticky: spec.product.sticky,
@@ -399,7 +401,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "cart", "search", "account"], drawer: "drill-in" }],
       card: ["quick-add", { fullAction: true }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "thumbs-below", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
+      product: { gallery: ["thumbs-left", { phoneSideThumbnails: true }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
       footer: "directory",
     }),
     home: [
