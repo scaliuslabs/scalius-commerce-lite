@@ -124,6 +124,7 @@ const dimensions = variant === "standard"
       dimensions={dimensions}
       inset={inset}
       productId={product.id}
+      showBuyNow={resolved.blocks.card.variant === "quick-add" && resolved.blocks.card.settings.showBuyNow === true}
       sizes={sizes}
       loading={loading}
       headingLevel={headingLevel}

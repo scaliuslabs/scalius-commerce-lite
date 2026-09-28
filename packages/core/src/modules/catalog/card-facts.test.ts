@@ -155,15 +155,18 @@ describe("card facts", () => {
     });
 
     it("batches with the card media and rides on listing rows", async () => {
-        const { db } = setup();
+        const { db, sqlite } = setup();
         const { facts } = await loadCatalogCardData(db, [{ id: "p_laptop" }, { id: "p_free", freeDelivery: true }], 2);
         expect(facts("p_laptop").keySpecs).toHaveLength(4);
         expect(facts("p_free").delivery).toEqual({ free: true });
 
+        sqlite.exec("UPDATE products SET product_condition = 'used' WHERE id = 'p_shirt'");
         await rebuildCatalogProjections(db);
         const listing = await getStorefrontProducts(db, { limit: 10, sort: "name-asc" });
         const byId = new Map(listing.products.map((product) => [product.id, product]));
         expect(byId.get("p_laptop")?.cardFacts.brand).toEqual({ name: "HP", slug: "hp" });
         expect(byId.get("p_shirt")?.cardFacts.options.map((option) => option.count)).toEqual([2, 3]);
+        expect(byId.get("p_shirt")?.productCondition).toBe("used");
+        expect(byId.get("p_laptop")?.productCondition).toBeNull();
     });
 });

@@ -18,6 +18,7 @@ import {
   EMPTY_HOMEPAGE_SECTION_DATA,
   homepageContent,
   homepageLeadSection,
+  homepagePhoneSections,
   homepageSectionRenders,
 } from "@/lib/homepage-sections";
 import {
@@ -25,7 +26,7 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
 } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import { mediaImageUrl } from "@/lib/media-url";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -97,12 +98,25 @@ const hero = content.hero;
 const firstDesktopHero = hero.desktop[0] ?? null;
 const firstMobileHero = hero.mobile[0] ?? null;
 const leadSection = homepageLeadSection(homeSections, content);
+const phoneSections = homepagePhoneSections(homeSections, content);
+const phoneHeroMoved = phoneSections !== homeSections;
+const phoneLeadSection = phoneHeroMoved ? homepageLeadSection(phoneSections, content, true) : leadSection;
 // Preload the banner only when it is the first thing buyers see: the same
 // candidates the hero's first slide offers, so the preload is the file the
 // banner paints (a phone-sized rendition on phones).
 const heroPreloads = leadSection?.type === "hero" && homepageSectionRenders(leadSection, content)
   ? heroLeadCandidates(hero, leadSection.settings.layout)
+    .filter((candidate) => !phoneHeroMoved || candidate.media !== "(max-width: 767px)")
+    .map((candidate) => phoneHeroMoved && candidate.media === "all" ? { ...candidate, media: "(min-width: 768px)" } : candidate)
   : [];
+const phoneCategory = phoneLeadSection?.type === "category-tiles"
+  ? content.categoryRail.categories.find((category) => category.imageUrl)
+  : null;
+const phoneCategoryImage = phoneCategory?.imageUrl ?? null;
+const phoneCategoryWidth = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "photo" ? 480 : 320;
+const phoneCategorySizes = phoneLeadSection?.type === "category-tiles" ? {
+  photo: "min(42vw, 176px)", icons: "56px", round: "30vw", square: "30vw", quad: "45vw",
+}[phoneLeadSection.settings.style] : "";
 
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
@@ -121,6 +135,17 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
   }
 >
   <Fragment slot="preload">
+    {phoneCategoryImage && (
+      <link
+        rel="preload"
+        as="image"
+        href={mediaImageSrcSet(phoneCategoryImage) ? undefined : mediaImageUrl(phoneCategoryImage, phoneCategoryWidth)}
+        imagesrcset={mediaImageSrcSet(phoneCategoryImage)}
+        imagesizes={phoneCategorySizes}
+        media="(max-width: 767px)"
+        fetchpriority="high"
+      />
+    )}
     {
       heroPreloads.map((candidate) => (
         // With renditions, href is left out so a browser without

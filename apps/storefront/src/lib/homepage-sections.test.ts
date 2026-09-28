@@ -5,6 +5,7 @@ import {
   homepageCollectionsFallback,
   homepageContent,
   homepageLeadSection,
+  homepagePhoneSections,
   homepageRenderUnits,
   homepageSectionProducts,
   homepageSectionRenders,
@@ -62,6 +63,20 @@ describe("homepage section products", () => {
 });
 
 describe("homepage section rules", () => {
+  it("moves a visible banner after category tiles only for phones when the merchant chooses it", () => {
+    const hero = section("hero", "hero", { phonePlacement: "after-categories" });
+    const categories = section("category-tiles", "tiles", { style: "photo" });
+    const sections = [hero, section("usp-strip", "notice"), categories];
+    const shown = content({
+      hero: { desktop: [{ url: "https://cdn.test/hero.jpg" } as never], mobile: [] },
+      categoryRail: { enabled: true, title: "Categories", categories: [{ id: "c", name: "Tea", slug: "tea", imageUrl: "https://cdn.test/tea.jpg" }] } as never,
+    });
+    expect(homepagePhoneSections(sections, shown).map((each) => each.id)).toEqual(["notice", "tiles", "hero"]);
+    expect(homepageLeadSection(homepagePhoneSections(sections, shown), shown, true)?.id).toBe("tiles");
+    expect(homepagePhoneSections(sections, content())).toBe(sections);
+    expect(homepagePhoneSections([categories, hero], shown)).toEqual([categories, hero]);
+  });
+
   it("renders a section only with data", () => {
     const empty = content({ lists: new Map(), media: new Map() });
     expect(homepageSectionRenders(section("hero", "h"), empty)).toBe(false);

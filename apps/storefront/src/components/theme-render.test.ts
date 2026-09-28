@@ -805,15 +805,15 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(hover(plain)).toBe(false);
   expect(onSale.querySelector(".product-card-hover-image")).toBeNull();
 
-  // A buy action only on cards with one, only in stock without options; it
-  // sits above the stretched card link. The card matrix
+  // A purchase action only on cards with one, only in stock without options;
+  // grocery quick add keeps the shelf open instead of entering /buy. The card matrix
   // (cards/product-card.render.test.ts) covers each anatomy in detail.
-  const buyNow = (element: Element) => element.querySelector('a[href^="/buy/"]');
-  expect(Boolean(buyNow(onSale))).toBe(card.quickBuy);
-  expect(Boolean(buyNow(plain))).toBe(card.quickBuy);
-  expect(buyNow(withOptions)).toBeNull();
-  expect(buyNow(soldOut)).toBeNull();
-  if (card.quickBuy) expect(buyNow(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
+  const buyAction = (element: Element) => element.querySelector(resolved.blocks.card.variant === "quick-add" ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
+  expect(Boolean(buyAction(onSale))).toBe(card.quickBuy);
+  expect(Boolean(buyAction(plain))).toBe(card.quickBuy);
+  expect(buyAction(withOptions)).toBeNull();
+  expect(buyAction(soldOut)).toBeNull();
+  if (card.quickBuy) expect(buyAction(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
 
   // The discount badge sits on the photo, next to the price, or both (Fabrilife).
   expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge !== "price");

@@ -8,7 +8,8 @@ import {
   parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { TEMPLATES } from "./lib/context.mjs";
-import { BLOCKS, parseArgs, stagesFor } from "./check.mjs";
+import { BLOCKS, markdownSummary, parseArgs, stagesFor } from "./check.mjs";
+import { referenceShotIssue, writePairs } from "./pairs.mjs";
 import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
 const reference = JSON.parse(readFileSync(new URL("./reference-metrics.json", import.meta.url), "utf8"));
@@ -277,6 +278,33 @@ describe("filters, verdict and exit code", () => {
     expect(o).toMatchObject({ only: "boutique", reportOnly: true, ports: { api: 9011, storefront: 4601, chrome: 9601, apiInspector: 29011 } });
     expect(() => parseArgs(["--api-port", "4601"])).toThrow(/ports must differ/);
     expect(() => parseArgs(["--bogus"])).toThrow(/Unknown argument/);
+  });
+
+  it("keeps blocked reference captures out of visual pairs and reports them separately from metrics", async () => {
+    expect(referenceShotIssue("/shots/target-home-d-top.jpg")).toBe("known blocked reference capture");
+    expect(referenceShotIssue("/shots/target-search-m-full.jpg")).toBe("known blocked reference capture");
+    expect(referenceShotIssue("/shots/ghorerbazar-home-m-top.jpg")).toBe("known blocked reference capture");
+    expect(referenceShotIssue("/shots/target-mega-d.jpg")).toBeNull();
+    const dir = mkdtempSync(join(tmpdir(), "fidelity-blocked-shots-"));
+    try {
+      for (const page of ["home", "search", "pdp"]) for (const viewport of ["d", "m"]) {
+        writeFileSync(join(dir, `target-${page}-${viewport}-top.jpg`), "blocked capture");
+      }
+      const pairs = await writePairs({
+        reference: { templates: { "mass-retail": { refs: { header: "target", card: "target", listing: "target", pdp: "target" } } }, sites: { target: { name: "Target", shots: { home: "target-home", plp: "target-search", pdp: "target-pdp" } } } },
+        matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["mass-retail"],
+      });
+      expect(pairs.made).toHaveLength(0);
+      expect(pairs.unverified).toHaveLength(6);
+      expect(pairs.unverified.every((item) => item.reason === "known blocked reference capture")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    const visualEvidence = { paired: 2, unverified: [{ template: "mass-retail", page: "home", viewport: "desktop", reference: "target-home-d-top.jpg", reason: "known blocked reference capture" }] };
+    const report = markdownSummary({ summary: summarize([{ template: "mass-retail", block: "header", pass: true }]), checks: [], meta: { finishedAt: "now", git: "test", durationS: 1, peakRssMb: 1 }, filter: "", visualEvidence });
+    expect(report).toContain("1/1 metric checks pass");
+    expect(report).toContain("Visual pairs: 2 paired, 1 unverified.");
+    expect(report).toContain("mass-retail/home/desktop | target-home-d-top.jpg | known blocked reference capture");
   });
 });
 

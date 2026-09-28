@@ -184,4 +184,43 @@ describe("product summary browser payload", () => {
     });
     expect(otherHtml).not.toContain("data-product-compact-facts");
   });
+
+  it("shows only truthful Star Tech fact pills while keeping the live price and stock nodes", async () => {
+    const product = {
+      id: "prod_1", slug: "laptop", name: "Laptop", price: 60_500,
+      discountType: "flat", discountPercentage: null, discountAmount: 3_500,
+      brand: { id: "acer", name: "Acer", slug: "acer" },
+    } as Product;
+    const simpleVariant = {
+      ...variants[0]!, selectedOptions: [], optionCombinationKey: null,
+      sku: "LAP-57", price: 60_500,
+    };
+    const html = await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [simpleVariant], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
+      request: new Request("https://shop.test/products/laptop"),
+    });
+    const doc = new Window().document;
+    doc.write(`<body>${html}</body>`);
+
+    const factRow = doc.querySelector("[data-fact-pills] .buy-box-main-price")!;
+    expect(factRow.textContent).toContain("Price:");
+    expect(factRow.textContent).toContain("Regular Price:");
+    expect(factRow.textContent).toContain("Status:In Stock");
+    expect(factRow.textContent).toContain("Product Code:LAP-57");
+    expect(factRow.textContent).toContain("Brand:Acer");
+    expect(doc.querySelectorAll(".product-price")).toHaveLength(1);
+    expect(doc.querySelectorAll("#product-stock-text")).toHaveLength(1);
+    expect(doc.querySelector(".product-original-price")?.classList.contains("hidden")).toBe(false);
+
+    const variableHtml = await container.renderToString(ProductSummary, {
+      props: { product: { ...product, discountType: null, discountAmount: null, brand: null }, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
+      request: new Request("https://shop.test/products/laptop"),
+    });
+    const variableDoc = new Window().document;
+    variableDoc.write(`<body>${variableHtml}</body>`);
+    const variableFacts = variableDoc.querySelector("[data-fact-pills] .buy-box-main-price")!;
+    expect(variableFacts.textContent).not.toContain("Product Code:");
+    expect(variableFacts.textContent).not.toContain("Brand:");
+    expect(variableDoc.querySelector(".product-original-price")?.classList.contains("hidden")).toBe(true);
+  });
 });

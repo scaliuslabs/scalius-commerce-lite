@@ -101,3 +101,12 @@ export function groupSpecificationRows(
 export function specificationValue(row: { value: string; unit: string | null }): string {
   return row.unit ? `${row.value} ${row.unit}` : row.value;
 }
+
+/** Merchant highlights win; saved key specifications fill an otherwise empty buy-box list. */
+export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">): string[] {
+  if (product.features?.length) return product.features;
+  return (product.attributes ?? [])
+    .filter((row) => row.keySpec && row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand")
+    .slice(0, 6)
+    .map((row) => `${row.name}: ${specificationValue(row)}`);
+}

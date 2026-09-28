@@ -281,6 +281,12 @@ describe("product card matrix", () => {
     const compact = await renderCards(themeWith("quick-add", {}));
     expect(compact.onSale.hasAttribute("data-card-full-essentials")).toBe(false);
     expect(compact.onSale.querySelector(".product-card-round-action")).not.toBeNull();
+    expect(compact.onSale.querySelector("[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
+    expect(compact.onSale.querySelector(".pc-buy-now")).toBeNull();
+    theme.blocks.card.settings.showBuyNow = true;
+    const withBuyNow = await renderCards(theme);
+    expect(withBuyNow.onSale.querySelector(".pc-buy-now")?.getAttribute("href")).toBe("/buy/product-sale");
+    expect(withBuyNow.withOptions.querySelector(".pc-buy-now")).toBeNull();
   });
 
   it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
@@ -390,7 +396,7 @@ describe("product card matrix", () => {
 
     // The buy action: in stock without options only, above the card link,
     // named with its visible words first (WCAG 2.5.3).
-    const action = (element: Element) => element.querySelector('a[href^="/buy/"]');
+    const action = (element: Element) => element.querySelector(card === "quick-add" ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
     const label = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
     for (const fixture of ["onSale", "noPhoto", "allFacts"] as const) {
       expect(Boolean(action(cards[fixture])), fixture).toBe(anatomy.quickBuy);
@@ -399,8 +405,8 @@ describe("product card matrix", () => {
     expect(action(cards.soldOut)).toBeNull();
     if (anatomy.quickBuy) {
       const buy = action(cards.onSale)!;
-      expect(buy.getAttribute("href")).toBe("/buy/product-sale");
-      expect(buy.getAttribute("rel")).toBe("nofollow");
+      expect(buy.getAttribute("href")).toBe(card === "quick-add" ? "/products/product-sale" : "/buy/product-sale");
+      if (card !== "quick-add") expect(buy.getAttribute("rel")).toBe("nofollow");
       expect(buy.className).toMatch(/\bz-10\b/);
       expect(buy.hasAttribute("aria-label")).toBe(false);
       expect(text(buy)).toBe(`${label}: Product sale`);
@@ -491,6 +497,19 @@ describe("product card matrix", () => {
       request: new Request("https://shop.test/"),
     });
     expect(text(parse(quick).querySelector('[data-card-fact="delivery"]'))).toBe("৳60 delivery");
+  });
+
+  it("includes a condition label only when the merchant saved one", async () => {
+    for (const variant of ["detailed", "standard"]) {
+      const locals = { storefrontTheme: Promise.resolve(requestThemeFor(themeWith(variant, {}))) };
+      const render = (productCondition: "used" | null) => container.renderToString(ProductCard, {
+        props: { product: { ...PRODUCTS.allFacts, productCondition } },
+        locals,
+        request: new Request("https://shop.test/search"),
+      });
+      expect(text(parse(await render("used")).querySelector('[data-card-fact="condition"]'))).toBe("Used");
+      expect(parse(await render(null)).querySelector('[data-card-fact="condition"]')).toBeNull();
+    }
   });
 
   it("shows no rating on any card while the store has no published review or reviews are off", async () => {

@@ -154,6 +154,15 @@ describe("theme page", () => {
     expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
   });
 
+  it("saves a chosen grocery template with its merchant defaults", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    act(() => radio("Daily essentials").click());
+    await pressSave();
+    const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.template).toBe("daily-essentials");
+    expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
+  });
+
   it("lets a Marketplace merchant set category and search starting views separately", async () => {
     const marketplace = storefrontTemplateTheme("marketplace");
     render(marketplace);
@@ -234,13 +243,13 @@ describe("theme page", () => {
     const essentials = storefrontTemplateTheme("daily-essentials");
     render(essentials);
     expect(essentials.blocks.listing.layout.variant).toBe("grid");
-    expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true } });
+    expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
     const quick = container.querySelector<HTMLButtonElement>("#theme-essentials-full-action")!;
     expect(quick.getAttribute("aria-checked")).toBe("true");
     act(() => quick.click());
     await pressSave();
     const saved = api.theme.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false } });
+    expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false, showBuyNow: false } });
   });
 
   it("lets an essentials merchant move phone thumbnails below the photo", async () => {

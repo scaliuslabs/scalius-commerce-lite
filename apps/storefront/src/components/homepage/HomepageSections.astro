@@ -10,6 +10,7 @@ import {
   homepageCollectionsFallback,
   homepageMedia,
   homepageMosaicTiles,
+  homepagePhoneSections,
   homepageRenderUnits,
   homepageSectionProducts,
   homepageSectionTabs,
@@ -47,19 +48,35 @@ interface Props {
 
 const { sections, content, leadSectionId, currencySymbol, currencyCode } = Astro.props;
 const units = homepageRenderUnits(sections, content);
+const phoneSections = homepagePhoneSections(sections, content);
+const phoneHeroAfterCategories = phoneSections !== sections;
+const phoneRank = new Map(phoneSections.map((section, index) => [section.id, index]));
+const phoneUnits = [...units].sort((left, right) => {
+  const first = (unit: typeof left) => unit.kind === "banners" ? unit.sections[0]!.id : unit.section.id;
+  return phoneRank.get(first(left))! - phoneRank.get(first(right))!;
+});
+const phoneOrder = new Map(phoneUnits.map((unit, index) => [unit, index]));
 const money = { currencySymbol, currencyCode };
 ---
 
-<div class="flex flex-col">
+<div class="flex flex-col" data-home-phone-reorder={phoneHeroAfterCategories ? "" : undefined}>
   {units.map((unit) => {
+    const wrapper = {
+      class: "contents home-render-unit",
+      "data-home-render-unit": "",
+      "data-phone-order": phoneOrder.get(unit),
+      style: `--phone-order:${phoneOrder.get(unit)}`,
+    };
     if (unit.kind === "banners") {
       return (
-        <BannerRow
-          layout={unit.layout}
-          banners={unit.sections.map((section) => ({ section, photo: homepageMedia(content, section.settings.mediaId) }))}
-          aboveFold={unit.sections.some((section) => section.id === leadSectionId)}
-          grouped
-        />
+        <div {...wrapper}>
+          <BannerRow
+            layout={unit.layout}
+            banners={unit.sections.map((section) => ({ section, photo: homepageMedia(content, section.settings.mediaId) }))}
+            aboveFold={unit.sections.some((section) => section.id === leadSectionId)}
+            grouped
+          />
+        </div>
       );
     }
     const { section } = unit;
@@ -67,12 +84,13 @@ const money = { currencySymbol, currencyCode };
     const list = homepageSectionProducts(section, content);
     const headingId = `home-${section.id}-title`;
     return (
-      <div class="contents" data-home-section={section.type} data-section-id={section.id}>
+      <div {...wrapper} data-home-section={section.type} data-section-id={section.id}>
         {section.type === "hero" && (
           <section class="w-full">
             <Hero
               hero={content.hero}
-              priority
+              priority={lead}
+              phonePriority={lead && !phoneHeroAfterCategories}
               layout={section.settings.layout}
               sideBanners={(section.settings.sideBanners ?? []).flatMap((banner) => {
                 const asset = homepageMedia(content, banner.mediaId);
@@ -182,7 +200,30 @@ const money = { currencySymbol, currencyCode };
   })}
 </div>
 
+{phoneHeroAfterCategories && (
+  <script is:inline>
+    (() => {
+      const root = document.querySelector("[data-home-phone-reorder]");
+      if (!root) return;
+      const hero = root.querySelector(':scope > [data-home-section="hero"]');
+      const categories = root.querySelector(':scope > [data-home-section="category-tiles"]');
+      if (!hero || !categories) return;
+      const desktopNext = hero.nextElementSibling;
+      const phone = matchMedia("(max-width: 767px)");
+      const sync = () => {
+        if (phone.matches) categories.after(hero);
+        else root.insertBefore(hero, desktopNext);
+      };
+      sync();
+      phone.addEventListener("change", sync);
+    })();
+  </script>
+)}
+
 <style is:global>
+  @media (max-width: 767px) {
+    [data-home-phone-reorder] > .home-render-unit { display: block; order: var(--phone-order); }
+  }
   /* New sections space themselves by the density (theme-foundation.css
      --theme-section-gap): half above, half below. */
   .home-section {

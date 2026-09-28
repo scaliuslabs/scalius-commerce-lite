@@ -3,10 +3,23 @@
 // measured numbers and the template's check count. Reference screenshots come
 // from the (gitignored) storefront-study and fidelity audit folders.
 import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { loadSharp } from "./lib/context.mjs";
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// These saved captures show an access challenge, not a storefront. Keep them
+// out of visual pairs until each site can be captured and reviewed again.
+const BLOCKED_REFERENCE_SHOTS = new Set([
+  ...["home", "search", "pdp"].flatMap((page) => ["d", "m"].flatMap((viewport) => ["top", "full"].map((crop) => `target-${page}-${viewport}-${crop}.jpg`))),
+  "ghorerbazar-home-m-top.jpg",
+  "ghorerbazar-home-m-full.jpg",
+]);
+
+export function referenceShotIssue(ref) {
+  if (!ref) return "reference screenshot missing";
+  return BLOCKED_REFERENCE_SHOTS.has(basename(ref)) ? "known blocked reference capture" : null;
+}
 
 function findRef(dirs, base, v) {
   for (const dir of dirs) {
@@ -37,13 +50,13 @@ const fmt = (d) => (d ? `first card y ${d.firstCardTop ?? "-"} | cards >=50% vis
 const refFmt = (m) => (m ? `first card y ${m["listing.firstCardY"]?.v ?? "-"} | cards >=50% visible ${m["listing.productsVisible"]?.v ?? "-"} | filters visible ${m["listing.filtersVisible"]?.v ?? "-"} | 20th bottom ${m["listing.bottomOf20"]?.v ?? "-"}` : "");
 
 /**
- * @returns list of written pair files
+ * @returns written pairs and screenshots without usable visual evidence
  */
 export async function writePairs({ reference, matrix, checks, shotsDir, refDirs, outDir, templates }) {
   const sharp = await loadSharp();
   mkdirSync(outDir, { recursive: true });
   const made = [];
-  const missing = [];
+  const unverified = [];
   for (const template of templates) {
     const tpl = reference.templates[template];
     const counts = checks.filter((c) => c.template === template);
@@ -57,8 +70,9 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
         const oursPage = template === "marketplace" && page === "plp" ? "search" : page;
         const ours = join(shotsDir, `ours-${template}-${oursPage}-${v}-top.jpg`);
         const ref = base ? findRef(refDirs, base, v) : null;
-        if (!ref || !existsSync(ours)) {
-          missing.push(`${template}-${page}-${v}`);
+        const issue = referenceShotIssue(ref) ?? (!existsSync(ours) ? "our screenshot missing" : null);
+        if (issue) {
+          unverified.push({ template, page, viewport, reference: ref ? basename(ref) : null, reason: issue });
           continue;
         }
         const H = v === "d" ? 900 : 1000;
@@ -91,5 +105,5 @@ export async function writePairs({ reference, matrix, checks, shotsDir, refDirs,
       }
     }
   }
-  return { made, missing };
+  return { made, unverified };
 }

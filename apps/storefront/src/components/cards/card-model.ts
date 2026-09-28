@@ -12,6 +12,7 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
 import type {
   StorefrontCardRenderer,
   StorefrontCardSlot,
@@ -74,6 +75,7 @@ export interface ProductCardFactValues {
 
 export interface ProductCardModel {
   name: string;
+  condition: string | null;
   href: string;
   soldOut: boolean;
   /** Null when the product has no photo we may show on a card: the card shows the placeholder. */
@@ -227,6 +229,7 @@ export function productCardModel(
   const current = money(product.discountedPrice);
   return {
     name: product.name,
+    condition: product.productCondition ? PRODUCT_CONDITION_LABELS[product.productCondition] : null,
     href: `/products/${product.slug}`,
     soldOut,
     image: photo

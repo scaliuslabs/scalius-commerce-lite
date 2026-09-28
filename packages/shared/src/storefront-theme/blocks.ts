@@ -723,8 +723,8 @@ export const STOREFRONT_CARD_VARIANTS = {
   // Chaldal: ruled tiles, a "৳81 OFF" tag and the round + on the photo,
   // price first (red on sale), name 16/400, pack size, delivery chip.
   "quick-add": variant({
-    settings: { fullAction: z.boolean().optional() },
-    defaults: { fullAction: false },
+    settings: { fullAction: z.boolean().optional(), showBuyNow: z.boolean().optional() },
+    defaults: { fullAction: false, showBuyNow: false },
     contrastPairs: [["destructive", "card"]],
     renders: (settings) => card(settings.fullAction ? STOREFRONT_CARD_LOOKS["quick-add-full"] : STOREFRONT_CARD_LOOKS["quick-add"], {
       quickBuy: true,

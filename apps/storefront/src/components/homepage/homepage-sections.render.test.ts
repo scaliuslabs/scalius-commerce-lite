@@ -33,6 +33,7 @@ import {
   type HomepageContent,
 } from "@/lib/homepage-sections";
 import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
+import { capSizesDensity } from "@/lib/responsive-image";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -317,6 +318,20 @@ describe("homepage section library", () => {
     expect(homepageLeadSection(EVERY_SECTION, EMPTY)).toBeNull();
   });
 
+  it("keeps one banner and one category section while putting categories first on phones", async () => {
+    const page = await render([
+      section("hero", "hero", { layout: "full-bleed", phonePlacement: "after-categories" }),
+      section("category-tiles", "tiles", { style: "square" }),
+    ], store("large"));
+    const units = [...page.querySelectorAll("[data-home-render-unit]")];
+    expect(units.map((unit) => unit.getAttribute("data-section-id"))).toEqual(["hero", "tiles"]);
+    expect(units.map((unit) => unit.getAttribute("data-phone-order"))).toEqual(["1", "0"]);
+    expect(page.querySelectorAll('[data-section-id="hero"]')).toHaveLength(1);
+    expect(page.querySelectorAll('[data-section-id="tiles"]')).toHaveLength(1);
+    expect(page.querySelector('.desktop-carousel img')?.getAttribute("fetchpriority")).toBe("high");
+    expect(page.querySelector('.mobile-carousel img')?.getAttribute("fetchpriority")).toBe("auto");
+  });
+
   it.each(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"] as const)(
     "renders the %s hero with the first banner as the only high-priority image",
     async (layout) => {
@@ -361,7 +376,7 @@ describe("homepage section library", () => {
     const items = Array.from(track.children);
     expect(items).toHaveLength(12);
     expect(items.every((item) => item.className.includes("snap-start"))).toBe(true);
-    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(SHELF_CARD_SIZES);
+    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(capSizesDensity(SHELF_CARD_SIZES));
     // The title says what the list is; "View all" goes to the full listing.
     expect(text(large.querySelector("h2"))).toBe("New arrivals");
     expect(large.querySelector('a[href="/search"]')).not.toBeNull();
@@ -377,13 +392,12 @@ describe("homepage section library", () => {
     const page = await render([section("product-grid", "grid", { title: "", source: { kind: "category", categoryId: "cat-sarees" }, columns: 5, rows: 2 })], store("large"));
     expect(page.querySelectorAll(".product-grid > *")).toHaveLength(10);
     expect(page.querySelector(".home-grid-capped")!.getAttribute("style")).toContain("--home-grid-columns: 5");
-    // Card photos are sized for the capped columns (wider than the density's own).
+    // Card photos use the selected maximum column count.
     const { layout, theme } = requestThemeFor(DEFAULT_STOREFRONT_THEME);
     const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
     const container = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
     const capped = productCardImageSizes(grid, container, "grid", "grid", 5);
-    expect(capped).not.toBe(productCardImageSizes(grid, container));
-    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(capped);
+    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(capSizesDensity(capped));
     expect(text(page.querySelector("h2"))).toBe("Sarees");
     expect(page.querySelector('a[href="/categories/sarees"]')).not.toBeNull();
   });

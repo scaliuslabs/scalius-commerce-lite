@@ -50,6 +50,8 @@ export const STOREFRONT_SECTION_REGISTRY = {
       // Fabrilife full-bleed 2.6:1; Star Tech contained + 2 side banners;
       // Daraz + app panel; Dawn split; Amazon story cards; Aarong full-screen phone; eBay wide editorial.
       layout: z.enum(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen", "wide-editorial"]),
+      /** Keep the desktop order, but let category tiles lead on phones. */
+      phonePlacement: z.enum(["after-categories"]).optional(),
       /**
        * Star Tech's two stacked promos beside a contained hero (300x240 at
        * 1440px, two across under it on phones). Only `contained-banners`

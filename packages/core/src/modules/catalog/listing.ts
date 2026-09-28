@@ -10,6 +10,7 @@ import { suggestSearchCorrection } from "../../search/correct";
 import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
+import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
 import {
@@ -74,6 +75,7 @@ export const SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT = 2_000;
 type StorefrontProductListRow = {
     id: string;
     name: string;
+    productCondition: ProductCondition | null;
     basePriceMinor: number;
     slug: string;
     discountType: string | null;
@@ -243,6 +245,7 @@ async function readStorefrontCatalogResults(
         .select({
             id: products.id,
             name: products.name,
+            productCondition: products.productCondition,
             ...buyerStatePricingSelection(cardSku),
             slug: products.slug,
             freeDelivery: products.freeDelivery,

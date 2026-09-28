@@ -157,9 +157,9 @@ describe("theme colors", () => {
     // raised paper keeps its (+5, +7, +9) step.
     const heritage = setThemeColor(storefrontTemplateTheme("heritage-editorial"), "background", "#f0ebe3");
     expect(heritage.tokens.colors.card).not.toBe("#f0ebe3");
-    // Midnight: raised panels (#141416) over the page (#0a0a0b) keep their lift.
+    // Rounded tech now uses one continuous dark surface.
     const midnight = setThemeColor(storefrontTemplateTheme("rounded-tech"), "background", "#101014");
-    expect(midnight.tokens.colors.card).toBe("#1a1a1f");
+    expect(midnight.tokens.colors.card).toBe("#101014");
     // A template whose card is its page keeps them equal.
     const fresh = setThemeColor(storefrontTemplateTheme("daily-essentials"), "background", "#fdfdf8");
     expect(fresh.tokens.colors.card).toBe("#fdfdf8");
@@ -176,14 +176,11 @@ describe("theme colors", () => {
     expect(themeDraftInvalid(DEFAULT_STOREFRONT_THEME)).toBe(false);
   });
 
-  it("checks the pairs the chosen blocks paint, such as a coloured price on cards", () => {
-    // A grey that passes on the dark page fails on the lighter cards, only once a card paints it.
+  it("keeps unreadable button and link colours blocked across card choices", () => {
     const base = setBlockVariant(setThemeColor(storefrontTemplateTheme("rounded-tech"), "buttons", "#7a7a7a"), "card", "standard");
     const onCards = setBlockVariant(base, "card", "spec");
-    expect(themeContrastProblems(base).map((problem) => problem.message)).toEqual([]);
-    expect(themeContrastProblems(onCards)).toEqual([
-      expect.objectContaining({ message: "contrastLinks", role: "buttons" }),
-    ]);
+    expect(themeContrastProblems(base).map((problem) => problem.message)).toEqual(["contrastButtonText", "contrastLinks"]);
+    expect(themeContrastProblems(onCards).map((problem) => problem.message)).toEqual(["contrastButtonText", "contrastLinks"]);
   });
 
   it("one message per problem, even when cards and popovers share it", () => {

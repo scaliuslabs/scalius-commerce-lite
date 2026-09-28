@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
 import type { Product } from "@/lib/api";
 import {
+  buyBoxFeatures,
   descriptionInInfoColumn,
   featuresPlacement,
   groupSpecificationRows,
@@ -56,5 +57,13 @@ describe("product page modules", () => {
   it("groups specification rows in the order they arrive", () => {
     expect(groupSpecificationRows([spec("A", "Body"), spec("B", "Body"), spec("C", null), spec("D", "Body")]).map((group) => [group.group, group.rows.length]))
       .toEqual([["Body", 2], [null, 1], ["Body", 1]]);
+  });
+
+  it("uses saved highlights, then truthful key specs when highlights are empty", () => {
+    expect(buyBoxFeatures(product())).toEqual(["Soft"]);
+    expect(buyBoxFeatures(product({
+      features: [],
+      attributes: [spec("Brand", null, true), { ...spec("Weight", "Body", true), value: "2", unit: "kg" }, spec("Colour", null)],
+    }))).toEqual(["Weight: 2 kg"]);
   });
 });

@@ -57123,6 +57123,16 @@
                               "name": {
                                 "type": "string"
                               },
+                              "productCondition": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "new",
+                                  "refurbished",
+                                  "used",
+                                  null
+                                ]
+                              },
                               "price": {
                                 "type": "number"
                               },
@@ -57230,6 +57240,7 @@
                             "required": [
                               "id",
                               "name",
+                              "productCondition",
                               "price",
                               "slug",
                               "discountType",

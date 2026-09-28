@@ -119,6 +119,7 @@ const productSitemapSchema = z.object({
 const storefrontProductSchema = z.object({
   id: z.string(),
   name: z.string(),
+  productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
   price: z.number(),
   slug: z.string(),
   discountType: z.string().nullable(),

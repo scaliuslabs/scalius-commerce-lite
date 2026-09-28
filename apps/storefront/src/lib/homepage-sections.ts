@@ -326,8 +326,26 @@ function leadsWithPhoto(section: StorefrontSection, content: HomepageContent): b
 export function homepageLeadSection(
   sections: readonly StorefrontSection[],
   content: HomepageContent,
+  categoryTilesLead = false,
 ): StorefrontSection | null {
-  return sections.find((section) => leadsWithPhoto(section, content) && homepageSectionRenders(section, content)) ?? null;
+  return sections.find((section) =>
+    homepageSectionRenders(section, content) &&
+    (leadsWithPhoto(section, content) || (categoryTilesLead && section.type === "category-tiles" && content.categoryRail.categories.some((category) => Boolean(category.imageUrl))))
+  ) ?? null;
+}
+
+/** Move a saved hero after the first visible category tiles on phones, if requested. */
+export function homepagePhoneSections(
+  sections: readonly StorefrontSection[],
+  content: HomepageContent,
+): readonly StorefrontSection[] {
+  const heroIndex = sections.findIndex((section) => section.type === "hero" && section.settings.phonePlacement === "after-categories" && homepageSectionRenders(section, content));
+  const categoryIndex = sections.findIndex((section) => section.type === "category-tiles" && homepageSectionRenders(section, content));
+  if (heroIndex < 0 || categoryIndex <= heroIndex) return sections;
+  const ordered = [...sections];
+  const [hero] = ordered.splice(heroIndex, 1);
+  ordered.splice(categoryIndex, 0, hero!);
+  return ordered;
 }
 
 /** What renders, in order: one entry per section, consecutive two-up / four-up banners in one row. */

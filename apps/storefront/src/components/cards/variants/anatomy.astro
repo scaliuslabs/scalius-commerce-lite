@@ -29,11 +29,12 @@ interface Props {
   headingLevel: "h2" | "h3";
   /** The product id, for Compare. */
   productId: string;
+  showBuyNow?: boolean;
   /** The contained photo's margin on each side, as a share of its box (CARD_PHOTO_INSET). */
   inset: number;
 }
 
-const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId, inset } = Astro.props;
+const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId, inset, showBuyNow = false } = Astro.props;
 const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
@@ -44,6 +45,7 @@ const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
 const quickRetail = variant === "retail" && anatomy.action === "outline";
 const pushAction = !priceFollowsTitle && variant !== "retail";
 const fullEssentials = variant === "quick-add" && anatomy.action === "outline";
+const quickAdd = variant === "quick-add";
 const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : quickRetail ? "Add" : "Add to cart";
 const roundAction = anatomy.quickBuy && anatomy.action === "round";
 const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
@@ -113,7 +115,8 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
     {
       roundAction && model.quickBuyHref && (
         <a
-          href={model.quickBuyHref}
+          href={quickAdd ? model.href : model.quickBuyHref}
+          data-card-quick-add={quickAdd ? model.name : undefined}
           data-astro-prefetch="false"
           rel="nofollow"
           class="product-card-round-action absolute z-10 inline-flex items-center justify-center rounded-full"
@@ -132,17 +135,20 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
       parts.map((part) => {
         if (part === "title") {
           return (
-            <TitleTag
-              class:list={[
-                "product-card-name pc-title text-foreground [font-family:var(--theme-font-body)]",
-                titleWeight,
-                titleClamp,
-              ]}
-            >
-              <a href={model.href} class="product-card-link after:absolute after:inset-0 after:content-['']">
-                {model.name}
-              </a>
-            </TitleTag>
+            <>
+              <TitleTag
+                class:list={[
+                  "product-card-name pc-title text-foreground [font-family:var(--theme-font-body)]",
+                  titleWeight,
+                  titleClamp,
+                ]}
+              >
+                <a href={model.href} class="product-card-link after:absolute after:inset-0 after:content-['']">
+                  {model.name}
+                </a>
+              </TitleTag>
+              {model.condition && <p class="pc-condition text-muted-foreground" data-card-fact="condition">{model.condition}</p>}
+            </>
           );
         }
         if (part === "price") {
@@ -273,7 +279,8 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
     {
       bodyAction && model.quickBuyHref && (
         <a
-          href={model.quickBuyHref}
+          href={quickAdd ? model.href : model.quickBuyHref}
+          data-card-quick-add={quickAdd ? model.name : undefined}
           data-astro-prefetch="false"
           rel="nofollow"
           class:list={[
@@ -288,6 +295,13 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
           )}
           {/* The name starts with the visible words (WCAG 2.5.3). */}
           {quickRetail && <span aria-hidden="true">+</span>}{actionText}<span class="sr-only">: {model.name}</span>
+        </a>
+      )
+    }
+    {
+      quickAdd && showBuyNow && model.quickBuyHref && (
+        <a href={model.quickBuyHref} rel="nofollow" data-astro-prefetch="false" class="pc-buy-now relative z-10 self-end text-sm font-medium text-primary underline-offset-2 hover:underline">
+          Buy now<span class="sr-only">: {model.name}</span>
         </a>
       )
     }
@@ -340,5 +354,9 @@ const tagIcon = "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4
       )
     }
   </div>
+  <script>
+    import { initQuickAddCards } from "../scripts/quick-add-card";
+    initQuickAddCards();
+  </script>
 </div>
 {anatomy.compare && <CompareTray />}

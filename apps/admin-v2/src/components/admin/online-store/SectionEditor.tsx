@@ -433,6 +433,17 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
             options={(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen", "wide-editorial"] as const).map((value) => ({ value, label: t(`heroLayout_${value}`) }))}
             onChange={(layout) => update({ ...settings, layout })}
           />
+          <ChoiceField
+            id={id("phone-placement")}
+            label={t("heroPhonePlacement")}
+            help={t("heroPhonePlacementHelp")}
+            value={settings.phonePlacement ?? "same"}
+            options={([
+              { value: "same", label: t("heroPhonePlacementSame") },
+              { value: "after-categories", label: t("heroPhonePlacementAfterCategories") },
+            ] as const)}
+            onChange={(value) => update({ ...settings, phonePlacement: value === "same" ? undefined : value })}
+          />
           <p className="text-body text-muted-foreground">{t("heroImagesHelp")}</p>
           {settings.layout === "contained-banners" && (
             <ItemList

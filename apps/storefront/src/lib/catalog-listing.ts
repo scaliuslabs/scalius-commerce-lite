@@ -247,7 +247,6 @@ export function catalogAspectChips(
   facets: ReadonlyArray<Pick<ProductFacet, "slug" | "name"> & { selectedCount: number }>,
   price: { shown: boolean; applied: boolean },
 ): CatalogAspectChip[] {
-  if (facets.length === 0) return [];
   const chips = facets.map((facet) => ({
     slug: facet.slug,
     label: facet.name,

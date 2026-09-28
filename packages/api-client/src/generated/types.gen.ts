@@ -15707,6 +15707,7 @@ export type GetApiV1ProductsResponses = {
             products: Array<{
                 id: string;
                 name: string;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
                 price: number;
                 slug: string;
                 discountType: string | null;

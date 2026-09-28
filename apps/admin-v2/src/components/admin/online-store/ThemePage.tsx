@@ -691,6 +691,22 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
             };
           })}
         />}
+        {theme.blocks.card.variant === "quick-add" && <SwitchField
+          id="theme-essentials-buy-now"
+          label={t("essentialsBuyNow")}
+          help={t("essentialsBuyNowHelp")}
+          checked={Boolean(theme.blocks.card.settings.showBuyNow)}
+          onCheckedChange={(checked) => setDraft((current) => {
+            if (current.blocks.card.variant !== "quick-add") return current;
+            return {
+              ...current,
+              blocks: {
+                ...current.blocks,
+                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, showBuyNow: checked } },
+              },
+            };
+          })}
+        />}
       </SectionCard>
 
       <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
@@ -859,7 +875,17 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
 
       <SectionCard
         title={t("homepageSections")}
-        description={t("homepageSectionsHelp")}
+        description={
+          <>
+            {t("homepageSectionsHelp")}
+            {theme.pages.home.some((section) => section.type === "category-tiles") && <>
+              {" "}{t("featuredCategoriesSetup")}{" "}
+              <Link to="/admin/online-store/banners" className="text-link hover:underline">
+                {t("featuredCategories")}
+              </Link>
+            </>}
+          </>
+        }
         rows={
           <SectionEditor
             sections={theme.pages.home}

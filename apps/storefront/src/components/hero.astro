@@ -33,6 +33,8 @@ interface Props {
   hero: ResolvedHomepageHero;
   /** The banner leads the page (the LCP): its first slide gets high priority. */
   priority?: boolean;
+  /** Phones can show category tiles before this banner. */
+  phonePriority?: boolean;
   layout?: StorefrontHeroLayout;
   /** contained-banners: up to two images beside the banner. */
   sideBanners?: HeroSideBanner[];
@@ -43,6 +45,7 @@ interface Props {
 const {
   hero,
   priority = true,
+  phonePriority = priority,
   layout = "contained-banners",
   sideBanners = [],
   panelFacts = [],
@@ -81,7 +84,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
     )}
     {hero.mobile[0] && (
       <div class="md:hidden">
-        <HeroPicture slide={hero.mobile[0]} viewport="mobile" layout="split" index={0} priority={priority} frameClass="hero-split-frame" />
+        <HeroPicture slide={hero.mobile[0]} viewport="mobile" layout="split" index={0} priority={phonePriority} frameClass="hero-split-frame" />
       </div>
     )}
   </div>
@@ -108,7 +111,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
           images={hero.mobile}
           height={HERO_SLIDE_PRESENTATION.mobile.height}
           type="mobile"
-          priority={priority}
+          priority={phonePriority}
           layout={layout}
           frameHeight="min(24rem, 90vw)"
           overlay="editorial"
@@ -140,7 +143,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
           images={hero.mobile}
           height={HERO_SLIDE_PRESENTATION.mobile.height}
           type="mobile"
-          priority={priority}
+          priority={phonePriority}
           layout={layout}
           frameHeight={frame.mobile}
           rounded={false}
@@ -170,7 +173,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
             images={hero.mobile}
             height={HERO_SLIDE_PRESENTATION.mobile.height}
             type="mobile"
-            priority={priority}
+            priority={phonePriority}
           />
         </div>
       )}
@@ -200,7 +203,7 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
                 images={hero.mobile}
                 height={HERO_SLIDE_PRESENTATION.mobile.height}
                 type="mobile"
-                priority={priority}
+                priority={phonePriority}
                 overlay="band"
               />
             </div>

@@ -148,8 +148,11 @@ describe("toolbar chips", () => {
     ]);
     expect(catalogFacetAnchor("option.স্টোরেজ")).toBe("catalog-facet-option_2eস্টোরেজ");
     expect(catalogFacetAnchor("option.size")).not.toBe(catalogFacetAnchor("option-size"));
-    // No facet worth a chip: no chips at all, not a lone Price chip.
-    expect(catalogAspectChips([], { shown: true, applied: true })).toEqual([]);
+    // Price can still narrow a catalogue without any filterable attributes.
+    expect(catalogAspectChips([], { shown: true, applied: true })).toEqual([
+      { slug: "price", label: "Price", selectedCount: 1, anchor: "catalog-facet-price" },
+    ]);
+    expect(catalogAspectChips([], { shown: false, applied: false })).toEqual([]);
   });
 
   it("links the popular values that narrow the listing, by label", () => {

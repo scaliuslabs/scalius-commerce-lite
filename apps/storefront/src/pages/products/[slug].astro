@@ -31,6 +31,7 @@ import ProductWarrantyModule from "@/components/product/modules/ProductWarrantyM
 import ProductDetails from "@/components/product/ProductDetails.astro";
 import {
   KEY_ATTRIBUTES_MAX,
+  buyBoxFeatures,
   descriptionInInfoColumn,
   featuresPlacement,
   productPageModules,
@@ -711,10 +712,18 @@ const productCategoryAnalytics = productCategory
           detailsFeatures={featuresAt === "description"}
         >
           <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
-          {featuresAt === "buy-box" && buyBoxLook && buyBoxLook.features !== "none" && (
+          {featuresAt === "buy-box" && buyBoxLook && buyBoxLook.features !== "none" && !buyBoxLook.factPills && (
             <ProductFeatureList
               slot="after-title"
-              features={product.features ?? []}
+              features={buyBoxFeatures(product)}
+              variant={buyBoxLook.features}
+              title={productPageCopy.productKeyFeaturesText}
+            />
+          )}
+          {featuresAt === "buy-box" && buyBoxLook?.factPills && buyBoxLook.features !== "none" && (
+            <ProductFeatureList
+              slot="after-price"
+              features={buyBoxFeatures(product)}
               variant={buyBoxLook.features}
               title={productPageCopy.productKeyFeaturesText}
             />

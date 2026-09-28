@@ -109,6 +109,15 @@ describe("homepage section editor", () => {
     expect(seen.sections[0]?.type).toBe("hero");
   });
 
+  it("saves a different phone banner position without changing the desktop section order", async () => {
+    render([section("hero", "hero"), section("category-tiles", "tiles")]);
+    act(() => button("Edit Banners").click());
+    choose(document.querySelector<HTMLButtonElement>("#section-hero-phone-placement")!, "After category tiles");
+    await act(async () => button("Done").click());
+    expect(seen.sections.map((each) => each.id)).toEqual(["hero", "tiles"]);
+    expect(seen.sections[0]?.settings).toEqual({ layout: "full-bleed", phonePlacement: "after-categories" });
+  });
+
   it("saves side promotion copy and link with a contained banner", async () => {
     render([section("hero", "hero", { layout: "contained-banners", sideBanners: [{ mediaId: "m-1", alt: "Honey jars", href: null }] })]);
     act(() => button("Edit Banners").click());

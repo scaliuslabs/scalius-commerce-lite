@@ -41,6 +41,7 @@ const TitleTag = headingLevel;
         {model.name}
       </a>
     </TitleTag>
+    {model.condition && <p class="pc-condition text-muted-foreground" data-card-fact="condition">{model.condition}</p>}
 
     {
       /* The rating once the product has a published review (stars and a

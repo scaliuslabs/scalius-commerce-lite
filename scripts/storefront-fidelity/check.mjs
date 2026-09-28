@@ -109,11 +109,19 @@ function fmtVal(v) {
   return String(v);
 }
 
-export function markdownSummary({ summary, checks, meta, filter }) {
+export function markdownSummary({ summary, checks, meta, filter, visualEvidence = null }) {
   const lines = [];
   lines.push(`# Storefront fidelity scorecard`, "");
   lines.push(`${meta.finishedAt} · ${meta.git} · ${Math.round(meta.durationS / 60 * 10) / 10} min · peak memory ${meta.peakFootprintMb ?? "-"} MB footprint / ${meta.peakRssMb} MB summed RSS${meta.reportOnly ? " · report-only" : ""}${filter ? ` · only ${filter}` : ""}`, "");
-  lines.push(`**${summary.failed === 0 ? "PASS" : "FAIL"}: ${summary.passed}/${summary.total} checks pass, ${summary.failed} breach${summary.failed === 1 ? "" : "es"}.**`, "");
+  lines.push(`**${summary.failed === 0 ? "PASS" : "FAIL"}: ${summary.passed}/${summary.total} metric checks pass, ${summary.failed} breach${summary.failed === 1 ? "" : "es"}.**`, "");
+  if (visualEvidence) {
+    lines.push(`Visual pairs: ${visualEvidence.paired} paired, ${visualEvidence.unverified.length} unverified.`, "");
+    if (visualEvidence.unverified.length) {
+      lines.push("| Unverified pair | Reference | Reason |", "|---|---|---|");
+      for (const item of visualEvidence.unverified) lines.push(`| ${item.template}/${item.page}/${item.viewport} | ${item.reference ?? "—"} | ${item.reason} |`);
+      lines.push("");
+    }
+  }
   lines.push("| Template | Pass | Fail |", "|---|---|---|");
   for (const [t, c] of Object.entries(summary.byTemplate)) lines.push(`| ${t} | ${c.pass} | ${c.fail} |`);
   lines.push("", "| Block | Pass | Fail |", "|---|---|---|");
@@ -192,6 +200,7 @@ async function main() {
   const results = {};
   const checks = [];
   const stageErrors = [];
+  let visualEvidence = null;
   try {
     if (!opts.skipBuild || !storefrontBuilt()) {
       log("astro build (storefront)");
@@ -265,7 +274,26 @@ async function main() {
     if (stages.matrix) {
       log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}} x {1440, 390}`);
       results.matrix = {};
-      await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages: { marketplace: { search: pages.search } }, into: results.matrix }));
+      // A spec-heavy template needs a product with actual saved specifications;
+      // the shared phone-case PDP exercises option choice but has none.
+      const specSlug = templates.includes("spec-catalogue") ? db.prepare(`
+        SELECT p.slug FROM products p
+        JOIN product_attribute_values v ON v.product_id = p.id
+        JOIN product_attributes a ON a.id = v.attribute_id AND a.key_spec = 1
+        WHERE p.is_active = 1 AND p.deleted_at IS NULL AND p.name LIKE '%Laptop%' AND p.price_minor > 0
+          AND EXISTS (
+            SELECT 1 FROM product_attribute_values cpu
+            JOIN product_attributes cpu_attribute ON cpu_attribute.id = cpu.attribute_id AND cpu_attribute.name = 'Processor'
+            WHERE cpu.product_id = p.id AND instr(lower(p.name), lower(cpu.value)) > 0
+          )
+        GROUP BY p.id HAVING count(DISTINCT a.id) >= 4
+        ORDER BY p.price_minor DESC, p.slug LIMIT 1
+      `).get()?.slug : null;
+      const extraPages = {
+        marketplace: { search: pages.search },
+        ...(specSlug ? { "spec-catalogue": { pdp: `/products/${encodeURIComponent(specSlug)}` } } : {}),
+      };
+      await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages, into: results.matrix }));
     }
     if (stages.variants) {
       log("variants: card and listing swaps on department-mall");
@@ -329,8 +357,9 @@ async function main() {
     if (results.matrix) {
       const study = join(mainCheckoutRoot(), "audit", "rewrite-2026-09-23");
       const refDirs = opts.refShots ?? [join(study, "storefront-study", "shots"), join(study, "fidelity", "shots")];
-      const { made, missing } = await writePairs({ reference, matrix: results.matrix, checks, shotsDir, refDirs, outDir: join(opts.out, "pairs"), templates });
-      log(`pairs: ${made.length} written${missing.length ? `, ${missing.length} without a reference screenshot` : ""}${refDirs.some(existsSync) ? "" : " (reference screenshots not found; pass --ref-shots)"}`);
+      const { made, unverified } = await writePairs({ reference, matrix: results.matrix, checks, shotsDir, refDirs, outDir: join(opts.out, "pairs"), templates });
+      visualEvidence = { paired: made.length, unverified };
+      log(`pairs: ${made.length} written, ${unverified.length} unverified${refDirs.some(existsSync) ? "" : " (reference screenshots not found; pass --ref-shots)"}`);
     }
     await page.close();
   } finally {
@@ -345,9 +374,10 @@ async function main() {
   let git = "";
   try { git = (await import("node:child_process")).execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch { /* best effort */ }
   const meta = { finishedAt: new Date().toISOString(), git, durationS: Math.round((Date.now() - started) / 1000), peakRssMb: peak.peakMb, peakFootprintMb: peak.peakFootprintMb, footprintAtPeakMb: peak.breakdown, reportOnly: opts.reportOnly, leftoverListeners: leftovers, runDirRemoved: !existsSync(runDir) };
-  writeFileSync(join(opts.out, "scorecard.json"), JSON.stringify({ meta, filter: opts.only || null, summary, checks: kept, results }, null, 1));
-  writeFileSync(join(opts.out, "summary.md"), markdownSummary({ summary, checks: kept, meta, filter: opts.only }));
-  console.log(`\n${summary.failed === 0 ? "PASS" : "FAIL"}: ${summary.passed}/${summary.total} checks pass (${meta.durationS}s, peak memory ${peak.peakFootprintMb ?? "-"} MB footprint, ${peak.peakMb} MB summed RSS)`);
+  writeFileSync(join(opts.out, "scorecard.json"), JSON.stringify({ meta, filter: opts.only || null, summary, visualEvidence, checks: kept, results }, null, 1));
+  writeFileSync(join(opts.out, "summary.md"), markdownSummary({ summary, checks: kept, meta, filter: opts.only, visualEvidence }));
+  console.log(`\n${summary.failed === 0 ? "PASS" : "FAIL"}: ${summary.passed}/${summary.total} metric checks pass (${meta.durationS}s, peak memory ${peak.peakFootprintMb ?? "-"} MB footprint, ${peak.peakMb} MB summed RSS)`);
+  if (visualEvidence) console.log(`  visual pairs ${visualEvidence.paired} paired, ${visualEvidence.unverified.length} unverified`);
   for (const [b, c] of Object.entries(summary.byBlock)) console.log(`  ${b.padEnd(9)} ${String(c.pass).padStart(4)} pass ${String(c.fail).padStart(4)} fail`);
   if (peak.breakdown) console.log(`  memory at the peak (MB footprint): ${Object.entries(peak.breakdown).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   console.log(`\nScorecard: ${join(opts.out, "scorecard.json")}\nSummary:   ${join(opts.out, "summary.md")}\nPairs:     ${join(opts.out, "pairs")}`);

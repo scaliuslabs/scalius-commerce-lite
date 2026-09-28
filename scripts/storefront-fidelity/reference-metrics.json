@@ -328,7 +328,8 @@
     },
     "ghorerbazar": {
       "name": "Ghorer Bazar (geometry pending measured capture)",
-      "$comment": "Official home, shop and product pages were viewed live on 2026-09-28 at desktop and 390px phone sizes: nested category navigation, full outlined Add To Cart card actions, sidebar filters and numbered results, and a phone product gallery with vertical thumbnails beside the image. No repeatable pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
+      "$comment": "Official home, shop and product pages were viewed live on 2026-09-28 at desktop and 390px phone sizes: nested category navigation, full outlined Add To Cart card actions, sidebar filters and numbered results, and a phone product gallery with vertical thumbnails beside the image. The saved phone home capture is blocked; no repeatable pixel measurements are asserted yet. The Chaldal numbers below cover the optional compact quick-add setting only.",
+      "shots": { "home": "ghorerbazar-home" },
       "desktop": {},
       "phone": {}
     },
