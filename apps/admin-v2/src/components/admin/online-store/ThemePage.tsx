@@ -164,7 +164,7 @@ function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStor
   );
 }
 
-function ListingLayoutSketch({ layout, theme }: { layout: "grid" | "list"; theme: Theme }) {
+function ListingLayoutSketch({ layout, theme }: { layout: "grid" | "list" | "shelves" | "quick-grid"; theme: Theme }) {
   const { colors } = theme.tokens;
   return (
     <Sketch palette={{
@@ -175,16 +175,29 @@ function ListingLayoutSketch({ layout, theme }: { layout: "grid" | "list"; theme
       edge: colors.border,
       accent: colors.primary,
     }} className="h-16">
-      <span data-listing-layout-sketch={layout} className={layout === "grid" ? "grid min-h-0 flex-1 grid-cols-3 gap-1" : "flex min-h-0 flex-1 flex-col gap-1"}>
-        {[0, 1, 2].map((index) => (
-          <span key={index} className={layout === "grid" ? "flex min-h-0 flex-col gap-0.5 rounded-xs border border-(--sk-edge) p-0.5" : "flex min-h-0 flex-1 gap-1 border-b border-(--sk-edge) pb-0.5 last:border-0"}>
-            <span className={layout === "grid" ? "min-h-0 flex-1 bg-(--sk-soft)" : "aspect-square h-full shrink-0 bg-(--sk-soft)"} />
-            <span className={layout === "grid" ? "h-0.5 w-3/4 bg-(--sk-ink)" : "flex min-w-0 flex-1 flex-col justify-center gap-0.5"}>
-              {layout === "list" && <><span className="h-0.5 w-4/5 bg-(--sk-line)" /><span className="h-0.5 w-1/3 bg-(--sk-ink)" /></>}
+      {layout === "shelves" ? (
+        <span data-listing-layout-sketch={layout} className="flex min-h-0 flex-1 flex-col gap-1">
+          {[0, 1].map((row) => (
+            <span key={row} className="flex min-h-0 flex-1 flex-col gap-0.5">
+              <span className="h-0.5 w-1/3 bg-(--sk-ink)" />
+              <span className="grid min-h-0 flex-1 grid-cols-3 gap-1">
+                {[0, 1, 2].map((card) => <span key={card} className="bg-(--sk-soft)" />)}
+              </span>
             </span>
-          </span>
-        ))}
-      </span>
+          ))}
+        </span>
+      ) : (
+        <span data-listing-layout-sketch={layout} className={layout === "list" ? "flex min-h-0 flex-1 flex-col gap-1" : `grid min-h-0 flex-1 ${layout === "quick-grid" ? "grid-cols-4" : "grid-cols-3"} gap-1`}>
+          {(layout === "quick-grid" ? [0, 1, 2, 3] : [0, 1, 2]).map((index) => (
+            <span key={index} className={layout === "list" ? "flex min-h-0 flex-1 gap-1 border-b border-(--sk-edge) pb-0.5 last:border-0" : "flex min-h-0 flex-col gap-0.5 rounded-xs border border-(--sk-edge) p-0.5"}>
+              <span className={layout === "list" ? "aspect-square h-full shrink-0 bg-(--sk-soft)" : "min-h-0 flex-1 bg-(--sk-soft)"} />
+              <span className={layout === "list" ? "flex min-w-0 flex-1 flex-col justify-center gap-0.5" : "h-0.5 w-3/4 bg-(--sk-ink)"}>
+                {layout === "list" && <><span className="h-0.5 w-4/5 bg-(--sk-line)" /><span className="h-0.5 w-1/3 bg-(--sk-ink)" /></>}
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
     </Sketch>
   );
 }
@@ -648,18 +661,16 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
         />
       </SectionCard>
 
-      {(theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list") && (
-        <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
+      <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
           <div data-listing-default className="space-y-4">
             <VisualChoice
               label={t("listingDefault")}
-              value={theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list"
-                ? theme.blocks.listing.layout.variant
-                : null}
-              className="grid-cols-2"
-              options={(["grid", "list"] as const).map((layout) => ({
+              value={theme.blocks.listing.layout.variant}
+              className="grid-cols-2 sm:grid-cols-4"
+              options={(["grid", "list", "shelves", "quick-grid"] as const).map((layout) => ({
                 value: layout,
-                label: t(layout === "grid" ? "listingGrid" : "listingList"),
+                label: t(({ grid: "listingGrid", list: "listingList", shelves: "listingShelves", "quick-grid": "listingQuickGrid" } as const)[layout]),
+                help: layout === "shelves" ? t("listingShelvesHelp") : layout === "quick-grid" ? t("listingQuickGridHelp") : undefined,
                 sketch: <ListingLayoutSketch layout={layout} theme={theme} />,
               }))}
               onChange={(layout) => setDraft((current) => ({
@@ -669,11 +680,14 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                   listing: {
                     ...current.blocks.listing,
                     layout: storefrontBlockDefault("listing", layout) as Theme["blocks"]["listing"]["layout"],
+                    toolbar: layout === "grid" || layout === "list"
+                      ? current.blocks.listing.toolbar
+                      : current.blocks.listing.toolbar.filter((piece) => piece !== "grid-list-toggle"),
                   },
                 },
               }))}
             />
-            <SwitchField
+            {(theme.blocks.listing.layout.variant === "grid" || theme.blocks.listing.layout.variant === "list") && <SwitchField
               id="theme-listing-view-toggle"
               label={t("listingViewSwitch")}
               help={t("listingViewSwitchHelp")}
@@ -690,11 +704,10 @@ function ThemeCards({ saved, revision, storeShape, sectionMedia, refetch, site }
                   },
                 },
               }))}
-            />
+            />}
             {theme.template === "marketplace" && <p className="text-body text-muted-foreground">{t("listingMarketplaceHelp")}</p>}
           </div>
-        </SectionCard>
-      )}
+      </SectionCard>
 
       <SectionCard title={t("listingFilters")} description={t("listingFiltersHelp")}>
         <div data-listing-filter-style>
