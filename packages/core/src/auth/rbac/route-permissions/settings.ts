@@ -50,6 +50,16 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/taxes/preview": {
     POST: { permission: PERMISSIONS.TAXES_VIEW },
   },
+  "/api/v1/admin/settings/theme/agent/workspace": { GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW } },
+  "/api/v1/admin/settings/theme/agent/versions": { GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW } },
+  "/api/v1/admin/settings/theme/agent/document": { GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW } },
+  "/api/v1/admin/settings/theme/agent/page-check": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW } },
+  "/api/v1/admin/settings/theme/agent/draft": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
+  "/api/v1/admin/settings/theme/agent/publish": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
+  "/api/v1/admin/settings/theme/agent/restore": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
+  "/api/v1/admin/settings/theme/agent/rollback": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
+  "/api/v1/admin/settings/theme/agent/discard": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
+  "/api/v1/admin/settings/theme/agent/page-draft": { POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT } },
   "/api/v1/admin/settings/theme/workspace": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },

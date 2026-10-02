@@ -33,7 +33,7 @@ const compileWorkflowRead = createWorkflowReadCompiler({ catalog, operations });
 it("routes landing-page drafting to the curated CAS workflow without publication", () => {
   const resolution = resolveWorkflow({ surface: "dashboard", prompt: "Draft an Eid campaign landing page at /pages/eid-offers." });
   expect(resolution.kind).toBe("plan");
-  expect(operationIds(resolution)).toEqual(["dashboard.theme.workspace_get", "dashboard.theme.page_draft_update"]);
+  expect(operationIds(resolution)).toEqual(["dashboard.theme.workspace_get", "dashboard.theme.page_draft_update", "dashboard.theme.page_draft_verify"]);
   expect(resolutionFlags(resolution)).toEqual({ requiresFacts: true, requiresConfirmation: true, requiresVerification: true });
 });
 

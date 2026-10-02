@@ -398,6 +398,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     prompt: "Change the storefront colors in the durable draft, preview the exact draft, and publish that revision.",
     expectedOperationIds: [
       "dashboard.theme.workspace_get",
+      "dashboard.theme.document_get",
       "dashboard.theme.draft_save",
       "dashboard.theme.preview_session_create",
       "dashboard.theme.publish",
@@ -681,6 +682,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     prompt: "Update the header logo, the footer tagline, and the homepage category tiles in the theme draft, publish that draft revision, then verify layout and homepage.",
     expectedOperationIds: [
       "dashboard.theme.workspace_get",
+      "dashboard.theme.document_get",
       "dashboard.media.list",
       "dashboard.theme.draft_save",
       "dashboard.theme.publish",
@@ -1006,6 +1008,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
       "dashboard.navigation.menus_list",
       "dashboard.navigation.items_search",
       "dashboard.theme.workspace_get",
+      "dashboard.theme.document_get",
       "dashboard.media.list",
       "dashboard.media.import_url",
       "dashboard.content.create",
@@ -1036,6 +1039,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
       "dashboard.navigation.menus_list",
       "dashboard.navigation.items_search",
       "dashboard.theme.workspace_get",
+      "dashboard.theme.document_get",
       "dashboard.media.list",
       "dashboard.media.import_url",
       "dashboard.content.create",

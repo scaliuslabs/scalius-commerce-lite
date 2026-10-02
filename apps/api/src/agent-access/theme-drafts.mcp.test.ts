@@ -1,0 +1,156 @@
+import "@hono/zod-openapi";
+import type { DatabaseSync } from "node:sqlite";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { DEFAULT_STOREFRONT_THEME, storefrontSectionDefault } from "@scalius/shared/storefront-theme";
+import { buildAgentOperationManifest, type AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import type { AgentOAuthProps, AgentPrincipal } from "./types";
+
+const state = vi.hoisted(() => ({ operations: [] as AgentOperationManifestEntry[], principal: null as AgentPrincipal | null, props: null as AgentOAuthProps | null }));
+vi.mock("cloudflare:workers", () => ({ WorkerEntrypoint: class {} }));
+vi.mock("agents/mcp/server", () => ({ createMcpHandler: vi.fn(), getMcpAuthContext: () => ({ props: state.props }) }));
+vi.mock("./principal", () => ({ resolveAgentPrincipalFromBearer: vi.fn(async () => state.principal), resolveAgentPrincipalFromGrant: vi.fn(async () => state.principal) }));
+vi.mock("./backend", () => ({ loadAgentAccessBackend: vi.fn(async () => ({ resolvePrincipal: vi.fn(async () => state.principal), authorizeOperation: vi.fn(async () => true), writeAudit: vi.fn(async () => undefined) })) }));
+// Contract-derived discovery keeps this integration check valid before SDK regeneration.
+vi.mock("./mcp/operations", () => ({
+  getAuthorizedOperation: vi.fn(async (id: string) => state.operations.find((operation) => operation.operationId === id) ?? null),
+  listAuthorizedOperations: vi.fn(async () => state.operations), summarizeOperation: vi.fn((operation: AgentOperationManifestEntry) => operation), describeOperation: vi.fn((operation: AgentOperationManifestEntry) => operation),
+}));
+vi.mock("./direct-operation", () => ({ resolveDirectAgentOperation: (method: string, path: string) => state.operations.find((operation) => operation.method === method && operation.pathTemplate === path) ?? null }));
+
+import app from "../app";
+import { finalizeOpenApiContract } from "../openapi-contract";
+import { createAgentMcpServer } from "./mcp/server";
+import { openAgentArtifact } from "./artifacts";
+import { DRAFT_LANDING_PAGE_WORKFLOW } from "./workflows/cards";
+import { projectWorkflowReadResponse } from "./workflows/resolver-core";
+
+const OWNER = "00000000-0000-4000-8000-000000000001";
+const GRANT = "agr_0123456789abcdefghij";
+const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+const measured = { maxCompactResultBytes: 0, maxVersionPageBytes: 0, artifactBytes: 0 };
+
+function largePage() {
+  return {
+    title: "ঈদ প্রচারণা", overrideCms: false,
+    sections: Array.from({ length: 7 }, (_, index) => ({
+      ...storefrontSectionDefault("faq", `faq-${index}`), type: "faq" as const,
+      settings: { heading: "সাধারণ প্রশ্ন", items: Array.from({ length: 20 }, () => ({ question: "অফার?", answer: "বাংলা".repeat(200) })) },
+    })),
+  };
+}
+
+describe("bounded theme operations through real MCP dispatch and D1", () => {
+  let sqlite: DatabaseSync;
+  let env: Env;
+  let objects: Map<string, ArrayBuffer>;
+  let server: ReturnType<typeof createAgentMcpServer>;
+
+  beforeEach(() => {
+    state.operations = buildAgentOperationManifest(finalizeOpenApiContract(app.getOpenAPIDocument({ openapi: "3.0.0", info: { title: "Theme MCP", version: "test" } })));
+    state.principal = { kind: "agent", grantId: GRANT, credentialId: null, ownerUserId: OWNER, isSuperAdmin: false, resource: "dashboard", grantKind: "oauth", preset: "full", permissions: new Set(["settings.general.view", "settings.general.edit"]), riskCeiling: "destructive", authorityRevision: 1, expiresAt: new Date(Date.now() + 3600_000) };
+    state.props = { grantId: GRANT, ownerUserId: OWNER, resource: "dashboard", permissions: [...state.principal.permissions], riskCeiling: "destructive", audience: ["https://api.example.test/api/v1/mcp/dashboard"] };
+    const harness = createSqliteD1Database();
+    sqlite = harness.sqlite;
+    sqlite.prepare("INSERT INTO user (id,name,email) VALUES (?,'Owner','owner@example.test')").run(OWNER);
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("INSERT INTO agent_grants (id,kind,owner_user_id,resource,label,oauth_client_id,oauth_redirect_uris_json,preset,permissions_json,risk_ceiling,authority_revision,status,expires_at,created_at,updated_at) VALUES (?,'oauth',?,'dashboard','Themes','theme-test-client','[]','full','[\"settings.general.view\",\"settings.general.edit\"]','destructive',1,'active',?,?,?)").run(GRANT, OWNER, now + 3600, now, now);
+    const theme = JSON.stringify(DEFAULT_STOREFRONT_THEME);
+    sqlite.prepare("INSERT INTO theme_settings (id,colors,revision) VALUES ('default',?,20)").run(theme);
+    sqlite.prepare("INSERT INTO theme_settings_drafts (id,theme,revision,base_published_revision) VALUES ('default',?,1,20)").run(theme);
+    const large = { ...structuredClone(DEFAULT_STOREFRONT_THEME), pages: { ...structuredClone(DEFAULT_STOREFRONT_THEME.pages), landing: { eid: largePage() } } };
+    expect(bytes(large)).toBeGreaterThan(400_000);
+    expect(bytes(large)).toBeLessThan(512 * 1024);
+    const snapshot = JSON.stringify({ theme: large, publication: { note: "বাংলা".repeat(100), publishedByName: "বাংলা".repeat(40), summary: Array.from({ length: 50 }, () => "\u0000".repeat(240)), changes: [] } });
+    const insertVersion = sqlite.prepare("INSERT INTO theme_settings_versions (id,published_revision,theme,source,published_by) VALUES (?, ?, ?, 'publish', ?)");
+    for (let revision = 1; revision <= 20; revision += 1) insertVersion.run(`themev_${revision}`, revision, snapshot, OWNER);
+    objects = new Map();
+    env = {
+      DB: harness.binding, PUBLIC_API_BASE_URL: "https://api.example.test", STOREFRONT_URL: "https://storefront.example.test", SCALIUS_SECRET: "theme-mcp-test-master-secret-0123456789", AGENT_TOKEN_PEPPER: "test-pepper", RL_STANDARD: { limit: vi.fn(async () => ({ success: true })) },
+      BUCKET: { put: vi.fn(async (key: string, value: BodyInit) => { objects.set(key, await new Response(value).arrayBuffer()); return { key }; }), get: vi.fn(async (key: string) => { const value = objects.get(key); return value ? { arrayBuffer: async () => value, size: value.byteLength } : null; }), delete: vi.fn(async (key: string) => { objects.delete(key); }) },
+    } as unknown as Env;
+    server = createAgentMcpServer({ surface: "dashboard", env, ctx: { props: state.props, waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext });
+  });
+  afterEach(() => sqlite.close());
+  afterAll(() => process.stdout.write(`Theme MCP measured bytes ${JSON.stringify(measured)}\n`));
+
+  async function call(mode: "read" | "write", operationId: string, input: unknown = {}) {
+    const handler = Reflect.get(server, "_registeredTools")[`operations.${mode}`].handler;
+    const result = await handler({ operationId, input });
+    expect(result, operationId).not.toHaveProperty("isError");
+    expect(result.structuredContent, operationId).toMatchObject({ ok: true });
+    expect(bytes(result.structuredContent)).toBeLessThan(65_536);
+    if (operationId === "dashboard.theme.versions_list") measured.maxVersionPageBytes = Math.max(measured.maxVersionPageBytes, bytes(result.structuredContent));
+    else if (operationId !== "dashboard.theme.document_get") {
+      expect(bytes(result.structuredContent)).toBeLessThan(4096);
+      measured.maxCompactResultBytes = Math.max(measured.maxCompactResultBytes, bytes(result.structuredContent));
+    }
+    return result.structuredContent.result;
+  }
+
+  it("saves large approved Bangla content with tiny receipts and verifies exact copy and revisions", async () => {
+    const page = largePage();
+    const saved = await call("write", "dashboard.theme.page_draft_update", { body: { page: "landing", slug: "eid", value: page, expectedDraftRevision: 1, basePublishedRevision: 20 } });
+    expect(bytes(saved)).toBeLessThan(4096);
+    expect(saved.data.data).toMatchObject({ revision: 2, basePublishedRevision: 20 });
+    expect(saved).not.toHaveProperty("artifact");
+    expect(objects.size).toBe(0);
+    const check = { body: { page: "landing", slug: "eid", value: page, expectedDraftRevision: 2, expectedPublishedRevision: 20 } };
+    const before = sqlite.prepare("SELECT revision,theme FROM theme_settings_drafts").get();
+    const beforeClock = sqlite.prepare("SELECT * FROM cache_clock").all();
+    const beforeDeps = sqlite.prepare("SELECT * FROM cache_dep ORDER BY dep").all();
+    const proof = await call("read", "dashboard.theme.page_draft_verify", check);
+    expect(proof.data.data).toMatchObject({ matches: true, pageMatches: true, revisionMatches: true, publishedRevisionMatches: true });
+    const output = DRAFT_LANDING_PAGE_WORKFLOW.phases.find((phase) => phase.id === "verify")!.steps[0]!.output!;
+    expect(projectWorkflowReadResponse(proof.data, output)).toEqual({ matches: true, draftRevision: 2, publishedRevision: 20 });
+    const changed = { ...page, title: "ভিন্ন শিরোনাম" };
+    expect((await call("read", "dashboard.theme.page_draft_verify", { body: { ...check.body, value: changed } })).data.data).toMatchObject({ matches: false, pageMatches: false });
+    expect((await call("read", "dashboard.theme.page_draft_verify", { body: { ...check.body, expectedDraftRevision: 1 } })).data.data).toMatchObject({ matches: false, revisionMatches: false });
+    expect((await call("read", "dashboard.theme.page_draft_verify", { body: { ...check.body, expectedPublishedRevision: 19 } })).data.data).toMatchObject({ matches: false, publishedRevisionMatches: false });
+    expect(sqlite.prepare("SELECT revision,theme FROM theme_settings_drafts").get()).toEqual(before);
+    expect(sqlite.prepare("SELECT * FROM cache_clock").all()).toEqual(beforeClock);
+    expect(sqlite.prepare("SELECT * FROM cache_dep ORDER BY dep").all()).toEqual(beforeDeps);
+    state.principal!.permissions.delete("settings.general.edit");
+    expect((await call("read", "dashboard.theme.page_draft_verify", check)).data.data.matches).toBe(true);
+  });
+
+  it("paginates all 20 large versions with escaped summaries and keeps read/restore/discard/publish receipts bounded", async () => {
+    const revisions: number[] = [];
+    let beforeRevision: number | undefined;
+    do {
+      const result = await call("read", "dashboard.theme.versions_list", { query: { limit: 5, ...(beforeRevision ? { beforeRevision } : {}) } });
+      const page = result.data.data;
+      expect(page.versions).toHaveLength(5);
+      expect(page.versions[0]).not.toHaveProperty("theme");
+      revisions.push(...page.versions.map((version: { revision: number }) => version.revision));
+      beforeRevision = page.nextBeforeRevision ?? undefined;
+    } while (beforeRevision);
+    expect(revisions).toEqual(Array.from({ length: 20 }, (_, index) => 20 - index));
+    const restored = await call("write", "dashboard.theme.version_restore", { body: { sourceRevision: 1, expectedDraftRevision: 1, basePublishedRevision: 20 } });
+    expect(bytes(restored)).toBeLessThan(4096);
+    const workspace = await call("read", "dashboard.theme.workspace_get");
+    expect(workspace.data.data).toMatchObject({ published: { revision: 20 }, draft: { revision: 2, basePublishedRevision: 20 } });
+    expect(workspace.data.data.draft).not.toHaveProperty("theme");
+    const theme = JSON.parse((sqlite.prepare("SELECT theme FROM theme_settings_drafts").get() as { theme: string }).theme);
+    await call("write", "dashboard.theme.draft_save", { body: { theme, expectedDraftRevision: 2, basePublishedRevision: 20 } });
+    const published = await call("write", "dashboard.theme.publish", { body: { expectedPublishedRevision: 20, expectedDraftRevision: 3, note: "বাংলা".repeat(100) } });
+    expect(published.data.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 4, basePublishedRevision: 21 } });
+    const discarded = await call("write", "dashboard.theme.draft_discard", { body: { expectedDraftRevision: 4, basePublishedRevision: 21 } });
+    expect(discarded.data.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 5 } });
+    expect(objects.size).toBe(0);
+  });
+
+  it("delivers only the requested large draft/version/page as an encrypted JSON artifact", async () => {
+    const result = await call("read", "dashboard.theme.document_get", { query: { source: "version", sourceRevision: 1, page: "landing", slug: "eid" } });
+    // The MCP formatter deliberately strips data:null from artifact metadata.
+    expect(result).not.toHaveProperty("data");
+    expect(result.artifact).toMatchObject({ mediaType: "application/json", filename: "theme-version-1.json", sizeBytes: expect.any(Number) });
+    expect(result.artifact.sizeBytes).toBeGreaterThan(400_000);
+    expect(result.artifact.sizeBytes).toBeLessThan(1024 * 1024);
+    measured.artifactBytes = result.artifact.sizeBytes;
+    const [key, encrypted] = [...objects][0]!;
+    const decoded = JSON.parse(new TextDecoder().decode(await openAgentArtifact(env, key, encrypted)));
+    expect(decoded.data.document).toEqual(largePage());
+    expect(decoded.data.document).not.toHaveProperty("tokens");
+  });
+});

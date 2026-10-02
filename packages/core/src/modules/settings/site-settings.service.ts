@@ -15,7 +15,7 @@ import {
   themeSettingsDrafts,
   themeSettingsVersions,
 } from "@scalius/database/schema";
-import { eq, and, desc, gt, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { eq, and, desc, gt, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   buildBatchGuard,
@@ -671,33 +671,35 @@ export async function publishThemeDraft(
   });
 }
 
-export async function listThemeVersions(
-  db: Database,
-  limit = 20,
-): Promise<ThemeVersionDocument[]> {
-  const boundedLimit = Math.min(THEME_VERSION_HISTORY_LIMIT, Math.max(1, Math.trunc(limit)));
-  const rows = await db
-    .select({
-      id: themeSettingsVersions.id,
-      revision: themeSettingsVersions.publishedRevision,
-      theme: themeSettingsVersions.theme,
-      source: themeSettingsVersions.source,
-      sourceRevision: themeSettingsVersions.sourceRevision,
-      publishedBy: themeSettingsVersions.publishedBy,
-      createdAt: themeSettingsVersions.createdAt,
-    })
-    .from(themeSettingsVersions)
-    .orderBy(desc(themeSettingsVersions.publishedRevision))
-    .limit(boundedLimit);
-  return rows.map((row) => ({
+function themeVersionFromRow(row: typeof themeSettingsVersions.$inferSelect): ThemeVersionDocument {
+  return {
     id: row.id,
-    revision: row.revision,
+    revision: row.publishedRevision,
     ...parseThemeVersionSnapshot(row.theme),
     source: row.source,
     sourceRevision: row.sourceRevision,
     publishedBy: row.publishedBy,
     createdAt: row.createdAt,
-  }));
+  };
+}
+
+export async function listThemeVersions(
+  db: Database,
+  limit = 20,
+  beforeRevision?: number,
+): Promise<ThemeVersionDocument[]> {
+  const boundedLimit = Math.min(THEME_VERSION_HISTORY_LIMIT, Math.max(1, Math.trunc(limit)));
+  const rows = await db.select().from(themeSettingsVersions)
+    .where(beforeRevision === undefined ? undefined : lt(themeSettingsVersions.publishedRevision, beforeRevision))
+    .orderBy(desc(themeSettingsVersions.publishedRevision)).limit(boundedLimit);
+  return rows.map(themeVersionFromRow);
+}
+
+export async function getThemeVersion(db: Database, sourceRevision: number): Promise<ThemeVersionDocument> {
+  if (!Number.isInteger(sourceRevision) || sourceRevision < 1) throw new ValidationError("Choose a positive published theme revision.");
+  const row = await db.select().from(themeSettingsVersions).where(eq(themeSettingsVersions.publishedRevision, sourceRevision)).get();
+  if (!row) throw new ValidationError("That storefront style revision is unavailable.");
+  return themeVersionFromRow(row);
 }
 
 /** Restore and discard replace only the draft; the monotonic revision prevents stale editors and ABA. */
@@ -772,6 +774,38 @@ export async function rollbackThemeSettings(
   return restoreThemeVersion(db, sourceRevision, expectedDraftRevision, expectedPublishedRevision, actorId);
 }
 
+function patchThemePage(theme: StorefrontThemeDocument, page: "home" | "landing" | "product" | "collection" | "search", value: unknown, slug?: string): void {
+  if (page === "landing") {
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new ValidationError("Choose a valid landing-page slug.");
+    const pages = theme.pages as unknown as { landing: Record<string, unknown> };
+    if (value === null) delete pages.landing[slug];
+    else pages.landing[slug] = value;
+  } else {
+    (theme.pages as unknown as Record<string, unknown>)[page] = value;
+  }
+}
+
+/** A bounded read proof compares approved page content and exact revisions without returning the theme. */
+export async function checkThemePageDraft(
+  db: Database,
+  page: "home" | "landing" | "product" | "collection" | "search",
+  value: unknown,
+  expectedDraftRevision: number,
+  expectedPublishedRevision: number,
+  slug?: string,
+) {
+  assertNonnegativeRevision(expectedDraftRevision, "draft");
+  assertNonnegativeRevision(expectedPublishedRevision, "published");
+  const workspace = await getThemeWorkspace(db);
+  const expectedTheme = structuredClone(workspace.draft.theme);
+  patchThemePage(expectedTheme, page, value, slug);
+  const normalized = serializeThemeSettings(expectedTheme).theme;
+  const pageMatches = compareThemeDocuments(workspace.draft.theme, normalized).length === 0;
+  const revisionMatches = workspace.draft.revision === expectedDraftRevision;
+  const publishedRevisionMatches = workspace.published.revision === expectedPublishedRevision;
+  return { matches: pageMatches && revisionMatches && publishedRevisionMatches, pageMatches, revisionMatches, publishedRevisionMatches, draftRevision: workspace.draft.revision, publishedRevision: workspace.published.revision };
+}
+
 /** One-page agent edits use the same document validation and revision authority as the editor. */
 export async function saveThemePageDraft(
   db: Database,
@@ -787,14 +821,7 @@ export async function saveThemePageDraft(
     throw themeConflict("The storefront style draft changed in another session. Reload before changing a page.");
   }
   const theme = structuredClone(workspace.draft.theme);
-  if (page === "landing") {
-    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new ValidationError("Choose a valid landing-page slug.");
-    const pages = theme.pages as unknown as { landing: Record<string, unknown> };
-    if (value === null) delete pages.landing[slug];
-    else pages.landing[slug] = value;
-  } else {
-    (theme.pages as unknown as Record<string, unknown>)[page] = value;
-  }
+  patchThemePage(theme, page, value, slug);
   return saveThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, actorId);
 }
 
