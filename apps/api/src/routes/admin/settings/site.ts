@@ -586,7 +586,7 @@ app.openapi(createRoute({
   if (!document) throw new ValidationError("That landing page is unavailable.");
   c.header("Content-Disposition", `inline; filename="theme-${query.source}-${source.revision}.json"`);
   c.header("Cache-Control", "private, no-store");
-  return ok(c, { source: query.source, revision: source.revision, basePublishedRevision: "basePublishedRevision" in source ? source.basePublishedRevision : source.revision, page: query.page ?? null, slug: query.slug ?? null, document });
+  return ok(c, { source: query.source, revision: source.revision, basePublishedRevision: "basePublishedRevision" in source && typeof source.basePublishedRevision === "number" ? source.basePublishedRevision : source.revision, page: query.page ?? null, slug: query.slug ?? null, document });
 });
 
 const createThemePreviewRoute = createRoute({
