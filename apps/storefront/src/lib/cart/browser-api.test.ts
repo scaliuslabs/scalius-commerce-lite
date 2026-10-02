@@ -58,6 +58,26 @@ describe("previewCartDiscounts", () => {
     });
   });
 
+  it("previews a signed-in buyer through this origin, which adds the session the API can't see", async () => {
+    document.cookie = "cs_auth=1; path=/";
+    try {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({
+        success: true,
+        data: { totalDiscount: 100, discounts: [{ promotionId: "p_vip", title: "VIP", code: "QA-OCT3-VIP", amount: 100, shippingAmount: 0 }], offers: [], rejectedCodes: [] },
+      })));
+
+      const result = await previewCartDiscounts(["QA-OCT3-VIP"], [{ id: "prod_vip", name: "Shawl", price: 1000, quantity: 1, variantId: "var_vip" }]);
+
+      expect(result).toMatchObject({ ok: true, totalDiscount: 100 });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("/api/checkout/discount-preview");
+      expect(init).toMatchObject({ method: "POST", credentials: "same-origin" });
+      expect(JSON.parse(init.body as string)).toMatchObject({ codes: ["QA-OCT3-VIP"] });
+    } finally {
+      document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+    }
+  });
+
   it("sends the pre-surcharge price bundles use and lists the bundle saving in the estimate", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       success: true,
