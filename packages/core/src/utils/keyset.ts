@@ -19,11 +19,15 @@ import {
     LIST_MAX_OFFSET,
     LIST_OFFSET_ERROR_CODE,
     LIST_CURSOR_ERROR_CODE,
+    buildPageInfo,
     cappedCountLimit,
+    capTotal,
     decodeListCursor,
     encodeListCursor,
+    finishKeysetPage,
     type CursorDirection,
     type CursorValue,
+    type CursorValueKind,
     type ListCursor,
     type ListCursorShape,
 } from "@scalius/shared/pagination";
@@ -196,4 +200,119 @@ export function resolvePositionalPaging(
     }
     if (offset >= LIST_MAX_OFFSET) throw tooDeepPage(offset);
     return { offset, take: Math.min(take, LIST_MAX_OFFSET - offset) };
+}
+
+// ─── One list's page plan ────────────────────────────────────────────────────
+
+export interface KeysetListSpec {
+    /** The sort the request asked for; its cursors are issued for it. */
+    sort: string;
+    order: KeysetOrder;
+    kind: CursorValueKind;
+    /** A ranked result (search by relevance): page by position over this ORDER BY. */
+    ranked?: SQL[];
+}
+
+/** A row of a keyset-paged read: its id and its sort column exactly as stored. */
+export interface KeysetRow {
+    id: string;
+    keysetValue: CursorValue;
+}
+
+/**
+ * Everything one list needs to read a page: validated paging, the page's
+ * predicate and ORDER BY, the window to fetch (one row past the page), the
+ * capped position count, and how to turn the fetched rows into the page and
+ * its `pageInfo`.
+ *
+ * The data read must select the sort column as `keysetValue` (aliased: a
+ * plain duplicate of a column the query already selects maps to NULL) and
+ * the id as `id`.
+ */
+export function planKeysetPage(
+    input: { page: number; limit: number; after?: string | null; before?: string | null },
+    spec: KeysetListSpec,
+) {
+    const { limit } = input;
+    const positional = spec.ranked ? resolvePositionalPaging(input, spec.sort) : null;
+    const paging: ListPaging = positional
+        ? { mode: "offset", offset: positional.offset }
+        : resolveListPaging(input, {
+            sort: spec.sort,
+            direction: spec.order.direction,
+            kinds: [spec.kind],
+            nullable: spec.order.nullable,
+        });
+    const backward = paging.mode === "before";
+    const take = positional?.take ?? limit;
+
+    return {
+        /** ORDER BY of the page read (reversed for a `before` page). */
+        orderBy: spec.ranked ?? keysetOrderBy(spec.order, backward),
+        /** Rows to skip. */
+        offset: paging.mode === "offset" ? paging.offset : 0,
+        /** Rows to read: one more than the page shows. */
+        fetchLimit: take + 1,
+        /** The list's filters plus, for a cursor page, the rows beyond the cursor. */
+        pageWhere(base: SQL | undefined): SQL | undefined {
+            return paging.mode === "offset"
+                ? base
+                : sql`${base} AND ${keysetCondition(spec.order, paging.cursor, { backward })}`;
+        },
+        /**
+         * The predicate of a capped count of the rows that lead up to a cursor
+         * page (so the dashboard can print "51-100 of 1,000+"); null for a
+         * numbered or positional page, whose offset is already known.
+         */
+        positionWhere(base: SQL | undefined): SQL | null {
+            return paging.mode === "offset"
+                ? null
+                : sql`${base} AND ${keysetCondition(spec.order, paging.cursor, { backward: true, inclusive: !backward })}`;
+        },
+        /** Trims the fetched rows to the page and builds its `pageInfo` and start position. */
+        finish<Row extends KeysetRow>(fetched: readonly Row[], positionCount?: number) {
+            const page = finishKeysetPage(fetched, take, backward);
+            // A ranked search only shows its first LIST_MAX_OFFSET matches.
+            if (positional && positional.offset + take >= LIST_MAX_OFFSET) page.hasMore = false;
+            const rows = page.rows;
+            const upToCursor = paging.mode === "offset" ? null : Number(positionCount ?? 0);
+            const pageStart: number | null = paging.mode === "offset"
+                ? paging.offset
+                : upToCursor !== null && upToCursor <= LIST_COUNT_CAP
+                    ? Math.max(0, upToCursor - (backward ? rows.length : 0))
+                    : null;
+            const pageInfo = buildPageInfo(
+                { rows: rows.map((row, index) => ({ row, index })), hasMore: page.hasMore },
+                {
+                    backward,
+                    anchored: paging.mode !== "offset" || paging.offset > 0,
+                    cursorOf: ({ row, index }) => positional
+                        ? positionCursor(spec.sort, positional.offset + index)
+                        : encodeListCursor({
+                            sort: spec.sort,
+                            direction: spec.order.direction,
+                            values: [row.keysetValue],
+                            id: row.id,
+                        }),
+                },
+            );
+            return { rows, pageInfo, pageStart };
+        },
+    };
+}
+
+/** The `pagination` object of a keyset-paged list. */
+export function cappedPagination(counted: number, pageStart: number | null, limit: number) {
+    const { total, totalIsCapped } = capTotal(counted);
+    return {
+        total,
+        /** `total` is a lower bound: more rows match than the count reads. */
+        totalIsCapped,
+        /** The page's number; 0 for a cursor page deeper than the count cap. */
+        page: pageStart === null ? 0 : Math.floor(pageStart / limit) + 1,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        /** Zero-based index of the page's first row; null deeper than the count cap. */
+        offset: pageStart,
+    };
 }
