@@ -21,7 +21,9 @@ collection and search blocks; publishing is the only way draft changes go live.
 - Restore and discard only replace the draft and advance its revision. Staff
   conflicts require reload or explicit overwrite against the newly read revision.
   Version previews encode an authenticated selector in the random session token;
-  the stored token hash remains authority. Pruned versions lose preview access.
+  draft tokens reserve `D` and immutable versions reserve `V`, keeping the
+  existing 52-character protocol unambiguous. The stored token hash remains
+  authority. Pruned versions lose preview access.
 - `upgradeThemeDocument` clones and applies one step per historical version,
   then validates the current strict schema. Reads upgrade in memory; writes
   require v7. Historical golden fixtures and migration notes are beside the
