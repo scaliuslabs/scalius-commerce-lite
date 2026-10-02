@@ -886,7 +886,8 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
     expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
-    expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : "auto");
+    // "auto" is the default priority: the attribute is left out.
+    expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : null);
     // One link per card (the stretched title link) plus at most Buy now (and Compare).
     const links = element.querySelectorAll("a");
     expect(links.length).toBeLessThanOrEqual(card.compare ? 3 : 2);

@@ -2,7 +2,7 @@
 // Poster first, player on press (scripts/video-facade.ts). The facade fills
 // its parent's fixed-ratio box, so swapping in the player never moves the
 // page. It is a real link: without JavaScript it opens the video itself.
-import { Play } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import type { ResponsiveImageSources } from "@/lib/responsive-image";
 import type { VideoFacadeKind } from "./scripts/video-facade";
 
@@ -67,7 +67,7 @@ const {
     class="relative flex h-14 w-14 items-center justify-center rounded-full bg-black/65 text-white shadow-md transition-transform duration-200 group-hover/video:scale-105 motion-reduce:transition-none"
     aria-hidden="true"
   >
-    <Play className="ml-0.5 h-6 w-6 fill-current" />
+    <Icon name="play" class="ml-0.5 h-6 w-6 fill-current" />
   </span>
   <span
     data-video-duration

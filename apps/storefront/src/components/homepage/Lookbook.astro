@@ -9,7 +9,7 @@ import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { ArrowRight } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   section: StorefrontSectionOf<"lookbook">;
@@ -69,7 +69,7 @@ const shown = products.slice(0, viewMore ? 7 : 8);
             <li class="min-w-0">
               <a href={href!} class="flex h-full min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted p-4 text-center text-sm font-semibold text-foreground transition-colors hover:border-primary">
                 View more
-                <ArrowRight className="h-4 w-4" />
+                <Icon name="arrow-right" class="h-4 w-4" />
               </a>
             </li>
           )}

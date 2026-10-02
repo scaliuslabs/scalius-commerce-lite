@@ -6,7 +6,7 @@
 //   items take the same shape with a check mark.
 // - ticker: one 40px pill whose text scrolls (CSS only: it pauses while
 //   hovered or with its pause toggle, and stands still under reduced motion).
-import { BadgeCheck, Pause, Play } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
@@ -37,7 +37,7 @@ const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
         {items.map((item) => (
           <li class="flex min-h-20 items-center gap-3 px-4 py-3 md:px-5">
             <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-              <BadgeCheck className="size-4" aria-hidden="true" />
+              <Icon name="badge-check" class="size-4" aria-hidden="true" />
             </span>
             <span class="min-w-0 [overflow-wrap:anywhere]">
               <span class="block text-sm font-semibold text-foreground">{item.title}</span>
@@ -66,8 +66,8 @@ const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
           </ul>
         </div>
         <label for={`${section.id}-ticker-pause`} class="usp-ticker-pause grid h-10 w-10 shrink-0 cursor-pointer place-items-center border-l border-border text-muted-foreground" aria-hidden="true">
-          <span class="usp-ticker-pause-icon"><Pause className="size-3.5" /></span>
-          <span class="usp-ticker-play-icon"><Play className="size-3.5" /></span>
+          <span class="usp-ticker-pause-icon"><Icon name="pause" class="size-3.5" /></span>
+          <span class="usp-ticker-play-icon"><Icon name="play" class="size-3.5" /></span>
         </label>
       </div>
     </div>

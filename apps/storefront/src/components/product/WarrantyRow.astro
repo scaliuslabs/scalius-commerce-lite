@@ -6,7 +6,7 @@
 //
 // Mount (products/[slug].astro, in ProductSummary's `after-actions` slot):
 //   <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
-import { ChevronDown, ShieldCheck } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import type { Product } from "@/lib/api";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { pickWarrantyCopy, warrantySummaryText } from "@/lib/account-warranties";
@@ -28,13 +28,13 @@ const summary = warranty ? warrantySummaryText(productWarrantyTerms(warranty), c
   <details class="group mt-3 rounded-lg border border-border bg-card" data-warranty-row>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
       <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-        <ShieldCheck className="size-4" aria-hidden="true" />
+        <Icon name="shield-check" class="size-4" aria-hidden="true" />
       </span>
       <span class="min-w-0 flex-1">
         <span class="block text-sm font-semibold text-foreground">{summary}</span>
         <span class="block text-sm leading-relaxed text-muted-foreground">{copy.warrantyTermsText}</span>
       </span>
-      <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      <Icon name="chevron-down" class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
     </summary>
     <div class="space-y-2 border-t border-border px-3 py-3 text-sm leading-relaxed">
       <p class="font-medium text-foreground">{warranty.name}</p>

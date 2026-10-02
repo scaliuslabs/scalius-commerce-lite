@@ -1,0 +1,30 @@
+---
+// A Lucide icon as inline SVG, rendered by Astro itself: the same attributes
+// lucide-react renders (24px grid, stroked in currentColor, aria-hidden unless
+// the icon is labelled), without a React render for every icon on the page.
+// The scope attribute of a styled parent (data-astro-cid-*) arrives in the
+// rest props, so the parent's scoped rules still reach the <svg>.
+import { LUCIDE_ICONS, type LucideIconName } from "./lucide-icons";
+
+type Props = astroHTML.JSX.SVGAttributes & { name: LucideIconName };
+
+const { name, ...rest } = Astro.props;
+const labelled = Object.keys(rest).some((key) => key.startsWith("aria-") || key === "role" || key === "title");
+const body = LUCIDE_ICONS[name]
+  .map(([tag, attributes]) => `<${tag} ${Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(" ")}></${tag}>`)
+  .join("");
+---
+
+<svg
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden={labelled ? undefined : "true"}
+  {...rest}
+  set:html={body}
+/>

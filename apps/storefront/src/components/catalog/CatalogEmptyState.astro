@@ -1,5 +1,5 @@
 ---
-import { Search } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
@@ -20,7 +20,7 @@ const { title, description, actionHref, actionLabel } = Astro.props;
     class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
     aria-hidden="true"
   >
-    <Search className="h-5 w-5" />
+    <Icon name="search" class="h-5 w-5" />
   </span>
   <h2 class="mt-4 text-lg font-semibold text-foreground">{title}</h2>
   <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">

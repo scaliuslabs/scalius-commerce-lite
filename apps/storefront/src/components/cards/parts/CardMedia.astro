@@ -50,7 +50,7 @@ const own = className !== undefined;
         width={width}
         height={height}
         loading={loading.loading}
-        fetchpriority={loading.fetchpriority}
+        fetchpriority={loading.fetchpriority === "auto" ? undefined : loading.fetchpriority}
         decoding={loading.decoding}
         class={own ? "product-card-photo" : "product-card-photo w-full h-full object-center"}
       />
