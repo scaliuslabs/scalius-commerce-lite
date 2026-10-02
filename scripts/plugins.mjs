@@ -10,7 +10,7 @@
 //   pnpm plugin list                                           what is bundled, and whether it is current
 //   pnpm plugin build [plugin id ...]                          repack bundled plugins, regenerate the wrapper
 //   pnpm plugin sandbox <on|off>                               record the operator's sandbox choice
-//   pnpm plugin wrangler-config [--local]                      print the API Wrangler config to use
+//   pnpm plugin wrangler-config [--local] [--plan paid]        print the API Wrangler config to use
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
@@ -30,6 +30,7 @@ import {
   writeIfChanged,
 } from "./plugin-build.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
+import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const API_DIR = join(root, "apps/api");
@@ -51,12 +52,18 @@ export function withPluginSandbox(configText) {
   return { ...config, worker_loaders: loaders };
 }
 
-/** The API Wrangler config path for deploy (`--local` for `pnpm dev`), generating the sandbox variant when enabled. */
-export function apiWranglerConfig({ local = false, sandbox = false } = {}) {
+/**
+ * The API Wrangler config path for deploy (`--local` for `pnpm dev`). The
+ * committed config is the Free config; the sandbox (Worker Loader) and the
+ * Paid plan's profile (scripts/plan.mjs) are added in a generated file beside
+ * it, so relative paths still resolve.
+ */
+export function apiWranglerConfig({ local = false, sandbox = false, plan = "free" } = {}) {
   const base = local ? "wrangler.local.jsonc" : "wrangler.jsonc";
-  if (!sandbox) return join(API_DIR, base);
-  const generated = join(API_DIR, local ? "wrangler.local.sandbox.gen.json" : "wrangler.sandbox.gen.json");
-  const config = withPluginSandbox(readFileSync(join(API_DIR, base), "utf8"));
+  if (!sandbox && plan === "free") return join(API_DIR, base);
+  const generated = join(API_DIR, local ? "wrangler.local.deploy.gen.json" : "wrangler.deploy.gen.json");
+  const text = readFileSync(join(API_DIR, base), "utf8");
+  const config = withPlanProfile(sandbox ? withPluginSandbox(text) : JSON.parse(stripJsonc(text)), plan);
   writeIfChanged(generated, `${JSON.stringify(config, null, 2)}\n`);
   return generated;
 }
@@ -224,7 +231,8 @@ async function main(argv) {
       return setSandbox(positional[0]);
     case "wrangler-config": {
       const local = rest.includes("--local");
-      const path = apiWranglerConfig({ local, sandbox: pluginSandboxEnabled(readLockfile(), process.env, rest) });
+      const sandbox = pluginSandboxEnabled(readLockfile(), process.env, rest);
+      const path = apiWranglerConfig({ local, sandbox, plan: resolvePlan({ args: rest, sandbox }) });
       console.log(relative(API_DIR, path));
       return undefined;
     }
