@@ -10,14 +10,15 @@ import {
   parsePluginUiDocument,
   pluginUiRouteActions,
 } from "@scalius/plugin-sdk/testing";
+import type { PluginApiCallInput } from "@scalius/plugin-sdk";
 import type { PluginManifest } from "@scalius/shared/plugins";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 
 /** A store that answers every read the apps make, as a paid order. */
-const api = async (_operationId: string, input: { path?: Record<string, string> } | undefined) => ({
+const api = async (_operationId: string, input: PluginApiCallInput | undefined) => ({
   ok: true as const,
   status: 200,
-  data: { id: input?.path?.id ?? "ord_1", status: "paid", paymentStatus: "paid", totalAmount: 1500, items: [] },
+  data: { id: String(input?.path?.id ?? "ord_1"), status: "paid", paymentStatus: "paid", totalAmount: 1500, items: [] },
   error: null,
 });
 
@@ -37,7 +38,7 @@ function surfaces(manifest: PluginManifest) {
 
 describe.each(Object.keys(BUNDLED_PLUGINS))("bundled app %s", (pluginId) => {
   it("answers every dashboard surface with a document the dashboard draws", async () => {
-    const module = (await BUNDLED_PLUGINS[pluginId]!.load()).default;
+    const module = ((await BUNDLED_PLUGINS[pluginId]!.load()) as { default: unknown }).default;
     const harness = createPluginTestHarness(module, { api });
     const manifest = harness.manifest;
     const declared = new Map(manifest.routes.admin.map((route) => [route.name, route.methods as readonly string[]]));
@@ -62,9 +63,10 @@ describe.each(Object.keys(BUNDLED_PLUGINS))("bundled app %s", (pluginId) => {
     };
 
     await check("before any event");
-    for (const topic of manifest.events) {
+    // Each concrete topic it listens to once (a wildcard subscription names none).
+    for (const topic of manifest.events.filter((filter) => !filter.includes("*"))) {
       const [resource] = topic.split(".");
-      await harness.event(topic, { type: resource!, id: RESOURCE_IDS[resource!] ?? `${resource}_1` });
+      await harness.event(topic as Parameters<typeof harness.event>[0], { type: resource!, id: RESOURCE_IDS[resource!] ?? `${resource}_1` });
     }
     await check("after its events");
   });
