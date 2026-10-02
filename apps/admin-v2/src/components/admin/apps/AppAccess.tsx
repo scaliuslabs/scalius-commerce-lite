@@ -8,11 +8,10 @@ import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
 import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
 import { permissionMessages } from "~/i18n/settings-users";
-import type { AppDetail, AppGrant } from "~/lib/api-query-options/apps";
+import { APP_FUNCTION_POINTS, type AppDetail, type AppGrant } from "~/lib/api-query-options/apps";
 import { topicLabel } from "../settings/webhooks/webhook-format";
 import { RISK_VARIANT } from "./app-status";
 
-const FUNCTION_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "order.risk"] as const;
 const PROVIDER_KINDS = ["payment", "shipping", "messaging", "email", "fraud", "tax"] as const;
 
 function known<T extends string>(list: readonly T[], value: string): value is T {
@@ -76,7 +75,7 @@ export function AppAccess({ app }: { app: AppDetail }) {
     sections.push(
       <Section key="checkout" title={t("access_checkout")}>
         {request.functions.map((point) =>
-          row(point, known(FUNCTION_POINTS, point) ? t(`function_${point}`) : <span className="font-mono">{point}</span>, isNew("functions", point)),
+          row(point, known(APP_FUNCTION_POINTS, point) ? t(`function_${point}`) : <span className="font-mono">{point}</span>, isNew("functions", point)),
         )}
       </Section>,
     );

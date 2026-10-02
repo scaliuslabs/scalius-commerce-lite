@@ -19,6 +19,8 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 | `quote-fingerprint.ts` | `buildStorefrontCheckoutQuoteFingerprint()` | The fingerprint that fences a quote to its commit |
 | `created-notification-policy.ts` | `shouldCreateOrderCreatedNotification()` | Whether a committed order notifies the buyer |
 | `abandoned/{snapshot,cleanup}.ts` | abandoned-checkout snapshots and retention cleanup | Recovery data for unfinished checkouts |
+| `pricing.ts` | `priceStorefrontCheckout()`, `checkStorefrontCartRules()`, `resolveAppPaymentMethods()`, ... | The one price of a checkout: promotions or bundles, then the apps' functions, then tax (quote and order alike) |
+| `app-functions.ts` | `buildAppFunctionCart()`, `resolveAppDiscounts()`, `applyAppShippingRateOperations()`, ... | The cart apps see and the pure rules that merge app function outputs |
 
 ## Data Flow
 
@@ -31,6 +33,68 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
    Every new commit requires the prepared `checkoutAuthorityRevision` and guards it inside the final batch, including online payments, discounts, agent checkout, and reservation-replay recovery. A changed catalog/delivery/tax/checkout policy rolls back the whole commit and asks the buyer to review again; an already-committed order remains replayable after authority changes.
 6. **Post-commit work** -- The durable notification/Meta claims and initial COD state are already part of the authoritative commit when applicable. Queue relay, Meta dispatch, semantic product-availability cache invalidation, and hashed checkout-status/receipt KV hints run after commit through `executionCtx.waitUntil()` when available. Their failure cannot turn a committed checkout into a false `500`; durable claims or database fallback remain available for retry and repair.
 7. **Recovery and guest support** -- `GET /orders/status/:token` accepts only derived `cst_` status tokens and receipt validation accepts only private `chk_` receipt tokens. Both use KV as the fast path, then fall back to `checkout_attempts` plus the committed `orders` row. Fallbacks that prove a completed checkout schedule hashed KV repair through `waitUntil()`, so repeated polling returns to the fast path without storing raw receipt proof in URL paths or KV keys. `GET /orders/receipt/:id` returns buyer-safe receipt facts plus eligible support-request actions and reuses its receipt order projection for support-action eligibility instead of rereading the order. `POST /orders/receipt/:id/support-requests` accepts the private receipt token and creates a cancellation, return, or refund request in the same support-request ledger used by customer accounts. Its support-request `customerId` comes only from `orders.accountOwnerCustomerId`, never from the broader CRM link. It never directly mutates payment, shipment, inventory, COD, or order status.
+
+## App functions (plugin platform phase 2b)
+
+Installed apps (`docs/platform/PLUGINS.md`) can declare checkout function
+points. The API builds one runner per request (`apps/api/src/plugins/
+checkout-functions.ts`) from the active registrations, read in a wave the
+request already makes (the checkout read batch, or the first `Promise.all`
+of the quote, cart-validation and discount-preview routes). No app: no
+points, no app call, no extra read. An app runs only at points its approved
+grant names. Outputs are memoized per point and input for the request; the
+order runs the apps again and the quote fingerprint compares the totals, so
+an app answering differently at placement sends the buyer back to review.
+Any app that throws, times out (1.5 s) or answers invalid output is skipped
+and logged on its page (fail-open); a semantic problem (an unknown line or
+rate) is logged the same way.
+
+- **The cart apps see** (`functionCartSchema`): lines keyed by the tax
+  allocation line id, unit price and the line total after the platform's
+  discounts, SKU, category with ancestors, collections, brand, buyer inputs;
+  the signed-in customer's order count and spend (no tags exist yet: always
+  empty); the delivery region (city and thana names) when something ships;
+  the typed codes. One extra read batch, only when an app implements a point.
+- **`cart.validate`**: on the cart page (catalog totals, no codes), the quote
+  and the order. Errors land on their line (`index`, `cartKey`) or the whole
+  cart; any error blocks: `400 details.reason = "cart_rules"` with
+  `ruleErrors`.
+- **`checkout.discounts`**, stacking rules (`app-functions.ts` header):
+  platform discounts first (promotions or bundles, whichever the interplay
+  picks); then apps in priority order (then app id), each app's discounts in
+  order; each takes from what is left, so no line or delivery charge goes
+  below zero; percentages of what is left, half-up to the cash unit (BDT
+  whole taka); fixed amounts and caps floored to the cash unit; `order` and
+  `lines` targets spread by remaining value (largest remainder, whole taka);
+  `shipping` lowers delivery only; gift-card lines never take one; a
+  code-driven discount needs its code typed and claims it (no longer
+  `not_found`); a discount naming a line not in the cart is skipped. Tax is
+  quoted after every discount (the platform and app allocations together).
+- **Persistence**: no schema change. Line `discount_amount_minor` is the
+  platform part plus the app part; each app discount is an immutable
+  `app_discount` row in `order_events` (`orders/app-facts.ts`: app id and
+  name, title, code, target, amounts, per-order-item parts), inserted in the
+  commit batch. The commit check, refund reconciliation
+  (`readPromotionRefundSnapshot`), the order discount lines (receipts,
+  account order, dashboard, invoice) and the amendment guard (an app-discounted
+  order's items are not editable, like a promotion order) all read it. The
+  order timeline leaves app facts out.
+- **`checkout.shipping_rates`**: hide, rename, price (the rate's own charge,
+  cash-rounded; a rate the platform makes free stays free) and reorder the
+  rates offered for the address. Apps never add a rate. The quote returns
+  `shippingRates` when an app changed them; a hidden chosen rate is refused
+  with `delivery_rate_unavailable` and the visible options. The order keeps
+  the renamed/priced rate as reviewed.
+- **`checkout.payment_methods`**: hide, rename and reorder the methods the
+  merchant's policy and readiness already allow; apps never add or enable
+  one. The quote returns `paymentMethods`; placement refuses a hidden method
+  (`payment_method_unavailable`). Gift-card cover is tender, never hidden.
+- **`order.risk`**: after the commit, in `waitUntil` (never on the buyer's
+  path), with the order total, method and the buyer's earlier order counts.
+  Each app's advice is one `app_risk` order fact (a retry adds nothing),
+  shown on the dashboard order next to the courier fraud check. Nothing acts
+  on it.
+- **Not yet**: the agent and admin order channels do not run app functions.
 
 ## Order lines (Wave A)
 

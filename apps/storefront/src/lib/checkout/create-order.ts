@@ -5,6 +5,7 @@
 import { getCheckoutErrorMessage } from "./error-messages";
 import type { CreateOrderPayload } from "../api/types";
 import type { CartValidationIssue } from "../api/orders";
+import { checkoutOrderRefusal, type CheckoutOrderRefusal } from "./tax-quote-error-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
@@ -71,6 +72,8 @@ export class CheckoutOrderError extends Error {
   readonly errorCode?: string;
   readonly details: unknown;
   readonly cartIssues: CartValidationIssue[];
+  /** A store app's rule, a hidden payment method or a hidden delivery option. */
+  readonly refusal: CheckoutOrderRefusal | null;
 
   constructor(message: string, options: {
     status: number;
@@ -84,6 +87,7 @@ export class CheckoutOrderError extends Error {
     this.errorCode = options.errorCode;
     this.details = options.details;
     this.cartIssues = options.cartIssues;
+    this.refusal = checkoutOrderRefusal({ details: options.details });
   }
 }
 

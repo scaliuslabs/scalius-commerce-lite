@@ -78,6 +78,7 @@ function toOrderViewModel(
     cityName: order.cityName ?? undefined,
     zoneName: order.zoneName ?? undefined,
     supportRequests: order.supportRequests ?? [],
+    appRiskChecks: order.appRiskChecks ?? [],
     shipments: shipments.map((shipment) => toOrderShipment(shipment, order.createdAt)),
     deliveryProviders,
     operationalReads,

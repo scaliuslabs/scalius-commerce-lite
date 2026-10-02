@@ -80,7 +80,7 @@ describe("account owner receipt access", () => {
   it("names each discount the order used, delivery savings apart, and echoes the order note", async () => {
     sqlite.exec(`
       UPDATE orders SET notes = ' দয়া করে ফোন করুন ', subtotal_amount_minor = 50000, shipping_amount_minor = 8000,
-        discount_amount_minor = 18000, currency_code = 'BDT' WHERE id = 'ORDEROWNED000001';
+        discount_amount_minor = 20000, currency_code = 'BDT' WHERE id = 'ORDEROWNED000001';
       INSERT INTO products (id, name, slug, price_minor) VALUES ('prod_kettle', 'Kettle', 'kettle', 50000);
       INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, line_subtotal_minor)
         VALUES ('item_1', 'ORDEROWNED000001', 'prod_kettle', 1, 50000, 50000);
@@ -94,6 +94,9 @@ describe("account owner receipt access", () => {
         base_amount_minor, discount_amount_minor, quantity) VALUES
         ('alloc_eid', 'ORDEROWNED000001', 'item_1', 'promo_eid', 'eff_eid', 1, 1, 'code', 'Eid sale', 'EID10', 'fixed_amount_off', 'line', 'BDT', 50000, 10000, 1),
         ('alloc_ship', 'ORDEROWNED000001', NULL, 'promo_ship', 'eff_ship', 1, 1, 'code', 'Free delivery', 'SHIPFREE', 'free', 'shipping', 'BDT', 8000, 8000, NULL);
+      -- An installed app's discount on top (an app_discount order fact, checkout/app-functions.ts).
+      INSERT INTO order_events (id, order_id, kind, data) VALUES ('oev_app_bulk', 'ORDEROWNED000001', 'app_discount',
+        '{"pluginId":"scalius.bulk-discount","appName":"Bulk discount","title":"Bulk savings (5% off)","code":null,"target":"lines","currencyCode":"BDT","amountMinor":2000,"shippingAmountMinor":0,"lines":[{"orderItemId":"item_1","amountMinor":2000}]}');
     `);
     const proof = await ownerProof({ Authorization: service(), "X-Customer-Session": OWNER_SESSION });
     const { data } = await proof.json() as { data: { receiptToken: string } };
@@ -101,8 +104,9 @@ describe("account owner receipt access", () => {
       data: { order: { discounts: unknown[]; notes: string | null } };
     };
     expect(order.discounts).toEqual([
-      { promotionId: "promo_eid", title: "Eid sale", code: "EID10", kind: "product", amount: 100, shippingAmount: 0 },
-      { promotionId: "promo_ship", title: "Free delivery", code: "SHIPFREE", kind: "shipping", amount: 0, shippingAmount: 80 },
+      { promotionId: "promo_eid", appId: null, title: "Eid sale", code: "EID10", kind: "product", amount: 100, shippingAmount: 0 },
+      { promotionId: "promo_ship", appId: null, title: "Free delivery", code: "SHIPFREE", kind: "shipping", amount: 0, shippingAmount: 80 },
+      { promotionId: null, appId: "scalius.bulk-discount", title: "Bulk savings (5% off)", code: null, kind: "product", amount: 20, shippingAmount: 0 },
     ]);
     expect(order.notes).toBe("দয়া করে ফোন করুন");
 

@@ -11,6 +11,7 @@ import {
     inventoryLocations,
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../app-facts";
 import { sql, desc, eq } from "drizzle-orm";
 import { customerKind } from "../../customers/customer-identity";
 import { fromMinor } from "@scalius/shared/money";
@@ -202,9 +203,10 @@ async function getOrderDetailsOnce(
 
     if (!orderRow) return null;
     // A second wave keeps the read within six simultaneous D1 connections.
-    const [fulfillments, conversation] = await Promise.all([
+    const [fulfillments, conversation, appRiskRows] = await Promise.all([
         listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces, orderRow.status),
         findOrderConversationForStaff(db, id),
+        selectOrderAppFactRows(db, [id], ["app_risk"]).all() as Promise<OrderAppFactRow[]>,
     ]);
     const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;
     const customerRecord = recordId && recordName !== null && recordPhone !== null
@@ -277,13 +279,24 @@ async function getOrderDetailsOnce(
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         discounts: promotionRows.map((row) => ({
+            source: row.appId ? "app" as const : "promotion" as const,
             promotionId: row.promotionId,
+            appId: row.appId,
+            appName: row.appName,
             name: row.title,
             code: row.code,
             method: row.method,
             kind: row.kind,
             amount: fromMinor(row.amountMinor + row.shippingAmountMinor, order.currencyDecimalPlaces),
             shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
+        })),
+        /** Apps' advisory risk checks, newest first: shown to the merchant, never acted on. */
+        appRiskChecks: resolveOrderAppFacts(appRiskRows).riskChecks.map((check) => ({
+            appId: check.pluginId,
+            appName: check.appName,
+            level: check.level,
+            reasons: check.reasons,
+            checkedAt: check.checkedAt,
         })),
         items: formattedItems,
         itemCount: formattedItems.length,

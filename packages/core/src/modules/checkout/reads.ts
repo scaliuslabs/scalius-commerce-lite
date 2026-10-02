@@ -15,6 +15,12 @@ import {
     type ExistingCheckoutAttemptResult,
 } from "./attempts";
 import {
+    resolveActiveFunctionRegistrations,
+    selectActiveFunctionRegistrations,
+    type ActiveFunctionRegistrationRow,
+    type RegisteredPlugin,
+} from "../plugins/registry";
+import {
     createStorefrontCheckoutAuthorityReadPlan,
     type StorefrontCheckoutAuthorityInput,
     type StorefrontCheckoutAuthoritySnapshot,
@@ -45,8 +51,10 @@ function tagCheckoutError(error: unknown, code: string): unknown {
 
 /**
  * One read round trip for a storefront checkout: the idempotency row, the
- * checkout authority snapshot, and the rows the commit needs. The attempt is
- * decided first so a committed request replays even if authority changed.
+ * checkout authority snapshot, the rows the commit needs and the apps'
+ * checkout function registrations (none: checkout does no app work). The
+ * attempt is decided first so a committed request replays even if authority
+ * changed.
  */
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
@@ -57,6 +65,8 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
     authority(): StorefrontCheckoutAuthoritySnapshot;
+    /** Active checkout function registrations, every point. */
+    functionRegistrations: RegisteredPlugin[];
 }> {
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, authorityInput);
     const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
@@ -68,6 +78,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         selectCheckoutAttemptByKey(db, identity.requestKey),
         selectContactCustomerCandidates(db, contact),
         selectReservationVariantStates(db, variantIds),
+        selectActiveFunctionRegistrations(db),
     ];
     let results: unknown[];
     try {
@@ -75,10 +86,11 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     } catch (error) {
         throw tagCheckoutError(error, "CHECKOUT_AUTHORITY_BATCH");
     }
-    const [attemptRows, customerRows, variantRows] = results.slice(plan.statements.length) as [
+    const [attemptRows, customerRows, variantRows, registrationRows] = results.slice(plan.statements.length) as [
         CheckoutAttemptRow[],
         ContactCustomerCandidate[],
         ReservationVariantState[],
+        ActiveFunctionRegistrationRow[] | undefined,
     ];
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(attemptRows[0], identity);
     const settled: SettledAuthority = existingAttempt?.status === "replay"
@@ -100,5 +112,6 @@ export async function loadStorefrontCheckoutReads<TResponse>(
             if (!settled.ok) throw settled.error;
             return settled.snapshot;
         },
+        functionRegistrations: resolveActiveFunctionRegistrations(registrationRows ?? []),
     };
 }

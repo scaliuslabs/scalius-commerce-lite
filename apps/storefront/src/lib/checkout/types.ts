@@ -1,6 +1,7 @@
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import type { Readiness } from "@scalius/shared/readiness";
 import type { CartValidationIssue } from "../api/orders";
+import type { CheckoutOrderRefusal } from "./tax-quote-error-contract";
 
 export interface GatewayMeta {
   label: string;
@@ -28,6 +29,8 @@ export interface PaymentResult {
   errorCode?: string;
   status?: number;
   cartIssues?: CartValidationIssue[];
+  /** A refusal the checkout repairs itself (a store app's rule, method or delivery option). */
+  refusal?: CheckoutOrderRefusal | null;
   hostedPaymentRecoveryUrl?: string;
 }
 

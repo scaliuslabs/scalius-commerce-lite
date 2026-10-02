@@ -41,6 +41,40 @@ export function listActiveFunctionPlugins(db: Database, point: PluginFunctionPoi
   return activeRegistrations(db, "function", [point]);
 }
 
+/**
+ * Every active function registration, all points at once, as one statement
+ * a caller can add to a read batch it already makes (checkout does). No
+ * active implementation: no rows, and checkout does no plugin work at all.
+ */
+export function selectActiveFunctionRegistrations(db: Database) {
+  return db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(eq(pluginRegistrations.kind, "function"), eq(pluginInstallations.status, "active")))
+    .orderBy(asc(pluginRegistrations.priority), asc(pluginRegistrations.pluginId));
+}
+
+export interface ActiveFunctionRegistrationRow {
+  priority: number;
+  name: string;
+  installation: typeof pluginInstallations.$inferSelect;
+}
+
+/** The rows of `selectActiveFunctionRegistrations`, parsed (an unreadable manifest is skipped). */
+export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunctionRegistrationRow[]): RegisteredPlugin[] {
+  const result: RegisteredPlugin[] = [];
+  for (const row of rows) {
+    const installation = toPluginInstallation(row.installation);
+    if (installation) result.push({ installation, priority: row.priority, name: row.name });
+  }
+  return result;
+}
+
+/** Every active function registration (all points), by priority then plugin id. */
+export async function listActiveFunctionRegistrations(db: Database): Promise<RegisteredPlugin[]> {
+  return resolveActiveFunctionRegistrations(await selectActiveFunctionRegistrations(db).all());
+}
+
 /** Active plugins subscribed to a topic through its exact name, its resource wildcard or `*` (one row per plugin). */
 export async function listActiveEventPlugins(db: Database, topic: string): Promise<RegisteredPlugin[]> {
   const prefix = topic.split(".", 1)[0];

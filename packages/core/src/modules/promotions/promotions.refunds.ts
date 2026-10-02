@@ -1,5 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { orderDiscountAllocations, orderItems } from "@scalius/database/schema";
+import { listOrderAppFacts } from "../orders/app-facts";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { asc, eq } from "drizzle-orm";
 
@@ -52,8 +53,10 @@ export function prorateSavedPromotionDiscount(input: {
 /**
  * Validates the immutable promotion allocation ledger against the immutable
  * order-item discount snapshot before refund math or provider side effects.
- * Orders created by the legacy discount authority have no allocation rows and
- * remain on their explicit saved-total compatibility path.
+ * App discounts (`app_discount` order facts) are the rest of a line's saved
+ * discount and reconcile with it. Orders created by the legacy discount
+ * authority have no allocation rows and remain on their explicit saved-total
+ * compatibility path.
  */
 export async function readPromotionRefundSnapshot(
     db: Database,
@@ -74,10 +77,13 @@ export async function readPromotionRefundSnapshot(
         .orderBy(asc(orderDiscountAllocations.id));
     if (allocations.length === 0) return null;
 
-    const items = await db.select({
-        id: orderItems.id,
-        discountAmountMinor: orderItems.discountAmountMinor,
-    }).from(orderItems).where(eq(orderItems.orderId, input.orderId));
+    const [items, appFacts] = await Promise.all([
+        db.select({
+            id: orderItems.id,
+            discountAmountMinor: orderItems.discountAmountMinor,
+        }).from(orderItems).where(eq(orderItems.orderId, input.orderId)),
+        listOrderAppFacts(db, input.orderId),
+    ]);
     const savedLineDiscounts = new Map(items.map((item) => [
         item.id,
         item.discountAmountMinor ?? 0,
@@ -104,6 +110,19 @@ export async function readPromotionRefundSnapshot(
             allocation.orderItemId,
             (allocatedByItem.get(allocation.orderItemId) ?? 0) + allocation.discountAmountMinor,
         );
+    }
+    for (const discount of appFacts.discounts) {
+        if (discount.currencyCode !== input.currencyCode) {
+            throw new ServiceUnavailableError("The saved app discount currency is inconsistent. Repair the order before refunding it.");
+        }
+        shippingDiscountMinor += discount.shippingAmountMinor;
+        for (const line of discount.lines) {
+            if (!savedLineDiscounts.has(line.orderItemId)) {
+                throw new ServiceUnavailableError("A saved app discount is missing its order item.");
+            }
+            merchandiseDiscountMinor += line.amountMinor;
+            allocatedByItem.set(line.orderItemId, (allocatedByItem.get(line.orderItemId) ?? 0) + line.amountMinor);
+        }
     }
     for (const [itemId, savedDiscountMinor] of savedLineDiscounts) {
         if ((allocatedByItem.get(itemId) ?? 0) !== savedDiscountMinor) {

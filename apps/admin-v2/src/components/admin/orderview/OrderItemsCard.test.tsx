@@ -9,7 +9,9 @@ import type { Order } from "./types";
 import { OrderSummaryCard } from "./OrderItemsCard";
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, className }: { children: ReactNode; className?: string }) => <a className={className} href="#link">{children}</a>,
+  Link: ({ to, params, children, className }: { to: string; params?: Record<string, string>; children: ReactNode; className?: string }) => (
+    <a className={className} href={Object.entries(params ?? {}).reduce((href, [key, value]) => href.replace(`$${key}`, value), to)}>{children}</a>
+  ),
 }));
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ symbol: "৳", fmt: (value: number) => `৳${value}` }) }));
 vi.mock("~/lib/api-query-options/orders", () => ({
@@ -29,7 +31,7 @@ const order = {
   subtotalAmountMinor: 240_000, shippingAmountMinor: 0, discountAmountMinor: 28_500, taxAmountMinor: 0, totalAmountMinor: 211_500,
   shippingMethodName: "Standard delivery", shippingMethodBaseAmountMinor: 6_000, shippingFeeWaived: true,
   discounts: [{
-    promotionId: "promo_1", name: "Amount off order", code: "R2MKTORD15", method: "code", kind: "order",
+    source: "promotion", appId: null, appName: null, promotionId: "promo_1", name: "Amount off order", code: "R2MKTORD15", method: "code", kind: "order",
     amount: 285, shippingAmount: 0,
   }],
 } as unknown as Order;
@@ -41,8 +43,8 @@ const withDeliveryCode = {
   shippingAmountMinor: 8_000, discountAmountMinor: 36_500, totalAmountMinor: 211_500,
   shippingMethodBaseAmountMinor: 8_000, shippingFeeWaived: false,
   discounts: [
-    { promotionId: "promo_1", name: "Amount off order", code: "R2MKTORD15", method: "code", kind: "order", amount: 285, shippingAmount: 0 },
-    { promotionId: "promo_2", name: "Free delivery", code: "FREESHIP", method: "code", kind: "shipping", amount: 80, shippingAmount: 80 },
+    { source: "promotion", appId: null, appName: null, promotionId: "promo_1", name: "Amount off order", code: "R2MKTORD15", method: "code", kind: "order", amount: 285, shippingAmount: 0 },
+    { source: "promotion", appId: null, appName: null, promotionId: "promo_2", name: "Free delivery", code: "FREESHIP", method: "code", kind: "shipping", amount: 80, shippingAmount: 80 },
   ],
 } as unknown as Order;
 
@@ -117,10 +119,43 @@ describe("OrderSummaryCard", () => {
       totalAmount: 2155, discountAmount: 325, discountAmountMinor: 32_500, totalAmountMinor: 215_500,
       discounts: [
         withDeliveryCode.discounts[0]!,
-        { promotionId: "promo_3", name: "Half-price delivery", code: null, method: "automatic", kind: "shipping", amount: 40, shippingAmount: 40 },
+        { source: "promotion", appId: null, appName: null, promotionId: "promo_3", name: "Half-price delivery", code: null, method: "automatic", kind: "shipping", amount: 40, shippingAmount: 40 },
       ],
     } as unknown as Order);
     const delivery = rows().find((row) => row.startsWith("Delivery"))!;
     expect(delivery).toMatch(/৳80\.00 ৳40\.00 \(Half-price delivery\)$/);
+  });
+
+  it("names an app's discount with its app, links the app, keeps its delivery part on the delivery line and adds up", async () => {
+    const app = { source: "app", promotionId: null, appId: "acme.bulk", appName: "Bulk discount" } as const;
+    // ৳2,400 of items + ৳80 delivery − ৳285 promotion − ৳120 app (BULK10) − ৳80 app free delivery = ৳1,995.
+    await render([], {
+      ...withDeliveryCode,
+      totalAmount: 1995, discountAmount: 485, discountAmountMinor: 48_500, totalAmountMinor: 199_500,
+      discounts: [
+        withDeliveryCode.discounts[0]!,
+        { ...app, name: "Bulk savings", code: "BULK10", method: "code", kind: "order", amount: 120, shippingAmount: 0 },
+        { ...app, name: "Free delivery", code: null, method: "automatic", kind: "shipping", amount: 80, shippingAmount: 80 },
+      ],
+    } as unknown as Order);
+    const summary = rows();
+
+    expect(summary.find((row) => row.startsWith("Delivery"))).toMatch(/৳80\.00 Free \(Free delivery\)$/);
+    expect(summary.filter((row) => row.startsWith(en["summary.discount"]))).toEqual([
+      "Discount · Amount off order (R2MKTORD15)−৳285.00",
+      "Discount · Bulk savings (BULK10) · from Bulk discount−৳120.00",
+    ]);
+    const links = [...host.querySelectorAll("dl a")].map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(links).toEqual([
+      ["Amount off order (R2MKTORD15)", "/admin/discounts/promo_1"],
+      ["Bulk discount", "/admin/apps/acme.bulk"],
+    ]);
+
+    const subtotal = amountIn(summary.find((row) => row.startsWith(en["summary.subtotal"]))!);
+    const discounts = summary.filter((row) => row.startsWith(en["summary.discount"])).map(amountIn);
+    const total = amountIn(summary.find((row) => row.startsWith(en["summary.total"]))!);
+    // Delivery is free, so subtotal − item discounts is the total.
+    expect(subtotal + discounts.reduce((sum, value) => sum + value, 0)).toBeCloseTo(total, 2);
+    expect(total).toBe(1995);
   });
 });

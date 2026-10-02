@@ -37,8 +37,10 @@ import { formatMoney } from "@/lib/currency";
 import { productImageSources } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
-import type { CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
-import type { CartValidationIssue } from "@/lib/api/orders";
+import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
+import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
+import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
+import { groupCartRuleErrors } from "@/lib/cart/rule-errors";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
@@ -128,6 +130,8 @@ export function setCartOpen(value: boolean) {
 function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
   const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
+  /** Store app rules that block checkout, in the app's own words. */
+  const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
   useEffect(() => {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
@@ -153,10 +157,11 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
         }),
       })
         .then((response) => response.json())
-        .then((json: { data?: { issues?: CartValidationIssue[] }; details?: { itemIssues?: CartValidationIssue[] } }) => {
+        .then((json: { data?: { issues?: CartValidationIssue[]; ruleErrors?: unknown }; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
+          setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
         })
         .catch(() => undefined);
     }, 300);
@@ -165,17 +170,24 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       window.clearTimeout(timer);
     };
   }, [cart.items, cart.discountCodes, isOpen]);
-  return { discounts: Object.keys(cart.items).length > 0 ? discounts : null, issues };
+  return { discounts: Object.keys(cart.items).length > 0 ? discounts : null, issues, ruleErrors };
 }
 
 export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, issues } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, issues, ruleErrors } = useDrawerCartFacts(cart, isOpen);
   const recommendations = useCartRecommendations(cart, isOpen);
-  // A line that can't be bought as is blocks Checkout here, like on the cart page.
+  // A line that can't be bought as is blocks Checkout here, like on the cart page,
+  // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
-  const checkoutBlocked = lineIssues.length > 0;
+  const rules = groupCartRuleErrors(ruleErrors, cart.items);
+  const cartRuleMessages = rules.cart.map(({ message }) => message).filter(Boolean);
+  const checkoutBlocked =
+    lineIssues.length > 0 || Object.keys(rules.lines).length > 0 || rules.cart.length > 0;
+  const blockedText = cartRuleMessages.length > 0 && lineIssues.length === 0 && Object.keys(rules.lines).length === 0
+    ? cartRuleMessages.join(" ")
+    : "Fix the highlighted items to check out.";
   // Shopify's drawer: discounts listed above, the total already net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
@@ -526,6 +538,11 @@ export default function CartFlyout({ onReady }: Props) {
                               ) : null}
                             </div>
                           )}
+                          {(rules.lines[key] ?? []).map((rule, position) => (
+                            <p key={`${rule.code}:${position}`} className="text-xs font-medium text-destructive" role="alert">
+                              {rule.message}
+                            </p>
+                          ))}
                         </div>
 
                         {/* Price */}
@@ -643,8 +660,8 @@ export default function CartFlyout({ onReady }: Props) {
         {/* Savings and offers the cart already qualifies for */}
         {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
-            {discounts.discounts.filter((line) => line.amount > 0).map((line) => (
-              <div key={line.promotionId} className="flex justify-between gap-3 text-primary">
+            {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
+              <div key={key} className="flex justify-between gap-3 text-primary">
                 <span className="min-w-0">{formatDiscountLineLabel("Discount", line)}</span>
                 <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
               </div>
@@ -698,7 +715,7 @@ export default function CartFlyout({ onReady }: Props) {
                 </div>
               </div>
               {checkoutBlocked && (
-                <p className="text-sm text-destructive" role="status">Fix the highlighted items to check out.</p>
+                <p className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
               <Button
                 disabled={checkoutBlocked}
@@ -732,7 +749,7 @@ export default function CartFlyout({ onReady }: Props) {
 
             {/* Mobile Footer */}
             {checkoutBlocked && (
-              <p id="drawerCheckoutBlocked" className="px-1 pb-1 text-xs text-destructive sm:hidden" role="status">Fix the highlighted items to check out.</p>
+              <p id="drawerCheckoutBlocked" className="px-1 pb-1 text-xs text-destructive sm:hidden" role="status">{blockedText}</p>
             )}
             <div className="flex sm:hidden items-center gap-3 px-1 pb-1">
               {/* Left: Total */}

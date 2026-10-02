@@ -12,16 +12,22 @@
  * - none: nothing to choose (nothing physical in the cart).
  * Other cart code reads the choice from `window.lastShippingEventDetail` and
  * the `shippingLocationChange` event (detail `null` while nothing applies).
+ *
+ * A store app may change the options for this cart: the quote then lists the
+ * ones to show (`applyQuotedRates`), in its order, with its names and fees.
  */
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import type { ShippingMethod } from "@/lib/api";
 import type { CheckoutDeliveryMode } from "./delivery-mode";
+import type { QuotedShippingRate } from "./tax-quote-contract";
 
 export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description"> & {
   freeOver: number | null;
   kind: "delivery" | "pickup";
   pickupAddress: string | null;
   pickupHours: string | null;
+  /** Name and fee come from the quote (a store app changed them): the fee is what the buyer pays. */
+  quoted?: true;
 };
 
 export interface ShippingMethodDetail {
@@ -34,6 +40,28 @@ export interface ShippingMethodDetail {
   /** Pickup rates: where and when to collect. */
   pickupAddress?: string | null;
   pickupHours?: string | null;
+  /** The fee is the quote's (a store app priced this option): no free-over threshold applies. */
+  quoted?: true;
+}
+
+/**
+ * The options as a store app left them on the quote: only the ones it lists,
+ * in its order, with its names and fees (what the buyer pays, so no free-over
+ * threshold is left to apply). An option this path does not offer is never
+ * added. Null (no app changed them) leaves the options as they are.
+ */
+export function overlayQuotedRates<Rate extends { id: string; name: string; fee: number }>(
+  rates: readonly Rate[],
+  quoted: readonly QuotedShippingRate[] | null,
+): Array<Rate | (Rate & { freeOver: null; quoted: true })> {
+  if (!quoted) return [...rates];
+  const byId = new Map(rates.map((rate) => [rate.id, rate]));
+  return quoted.flatMap((entry) => {
+    const rate = byId.get(entry.id);
+    return rate
+      ? [{ ...rate, name: entry.name, fee: entry.amount, freeOver: null, quoted: true as const }]
+      : [];
+  });
 }
 
 export interface DeliveryAddress {
@@ -128,8 +156,14 @@ export function enhanceShippingMethods(
   setAddress(address: Partial<DeliveryAddress>): Promise<void>;
   /** The buyer switched Delivery/Pickup, or the cart gained or lost its last physical line. */
   setMode(mode: CheckoutDeliveryMode): Promise<void>;
-  /** The checkout refused the chosen rate: drop it, re-read the address's rates and say what changed. */
-  rejectSelected(): Promise<void>;
+  /**
+   * The checkout refused the chosen rate: drop it, re-read the address's rates
+   * and say what changed. When a store app hid it, `shippingRates` are the
+   * options still offered and the first of them is chosen.
+   */
+  rejectSelected(shippingRates?: QuotedShippingRate[] | null): Promise<void>;
+  /** The latest quote's options when a store app changed them, or null to show the store's own. */
+  applyQuotedRates(shippingRates: QuotedShippingRate[] | null): void;
   /**
    * Before placing the order: re-reads the address's rates and, when the chosen
    * rate is gone or its fee changed, shows what changed and returns true so the
@@ -178,6 +212,9 @@ export function enhanceShippingMethods(
   const addressFreeRates = () => (mode === "pickup" || !hasModeSwitch ? pickupRates : []);
 
   let rates: DeliveryRate[] = mode === "none" ? [] : addressFreeRates();
+  /** The options a store app left on the latest quote; null shows `rates` as read. */
+  let overlay: QuotedShippingRate[] | null = null;
+  const shown = (): DeliveryRate[] => overlayQuotedRates(rates, overlay);
   let selectedId: string | null = null;
   let preferredId: string | null = options.readDraftMethod() ?? null;
   let address: DeliveryAddress = { cityId: "", zoneId: "", areaId: "" };
@@ -188,7 +225,7 @@ export function enhanceShippingMethods(
   let announced: string | undefined;
 
   const emit = () => {
-    const rate = rates.find((candidate) => candidate.id === selectedId) ?? null;
+    const rate = shown().find((candidate) => candidate.id === selectedId) ?? null;
     const detail: ShippingMethodDetail | null = rate
       ? {
           id: rate.id,
@@ -199,6 +236,7 @@ export function enhanceShippingMethods(
           ...(rate.kind === "pickup"
             ? { pickupAddress: rate.pickupAddress, pickupHours: rate.pickupHours }
             : {}),
+          ...(rate.quoted ? { quoted: true as const } : {}),
         }
       : null;
     window.lastShippingEventDetail = detail ?? undefined;
@@ -229,6 +267,10 @@ export function enhanceShippingMethods(
   };
 
   const feeFacts = (rate: DeliveryRate) => {
+    // The quote's fee is what the buyer pays: nothing left to explain.
+    if (rate.quoted) {
+      return { label: rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee), note: "" };
+    }
     const subtotal = options.readSubtotal();
     if (options.isFeeWaived() && rate.fee > 0) {
       return {
@@ -248,8 +290,9 @@ export function enhanceShippingMethods(
   };
 
   const refreshFees = () => {
+    const current = shown();
     for (const option of list.querySelectorAll<HTMLElement>("[data-rate-id]")) {
-      const rate = rates.find((candidate) => candidate.id === option.dataset.rateId);
+      const rate = current.find((candidate) => candidate.id === option.dataset.rateId);
       if (!rate) continue;
       const facts = feeFacts(rate);
       const label = option.querySelector<HTMLElement>("[data-fee-label]");
@@ -285,7 +328,7 @@ export function enhanceShippingMethods(
 
   const render = () => {
     list.removeAttribute("aria-busy");
-    list.replaceChildren(...rates.map((rate) => {
+    list.replaceChildren(...shown().map((rate) => {
       const option = document.createElement("label");
       option.dataset.rateId = rate.id;
       option.className = `${OPTION_HEIGHT} flex cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring`;
@@ -337,9 +380,10 @@ export function enhanceShippingMethods(
   /** Keep the buyer's choice while it applies; otherwise the first rate of the path. */
   const choose = () => {
     const wanted = selectedId ?? preferredId;
-    selectedId = rates.some((rate) => rate.id === wanted)
+    const current = shown();
+    selectedId = current.some((rate) => rate.id === wanted)
       ? wanted
-      : rates.find((rate) => rate.kind === (mode === "pickup" ? "pickup" : "delivery"))?.id ?? null;
+      : current.find((rate) => rate.kind === (mode === "pickup" ? "pickup" : "delivery"))?.id ?? null;
   };
 
   /** Says, next to the options, how the buyer's delivery changed. */
@@ -354,12 +398,12 @@ export function enhanceShippingMethods(
     if (message) container.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
 
-  const selectedRate = () => rates.find((rate) => rate.id === selectedId) ?? null;
+  const selectedRate = () => shown().find((rate) => rate.id === selectedId) ?? null;
 
   /** What changed between the rate the buyer chose and the rates now offered. */
   const describeChange = (previous: DeliveryRate): string => {
     const money = (rate: DeliveryRate) => rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee);
-    const now = rates.find((rate) => rate.id === previous.id);
+    const now = shown().find((rate) => rate.id === previous.id);
     if (now) {
       return now.fee === previous.fee
         ? ""
@@ -388,7 +432,7 @@ export function enhanceShippingMethods(
       !rejected.has(rate.id) && (!hasModeSwitch || rate.kind === "delivery"));
     choose();
     render();
-    setNote(rates.some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+    setNote(shown().some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
   };
 
   const load = async (force = false) => {
@@ -408,9 +452,10 @@ export function enhanceShippingMethods(
     if (mode === "pickup" || !hasAddress) {
       rates = addressFreeRates().filter((rate) => !rejected.has(rate.id));
       delete list.dataset.addressKey;
-      const keptId = [selectedId, preferredId].find((id) => rates.some((rate) => rate.id === id));
+      const current = shown();
+      const keptId = [selectedId, preferredId].find((id) => current.some((rate) => rate.id === id));
       // A single pickup location is simply chosen.
-      selectedId = keptId ?? (mode === "pickup" && rates.length === 1 ? rates[0]!.id : null);
+      selectedId = keptId ?? (mode === "pickup" && current.length === 1 ? current[0]!.id : null);
       render();
       setNote("");
       if (mode !== "pickup") list.append(placeholder(copy.chooseAddressText));
@@ -428,7 +473,7 @@ export function enhanceShippingMethods(
     if (!loaded) {
       rates = addressFreeRates();
       delete list.dataset.addressKey;
-      if (!rates.some((rate) => rate.id === selectedId)) selectedId = null;
+      if (!shown().some((rate) => rate.id === selectedId)) selectedId = null;
       render();
       setNote(copy.failedText, true);
       emit();
@@ -454,6 +499,8 @@ export function enhanceShippingMethods(
     setMode(next) {
       if (next === mode) return Promise.resolve();
       mode = next;
+      // A quote's options belong to the path it priced.
+      overlay = null;
       showNotice("");
       // The other path's choice no longer applies; a rate chosen earlier on
       // this path comes back through the draft preference.
@@ -469,18 +516,46 @@ export function enhanceShippingMethods(
         areaId: next.areaId ?? "",
       };
       if (nextAddress.cityId !== address.cityId || nextAddress.zoneId !== address.zoneId) rejected.clear();
+      // A quote's options belong to the address it priced.
+      if (addressKey(nextAddress) !== addressKey(address)) overlay = null;
       address = nextAddress;
       showNotice("");
       return load();
     },
-    async rejectSelected() {
+    async rejectSelected(shippingRates = null) {
       const previous = selectedRate();
-      if (selectedId) rejected.add(selectedId);
+      if (shippingRates) {
+        // A store app hid it: the options it left are the ones to show (never the refused one).
+        overlay = shippingRates.filter((rate) => rate.id !== selectedId);
+      } else if (selectedId) {
+        rejected.add(selectedId);
+      }
       selectedId = null;
       await load(true);
       if (previous) showNotice(describeChange(previous));
     },
+    applyQuotedRates(shippingRates) {
+      // Nothing to show on this path; or another address's options are
+      // loading, so this quote is about the address the buyer left (the new
+      // options are quoted, and answered, once they arrive).
+      if (mode === "none" || list.getAttribute("aria-busy") === "true") return;
+      if (JSON.stringify(shippingRates) === JSON.stringify(overlay)) return;
+      overlay = shippingRates;
+      choose();
+      render();
+      if (mode === "delivery") {
+        if (address.cityId && address.zoneId) {
+          setNote(shown().some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+        } else {
+          list.append(placeholder(copy.chooseAddressText));
+        }
+      }
+      emit();
+    },
     async recheck() {
+      // The quote priced the options a store app changed, and placing the
+      // order checks that quote: there is no older fee to compare here.
+      if (overlay) return false;
       const previous = selectedRate();
       // Pickup rates need no address; the checkout verifies them itself.
       if (mode !== "delivery" || !previous || !address.cityId || !address.zoneId) return false;

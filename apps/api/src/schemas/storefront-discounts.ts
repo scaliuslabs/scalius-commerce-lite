@@ -6,6 +6,7 @@ import {
   type StorefrontDiscountQuote,
 } from "@scalius/core/modules/promotions";
 import { fromMinor } from "@scalius/shared/money";
+import type { AppliedAppDiscount } from "@scalius/core/modules/checkout";
 
 /** Codes the buyer applied, in the order they typed them. */
 export const discountCodesSchema = z
@@ -15,7 +16,8 @@ export const discountCodesSchema = z
   .openapi({ description: "Discount codes the buyer applied. Codes of different discount classes combine when either allows it." });
 
 export const appliedDiscountLineSchema = z.object({
-  promotionId: z.string(),
+  promotionId: z.string().nullable().openapi({ description: "Null for a discount an installed app gave (then `appId` is set)." }),
+  appId: z.string().nullable().openapi({ description: "The app that gave the discount; null for the store's own. App discounts apply after the store's." }),
   title: z.string(),
   code: z.string().nullable(),
   amount: z.number().openapi({ description: "Off the items: shown as a discount line." }),
@@ -40,6 +42,7 @@ export const orderDiscountLineSchema = appliedDiscountLineSchema.extend({
 export function presentOrderDiscountLines(lines: OrderDiscountLine[], decimalPlaces: number) {
   return lines.map((line) => ({
     promotionId: line.promotionId,
+    appId: line.appId,
     title: line.title,
     code: line.code,
     kind: line.kind,
@@ -100,14 +103,32 @@ function presentOffer(offer: StorefrontDiscountOffer, decimalPlaces: number) {
   };
 }
 
-/** The buyer-facing discount facts of a quote, in the decimal HTTP contract. */
-export function presentStorefrontDiscountQuote(quote: StorefrontDiscountQuote, decimalPlaces: number) {
+/**
+ * The buyer-facing discount facts of a quote, in the decimal HTTP contract:
+ * the store's discounts, then the apps' (in the order they applied).
+ */
+export function presentStorefrontDiscountQuote(
+  quote: StorefrontDiscountQuote,
+  decimalPlaces: number,
+  appDiscounts: readonly AppliedAppDiscount[] = [],
+) {
   return {
-    discounts: quote.discounts.map(({ amountMinor, shippingAmountMinor, ...line }) => ({
-      ...line,
-      amount: fromMinor(amountMinor, decimalPlaces),
-      shippingAmount: fromMinor(shippingAmountMinor, decimalPlaces),
-    })),
+    discounts: [
+      ...quote.discounts.map(({ amountMinor, shippingAmountMinor, ...line }) => ({
+        ...line,
+        appId: null,
+        amount: fromMinor(amountMinor, decimalPlaces),
+        shippingAmount: fromMinor(shippingAmountMinor, decimalPlaces),
+      })),
+      ...appDiscounts.map((discount) => ({
+        promotionId: null,
+        appId: discount.pluginId,
+        title: discount.title,
+        code: discount.code,
+        amount: fromMinor(discount.amountMinor, decimalPlaces),
+        shippingAmount: fromMinor(discount.shippingAmountMinor, decimalPlaces),
+      })),
+    ],
     offers: quote.offers.map((offer) => presentOffer(offer, decimalPlaces)),
     rejectedCodes: quote.rejectedCodes.map(({ shortfallMinor, offer, ...rejection }) => ({
       ...rejection,

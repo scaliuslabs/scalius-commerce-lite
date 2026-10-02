@@ -1,18 +1,22 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import type { CartValidationIssue } from "@/lib/api/orders";
+import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { apiFetch } from "@/lib/api/transport";
 import {
   normalizeTaxQuoteRequest,
   parseTaxQuoteEnvelope,
   TAX_QUOTE_MAX_REQUEST_BYTES,
   TAX_QUOTE_MAX_RESPONSE_BYTES,
+  type QuotedShippingRate,
 } from "@/lib/checkout/tax-quote-contract";
 import {
+  CART_RULES_REASON,
+  cartRuleRefusal,
   DELIVERY_LOCATION_UNAVAILABLE_REASON,
   DELIVERY_RATE_UNAVAILABLE_REASON,
   isDeliveryRateUnavailable,
   parseTaxQuoteCartIssues,
+  refusedDeliveryRates,
   unavailableDeliveryLocation,
   type DeliveryLocationLevel,
 } from "@/lib/checkout/tax-quote-error-contract";
@@ -152,7 +156,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!upstream.ok) {
       let itemIssues: CartValidationIssue[] = [];
+      let ruleErrors: CartRuleError[] | null = null;
       let deliveryRateUnavailable = false;
+      let visibleRates: QuotedShippingRate[] | null = null;
       let locationGone: DeliveryLocationLevel | null = null;
       try {
         const text = await readBoundedBody(
@@ -161,7 +167,9 @@ export const POST: APIRoute = async ({ request }) => {
         );
         const payload = JSON.parse(text);
         itemIssues = parseTaxQuoteCartIssues(payload);
+        ruleErrors = cartRuleRefusal(payload);
         deliveryRateUnavailable = isDeliveryRateUnavailable(payload);
+        visibleRates = refusedDeliveryRates(payload);
         locationGone = unavailableDeliveryLocation(payload);
       } catch {
         itemIssues = [];
@@ -172,8 +180,16 @@ export const POST: APIRoute = async ({ request }) => {
           error: "Current checkout total is unavailable",
           ...(itemIssues.length > 0
             ? { details: { itemIssues } }
+            : ruleErrors
+              ? { details: { reason: CART_RULES_REASON, ruleErrors } }
             : deliveryRateUnavailable
-              ? { details: { reason: DELIVERY_RATE_UNAVAILABLE_REASON } }
+              ? {
+                  details: {
+                    reason: DELIVERY_RATE_UNAVAILABLE_REASON,
+                    // The options still offered, when a store app hid the chosen one.
+                    ...(visibleRates ? { shippingRates: visibleRates } : {}),
+                  },
+                }
               : locationGone
                 ? { details: { reason: DELIVERY_LOCATION_UNAVAILABLE_REASON, field: locationGone } }
                 : {}),

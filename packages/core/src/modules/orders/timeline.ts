@@ -1,9 +1,10 @@
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
 import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "./admin/create-attempts";
+import { ORDER_APP_FACT_KINDS } from "./app-facts";
 
 /** What happened to an order. The dashboard words each kind; `data` carries the facts. */
 export const ORDER_EVENT_KINDS = [
@@ -220,7 +221,8 @@ export async function listOrderTimeline(
         createdAt: orderEvents.createdAt,
     }).from(orderEvents)
         .leftJoin(user, eq(user.id, orderEvents.actorId))
-        .where(eq(orderEvents.orderId, orderId))
+        // App facts (discounts, risk checks) show in the summary and customer card, not here.
+        .where(and(eq(orderEvents.orderId, orderId), notInArray(orderEvents.kind, [...ORDER_APP_FACT_KINDS])))
         .orderBy(desc(orderEvents.createdAt), desc(orderEvents.id))
         .limit(200)
         .all();

@@ -1,4 +1,5 @@
-import type { CartValidationIssue } from "../api/orders";
+import type { CartRuleError, CartValidationIssue } from "../api/orders";
+import { parseCartRuleErrors } from "../checkout/tax-quote-error-contract";
 
 export const CHECKOUT_CART_REPAIR_STORAGE_KEY = "scalius_cart_repair_state";
 const REPAIR_STATE_MAX_AGE_MS = 5 * 60 * 1000;
@@ -7,6 +8,8 @@ export interface CartRepairState {
   source: "checkout" | "cart";
   message: string;
   issues: CartValidationIssue[];
+  /** Store app rules that blocked the order (absent when none did). */
+  ruleErrors?: CartRuleError[];
   createdAt: number;
 }
 
@@ -46,11 +49,13 @@ function parseCartRepairState(raw: string | null, now: number): CartRepairState 
     const issues = Array.isArray(parsed.issues)
       ? parsed.issues.filter(isCartValidationIssue)
       : [];
+    const ruleErrors = parseCartRuleErrors(parsed.ruleErrors);
 
     return {
       source: parsed.source,
       message: parsed.message,
       issues,
+      ...(ruleErrors.length > 0 ? { ruleErrors } : {}),
       createdAt: parsed.createdAt,
     };
   } catch {

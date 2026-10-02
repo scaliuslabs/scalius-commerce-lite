@@ -5,6 +5,8 @@
 // behaviour as the bundled loader: storage, KV, the /api/v1 call as the plugin
 // principal, routes, cron and the checkout function. Plus what only a sandbox
 // can prove: direct fetch is impossible and a tampered bundle never loads.
+// And scalius.bulk-discount priced into a real checkout with Hello's discount
+// stacked after it, each app in its own isolate.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -75,6 +77,15 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
     sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
       VALUES ('ord_box1', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'confirmed')`).run();
+    sqlite.exec(`
+      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+      VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'Gulshan', 'zone', 'city_1', '{}', '{}', 1);
+      INSERT INTO shipping_methods (id, name, fee_minor, kind) VALUES ('m_std', 'Standard', 6000, 'delivery');
+      INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p_tea', 'Assam tea', 'assam-tea', 50000, 1);
+      INSERT INTO product_variants
+        (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
+      VALUES ('v_tea', 'p_tea', 'TEA-250', 50000, 500, 0, 0, 1, 1, 'physical');
+    `);
 
     // The harness Worker: the real host code, bundled the way the API is.
     workdir = mkdtempSync(join(tmpdir(), "scalius-plugin-sandbox-"));
@@ -133,6 +144,15 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     });
     await activatePlugin(db, "scalius.hello", { actorUserId: "owner", expectedRevision: configured.revision });
 
+    // The Bulk discount example app, packed and stored the same way.
+    const bulk = await packPlugin("plugins/bulk-discount");
+    await bucket.put(pluginBundleKey("scalius.bulk-discount", bulk.version, bulk.sha256), bulk.code);
+    const bulkInstalled = await installPlugin(db, { manifest: bulk.manifest, source: "registry", bundleSha256: bulk.sha256, actorUserId: "owner" });
+    const bulkConfigured = await writePluginSettings(db, "scalius.bulk-discount", {
+      title: "Bulk savings", tier1_quantity: 3, tier1_percent: 5, max_quantity_per_line: 10,
+    }, { expectedRevision: bulkInstalled.revision, credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY });
+    await activatePlugin(db, "scalius.bulk-discount", { actorUserId: "owner", expectedRevision: bulkConfigured.revision });
+
     const probeSha = sha256(PROBE_CODE);
     await bucket.put(pluginBundleKey("acme.probe", "1.0.0", probeSha), PROBE_CODE);
     await installPlugin(db, {
@@ -176,8 +196,31 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(await send({ action: "cron", pluginId: "scalius.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
       .toEqual({ ok: true, value: null, error: null });
     expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toBeNull();
+    // Every active implementation answers, in priority then id order (one unit: no bulk tier).
     expect(await send({ action: "function", pluginId: "scalius.hello", point: "checkout.discounts", input: { cart: testCart(5000) } }))
-      .toEqual([{ pluginId: "scalius.hello", priority: 100, output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 20 } }] } }]);
+      .toEqual([
+        { pluginId: "scalius.bulk-discount", priority: 100, output: { discounts: [] } },
+        { pluginId: "scalius.hello", priority: 100, output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 20 } }] } },
+      ]);
+  });
+
+  it("prices a real checkout with the bulk discount's functions in their isolate, Hello's discount stacked after it", async () => {
+    const order = {
+      items: [{ productId: "p_tea", variantId: "v_tea", quantity: 4, price: 500 }],
+      inventoryPool: "regular", city: "city_1", zone: "zone_1", area: null, shippingMethodId: "m_std",
+      customerPhone: "+8801712345678", discountCodes: [],
+    };
+    const priced = await send({ action: "price", pluginId: "scalius.bulk-discount", input: order });
+    expect(priced.points).toEqual(["cart.validate", "checkout.discounts"]);
+    // Bulk (priority 100, "scalius.bulk-discount" sorts first): 5% of ৳2,000 = ৳100;
+    // then Hello's 20% of the ৳1,900 left = ৳380.
+    expect(priced.appDiscounts.map((entry: { pluginId: string; amountMinor: number }) => [entry.pluginId, entry.amountMinor])).toEqual([
+      ["scalius.bulk-discount", 10_000],
+      ["scalius.hello", 38_000],
+    ]);
+    expect(priced).toMatchObject({ ruleErrors: [], discountMinor: 48_000, totalMinor: 200_000 + 6_000 - 48_000 });
+    const blocked = await send({ action: "price", pluginId: "scalius.bulk-discount", input: { ...order, items: [{ ...order.items[0], quantity: 11 }] } });
+    expect(blocked.ruleErrors).toEqual([{ code: "max_quantity", message: "You can buy at most 10 of this item in one order.", index: 0, cartKey: null }]);
   });
 
   it("gives the isolate no network: direct fetch fails and the bridge refuses undeclared hosts", async () => {

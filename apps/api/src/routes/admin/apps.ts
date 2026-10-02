@@ -28,6 +28,7 @@ import {
 import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permissions";
 import {
   PLUGIN_ID_PATTERN,
+  PLUGIN_FUNCTION_POINTS,
   PLUGIN_SETTING_TYPES,
   pluginGrantAdditions,
   pluginGrantKey,
@@ -99,6 +100,10 @@ const appSummarySchema = z.object({
   installedAt: z.string(),
   activatedAt: z.string().nullable(),
   updatedAt: z.string(),
+  functions: z.array(z.object({
+    point: z.enum(PLUGIN_FUNCTION_POINTS),
+    priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
+  })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
 const settingValueSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]);
@@ -213,6 +218,7 @@ function summary(installation: PluginInstallation) {
     installedAt: iso(installation.installedAt),
     activatedAt: isoOrNull(installation.activatedAt),
     updatedAt: iso(installation.updatedAt),
+    functions: manifest.functions.map((fn) => ({ point: fn.point, priority: fn.priority })),
   };
 }
 

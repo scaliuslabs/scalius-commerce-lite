@@ -50,6 +50,24 @@ describe("order discount summary", () => {
     }).lines).toEqual([{ label: "Discount · Eid (EID10)", amount: 100.1 }, { label: "Discount", amount: 50.2 }]);
   });
 
+  it("lists a store app's discount (no promotion) on the receipt like any other", () => {
+    const summary = summarizeOrderDiscounts({
+      discounts: [
+        discount({ title: "Eid sale", amount: 50 }),
+        discount({ promotionId: null, appId: "app_loyalty", title: "Loyalty reward", kind: "order", amount: 30 }),
+        discount({ promotionId: null, appId: "app_loyalty", title: "App delivery", kind: "shipping", shippingAmount: 60 }),
+      ],
+      shipping: 60,
+      discount: 140,
+      discountText: "Discount",
+    });
+    expect(summary.lines).toEqual([
+      { label: "Discount · Eid sale", amount: 50 },
+      { label: "Discount · Loyalty reward", amount: 30 },
+    ]);
+    expect(summary.delivery).toEqual({ fee: 60, charged: 0, codes: "App delivery" });
+  });
+
   it("strikes through a waived fee: the method's fee stands, nothing is charged", () => {
     const summary = summarizeOrderDiscounts({ discounts: undefined, shipping: 0, deliveryFee: 80, discount: 0, discountText: "Discount" });
     expect(summary).toEqual({ delivery: { fee: 80, charged: 0, codes: "" }, lines: [] });

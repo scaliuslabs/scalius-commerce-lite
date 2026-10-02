@@ -87,10 +87,39 @@ export default {
       import("../functions"),
     ]);
     const command = await request.json() as {
-      action: "event" | "function" | "route" | "cron" | "lifecycle" | "deliver";
+      action: "event" | "function" | "route" | "cron" | "lifecycle" | "deliver" | "price";
       pluginId: string;
       [key: string]: unknown;
     };
+    if (command.action === "price") {
+      // A checkout priced the way the quote and the order price it, with
+      // every active app's checkout functions (core checkout/pricing.ts).
+      const [{ listActiveFunctionRegistrations }, checkout, { createCheckoutAppFunctions }] = await Promise.all([
+        import("@scalius/core/modules/plugins"),
+        import("@scalius/core/modules/checkout"),
+        import("../checkout-functions"),
+      ]);
+      const data = command.input as Parameters<typeof checkout.loadStorefrontCheckoutAuthority>[1] & { discountCodes: string[] };
+      const read = await checkout.loadStorefrontCheckoutAuthority(db, data);
+      const apps = createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveFunctionRegistrations(db) });
+      const priced = await checkout.priceStorefrontCheckout(db, {
+        cartValidation: read.cartValidation,
+        delivery: read.deliveryPreflight,
+        discountCodes: data.discountCodes,
+        currency: { code: "BDT", decimalPlaces: 2 },
+        taxAuthority: read.taxAuthority,
+        apps,
+        channel: "online_store",
+        location: { city: data.city, zone: data.zone, area: data.area },
+      });
+      return Response.json({
+        points: [...apps.points].sort(),
+        appDiscounts: priced.appDiscounts,
+        ruleErrors: priced.ruleErrors,
+        discountMinor: priced.taxQuote.discountMinor,
+        totalMinor: priced.taxQuote.totalMinor,
+      });
+    }
     if (command.action === "deliver") {
       // The whole `plugins.deliver` consumer: claim, host, record.
       const { processPluginEventDelivery } = await import("../event-delivery");

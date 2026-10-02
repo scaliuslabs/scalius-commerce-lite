@@ -4,6 +4,12 @@
   "sandbox": false,
   "plugins": [
     {
+      "id": "scalius.bulk-discount",
+      "version": "0.1.0",
+      "source": "plugins/bulk-discount",
+      "sha256": "5dbf2cc5545c38de70b2e52d46f2b0e87670369bab2dd2527d1d9b9cd9157005"
+    },
+    {
       "id": "scalius.hello",
       "version": "0.2.0",
       "source": "plugins/hello",

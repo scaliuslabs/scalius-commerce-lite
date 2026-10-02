@@ -71,6 +71,7 @@ function summary(overrides: Record<string, unknown> = {}) {
     installedAt: "2026-10-01T08:00:00.000Z",
     activatedAt: null,
     updatedAt: "2026-10-01T08:00:00.000Z",
+    functions: [],
     ...overrides,
   };
 }
@@ -266,6 +267,27 @@ describe("Apps list", () => {
     expect(document.querySelector('a[href="/admin/apps/acme.erp"]')?.textContent).toContain("ERP sync");
   });
 
+  it("shows the checkout points each app implements, in checkout order", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() =>
+      ok({
+        apps: [
+          summary({
+            id: "acme.bulk",
+            name: "Bulk discount",
+            functions: [{ point: "order.risk", priority: 20 }, { point: "checkout.discounts", priority: 10 }],
+          }),
+          summary({ id: "acme.sms", name: "SMS alerts" }),
+        ],
+        sandboxAvailable: false,
+      }));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("SMS alerts"));
+
+    const [bulk, sms] = [...document.querySelectorAll("li")];
+    expect(bulk!.textContent).toMatch(/CheckoutDiscountsOrder risk/);
+    expect(sms!.textContent).not.toContain("Checkout");
+  });
+
   it("says what appears here when nothing is installed", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], sandboxAvailable: false }));
     await render(<AppsList />, VIEWER);
@@ -288,6 +310,34 @@ describe("App page", () => {
     expect(text()).toContain("Customers");
     // Nothing is marked new before the first approval.
     expect(text()).not.toContain("New");
+  });
+
+  it("lists its checkout functions in plain words with their priority, in checkout order", async () => {
+    await renderApp(
+      detail({
+        functions: [
+          { point: "order.risk", priority: 20 },
+          { point: "cart.validate", priority: 5 },
+          { point: "checkout.discounts", priority: 10 },
+        ],
+      }),
+      VIEWER,
+    );
+    expect(text()).toContain("Checkout functions");
+    expect(text()).toContain("the app with the lowest priority number runs first");
+    const rows = [...document.querySelectorAll("li")]
+      .map((row) => row.textContent ?? "")
+      .filter((row) => row.includes("Priority"));
+    expect(rows).toEqual([
+      "Checks carts before checkoutPriority 5",
+      "Adds discounts at checkoutPriority 10",
+      "Rates new orders' risk (advice only)Priority 20",
+    ]);
+  });
+
+  it("has no checkout functions section when the app implements none", async () => {
+    await renderApp(detail(), VIEWER);
+    expect(text()).not.toContain("Checkout functions");
   });
 
   it("marks what an update adds and explains the app waits for a Super Admin", async () => {
@@ -477,5 +527,13 @@ describe("App page", () => {
     expect(text()).toContain("দেখে চালু করুন");
     expect(text()).toContain("স্টোরের তথ্য");
     expect(text()).toContain("চেকআউটে ডিসকাউন্ট দেওয়া");
+  });
+
+  it("names checkout functions in Bangla", async () => {
+    setLocale("bn");
+    await renderApp(detail({ functions: [{ point: "checkout.shipping_rates", priority: 3 }] }), VIEWER);
+    expect(text()).toContain("চেকআউট ফাংশন");
+    expect(text()).toContain("ডেলিভারি অপশন বদলায়");
+    expect(text()).toContain("প্রায়োরিটি ৩");
   });
 });

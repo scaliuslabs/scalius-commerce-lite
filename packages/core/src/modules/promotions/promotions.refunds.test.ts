@@ -9,6 +9,7 @@ import {
 function createDb(
     allocations: Array<Record<string, unknown>>,
     items: Array<Record<string, unknown>>,
+    appFacts: Array<Record<string, unknown>> = [],
 ): Database {
     const allocationQuery = {
         from: vi.fn().mockReturnThis(),
@@ -19,10 +20,18 @@ function createDb(
         from: vi.fn().mockReturnThis(),
         where: vi.fn(async () => items),
     };
+    // The `app_discount` order facts (orders/app-facts.ts).
+    const appFactQuery = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        all: vi.fn(async () => appFacts),
+    };
     return {
         select: vi.fn()
             .mockReturnValueOnce(allocationQuery)
-            .mockReturnValueOnce(itemQuery),
+            .mockReturnValueOnce(itemQuery)
+            .mockReturnValueOnce(appFactQuery),
     } as unknown as Database;
 }
 
@@ -95,5 +104,30 @@ describe("promotion refund snapshots", () => {
             currencyCode: "BDT",
             orderDiscountAmountMinor: 80,
         })).rejects.toThrow("do not reconcile");
+    });
+
+    it("reconciles an app discount stacked on the promotion (the rest of each line's saved discount)", async () => {
+        const fact = (data: Record<string, unknown>) => ({ orderId: "order_1", kind: "app_discount", createdAt: 1, data: JSON.stringify(data) });
+        const db = createDb([{
+            id: "allocation_line",
+            orderItemId: "item_1",
+            target: "line",
+            currencyCode: "BDT",
+            discountAmountMinor: 70,
+        }], [{ id: "item_1", discountAmountMinor: 80 }], [
+            fact({ pluginId: "scalius.bulk-discount", appName: "Bulk discount", title: "Bulk", code: null, target: "lines", currencyCode: "BDT", amountMinor: 10, shippingAmountMinor: 0, lines: [{ orderItemId: "item_1", amountMinor: 10 }] }),
+            fact({ pluginId: "acme.ship", appName: "Ship", title: "Free delivery", code: null, target: "shipping", currencyCode: "BDT", amountMinor: 0, shippingAmountMinor: 30, lines: [] }),
+        ]);
+
+        await expect(readPromotionRefundSnapshot(db, {
+            orderId: "order_1",
+            currencyCode: "BDT",
+            orderDiscountAmountMinor: 110,
+        })).resolves.toEqual({
+            allocationCount: 1,
+            totalDiscountMinor: 110,
+            merchandiseDiscountMinor: 80,
+            shippingDiscountMinor: 30,
+        });
     });
 });

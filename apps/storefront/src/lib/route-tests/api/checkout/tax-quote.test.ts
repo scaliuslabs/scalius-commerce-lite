@@ -259,6 +259,80 @@ describe("checkout tax quote proxy", () => {
     });
   });
 
+  it("forwards a store app's bounded rules, never the upstream message", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Phone +8801700000000 blocked by app",
+        details: {
+          reason: "cart_rules",
+          ruleErrors: [
+            { code: "max_qty", message: "At most 10 per order.", index: 0, cartKey: "line_1", appSecret: "x" },
+            { code: "min_total", message: "Spend ৳500 to check out.", index: null, cartKey: null },
+          ],
+        },
+      },
+    }), { status: 400 }));
+
+    const response = await POST({ request: storefrontRequest(requestPayload()) } as never);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: {
+        reason: "cart_rules",
+        ruleErrors: [
+          { code: "max_qty", message: "At most 10 per order.", index: 0, cartKey: "line_1" },
+          { code: "min_total", message: "Spend ৳500 to check out.", index: null, cartKey: null },
+        ],
+      },
+    });
+  });
+
+  it("forwards the options still offered when a store app hid the chosen one", async () => {
+    const shippingRates = [{ id: "ship_2", name: "Standard", kind: "delivery", amount: 60, amountMinor: 6_000 }];
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: { code: "VALIDATION_ERROR", details: { reason: "delivery_rate_unavailable", shippingRates } },
+    }), { status: 400 }));
+
+    const response = await POST({ request: storefrontRequest(requestPayload()) } as never);
+
+    expect(await response.json()).toEqual({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { reason: "delivery_rate_unavailable", shippingRates },
+    });
+  });
+
+  it("passes a quote's app options, methods and discount lines through", async () => {
+    const envelope = quoteEnvelope();
+    const data = envelope.data as Record<string, unknown>;
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...envelope,
+      data: {
+        ...data,
+        shippingRates: [{ id: "ship_1", name: "Standard delivery", kind: "delivery", amount: 50, amountMinor: 5_000 }],
+        paymentMethods: [{ id: "cod", name: "Pay at the door" }],
+        discounts: [{ promotionId: null, appId: "app_1", title: "Loyalty", code: null, amount: 20, shippingAmount: 0 }],
+      },
+    }), { status: 200 }));
+
+    const response = await POST({ request: storefrontRequest(requestPayload()) } as never);
+    const body = await response.json() as { data: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    expect(body.data.shippingRates).toEqual([
+      { id: "ship_1", name: "Standard delivery", kind: "delivery", amount: 50, amountMinor: 5_000 },
+    ]);
+    expect(body.data.paymentMethods).toEqual([{ id: "cod", name: "Pay at the door" }]);
+    expect(body.data.discounts).toEqual([
+      { promotionId: null, appId: "app_1", title: "Loyalty", code: null, amount: 20, shippingAmount: 0 },
+    ]);
+  });
+
   it("fails closed when the upstream success payload violates the quote contract", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       ...quoteEnvelope(),

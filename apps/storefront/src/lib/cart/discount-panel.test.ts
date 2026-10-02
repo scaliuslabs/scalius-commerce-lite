@@ -50,4 +50,22 @@ describe("discount panel: which discount applies", () => {
     const notes = [...root.querySelectorAll("#appliedCodes li.basis-full")].map((note) => note.textContent);
     expect(notes).toEqual(["SAVE5: Bundle saving applied: better than SAVE5."]);
   });
+
+  it("lists a store app's discount (no promotion) like any other, keyed by its app and position", () => {
+    const root = panel();
+    // The cart preview (`/discounts/validate`) may now answer with an app's line.
+    const facts = parseDiscountFacts({
+      discounts: [
+        { promotionId: "p_eid", appId: null, title: "Eid 5%", code: null, amount: 50, shippingAmount: 0 },
+        { promotionId: null, appId: "app_loyalty", title: "<i>Loyalty</i> reward", code: null, amount: 30, shippingAmount: 0 },
+        { promotionId: null, appId: "app_loyalty", title: "Free delivery", code: null, amount: 0, shippingAmount: 60 },
+      ],
+    });
+    renderDiscountPanel(root, { codes: [], facts }, ENGLISH_CHECKOUT_LANGUAGE_DATA, actions);
+
+    const rows = [...root.querySelectorAll<HTMLElement>("#discountLines > div")];
+    expect(rows.map((row) => row.dataset.discountLine)).toEqual(["p_eid", "app:app_loyalty:1"]);
+    expect(rows[1]?.textContent).toContain("Discount · <i>Loyalty</i> reward");
+    expect(rows[1]?.querySelector("i")).toBeNull();
+  });
 });

@@ -46,7 +46,12 @@ vi.mock("@/lib/analytics", () => ({
 vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
-  TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
+  TaxQuoteCartRulesError: class TaxQuoteCartRulesError extends Error {
+    constructor(public readonly ruleErrors: unknown[]) { super("rules"); }
+  },
+  TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {
+    constructor(public readonly shippingRates: unknown[] | null = null) { super("rate"); }
+  },
   TaxQuoteDeliveryLocationError: class TaxQuoteDeliveryLocationError extends Error {
     constructor(public readonly field: string) { super("gone"); }
   },
@@ -1140,5 +1145,146 @@ describe("initCartFunctionality", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(document.getElementById("shippingCost")?.textContent).toBe("—");
     expect(document.getElementById("total")?.textContent).toBe("৳100");
+  });
+
+  describe("store app checkout rules and options", () => {
+    const MALICIOUS = '<img src=x onerror="window.__rulePwned=true">At most 10 per order.';
+    const lineRule = { code: "max_qty", message: MALICIOUS, index: 0, cartKey: CART_LINE_KEY };
+    const cartRule = { code: "min_total", message: "Spend ৳500 to check out.", index: null, cartKey: null };
+    const banner = () => document.getElementById("cartRuleErrors")!;
+    const submit = () => document.getElementById("submitButton") as HTMLButtonElement;
+    const blockedCart = (ruleErrors: unknown[]) =>
+      jsonResponse({ success: true, data: { ...VALID_CART.data, valid: false, ruleErrors } });
+
+    beforeEach(() => {
+      // The banner sits right above the checkout action (cart.astro).
+      submit().insertAdjacentHTML(
+        "beforebegin",
+        `<div id="cartRuleErrors" class="hidden" role="alert" tabindex="-1"></div>`,
+      );
+    });
+
+    afterEach(() => {
+      delete (window as typeof window & { __rulePwned?: boolean }).__rulePwned;
+    });
+
+    it("says a rule under its line and the cart's rules above Place order, as text, and blocks checkout", async () => {
+      vi.mocked(fetch).mockResolvedValue(blockedCart([lineRule, cartRule]));
+      await initCartFunctionality();
+
+      const ruleList = document.querySelector<HTMLElement>("#cartItems li [data-cart-line-rule-errors]")!;
+      expect(ruleList.textContent).toBe(MALICIOUS);
+      expect(document.querySelector("#cartItems img[src='x']")).toBeNull();
+      // The line's controls name the rule, so it is read with them.
+      const described = document.querySelectorAll(`#cartItems [aria-describedby="${ruleList.id}"]`);
+      expect(described.length).toBe(3);
+      // The quantity stepper stays: lowering the quantity is how the buyer meets the rule.
+      expect(document.querySelector("#cartItems [data-cart-line-issue]")).toBeNull();
+
+      expect(banner().classList.contains("hidden")).toBe(false);
+      expect(banner().getAttribute("role")).toBe("alert");
+      expect(banner().textContent).toContain("This order can't be placed yet.");
+      expect(banner().textContent).toContain("Spend ৳500 to check out.");
+      expect(banner().textContent).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.reviewCartItemsText);
+      // Said once: the summary's availability box stays quiet for rules alone.
+      expect(document.getElementById("cartValidationMessage")?.classList).toContain("hidden");
+      expect(submit().disabled).toBe(true);
+      expect(submit().title).toBe("This order can't be placed yet.");
+      expect(window.hasCartRuleErrors?.()).toBe(true);
+      expect((window as typeof window & { __rulePwned?: boolean }).__rulePwned).toBeUndefined();
+
+      // A later check without rules clears them everywhere.
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(VALID_CART));
+      await window.validateCartSnapshot?.();
+      expect(document.querySelector("#cartItems [data-cart-line-rule-errors]")).toBeNull();
+      expect(document.querySelector("#cartItems [aria-describedby]")).toBeNull();
+      expect(banner().classList).toContain("hidden");
+      expect(submit().disabled).toBe(false);
+      expect(window.hasCartRuleErrors?.()).toBe(false);
+    });
+
+    it("blocks on the quote's rules and clears them with the next quote, without another quote", async () => {
+      withAddress();
+      const { TaxQuoteCartRulesError } = await import("../checkout/tax-quote-client");
+      taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteCartRulesError([cartRule]));
+      await initCartFunctionality();
+      await vi.waitFor(() => expect(banner().classList.contains("hidden")).toBe(false));
+
+      expect(banner().textContent).toContain("Spend ৳500 to check out.");
+      expect(submit().disabled).toBe(true);
+      // Not a connection problem: no retry offer.
+      expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
+      const quotes = taxQuoteMocks.fetchAuthoritativeTaxQuote.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(taxQuoteMocks.fetchAuthoritativeTaxQuote.mock.calls.length).toBe(quotes);
+
+      taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(310));
+      window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail: { ...STANDARD_RATE } }));
+      await vi.waitFor(() => expect(banner().classList).toContain("hidden"));
+      await vi.advanceTimersByTimeAsync(400);
+      expect(submit().disabled).toBe(false);
+    });
+
+    it("shows the rules the payment step handed back, from session storage", async () => {
+      sessionStorage.setItem(CHECKOUT_CART_REPAIR_STORAGE_KEY, JSON.stringify({
+        source: "checkout",
+        message: "This order can't be placed yet.",
+        issues: [],
+        ruleErrors: [lineRule],
+        createdAt: Date.now(),
+      }));
+      await initCartFunctionality();
+
+      expect(document.querySelector("#cartItems [data-cart-line-rule-errors]")?.textContent).toBe(MALICIOUS);
+      expect(submit().disabled).toBe(true);
+      expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).toBeNull();
+      expect(window.location.search).not.toContain("max_qty");
+    });
+
+    it("hands each quote's app-changed options to the delivery options, and null when no app changed them", async () => {
+      withAddress();
+      const quoted = vi.fn();
+      const changed = vi.fn();
+      window.addEventListener("delivery-rates-quoted", quoted);
+      window.addEventListener("delivery-rate-changed", changed);
+      const shippingRates = [{ id: "ship_standard", name: "Standard (app)", kind: "delivery", amount: 0, amountMinor: 0 }];
+      // The options already show the app's fee; the quote's own fee is never compared with it.
+      window.lastShippingEventDetail = { id: "ship_standard", fee: 0, freeOver: null, name: "Standard (app)", kind: "delivery", quoted: true };
+      taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue({ ...taxQuote(310), shippingRates });
+
+      await initCartFunctionality();
+      await vi.waitFor(() => expect(quoted).toHaveBeenCalled());
+      expect((quoted.mock.calls.at(-1)![0] as CustomEvent).detail).toEqual({ shippingRates });
+      expect(changed).not.toHaveBeenCalled();
+
+      taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(310));
+      quoted.mockClear();
+      window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail: { ...STANDARD_RATE } }));
+      await vi.waitFor(() => expect(quoted).toHaveBeenCalled());
+      expect((quoted.mock.calls.at(-1)![0] as CustomEvent).detail).toEqual({ shippingRates: null });
+      window.removeEventListener("delivery-rates-quoted", quoted);
+      window.removeEventListener("delivery-rate-changed", changed);
+    });
+
+    it("passes the options still offered when a store app hid the chosen one", async () => {
+      withAddress();
+      const rejected = vi.fn();
+      window.addEventListener("delivery-rate-rejected", rejected);
+      const left = [{ id: "ship_2", name: "Standard", kind: "delivery", amount: 60, amountMinor: 6_000 }];
+      taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteDeliveryRateError(left as never));
+      await initCartFunctionality();
+      await vi.waitFor(() => expect(rejected).toHaveBeenCalled());
+      expect((rejected.mock.calls[0]![0] as CustomEvent).detail).toEqual({ shippingRates: left });
+
+      rejected.mockClear();
+      vi.mocked(fetch).mockResolvedValue(jsonResponse({
+        success: false,
+        error: "This delivery option isn't available.",
+        details: { reason: "delivery_rate_unavailable", shippingRates: left },
+      }, 400));
+      await window.validateCartSnapshot?.();
+      expect((rejected.mock.calls[0]![0] as CustomEvent).detail).toEqual({ shippingRates: left });
+      window.removeEventListener("delivery-rate-rejected", rejected);
+    });
   });
 });

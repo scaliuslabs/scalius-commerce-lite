@@ -221,6 +221,7 @@ export const stripeHandler: GatewayHandler = {
           errorCode: err.errorCode,
           status: err.status,
           cartIssues: err.cartIssues,
+          refusal: err.refusal,
         };
       }
       return { success: false, error: err instanceof Error ? err.message : String(err) };

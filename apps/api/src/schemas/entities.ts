@@ -469,7 +469,13 @@ export const orderDetailSchema = z.object({
   taxLabel: z.string().nullable(),
   pricesIncludeTax: z.boolean(),
   discounts: z.array(z.object({
-    promotionId: z.string(),
+    /** `app`: a discount an installed app gave at checkout (after the store's own). */
+    source: z.enum(["promotion", "app"]),
+    /** Null for an app's discount. */
+    promotionId: z.string().nullable(),
+    /** The app that gave the discount; null for the store's own. */
+    appId: z.string().nullable(),
+    appName: z.string().nullable(),
     name: z.string(),
     code: z.string().nullable(),
     method: z.enum(["automatic", "code"]),
@@ -479,6 +485,14 @@ export const orderDetailSchema = z.object({
     amount: z.number(),
     /** The part off delivery: show it on the delivery line ("Free", fee struck through). */
     shippingAmount: z.number(),
+  })),
+  /** Apps' advisory risk checks (`order.risk`), newest first. Advice only: nothing acts on them. */
+  appRiskChecks: z.array(z.object({
+    appId: z.string(),
+    appName: z.string(),
+    level: z.enum(["low", "medium", "high"]),
+    reasons: z.array(z.string()),
+    checkedAt: timestampSchema,
   })),
   status: z.string(),
   paymentStatus: z.string().nullable(),

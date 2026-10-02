@@ -7830,6 +7830,33 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "functions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "point": {
+                  "type": "string",
+                  "enum": [
+                    "cart.validate",
+                    "checkout.discounts",
+                    "checkout.shipping_rates",
+                    "checkout.payment_methods",
+                    "order.risk"
+                  ]
+                },
+                "priority": {
+                  "type": "integer",
+                  "description": "Lower runs first among apps at the same point."
+                }
+              },
+              "required": [
+                "point",
+                "priority"
+              ]
+            },
+            "description": "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)."
           }
         },
         "required": [
@@ -7846,7 +7873,8 @@
           "revision",
           "installedAt",
           "activatedAt",
-          "updatedAt"
+          "updatedAt",
+          "functions"
         ]
       },
       "AppDetail": {
@@ -18183,7 +18211,7 @@
           "Discounts"
         ],
         "summary": "Preview the cart's discounts before delivery is chosen",
-        "description": "Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.",
+        "description": "Evaluates the applied codes together with active automatic discounts, then installed apps' discounts on top (as checkout stacks them). Codes that do not apply are listed with the reason and add nothing.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18323,7 +18351,14 @@
                             "type": "object",
                             "properties": {
                               "promotionId": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Null for a discount an installed app gave (then `appId` is set)."
+                              },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
                               },
                               "title": {
                                 "type": "string"
@@ -18347,6 +18382,7 @@
                             },
                             "required": [
                               "promotionId",
+                              "appId",
                               "title",
                               "code",
                               "amount",
@@ -44281,7 +44317,14 @@
                             "type": "object",
                             "properties": {
                               "promotionId": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Null for a discount an installed app gave (then `appId` is set)."
+                              },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
                               },
                               "title": {
                                 "type": "string"
@@ -44311,6 +44354,7 @@
                             },
                             "required": [
                               "promotionId",
+                              "appId",
                               "title",
                               "code",
                               "amount",
@@ -69390,7 +69434,14 @@
                                 "type": "object",
                                 "properties": {
                                   "promotionId": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "Null for a discount an installed app gave (then `appId` is set)."
+                                  },
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
                                   },
                                   "title": {
                                     "type": "string"
@@ -69420,6 +69471,7 @@
                                 },
                                 "required": [
                                   "promotionId",
+                                  "appId",
                                   "title",
                                   "code",
                                   "amount",
@@ -71230,6 +71282,37 @@
                             ]
                           }
                         },
+                        "ruleErrors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string",
+                                "description": "Written by the app for the buyer; show it as text."
+                              },
+                              "index": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The cart line it is about (request index); null for the whole cart."
+                              },
+                              "cartKey": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message",
+                              "index",
+                              "cartKey"
+                            ]
+                          },
+                          "description": "Rules installed apps set for this cart (\"at most 10 per order\"), checked only when `issues` is empty. Checkout is blocked while any remain; the checkout quote and the order check them again."
+                        },
                         "items": {
                           "type": "array",
                           "items": {
@@ -71532,6 +71615,7 @@
                       "required": [
                         "valid",
                         "issues",
+                        "ruleErrors",
                         "items",
                         "subtotal",
                         "hasFreeDeliveryProduct",
@@ -72038,7 +72122,14 @@
                             "type": "object",
                             "properties": {
                               "promotionId": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Null for a discount an installed app gave (then `appId` is set)."
+                              },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
                               },
                               "title": {
                                 "type": "string"
@@ -72062,6 +72153,7 @@
                             },
                             "required": [
                               "promotionId",
+                              "appId",
                               "title",
                               "code",
                               "amount",
@@ -72324,6 +72416,64 @@
                           },
                           "description": "The bundle tiers that priced this quote (empty when promotions did)."
                         },
+                        "shippingRates": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery",
+                                  "pickup"
+                                ],
+                                "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "kind",
+                              "amount",
+                              "amountMinor"
+                            ]
+                          },
+                          "description": "Null when no installed app changed the delivery options (show them as listed). Otherwise exactly the options to show, in this order, with these names and what the buyer pays for each (free-delivery rules applied); options not listed are hidden."
+                        },
+                        "paymentMethods": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ]
+                          },
+                          "description": "Null when no installed app changed the payment methods. Otherwise the methods to show, in this order, with these names; `allowedPaymentMethods` is narrowed the same way. Apps never add or enable a method."
+                        },
                         "items": {
                           "type": "array",
                           "items": {
@@ -72463,6 +72613,8 @@
                         "bundleDiscountMinor",
                         "bundleDiscountAmount",
                         "bundles",
+                        "shippingRates",
+                        "paymentMethods",
                         "items"
                       ]
                     }
@@ -196416,8 +196568,24 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "promotion",
+                                  "app"
+                                ]
+                              },
                               "promotionId": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "appName": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "name": {
                                 "type": "string"
@@ -196450,13 +196618,61 @@
                               }
                             },
                             "required": [
+                              "source",
                               "promotionId",
+                              "appId",
+                              "appName",
                               "name",
                               "code",
                               "method",
                               "kind",
                               "amount",
                               "shippingAmount"
+                            ]
+                          }
+                        },
+                        "appRiskChecks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "checkedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "level",
+                              "reasons",
+                              "checkedAt"
                             ]
                           }
                         },
@@ -197563,6 +197779,7 @@
                         "taxLabel",
                         "pricesIncludeTax",
                         "discounts",
+                        "appRiskChecks",
                         "status",
                         "paymentStatus",
                         "paymentMethod",

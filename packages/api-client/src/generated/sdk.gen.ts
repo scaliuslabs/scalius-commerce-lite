@@ -271,7 +271,7 @@ export const getApiV1ArticlesSlugBySlug = <ThrowOnError extends boolean = false>
 /**
  * Preview the cart's discounts before delivery is chosen
  *
- * Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.
+ * Evaluates the applied codes together with active automatic discounts, then installed apps' discounts on top (as checkout stacks them). Codes that do not apply are listed with the reason and add nothing.
  */
 export const postApiV1DiscountsValidate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1DiscountsValidateData, ThrowOnError>): RequestResult<PostApiV1DiscountsValidateResponses, PostApiV1DiscountsValidateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1DiscountsValidateResponses, PostApiV1DiscountsValidateErrors, ThrowOnError>({
     url: '/api/v1/discounts/validate',

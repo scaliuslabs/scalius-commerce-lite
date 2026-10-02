@@ -21,9 +21,10 @@ import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
 import { resourceMessages } from "~/i18n/resource";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import type { AppDetail } from "~/lib/api-query-options/apps";
+import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
 import { formatDuration, formatWhen } from "../settings/webhooks/webhook-format";
 import { AppAccess } from "./AppAccess";
+import { checkoutFunctions, isKnownFunctionPoint } from "./app-functions";
 import { AppActivity } from "./AppActivity";
 import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./AppDialogs";
 import { AppSettingsForm } from "./AppSettingsForm";
@@ -79,6 +80,27 @@ function Overview({ app }: { app: AppDetail }) {
   );
 }
 
+/** The checkout points the app implements, in plain words, with its priority at each. */
+function CheckoutFunctions({ functions }: { functions: AppFunction[] }) {
+  const t = useMessages(installedAppsMessages);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("functionsTitle")}</CardTitle>
+        <CardDescription>{t("functionsDescription")}</CardDescription>
+      </CardHeader>
+      <ul className="border-t border-border">
+        {functions.map((fn) => (
+          <li key={fn.point} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border px-4 py-3 text-body first:border-t-0">
+            {isKnownFunctionPoint(fn.point) ? <span>{t(`point_${fn.point}`)}</span> : <span className="font-mono">{fn.point}</span>}
+            <span className="text-muted-foreground tabular-nums">{t("priority", { priority: fn.priority })}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function Jobs({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
   return (
@@ -122,6 +144,7 @@ function AppPage({ app }: { app: AppDetail }) {
     if (!open) setDialog(null);
   };
   const active = app.status === "active";
+  const functions = checkoutFunctions(app.functions);
   // An update that needs approval leaves the app "installed" (paused), so this covers both.
   const canActivate = isSuperAdmin && !active;
   // Why there's nothing to press: no access to change apps, or activation is a Super Admin's.
@@ -188,6 +211,7 @@ function AppPage({ app }: { app: AppDetail }) {
             <AppAccess app={app} />
           </CardContent>
         </Card>
+        {functions.length > 0 ? <CheckoutFunctions functions={functions} /> : null}
         {app.settings.fields.length > 0 ? <AppSettingsForm app={app} canManage={canManage} /> : null}
         {app.cron.length > 0 ? <Jobs app={app} /> : null}
         <AppActivity appId={app.id} canManage={canManage} />

@@ -5,7 +5,12 @@ import {
   type CreateOrderPayload,
   deleteAbandonedCheckout,
 } from "@/lib/api";
-import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
+import {
+  validateCartItems as validateCartItemsWithApi,
+  type CartRuleError,
+  type CartValidationIssue,
+} from "@/lib/api/orders";
+import { CART_RULES_REASON } from "@/lib/checkout/tax-quote-error-contract";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
@@ -154,13 +159,20 @@ function itemIssuesFromDetails(details: unknown): CartValidationIssue[] | undefi
   return issues.length > 0 ? issues : undefined;
 }
 
-function failedOrder(message: string, itemIssues?: CartValidationIssue[]) {
+function failedOrder(
+  message: string,
+  itemIssues?: CartValidationIssue[],
+  ruleErrors?: CartRuleError[],
+) {
   return {
     success: false,
     error: { message },
     ...(itemIssues && itemIssues.length > 0
       ? { details: { itemIssues } }
-      : {}),
+      : ruleErrors && ruleErrors.length > 0
+        // The API's own refusal shape, so the cart says each rule where it belongs.
+        ? { details: { reason: CART_RULES_REASON, ruleErrors } }
+        : {}),
   };
 }
 
@@ -244,9 +256,13 @@ export async function processOrder(
     }
     if (!cartValidation.data.valid) {
       const firstIssue = cartValidation.data.issues[0];
+      const ruleErrors = cartValidation.data.ruleErrors ?? [];
       return failedOrder(
-        firstIssue?.message || "Some items in your cart need attention before checkout.",
+        firstIssue?.message ||
+          ruleErrors[0]?.message ||
+          "Some items in your cart need attention before checkout.",
         cartValidation.data.issues,
+        ruleErrors,
       );
     }
     const validated = cartValidation.data;

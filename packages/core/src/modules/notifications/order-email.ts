@@ -1,5 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../orders/app-facts";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -96,13 +97,24 @@ async function readOrderFacts(db: Database, orderId: string) {
       orderDiscountAllocations.target,
     )
     .orderBy(asc(orderDiscountAllocations.promotionName));
-  const [orderRows, discountRows] = await Promise.all([rows, discounts]);
+  // An installed app's discounts (`app_discount` order facts), after the store's.
+  const appDiscounts = selectOrderAppFactRows(db, [orderId], ["app_discount"]).all() as Promise<OrderAppFactRow[]>;
+  const [orderRows, discountRows, appRows] = await Promise.all([rows, discounts, appDiscounts]);
   const order = orderRows[0]?.order;
   if (!order) throw new Error("Order email details are unavailable");
   return {
     order,
     items: orderRows.flatMap((row) => row.item ? [row.item] : []),
-    discounts: discountRows.map((row) => ({ ...row, amountMinor: Number(row.amountMinor) || 0 })),
+    discounts: [
+      ...discountRows.map((row) => ({ ...row, amountMinor: Number(row.amountMinor) || 0 })),
+      ...resolveOrderAppFacts(appRows).discounts.flatMap((fact, position) => {
+        const id = `app:${fact.pluginId}:${position}`;
+        return [
+          ...(fact.amountMinor > 0 ? [{ promotionId: id, name: fact.title, code: fact.code, target: "line" as const, amountMinor: fact.amountMinor }] : []),
+          ...(fact.shippingAmountMinor > 0 ? [{ promotionId: id, name: fact.title, code: fact.code, target: "shipping" as const, amountMinor: fact.shippingAmountMinor }] : []),
+        ];
+      }),
+    ],
   };
 }
 

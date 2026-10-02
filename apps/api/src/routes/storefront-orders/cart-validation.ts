@@ -5,6 +5,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
+  checkStorefrontCartRules,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   resolveCartPaymentMethods,
@@ -13,7 +14,12 @@ import {
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
+import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { ok } from "../../utils/api-response";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
+import { getCustomerSessionHashKey } from "../../utils/encryption-key";
+import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import {
@@ -25,6 +31,7 @@ import {
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import {
+  getCustomerSessionTokenFromRequest,
   giftCardHandlesSchema,
   giftCardIssueSchema,
   persistedStorefrontVariantIdSchema,
@@ -71,6 +78,14 @@ const cartIssueSchema = z.object({
   propertyKey: z.string().nullable().optional(),
 });
 
+/** An app rule the cart breaks (`cart.validate`). Any one blocks checkout. */
+export const cartRuleErrorSchema = z.object({
+  code: z.string(),
+  message: z.string().openapi({ description: "Written by the app for the buyer; show it as text." }),
+  index: z.number().int().nullable().openapi({ description: "The cart line it is about (request index); null for the whole cart." }),
+  cartKey: z.string().nullable(),
+});
+
 const cartValidationItemSchema = z.object({
   cartKey: z.string().min(1).max(256).optional().nullable(),
   productId: z.string().min(1, "Product is required"),
@@ -114,8 +129,12 @@ const cartValidationRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
+            /** False with any issue or any app rule error. */
             valid: z.boolean(),
             issues: z.array(cartIssueSchema),
+            ruleErrors: z.array(cartRuleErrorSchema).openapi({
+              description: "Rules installed apps set for this cart (\"at most 10 per order\"), checked only when `issues` is empty. Checkout is blocked while any remain; the checkout quote and the order check them again.",
+            }),
             items: z.array(z.object({
               index: z.number(),
               cartKey: z.string().nullable().optional(),
@@ -201,10 +220,37 @@ async function giftCardHandleIssues(
 app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
-  const [currency, paymentMethods] = await Promise.all([
+  // The apps' checkout functions ride the first read wave: none, no app work.
+  const [currency, paymentMethods, registrations] = await Promise.all([
     getCurrencySettings(db),
     getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
+    listActiveFunctionRegistrations(db),
   ]);
+  const apps = createCheckoutAppFunctions({
+    env: c.env,
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations,
+  });
+  /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
+  const ruleErrorsFor = async (
+    valid: boolean,
+    delivery: Parameters<typeof checkStorefrontCartRules>[1]["delivery"],
+  ) => {
+    if (!valid || !apps.points.has("cart.validate")) return [];
+    const token = getCustomerSessionTokenFromRequest(c);
+    const session = token
+      ? await getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)).catch(() => null)
+      : null;
+    return checkStorefrontCartRules(db, {
+      cartValidation: result,
+      delivery,
+      apps,
+      currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+      customerId: session?.customerId ?? null,
+      channel: "online_store",
+    });
+  };
   const giftCardIssues = await giftCardHandleIssues(
     db,
     (data.giftCards ?? []).map((card) => card.handle),
@@ -223,8 +269,11 @@ app.openapi(cartValidationRoute, async (c) => {
   // address, a delivery rate needs city and zone.
   const wantsDelivery = Boolean(data.shippingMethodId) || Boolean(data.city && data.zone);
   if (!result.valid || !cartOnly.requiresDeliveryMethod || !wantsDelivery) {
+    const ruleErrors = await ruleErrorsFor(result.valid, null);
     return ok(c, {
       ...presentStorefrontCartValidation(result, decimalPlaces, cartOnly, propertiesHashes),
+      valid: result.valid && ruleErrors.length === 0,
+      ruleErrors,
       allowedPaymentMethods: cartOnlyPayment,
       giftCardIssues,
     });
@@ -241,8 +290,11 @@ app.openapi(cartValidationRoute, async (c) => {
     result,
   );
   const presented = presentStorefrontDeliveryPreflight(delivery, decimalPlaces);
+  const ruleErrors = await ruleErrorsFor(result.valid, delivery);
   return ok(c, {
     ...presentStorefrontCartValidation(result, decimalPlaces, delivery.fulfilment, propertiesHashes),
+    valid: result.valid && ruleErrors.length === 0,
+    ruleErrors,
     allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
     giftCardIssues,
     ...(delivery.kind && delivery.shippingMethod

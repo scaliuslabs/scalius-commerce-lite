@@ -21,6 +21,11 @@ export function formatOrderTimestamp(value: OrderTimestamp | null | undefined): 
     : { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** The instant in ISO 8601, for a `<time dateTime>`. */
+export function orderTimestampIso(value: OrderTimestamp | null | undefined): string | undefined {
+  return toDate(value)?.toISOString();
+}
+
 export function formatOrderDate(value: OrderTimestamp | null | undefined): string | null {
   const date = toDate(value);
   return date ? formatDateTime(date, { dateStyle: "medium" }) : null;

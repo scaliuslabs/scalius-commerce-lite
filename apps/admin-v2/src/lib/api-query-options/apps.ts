@@ -29,6 +29,13 @@ import { queryKeys } from "../query-keys";
 
 export type { AppDetail, AppEventDelivery, AppGrant, AppLogLine, AppSettingField, AppSummary };
 
+/** The checkout points an app can implement, in the order checkout reaches them. */
+export const APP_FUNCTION_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "order.risk"] as const;
+export type AppFunctionPoint = (typeof APP_FUNCTION_POINTS)[number];
+
+/** A checkout function the app implements; at one point, lower priority runs first. */
+export type AppFunction = AppSummary["functions"][number];
+
 /** A settings value as the API stores it (`null` clears an optional field). */
 export type AppSettingValue = string | number | boolean | string[] | null;
 export type AppDeliveryStatus = AppEventDelivery["status"];
