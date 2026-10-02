@@ -10,14 +10,8 @@ import type { Product, ProductCardFacts } from "@/lib/api";
 import { formatMoney, getDecimalPlaces } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
-import { isUnrenderedMediaOriginal, MEDIA_VARIANT_WIDTHS } from "@scalius/shared/media-variants";
-import {
-  CARD_SIZES_COLLAPSE_FROM_PX,
-  capImageSrcSet,
-  capPhoneSizesDensity,
-  collapseWideSizes,
-  scaleSizes,
-} from "@/lib/responsive-image";
+import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
+import { capImageSrcSet, capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
 import type {
@@ -76,17 +70,17 @@ export const CARD_PHOTO_MAX_PX: Readonly<Record<string, number>> = {
 /**
  * The image `sizes` of a card's photo in a slot of `slotSizes`: the standard
  * card keeps the slot as it was; every other card names its fixed photo
- * width, or the slot shrunk by its photo margin with its desktop steps
- * merged (at most one rendition step over, never under), and caps DPR-3
- * phones at about 2x the drawn width. The string repeats on every card of
- * a listing, so it stays short.
+ * width, or the slot shrunk by its photo margin, and caps DPR-3 phones at
+ * about 2x the drawn width. Wider screens keep every step exact: merging the
+ * desktop steps saved bytes only before compression and fetched a rendition
+ * step more than drawn.
  */
 export function cardPhotoSizes(variant: string, slotSizes: string): string {
   if (variant === "standard") return slotSizes;
   const maxPx = CARD_PHOTO_MAX_PX[variant];
   return capPhoneSizesDensity(maxPx
     ? `${maxPx}px`
-    : collapseWideSizes(scaleSizes(slotSizes, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)), MEDIA_VARIANT_WIDTHS, CARD_SIZES_COLLAPSE_FROM_PX));
+    : scaleSizes(slotSizes, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)));
 }
 
 const finite = (value: number) => (Number.isFinite(value) ? String(Number(value)) : "0");

@@ -133,103 +133,6 @@ export function scaleSizes(sizes: string, factor: number): string {
   }).join(", ");
 }
 
-/** A `sizes` entry the collapse below can evaluate: `(max-width: Npx)` and a px or `calc(a vw - b px)` length. */
-interface SimpleSizesEntry {
-  /** The entry's `(max-width: Npx)`, or null for the unconditioned last entry. */
-  max: number | null;
-  /** Declared px at a viewport width. */
-  at: (viewport: number) => number;
-}
-
-function simpleSizesEntries(sizes: string): SimpleSizesEntry[] | null {
-  const entries: SimpleSizesEntry[] = [];
-  for (const entry of splitTopLevel(sizes)) {
-    const { condition, length } = splitSizesEntry(entry);
-    const max = condition === null ? null : /^\(max-width: (\d+)px\)$/.exec(condition)?.[1];
-    if (max === undefined) return null;
-    const linear = /^calc\(([\d.]+)vw - ([\d.]+)px\)$/.exec(length);
-    const px = /^([\d.]+)px$/.exec(length);
-    const vw = /^([\d.]+)vw$/.exec(length);
-    const at = linear
-      ? (viewport: number) => (Number(linear[1]) * viewport) / 100 - Number(linear[2])
-      : px
-        ? () => Number(px[1])
-        : vw
-          ? (viewport: number) => (Number(vw[1]) * viewport) / 100
-          : null;
-    if (!at) return null;
-    entries.push({ max: max === null ? null : Number(max), at });
-  }
-  return entries.length > 0 && entries.at(-1)!.max === null ? entries : null;
-}
-
-/** Screen densities a collapsed range is checked at (DPR 2.5+ above phones: full density). */
-const COLLAPSE_DENSITIES = [1, 1.25, 1.5, 2, 2.5, 3] as const;
-/** The widest viewport a collapse is checked to; past the container cap the last entry is a constant. */
-const COLLAPSE_VIEWPORT_LIMIT = 2560;
-const collapseCache = new Map<string, string>();
-
-/**
- * Card `sizes` with its desktop steps (from `fromViewportPx`) merged: each
- * merged range declares the widest card it covers, as one px length, as
- * long as no viewport of it at any density fetches more than one rendition
- * step (`ladder`, ascending widths) above what its own step would. A card
- * grid changes columns every ~200px of a wide container, so the steps of a
- * 2560px container otherwise cost a dozen entries on every card. Entries
- * below `fromViewportPx` (phones and tablets) stay exact, and nothing is
- * ever declared narrower than drawn. `sizes` the merge cannot evaluate are
- * returned unchanged.
- */
-export function collapseWideSizes(sizes: string, ladder: readonly number[], fromViewportPx = 1024): string {
-  const key = `${fromViewportPx}|${ladder.join(",")}|${sizes}`;
-  const cached = collapseCache.get(key);
-  if (cached !== undefined) return cached;
-  const entries = simpleSizesEntries(sizes);
-  const first = entries?.findIndex((_entry, index) => index > 0 && entries[index - 1]!.max! >= fromViewportPx - 1) ?? -1;
-  if (!entries || first < 0 || entries.length - first < 2) {
-    collapseCache.set(key, sizes);
-    return sizes;
-  }
-  const step = (width: number) => {
-    const index = ladder.findIndex((candidate) => candidate >= width);
-    return index < 0 ? ladder.length - 1 : index;
-  };
-  // Each entry's viewport range from `fromViewportPx` on.
-  const ranges = entries.map((entry, index) => ({
-    entry,
-    from: index === 0 ? 0 : entries[index - 1]!.max! + 1,
-    to: entry.max ?? Math.max(COLLAPSE_VIEWPORT_LIMIT, (entries[index - 1]?.max ?? 0) + 1),
-  })).slice(first);
-  const widest = (group: typeof ranges) =>
-    Math.ceil(Math.max(...group.flatMap(({ entry, from, to }) => [entry.at(from), entry.at(to)])) - 1e-9);
-  const fits = (group: typeof ranges, width: number) => group.every(({ entry, from, to }) => {
-    for (let viewport = from; viewport <= to; viewport += 1) {
-      const own = entry.at(viewport);
-      for (const density of COLLAPSE_DENSITIES) {
-        if (step(width * density) - step(own * density) > 1) return false;
-      }
-    }
-    return true;
-  });
-  const source = splitTopLevel(sizes);
-  const out = source.slice(0, first);
-  let start = 0;
-  while (start < ranges.length) {
-    let end = start;
-    while (end + 1 < ranges.length && fits(ranges.slice(start, end + 2), widest(ranges.slice(start, end + 2)))) end += 1;
-    const group = ranges.slice(start, end + 1);
-    const width = widest(group);
-    const last = group.at(-1)!.entry.max;
-    // A lone range that a constant cannot cover within a step keeps its own entry.
-    if (group.length === 1 && !fits(group, width)) out.push(source[first + start]!);
-    else out.push(last === null ? `${width}px` : `(max-width: ${last}px) ${width}px`);
-    start = end + 1;
-  }
-  const collapsed = out.join(", ");
-  collapseCache.set(key, collapsed);
-  return collapsed;
-}
-
 /**
  * `sizes` that ask a DPR 3 phone for about 2x pixels. A 390px phone at DPR 3
  * would otherwise pick a ~1100px file (the 1600w rendition) for a 366px LCP
@@ -252,8 +155,6 @@ export function capSizesDensity(sizes: string): string {
 
 /** The widest viewport the card photos' density cap covers: phones (below Tailwind's `sm`). */
 export const PHONE_DENSITY_CAP_MAX_VIEWPORT_PX = 639;
-/** From here up (tablets and computers) card `sizes` steps may merge (collapseWideSizes). */
-export const CARD_SIZES_COLLAPSE_FROM_PX = 640;
 
 /**
  * `capSizesDensity` for phones only, for the photos repeated on every card:

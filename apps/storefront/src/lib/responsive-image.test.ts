@@ -4,18 +4,16 @@ import { describe, expect, it } from "vitest";
 
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
-import { MEDIA_VARIANT_WIDTHS, mediaImageUrl } from "@scalius/shared/media-variants";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { STOREFRONT_DENSITY_SPECS } from "@scalius/shared/storefront-theme";
 import { cardPhotoSizes } from "@/components/cards/card-model";
 import { productCardImageSizes } from "./product-card-layout";
 import {
-  CARD_SIZES_COLLAPSE_FROM_PX,
   DENSITY_CAP_SCALE,
   PHONE_DENSITY_CAP_MAX_VIEWPORT_PX,
   capImageSrcSet,
   capPhoneSizesDensity,
   capSizesDensity,
-  collapseWideSizes,
   hoverImageSources,
   responsiveImageSources,
   scaleSizes,
@@ -45,11 +43,14 @@ describe("capSizesDensity", () => {
     ].join(", "));
   });
 
-  it("keeps the marketplace card's rendition on phones and stays within a step above them", () => {
+  it("keeps the marketplace card's rendition at every width, with DPR 3 phones capped", () => {
     const base = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 262);
     const card = cardPhotoSizes("marketplace", base);
-    // The repeated string stays short: every desktop step used to appear twice.
-    expect(card.length).toBeLessThan(capSizesDensity(scaleSizes(base, 0.8)).length / 2);
+    // The repeated string stays short: the capped copies stop at phones
+    // instead of repeating every desktop step.
+    const cappedEntries = card.split(", ").filter((entry) => entry.startsWith("(min-resolution: 2.5dppx)"));
+    expect(cappedEntries.length).toBeLessThanOrEqual(3);
+    expect(cappedEntries.at(-1)).toContain("(max-width: 639px)");
     const widthAt = (sizes: string, viewport: number, dpr: number) => {
       for (const entry of sizes.split(", ")) {
         if (entry.includes("min-resolution: 2.5dppx") && dpr < 2.5) continue;
@@ -74,32 +75,14 @@ describe("capSizesDensity", () => {
         const actual = widthAt(card, viewport, dpr);
         // Never narrower than drawn.
         expect(actual, `${viewport}px at ${dpr} DPR`).toBeGreaterThanOrEqual(exact - 1e-6);
-        if (viewport < CARD_SIZES_COLLAPSE_FROM_PX) {
-          expect(actual, `${viewport}px at ${dpr} DPR`).toBeCloseTo(exact, 5);
-          expect(step(actual * dpr), `${viewport}px at ${dpr} DPR`).toBe(step(exact * dpr));
-        } else {
-          // Tablets and computers: merged steps fetch at most one rendition step more.
-          expect(step(actual * dpr) - step(exact * dpr), `${viewport}px at ${dpr} DPR`).toBeLessThanOrEqual(1);
-        }
+        expect(actual, `${viewport}px at ${dpr} DPR`).toBeCloseTo(exact, 5);
+        expect(step(actual * dpr), `${viewport}px at ${dpr} DPR`).toBe(step(exact * dpr));
       }
     }
   });
 });
 
-describe("collapseWideSizes", () => {
-  it("merges desktop steps into the widest card without fetching two steps more", () => {
-    // A 2560px marketplace container changes columns every ~200px.
-    const sizes = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 190);
-    const merged = collapseWideSizes(sizes, MEDIA_VARIANT_WIDTHS, 1024);
-    const below = sizes.split(", ").filter((entry) => Number(/max-width: (\d+)px/.exec(entry)?.[1] ?? Infinity) < 1024);
-    expect(merged.startsWith(below.join(", "))).toBe(true);
-    expect(merged.split(", ").length).toBeLessThanOrEqual(below.length + 3);
-    expect(sizes.split(", ").length).toBeGreaterThan(below.length + 6);
-    // Unparseable sizes (other conditions, min()) stay as they were.
-    expect(collapseWideSizes("(min-width: 64rem) 30vw, 100vw", MEDIA_VARIANT_WIDTHS)).toBe("(min-width: 64rem) 30vw, 100vw");
-    expect(collapseWideSizes("(max-width: 639px) 72vw, min(20vw, 256px)", MEDIA_VARIANT_WIDTHS)).toBe("(max-width: 639px) 72vw, min(20vw, 256px)");
-  });
-
+describe("capPhoneSizesDensity", () => {
   it("caps phone density only below the tablet step", () => {
     expect(capPhoneSizesDensity("(max-width: 335px) calc(100vw - 32px), (max-width: 1023px) calc(25vw - 30px), 230px")).toBe([
       "(min-resolution: 2.5dppx) and (max-width: 335px) calc(66.6vw - 21.312px)",
