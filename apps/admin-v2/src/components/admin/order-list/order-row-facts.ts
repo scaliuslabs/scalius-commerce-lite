@@ -28,8 +28,9 @@ type AttentionOrder = Pick<OrderListItem, "paymentRecovery" | "activeRefundOpera
 export function orderAttention(order: AttentionOrder, t: ListT, o: OrderT): AttentionItem[] {
   const items: AttentionItem[] = [];
   const payment = order.paymentRecovery;
-  if (payment && (payment.state ?? "none") !== "none") {
-    items.push({ tone: payment.state === "needs_attention" ? "critical" : "warning", text: t(`recovery.${payment.state}`) });
+  const paymentState = payment?.state;
+  if (paymentState && paymentState !== "none") {
+    items.push({ tone: paymentState === "needs_attention" ? "critical" : "warning", text: t(`recovery.${paymentState}`) });
   }
   if (order.activeRefundOperation?.active) {
     items.push({ tone: order.activeRefundOperation.severity === "danger" ? "critical" : "warning", text: t("refundInProgress") });
