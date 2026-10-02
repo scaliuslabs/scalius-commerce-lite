@@ -166,7 +166,7 @@ const themeWorkspaceSchema = z.object({
   }),
   draft: themeDraftSchema,
   draftDiffersFromLive: z.boolean(),
-  lastPublished: z.object({ revision: revisionSchema, publishedBy: z.string().nullable(), publishedByName: z.string().nullable(), createdAt: z.any() }).nullable(),
+  lastPublished: z.object({ revision: revisionSchema, publishedBy: z.string().nullable(), publishedByName: z.string().nullable(), createdAt: z.any().openapi({ type: "string", format: "date-time" }) }).nullable(),
 });
 
 /** An active app's storefront sections and product blocks, with the settings the editor draws for each. */
