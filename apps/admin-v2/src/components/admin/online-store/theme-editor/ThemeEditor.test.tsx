@@ -709,6 +709,28 @@ describe("theme editor: page templates", () => {
     act(() => field<HTMLButtonElement>("landing-override").click());
     await autosaved(2);
     expect(lastSaved().theme.pages.landing["eid-offers"]!.overrideCms).toBe(true);
+    expect(preview.props.previewPath).toBe("/eid-offers");
+  });
+
+  it("previews each version's CMS mode and falls back to home when that version predates the landing page", async () => {
+    const theme = themeWith(HOME);
+    theme.pages.landing = { sale: { title: "Sale", sections: [], overrideCms: true } };
+    const earlier = structuredClone(theme);
+    earlier.pages.landing.sale!.overrideCms = false;
+    api.versions.mockResolvedValue({ versions: [
+      { revision: 8, theme: earlier, changes: [], summary: [], note: "Earlier landing", publishedByName: null, createdAt: null },
+      { revision: 7, theme: themeWith(HOME), changes: [], summary: [], note: "Before landing", publishedByName: null, createdAt: null },
+    ] });
+    render(theme);
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Sale");
+    expect(preview.props.previewPath).toBe("/sale");
+    openTab("History");
+    await vi.waitFor(() => expect(container.textContent).toContain("Before landing"));
+    const previews = [...container.querySelectorAll<HTMLButtonElement>("button")].filter((each) => each.textContent === "Preview version");
+    act(() => previews[0]!.click());
+    expect(preview.props).toMatchObject({ sourceRevision: 8, previewPath: "/pages/sale" });
+    act(() => previews[1]!.click());
+    expect(preview.props).toMatchObject({ sourceRevision: 7, previewPath: "/" });
   });
 
   it("returns to the homepage when undo removes a newly created landing page", () => {

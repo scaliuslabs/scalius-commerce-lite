@@ -84,7 +84,7 @@ import { PreviewFrame, type PreviewController, type PreviewDevice } from "./Prev
 import { SectionList, type SectionRowInfo } from "./SectionList";
 import { SectionPicker } from "./SectionPicker";
 import { PageSelector, LandingSettings, TemplateBlocks, type EditorPage, type FixedEditorPage } from "./PageTemplates";
-import { ThemeHistory, themeVersionsKey } from "./ThemeHistory";
+import { ThemeHistory, themeVersionsKey, type ThemeVersion } from "./ThemeHistory";
 import { SettingsGroup, ThemeSettingsPanel } from "./ThemeSettingsPanel";
 
 type Theme = StorefrontThemeDocument;
@@ -373,11 +373,13 @@ export function ThemeEditor({ workspace, refetch }: {
   const landingSlug = page.startsWith("landing:") ? page.slice(8) : null;
   const sections = useMemo(() => landingSlug ? theme.pages.landing[landingSlug]?.sections ?? [] : theme.pages.home, [landingSlug, theme.pages]);
   const fixedPage = page !== "home" && !landingSlug ? page as FixedEditorPage : null;
-  const previewPath = landingSlug ? `/pages/${landingSlug}` : page === "search" ? "/search" : fixedPage ? templatePreviewPaths[fixedPage] ?? "/" : "/";
+  const previewTheme = previewRevision === null ? theme : queryClient.getQueryData<ThemeVersion[]>(themeVersionsKey)?.find((version) => version.revision === previewRevision)?.theme ?? theme;
+  const previewLanding = landingSlug ? previewTheme.pages.landing[landingSlug] : null;
+  const previewPath = landingSlug ? previewLanding ? previewLanding.overrideCms ? `/${landingSlug}` : `/pages/${landingSlug}` : "/" : page === "search" ? "/search" : fixedPage ? templatePreviewPaths[fixedPage] ?? "/" : "/";
   const previewReady = !fixedPage || fixedPage === "search" || Boolean(templatePreviewPaths[fixedPage]);
   useEffect(() => {
-    if (landingSlug && !theme.pages.landing[landingSlug]) { setPage("home"); setSelectedId(null); }
-  }, [landingSlug, theme.pages.landing]);
+    if (landingSlug && (!theme.pages.landing[landingSlug] || (previewRevision !== null && !previewLanding))) { setPage("home"); setSelectedId(null); }
+  }, [landingSlug, theme.pages.landing, previewRevision, previewLanding]);
   const selected = sections.find((section) => section.id === selectedId) ?? null;
   const setSections = (update: (sections: Section[]) => Section[]) =>
     setDraft((current) => ({ ...current, pages: landingSlug
