@@ -67,8 +67,9 @@ describe("plan profile", () => {
       expect(paid.queue.nightlyRecommendationRefreshLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.nightlyRecommendationRefreshLimit);
     });
 
-    it("every KV hint stays on", () => {
+    it("every KV hint and on-demand rendition stays on", () => {
       expect(Object.values(paid.kv)).toEqual(Object.values(paid.kv).map(() => true));
+      expect(paid.queue.renditionsFromPublicReads).toBe(true);
     });
 
     it("every sweep runs on every cron tick", () => {

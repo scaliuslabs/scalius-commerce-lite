@@ -42,6 +42,13 @@ export interface PlanLimits {
     readonly bulkPageSize: number;
     /** Recommendation lists the nightly pass refreshes. */
     readonly nightlyRecommendationRefreshLimit: number;
+    /**
+     * A public read that shows an image still without renditions queues its
+     * rendering at once (and marks it in KV so the next read does not queue it
+     * again). Off, only the scheduled backfill renders: no queue message and no
+     * KV write on the buyer's path.
+     */
+    readonly renditionsFromPublicReads: boolean;
   };
   /** Optional KV hints: D1 stays the authority, so a hint that is off costs a D1 read, never correctness. */
   readonly kv: {
@@ -49,8 +56,6 @@ export interface PlanLimits {
     readonly checkoutRecoveryHints: boolean;
     /** The per-user permission snapshot cached for other isolates. */
     readonly permissionCache: boolean;
-    /** The "rendition already requested" markers for media. */
-    readonly mediaRenditionHints: boolean;
   };
   readonly maintenance: {
     /** The cron rotates through this many groups of sweeps, one group a run (1: every sweep every run). */
@@ -75,8 +80,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       bulkBacklogLimit: 20,
       bulkPageSize: 10,
       nightlyRecommendationRefreshLimit: 150,
+      renditionsFromPublicReads: false,
     }),
-    kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false, mediaRenditionHints: false }),
+    kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
     maintenance: Object.freeze({ slices: 4 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000 }),
   }),
@@ -90,8 +96,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       bulkBacklogLimit: 1_000,
       bulkPageSize: 1_000,
       nightlyRecommendationRefreshLimit: 3_000,
+      renditionsFromPublicReads: true,
     }),
-    kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true, mediaRenditionHints: true }),
+    kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
     maintenance: Object.freeze({ slices: 1 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000 }),
   }),

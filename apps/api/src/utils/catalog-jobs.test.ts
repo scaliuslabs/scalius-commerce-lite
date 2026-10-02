@@ -4,7 +4,8 @@
 // list; the nightly pass refreshes sales stats and queues both.
 import "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetKvHintBreaker } from "@scalius/shared/kv-hints";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 
@@ -158,6 +159,42 @@ describe("post-deploy projection rebuild", () => {
       { type: "catalog.projections.rebuild", afterProductId: null },
     ]);
     expect(kv.get(PROJECTIONS_REBUILT_FOR_VERSION_KEY)).toBe("v2");
+  });
+});
+
+describe("post-deploy projection rebuild when KV or the queue misbehave", () => {
+  const version = { id: "v9", tag: "", timestamp: "" };
+
+  afterEach(() => resetKvHintBreaker());
+
+  it("queues nothing while KV refuses the claim: no rebuild chain per 15-minute tick", async () => {
+    const put = vi.fn(async () => { throw new Error("KV put() limit exceeded for the day."); });
+    const { queue, sent } = fakeQueue();
+    const env = { CACHE: { get: async () => null, put, delete: async () => undefined }, JOBS_QUEUE: queue, CF_VERSION_METADATA: version } as unknown as Env;
+
+    for (let tick = 0; tick < 5; tick += 1) await expect(queuePostDeployProjectionRebuild(env)).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    // One failing write, then the breaker keeps the other ticks off KV.
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the claim when the queue rejects the rebuild, so the next tick retries", async () => {
+    const kv = new Map<string, string>();
+    const cache = {
+      get: async (key: string) => kv.get(key) ?? null,
+      put: async (key: string, value: string) => { kv.set(key, value); },
+      delete: async (key: string) => { kv.delete(key); },
+    };
+    const failing = { send: async () => { throw new Error("queue down"); }, sendBatch: async () => undefined };
+    const down = { CACHE: cache, JOBS_QUEUE: failing, CF_VERSION_METADATA: version } as unknown as Env;
+    await expect(queuePostDeployProjectionRebuild(down)).resolves.toBe(false);
+    expect(kv.has(PROJECTIONS_REBUILT_FOR_VERSION_KEY)).toBe(false);
+
+    const { queue, sent } = fakeQueue();
+    const up = { CACHE: cache, JOBS_QUEUE: queue, CF_VERSION_METADATA: version } as unknown as Env;
+    await expect(queuePostDeployProjectionRebuild(up)).resolves.toBe(true);
+    expect(sent).toEqual([{ type: "catalog.projections.rebuild", afterProductId: null }]);
   });
 });
 

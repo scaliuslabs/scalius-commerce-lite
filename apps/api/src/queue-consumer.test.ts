@@ -1,3 +1,4 @@
+import { resetKvHintBreaker } from "@scalius/shared/kv-hints";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -1995,6 +1996,55 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(hintPayload).not.toContain("987654");
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  });
+
+  it("costs a first-attempt OTP delivery no KV call at all", async () => {
+    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_first_attempt",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message], "jobs"), { CACHE: cache } as unknown as Env);
+
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+    expect(cache.delete).not.toHaveBeenCalled();
+  });
+
+  it("clears a recovery hint only after a retry, and a KV that refuses writes never fails the delivery", async () => {
+    resetKvHintBreaker();
+    mocks.claimAuthOtpDeliveryReceipt.mockResolvedValueOnce({
+      claimed: true,
+      receipt: { id: "aor_retry", deliveryKey: "otp_delivery_retry", claimId: "aorc_retry", attempts: 2 },
+    });
+    const refusing = new Error("KV DELETE failed: 429 Too Many Requests");
+    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn().mockRejectedValue(refusing) };
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_retry",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message], "jobs"), { CACHE: cache } as unknown as Env);
+
+    expect(cache.delete).toHaveBeenCalledWith("auth_otp:accepted:otp_delivery_retry");
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+    resetKvHintBreaker();
   });
 
   it("recovers accepted OTP deliveries from a hint before retrying providers", async () => {

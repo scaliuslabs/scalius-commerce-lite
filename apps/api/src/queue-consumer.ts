@@ -22,6 +22,7 @@
 //       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@scalius/database/client";
+import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { CatalogQueueMessage } from "./utils/catalog-jobs";
 import {
   customerAuthOtpChallenges,
@@ -565,10 +566,6 @@ async function storeAuthOtpAcceptedHint(
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel },
   result: AuthOtpDeliveryReceiptResult,
 ): Promise<void> {
-  if (!env.CACHE) {
-    throw new Error("CACHE binding is required to preserve accepted OTP delivery recovery hints");
-  }
-
   const hint: AuthOtpAcceptedHint = {
     deliveryKey: target.deliveryKey,
     channel: target.channel,
@@ -579,11 +576,17 @@ async function storeAuthOtpAcceptedHint(
     createdAt: Math.floor(Date.now() / 1000),
   };
 
-  await env.CACHE.put(
+  // Written only when marking the delivery accepted failed after the provider
+  // took the message, so a retry does not send the code twice. Not written
+  // (no binding, KV refusing writes): the retry sends again, which costs one
+  // duplicate message and nothing else.
+  const stored = await putKvHint(
+    env.CACHE,
     authOtpAcceptedHintKey(target.deliveryKey),
     JSON.stringify(hint),
     { expirationTtl: AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS },
   );
+  if (!stored) throw new Error("The accepted OTP recovery hint was not written");
 }
 
 async function recoverAuthOtpAcceptedDeliveryFromHint(
@@ -621,13 +624,9 @@ async function readAuthOtpAcceptedHint(
 }
 
 async function deleteAuthOtpAcceptedHint(env: Env, deliveryKey: string): Promise<void> {
-  if (!env.CACHE) return;
-  await env.CACHE.delete(authOtpAcceptedHintKey(deliveryKey)).catch((error: unknown) => {
-    console.warn(
-      `[Queue] Failed to delete accepted OTP recovery hint delivery=${deliveryKey}:`,
-      error instanceof Error ? error.message : error,
-    );
-  });
+  if (!(await deleteKvHint(env.CACHE, authOtpAcceptedHintKey(deliveryKey)))) {
+    console.warn(`[Queue] Accepted OTP recovery hint delivery=${deliveryKey} not deleted; it expires on its own`);
+  }
 }
 
 function authOtpAcceptedHintKey(deliveryKey: string): string {
@@ -1216,7 +1215,9 @@ async function processAuthOtpQueueMessage(
     const result = await sendAuthOtpByChannel(resolvedPayload, code, target, db, env);
     try {
       await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
-      await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
+      // Only an earlier attempt can have left a recovery hint: the first one
+      // never costs a KV call (Workers Free allows 1,000 writes and deletes a day).
+      if (claim.receipt.attempts > 1) await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
     } catch (acceptedMarkError) {
       await storeAuthOtpAcceptedHint(env, target, result).catch((hintError: unknown) => {
         console.error(

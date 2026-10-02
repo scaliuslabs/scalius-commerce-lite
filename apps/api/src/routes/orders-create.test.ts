@@ -1,5 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orders } from "@scalius/database/schema";
 
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
@@ -1110,7 +1110,12 @@ describe("authoritative tax quote", () => {
   });
 });
 
+// The recovery hints are the Paid profile's accelerator (kv.checkoutRecoveryHints);
+// the Free profile's behaviour is the describe after them.
 describe("checkout status recovery hints", () => {
+  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
   it("rejects receipt proof in the status URL before KV or D1 reads", async () => {
     const { app, db, kv } = createStatusTestApp({
       attempt: {
@@ -1444,7 +1449,59 @@ describe("create order currency parity", () => {
   );
 });
 
+describe("checkout recovery hints on the Free profile", () => {
+  it("answers a poll from D1 alone: no KV read, no KV write", async () => {
+    const { app, kv, statusToken } = createStatusTestApp({
+      attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
+      // A hint that would say otherwise is never consulted.
+      kvStatus: { status: "failed", orderId: "order_1", error: "stale" },
+    });
+    const executionCtx = createWaitUntilContext();
+
+    const response = await app.request(`/api/v1/orders/status/${statusToken}`, {}, { CACHE: kv } as never, executionCtx as never);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: { status: "completed", orderId: "order_1" } });
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("answers failed and processing attempts from D1 too, and works without a KV binding at all", async () => {
+    const failed = createStatusTestApp({ attempt: { status: "failed", orderId: "order_1", checkoutToken: "chk_status", lastError: "Out of stock" } });
+    const failedResponse = await failed.app.request(`/api/v1/orders/status/${failed.statusToken}`, {}, {} as never);
+    expect(await failedResponse.json()).toMatchObject({ data: { status: "failed", error: "Out of stock" } });
+
+    const processing = createStatusTestApp({ attempt: { status: "processing", orderId: "order_1", checkoutToken: "chk_status" }, orderExists: false });
+    const processingResponse = await processing.app.request(`/api/v1/orders/status/${processing.statusToken}`, {}, {} as never);
+    expect(processingResponse.status).toBe(202);
+    expect(await processingResponse.json()).toMatchObject({ data: { status: "processing" } });
+
+    const committed = createStatusTestApp({ attempt: { status: "processing", orderId: "order_1", checkoutToken: "chk_status" }, orderExists: true });
+    const committedResponse = await committed.app.request(`/api/v1/orders/status/${committed.statusToken}`, {}, {} as never);
+    expect(await committedResponse.json()).toMatchObject({ data: { status: "completed", orderId: "order_1" } });
+  });
+
+  it("writes no KV hint after an order commits", async () => {
+    const { app, kv } = createTestApp();
+    const executionCtx = createWaitUntilContext();
+    const response = await app.request(
+      "/api/v1/orders",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(validOrderBody) },
+      { CACHE: kv } as never,
+      executionCtx as never,
+    );
+    expect(response.status).toBe(201);
+    await Promise.all(executionCtx.waitUntil.mock.calls.map(([task]) => task));
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+  });
+});
+
 describe("create order commit/KV ordering", () => {
+  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
   it("rejects a changed authoritative quote before rate limiting or durable checkout writes", async () => {
     const { app, kv } = createTestApp();
     const response = await app.request(

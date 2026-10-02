@@ -26,6 +26,7 @@
 // closed instead of guessing from defaults. Public HTTP caches are not per
 // document; route handlers bump the store cache generation after a save.
 
+import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { ZodType } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -443,10 +444,8 @@ export function defineSettingsDocument<T extends object>(
 
   async function writeCache(ctx: SettingsDocumentContext, value: T): Promise<void> {
     if (!definition.cacheKey || !ctx.kv) return;
-    try {
-      await ctx.kv.put(definition.cacheKey, JSON.stringify(value));
-    } catch (error: unknown) {
-      console.warn(`[Settings] KV write failed for ${label}:`, maskedMessage(error));
+    if (!(await putKvHint(ctx.kv, definition.cacheKey, JSON.stringify(value)))) {
+      console.warn(`[Settings] KV mirror of ${label} not written; D1 stays the authority`);
     }
   }
 
@@ -602,10 +601,8 @@ export function defineSettingsDocument<T extends object>(
     },
     async invalidate(ctx = {}) {
       if (!definition.cacheKey || !ctx.kv) return;
-      try {
-        await ctx.kv.delete(definition.cacheKey);
-      } catch (error: unknown) {
-        console.warn(`[Settings] KV delete failed for ${label}:`, maskedMessage(error));
+      if (!(await deleteKvHint(ctx.kv, definition.cacheKey))) {
+        console.warn(`[Settings] KV mirror of ${label} not cleared`);
       }
     },
   };

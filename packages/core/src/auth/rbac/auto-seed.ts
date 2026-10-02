@@ -1,5 +1,6 @@
 // Reconciles code-owned permissions and system roles without changing user authority.
 
+import { putKvHint } from "@scalius/shared/kv-hints";
 import { eq, count, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
@@ -181,15 +182,8 @@ export async function markRbacSeedCacheCurrent(
   kv?: Pick<KVNamespace, "put">,
 ): Promise<void> {
   if (!kv) return;
-  try {
-    await kv.put(getRbacSeedCacheKey(), "1", {
-      expirationTtl: RBAC_SEED_CACHE_TTL_SECONDS,
-    });
-  } catch (error) {
-    console.warn(
-      "RBAC: Failed to write seed cache marker:",
-      error instanceof Error ? error.message : String(error),
-    );
+  if (!(await putKvHint(kv, getRbacSeedCacheKey(), "1", { expirationTtl: RBAC_SEED_CACHE_TTL_SECONDS }))) {
+    console.warn("RBAC: seed cache marker not written; D1 stays the authority");
   }
 }
 
