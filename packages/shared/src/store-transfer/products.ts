@@ -134,6 +134,39 @@ export const productImportBatchSchema = z.object({
 });
 export type ProductImportBatch = z.infer<typeof productImportBatchSchema>;
 
+/** Images fetched per request (each is a remote download and an upload). */
+export const PRODUCT_IMAGE_BATCH_MAX = 20;
+export const PRODUCT_IMAGE_BATCH_DEFAULT = 6;
+
+/**
+ * Remote images to attach to imported products. Each URL is fetched once per
+ * store (media are named after the URL), so re-sending an image that is
+ * already attached does nothing.
+ */
+export const productImageBatchSchema = z.object({
+  items: z.array(z.object({
+    productId: z.string().trim().min(1).max(100),
+    images: z.array(z.object({
+      url: importUrlSchema,
+      alt: nullableText(500),
+      /** SKUs of this product that show this image. */
+      skus: z.array(z.string().trim().min(1).max(100)).max(150).default([]),
+    })).min(1).max(PRODUCT_IMPORT_MAX_IMAGES),
+  })).min(1).max(PRODUCT_IMAGE_BATCH_MAX),
+}).refine((batch) => batch.items.reduce((sum, item) => sum + item.images.length, 0) <= PRODUCT_IMPORT_MAX_IMAGES, {
+  message: `Send at most ${PRODUCT_IMPORT_MAX_IMAGES} images per request.`,
+});
+export type ProductImageBatch = z.infer<typeof productImageBatchSchema>;
+
+/** The image jobs for imported products: every image, with the SKUs that use it. */
+export function productImageJobs(item: ProductImportItem): ProductImageBatch["items"][number]["images"] {
+  return item.images.map((image) => ({
+    url: image.url,
+    alt: image.alt,
+    skus: item.variants.flatMap((variant) => variant.imageUrl === image.url && variant.sku ? [variant.sku] : []),
+  }));
+}
+
 type RuleIssue = { message: string; path: (string | number)[]; code: string };
 
 /** Combinations the option set spans (the editor's limit counts every one). */

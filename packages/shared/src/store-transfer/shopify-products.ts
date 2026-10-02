@@ -254,7 +254,8 @@ export function mapShopifyProducts(table: CsvTable, options: ProductMappingOptio
         line: row.line,
         optionValues,
         sku: sku || (axes.length > 0 ? generatedVariantSku(handle, optionValues) : null),
-        price: price.value!,
+        // A missing or unreadable price was refused above.
+        price: price.ok ? price.value ?? 0 : 0,
         compareAtPrice: compareAt.ok && compareAt.value !== null && compareAt.value > 0 ? compareAt.value : null,
         cost: hasCost && cost.ok ? cost.value : null,
         stock: tracked && quantity.ok && quantity.value !== null ? quantity.value : null,

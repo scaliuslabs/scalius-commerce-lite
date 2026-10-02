@@ -25,6 +25,7 @@ import { WARRANTY_ROUTE_PERMISSIONS } from "./warranty";
 import { WEBHOOK_ROUTE_PERMISSIONS } from "./webhooks";
 import { CUSTOM_FIELD_ROUTE_PERMISSIONS } from "./custom-fields";
 import { APP_ROUTE_PERMISSIONS } from "./apps";
+import { STORE_TRANSFER_ROUTE_PERMISSIONS } from "./store-transfer";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -56,6 +57,7 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   WEBHOOK_ROUTE_PERMISSIONS,
   CUSTOM_FIELD_ROUTE_PERMISSIONS,
   APP_ROUTE_PERMISSIONS,
+  STORE_TRANSFER_ROUTE_PERMISSIONS,
 ];
 
 /**

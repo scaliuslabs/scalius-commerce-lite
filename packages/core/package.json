@@ -59,6 +59,7 @@
     "./modules/settings": "./src/modules/settings/index.ts",
     "./modules/settings/browser": "./src/modules/settings/browser.ts",
     "./modules/storefront": "./src/modules/storefront/index.ts",
+    "./modules/store-transfer": "./src/modules/store-transfer/index.ts",
     "./modules/tax": "./src/modules/tax/index.ts",
     "./modules/tax/browser": "./src/modules/tax/browser.ts",
     "./modules/warranty": "./src/modules/warranty/index.ts",

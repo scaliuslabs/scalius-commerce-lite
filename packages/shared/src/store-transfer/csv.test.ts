@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CsvParseError, createCsvParser, csvCell, parseCsv, readCsvBlob, spreadsheetSafeText, toCsv } from "./csv";
 import { cleanImportCell, parseImportDecimal, parseImportInteger, splitImportList } from "./values";
 import { ImportFileError, parseImportText, readImportFile } from "./detect";
+import { readFixture } from "./fixtures/fixture";
 
-const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+const fixtures = new Map(await Promise.all(["shopify-products.csv", "malformed.csv"].map(async (name) => [name, await readFixture(name)] as const)));
+const fixture = (name: string) => fixtures.get(name)!;
 
 describe("RFC 4180 parser", () => {
   it("reads quoted fields with commas, doubled quotes and line breaks", () => {

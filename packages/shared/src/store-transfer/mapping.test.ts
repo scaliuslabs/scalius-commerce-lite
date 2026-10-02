@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readFixture } from "./fixtures/fixture";
 import { parseImportText } from "./detect";
 import { mapShopifyProducts } from "./shopify-products";
 import { mapWooCommerceProducts } from "./woocommerce-products";
@@ -10,7 +10,9 @@ import { buildFailedRowsCsv, buildImportIssuesCsv } from "./issues";
 import { parseCsv } from "./csv";
 
 const BDT = { code: "BDT", decimalPlaces: 2 };
-const file = (name: string) => parseImportText(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
+const FIXTURES = ["shopify-products.csv", "woocommerce-products.csv", "shopify-customers.csv", "woocommerce-customers.csv"];
+const fixtures = new Map(await Promise.all(FIXTURES.map(async (name) => [name, await readFixture(name)] as const)));
+const file = (name: string) => parseImportText(fixtures.get(name)!);
 
 describe("format detection", () => {
   it("names each fixture's format", () => {

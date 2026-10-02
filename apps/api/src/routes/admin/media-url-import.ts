@@ -88,7 +88,14 @@ function remoteMetadata(response: Response, requestedFilename?: string) {
         throw new ValidationError("Remote media must return an exact Content-Length.");
     }
     const policy = getMediaPolicy(mimeType);
-    const filename = requestedFilename?.trim() || `imported.${policy.preferredExtension}`;
+    const requested = requestedFilename?.trim() ?? "";
+    const extension = requested.split(".").pop()?.toLowerCase() ?? "";
+    // The server's Content-Type decides the format; a name like photo.jpg for a WebP gets .webp.
+    const filename = !requested
+        ? `imported.${policy.preferredExtension}`
+        : (policy.extensions as readonly string[]).includes(extension)
+            ? requested
+            : `${requested.replace(/\.[A-Za-z0-9]{1,5}$/, "") || "imported"}.${policy.preferredExtension}`;
     const validated = validateMediaFileMetadata({ filename, mimeType, size });
     if (!validated.ok) throw new ValidationError(validated.error);
     return validated.value;
@@ -139,15 +146,20 @@ export async function importMediaFromUrl(input: {
     filename?: string;
     folderId?: string | null;
     fetcher?: typeof fetch;
+    /** A chosen id for the new media (store import names media after the source URL). */
+    mediaId?: string;
 }) {
     const response = await fetchPublicMedia(input.sourceUrl, input.fetcher ?? fetch);
     const metadata = remoteMetadata(response, input.filename);
-    const session = await initiateMediaUpload(input.db, {
+    const file = {
         filename: metadata.filename,
         mimeType: metadata.mimeType,
         size: metadata.size,
         folderId: input.folderId,
-    }, input.bucket);
+    };
+    const session = input.mediaId
+        ? await initiateMediaUpload(input.db, file, input.bucket, { mediaId: input.mediaId })
+        : await initiateMediaUpload(input.db, file, input.bucket);
     try {
         await readRemoteParts(response.body!, metadata.size, async (partNumber, value) => {
             await uploadMediaPart(input.db, {
