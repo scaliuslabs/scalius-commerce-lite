@@ -34,6 +34,9 @@ import {
     unarchiveInventoryLocation,
     updateInventoryLocation,
     updateInventoryLocationSchema,
+    getInventoryValuation,
+    setSkuCosts,
+    setSkuCostsSchema,
 } from "@scalius/core/modules/inventory";
 import { INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
@@ -90,6 +93,8 @@ const inventoryVariantSchema = z.object({
     lowStockThreshold: z.number().nullable(),
     version: z.number(),
     locationOnHand: z.number().int().nullable().openapi({ description: "On-hand at the `locationId` filter; null without one" }),
+    cost: z.number().nullable().openapi({ description: "Unit cost (cost per item) in major units; null when not set. Staff-only." }),
+    incoming: z.number().int().openapi({ description: "Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand" }),
 }).passthrough();
 
 const inventoryStatsSchema = z.object({
@@ -295,7 +300,7 @@ const listRoute = createRoute({
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(100).default(50).openapi({ description: "Items per page" }),
             alertStatus: z.enum(["active", "acknowledged", "resolved", "all"]).optional().openapi({ description: "Alert status filter" }),
-            movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all").openapi({ description: "Movement type filter" }),
+            movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted", "received", "transfer_out", "transfer_in"]).optional().default("all").openapi({ description: "Movement type filter" }),
             movementOrderId: z.string().trim().max(100).optional().openapi({ description: "Exact order ID filter for movements" }),
             movementLocationId: z.string().trim().min(1).max(100).optional().openapi({ description: "Movements at this inventory location only" }),
             movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement start date (YYYY-MM-DD, Bangladesh calendar day)" }),
@@ -360,7 +365,7 @@ app.openapi(listRoute, async (c) => {
 
 const movementExportBodySchema = z.object({
     search: z.string().trim().max(120).optional().default(""),
-    movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all"),
+    movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted", "received", "transfer_out", "transfer_in"]).optional().default("all"),
     movementOrderId: z.string().trim().max(100).optional(),
     movementLocationId: z.string().trim().min(1).max(100).optional(),
     movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -904,6 +909,69 @@ app.openapi(stockSetRoute, async (c) => {
     }
 });
 
+// ── Valuation ──
+
+const valuationLocationSchema = z.object({
+    locationId: z.string(),
+    name: z.string(),
+    code: z.string(),
+    isDefault: z.boolean(),
+    status: z.enum(INVENTORY_LOCATION_STATUSES),
+    units: z.number().int(),
+    value: z.number().openapi({ description: "On hand x unit cost (major units), SKUs with a cost only" }),
+    unitsWithoutCost: z.number().int(),
+    skusWithoutCost: z.number().int(),
+});
+
+const valuationRoute = createRoute({
+    method: "get",
+    path: "/valuation",
+    operationId: "dashboard.inventory.valuation",
+    tags: ["Admin - Inventory"],
+    summary: "Get the inventory value per location",
+    description: "On-hand units times each SKU's current unit cost, per location, plus units in transit. SKUs without a cost are counted (unitsWithoutCost, skusWithoutCost), not valued.",
+    responses: {
+        200: {
+            description: "Inventory valuation",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        currencyCode: z.string(),
+                        locations: z.array(valuationLocationSchema),
+                        total: z.object({ units: z.number().int(), value: z.number(), unitsWithoutCost: z.number().int(), skusWithoutCost: z.number().int() }),
+                        inTransit: z.object({ units: z.number().int(), value: z.number(), unitsWithoutCost: z.number().int() }),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(valuationRoute, async (c) => ok(c, await getInventoryValuation(c.get("db"))));
+
+// ── Unit costs ──
+
+const setCostsRoute = createRoute({
+    method: "put",
+    path: "/costs",
+    operationId: "dashboard.inventory.set_costs",
+    tags: ["Admin - Inventory"],
+    summary: "Set the unit cost of SKUs",
+    description: "Cost per item in major units (null clears it), up to 100 live SKUs in one atomic write. With expectedCost, a SKU whose cost changed since it was read (a receipt average or another editor) refuses the whole change. Never shown to buyers.",
+    request: { body: { content: { "application/json": { schema: setSkuCostsSchema } } } },
+    responses: {
+        200: {
+            description: "Costs saved",
+            content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(z.object({ variantId: z.string(), cost: z.number().nullable() })) })) } },
+        },
+        400: errorResponses[400],
+        404: errorResponses[404],
+        409: conflictResponse,
+    },
+});
+
+app.openapi(setCostsRoute, async (c) => ok(c, await setSkuCosts(c.get("db"), c.req.valid("json"))));
+
 // ── Per-location levels of a product's SKUs ──
 
 const productLevelsRoute = createRoute({
@@ -930,6 +998,12 @@ const productLevelsRoute = createRoute({
                             locationId: z.string(),
                             onHand: z.number().int(),
                         })),
+                        incoming: z.array(z.object({
+                            variantId: z.string(),
+                            locationId: z.string(),
+                            purchaseOrders: z.number().int().openapi({ description: "Open purchase order units arriving there" }),
+                            transfers: z.number().int().openapi({ description: "Units in transit to there" }),
+                        })).openapi({ description: "Units coming to each location (not on hand); rows with nothing incoming are omitted" }),
                     })),
                 },
             },

@@ -1,7 +1,7 @@
 // The `data` of a webhook delivery: the resource's current admin API
 // representation, read with the same core functions the admin GET routes use
 // (orders/detail.ts, orders-returns.ts, products.ts, customers.ts,
-// inventory.ts), so a receiver sees exactly what `GET /api/v1/admin/...`
+// inventory.ts, inventory-purchasing.ts), so a receiver sees exactly what `GET /api/v1/admin/...`
 // returns. A resource that no longer exists is null.
 
 import type { Database } from "@scalius/database/client";
@@ -10,7 +10,7 @@ import type { OutboxEvent, WebhookRepresentationResolver } from "@scalius/core/m
 import { getOrderDetails, getOrderReturn } from "@scalius/core/modules/orders";
 import { getProductDetails } from "@scalius/core/modules/products";
 import { getCustomerDetail } from "@scalius/core/modules/customers";
-import { getVariantInventoryLevels } from "@scalius/core/modules/inventory";
+import { getPurchaseOrder, getTransfer, getVariantInventoryLevels } from "@scalius/core/modules/inventory";
 import { composeOrderLineExtras, withOrderLineExtras } from "../routes/shared/order-line-extras";
 
 async function orNullWhenMissing<T>(read: () => Promise<T | null | undefined>): Promise<T | null> {
@@ -53,6 +53,12 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
       case "variant":
         // `GET /api/v1/admin/inventory/{variantId}/levels`
         return orNullWhenMissing(() => getVariantInventoryLevels(db, event.resourceId));
+      case "purchase_order":
+        // `GET /api/v1/admin/inventory/purchase-orders/{purchaseOrderId}`
+        return orNullWhenMissing(() => getPurchaseOrder(db, event.resourceId));
+      case "inventory_transfer":
+        // `GET /api/v1/admin/inventory/transfers/{transferId}`
+        return orNullWhenMissing(() => getTransfer(db, event.resourceId));
     }
   };
 }

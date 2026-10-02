@@ -137,6 +137,43 @@ describe("route permissions", () => {
     });
   });
 
+  it("reads purchasing, transfers, costs and value with products.view and writes them with products.edit", () => {
+    const view = { permission: PERMISSIONS.PRODUCTS_VIEW };
+    const edit = { permission: PERMISSIONS.PRODUCTS_EDIT };
+    const cases: Array<[string, "GET" | "POST" | "PUT" | "PATCH" | "DELETE", typeof view]> = [
+      ["/api/v1/admin/inventory/valuation", "GET", view],
+      ["/api/v1/admin/inventory/costs", "PUT", edit],
+      ["/api/v1/admin/inventory/suppliers", "GET", view],
+      ["/api/v1/admin/inventory/suppliers", "POST", edit],
+      ["/api/v1/admin/inventory/suppliers/sup_1", "GET", view],
+      ["/api/v1/admin/inventory/suppliers/sup_1", "PATCH", edit],
+      ["/api/v1/admin/inventory/suppliers/sup_1/archive", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders", "GET", view],
+      ["/api/v1/admin/inventory/purchase-orders", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1", "GET", view],
+      ["/api/v1/admin/inventory/purchase-orders/po_1", "PUT", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1", "DELETE", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/export", "GET", view],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/order", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/cancel", "POST", edit],
+      ["/api/v1/admin/inventory/transfers", "GET", view],
+      ["/api/v1/admin/inventory/transfers", "POST", edit],
+      ["/api/v1/admin/inventory/transfers/trf_1", "GET", view],
+      ["/api/v1/admin/inventory/transfers/trf_1", "PUT", edit],
+      ["/api/v1/admin/inventory/transfers/trf_1/ship", "POST", edit],
+      ["/api/v1/admin/inventory/transfers/trf_1/receive", "POST", edit],
+      ["/api/v1/admin/inventory/transfers/trf_1/cancel", "POST", edit],
+    ];
+    for (const [path, method, expected] of cases) {
+      expect(getRoutePermission(path, method), `${method} ${path}`).toEqual(expected);
+    }
+    // Reads never open a write, and nothing opens a method the API lacks.
+    expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1/receive", "GET")).toBeNull();
+    expect(getRoutePermission("/api/v1/admin/inventory/valuation", "POST")).toBeNull();
+    expect(getRoutePermission("/api/v1/admin/inventory/suppliers/sup_1", "DELETE")).toBeNull();
+  });
+
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });

@@ -35269,6 +35269,2078 @@ export type PutApiV1AdminMediaFoldersByIdResponses = {
 
 export type PutApiV1AdminMediaFoldersByIdResponse = PutApiV1AdminMediaFoldersByIdResponses[keyof PutApiV1AdminMediaFoldersByIdResponses];
 
+export type GetApiV1AdminInventorySuppliersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'active' | 'archived' | 'all';
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/inventory/suppliers';
+};
+
+export type GetApiV1AdminInventorySuppliersResponses = {
+    /**
+     * Suppliers
+     */
+    200: {
+        success: true;
+        data: {
+            suppliers: Array<{
+                id: string;
+                name: string;
+                contactName: string | null;
+                phone: string | null;
+                email: string | null;
+                notes: string | null;
+                status: 'active' | 'archived';
+                version: number;
+                /**
+                 * Purchase orders still expected from this supplier
+                 */
+                openPurchaseOrders: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminInventorySuppliersResponse = GetApiV1AdminInventorySuppliersResponses[keyof GetApiV1AdminInventorySuppliersResponses];
+
+export type PostApiV1AdminInventorySuppliersData = {
+    body: {
+        name: string;
+        contactName?: string | null;
+        phone?: string | null;
+        email?: string | '' | unknown;
+        notes?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/suppliers';
+};
+
+export type PostApiV1AdminInventorySuppliersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersError = PostApiV1AdminInventorySuppliersErrors[keyof PostApiV1AdminInventorySuppliersErrors];
+
+export type PostApiV1AdminInventorySuppliersResponses = {
+    /**
+     * Supplier added
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            contactName: string | null;
+            phone: string | null;
+            email: string | null;
+            notes: string | null;
+            status: 'active' | 'archived';
+            version: number;
+            /**
+             * Purchase orders still expected from this supplier
+             */
+            openPurchaseOrders: number;
+            createdAt: string | number;
+            updatedAt: string | number;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersResponse = PostApiV1AdminInventorySuppliersResponses[keyof PostApiV1AdminInventorySuppliersResponses];
+
+export type GetApiV1AdminInventorySuppliersBySupplierIdData = {
+    body?: never;
+    path: {
+        supplierId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/suppliers/{supplierId}';
+};
+
+export type GetApiV1AdminInventorySuppliersBySupplierIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminInventorySuppliersBySupplierIdError = GetApiV1AdminInventorySuppliersBySupplierIdErrors[keyof GetApiV1AdminInventorySuppliersBySupplierIdErrors];
+
+export type GetApiV1AdminInventorySuppliersBySupplierIdResponses = {
+    /**
+     * Supplier
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            contactName: string | null;
+            phone: string | null;
+            email: string | null;
+            notes: string | null;
+            status: 'active' | 'archived';
+            version: number;
+            /**
+             * Purchase orders still expected from this supplier
+             */
+            openPurchaseOrders: number;
+            createdAt: string | number;
+            updatedAt: string | number;
+        };
+    };
+};
+
+export type GetApiV1AdminInventorySuppliersBySupplierIdResponse = GetApiV1AdminInventorySuppliersBySupplierIdResponses[keyof GetApiV1AdminInventorySuppliersBySupplierIdResponses];
+
+export type PatchApiV1AdminInventorySuppliersBySupplierIdData = {
+    body: {
+        name: string;
+        contactName?: string | null;
+        phone?: string | null;
+        email?: string | '' | unknown;
+        notes?: string | null;
+        expectedVersion: number;
+    };
+    path: {
+        supplierId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/suppliers/{supplierId}';
+};
+
+export type PatchApiV1AdminInventorySuppliersBySupplierIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminInventorySuppliersBySupplierIdError = PatchApiV1AdminInventorySuppliersBySupplierIdErrors[keyof PatchApiV1AdminInventorySuppliersBySupplierIdErrors];
+
+export type PatchApiV1AdminInventorySuppliersBySupplierIdResponses = {
+    /**
+     * Supplier saved
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            contactName: string | null;
+            phone: string | null;
+            email: string | null;
+            notes: string | null;
+            status: 'active' | 'archived';
+            version: number;
+            /**
+             * Purchase orders still expected from this supplier
+             */
+            openPurchaseOrders: number;
+            createdAt: string | number;
+            updatedAt: string | number;
+        };
+    };
+};
+
+export type PatchApiV1AdminInventorySuppliersBySupplierIdResponse = PatchApiV1AdminInventorySuppliersBySupplierIdResponses[keyof PatchApiV1AdminInventorySuppliersBySupplierIdResponses];
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdArchiveData = {
+    body?: never;
+    path: {
+        supplierId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/suppliers/{supplierId}/archive';
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdArchiveError = PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors[keyof PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors];
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses = {
+    /**
+     * Supplier archived
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            contactName: string | null;
+            phone: string | null;
+            email: string | null;
+            notes: string | null;
+            status: 'active' | 'archived';
+            version: number;
+            /**
+             * Purchase orders still expected from this supplier
+             */
+            openPurchaseOrders: number;
+            createdAt: string | number;
+            updatedAt: string | number;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponse = PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses[keyof PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses];
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveData = {
+    body?: never;
+    path: {
+        supplierId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/suppliers/{supplierId}/unarchive';
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveError = PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors[keyof PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors];
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses = {
+    /**
+     * Supplier active
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            contactName: string | null;
+            phone: string | null;
+            email: string | null;
+            notes: string | null;
+            status: 'active' | 'archived';
+            version: number;
+            /**
+             * Purchase orders still expected from this supplier
+             */
+            openPurchaseOrders: number;
+            createdAt: string | number;
+            updatedAt: string | number;
+        };
+    };
+};
+
+export type PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponse = PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses[keyof PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses];
+
+export type GetApiV1AdminInventoryPurchaseOrdersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled' | 'open' | 'all';
+        supplierId?: string;
+        locationId?: string;
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/inventory/purchase-orders';
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersResponses = {
+    /**
+     * Purchase orders
+     */
+    200: {
+        success: true;
+        data: {
+            purchaseOrders: Array<{
+                id: string;
+                number: number;
+                /**
+                 * PO1001
+                 */
+                displayNumber: string;
+                status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+                supplier: {
+                    id: string;
+                    name: string;
+                } | null;
+                destination: {
+                    id: string;
+                    name: string;
+                };
+                /**
+                 * Expected arrival date (YYYY-MM-DD)
+                 */
+                expectedOn: string | null;
+                reference: string | null;
+                currencyCode: string;
+                lineCount: number;
+                quantity: number;
+                receivedQuantity: number;
+                /**
+                 * Σ quantity × unit cost, major units
+                 */
+                subtotal: number;
+                /**
+                 * Subtotal + shipping + other costs + tax
+                 */
+                total: number;
+                revision: number;
+                orderedAt: NullableTimestamp;
+                receivedAt: NullableTimestamp;
+                cancelledAt: NullableTimestamp;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersResponse = GetApiV1AdminInventoryPurchaseOrdersResponses[keyof GetApiV1AdminInventoryPurchaseOrdersResponses];
+
+export type PostApiV1AdminInventoryPurchaseOrdersData = {
+    body: {
+        supplierId?: string | null;
+        destinationLocationId?: string;
+        expectedOn?: string | null;
+        reference?: string | null;
+        notes?: string | null;
+        shipping?: number;
+        otherCosts?: number;
+        tax?: number;
+        lines?: Array<{
+            variantId: string;
+            quantity: number;
+            unitCost: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders';
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersError = PostApiV1AdminInventoryPurchaseOrdersErrors[keyof PostApiV1AdminInventoryPurchaseOrdersErrors];
+
+export type PostApiV1AdminInventoryPurchaseOrdersResponses = {
+    /**
+     * Draft created
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * PO1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            supplier: {
+                id: string;
+                name: string;
+                status: string;
+                phone: string | null;
+                email: string | null;
+                contactName: string | null;
+            } | null;
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            /**
+             * Expected arrival date (YYYY-MM-DD)
+             */
+            expectedOn: string | null;
+            reference: string | null;
+            currencyCode: string;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            /**
+             * Σ quantity × unit cost, major units
+             */
+            subtotal: number;
+            /**
+             * Subtotal + shipping + other costs + tax
+             */
+            total: number;
+            revision: number;
+            orderedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            shipping: number;
+            otherCosts: number;
+            tax: number;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                /**
+                 * The SKU was removed from its product
+                 */
+                retired: boolean;
+                position: number;
+                quantity: number;
+                receivedQuantity: number;
+                openQuantity: number;
+                unitCost: number;
+                lineTotal: number;
+                /**
+                 * The SKU's unit cost now
+                 */
+                currentCost: number | null;
+            }>;
+            receipts: Array<{
+                operationKey: string;
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    unitCost: number;
+                    costBefore: number | null;
+                    costAfter: number | null;
+                    costUpdated: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersResponse = PostApiV1AdminInventoryPurchaseOrdersResponses[keyof PostApiV1AdminInventoryPurchaseOrdersResponses];
+
+export type DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData = {
+    body?: never;
+    path: {
+        purchaseOrderId: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}';
+};
+
+export type DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdError = DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors[keyof DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors];
+
+export type DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
+    /**
+     * Draft deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponse = DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses[keyof DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses];
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData = {
+    body?: never;
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}';
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdError = GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors[keyof GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors];
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
+    /**
+     * Purchase order
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * PO1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            supplier: {
+                id: string;
+                name: string;
+                status: string;
+                phone: string | null;
+                email: string | null;
+                contactName: string | null;
+            } | null;
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            /**
+             * Expected arrival date (YYYY-MM-DD)
+             */
+            expectedOn: string | null;
+            reference: string | null;
+            currencyCode: string;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            /**
+             * Σ quantity × unit cost, major units
+             */
+            subtotal: number;
+            /**
+             * Subtotal + shipping + other costs + tax
+             */
+            total: number;
+            revision: number;
+            orderedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            shipping: number;
+            otherCosts: number;
+            tax: number;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                /**
+                 * The SKU was removed from its product
+                 */
+                retired: boolean;
+                position: number;
+                quantity: number;
+                receivedQuantity: number;
+                openQuantity: number;
+                unitCost: number;
+                lineTotal: number;
+                /**
+                 * The SKU's unit cost now
+                 */
+                currentCost: number | null;
+            }>;
+            receipts: Array<{
+                operationKey: string;
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    unitCost: number;
+                    costBefore: number | null;
+                    costAfter: number | null;
+                    costUpdated: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponse = GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses[keyof GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses];
+
+export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData = {
+    body: {
+        supplierId?: string | null;
+        destinationLocationId?: string;
+        expectedOn?: string | null;
+        reference?: string | null;
+        notes?: string | null;
+        shipping?: number;
+        otherCosts?: number;
+        tax?: number;
+        lines?: Array<{
+            variantId: string;
+            quantity: number;
+            unitCost: number;
+        }>;
+        expectedRevision: number;
+    };
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}';
+};
+
+export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdError = PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors[keyof PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors];
+
+export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
+    /**
+     * Purchase order saved
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * PO1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            supplier: {
+                id: string;
+                name: string;
+                status: string;
+                phone: string | null;
+                email: string | null;
+                contactName: string | null;
+            } | null;
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            /**
+             * Expected arrival date (YYYY-MM-DD)
+             */
+            expectedOn: string | null;
+            reference: string | null;
+            currencyCode: string;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            /**
+             * Σ quantity × unit cost, major units
+             */
+            subtotal: number;
+            /**
+             * Subtotal + shipping + other costs + tax
+             */
+            total: number;
+            revision: number;
+            orderedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            shipping: number;
+            otherCosts: number;
+            tax: number;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                /**
+                 * The SKU was removed from its product
+                 */
+                retired: boolean;
+                position: number;
+                quantity: number;
+                receivedQuantity: number;
+                openQuantity: number;
+                unitCost: number;
+                lineTotal: number;
+                /**
+                 * The SKU's unit cost now
+                 */
+                currentCost: number | null;
+            }>;
+            receipts: Array<{
+                operationKey: string;
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    unitCost: number;
+                    costBefore: number | null;
+                    costAfter: number | null;
+                    costUpdated: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponse = PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses[keyof PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderData = {
+    body: {
+        /**
+         * The document's current revision
+         */
+        expectedRevision: number;
+    };
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/order';
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses = {
+    /**
+     * Purchase order ordered
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * PO1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            supplier: {
+                id: string;
+                name: string;
+                status: string;
+                phone: string | null;
+                email: string | null;
+                contactName: string | null;
+            } | null;
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            /**
+             * Expected arrival date (YYYY-MM-DD)
+             */
+            expectedOn: string | null;
+            reference: string | null;
+            currencyCode: string;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            /**
+             * Σ quantity × unit cost, major units
+             */
+            subtotal: number;
+            /**
+             * Subtotal + shipping + other costs + tax
+             */
+            total: number;
+            revision: number;
+            orderedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            shipping: number;
+            otherCosts: number;
+            tax: number;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                /**
+                 * The SKU was removed from its product
+                 */
+                retired: boolean;
+                position: number;
+                quantity: number;
+                receivedQuantity: number;
+                openQuantity: number;
+                unitCost: number;
+                lineTotal: number;
+                /**
+                 * The SKU's unit cost now
+                 */
+                currentCost: number | null;
+            }>;
+            receipts: Array<{
+                operationKey: string;
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    unitCost: number;
+                    costBefore: number | null;
+                    costAfter: number | null;
+                    costUpdated: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponse = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveData = {
+    body: {
+        operationKey?: string;
+        lines: Array<{
+            lineId: string;
+            quantity: number;
+        }>;
+        updateCost?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key for this stock command. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/receive';
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponses = {
+    /**
+     * Stock received
+     */
+    200: {
+        success: true;
+        data: {
+            purchaseOrderId: string;
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            revision: number;
+            locationId: string;
+            costUpdated: boolean;
+            lines: Array<{
+                lineId: string;
+                variantId: string;
+                sku: string;
+                quantity: number;
+                movementId: string;
+                unitCost: number;
+                costBefore: number | null;
+                costAfter: number | null;
+                /**
+                 * The SKU's on-hand across every location after the receipt
+                 */
+                stockAfter: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponse = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponses[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponses];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelData = {
+    body: {
+        /**
+         * The document's current revision
+         */
+        expectedRevision: number;
+    };
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/cancel';
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors];
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponses = {
+    /**
+     * Purchase order cancelled
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * PO1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+            supplier: {
+                id: string;
+                name: string;
+                status: string;
+                phone: string | null;
+                email: string | null;
+                contactName: string | null;
+            } | null;
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            /**
+             * Expected arrival date (YYYY-MM-DD)
+             */
+            expectedOn: string | null;
+            reference: string | null;
+            currencyCode: string;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            /**
+             * Σ quantity × unit cost, major units
+             */
+            subtotal: number;
+            /**
+             * Subtotal + shipping + other costs + tax
+             */
+            total: number;
+            revision: number;
+            orderedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            shipping: number;
+            otherCosts: number;
+            tax: number;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                /**
+                 * The SKU was removed from its product
+                 */
+                retired: boolean;
+                position: number;
+                quantity: number;
+                receivedQuantity: number;
+                openQuantity: number;
+                unitCost: number;
+                lineTotal: number;
+                /**
+                 * The SKU's unit cost now
+                 */
+                currentCost: number | null;
+            }>;
+            receipts: Array<{
+                operationKey: string;
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    unitCost: number;
+                    costBefore: number | null;
+                    costAfter: number | null;
+                    costUpdated: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponse = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponses[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponses];
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportData = {
+    body?: never;
+    path: {
+        purchaseOrderId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/export';
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportError = GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors[keyof GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors];
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses = {
+    /**
+     * Purchase order CSV attachment
+     */
+    200: string;
+};
+
+export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponse = GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses[keyof GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses];
+
+export type GetApiV1AdminInventoryTransfersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled' | 'open' | 'all';
+        locationId?: string;
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/inventory/transfers';
+};
+
+export type GetApiV1AdminInventoryTransfersResponses = {
+    /**
+     * Transfers
+     */
+    200: {
+        success: true;
+        data: {
+            transfers: Array<{
+                id: string;
+                number: number;
+                /**
+                 * T1001
+                 */
+                displayNumber: string;
+                status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+                origin: {
+                    id: string;
+                    name: string;
+                };
+                destination: {
+                    id: string;
+                    name: string;
+                };
+                expectedOn: string | null;
+                reference: string | null;
+                lineCount: number;
+                quantity: number;
+                receivedQuantity: number;
+                returnedQuantity: number;
+                /**
+                 * Shipped, not yet received or returned: out of both locations and of stock
+                 */
+                inTransitQuantity: number;
+                revision: number;
+                shippedAt: NullableTimestamp;
+                receivedAt: NullableTimestamp;
+                cancelledAt: NullableTimestamp;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryTransfersResponse = GetApiV1AdminInventoryTransfersResponses[keyof GetApiV1AdminInventoryTransfersResponses];
+
+export type PostApiV1AdminInventoryTransfersData = {
+    body: {
+        originLocationId: string;
+        destinationLocationId: string;
+        expectedOn?: string | null;
+        reference?: string | null;
+        notes?: string | null;
+        lines?: Array<{
+            variantId: string;
+            quantity: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers';
+};
+
+export type PostApiV1AdminInventoryTransfersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersError = PostApiV1AdminInventoryTransfersErrors[keyof PostApiV1AdminInventoryTransfersErrors];
+
+export type PostApiV1AdminInventoryTransfersResponses = {
+    /**
+     * Draft created
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * T1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            origin: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            expectedOn: string | null;
+            reference: string | null;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            returnedQuantity: number;
+            /**
+             * Shipped, not yet received or returned: out of both locations and of stock
+             */
+            inTransitQuantity: number;
+            revision: number;
+            shippedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                retired: boolean;
+                position: number;
+                quantity: number;
+                shippedQuantity: number;
+                receivedQuantity: number;
+                returnedQuantity: number;
+                inTransitQuantity: number;
+            }>;
+            activity: Array<{
+                operationKey: string;
+                kind: 'ship' | 'receive' | 'return';
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    locationId: string;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersResponse = PostApiV1AdminInventoryTransfersResponses[keyof PostApiV1AdminInventoryTransfersResponses];
+
+export type DeleteApiV1AdminInventoryTransfersByTransferIdData = {
+    body?: never;
+    path: {
+        transferId: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/inventory/transfers/{transferId}';
+};
+
+export type DeleteApiV1AdminInventoryTransfersByTransferIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminInventoryTransfersByTransferIdError = DeleteApiV1AdminInventoryTransfersByTransferIdErrors[keyof DeleteApiV1AdminInventoryTransfersByTransferIdErrors];
+
+export type DeleteApiV1AdminInventoryTransfersByTransferIdResponses = {
+    /**
+     * Draft deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminInventoryTransfersByTransferIdResponse = DeleteApiV1AdminInventoryTransfersByTransferIdResponses[keyof DeleteApiV1AdminInventoryTransfersByTransferIdResponses];
+
+export type GetApiV1AdminInventoryTransfersByTransferIdData = {
+    body?: never;
+    path: {
+        transferId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers/{transferId}';
+};
+
+export type GetApiV1AdminInventoryTransfersByTransferIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryTransfersByTransferIdError = GetApiV1AdminInventoryTransfersByTransferIdErrors[keyof GetApiV1AdminInventoryTransfersByTransferIdErrors];
+
+export type GetApiV1AdminInventoryTransfersByTransferIdResponses = {
+    /**
+     * Transfer
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * T1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            origin: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            expectedOn: string | null;
+            reference: string | null;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            returnedQuantity: number;
+            /**
+             * Shipped, not yet received or returned: out of both locations and of stock
+             */
+            inTransitQuantity: number;
+            revision: number;
+            shippedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                retired: boolean;
+                position: number;
+                quantity: number;
+                shippedQuantity: number;
+                receivedQuantity: number;
+                returnedQuantity: number;
+                inTransitQuantity: number;
+            }>;
+            activity: Array<{
+                operationKey: string;
+                kind: 'ship' | 'receive' | 'return';
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    locationId: string;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryTransfersByTransferIdResponse = GetApiV1AdminInventoryTransfersByTransferIdResponses[keyof GetApiV1AdminInventoryTransfersByTransferIdResponses];
+
+export type PutApiV1AdminInventoryTransfersByTransferIdData = {
+    body: {
+        originLocationId?: string;
+        destinationLocationId?: string;
+        expectedOn?: string | null;
+        reference?: string | null;
+        notes?: string | null;
+        lines?: Array<{
+            variantId: string;
+            quantity: number;
+        }>;
+        expectedRevision: number;
+    };
+    path: {
+        transferId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers/{transferId}';
+};
+
+export type PutApiV1AdminInventoryTransfersByTransferIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryTransfersByTransferIdError = PutApiV1AdminInventoryTransfersByTransferIdErrors[keyof PutApiV1AdminInventoryTransfersByTransferIdErrors];
+
+export type PutApiV1AdminInventoryTransfersByTransferIdResponses = {
+    /**
+     * Transfer saved
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            number: number;
+            /**
+             * T1001
+             */
+            displayNumber: string;
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            origin: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            destination: {
+                id: string;
+                name: string;
+                code: string;
+                status: string;
+            };
+            expectedOn: string | null;
+            reference: string | null;
+            lineCount: number;
+            quantity: number;
+            receivedQuantity: number;
+            returnedQuantity: number;
+            /**
+             * Shipped, not yet received or returned: out of both locations and of stock
+             */
+            inTransitQuantity: number;
+            revision: number;
+            shippedAt: NullableTimestamp;
+            receivedAt: NullableTimestamp;
+            cancelledAt: NullableTimestamp;
+            createdAt: string | number;
+            updatedAt: string | number;
+            notes: string | null;
+            createdBy: string | null;
+            lines: Array<{
+                id: string;
+                variantId: string;
+                productId: string;
+                productName: string | null;
+                sku: string;
+                barcode: string | null;
+                optionLabel: string | null;
+                retired: boolean;
+                position: number;
+                quantity: number;
+                shippedQuantity: number;
+                receivedQuantity: number;
+                returnedQuantity: number;
+                inTransitQuantity: number;
+            }>;
+            activity: Array<{
+                operationKey: string;
+                kind: 'ship' | 'receive' | 'return';
+                createdAt: string | number;
+                actorName: string;
+                lines: Array<{
+                    lineId: string;
+                    variantId: string;
+                    sku: string;
+                    quantity: number;
+                    locationId: string;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryTransfersByTransferIdResponse = PutApiV1AdminInventoryTransfersByTransferIdResponses[keyof PutApiV1AdminInventoryTransfersByTransferIdResponses];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdShipData = {
+    body: {
+        operationKey?: string;
+        /**
+         * The document's current revision
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key for this stock command. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        transferId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers/{transferId}/ship';
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdShipErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdShipError = PostApiV1AdminInventoryTransfersByTransferIdShipErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdShipErrors];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdShipResponses = {
+    /**
+     * Transfer shipped
+     */
+    200: {
+        success: true;
+        data: {
+            transferId: string;
+            displayNumber: string;
+            kind: 'ship' | 'receive' | 'return';
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            revision: number;
+            locationId: string | null;
+            lines: Array<{
+                lineId: string;
+                variantId: string;
+                sku: string;
+                quantity: number;
+                movementId: string;
+                stockAfter: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdShipResponse = PostApiV1AdminInventoryTransfersByTransferIdShipResponses[keyof PostApiV1AdminInventoryTransfersByTransferIdShipResponses];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdReceiveData = {
+    body: {
+        operationKey?: string;
+        lines: Array<{
+            lineId: string;
+            quantity: number;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key for this stock command. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        transferId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers/{transferId}/receive';
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdReceiveError = PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdReceiveResponses = {
+    /**
+     * Units received
+     */
+    200: {
+        success: true;
+        data: {
+            transferId: string;
+            displayNumber: string;
+            kind: 'ship' | 'receive' | 'return';
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            revision: number;
+            locationId: string | null;
+            lines: Array<{
+                lineId: string;
+                variantId: string;
+                sku: string;
+                quantity: number;
+                movementId: string;
+                stockAfter: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdReceiveResponse = PostApiV1AdminInventoryTransfersByTransferIdReceiveResponses[keyof PostApiV1AdminInventoryTransfersByTransferIdReceiveResponses];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdCancelData = {
+    body: {
+        operationKey?: string;
+        /**
+         * The document's current revision
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key for this stock command. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        transferId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/transfers/{transferId}/cancel';
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdCancelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdCancelError = PostApiV1AdminInventoryTransfersByTransferIdCancelErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdCancelErrors];
+
+export type PostApiV1AdminInventoryTransfersByTransferIdCancelResponses = {
+    /**
+     * Transfer cancelled
+     */
+    200: {
+        success: true;
+        data: {
+            transferId: string;
+            displayNumber: string;
+            kind: 'ship' | 'receive' | 'return';
+            status: 'draft' | 'in_transit' | 'partially_received' | 'received' | 'cancelled';
+            revision: number;
+            locationId: string | null;
+            lines: Array<{
+                lineId: string;
+                variantId: string;
+                sku: string;
+                quantity: number;
+                movementId: string;
+                stockAfter: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryTransfersByTransferIdCancelResponse = PostApiV1AdminInventoryTransfersByTransferIdCancelResponses[keyof PostApiV1AdminInventoryTransfersByTransferIdCancelResponses];
+
 export type GetApiV1AdminInventoryData = {
     body?: never;
     path?: never;
@@ -35300,7 +37372,7 @@ export type GetApiV1AdminInventoryData = {
         /**
          * Movement type filter
          */
-        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted';
+        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted' | 'received' | 'transfer_out' | 'transfer_in';
         /**
          * Exact order ID filter for movements
          */
@@ -35367,6 +37439,14 @@ export type GetApiV1AdminInventoryResponses = {
                  * On-hand at the `locationId` filter; null without one
                  */
                 locationOnHand: number | null;
+                /**
+                 * Unit cost (cost per item) in major units; null when not set. Staff-only.
+                 */
+                cost: number | null;
+                /**
+                 * Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand
+                 */
+                incoming: number;
                 [key: string]: unknown;
             }>;
             movements?: Array<{
@@ -35464,7 +37544,7 @@ export type GetApiV1AdminInventoryResponse = GetApiV1AdminInventoryResponses[key
 export type PostApiV1AdminInventoryMovementsExportData = {
     body?: {
         search?: string;
-        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted';
+        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted' | 'received' | 'transfer_out' | 'transfer_in';
         movementOrderId?: string;
         movementLocationId?: string;
         movementStartDate?: string;
@@ -36216,6 +38296,120 @@ export type PostApiV1AdminInventoryStockSetResponses = {
 
 export type PostApiV1AdminInventoryStockSetResponse = PostApiV1AdminInventoryStockSetResponses[keyof PostApiV1AdminInventoryStockSetResponses];
 
+export type GetApiV1AdminInventoryValuationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/valuation';
+};
+
+export type GetApiV1AdminInventoryValuationResponses = {
+    /**
+     * Inventory valuation
+     */
+    200: {
+        success: true;
+        data: {
+            currencyCode: string;
+            locations: Array<{
+                locationId: string;
+                name: string;
+                code: string;
+                isDefault: boolean;
+                status: 'active' | 'archived';
+                units: number;
+                /**
+                 * On hand x unit cost (major units), SKUs with a cost only
+                 */
+                value: number;
+                unitsWithoutCost: number;
+                skusWithoutCost: number;
+            }>;
+            total: {
+                units: number;
+                value: number;
+                unitsWithoutCost: number;
+                skusWithoutCost: number;
+            };
+            inTransit: {
+                units: number;
+                value: number;
+                unitsWithoutCost: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminInventoryValuationResponse = GetApiV1AdminInventoryValuationResponses[keyof GetApiV1AdminInventoryValuationResponses];
+
+export type PutApiV1AdminInventoryCostsData = {
+    body: {
+        items: Array<{
+            variantId: string;
+            cost: number | null;
+            expectedCost?: number | null;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/costs';
+};
+
+export type PutApiV1AdminInventoryCostsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryCostsError = PutApiV1AdminInventoryCostsErrors[keyof PutApiV1AdminInventoryCostsErrors];
+
+export type PutApiV1AdminInventoryCostsResponses = {
+    /**
+     * Costs saved
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                variantId: string;
+                cost: number | null;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryCostsResponse = PutApiV1AdminInventoryCostsResponses[keyof PutApiV1AdminInventoryCostsResponses];
+
 export type GetApiV1AdminInventoryLevelsData = {
     body?: never;
     path?: never;
@@ -36240,6 +38434,21 @@ export type GetApiV1AdminInventoryLevelsResponses = {
                 variantId: string;
                 locationId: string;
                 onHand: number;
+            }>;
+            /**
+             * Units coming to each location (not on hand); rows with nothing incoming are omitted
+             */
+            incoming: Array<{
+                variantId: string;
+                locationId: string;
+                /**
+                 * Open purchase order units arriving there
+                 */
+                purchaseOrders: number;
+                /**
+                 * Units in transit to there
+                 */
+                transfers: number;
             }>;
         };
     };
@@ -71789,7 +73998,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
     };
     path?: never;
@@ -72046,7 +74255,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
         status?: 'active' | 'disabled';
     };
@@ -72512,8 +74721,8 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
-        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
+        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer';
         resourceId?: string;
         /**
          * `nextCursor` of the previous page.
