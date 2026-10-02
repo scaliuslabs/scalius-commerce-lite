@@ -9,7 +9,8 @@ const testState = vi.hoisted(() => ({
   shippingValue: 10,
   localTotals: { subtotal: 100, shipping: 10, discount: 200, total: -90 },
   manualQuote: {
-    data: null,
+    data: null as Record<string, unknown> | null,
+    ruleErrors: null as Array<{ code: string; message: string; index: number | null }> | null,
     isCurrent: false,
     isLoading: false,
     discountLimit: {
@@ -137,6 +138,7 @@ describe("manual-order summary discount recovery", () => {
     testState.shippingValue = 10;
     testState.localTotals = { subtotal: 100, shipping: 10, discount: 200, total: -90 };
     testState.manualQuote.data = null;
+    testState.manualQuote.ruleErrors = null;
     testState.manualQuote.isCurrent = false;
     testState.manualQuote.isLoading = false;
     testState.manualQuote.discountLimit = {
@@ -228,6 +230,32 @@ describe("manual-order summary discount recovery", () => {
     await act(async () => root.render(<SummarySection />));
     expect(host.textContent).not.toContain("-৳20");
     expect(host.textContent).toContain(en.fixDeliveryCharge);
+  });
+
+  it("shows each installed app's discount after the staff discount", async () => {
+    testState.discountValue = 10;
+    testState.manualQuote.discountLimit = null;
+    testState.manualQuote.isCurrent = true;
+    testState.manualQuote.data = {
+      currencyCode: "BDT", decimalPlaces: 2, subtotalAmount: 100, shippingAmount: 10, discountAmount: 15,
+      taxAmount: 0, totalAmount: 95, taxLabel: "Tax", pricesIncludeTax: false, taxEnabled: false, settingsVersion: 1, lines: [],
+      appDiscounts: [{ appId: "acme.club", appName: "Tea club", title: "Members 5%", amount: 5, shippingAmount: 0 }],
+    };
+
+    await act(async () => root.render(<SummarySection />));
+    expect(host.textContent).toContain(`${en.discount}−৳10.00`);
+    expect(host.textContent).toContain(`${en.appDiscount.replace("{title}", "Members 5%").replace("{app}", "Tea club")}−৳5.00`);
+    expect(host.textContent).toContain("৳95.00");
+  });
+
+  it("lists the app rules that refused the quote instead of a generic error", async () => {
+    testState.manualQuote.discountLimit = null;
+    testState.manualQuote.ruleErrors = [{ code: "too_much_tea", message: "At most 3 teas per order.", index: 0 }];
+
+    await act(async () => root.render(<SummarySection />));
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(en.appRulesTitle);
+    expect(alert?.textContent).toContain("At most 3 teas per order.");
   });
 
   it("does not offer Retry for a deterministic non-discount validation error", async () => {

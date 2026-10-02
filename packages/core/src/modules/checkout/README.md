@@ -94,7 +94,20 @@ rate) is logged the same way.
   Each app's advice is one `app_risk` order fact (a retry adds nothing),
   shown on the dashboard order next to the courier fraud check. Nothing acts
   on it.
-- **Not yet**: the agent and admin order channels do not run app functions.
+- **Channels**: every channel runs the same merge rules. Buyer agents
+  (`channel: "agent"`, `agent-storefront/`): the quote and submit price
+  through `priceStorefrontCheckout`/`createStorefrontOrder` with the apps the
+  route builds; the quote adds `appDiscounts`, `shippingRates` and
+  `paymentMethods`, submit re-runs the apps under the quote fingerprint and
+  refuses a hidden method, and applying a code only an app answers to is
+  allowed. Staff orders (`channel: "admin"`, `orders/admin/app-functions.ts`):
+  the staff discount takes the place of promotions in stacking rule 1, the
+  quote carries `appDiscounts`, rule errors and a hidden cash on delivery
+  refuse the quote and the order, the order records `app_discount` facts; an
+  app prices the chosen delivery method only when staff kept its own fee (a
+  typed charge is an override), a rename always applies, hiding it refuses.
+  Amendments run no apps (an app-discounted order is not amendable).
+  `order.risk` runs after a committed agent or staff order, never a replay.
 
 ## Order lines (Wave A)
 

@@ -7880,6 +7880,35 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses = 
                 productName: string;
                 variantLabel: string | null;
             }>;
+            /**
+             * Installed apps' discounts included in discountMinor, after the store's own discount. amount is off the items, shippingAmount off delivery.
+             */
+            appDiscounts: Array<{
+                appId: string;
+                title: string;
+                code: string | null;
+                amount: number;
+                amountMinor: number;
+                shippingAmount: number;
+                shippingAmountMinor: number;
+            }>;
+            /**
+             * The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit.
+             */
+            shippingRates: Array<{
+                id: string;
+                name: string;
+                kind: 'delivery' | 'pickup';
+                amount: number;
+                amountMinor: number;
+            }> | null;
+            /**
+             * The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit.
+             */
+            paymentMethods: Array<{
+                id: string;
+                name: string;
+            }> | null;
         };
     };
 };
@@ -53318,6 +53347,16 @@ export type PostApiV1AdminOrdersQuoteResponses = {
                 unitPrice: number;
                 lineSubtotal: number;
             }>;
+            /**
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             */
+            appDiscounts?: Array<{
+                appId: string;
+                appName: string;
+                title: string;
+                amount: number;
+                shippingAmount: number;
+            }>;
         };
     };
 };
@@ -53454,6 +53493,16 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
                 quantity: number;
                 unitPrice: number;
                 lineSubtotal: number;
+            }>;
+            /**
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             */
+            appDiscounts?: Array<{
+                appId: string;
+                appName: string;
+                title: string;
+                amount: number;
+                shippingAmount: number;
             }>;
             orderId: string;
             expectedVersion: number;

@@ -36,6 +36,30 @@ import {
 } from "./create-attempts";
 import { prepareManualOrderQuote } from "./quote";
 import type { SQLiteBatchItem } from "./shared";
+import type { FunctionCart } from "@scalius/shared/plugins";
+import type { AppliedAppDiscount, CheckoutAppFunctions } from "../../checkout/app-functions";
+import { buildAppDiscountFactInserts } from "../app-facts";
+import { buildManualOrderAppCart, manualOrderAppLines } from "./app-functions";
+
+/**
+ * What the API needs after a manual order commits, for the apps' advisory
+ * `order.risk` (run in waitUntil). Absent on a replay: risk runs once.
+ */
+export interface ManualOrderCommitted {
+    orderId: string;
+    /** The guest record the order is filed under (by phone). */
+    customerId: string;
+    paymentMethod: string;
+    totalAmountMinor: number;
+    appDiscounts: AppliedAppDiscount[];
+    /** The cart apps saw while pricing, or built now (after the commit) when none ran. */
+    appCart(): Promise<FunctionCart>;
+}
+
+export interface CreateManualOrderResult {
+    response: { id: string };
+    committed: ManualOrderCommitted | null;
+}
 
 // Bound values per multi-row insert row (drizzle binds every column,
 // defaults included); D1 allows 100 per statement.
@@ -63,12 +87,28 @@ export async function createOrder(
     data: CreateOrderInput,
     actorId: string | null,
 ): Promise<{ id: string }> {
+    return (await createManualOrder(db, data, actorId)).response;
+}
+
+/**
+ * `createOrder` with the apps' checkout functions (channel "admin",
+ * app-functions.ts): their rules, delivery options, payment method and
+ * discounts apply as on the online store, and the order records the app
+ * discounts. `committed` is set only when this call committed the order.
+ */
+export async function createManualOrder(
+    db: Database,
+    data: CreateOrderInput,
+    actorId: string | null,
+    options: { apps?: CheckoutAppFunctions } = {},
+): Promise<CreateManualOrderResult> {
+    const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
     const existingReplay = await resolveAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
-    if (existingReplay) return existingReplay.response;
+    if (existingReplay) return replayed(existingReplay.response);
     await validateCustomerPhoneCountry(db, data.customerPhone);
     const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
-    if (claim.status === "replay") return claim.response;
+    if (claim.status === "replay") return replayed(claim.response);
     if (claim.status === "processing") {
         throw new ServiceUnavailableError(
             "This manual order is still being created. Retry the same form in a moment.",
@@ -82,7 +122,7 @@ export async function createOrder(
     // response still replays. Fresh requests validate before claiming, which
     // lets a merchant correct a rejected phone without burning the request key.
     const prepared = await (async () => {
-        const manualQuote = await prepareManualOrderQuote(db, data);
+        const manualQuote = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps });
         const {
             locationNames: { cityName, zoneName, areaName },
             trackedItems,
@@ -93,6 +133,10 @@ export async function createOrder(
             requiresShipping,
             deliveryMethodKind,
             deliveryMethod: shippingMethod,
+            manualDiscountMinor,
+            appDiscounts,
+            appCart,
+            currency,
         } = manualQuote;
         const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
         if (requiresShipping && !shippingAddress) {
@@ -147,6 +191,10 @@ export async function createOrder(
             reservationEntries,
             inventoryPlan,
             shippingMethod,
+            manualDiscountMinor,
+            appDiscounts,
+            appCart,
+            currency,
         };
     })().catch(async (error) => {
         await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
@@ -169,6 +217,10 @@ export async function createOrder(
         reservationEntries,
         inventoryPlan,
         shippingMethod,
+        manualDiscountMinor,
+        appDiscounts,
+        appCart,
+        currency,
     } = prepared;
     let customerId = existingCustomer?.id;
 
@@ -368,6 +420,19 @@ export async function createOrder(
         }),
     );
 
+    // App discounts (checkout functions) sit on top of the staff discount:
+    // line discount = staff part + app part, recorded as `app_discount` facts
+    // exactly as a storefront order records them (orders/app-facts.ts).
+    if (appDiscounts.length > 0) {
+        const orderItemIdByLineId = new Map(preparedOrderItems.map(({ id }, index) => [allocationLineIds[index]!, id]));
+        writeBatch.push(...buildAppDiscountFactInserts(db, {
+            orderId,
+            currencyCode: taxQuote.currencyCode,
+            discounts: appDiscounts,
+            orderItemIdByLineId,
+        }) as SQLiteBatchItem[]);
+    }
+
     writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response));
 
     try {
@@ -377,7 +442,7 @@ export async function createOrder(
             db,
             attemptIdentity,
         ).catch(() => null);
-        if (replay) return replay.response;
+        if (replay) return replayed(replay.response);
         if (isAdminOrderCreateAttemptGuardError(batchError)) {
             // A reclaimed request owns the same stable reservation identity.
             // Do not release stock underneath the new owner.
@@ -393,5 +458,21 @@ export async function createOrder(
         throw batchError;
     }
 
-    return response;
+    return {
+        response,
+        committed: {
+            orderId,
+            customerId: customerId!,
+            paymentMethod: PaymentMethod.COD,
+            totalAmountMinor: taxQuote.totalMinor,
+            appDiscounts,
+            appCart: () => appCart ? Promise.resolve(appCart) : buildManualOrderAppCart(db, {
+                currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+                lines: manualOrderAppLines(trackedItems, allocationLineIds),
+                requiresShipping,
+                locationNames: { cityName, zoneName },
+                manualDiscountMinor,
+            }),
+        },
+    };
 }

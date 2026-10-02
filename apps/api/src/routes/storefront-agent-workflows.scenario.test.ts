@@ -48,6 +48,12 @@ vi.mock("@scalius/core/modules/orders", () => ({
   runStorefrontOrderPostCommitSideEffects: mocks.postCommit,
 }));
 
+// No app implements a checkout function: the routes do no app work.
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/plugins")>(),
+  listActiveFunctionRegistrations: async () => [],
+}));
+
 vi.mock("../utils/order-notification-queue", () => ({
   enqueueOrderSupportRequestNotificationForOrder: mocks.enqueueSupport,
 }));

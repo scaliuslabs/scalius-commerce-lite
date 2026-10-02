@@ -30527,6 +30527,108 @@
                             ]
                           },
                           "maxItems": 99
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "title",
+                              "code",
+                              "amount",
+                              "amountMinor",
+                              "shippingAmount",
+                              "shippingAmountMinor"
+                            ]
+                          },
+                          "description": "Installed apps' discounts included in discountMinor, after the store's own discount. amount is off the items, shippingAmount off delivery."
+                        },
+                        "shippingRates": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery",
+                                  "pickup"
+                                ]
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "kind",
+                              "amount",
+                              "amountMinor"
+                            ]
+                          },
+                          "description": "The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit."
+                        },
+                        "paymentMethods": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ]
+                          },
+                          "description": "The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit."
                         }
                       },
                       "required": [
@@ -30549,7 +30651,10 @@
                         "taxAmount",
                         "totalMinor",
                         "totalAmount",
-                        "items"
+                        "items",
+                        "appDiscounts",
+                        "shippingRates",
+                        "paymentMethods"
                       ]
                     }
                   },
@@ -193566,6 +193671,39 @@
                               "lineSubtotal"
                             ]
                           }
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "title",
+                              "amount",
+                              "shippingAmount"
+                            ]
+                          },
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
                         }
                       },
                       "required": [
@@ -194141,6 +194279,39 @@
                               "lineSubtotal"
                             ]
                           }
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "title",
+                              "amount",
+                              "shippingAmount"
+                            ]
+                          },
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
                         },
                         "orderId": {
                           "type": "string"
