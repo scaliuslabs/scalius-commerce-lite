@@ -209,10 +209,10 @@ export function showsCatalogPriceFilter(
 }
 
 /** The phone sheet's apply button for a selection matching `total` products. */
-export function catalogApplyButton(total: number): { label: string; disabled: boolean } {
+export function catalogApplyButton(total: number, capped = false): { label: string; disabled: boolean } {
   return total === 0
     ? { label: "No matching products", disabled: true }
-    : { label: `Show ${total.toLocaleString("en-IN")} ${total === 1 ? "product" : "products"}`, disabled: false };
+    : { label: `Show ${total.toLocaleString("en-IN")}${capped ? "+" : ""} ${total === 1 && !capped ? "product" : "products"}`, disabled: false };
 }
 
 /**
@@ -227,6 +227,7 @@ export function applyCatalogFilterCounts(
   facets: readonly ProductFacet[] | null,
   total: number,
   ratingFacet: readonly RatingFacetValue[] | null = null,
+  totalIsCapped = false,
 ): void {
   // "N★ & up" rows count against every other selection, like a facet value.
   if (ratingFacet) {
@@ -259,7 +260,7 @@ export function applyCatalogFilterCounts(
   }
   const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]");
   if (apply) {
-    const { label, disabled } = catalogApplyButton(total);
+    const { label, disabled } = catalogApplyButton(total, totalIsCapped);
     apply.textContent = label;
     apply.disabled = disabled;
   }
@@ -569,7 +570,7 @@ export function setupCatalogFilters(): void {
           { signal: request.signal },
         );
         const body = (await response.json()) as {
-          data?: { pagination?: { total?: unknown }; facets?: unknown; ratingFacet?: unknown };
+          data?: { pagination?: { total?: unknown; totalIsCapped?: unknown }; facets?: unknown; ratingFacet?: unknown };
         };
         const total = body.data?.pagination?.total;
         const facets = body.data?.facets;
@@ -580,6 +581,7 @@ export function setupCatalogFilters(): void {
             Array.isArray(facets) ? facets as ProductFacet[] : null,
             total,
             Array.isArray(ratingFacet) ? ratingFacet as RatingFacetValue[] : null,
+            body.data?.pagination?.totalIsCapped === true,
           );
         }
       } catch {

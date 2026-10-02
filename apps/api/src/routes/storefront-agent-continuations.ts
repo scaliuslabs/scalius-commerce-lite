@@ -1,3 +1,4 @@
+import { enqueueAuthOtp } from "../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   assertHostedContinuationOrderAccess,
@@ -249,7 +250,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   try {
-    await c.env.JOBS_QUEUE.send(result.queuePayload);
+    await enqueueAuthOtp(c, result.queuePayload);
   } catch (error) {
     await deleteCustomerAuthOtpChallenge(c.get("db"), {
       otpKey: result.otpStorageKey,
@@ -426,7 +427,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
   });
   if (result.queuePayload) {
     try {
-      await c.env.JOBS_QUEUE.send(result.queuePayload);
+      await enqueueAuthOtp(c, result.queuePayload);
     } catch (error) {
       if (result.challengeKey && result.deliveryKey) {
         await deleteOrderPaymentRecoveryChallenge(c.get("db"), {

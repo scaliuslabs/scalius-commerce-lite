@@ -14,13 +14,15 @@ interface Props {
   page: number;
   totalPages: number;
   total: number;
+  /** `total` is a lower bound ("1,000+"). */
+  totalIsCapped?: boolean;
   /** Products on this page. */
   shown: number;
   limit: number;
   getPageUrl: (page: number) => string;
 }
 
-const { mode, page, totalPages, total, shown, limit, getPageUrl } = Astro.props;
+const { mode, page, totalPages, total, totalIsCapped = false, shown, limit, getPageUrl } = Astro.props;
 const from = (page - 1) * limit + 1;
 const to = from + shown - 1;
 const next = page < totalPages ? getPageUrl(page + 1) : null;
@@ -41,10 +43,11 @@ const next = page < totalPages ? getPageUrl(page + 1) : null;
         data-from={from}
         data-to={to}
         data-total={total}
+        data-capped={totalIsCapped ? "true" : undefined}
         aria-live="polite"
         class="text-sm text-muted-foreground"
       >
-        {catalogProgressLabel(from, to, total)}
+        {catalogProgressLabel(from, to, total, totalIsCapped)}
       </p>
       {next && (
         <a

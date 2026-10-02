@@ -9,6 +9,7 @@ import {
   postApiV1AdminProductsByIdRestore,
 } from "@scalius/api-client/sdk";
 import {
+  NO_CURSOR,
   createListSearchValidator,
   normalizeOptionalEnumSearchParam,
   normalizeOptionalSearchString,
@@ -56,8 +57,10 @@ function validateProductSearch(search: SearchValidatorInput) {
 type ProductSearch = ReturnType<typeof validateProductSearch>;
 
 function listQuery(search: ProductSearch, term: string) {
+  // A numbered page (older links) or a cursor, never both.
+  const cursor = search.after ? { after: search.after } : search.before ? { before: search.before } : null;
   return productsQueryOptions({
-    page: search.page,
+    ...(cursor ?? { page: search.page }),
     limit: search.limit,
     search: term || undefined,
     category: search.category || undefined,
@@ -123,7 +126,8 @@ function ProductsPage() {
         }
         search={search}
         query={listQuery(search, term)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term)}
+        cursorPaging
         dataKey="products"
         columns={columns}
         invalidate={[queryKeys.products.all, queryKeys.dashboard.all, queryKeys.inventory.list()]}
@@ -140,7 +144,7 @@ function ProductsPage() {
             value={search.category ?? "all"}
             onValueChange={(value) => void navigate({
               to: "/admin/products",
-              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1 })) as never,
+              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1, ...NO_CURSOR })) as never,
             })}
             options={[
               { value: "all", label: t("allCategories") },

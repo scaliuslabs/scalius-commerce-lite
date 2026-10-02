@@ -13,6 +13,7 @@ import RichContent from "@/components/RichContent.astro";
 import CatalogDescription from "./CatalogDescription.astro";
 import CatalogListing from "./CatalogListing.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCountText } from "@/lib/catalog-paging";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 
 type ListingProps = ComponentProps<typeof CatalogListing>;
@@ -30,6 +31,8 @@ interface Props {
     countLabel?: string | null;
     /** Products in the listing. */
     count: number;
+    /** `count` is a lower bound (the API counts to a cap): "1,000+ products". */
+    countCapped?: boolean;
     /** The category banner (Apple Gadgets), shown when the toolbar has `category-banner`. */
     banner?: { src: string; srcset?: string; alt: string } | null;
     /** Links shown as pills above the results (a collection's categories). */
@@ -46,7 +49,7 @@ const { resolved } = await currentRequestTheme(Astro.locals);
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;
 const countLabel = hero.countLabel === undefined
-  ? `${hero.count.toLocaleString("en-IN")} ${hero.count === 1 ? "product" : "products"}`
+  ? `${catalogCountText(hero.count, hero.countCapped)} ${hero.count === 1 && !hero.countCapped ? "product" : "products"}`
   : hero.countLabel;
 const breadcrumb = kind === "search" ? null : [{ label: "Home", href: "/" }, ...(hero.breadcrumb ?? [])];
 const description = hero.description && hasRenderableHtmlContent(hero.description) ? hero.description : null;

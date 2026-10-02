@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { verifyPassword } from "better-auth/crypto";
 import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +23,7 @@ import {
   createInvitedAdminCredentialAccount,
   prepareCredentialIdentity,
 } from "./credential-account";
+import { verifyPassword } from "./password-hash";
 import { ConflictError } from "../errors";
 
 // Opt-in because this suite mutates its target. Use only an isolated,
@@ -104,10 +104,8 @@ describe.runIf(nativePostgresUrl)("native PostgreSQL credential conformance", ()
         accountId: invitedUserId,
         issuer: "local:credential",
       });
-      expect(await verifyPassword({
-        hash: storedAccount?.password ?? "",
-        password,
-      })).toBe(true);
+      expect(await verifyPassword(storedAccount?.password ?? "", password))
+        .toEqual({ valid: true, needsRehash: false });
 
       const duplicate = await prepareCredentialIdentity({
         userId: duplicateUserId,

@@ -1,5 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orderItems, orderReceipts, orders } from "@scalius/database/schema";
 
 import { errorResponseFromError } from "../utils/api-response";
@@ -456,7 +456,10 @@ describe("order receipt route", () => {
     expect(body.data?.order?.balanceDue).toBe(250);
   });
 
-  it("falls back to D1 checkout attempts, records receipt proof, and repairs KV when receipt row is missing", async () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("falls back to D1 checkout attempts, records receipt proof, and repairs KV when receipt row is missing (Paid)", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     const { app, db, kv } = createTestApp({
       tokenOrderId: null,
       attemptRow: { orderId: "order_1", status: "committed" },
@@ -487,7 +490,26 @@ describe("order receipt route", () => {
     );
   });
 
+  it("records the receipt proof in D1 without a KV repair write on the Free profile", async () => {
+    const { app, db, kv } = createTestApp({
+      tokenOrderId: null,
+      attemptRow: { orderId: "order_1", status: "committed" },
+    });
+
+    const response = await app.request(
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_valid" } },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect((db as unknown as { __inserts: unknown[] }).__inserts).toHaveLength(1);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("does not repair receipt KV for a still-processing checkout attempt", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     const { app, kv } = createTestApp({
       tokenOrderId: null,
       attemptRow: { orderId: "order_1", status: "processing" },

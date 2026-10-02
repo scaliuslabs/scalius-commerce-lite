@@ -32,6 +32,8 @@ interface ExportOrdersDialogProps {
   /** Every order matching the filters is selected ("Select all N orders"). */
   allSelected: boolean;
   total: number;
+  /** `total` is a lower bound: more orders match than the list counts. */
+  totalIsCapped?: boolean;
 }
 
 /** Export orders as CSV: this page, every matching order or the selection; one row per order or per item. */
@@ -43,6 +45,7 @@ export function ExportOrdersDialog({
   selectedIds,
   allSelected,
   total,
+  totalIsCapped = false,
 }: ExportOrdersDialogProps) {
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
@@ -78,7 +81,12 @@ export function ExportOrdersDialog({
   const options: Array<{ value: OrderExportScope; label: string }> = [
     ...(canSelectScope ? [{ value: "selected" as const, label: t("exportScope.selected", { count: selectedIds.length }) }] : []),
     { value: "page", label: t("exportScope.page", { count: pageIds.length }) },
-    { value: "all", label: t(total === 1 ? "exportScope.allOne" : "exportScope.all", { count: total }) },
+    {
+      value: "all",
+      label: totalIsCapped
+        ? t("exportScope.allCapped", { count: ORDER_EXPORT_MAX_ROWS })
+        : t(total === 1 ? "exportScope.allOne" : "exportScope.all", { count: total }),
+    },
   ];
 
   return (

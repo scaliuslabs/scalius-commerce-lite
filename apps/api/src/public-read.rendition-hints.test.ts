@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   fetchRuntimeApiApp: vi.fn(),
@@ -25,7 +25,10 @@ function executionContext() {
 }
 
 describe("renderPublicRead rendition hints", () => {
-  it("queues renditions for an original a rendered public read publishes, and still returns the full body", async () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("queues renditions for an original a rendered public read publishes, and still returns the full body (Paid)", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const payload = { data: { imageUrl: "https://cdn.example.com/media/media_legacy01.jpg" } };
     mocks.fetchRuntimeApiApp.mockResolvedValueOnce(Response.json(payload));
@@ -42,7 +45,21 @@ describe("renderPublicRead rendition hints", () => {
     );
   });
 
+  it("queues nothing from a public read on the Free profile, which leaves renditions to the cron backlog", async () => {
+    const payload = { data: { imageUrl: "https://cdn.example.com/media/media_legacy01.jpg" } };
+    mocks.fetchRuntimeApiApp.mockResolvedValueOnce(Response.json(payload));
+    const { env, queue } = runtimeEnv();
+    const { ctx, settled } = executionContext();
+
+    const response = await renderPublicRead(new Request("https://api.example.com/api/v1/products/lamp"), env, ctx);
+
+    expect(await response.json()).toEqual(payload);
+    await settled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
   it("scans nothing for errors or uncacheable reads", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     const { env, queue } = runtimeEnv();
     const { ctx, settled } = executionContext();
     const original = { imageUrl: "https://cdn.example.com/media/media_legacy01.jpg" };

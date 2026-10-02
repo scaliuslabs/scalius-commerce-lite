@@ -87,6 +87,8 @@ export interface PaginatedResponse<T> {
     limit: number;
     total: number;
     totalPages: number;
+    /** `total` is a lower bound (the API counts to a cap): show "1,000+". */
+    totalIsCapped?: boolean;
   };
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];

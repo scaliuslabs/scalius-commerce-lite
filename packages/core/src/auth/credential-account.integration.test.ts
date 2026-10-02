@@ -1,10 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { verifyPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { safeBatch, type Database } from "@scalius/database/client";
+import { PASSWORD_HASH_PREFIX, verifyPassword } from "./password-hash";
 import {
   account,
   adminInvitations,
@@ -125,10 +125,11 @@ describe.each(["d1", "turso"] as const)(
           providerId: "credential",
           issuer: "local:credential",
         });
-        expect(await verifyPassword({
-          hash: credentialRow?.password ?? "",
-          password,
-        })).toBe(true);
+        // Self-describing hash at this plan's cost (Free here; no pepper key was passed), verified by the Better Auth hook's function.
+        expect(credentialRow?.password).toMatch(/^\$sc1\$pbkdf2-sha256\$i=30000\$/);
+        expect(credentialRow?.password?.startsWith(PASSWORD_HASH_PREFIX)).toBe(true);
+        expect(await verifyPassword(credentialRow?.password ?? "", password))
+          .toEqual({ valid: true, needsRehash: false });
         await expect(db.select({ id: session.id })
           .from(session)
           .where(eq(session.userId, "invited_admin")))

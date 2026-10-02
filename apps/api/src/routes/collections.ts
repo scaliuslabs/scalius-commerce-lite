@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
+import { successEnvelope, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import {
   getPublicCollectionCatalog,
@@ -110,6 +110,7 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  ...listingCursorQuerySchema,
   sort: z.enum([
     "newest",
     "price-asc",
@@ -274,7 +275,8 @@ const getCollectionByIdRoute = createRoute({
         categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
         products: z.array(collectionProductSchema),
         featuredProduct: collectionProductSchema.optional(),
-        pagination: paginationSchema,
+        pagination: listingPaginationSchema,
+        pageInfo: listingPageInfoSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
@@ -304,7 +306,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     throw new NotFoundError("Collection not found");
   }
 
-  const { collection, categories, products, featuredProduct, pagination, priceRange, facets, ratingFacet } = result;
+  const { collection, categories, products, featuredProduct, pagination, pageInfo, priceRange, facets, ratingFacet } = result;
   const { version: _version, updatedAt: _updatedAt, deletedAt: _deletedAt, ...publicCollection } = collection;
 
   return ok(c, {
@@ -321,6 +323,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     products,
     ...(featuredProduct && { featuredProduct }),
     pagination,
+    pageInfo,
     priceRange,
     facets,
     ratingFacet,

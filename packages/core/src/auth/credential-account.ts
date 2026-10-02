@@ -1,4 +1,3 @@
-import { hashPassword } from "better-auth/crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 
 import {
@@ -16,6 +15,7 @@ import {
 } from "@scalius/database/schema";
 
 import { ConflictError, ValidationError } from "../errors";
+import { hashPassword, type PasswordHashOptions } from "./password-hash";
 import type { ClaimedAdminSetup } from "./admin-setup";
 
 export const AUTH_PASSWORD_MIN_LENGTH = 12;
@@ -65,6 +65,8 @@ export class CredentialIdentityConflictError extends ConflictError {
  */
 export async function prepareCredentialIdentity(
   input: PrepareCredentialIdentityInput,
+  /** How the password is hashed (default: this plan's cost; pass the pepper key as the sign-in does). */
+  hashOptions: PasswordHashOptions = {},
 ): Promise<PreparedCredentialIdentity> {
   const name = input.name.trim();
   const normalizedEmail = input.email.trim().toLowerCase();
@@ -85,7 +87,7 @@ export async function prepareCredentialIdentity(
     accountRowId: input.accountRowId ?? crypto.randomUUID(),
     name,
     normalizedEmail,
-    passwordHash: await hashPassword(input.password),
+    passwordHash: await hashPassword(input.password, hashOptions),
     createdAt: input.createdAt ?? new Date(),
   };
 }
@@ -285,4 +287,33 @@ function errorDescription(error: unknown): string {
       : `${message} ${errorDescription(candidate.cause)}`;
   }
   return String(error ?? "");
+}
+
+/**
+ * Rewrites a credential's stored hash with the password just verified, when
+ * the stored one is not what this deployment writes now (a Free hash on Paid,
+ * Better Auth's scrypt, an unkeyed hash). The write is a compare-and-set on
+ * the old hash, so concurrent sign-ins cannot overwrite each other, and a
+ * failure never fails the sign-in: the old hash still verifies next time.
+ */
+export async function upgradeStoredPasswordHash(
+  db: Database,
+  previousHash: string,
+  password: string,
+  hashOptions: PasswordHashOptions = {},
+): Promise<boolean> {
+  try {
+    const next = await hashPassword(password, hashOptions);
+    await db
+      .update(account)
+      .set({ password: next, updatedAt: new Date() })
+      .where(and(
+        eq(account.providerId, "credential"),
+        eq(account.password, previousHash),
+      ));
+    return true;
+  } catch {
+    console.warn("[auth] Password hash upgrade failed; the current hash stays valid");
+    return false;
+  }
 }

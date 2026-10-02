@@ -101,8 +101,14 @@ export function orderFilterQuery(search: OrderListSearch, term: string): Omit<Or
   };
 }
 
+/**
+ * The list request: a numbered page (links from before cursors, within the
+ * API's first rows) or `after`/`before` a cursor, never both. Filters and sort
+ * come from the URL, so a changed filter drops the cursor (OrdersIndexPage).
+ */
 export function orderListQuery(search: OrderListSearch, term: string): OrdersQuery {
-  return { page: search.page, limit: search.limit, ...orderFilterQuery(search, term) };
+  const cursor = search.after ? { after: search.after } : search.before ? { before: search.before } : null;
+  return { ...(cursor ?? { page: search.page }), limit: search.limit, ...orderFilterQuery(search, term) };
 }
 
 export const CLEARED_ORDER_FILTERS: Partial<OrderListSearch> = {

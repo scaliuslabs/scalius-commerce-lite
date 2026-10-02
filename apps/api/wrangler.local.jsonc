@@ -7,9 +7,6 @@
     "global_fetch_strictly_public",
     "disable_nodejs_process_v2"
   ],
-  "limits": {
-    "cpu_ms": 30000
-  },
   "cache": {
     "enabled": true
   },
@@ -86,9 +83,8 @@
   "images": {
     "binding": "IMAGES"
   },
-  // One jobs queue; the consumer routes each message by payload.type. The
-  // 2 s batch timeout bounds OTP latency; `jobs-dlq` archives exhausted
-  // messages into their durable D1 rows.
+  // One jobs queue; the consumer routes each message by payload.type (the Free
+  // profile's one message per invocation; see apps/api/wrangler.jsonc).
   "queues": {
     "producers": [
       {
@@ -99,14 +95,14 @@
     "consumers": [
       {
         "queue": "jobs",
-        "max_batch_size": 10,
+        "max_batch_size": 1,
         "max_batch_timeout": 2,
         "max_retries": 5,
         "dead_letter_queue": "jobs-dlq"
       },
       {
         "queue": "jobs-dlq",
-        "max_batch_size": 10,
+        "max_batch_size": 1,
         "max_batch_timeout": 5,
         "max_retries": 5
       }

@@ -46,4 +46,34 @@ describe("export orders", () => {
     expect(download).toHaveBeenCalledTimes(1);
     expect(Object.fromEntries(download.mock.calls[0]![0])).toEqual({ format: "summary", ids: "o-2,o-3", maxRows: "2" });
   });
+
+  it("names the export 'all matching (up to N)' when the list's count stopped at its cap", async () => {
+    root = createRoot(document.createElement("div"));
+    await act(async () => root.render(
+      <ExportOrdersDialog
+        open
+        onOpenChange={vi.fn()}
+        filters={{ sort: "createdAt", order: "desc" }}
+        pageIds={["o-1"]}
+        selectedIds={[]}
+        allSelected={false}
+        total={1_000}
+        totalIsCapped
+      />,
+    ));
+    expect(document.body.querySelector('label[for="export-scope-all"]')?.textContent).toBe("All matching orders (up to 5,000)");
+    // An exact count is still named.
+    await act(async () => root.render(
+      <ExportOrdersDialog
+        open
+        onOpenChange={vi.fn()}
+        filters={{ sort: "createdAt", order: "desc" }}
+        pageIds={["o-1"]}
+        selectedIds={[]}
+        allSelected={false}
+        total={40}
+      />,
+    ));
+    expect(document.body.querySelector('label[for="export-scope-all"]')?.textContent).toBe("All 40 matching orders");
+  });
 });

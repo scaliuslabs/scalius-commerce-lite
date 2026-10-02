@@ -13,7 +13,7 @@ import { brandSlugSchema } from "@scalius/shared/catalog-brand";
 import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import {
   normalizePublicFtsSearchQuery,
@@ -43,8 +43,9 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 const sortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"]);
 
 const brandProductFilterSchema = z.object({
-  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
+  ...listingCursorQuerySchema,
   sort: sortSchema.optional().default("newest").openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within the brand" }),
@@ -225,7 +226,8 @@ const getBrandProductsRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         brand: brandDetailSchema,
         products: z.array(brandProductSchema),
-        pagination: paginationSchema,
+        pagination: listingPaginationSchema,
+        pageInfo: listingPageInfoSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
@@ -268,6 +270,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     brand,
     products: result.products,
     pagination: result.pagination,
+    pageInfo: result.pageInfo,
     priceRange: result.priceRange,
     facets: result.facets,
     ratingFacet: result.ratingFacet,

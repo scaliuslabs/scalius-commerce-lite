@@ -11,11 +11,12 @@
 import type { Database } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import {
-  RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE,
   recommendationRefreshTargets,
   refreshProductRecommendations,
 } from "@scalius/core/modules/catalog";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { getOptionalExecutionContext, type WaitUntilExecutionContext } from "./execution-context";
+import { bulkQueueCapacity } from "./queue-lanes";
 
 export type CatalogRecommendationsRefreshQueueMessage = {
   type: "catalog.recommendations.refresh";
@@ -31,12 +32,10 @@ export type CatalogQueueMessage =
   | CatalogRecommendationsRefreshQueueMessage
   | CatalogProjectionsRebuildQueueMessage;
 
-/** Products one rebuild message recomputes (10 sequential batches of 90). */
-export const CATALOG_PROJECTION_REBUILD_CHUNK = 900;
 /** Messages per `sendBatch` call (the Queues limit is 100). */
 const QUEUE_SEND_BATCH = 50;
 
-type CatalogJobQueue = Pick<Queue, "sendBatch" | "send">;
+type CatalogJobQueue = Pick<Queue, "sendBatch" | "send" | "metrics">;
 
 function chunks<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];
@@ -44,13 +43,22 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-/** Enqueues recommendation refreshes for exactly these products, 20 per message. */
+/**
+ * Enqueues recommendation refreshes for these products, as many products per
+ * message as the plan profile allows, and no more messages than the bulk lane
+ * has room for (utils/queue-lanes.ts): a refresh is recomputed by the nightly
+ * pass, so what does not fit now is dropped, never queued behind urgent work.
+ * Returns the messages enqueued.
+ */
 export async function enqueueRecommendationRefresh(
   queue: CatalogJobQueue | undefined,
   productIds: readonly string[],
 ): Promise<number> {
   if (!queue || productIds.length === 0) return 0;
-  const messages = chunks([...new Set(productIds)], RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE)
+  const room = await bulkQueueCapacity(queue);
+  if (room === 0) return 0;
+  const messages = chunks([...new Set(productIds)], planLimits().queue.recommendationProductsPerMessage)
+    .slice(0, room)
     .map((ids): { body: CatalogRecommendationsRefreshQueueMessage } => ({
       body: { type: "catalog.recommendations.refresh", productIds: ids },
     }));
@@ -108,7 +116,7 @@ export async function processCatalogQueueMessage(
   const after = typeof payload.afterProductId === "string" ? payload.afterProductId : null;
   const result = await rebuildCatalogProjections(db, {
     afterProductId: after,
-    limit: CATALOG_PROJECTION_REBUILD_CHUNK,
+    limit: planLimits().queue.catalogRebuildChunk,
   });
   if (!result.done) {
     await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, result.nextAfterProductId);

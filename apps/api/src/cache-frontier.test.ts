@@ -5,6 +5,7 @@ import type { Database } from "@scalius/database/client";
 import {
   CACHE_COMMIT_SEQ_HEADER,
   CACHE_FRONTIER_KEY_HEADER,
+  CACHE_FRONTIER_MAX_CHANGES,
   CACHE_FRONTIER_SECRET_PURPOSE,
   hashCacheDep,
 } from "@scalius/shared/cache-frontier";
@@ -111,7 +112,22 @@ describe.each(["d1", "turso"] as const)("DVC clock reads (%s)", (provider) => {
 
     sqlite.exec("UPDATE cache_clock SET floor = 2 WHERE id = 1");
     expect((await checkHashedDependencies(db, 1, [hashCacheDep("p:a")])).changed).toBe(true);
-    expect(FRONTIER_CHECK_MAX_ROWS).toBeGreaterThan(4_000);
+    // One frontier window: an older entry re-renders instead of scanning more.
+    expect(FRONTIER_CHECK_MAX_ROWS).toBe(CACHE_FRONTIER_MAX_CHANGES);
+  });
+
+  it("frontier slow path reads at most one window of change rows, then answers changed", async () => {
+    const { db, sqlite } = store(provider);
+    const insert = sqlite.prepare('INSERT INTO "cache_dep" ("dep", "seq") VALUES (?, ?)');
+    sqlite.exec("BEGIN");
+    for (let seq = 1; seq <= FRONTIER_CHECK_MAX_ROWS + 50; seq += 1) insert.run(`bulk:${seq}`, seq);
+    sqlite.exec("COMMIT");
+    sqlite.exec(`UPDATE cache_clock SET seq = ${FRONTIER_CHECK_MAX_ROWS + 50} WHERE id = 1`);
+    // Within the window the answer is exact: a key that did not change is unchanged ...
+    const exact = await checkHashedDependencies(db, 50, [hashCacheDep("p:untouched")]);
+    expect(exact.changed).toBe(false);
+    // ... one row past the window is not scanned: the entry is simply re-rendered.
+    expect((await checkHashedDependencies(db, 49, [hashCacheDep("p:untouched")])).changed).toBe(true);
   });
 
   it("rejects a missing clock instead of minting a reusable zero proof", async () => {

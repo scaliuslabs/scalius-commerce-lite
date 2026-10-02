@@ -158,4 +158,87 @@ describe("ResourceListPage", () => {
 
     expect(run).toHaveBeenCalledWith("restore", [rows[0]]);
   });
+
+  describe("cursor paging", () => {
+    const pageInfo = { hasNextPage: true, hasPreviousPage: false, startCursor: "start-1", endCursor: "end-1" };
+
+    async function renderCursorList(overrides: Record<string, string> = {}, error?: { code: string }) {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const query = {
+        queryKey: ["cursor-things", JSON.stringify(overrides)],
+        queryFn: async () => {
+          if (error) throw Object.assign(new Error("refused"), error);
+          return {
+            things: rows,
+            pagination: { page: 1, limit: 10, total: 1_000, totalPages: 100, totalIsCapped: true, offset: 0 },
+            pageInfo,
+          };
+        },
+      };
+      const rootRoute = createRootRoute();
+      const listRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/",
+        validateSearch: (raw: Record<string, unknown>) => raw,
+        component: function CursorList() {
+          const current = listRoute.useSearch() as Record<string, unknown>;
+          return (
+            <ResourceListPage<Row>
+              title="Things"
+              list="cursor-things"
+              search={{ ...search, ...current } as typeof search}
+              query={query}
+              dataKey="things"
+              columns={[{ accessorKey: "name", header: "Name", cell: ({ row }) => row.original.name }]}
+              invalidate={[["cursor-things"]]}
+              empty={{ icon: () => null, title: "Nothing", description: "" }}
+              cursorPaging
+            />
+          );
+        },
+      });
+      const router = createRouter({
+        routeTree: rootRoute.addChildren([listRoute]),
+        history: createMemoryHistory({ initialEntries: [`/?${new URLSearchParams(overrides)}`] }),
+      });
+      await router.load();
+      await act(async () =>
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>,
+        ),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      return router;
+    }
+
+    const arrow = (label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+
+    it("shows an approximate count and moves to the next page with the end cursor", async () => {
+      const router = await renderCursorList();
+      expect(host.textContent).toContain("1–2 of 1,000+");
+      expect(arrow("Previous").disabled).toBe(true);
+      await act(async () => arrow("Next").click());
+      expect(router.state.location.search).toMatchObject({ after: "end-1", page: 1 });
+      expect(router.state.location.search).not.toHaveProperty("before");
+    });
+
+    it("keeps a cursor in the URL while the API has no previous page to offer", async () => {
+      const router = await renderCursorList({ after: "end-0" });
+      expect(arrow("Previous").disabled).toBe(true);
+      expect(router.state.location.search).toMatchObject({ after: "end-0" });
+    });
+
+    it("starts again from the first page when the API refuses the cursor", async () => {
+      const router = await renderCursorList({ after: "stale-cursor" }, { code: "INVALID_CURSOR" });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(router.state.location.search).not.toHaveProperty("after");
+      expect(router.state.location.search).toMatchObject({ page: 1 });
+    });
+  });
 });
