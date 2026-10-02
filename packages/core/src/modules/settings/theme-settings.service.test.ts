@@ -41,9 +41,9 @@ const V1_THEME = JSON.stringify({
   layout: {
     header: "classic",
     footer: "columns",
-    productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "top-left" },
+    productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
     grid: { desktop: 4, mobile: 2 },
-    productPage: { gallery: "carousel", thumbnails: "below" },
+    productPage: { gallery: "beside", thumbnails: "below" },
     homepage: ["hero", "collections", "categories", "delivery"],
   },
 });
