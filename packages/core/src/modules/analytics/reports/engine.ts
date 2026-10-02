@@ -244,13 +244,16 @@ export async function runReportPage(
   };
 }
 
-/** Rows per statement while exporting: four reads cover the 10,000-row cap. */
-export const ANALYTICS_EXPORT_PAGE_SIZE = 2_500;
+/**
+ * Rows per statement while exporting: the whole 10,000-row cap in one read,
+ * so the report groups once (a page re-groups every row before its LIMIT).
+ */
+export const ANALYTICS_EXPORT_PAGE_SIZE = ANALYTICS_REPORT_MAX_ROWS;
 
 /**
  * Every row of a report up to {@link ANALYTICS_REPORT_MAX_ROWS}, in the
  * requested order, for CSV export: the dashboard's statement in pages of
- * {@link ANALYTICS_EXPORT_PAGE_SIZE}, so an export is a few bounded reads.
+ * {@link ANALYTICS_EXPORT_PAGE_SIZE}, so an export is one bounded read.
  */
 export async function* iterateReportRows(
   ctx: AnalyticsContext,

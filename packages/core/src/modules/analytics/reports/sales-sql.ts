@@ -78,7 +78,7 @@ export function orderIdentitySql(alias = "so"): SQL {
  * reports group by and the money columns the residuals need.
  */
 export function salesOrdersCte(scope: SalesScope): SQL {
-  return sql`so as (
+  return sql`so as materialized (
     select o.id, o.created_at, o.status, o.payment_method, o.channel, o.channel_source,
       o.city_name, o.zone_name, o.fulfillment_location_id, o.fulfillment_status,
       o.shipping_method_id, o.shipping_method_kind, o.requires_shipping,
@@ -114,7 +114,18 @@ export interface SalesLineOptions {
  */
 export function salesLinesCtes(options: SalesLineOptions = {}): SQL {
   const unitCost = options.unitCost ? sql.raw("oi.unit_cost_minor") : sql.raw("null");
-  return sql`sl as (
+  // Accepted return quantities of the scope's lines, read once through
+  // order_return_lines(order_id, order_item_id) and joined by line, rather
+  // than a correlated subquery the planner may repeat for every reference.
+  return sql`rq as (
+    select rl.order_item_id, sum(rl.approved_quantity) as approved
+    from so
+    join order_return_lines rl on rl.order_id = so.id
+    join order_returns rr on rr.id = rl.return_id
+    where rr.status in (${COUNTED_RETURNS})
+    group by rl.order_item_id
+  ),
+  sl as (
     select oi.id as line_id, oi.order_id, oi.product_id, oi.variant_id, oi.quantity,
       oi.product_name, oi.variant_label, so.created_at, so.reversed,
       case when oi.fulfillment_type = 'gift_card' then 1 else 0 end as gc,
@@ -122,15 +133,10 @@ export function salesLinesCtes(options: SalesLineOptions = {}): SQL {
       oi.discount_amount_minor as disc,
       oi.tax_amount_minor as tax,
       ${unitCost} as unit_cost,
-      case when so.reversed = 1 then oi.quantity else coalesce((
-        select sum(rl.approved_quantity)
-        from order_return_lines rl
-        join order_returns rr on rr.id = rl.return_id
-        where rl.order_id = oi.order_id and rl.order_item_id = oi.id
-          and rr.status in (${COUNTED_RETURNS})
-      ), 0) end as returned_raw
+      case when so.reversed = 1 then oi.quantity else coalesce(rq.approved, 0) end as returned_raw
     from so
     join order_items oi on oi.order_id = so.id
+    left join rq on rq.order_item_id = oi.id
   ),
   sv as (
     select sl.*,

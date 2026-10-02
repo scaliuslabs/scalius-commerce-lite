@@ -204,11 +204,15 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
   return sql`with ${salesOrdersCte(scope)},
     ${salesLinesCtes()},
     ${orderMetricsCtes()},
-    ox as (
-      select om.*,
+    -- Materialized explicitly: SQLite otherwise inlines a CTE into every
+    -- compound branch and re-reads the period's orders once per grouping.
+    -- Only the columns the groupings read.
+    ox as materialized (
+      select om.status, om.payment_method, om.channel, om.channel_source, om.city_name,
+        om.gross, om.disc, om.returns, om.shipping, om.taxes, om.net_units,
         ${merchantDaySql("om.created_at")} as day,
         ${orderIdentitySql("om")} as identity,
-        ${hasPriorSalesOrderSql(instants.start, "om")} as has_prior,
+        om.customer_id, om.customer_phone,
         case when om.payment_method = 'cod' then 1 else 0 end as cod,
         case when om.payment_method = 'cod' and om.status in ('returned', 'refunded')
           and coalesce(ct.cod_status, '') <> 'collected' then 1 else 0 end as rts,
@@ -235,8 +239,13 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
       left join delivery_zones dz on dz.id = sm.zone_id
     ),
     cu as (
-      select ox.identity, max(ox.has_prior) as prior, count(*) as n
+      select ox.identity, max(ox.customer_id) as customer_id, max(ox.customer_phone) as customer_phone,
+        count(*) as n
       from ox group by ox.identity
+    ),
+    -- An earlier order is looked up once per customer, not once per order.
+    cp as (
+      select cu.n, ${hasPriorSalesOrderSql(instants.start, "cu")} as prior from cu
     )
     -- D1 allows at most five terms per compound SELECT: two groups of terms.
     select * from (
@@ -267,11 +276,11 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
       group by ox.location_key, coalesce(il.name, '')
       union all
       select 'customers', '', '', count(*), 0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when cu.prior = 0 then 1 else 0 end), 0),
-        coalesce(sum(cu.prior), 0),
-        coalesce(sum(case when cu.prior = 1 or cu.n >= 2 then 1 else 0 end), 0),
+        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
+        coalesce(sum(cp.prior), 0),
+        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0),
         0
-      from cu
+      from cp
       union all
       select 'placed', '', '',
         coalesce(sum(case when po.currency_code = ${scope.currency} then 1 else 0 end), 0),

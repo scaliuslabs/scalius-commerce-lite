@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
+import { ANALYTICS_REPORTS, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
+import { createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { createAnalyticsFixture, type AnalyticsFixture } from "./reports.fixture";
-import { AUGUST, seedKnownAnswerStore } from "./metrics.fixture-store";
+import { AUGUST, seedKnownAnswerExtras, seedKnownAnswerStore } from "./metrics.fixture-store";
 import { createAnalyticsContext } from "./context";
 import {
   exportAnalyticsReportCsv,
+  getAnalyticsOverviewForRequest,
   getAnalyticsReportPage,
   listAnalyticsReports,
   type AnalyticsAccess,
@@ -15,49 +17,11 @@ const NOW = new Date("2026-09-01T06:00:00+06:00");
 const FULL_ACCESS: AnalyticsAccess = { customers: true };
 let f: AnalyticsFixture;
 
-function seedExtras(fixture: AnalyticsFixture) {
-  const { sqlite, epoch } = fixture;
-  // A code discount on O1's line (the whole of O1's discount); O3's discount has no promotion.
-  sqlite.prepare(`INSERT INTO promotions (id, name, method, status) VALUES ('promo_1', 'Eid sale', 'code', 'active')`).run();
-  sqlite.prepare(`
-    INSERT INTO promotion_effects (id, promotion_id, kind, target, allocation, config, position)
-    VALUES ('eff_1', 'promo_1', 'percentage_off', 'line', 'across', '{"basisPoints":1000}', 0)
-  `).run();
-  sqlite.prepare(`INSERT INTO promotion_codes (id, promotion_id, code, normalized_code) VALUES ('code_1', 'promo_1', 'EID10', 'EID10')`).run();
-  sqlite.prepare(`
-    INSERT INTO order_discount_allocations (id, order_id, order_item_id, promotion_id, effect_id, promotion_revision,
-      evaluator_version, method, promotion_name, promotion_code, effect_kind, target, currency_code,
-      base_amount_minor, discount_amount_minor, quantity)
-    VALUES ('alloc_1', 'o1', 'o1_a', 'promo_1', 'eff_1', 1, 1, 'code', 'Eid sale', 'EID10', 'percentage_off', 'line', 'BDT', 100000, 10000, 2)
-  `).run();
-  // A staff-issued ৳500 card, ৳200 of it redeemed on O3.
-  sqlite.prepare(`
-    INSERT INTO gift_cards (id, code_hash, code_ciphertext, code_last4, currency_code, initial_amount_minor, status, source, created_at)
-    VALUES ('gc_testcard01', 'hash', 'cipher', 'ABCD', 'BDT', 50000, 'active', 'manual', ?)
-  `).run(epoch("2026-08-03T10:00:00+06:00"));
-  sqlite.prepare(`
-    INSERT INTO gift_card_transactions (id, gift_card_id, kind, amount_minor, balance_after_minor, idempotency_key, actor_type, created_at)
-    VALUES ('gct_issue0001', 'gc_testcard01', 'issue', 50000, 50000, 'issue-1', 'admin', ?)
-  `).run(epoch("2026-08-03T10:00:00+06:00"));
-  sqlite.prepare(`
-    INSERT INTO gift_card_transactions (id, gift_card_id, kind, amount_minor, balance_after_minor, order_id, idempotency_key, actor_type, created_at)
-    VALUES ('gct_redeem001', 'gc_testcard01', 'redeem', -20000, 30000, 'o3', 'redeem-1', 'customer', ?)
-  `).run(epoch("2026-08-10T15:00:00+06:00"));
-  // Abandoned checkouts: one recovered by O10 the next day, one too long before O10, one without a phone.
-  const abandoned = sqlite.prepare(`
-    INSERT INTO abandoned_checkouts (id, checkout_id, customer_phone, checkout_data, created_at, updated_at)
-    VALUES (?, ?, ?, '{}', ?, ?)
-  `);
-  abandoned.run("ab_1", "chk_1", "+8801711000004", epoch("2026-08-03T10:00:00+06:00"), epoch("2026-08-03T10:05:00+06:00"));
-  abandoned.run("ab_2", "chk_2", "+8801711000004", epoch("2026-08-30T10:00:00+06:00"), epoch("2026-08-30T10:05:00+06:00"));
-  abandoned.run("ab_3", "chk_3", null, epoch("2026-08-15T10:00:00+06:00"), epoch("2026-08-15T10:05:00+06:00"));
-}
-
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   f = createAnalyticsFixture();
   seedKnownAnswerStore(f);
-  seedExtras(f);
+  seedKnownAnswerExtras(f);
 });
 
 afterEach(() => {
@@ -327,5 +291,22 @@ describe("CSV export", () => {
   it("refuses customer exports without the permission", async () => {
     const ctx = await createAnalyticsContext(f.db, NOW);
     await expect(exportAnalyticsReportCsv(ctx, "customers_top", { ...AUGUST }, { customers: false })).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("TursoDB parity", () => {
+  it("answers the overview and every report exactly as D1 on the same rows", async () => {
+    const turso = createSqliteTursoDatabase(f.sqlite);
+    const [onD1, onTurso] = await Promise.all([
+      createAnalyticsContext(f.db, NOW),
+      createAnalyticsContext(turso, NOW),
+    ]);
+    expect(await getAnalyticsOverviewForRequest(onTurso, { ...AUGUST })).toEqual(await getAnalyticsOverviewForRequest(onD1, { ...AUGUST }));
+    for (const definition of ANALYTICS_REPORTS) {
+      if (definition.id === "profit_by_product") continue;
+      const query = { ...AUGUST, pageSize: 100 };
+      expect(await getAnalyticsReportPage(onTurso, definition.id, query, FULL_ACCESS), definition.id)
+        .toEqual(await getAnalyticsReportPage(onD1, definition.id, query, FULL_ACCESS));
+    }
   });
 });
