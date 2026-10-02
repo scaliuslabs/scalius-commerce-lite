@@ -43,7 +43,7 @@ import { useOrderNeighbours } from "./orderview/order-neighbours";
 import { ariaKeys } from "./layout/shortcuts";
 import { usePagerShortcuts } from "./shared/use-pager-shortcuts";
 import type { Order } from "./orderview/types";
-import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -245,7 +245,7 @@ export function OrderView({ order }: { order: Order }) {
             <div className="contents lg:block lg:space-y-4">
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
-              <div className="order-7 empty:hidden lg:order-none"><CustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
+              <div className="order-7 empty:hidden lg:order-none"><LazyCustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
               <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />
             </div>

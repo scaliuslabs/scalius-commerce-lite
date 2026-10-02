@@ -85,7 +85,7 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
-import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -526,7 +526,7 @@ function ProductEditor({
                 <AfterSaveCard title={t("productPage")} />
               )}
               <WarrantyCard form={form} readOnly={readOnly} />
-              {isEdit && productId ? <CustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
+              {isEdit && productId ? <LazyCustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
               {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}
             </div>
           </fieldset>
