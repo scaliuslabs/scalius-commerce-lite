@@ -5,8 +5,9 @@ based on (a label), the tokens every block reads, the brand (logo, footer
 logo, tab icon), one variant per block with its settings (the announcement's
 words, the footer's words), the homepage sections with their own content
 (hero slides, the category tiles' and collections' picks) and what `/`
-shows. It is the one draft for the look: the dashboard Theme page saves
-every visual and merchandising choice into it with one Save, previews it,
+shows. It is the one draft for the look: the dashboard (the Theme page and
+its theme editor) saves every visual and merchandising choice into it,
+previews it,
 publishes it atomically and restores it from theme versions (and a builder,
 an agent or a plugin section can write it); the storefront renders it; both
 resolve it against the store's shape with the same function. Store identity
@@ -118,6 +119,25 @@ numbers come from the storefront study
   being public leaves `/` on the sections. A preview follows the draft's
   mode.
 
+- **The theme editor.** Online store → Theme → Customize
+  (`/admin/online-store/theme/editor`) edits the homepage sections (drag or
+  keyboard reorder, add, duplicate, remove with undo), each section's
+  settings and the brand, colours, fonts, header, menus and footer, over the
+  real storefront in a frame. Settings forms are generated from the
+  registry's zod schemas (dashboard `online-store/schema-form/`), so a new
+  setting needs a label in `i18n/theme-settings.ts` and no form code. Edits
+  autosave the draft against its revision. The frame is a normal preview
+  session redeemed by `/theme-preview/embed` (the code arrives by
+  postMessage; the cookie is `SameSite=None; Partitioned`). Only a page
+  that rendered a valid preview carries the editor's section marks
+  (`data-theme-section-id`), the inline bridge
+  (`apps/storefront/src/lib/theme-preview-bridge.ts`) and a frame-ancestors
+  that names the dashboard origin; both sides check the other's exact
+  origin (Platform settings) and window (`@scalius/shared/theme-editor-bridge`).
+  A settings change re-renders its section from the private, never-stored
+  `/theme-preview/section?id=` (the homepage's own renderers); anything
+  that moves the page reloads it. A buyer's homepage is byte-identical with
+  or without the editor (`theme-editor-preview.render.test.ts`).
 - **The template is a label.** `template` says what the theme is based on
   (the dashboard's "based on" line and its reset-to-template defaults). No
   storefront component and not the resolver read it for behaviour: every

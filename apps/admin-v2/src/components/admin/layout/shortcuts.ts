@@ -7,6 +7,8 @@ type ShortcutsKey = keyof (typeof shortcutsMessages)["en"];
 export interface KeyCombo {
   key: string;
   mod?: boolean;
+  /** With ⌘/Ctrl only: Shift too (⇧⌘Z). */
+  shift?: boolean;
 }
 
 interface Shortcut {
@@ -30,6 +32,8 @@ export const SHORTCUTS = {
   cancel: { label: "cancel", group: "general", combos: [{ key: "escape" }] },
   save: { label: "save", group: "editing", combos: [{ key: "s", mod: true }] },
   submit: { label: "submit", group: "editing", combos: [{ key: "enter", mod: true }] },
+  undo: { label: "undo", group: "editing", combos: [{ key: "z", mod: true }] },
+  redo: { label: "redo", group: "editing", combos: [{ key: "z", mod: true, shift: true }, { key: "y", mod: true }] },
 } as const satisfies Record<string, Shortcut>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;
@@ -44,7 +48,7 @@ export function matchesShortcut(id: ShortcutId, event: AnyKeyboardEvent): boolea
   if (event.altKey) return false;
   return SHORTCUTS[id].combos.some((combo: KeyCombo) => {
     if (Boolean(combo.mod) !== mod) return false;
-    if (combo.mod && event.shiftKey) return false;
+    if (combo.mod && Boolean(combo.shift) !== event.shiftKey) return false;
     return event.key.toLowerCase() === combo.key;
   });
 }
@@ -52,14 +56,14 @@ export function matchesShortcut(id: ShortcutId, event: AnyKeyboardEvent): boolea
 /** `aria-keyshortcuts` for a shortcut's key presses. */
 export function ariaKeys(id: ShortcutId): string {
   return SHORTCUTS[id].combos
-    .map((combo: KeyCombo) => [...(combo.mod ? [isMac ? "Meta" : "Control"] : []), combo.key.length === 1 ? combo.key.toUpperCase() : combo.key[0]!.toUpperCase() + combo.key.slice(1)].join("+"))
+    .map((combo: KeyCombo) => [...(combo.mod ? [isMac ? "Meta" : "Control"] : []), ...(combo.shift ? ["Shift"] : []), combo.key.length === 1 ? combo.key.toUpperCase() : combo.key[0]!.toUpperCase() + combo.key.slice(1)].join("+"))
     .join(" ");
 }
 
 /** The caps shown for a key press: ["⌘", "K"], ["Ctrl", "Enter"], ["Esc"]. */
 export function comboCaps(combo: KeyCombo): string[] {
   const key = combo.key === "escape" ? "Esc" : combo.key === "enter" ? "Enter" : combo.key.toUpperCase();
-  return combo.mod ? [isMac ? "⌘" : "Ctrl", key] : [key];
+  return combo.mod ? [...(combo.shift ? ["⇧"] : []), isMac ? "⌘" : "Ctrl", key] : [key];
 }
 
 /** Typing in a field (or a dialog) never triggers a page-wide shortcut. */

@@ -19,6 +19,16 @@ describe("storefront theme preview cookie", () => {
     expect(readThemePreviewCookie(`other=1; ${THEME_PREVIEW_COOKIE_NAME}=${TOKEN}`)).toBe(TOKEN);
   });
 
+  it("gives the theme editor's frame a partitioned cookie only the dashboard's site can carry", () => {
+    const header = createThemePreviewCookieHeader(TOKEN, { embedded: true });
+    expect(header).toContain("HttpOnly");
+    expect(header).toContain("Secure");
+    expect(header).toContain("SameSite=None");
+    expect(header).toContain("Partitioned");
+    expect(header).not.toContain("SameSite=Lax");
+    expect(header).not.toContain("Domain=");
+  });
+
   it("rejects malformed values and clears the same cookie scope", () => {
     expect(createThemePreviewCookieHeader("not-a-preview")).toBe("");
     expect(readThemePreviewCookie(`${THEME_PREVIEW_COOKIE_NAME}=bad`)).toBe("");

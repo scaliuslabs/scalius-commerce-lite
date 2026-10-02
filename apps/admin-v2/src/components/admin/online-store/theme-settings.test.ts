@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { moveSectionTo } from "./theme-editor/editor-state";
 import {
   DEFAULT_STOREFRONT_THEME,
   EMPTY_STORE_SHAPE,
@@ -10,7 +11,6 @@ import {
   storefrontSectionDefault,
   storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
-  type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
@@ -20,7 +20,6 @@ import {
   blockVariant,
   cardForBackground,
   colorFieldForPath,
-  moveSection,
   previewFamily,
   resetTypeTokens,
   resolveThemeForStore,
@@ -68,33 +67,6 @@ function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
   };
 }
 
-const richText: StorefrontSection = {
-  id: "story",
-  type: "editorial",
-  version: 1,
-  settings: { layout: "rich-text", heading: "Our story", body: "Handmade in Dhaka." },
-};
-
-describe("homepage section order", () => {
-  const sections = DEFAULT_STOREFRONT_THEME.pages.home;
-  const ids = (list: readonly StorefrontSection[]) => list.map((section) => section.id);
-
-  it("moves a section one place up or down without touching the saved list", () => {
-    expect(ids(moveSection(sections, "categories", -1))).toEqual(["hero", "categories", "collections", "delivery"]);
-    expect(ids(moveSection(sections, "hero", 1))).toEqual(["collections", "hero", "categories", "delivery"]);
-    expect(ids(sections)).toEqual(["hero", "collections", "categories", "delivery"]);
-  });
-
-  it("keeps the order at either end", () => {
-    expect(moveSection(sections, "hero", -1)).toEqual(sections);
-    expect(moveSection(sections, "delivery", 1)).toEqual(sections);
-  });
-
-  it("moves a rich text section like any other", () => {
-    const withStory = [...sections, richText];
-    expect(ids(moveSection(withStory, "story", -1))).toEqual(["hero", "collections", "categories", "story", "delivery"]);
-  });
-});
 
 describe("templates", () => {
   it("a new store starts on Department mall", () => {
@@ -157,7 +129,7 @@ describe("templates", () => {
     const applied = storefrontTemplateTheme("boutique");
     const changed = [
       { ...applied, tokens: { ...applied.tokens, density: "compact" as const } },
-      { ...applied, pages: { ...applied.pages, home: moveSection(applied.pages.home, "testimonials", -1) } },
+      { ...applied, pages: { ...applied.pages, home: moveSectionTo(applied.pages.home, applied.pages.home.findIndex((section) => section.id === "testimonials"), applied.pages.home.findIndex((section) => section.id === "testimonials") - 1) } },
       setThemeColor(applied, "background", "#fafafa"),
       setBlockVariant(applied, "desktopNav", "mega-panel"),
       setBlockVariant(applied, "gallery", "classic"),
@@ -276,16 +248,16 @@ describe("theme colors", () => {
     expect(themeDraftInvalid({ ...theme, pages: { ...theme.pages, homeMode: { kind: "product", productId: "" } } })).toBe(true);
   });
 
-  it("marks the Theme page control behind a rejected document path", () => {
-    const theme = withContent(DEFAULT_STOREFRONT_THEME);
-    const hero = theme.pages.home.findIndex((section) => section.type === "hero");
-    expect(themeFieldForPath("brand.logo", theme)).toBe("theme-brand-logo");
-    expect(themeFieldForPath("theme.brand.favicon", theme)).toBe("theme-brand-favicon");
-    expect(themeFieldForPath("pages.homeMode.productId", theme)).toBe("theme-home-product");
-    expect(themeFieldForPath(`pages.home.${hero}.settings.slides.0.image`, theme)).toBe("theme-section-hero");
-    expect(themeFieldForPath("blocks.topBar.settings.link", theme)).toBe("theme-announcement-link");
-    expect(themeFieldForPath("tokens.colors.primary", theme)).toBe("theme-color-buttons");
-    expect(themeFieldForPath("pages.home.99.settings.title", theme)).toBeUndefined();
+  it("marks the control behind a rejected document path", () => {
+    expect(themeFieldForPath("brand.logo")).toBe("theme-brand-logo");
+    expect(themeFieldForPath("theme.brand.favicon")).toBe("theme-brand-favicon");
+    expect(themeFieldForPath("pages.homeMode.productId")).toBe("theme-home-product");
+    // Generated block settings are named after their document path.
+    expect(themeFieldForPath("blocks.topBar.settings.link")).toBe("theme-blocks-topBar-settings-link");
+    expect(themeFieldForPath("theme.blocks.product.buyBox.settings.showBuyNow")).toBe("theme-blocks-product-buyBox-settings-showBuyNow");
+    expect(themeFieldForPath("tokens.colors.primary")).toBe("theme-color-buttons");
+    // Section settings are edited (and marked) in the theme editor.
+    expect(themeFieldForPath("pages.home.0.settings.title")).toBeUndefined();
   });
 
   it("marks the field behind a rejected colour token", () => {

@@ -22,7 +22,7 @@ export function OnlineStorePage({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 pb-10">
+    <div className="@container mx-auto w-full max-w-3xl space-y-4 pb-10">
       <div className="flex min-h-11 flex-wrap items-center gap-2 lg:min-h-9">
         {back ? (
           <Link

@@ -112,20 +112,6 @@ export function colorFieldForPath(path: string): string | undefined {
   return COLOR_FIELD_IDS[role ?? "background"];
 }
 
-/** The sections with the one whose id is `id` moved one place up (-1) or down (+1); unchanged at either end. */
-export function moveSection<Section extends { id: string }>(
-  sections: readonly Section[],
-  id: string,
-  delta: -1 | 1,
-): Section[] {
-  const next = [...sections];
-  const from = next.findIndex((section) => section.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= next.length) return next;
-  [next[from], next[to]] = [next[to]!, next[from]!];
-  return next;
-}
-
 /** A single-variant block slot the Theme page offers as a picker. */
 export type ThemeBlockSlot = Exclude<StorefrontBlockSlot, "listing">;
 
@@ -252,25 +238,16 @@ export const THEME_FIELD_IDS = {
   logoWidth: "theme-logo-width",
   footerLogo: "theme-brand-footer-logo",
   favicon: "theme-brand-favicon",
-  announcementText: "theme-announcement-text",
-  announcementLink: "theme-announcement-link",
-  footerTagline: "theme-footer-tagline",
-  footerAbout: "theme-footer-about",
-  footerCopyright: "theme-footer-copyright",
   homeProduct: "theme-home-product",
 } as const;
 
-/** The id of a homepage section's row, which shows a rejected setting of that section. */
-export const themeSectionFieldId = (sectionId: string) => `theme-section-${sectionId}`;
-
 /**
- * The Theme page control that shows an API issue on a document path
- * (`brand.logo`, `pages.home.2.settings.slides.0.image`,
- * `pages.homeMode.productId`, a colour token), with or without the request
- * body's `theme.` prefix. A section's settings are edited in a dialog, so a
- * rejected one is marked on that section's row.
+ * The control that shows an API issue on a document path (`brand.logo`,
+ * `pages.homeMode.productId`, a colour token, a block's generated setting
+ * such as `blocks.topBar.settings.link`), with or without the request
+ * body's `theme.` prefix. Section settings are the theme editor's.
  */
-export function themeFieldForPath(path: string, theme: StorefrontThemeDocument): string | undefined {
+export function themeFieldForPath(path: string): string | undefined {
   const at = path.replace(/^theme\./, "");
   const color = colorFieldForPath(at);
   if (color) return color;
@@ -279,18 +256,12 @@ export function themeFieldForPath(path: string, theme: StorefrontThemeDocument):
     "brand.logoWidth": THEME_FIELD_IDS.logoWidth,
     "brand.footerLogo": THEME_FIELD_IDS.footerLogo,
     "brand.favicon": THEME_FIELD_IDS.favicon,
-    "blocks.topBar.settings.text": THEME_FIELD_IDS.announcementText,
-    "blocks.topBar.settings.link": THEME_FIELD_IDS.announcementLink,
-    "blocks.footer.settings.tagline": THEME_FIELD_IDS.footerTagline,
-    "blocks.footer.settings.about": THEME_FIELD_IDS.footerAbout,
-    "blocks.footer.settings.copyright": THEME_FIELD_IDS.footerCopyright,
     "pages.homeMode": THEME_FIELD_IDS.homeProduct,
     "pages.homeMode.productId": THEME_FIELD_IDS.homeProduct,
   };
   if (fixed[at]) return fixed[at];
-  const section = /^pages\.home\.(\d+)(?:\.|$)/.exec(at);
-  const id = section ? theme.pages.home[Number(section[1])]?.id : undefined;
-  return id ? themeSectionFieldId(id) : undefined;
+  // Generated block settings name their fields after their document path.
+  return /^blocks\.(?:[A-Za-z]+\.){1,2}settings\.[A-Za-z0-9.]+$/.test(at) ? `theme-${at.replace(/\./g, "-")}` : undefined;
 }
 
 function canonical(value: unknown): unknown {

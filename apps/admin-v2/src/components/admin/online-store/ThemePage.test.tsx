@@ -8,9 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
-  storefrontSectionDefault,
   storefrontTemplateTheme,
-  storefrontThemeDocumentSchema,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
@@ -158,27 +156,7 @@ function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
   });
 }
 
-/** Types into a field, then leaves it (links settle into their canonical form on leaving). */
-function typeAndLeave(input: HTMLInputElement, value: string) {
-  act(() => input.focus());
-  type(input, value);
-  act(() => input.blur());
-}
-
 const field = <Element extends HTMLElement = HTMLInputElement>(id: string) => document.querySelector<Element>(`#${CSS.escape(id)}`)!;
-const buttonIn = (id: string, name: string) =>
-  [...document.querySelectorAll<HTMLButtonElement>(`#${CSS.escape(id)} button`)].find((button) => button.textContent === name)!;
-const buttonNamed = (name: string) =>
-  document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)
-  ?? [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === name)!;
-
-function choose(trigger: HTMLButtonElement, label: string) {
-  act(() => trigger.click());
-  const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
-    .find((item) => item.textContent?.trim().startsWith(label));
-  expect(option).toBeDefined();
-  act(() => option!.click());
-}
 
 /** Picks an option a select loads from the server or a query. */
 async function chooseLoaded(trigger: HTMLButtonElement, label: string) {
@@ -192,23 +170,10 @@ async function chooseLoaded(trigger: HTMLButtonElement, label: string) {
   await act(async () => option.click());
 }
 
-const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 const homeModeRadio = (value: "sections" | "product") =>
   container.querySelector<HTMLButtonElement>(`[role=radiogroup][aria-label="Homepage"] [role=radio][value="${value}"]`)!;
 
 const SLIDE = { image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: "/collections/eid" };
-
-/** The theme with its category tiles naming these categories. */
-function withCategoryTiles(theme: StorefrontThemeDocument, categoryIds: string[]): StorefrontThemeDocument {
-  return {
-    ...theme,
-    pages: {
-      ...theme.pages,
-      home: theme.pages.home.map((section) =>
-        section.type === "category-tiles" ? { ...section, settings: { ...section.settings, categoryIds } } : section),
-    },
-  };
-}
 
 /** The theme with the merchant's content: a logo, the bar's and footer's words, a slide and a one-product homepage. */
 function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
@@ -232,14 +197,11 @@ describe("theme page", () => {
   it("shows one card per choice, with the saved template selected", () => {
     render(DEFAULT_STOREFRONT_THEME);
     expect(headings()).toEqual([
+      "Theme editor",
       "Storefront preview",
       "Template",
-      "Logo",
       "Colors",
       "Typography",
-      "Header",
-      "Navigation",
-      "Footer",
       "Product cards",
       "Listing default",
       "Filters on computers",
@@ -248,8 +210,9 @@ describe("theme page", () => {
       "Purchase panel",
       "More on the product page",
       "Homepage",
-      "Homepage sections",
     ]);
+    // Sections, the logo, header and footer are edited in the theme editor.
+    expect(container.querySelector('a[href="/admin/online-store/theme/editor"]')?.textContent).toBe("Customize");
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
     expect(radio("Fashion value").getAttribute("aria-checked")).toBe("false");
     // Previews are decorative; the radio's text names the choice.
@@ -273,25 +236,6 @@ describe("theme page", () => {
     expect(radio("Marketplace").textContent).toContain("Category and deal cards start in a grid; search starts in a list.");
     expect(radio("Department mall").querySelector("[data-marketplace-preview]")).toBeNull();
     expect(radio("Department mall").querySelectorAll(".max-w-11")).toHaveLength(3);
-  });
-
-  it("saves the header link source in the private draft used by preview", async () => {
-    const saved = storefrontTemplateTheme("marketplace");
-    const queryClient = render(saved);
-    const source = container.querySelector<HTMLButtonElement>("#theme-navigation-source")!;
-    expect(source.textContent).toContain("Categories and custom links");
-    act(() => source.click());
-    const choices = [...document.querySelectorAll<HTMLElement>("[role=option]")];
-    expect(choices.map((choice) => choice.textContent?.split(" · ")[0])).toEqual([
-      "Custom menu", "Published categories", "Categories and custom links",
-    ]);
-    act(() => choices[1]!.click());
-    expect(source.textContent).toContain("Published categories");
-    await pressSave();
-    expect(api.draft.mock.calls[0]![0].body.theme.blocks.navigation.source).toBe("category-tree");
-    expect(queryClient.getQueryData<ThemeWorkspaceDocument>(themeWorkspaceQueryOptions().queryKey)?.draft.theme.blocks.navigation.source)
-      .toBe("category-tree");
-    expect(container.querySelector("[data-draft-revision]")?.getAttribute("data-draft-revision")).toBe("2");
   });
 
   it("saves a chosen grocery template with its merchant defaults", async () => {
@@ -360,14 +304,14 @@ describe("theme page", () => {
     expect(container.textContent).not.toContain("The live theme changed since this draft started.");
   });
 
-  it("says Draft saved after every save: logo and words are part of the draft too", async () => {
+  it("says Draft saved after every save", async () => {
     const { toast } = await import("sonner");
     render(DEFAULT_STOREFRONT_THEME);
     act(() => radio("Fashion value").click());
     await pressSave();
     expect(toast.success).toHaveBeenLastCalledWith("Draft saved");
 
-    type(field("theme-footer-tagline"), "Pure honey");
+    act(() => container.querySelector<HTMLButtonElement>('[role=radio][value="airy"]')!.click());
     await pressSave();
     expect(api.draft).toHaveBeenCalledTimes(2);
     expect(toast.success).toHaveBeenLastCalledWith("Draft saved");
@@ -395,28 +339,6 @@ describe("theme page", () => {
       storeShape: SHAPE,
       media: [],
     });
-  });
-
-  it("previews the images the saved draft's sections name", () => {
-    const draft: StorefrontThemeDocument = {
-      ...DEFAULT_STOREFRONT_THEME,
-      pages: {
-        home: [{
-          id: "story",
-          type: "editorial",
-          version: 1,
-          settings: { layout: "image-with-text", heading: "Our story", body: "", mediaId: "media_draft", imageSide: "start" },
-        }],
-        homeMode: { kind: "sections" },
-      },
-    } as StorefrontThemeDocument;
-    render(DEFAULT_STOREFRONT_THEME, SHAPE, {
-      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
-      draft: { theme: draft, revision: 2, basePublishedRevision: 1 },
-    }, [{ id: "media_draft", url: "https://cdn.example.com/story.jpg", alt: "", width: 1200, height: 800 }]);
-    act(() => container.querySelector<HTMLButtonElement>("[aria-label='Edit Our story']")!.click());
-    expect(document.querySelector<HTMLImageElement>("[role=dialog] img")?.getAttribute("src"))
-      .toContain("story.jpg");
   });
 
   it("lets a Marketplace merchant set category and search starting views separately", async () => {
@@ -565,7 +487,7 @@ describe("theme page", () => {
     expect(radio("Daily essentials").querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(3);
     const groceryCard = container.querySelector<HTMLButtonElement>('[role="radio"][value="quick-add"]')!;
     expect(groceryCard.querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(2);
-    const quick = container.querySelector<HTMLButtonElement>("#theme-essentials-full-action")!;
+    const quick = container.querySelector<HTMLButtonElement>("#theme-blocks-card-settings-fullAction")!;
     expect(quick.getAttribute("aria-checked")).toBe("true");
     act(() => quick.click());
     expect(groceryCard.querySelectorAll("[data-card-sketch-round-action]")).toHaveLength(2);
@@ -576,7 +498,7 @@ describe("theme page", () => {
 
   it("lets an essentials merchant move phone thumbnails beside the photo", async () => {
     render(storefrontTemplateTheme("daily-essentials"));
-    const side = container.querySelector<HTMLButtonElement>("#theme-gallery-phone-side")!;
+    const side = container.querySelector<HTMLButtonElement>("#theme-blocks-product-gallery-settings-phoneSideThumbnails")!;
     expect(side.getAttribute("aria-checked")).toBe("false");
     act(() => side.click());
     await pressSave();
@@ -586,7 +508,7 @@ describe("theme page", () => {
 
   it.each(["fashion-value", "heritage-editorial"] as const)("lets %s merchants add a Buy now button to the product page", async (template) => {
     render(storefrontTemplateTheme(template));
-    const buyNow = container.querySelector<HTMLButtonElement>("#theme-product-buy-now")!;
+    const buyNow = container.querySelector<HTMLButtonElement>("#theme-blocks-product-buyBox-settings-showBuyNow")!;
     expect(buyNow.getAttribute("aria-checked")).toBe("false");
     act(() => buyNow.click());
     await pressSave();
@@ -645,7 +567,7 @@ describe("theme page", () => {
     const retail = storefrontTemplateTheme("mass-retail");
     render(retail);
     expect(retail.blocks.card.variant).toBe("retail");
-    const quick = container.querySelector<HTMLButtonElement>("#theme-retail-quick-action")!;
+    const quick = container.querySelector<HTMLButtonElement>("#theme-blocks-card-settings-quickAction")!;
     expect(quick.getAttribute("aria-checked")).toBe("false");
     act(() => quick.click());
     await pressSave();
@@ -667,7 +589,7 @@ describe("theme page", () => {
   it("starts Showcase with its dedicated product card", () => {
     render(storefrontTemplateTheme("showcase-landing"));
     expect(container.querySelector('[role="radio"][value="showcase"]')?.getAttribute("aria-checked")).toBe("true");
-    expect(container.querySelector("#theme-boutique-quick-action")).toBeNull();
+    expect(container.querySelector("#theme-blocks-card-settings-quickAction")).toBeNull();
   });
 
   it("selecting a template sets and saves the whole document", async () => {
@@ -708,97 +630,16 @@ describe("theme page", () => {
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
   });
 
-  it("keeps the boutique header on a large store while explaining hidden sections", () => {
-    const big = storeShapeFromFacts({
-      productCount: 900,
-      skuCount: 4000,
-      topCategoryCount: 14,
-      categoryDepth: 1,
-      menu: [{}, {}],
-      hasCollections: true,
-      hasDeliveryMethods: true,
-    });
-    // A merchant who adds the newsletter (it waits for a subscriber list) is
-    // told so; no template ships it until then.
-    const boutique = storefrontTemplateTheme("boutique");
-    expect(boutique.pages.home.map((section) => section.type)).not.toContain("newsletter");
-    boutique.pages.home = [...boutique.pages.home, storefrontSectionDefault("newsletter", "newsletter")];
-    render(boutique, big);
-    expect(radio("Inline menu").getAttribute("aria-checked")).toBe("true");
-    expect(container.textContent).not.toContain("Your store shows Departments instead.");
-    // Sections that wait for their data (a subscriber list) say so; the
-    // homepage section library renders the rest.
-    const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
-    expect(rows).toContain("NewsletterNot on your store yet.");
-    expect(rows).toContain("Product grid");
-    // A hero without slides shows nothing until its slides are added.
-    expect(rows).toContain("BannersHidden until you add its content.");
-  });
-
-  it.each([
-    ["department-mall", []],
-    ["marketplace", ["cat_a"]],
-  ] as const)("flags %s category tiles until they have the categories their style needs", (template, categoryIds) => {
-    render(withCategoryTiles(storefrontTemplateTheme(template), [...categoryIds]));
-    const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
-    expect(row?.textContent).toBe("Featured categoriesHidden until you add its content.");
-    expect(container.querySelector('a[href="/admin/online-store/banners"]')).toBeNull();
-  });
-
-  it("does not mark category tiles with their categories hidden", () => {
-    render(withCategoryTiles(storefrontTemplateTheme("marketplace"), ["cat_a", "cat_b"]));
-    const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
-    expect(row?.textContent).toBe("Featured categories");
-  });
-
-  it("saves the logo, top bar, footer words, a slide, categories and the home product in one theme draft, and nothing else", async () => {
+  it("saves the home product in the theme draft, and nothing else", async () => {
     render(DEFAULT_STOREFRONT_THEME);
-    files.next = [{ id: "media_logo", url: "https://cdn.test/logo.png", altText: "Mou Ghor" }];
-    expect(field("theme-logo-width")).toBeNull();
-    act(() => buttonIn("theme-brand-logo", "Select image").click());
-    expect(document.querySelector("#theme-brand-logo img")?.getAttribute("src")).toContain("logo.png");
-    expect(field("theme-logo-width")).not.toBeNull();
-
-    type(field("theme-announcement-text"), "Free delivery in Dhaka");
-    typeAndLeave(field("theme-announcement-link"), "collections/sale");
-    expect(field("theme-announcement-link").value).toBe("/collections/sale");
-
-    type(field("theme-footer-tagline"), "Pure honey");
-    type(field<HTMLTextAreaElement>("theme-footer-about"), "From the Sundarbans.\n\nPacked in Dhaka.");
-    type(field("theme-footer-copyright"), "Mou Ghor Ltd");
-
     act(() => homeModeRadio("product").click());
     await chooseLoaded(field<HTMLButtonElement>("theme-home-product"), "Sundarban honey");
-
-    act(() => buttonNamed("Edit Banners").click());
-    files.next = [{ id: "media_slide", url: "https://cdn.test/slide.jpg", altText: "Honey jars" }];
-    act(() => buttonNamed("Add slides").click());
-    await act(async () => buttonNamed("Done").click());
-    await settle();
-
-    act(() => buttonNamed("Edit Featured categories").click());
-    await chooseLoaded(field<HTMLButtonElement>("section-categories-categories"), "Honey");
-    await act(async () => buttonNamed("Done").click());
-
     // Content never makes the template custom.
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
     await pressSave();
-
     expect(api.draft).toHaveBeenCalledTimes(1);
     const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.brand).toEqual({ logo: "media_logo", logoWidth: 180, footerLogo: null, favicon: null });
-    expect(saved.blocks.topBar).toEqual({ variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
-    expect(saved.blocks.footer.settings).toMatchObject({
-      tagline: "Pure honey",
-      about: "From the Sundarbans.\n\nPacked in Dhaka.",
-      copyright: "Mou Ghor Ltd",
-    });
-    expect(saved.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
-    expect(saved.pages.home.find((section) => section.type === "hero")?.settings).toMatchObject({
-      slides: [{ image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: null }],
-    });
-    expect(saved.pages.home.find((section) => section.type === "category-tiles")?.settings).toMatchObject({ categoryIds: ["cat_honey"] });
-    expect(storefrontThemeDocumentSchema.safeParse(saved).success).toBe(true);
+    expect(saved).toEqual({ ...DEFAULT_STOREFRONT_THEME, pages: { ...DEFAULT_STOREFRONT_THEME.pages, homeMode: { kind: "product", productId: "prod_honey" } } });
     for (const call of Object.values(others)) expect(call).not.toHaveBeenCalled();
     expect(api.publish).not.toHaveBeenCalled();
   });
@@ -830,39 +671,6 @@ describe("theme page", () => {
     expect(document.querySelector("#theme-home-product-note")?.textContent).toBe("Choose a product");
     act(() => homeModeRadio("sections").click());
     expect(field("theme-home-product")).toBeNull();
-  });
-
-  it("offers None as the top bar's only off switch and keeps the words when switching bars", async () => {
-    render(DEFAULT_STOREFRONT_THEME);
-    type(field("theme-announcement-text"), "Eid sale");
-    choose(field<HTMLButtonElement>("theme-top-bar"), "Phone banner");
-    expect(field("theme-announcement-text").value).toBe("Eid sale");
-
-    typeAndLeave(field("theme-announcement-link"), "sale page");
-    expect(document.querySelector("#theme-announcement-link-note")?.textContent).toBe("Use a store path like /sale or a full https:// link.");
-    await pressSave();
-    expect(api.draft).not.toHaveBeenCalled();
-
-    choose(field<HTMLButtonElement>("theme-top-bar"), "None");
-    expect(field("theme-announcement-text")).toBeNull();
-    await pressSave();
-    expect((api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument).blocks.topBar).toEqual({ variant: "none", settings: {} });
-  });
-
-  it("marks a missing logo on its field and a missing slide image on its section", async () => {
-    const theme = withContent(DEFAULT_STOREFRONT_THEME);
-    render(theme);
-    type(field("theme-footer-tagline"), "Raw honey");
-    const message = "That image is not in Files any more. Choose another image.";
-    const hero = theme.pages.home.findIndex((section) => section.type === "hero");
-    api.draft.mockRejectedValueOnce(new AdminApiResponseError(message, 400, "VALIDATION_ERROR", [
-      { path: "brand.logo", message },
-      { path: `pages.home.${hero}.settings.slides.0.image`, message },
-    ]));
-    await pressSave();
-    expect(document.querySelector("#theme-brand-logo-note")?.textContent).toBe(message);
-    expect(document.querySelector("#theme-section-hero")?.textContent).toBe(message);
-    expect(saveBar()).not.toBeNull();
   });
 
   it("names unreadable text in plain words and will not save it", async () => {
@@ -1001,49 +809,4 @@ describe("theme page", () => {
     });
   });
 
-  it("the Navigation card shows both menu choices with the saved values and saves a new one", async () => {
-    const saved = storefrontTemplateTheme("marketplace");
-    render(saved);
-    let card = [...container.querySelectorAll("h2")]
-      .find((heading) => heading.textContent === "Navigation")!.parentElement!;
-    while (!card.querySelector("[role=radiogroup]")) card = card.parentElement!;
-    const groups = [...card.querySelectorAll<HTMLElement>("[role=radiogroup]")];
-    const labelOf = (group: HTMLElement) =>
-      container.querySelector(`#${CSS.escape(group.getAttribute("aria-labelledby")!)}`)?.textContent;
-    expect(groups.map(labelOf)).toEqual(["On computers", "On phones"]);
-    const options = (group: HTMLElement) => [...group.querySelectorAll<HTMLButtonElement>("[role=radio]")];
-    const checked = (group: HTMLElement) =>
-      options(group).filter((item) => item.getAttribute("aria-checked") === "true").map((item) => item.value);
-    expect(options(groups[0]!).map((item) => item.value)).toEqual([
-      "dropdown", "cascading", "mega-panel", "drill-in-drawer", "departments-rail", "sticky-category-bar",
-    ]);
-    expect(options(groups[1]!).map((item) => item.value)).toEqual(["accordion-drawer", "drill-in-drawer", "bottom-tabs"]);
-    expect(checked(groups[0]!)).toEqual(["drill-in-drawer"]);
-    expect(checked(groups[1]!)).toEqual(["drill-in-drawer"]);
-    // The help points to where the menu links are edited; sketches are decorative.
-    expect(card.querySelector("a")?.getAttribute("href")).toBe("/admin/online-store/navigation");
-    expect(options(groups[0]!).every((item) => item.querySelector("[aria-hidden=true]"))).toBe(true);
-
-    act(() => options(groups[0]!).find((item) => item.value === "mega-panel")!.click());
-    act(() => options(groups[1]!).find((item) => item.value === "bottom-tabs")!.click());
-    expect(checked(groups[0]!)).toEqual(["mega-panel"]);
-    expect(checked(groups[1]!)).toEqual(["bottom-tabs"]);
-    // Five flat menu links have no groups for a mega panel: the page says so.
-    expect(card.textContent).toContain("Your store shows Dropdown instead. Needs 2 or more navigation groups with two or more links (you have 0).");
-
-    await pressSave();
-    expect(api.draft).toHaveBeenCalledTimes(1);
-    expect(api.draft.mock.calls[0]![0].body).toEqual({
-      expectedDraftRevision: 1,
-      basePublishedRevision: 1,
-      theme: {
-        ...saved,
-        blocks: {
-          ...saved.blocks,
-          desktopNav: { variant: "mega-panel", settings: { promoImages: false } },
-          mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "search", "cart", "account"], drawer: "accordion" } },
-        },
-      },
-    });
-  });
 });

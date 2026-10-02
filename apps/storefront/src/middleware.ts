@@ -7,6 +7,7 @@ import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-hel
 import {
   getRuntimeApiBaseUrl,
   getRuntimeCspAllowedDomains,
+  getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
   getRuntimeStorefrontUrl,
   runWithRequestRuntime,
@@ -33,7 +34,39 @@ import {
 import { BUILD_ID } from "@/config/build-id";
 import {
   isBrowserContinuationRelayPathname,
+  isFramedBrowserContinuationRelayPathname,
 } from "@/lib/browser-continuation-relay";
+import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+
+interface PreviewFramingLocals {
+  /** Set by the response policy: the page rendered a valid theme preview. */
+  themePreviewRender?: boolean;
+}
+
+/**
+ * Who besides the storefront may frame this page: the dashboard (Platform
+ * settings), only when the HTML rendered a valid theme preview. A request
+ * without the preview cookie (every buyer's) is never even checked; with
+ * one, the page's own preview resolution is reused.
+ */
+async function themePreviewFrameAncestors(
+  context: { request: Request; locals: object },
+  response: Response,
+): Promise<string[]> {
+  if (!readThemePreviewCookie(context.request.headers.get("cookie"))) return [];
+  if (!response.headers.get("Content-Type")?.toLowerCase().includes("text/html")) return [];
+  try {
+    const theme = await resolveRequestTheme(context, await getLayoutData());
+    if (!theme.preview) return [];
+    (context.locals as PreviewFramingLocals).themePreviewRender = true;
+    const dashboard = themeEditorOrigin(getRuntimeDashboardUrl());
+    return dashboard ? [dashboard] : [];
+  } catch {
+    return [];
+  }
+}
 
 function getEnv(): Env | null {
   try {
@@ -55,7 +88,7 @@ function setPrivateResponse(response: Response, status: string): void {
 }
 
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
-  const { request, url } = context;
+  const { request, url, locals } = context;
   const response = await next();
   // The CSP below needs the platform origins; pages already awaited this read.
   await getLayoutData();
@@ -108,6 +141,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
+  // A theme preview may be framed by the dashboard's editor; a buyer's page never.
+  const frameAncestors = await themePreviewFrameAncestors({ request, locals }, response);
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
   return withPageCsp(url.pathname, response, {
     privateRelay: isBrowserContinuationRelayPathname(url.pathname),
@@ -120,6 +155,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         cdnBaseUrl: getCdnBase(),
       },
       getRuntimeCspAllowedDomains(),
+      frameAncestors,
     ),
   });
 });
@@ -141,12 +177,17 @@ const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
 );
 
 const transportSecurityMiddleware = defineMiddleware(
-  async ({ request }, next) => {
+  async ({ request, locals }, next) => {
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
-    return applyTransportSecurityHeaders(request, await next(), { privateRelay });
+    const pathname = new URL(request.url).pathname;
+    const privateRelay = isBrowserContinuationRelayPathname(pathname);
+    const response = await next();
+    // The editor's relay and a preview render state their framing in CSP frame-ancestors.
+    const framedByPolicy = isFramedBrowserContinuationRelayPathname(pathname)
+      || (locals as PreviewFramingLocals).themePreviewRender === true;
+    return applyTransportSecurityHeaders(request, response, { privateRelay, framedByPolicy });
   },
 );
 

@@ -79,6 +79,7 @@ import { Route as AdminCollectionsCollectionIdEditRouteImport } from './routes/a
 import { Route as AdminCustomersCustomerIdEditRouteImport } from './routes/admin/customers/$customerId/edit'
 import { Route as AdminOnlineStoreNavigationIndexRouteImport } from './routes/admin/online-store/navigation/index'
 import { Route as AdminOnlineStoreNavigationMenuIdRouteImport } from './routes/admin/online-store/navigation/$menuId'
+import { Route as AdminOnlineStoreThemeEditorRouteImport } from './routes/admin/online-store/theme_.editor'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
 import { Route as AdminOrdersListIndexRouteImport } from './routes/admin/orders/_list/index'
@@ -456,6 +457,12 @@ const AdminOnlineStoreNavigationMenuIdRoute =
     path: '/online-store/navigation/$menuId',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminOnlineStoreThemeEditorRoute =
+  AdminOnlineStoreThemeEditorRouteImport.update({
+    id: '/online-store/theme_/editor',
+    path: '/online-store/theme/editor',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminOrdersOrderIdIndexRoute = AdminOrdersOrderIdIndexRouteImport.update({
   id: '/orders/$orderId/',
   path: '/orders/$orderId/',
@@ -607,6 +614,7 @@ export interface FileRoutesByFullPath {
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
@@ -690,6 +698,7 @@ export interface FileRoutesByTo {
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
@@ -777,6 +786,7 @@ export interface FileRoutesById {
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/theme_/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
@@ -865,6 +875,7 @@ export interface FileRouteTypes {
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
@@ -948,6 +959,7 @@ export interface FileRouteTypes {
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
@@ -1034,6 +1046,7 @@ export interface FileRouteTypes {
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/theme_/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/_list/abandoned'
     | '/admin/pages/$pageId/edit'
@@ -1553,6 +1566,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOnlineStoreNavigationMenuIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/online-store/theme_/editor': {
+      id: '/admin/online-store/theme_/editor'
+      path: '/online-store/theme/editor'
+      fullPath: '/admin/online-store/theme/editor'
+      preLoaderRoute: typeof AdminOnlineStoreThemeEditorRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/orders/$orderId/': {
       id: '/admin/orders/$orderId/'
       path: '/orders/$orderId'
@@ -1780,6 +1800,7 @@ interface AdminRouteChildren {
   AdminCollectionsCollectionIdEditRoute: typeof AdminCollectionsCollectionIdEditRoute
   AdminCustomersCustomerIdEditRoute: typeof AdminCustomersCustomerIdEditRoute
   AdminOnlineStoreNavigationMenuIdRoute: typeof AdminOnlineStoreNavigationMenuIdRoute
+  AdminOnlineStoreThemeEditorRoute: typeof AdminOnlineStoreThemeEditorRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
@@ -1829,6 +1850,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCollectionsCollectionIdEditRoute: AdminCollectionsCollectionIdEditRoute,
   AdminCustomersCustomerIdEditRoute: AdminCustomersCustomerIdEditRoute,
   AdminOnlineStoreNavigationMenuIdRoute: AdminOnlineStoreNavigationMenuIdRoute,
+  AdminOnlineStoreThemeEditorRoute: AdminOnlineStoreThemeEditorRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,

@@ -19,9 +19,11 @@ interface Props {
   aboveFold: boolean;
   /** A row of grouped banners: each banner carries its own section marker. */
   grouped?: boolean;
+  /** A theme editor preview: grouped banners carry the editor's section mark too. */
+  previewMarks?: boolean;
 }
 
-const { layout, banners, aboveFold, grouped = false } = Astro.props;
+const { layout, banners, aboveFold, grouped = false, previewMarks = false } = Astro.props;
 const RATIO = {
   full: "aspect-[4/3] sm:aspect-[16/7] lg:aspect-[18/5]",
   "two-up": "aspect-[4/3] sm:aspect-[16/9]",
@@ -59,6 +61,7 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
             aria-label={!title && cta ? cta.label : undefined}
             data-home-section={grouped ? "banner" : undefined}
             data-section-id={grouped ? section.id : undefined}
+            data-theme-section-id={grouped && previewMarks ? section.id : undefined}
           >
             {photo && (
               <img

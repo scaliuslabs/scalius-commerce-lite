@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { AdminNavigationProgress } from "@/components/admin/layout/AdminNavigationProgress";
@@ -63,6 +63,22 @@ function AdminLayout() {
   );
   const nav = useMemo(() => visibleNav(canOpen), [canOpen]);
   useWarmEverydayRouteCode(canOpen);
+  // The theme editor is a workspace of its own (Shopify's): the frame steps aside.
+  const fullWindow = Boolean(useMatchRoute()({ to: "/admin/online-store/theme/editor" }));
+
+  if (fullWindow) {
+    return (
+      <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
+        <AdminSessionSync />
+        <ShellProvider>
+          <div id="admin-main-scroll" tabIndex={-1} className="h-svh overflow-clip outline-none">
+            <Outlet />
+          </div>
+        </ShellProvider>
+        <DeferredToaster />
+      </PermissionProvider>
+    );
+  }
 
   return (
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
