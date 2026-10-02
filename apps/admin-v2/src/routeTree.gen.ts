@@ -92,6 +92,7 @@ import { Route as AdminSettingsNotificationsEventRouteImport } from './routes/ad
 import { Route as AdminSettingsPoliciesWarrantyRouteImport } from './routes/admin/settings/policies_.warranty'
 import { Route as AdminSettingsShippingAreasRouteImport } from './routes/admin/settings/shipping_.areas'
 import { Route as AdminSettingsUsersUserIdRouteImport } from './routes/admin/settings/users_.$userId'
+import { Route as AdminAppsPluginIdPagesPageIdRouteImport } from './routes/admin/apps/$pluginId_.pages.$pageId'
 import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
@@ -532,6 +533,12 @@ const AdminSettingsUsersUserIdRoute =
     path: '/users/$userId',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminAppsPluginIdPagesPageIdRoute =
+  AdminAppsPluginIdPagesPageIdRouteImport.update({
+    id: '/apps/$pluginId_/pages/$pageId',
+    path: '/apps/$pluginId/pages/$pageId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminOrdersListAbandonedCheckoutIdRoute =
   AdminOrdersListAbandonedCheckoutIdRouteImport.update({
     id: '/$checkoutId',
@@ -641,6 +648,7 @@ export interface FileRoutesByFullPath {
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/': typeof AdminOrdersListIndexRoute
+  '/admin/apps/$pluginId/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -727,6 +735,7 @@ export interface FileRoutesByTo {
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders': typeof AdminOrdersListIndexRoute
+  '/admin/apps/$pluginId/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -817,6 +826,7 @@ export interface FileRoutesById {
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/_list/': typeof AdminOrdersListIndexRoute
+  '/admin/apps/$pluginId_/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/orders/_list/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -908,6 +918,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/'
+    | '/admin/apps/$pluginId/pages/$pageId'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -994,6 +1005,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
     | '/admin/orders'
+    | '/admin/apps/$pluginId/pages/$pageId'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -1083,6 +1095,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/_list/'
+    | '/admin/apps/$pluginId_/pages/$pageId'
     | '/admin/orders/_list/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -1682,6 +1695,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsUsersUserIdRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/apps/$pluginId_/pages/$pageId': {
+      id: '/admin/apps/$pluginId_/pages/$pageId'
+      path: '/apps/$pluginId/pages/$pageId'
+      fullPath: '/admin/apps/$pluginId/pages/$pageId'
+      preLoaderRoute: typeof AdminAppsPluginIdPagesPageIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/orders/_list/abandoned/$checkoutId': {
       id: '/admin/orders/_list/abandoned/$checkoutId'
       path: '/$checkoutId'
@@ -1847,6 +1867,7 @@ interface AdminRouteChildren {
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
   AdminOnlineStoreNavigationIndexRoute: typeof AdminOnlineStoreNavigationIndexRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
+  AdminAppsPluginIdPagesPageIdRoute: typeof AdminAppsPluginIdPagesPageIdRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -1899,6 +1920,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,
   AdminOnlineStoreNavigationIndexRoute: AdminOnlineStoreNavigationIndexRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,
+  AdminAppsPluginIdPagesPageIdRoute: AdminAppsPluginIdPagesPageIdRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

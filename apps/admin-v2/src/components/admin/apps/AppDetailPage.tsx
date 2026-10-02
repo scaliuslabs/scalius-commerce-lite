@@ -3,6 +3,7 @@
 // the app; no app code runs in the dashboard. A Super Admin activates (or
 // approves an update); managers change settings, deactivate and uninstall.
 import { useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
@@ -29,6 +30,7 @@ import { AppActivity } from "./AppActivity";
 import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./AppDialogs";
 import { AppSettingsForm } from "./AppSettingsForm";
 import { AppStatusBadge } from "./app-status";
+import { appPagePath } from "./ui/surfaces";
 
 type DialogName = "activate" | "deactivate" | "uninstall" | null;
 
@@ -53,7 +55,9 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 
 function Overview({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
-  const pages = app.admin.pages.map((page) => page.title);
+  const pages = app.admin.pages;
+  // Only an active app answers its pages; otherwise they are named only.
+  const linked = app.status === "active";
   return (
     <Card>
       <CardHeader>
@@ -72,8 +76,19 @@ function Overview({ app }: { app: AppDetail }) {
           <Fact label={t("runsIn")}>{t(app.runtime === "bundled" ? "runtime_bundled" : "runtime_sandbox")}</Fact>
           <Fact label={t("approvedBy")}>{app.activatedBy?.name ?? t("notApproved")}</Fact>
           {app.activatedAt ? <Fact label={t("activeSince")}>{formatWhen(app.activatedAt) ?? "—"}</Fact> : null}
-          {/* Phase 2b renders these pages from the app's declarations; for now they are named only. */}
-          {pages.length > 0 ? <Fact label={t("pages")}>{pages.join(", ")}</Fact> : null}
+          {pages.length > 0 ? (
+            <Fact label={t("pages")}>
+              <ul className="space-y-0.5">
+                {pages.map((page) => (
+                  <li key={page.id}>
+                    {linked ? (
+                      <Link to={appPagePath(app.id, page.id)} className="text-link hover:underline">{page.title}</Link>
+                    ) : page.title}
+                  </li>
+                ))}
+              </ul>
+            </Fact>
+          ) : null}
         </dl>
       </CardContent>
     </Card>

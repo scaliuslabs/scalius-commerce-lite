@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Archive, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
+import { Archive, Blocks, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
 import { getApiV1AdminOrders } from "@scalius/api-client/sdk";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { Button } from "~/components/ui/button";
@@ -15,6 +15,8 @@ import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
+import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
+import { appUiMessages } from "~/i18n/app-ui";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -84,6 +86,8 @@ export function OrderList({
   const refetchRef = useRef<() => Promise<unknown>>(async () => undefined);
   const actions = useOrderActions(orderActions, selection);
   const { archive, restore, changeStatus, updatingStatusIds } = actions;
+  const appActions = useAppActionRunner("order", true);
+  const appCopy = useMessages(appUiMessages);
 
   const columns = useMemo(
     () =>
@@ -184,6 +188,16 @@ export function OrderList({
   const canArchiveSelection =
     orderActions.canBulkDeleteOrders
     && (allSelected || planOrderBulkAction(selectedRows, "archive").eligible.length > 0);
+  // Apps' bulk actions run on the selected rows of this page (at most 250), never "all matching".
+  const tooManyForApps = selectedIds.length > APP_BULK_ACTION_MAX_IDS;
+  const appMoreActions = allSelected ? [] : appActions.entries.map((entry) => ({
+    key: `app:${appActionKey(entry)}`,
+    icon: Blocks,
+    label: entry.action.label,
+    disabled: tooManyForApps || appActions.pending !== null,
+    hint: tooManyForApps ? appCopy("tooManySelected", { max: APP_BULK_ACTION_MAX_IDS }) : undefined,
+    onSelect: () => appActions.start(entry, selectedIds, clearAll),
+  }));
   const moreActions = [
     !allSelected && orderActions.canPrintInvoices
       ? { key: "print", icon: Printer, label: t("printInvoices"), disabled: selectedIds.length > PRINT_LIMIT, hint: undefined, onSelect: printInvoices }
@@ -200,6 +214,7 @@ export function OrderList({
           onSelect: archiveSelection,
         }
       : null,
+    ...appMoreActions,
   ].filter((action) => action !== null);
 
   const bulkButtons = (
@@ -314,6 +329,7 @@ export function OrderList({
       <SelectionSheet count={selectedCount} clearLabel={t("clearSelection")} onClear={clearAll}>
         {bulkButtons}
       </SelectionSheet>
+      {appActions.dialogs}
 
       <OrderRowCancelDialog
         order={cancelOrder}

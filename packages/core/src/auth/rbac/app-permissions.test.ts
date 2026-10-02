@@ -56,5 +56,10 @@ describe("app (plugin) RBAC boundaries", () => {
     expect(getPagePermission("/admin/apps/acme.loyalty")).toEqual(view);
     expect(hasPageAccess(new Set([PERMISSIONS.APPS_VIEW]), false, "/admin/apps/acme.loyalty")).toBe(true);
     expect(hasPageAccess(new Set([PERMISSIONS.ORDERS_VIEW]), false, "/admin/apps")).toBe(false);
+    // An app's own page (declarative UI) opens with apps.view too; nothing deeper does.
+    expect(getPagePermission("/admin/apps/acme.loyalty/pages/overview")).toEqual(view);
+    expect(hasPageAccess(new Set([PERMISSIONS.ORDERS_VIEW]), false, "/admin/apps/acme.loyalty/pages/overview")).toBe(false);
+    expect(getPagePermission("/admin/apps/acme.loyalty/pages")).toBeUndefined();
+    expect(getPagePermission("/admin/apps/acme.loyalty/pages/overview/more")).toBeUndefined();
   });
 });

@@ -145,6 +145,7 @@ function CategoriesPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
       search={search}
       list="categories"
+      appActions="category"
       countLabel={(count) => t("categoryCount", { count })}
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}

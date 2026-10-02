@@ -100,6 +100,7 @@ function ProductsPage() {
     <ResourceListPage<ProductListItem>
       title={t("products")}
       list="products"
+      appActions="product"
       actions={
         <>
           <Button variant="outline" asChild>

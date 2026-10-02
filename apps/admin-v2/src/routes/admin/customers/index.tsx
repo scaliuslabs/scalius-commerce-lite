@@ -106,6 +106,7 @@ function CustomersPage() {
       actions={hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
       search={search}
       list="customers"
+      appActions="customer"
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="customers"

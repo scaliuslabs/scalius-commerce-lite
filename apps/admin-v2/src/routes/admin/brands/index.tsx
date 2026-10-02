@@ -119,6 +119,7 @@ function BrandsPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/brands/new">{t("addBrand")}</Link></Button> : null}
       search={search}
       list="brands"
+      appActions="brand"
       countLabel={(count) => t("brandCount", { count })}
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}

@@ -25,6 +25,8 @@ export interface NavLink {
   to: string;
   /** A live count beside a sub-page (pending reviews). */
   badge?: NavBadge;
+  /** An app's page: its own title (plain text) instead of the `key` label. */
+  label?: string;
 }
 
 export interface NavItem {
@@ -103,9 +105,38 @@ export interface VisibleNavItem {
   badge?: NavBadge;
 }
 
-export function visibleNav(canOpen: (path: string) => boolean): VisibleNavItem[] {
+/** An active app's page (`useAppNavPages`): listed under the section its placement names. */
+export interface AppNavLink {
+  placement: string;
+  title: string;
+  to: string;
+}
+
+/**
+ * The section an app page's placement joins. Marketing pages sit with
+ * Discounts; analytics and settings pages (no section of their own here)
+ * sit with Apps.
+ */
+const APP_PLACEMENT_SECTION: Readonly<Record<string, ShellKey>> = {
+  apps: "apps",
+  orders: "orders",
+  products: "products",
+  customers: "customers",
+  marketing: "discounts",
+  content: "content",
+  analytics: "apps",
+  settings: "apps",
+};
+
+/** An app's own page (`/admin/apps/<id>/pages/<page>`). */
+const APP_PAGE_PATH = /^\/admin\/apps\/[^/]+\/pages\/[^/]+\/?$/;
+
+export function visibleNav(canOpen: (path: string) => boolean, appPages: readonly AppNavLink[] = []): VisibleNavItem[] {
   return ADMIN_NAV.flatMap((item) => {
-    const children = (item.children ?? []).filter((child) => canOpen(child.to));
+    const appLinks = appPages
+      .filter((page) => (APP_PLACEMENT_SECTION[page.placement] ?? "apps") === item.key && canOpen(page.to))
+      .map((page): NavLink => ({ key: item.key, to: page.to, label: page.title }));
+    const children = [...(item.children ?? []).filter((child) => canOpen(child.to)), ...appLinks];
     const to = item.to && canOpen(item.to) ? item.to : children[0]?.to;
     return to ? [{ key: item.key, to, icon: item.icon, children, group: item.group, badge: item.badge }] : [];
   });
@@ -117,5 +148,8 @@ export function matchesPath(path: string, to: string): boolean {
 }
 
 export function isSectionActive(path: string, item: VisibleNavItem): boolean {
-  return matchesPath(path, item.to) || item.children.some((child) => matchesPath(path, child.to));
+  if (item.children.some((child) => matchesPath(path, child.to))) return true;
+  // An app's page belongs to the section that lists it, not to Apps by its address.
+  if (APP_PAGE_PATH.test(path)) return false;
+  return matchesPath(path, item.to);
 }

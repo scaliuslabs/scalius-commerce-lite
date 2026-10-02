@@ -35,6 +35,8 @@ import { pageFormMessages } from "~/i18n/page-form";
 import { defaultPageScheduleDate, toDateTimeLocalValue, type PagePublicationMode } from "@/lib/page-publication";
 import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { AppActionsMenu } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -184,6 +186,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       heading={isEdit ? defaultValues?.title || t(isArticle ? "blogPost" : "page") : t(isArticle ? "addBlogPost" : "addPage")}
       unsavedLabel={isEdit ? undefined : t(isArticle ? "unsavedBlogPost" : "unsavedPage")}
       savedMessage={t(isEdit ? (isArticle ? "blogPostSaved" : "pageSaved") : isArticle ? "blogPostCreated" : "pageCreated")}
+      actions={isEdit && defaultValues?.id && !isArticle ? <AppActionsMenu target="page" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl={backUrl ?? (isArticle ? "/admin/articles" : "/admin/pages")}
       canSave={canSave}
@@ -454,6 +457,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
           {isEdit && defaultValues?.id && !isArticle ? (
             <CustomFieldsCard ownerType="page" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}
+          {isEdit && defaultValues?.id && !isArticle ? <AppResourceCards target="page" id={defaultValues.id} /> : null}
         </div>
       </div>
     </FormContainer>

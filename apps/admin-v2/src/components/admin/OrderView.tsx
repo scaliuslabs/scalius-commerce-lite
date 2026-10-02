@@ -48,6 +48,8 @@ import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
 import type { Order } from "./orderview/types";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 
@@ -87,6 +89,7 @@ export function OrderView({ order }: { order: Order }) {
   const canEditCustomData = usePermissions().hasPermission(PERMISSIONS.ORDERS_EDIT);
   // Finished orders (delivered, cancelled, returned, refunded) leave the working list (R3-ORD-11).
   const canArchive = actions.canBulkDeleteOrders && !archived && orderSkipReason(order, "archive") === null;
+  const appActions = useAppActionRunner("order", false);
   const itemsLock = order.editReadiness.items;
   const editBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
@@ -196,24 +199,43 @@ export function OrderView({ order }: { order: Order }) {
                     {t("unarchive")}
                   </Button>
                 ) : null}
-                {canArchive ? (
+                {canArchive || appActions.entries.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" aria-label={t("moreActions")} title={t("moreActions")}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={t("moreActions")}
+                        title={t("moreActions")}
+                        loading={appActions.pending !== null}
+                      >
                         <MoreHorizontal className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={archiveMutation.isPending}
-                        onSelect={() => archiveMutation.mutate({ orders: [{ id: order.id, version: order.version }], skipped: 0 })}
-                      >
-                        <span className="flex h-lh items-center"><Archive className="size-4" /></span>
-                        {t("archive")}
-                      </DropdownMenuItem>
+                      {canArchive ? (
+                        <DropdownMenuItem
+                          disabled={archiveMutation.isPending}
+                          onSelect={() => archiveMutation.mutate({ orders: [{ id: order.id, version: order.version }], skipped: 0 })}
+                        >
+                          <span className="flex h-lh items-center"><Archive className="size-4" /></span>
+                          {t("archive")}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {/* Apps' actions for this order (apps.use). */}
+                      {appActions.entries.map((entry) => (
+                        <DropdownMenuItem
+                          key={appActionKey(entry)}
+                          variant={entry.action.destructive ? "destructive" : undefined}
+                          onSelect={() => appActions.start(entry, [order.id])}
+                        >
+                          {entry.action.label}
+                        </DropdownMenuItem>
+                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}
+                {appActions.dialogs}
                 {primaryButton ?<span className="hidden lg:inline-flex">{primaryButton}</span> : null}
                 <div className="hidden lg:flex">
                   <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
@@ -250,6 +272,7 @@ export function OrderView({ order }: { order: Order }) {
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
               <div className="order-7 lg:order-none"><CustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
+              <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />
             </div>
           </div>
         </div>
