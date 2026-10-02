@@ -106,6 +106,16 @@ export const deps = {
   analytics: (): void => declare(cacheDep.analytics()),
   /** `cf:<ownerType>`: the storefront-visible custom field definitions a reader shows values of. */
   customFieldDefinitions: (ownerType: string): void => declare(cacheDep.customFieldDefinitions(ownerType)),
+  /** `plg:<id>`: one app installation (status, version, grant, manifest, settings). */
+  plugin: (pluginId: Id): void => declareOne(cacheDep.plugin, pluginId),
+  /** `plg:*`: which apps are installed and active (their storefront scripts). */
+  anyPlugin: (): void => declare(cacheDep.anyPlugin()),
+  /** `plgs:<id>:<collection>`: one storage collection an app's storefront output reads. */
+  pluginCollections: (pluginId: string, collections: Iterable<string>): void => {
+    const scope = activeDependencyScope();
+    if (scope === null) return;
+    for (const collection of collections) scope.declare(cacheDep.pluginCollection(pluginId, collection));
+  },
 
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */

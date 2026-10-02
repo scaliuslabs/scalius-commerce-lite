@@ -11,13 +11,18 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     load: () => import("../../../../plugins/bulk-discount/src/index"),
   },
   "scalius.hello": {
-    version: "0.2.0",
-    sha256: "b6a2d34a5144a7a042ec8405c6a57c12079a627244c5101b93a8c572baf9c258",
+    version: "0.3.0",
+    sha256: "1f01c6ce43988416dffb4aa3270330ba2402adc47328403971bec9b0a84ae59b",
     load: () => import("../../../../plugins/hello/src/index"),
   },
   "scalius.order-tagger": {
     version: "0.1.0",
     sha256: "bd1c5c6d90d226f7469d76fb74b37da7a9801ea2d948f9c47f4edde66ed2181f",
     load: () => import("../../../../plugins/order-tagger/src/index"),
+  },
+  "scalius.wishlist": {
+    version: "0.1.0",
+    sha256: "fc9b8002c47d754f744d2ea58263c067b061d2e5b87c5288430fa02ea5223bc8",
+    load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { AppActionsMenu } from "~/components/admin/apps/ui/AppActions";
+import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
@@ -52,25 +54,25 @@ export function OrderReturnRow({
           </div>
           <p className="text-muted-foreground">{formatOrderTimestamp(orderReturn.requestedAt ?? orderReturn.createdAt)}</p>
         </div>
-        {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            {orderReturn.status === "requested" ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => onAction({ type: "approve", orderReturn })}>
-                {t("returns.review")}
-              </Button>
-            ) : null}
-            {canReceive ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => onAction({ type: "receive", orderReturn })}>
-                {t("returns.receive")}
-              </Button>
-            ) : null}
-            {canCancel ? (
-              <Button type="button" size="sm" variant="ghost" onClick={() => onAction({ type: "cancel", orderReturn })}>
-                {t("returns.cancel")}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {canManage && orderReturn.status === "requested" ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => onAction({ type: "approve", orderReturn })}>
+              {t("returns.review")}
+            </Button>
+          ) : null}
+          {canManage && canReceive ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => onAction({ type: "receive", orderReturn })}>
+              {t("returns.receive")}
+            </Button>
+          ) : null}
+          {canManage && canCancel ? (
+            <Button type="button" size="sm" variant="ghost" onClick={() => onAction({ type: "cancel", orderReturn })}>
+              {t("returns.cancel")}
+            </Button>
+          ) : null}
+          {/* Apps' actions for this return (apps.use); nothing when no app offers one. */}
+          <AppActionsMenu target="return" id={orderReturn.id} size="sm" />
+        </div>
       </div>
 
       {orderReturn.receiptRecovery ? (
@@ -128,6 +130,8 @@ export function OrderReturnRow({
         </ul>
       ) : null}
       {orderReturn.notes ? <p className="text-muted-foreground">{orderReturn.notes}</p> : null}
+      {/* Apps' cards for this return, inside the Returns card (never a card in a card). */}
+      <AppResourceCards target="return" id={orderReturn.id} inline className="space-y-3" />
     </li>
   );
 }

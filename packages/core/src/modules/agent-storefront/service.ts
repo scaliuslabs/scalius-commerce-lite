@@ -8,21 +8,27 @@ import {
 } from "@scalius/database/schema";
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
+  assertNoCheckoutRuleErrors,
   DELIVERY_ADDRESS_REQUIRED_REASON,
+  NO_CHECKOUT_APP_FUNCTIONS,
+  presentCheckoutRateOptions,
+  previewStorefrontAppDiscounts,
+  priceStorefrontCheckout,
+  resolveAppPaymentMethods,
   resolveBundlePromotionInterplay,
+  resolveCartPaymentMethods,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   summarizeStorefrontCartFulfilment,
   validateStorefrontCartItems,
   validateStorefrontDeliveryPreflight,
+  type CheckoutAppFunctions,
   type StorefrontCartItemIssue,
 } from "@scalius/core/modules/checkout";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
-import {
-  buildStorefrontTaxAllocationLineId,
-  calculateStorefrontTaxQuote,
-} from "@scalius/core/modules/tax";
+import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
+import { getActivePaymentMethods } from "../payments/gateway-settings";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
@@ -118,6 +124,22 @@ export interface AgentStorefrontCheckoutQuote {
     productName: string;
     variantLabel: string | null;
   }>;
+  /** Installed apps' discounts in `discountMinor`, after the store's own (checkout functions). */
+  appDiscounts: Array<{
+    appId: string;
+    title: string;
+    code: string | null;
+    /** Off the items. */
+    amount: number;
+    amountMinor: number;
+    /** Off delivery. */
+    shippingAmount: number;
+    shippingAmountMinor: number;
+  }>;
+  /** The delivery options when an app changed them (hid, renamed, priced, reordered); null when none did. */
+  shippingRates: Array<{ id: string; name: string; kind: "delivery" | "pickup"; amount: number; amountMinor: number }> | null;
+  /** The payment methods submit accepts when an app changed them; null when none did. */
+  paymentMethods: Array<{ id: string; name: string }> | null;
 }
 
 
@@ -447,7 +469,7 @@ export async function setAgentStorefrontDiscount(
   contextId: string,
   expectedRevision: number,
   code: string | null,
-  options: { now?: Date; customerPhone?: string | null } = {},
+  options: { now?: Date; customerPhone?: string | null; apps?: CheckoutAppFunctions } = {},
 ): Promise<AgentStorefrontCartProjection> {
   assertExpectedRevision(expectedRevision);
   const now = options.now ?? new Date();
@@ -462,6 +484,8 @@ export async function setAgentStorefrontDiscount(
       current,
       normalizedCode,
       options.customerPhone?.trim() || undefined,
+      undefined,
+      options.apps,
     );
   }
   const row = await mutateContext(db, {
@@ -639,15 +663,31 @@ async function getLiveContextCustomerPhone(db: Database, row: ContextRow): Promi
   return session?.phone ?? null;
 }
 
-/** The one storefront discount path; throws the buyer-facing reason when the code fails. */
+/**
+ * The one storefront discount path; throws the buyer-facing reason when the
+ * code fails. A code only an app answers to (checkout functions, channel
+ * "agent") is not "not found": the apps' discount preview claims it, as the
+ * storefront's discount preview does. The checkout quote prices it.
+ */
 async function quoteAgentStorefrontDiscount(
   db: Database,
   row: ContextRow,
   projection: AgentStorefrontCartState,
   code: string | null,
   customerPhone?: string | null,
+  apps: CheckoutAppFunctions = NO_CHECKOUT_APP_FUNCTIONS,
 ) {
   const currency = await getCurrencySettings(db);
+  const lines = projection.items.map((item) => ({
+    id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+    productId: item.productId,
+    variantId: item.variantId,
+    unitPriceMinor: item.unitPriceMinor,
+    quantity: item.quantity,
+    // Gift-card lines are outside every promotion (Wave B §4.2).
+    ...(item.isGiftCard ? { giftCard: true } : {}),
+  }));
+  const shippingMinor = projection.delivery?.shippingMinor ?? 0;
   // Only a context bound to a live customer session counts as signed in.
   const signedInCustomerId = await getLiveContextCustomerId(db, row);
   const quote = await quoteStorefrontDiscount(db, {
@@ -655,22 +695,46 @@ async function quoteAgentStorefrontDiscount(
     customerId: signedInCustomerId,
     segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
-    cart: {
-      currencyCode: currency.currencyCode,
-      lines: projection.items.map((item) => ({
-        id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-        productId: item.productId,
-        variantId: item.variantId,
-        unitPriceMinor: item.unitPriceMinor,
-        quantity: item.quantity,
-        // Gift-card lines are outside every promotion (Wave B §4.2).
-        ...(item.isGiftCard ? { giftCard: true } : {}),
-      })),
-      shippingAmountMinor: projection.delivery?.shippingMinor ?? 0,
-    },
+    cart: { currencyCode: currency.currencyCode, lines, shippingAmountMinor: shippingMinor },
   });
-  assertDiscountCodesApplied(quote);
-  return quote;
+  const unknownCode = quote.rejectedCodes.some((rejection) => rejection.reason === "not_found");
+  if (!code || !unknownCode || !apps.points.has("checkout.discounts")) {
+    assertDiscountCodesApplied(quote);
+    return quote;
+  }
+  const interplay = resolveBundlePromotionInterplay(
+    projection.items.map((item, position) => ({
+      lineId: lines[position]!.id,
+      unitPriceMinor: item.unitPriceMinor,
+      quantity: item.quantity,
+      bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+    })),
+    quote,
+  );
+  const preview = await previewStorefrontAppDiscounts(db, {
+    apps,
+    currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+    lines: lines.map((line) => ({
+      lineId: line.id,
+      productId: line.productId,
+      variantId: line.variantId,
+      unitPriceMinor: line.unitPriceMinor,
+      quantity: line.quantity,
+      ...(line.giftCard ? { giftCard: true } : {}),
+    })),
+    platformAllocation: interplay.allocation,
+    shippingMinor,
+    discountCodes: [code],
+    channel: "agent",
+  });
+  const claimed = new Set(preview?.claimedCodes ?? []);
+  const checked = {
+    ...quote,
+    rejectedCodes: quote.rejectedCodes.filter((rejection) =>
+      !(rejection.reason === "not_found" && claimed.has(rejection.code.trim().toUpperCase()))),
+  };
+  assertDiscountCodesApplied(checked);
+  return checked;
 }
 
 async function assertAgentStorefrontDiscountValid(
@@ -679,6 +743,7 @@ async function assertAgentStorefrontDiscountValid(
   normalizedCode: string,
   customerPhone?: string,
   currentCart?: AgentStorefrontCartState,
+  apps?: CheckoutAppFunctions,
 ): Promise<void> {
   const projection = currentCart ?? await loadAgentStorefrontCart(db, row);
   if (!projection.valid || projection.items.length === 0) {
@@ -686,7 +751,7 @@ async function assertAgentStorefrontDiscountValid(
       itemIssues: presentAgentStorefrontCartIssues(projection.issues),
     });
   }
-  await quoteAgentStorefrontDiscount(db, row, projection, normalizedCode, customerPhone);
+  await quoteAgentStorefrontDiscount(db, row, projection, normalizedCode, customerPhone, apps);
 }
 
 export async function getAgentStorefrontCart(
@@ -703,7 +768,7 @@ export async function validateAgentStorefrontCheckout(
   db: Database,
   grantId: string,
   contextId: string,
-  options: { now?: Date; customerPhone?: string | null } = {},
+  options: { now?: Date; customerPhone?: string | null; apps?: CheckoutAppFunctions } = {},
 ): Promise<AgentStorefrontCartProjection> {
   const now = options.now ?? new Date();
   const row = await loadActiveOwnedContext(db, grantId, contextId, now);
@@ -716,6 +781,7 @@ export async function validateAgentStorefrontCheckout(
       row.discountCode,
       options.customerPhone?.trim() || undefined,
       cart,
+      options.apps,
     );
   }
   return presentAgentStorefrontCart(cart);
@@ -744,50 +810,48 @@ export async function quoteAgentStorefrontCheckout(
   db: Database,
   grantId: string,
   contextId: string,
-  input: { customerPhone?: string | null; now?: Date } = {},
+  input: {
+    customerPhone?: string | null;
+    now?: Date;
+    /** The apps' checkout functions, channel "agent" (none: platform pricing only). */
+    apps?: CheckoutAppFunctions;
+    /** Reads the enabled payment methods, only when an app adjusts them. */
+    credentialEncryptionKey?: string;
+  } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
   const projection = await loadAgentStorefrontCart(db, row);
   assertAgentStorefrontCheckoutProjection(projection);
   const delivery = projection.delivery!;
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
-  const discount = await quoteAgentStorefrontDiscount(db, row, projection, discountCode, input.customerPhone);
-  const currency = await getCurrencySettings(db);
-  // Promotions or quantity bundles price the order, never both (as the order checkout commits).
-  const bundleDiscount = resolveBundlePromotionInterplay(
-    projection.items.map((item) => ({
-      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-      unitPriceMinor: item.unitPriceMinor,
-      quantity: item.quantity,
-      bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
-    })),
-    discount,
-  );
-  const quote = await calculateStorefrontTaxQuote(db, {
-    // The same destination checkout commits: no address (pickup, service)
-    // means only store-wide rates apply.
-    destination: {
-      city: delivery.address?.city ?? null,
-      zone: delivery.address?.zone ?? null,
-      area: delivery.address?.area ?? null,
-      cityName: delivery.cityName,
-      zoneName: delivery.zoneName,
-      areaName: delivery.areaName,
-    },
-    lines: projection.items.map((item) => ({
-      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-      productId: item.productId,
-      variantId: item.variantId,
-      unitPriceMinor: item.unitPriceMinor,
-      quantity: item.quantity,
-      taxClassId: item.taxClassId,
-      // A gift card is money, not a taxable sale (Wave B §4.2).
-      ...(item.isGiftCard ? { taxExempt: true } : {}),
-    })),
-    shippingMinor: delivery.shippingMinor,
-    promotionDiscountAllocation: bundleDiscount.allocation,
-    currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+  const apps = input.apps ?? NO_CHECKOUT_APP_FUNCTIONS;
+  const customerId = await getLiveContextCustomerId(db, row);
+  const customerPhone = input.customerPhone?.trim() || await getLiveContextCustomerPhone(db, row);
+  // Promotions or bundles, then the apps, then tax: the one rule the
+  // storefront quote and the submitted order use (checkout/pricing.ts), so
+  // the reviewed fingerprint is the committed one.
+  const pricing = await priceStorefrontCheckout(db, {
+    cartValidation: projection,
+    delivery,
+    discountCodes: discountCode ? [discountCode] : [],
+    customerId,
+    customerPhone,
+    currency: { code: projection.currencyCode, decimalPlaces: projection.decimalPlaces },
+    apps,
+    channel: "agent",
+    // Submit lists delivery options from the order's own address (none for pickup), so the quote does too.
+    location: null,
   });
+  assertNoCheckoutRuleErrors(pricing.ruleErrors);
+  assertDiscountCodesApplied(pricing.typedCodes);
+  const quote = pricing.taxQuote;
+  // Apps narrow and present the methods submit accepts (read only when an app adjusts them).
+  const payment = apps.points.has("checkout.payment_methods")
+    ? await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(
+      (await getActivePaymentMethods(db, input.credentialEncryptionKey)).enabledMethods,
+      delivery.fulfilment,
+    ))
+    : null;
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,
@@ -823,6 +887,19 @@ export async function quoteAgentStorefrontCheckout(
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),
+    appDiscounts: pricing.appDiscounts.map((discount) => ({
+      appId: discount.pluginId,
+      title: discount.title,
+      code: discount.code,
+      amount: toAmount(discount.amountMinor),
+      amountMinor: discount.amountMinor,
+      shippingAmount: toAmount(discount.shippingAmountMinor),
+      shippingAmountMinor: discount.shippingAmountMinor,
+    })),
+    shippingRates: pricing.shippingRates ? presentCheckoutRateOptions(pricing.shippingRates, quote.decimalPlaces) : null,
+    paymentMethods: payment?.changed
+      ? payment.methods.map((method) => ({ id: method.methodId, name: method.name }))
+      : null,
   };
 }
 

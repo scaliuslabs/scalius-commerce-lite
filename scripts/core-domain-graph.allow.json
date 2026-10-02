@@ -121,6 +121,7 @@
     "storefront -> collections",
     "storefront -> navigation",
     "storefront -> pages",
+    "storefront -> plugins",
     "storefront -> settings",
     "tax -> products",
     "tax -> settings",

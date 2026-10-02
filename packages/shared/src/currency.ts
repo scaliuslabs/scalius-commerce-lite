@@ -13,14 +13,12 @@ declare const window: { __CURRENCY_SYMBOL__?: string; __CURRENCY_CODE__?: string
 export interface CurrencyConfig {
   code: string;
   symbol: string;
-  usdExchangeRate: number;
   decimalPlaces: number;
 }
 
 export const DEFAULT_CURRENCY: CurrencyConfig = {
   code: "BDT",
   symbol: "৳",
-  usdExchangeRate: 1,
   decimalPlaces: 2,
 };
 

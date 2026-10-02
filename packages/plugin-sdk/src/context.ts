@@ -5,7 +5,7 @@
 // bundled one (in-process, Workers Free). Part of the versioned plugin API.
 
 import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
-import type { PluginSettingValue } from "@scalius/shared/plugins";
+import type { PluginRenderContext, PluginSettingValue } from "@scalius/shared/plugins";
 
 /** Store facts every handler may read. */
 export interface PluginStoreInfo {
@@ -169,6 +169,26 @@ export interface PluginRouteRequest {
   rawBody: string | null;
   /** Admin routes: the staff member's id. */
   staffId: string | null;
+  /**
+   * Public routes asked to draw a theme section or a product block: what to
+   * draw and the merchant's settings for it. Answer `{ body: { html, head? } }`.
+   * The platform sanitizes the HTML and caches it until the app's settings,
+   * version or a collection the section declares in `reads` change, so the
+   * answer must depend only on those and this context: while rendering, the
+   * app may read its settings and those collections; `ctx.api`, `ctx.http`,
+   * `ctx.kv`, custom fields, messaging and every write are refused. Never
+   * per-buyer: there is no customer here. Null on every other request.
+   */
+  render?: PluginRenderContext | null;
+  /**
+   * Public routes reached through the storefront proxy (`/apps/<id>/...`):
+   * the signed-in customer's id, resolved by the platform from the store's
+   * own session (the app never sees a cookie or token). Null for guests, on
+   * direct API requests and on every other surface. Use it to key the
+   * buyer's own records; read more with `ctx.api` if the app has
+   * `customers.view`.
+   */
+  customer?: { id: string } | null;
 }
 
 /**
@@ -181,6 +201,11 @@ export interface PluginRouteRequest {
 export interface PluginRouteResponse {
   status?: number;
   headers?: Record<string, string>;
-  /** JSON for API routes; a UI tree for admin pages/cards; `{ html, css? }` for storefront sections. */
+  /**
+   * JSON for API routes; a UI document (`ui.page(...)`) for admin pages,
+   * cards and widgets; an action result (`ui.result(...)`) for buttons and
+   * forms; `{ html, head? }` for sections and product blocks; `{ page }` or
+   * `{ redirect }` for a proxied page navigation.
+   */
   body?: unknown;
 }

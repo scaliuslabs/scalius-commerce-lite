@@ -1,18 +1,27 @@
 // Scalius Hello: the reference plugin. It touches every capability so both
 // loaders are exercised end to end: settings (with secrets), a storage
 // collection with a compound and a unique index, KV with a TTL, event
-// handlers that call an /api/v1 operation, admin page and action routes,
-// public routes on the storefront proxy, a signed provider webhook, a cron
-// job, a checkout function and a lifecycle hook.
+// handlers that call an /api/v1 operation, an admin page, an order card, a
+// bulk product action and a home widget (declarative UI), public routes on
+// the storefront proxy, a homepage section and a product block (sanitized
+// HTML, cached), a signed provider webhook, a cron job, a checkout function
+// and a lifecycle hook.
 
-import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import {
+  adminContext,
+  definePlugin,
+  PLUGIN_API_VERSION,
+  ui,
+  type PluginContext,
+  type PluginManifestInput,
+} from "@scalius/plugin-sdk";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const manifest = {
   id: "scalius.hello",
   name: "Hello",
-  version: "0.2.0",
+  version: "0.3.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Greets paid orders, offers a welcome discount and shows what it did.",
   author: { name: "Scalius" },
@@ -23,10 +32,15 @@ export const manifest = {
     admin: [
       { name: "dashboard", methods: ["GET"] },
       { name: "reset", methods: ["POST"], description: "Resets the counters." },
+      { name: "order-card", methods: ["GET"], description: "Whether an order was greeted." },
+      { name: "wave", methods: ["POST"], description: "Waves at the selected products." },
+      { name: "widget", methods: ["GET"], description: "The home widget's counts." },
     ],
     public: [
       { name: "greet", methods: ["GET"] },
       { name: "visits", methods: ["GET", "POST"] },
+      { name: "greeting-section", methods: ["GET"], description: "Draws the greeting section." },
+      { name: "product-note", methods: ["GET"], description: "Draws the product note block." },
     ],
     webhooks: ["ping"],
   },
@@ -43,9 +57,36 @@ export const manifest = {
   ],
   admin: {
     pages: [{ id: "overview", title: "Hello", route: "dashboard" }],
+    cards: [{ id: "greeting", target: "order", title: "Hello", route: "order-card" }],
+    actions: [{ id: "wave", target: "product", label: "Wave hello", route: "wave", bulk: true }],
+    widgets: [{ id: "summary", title: "Hello", route: "widget" }],
   },
-  storefront: { proxy: true },
+  storefront: {
+    proxy: true,
+    head: true,
+    sections: [{
+      type: "greeting",
+      name: "Greeting",
+      description: "A short greeting from the store.",
+      route: "greeting-section",
+      settings: [
+        { key: "heading", label: "Heading", type: "text", default: "Hello from our shop", maxLength: 120 },
+        { key: "text", label: "Text", type: "textarea", default: "", maxLength: 500 },
+      ],
+    }],
+    productBlocks: [{
+      type: "note",
+      name: "Hello note",
+      placement: "below",
+      route: "product-note",
+      settings: [{ key: "note", label: "Note", type: "text", default: "Packed with care.", maxLength: 200 }],
+    }],
+  },
 } satisfies PluginManifestInput;
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
+}
 
 function greetings(ctx: PluginContext) {
   const collection = ctx.storage.greetings;
@@ -112,29 +153,77 @@ export default definePlugin({
 
   routes: {
     admin: {
-      dashboard: async (_request, ctx) => {
-        const [greeted, paid, created] = await Promise.all([
+      dashboard: async (request, ctx) => {
+        const [greeted, paid, created, page] = await Promise.all([
           greetings(ctx).count(),
           ctx.kv.get<number>("paid_count"),
           ctx.kv.get<number>("created_count"),
+          greetings(ctx).query({ where: { kind: "paid" }, orderBy: { field: "createdAt", direction: "desc" }, limit: 10, cursor: adminContext(request).cursor }),
         ]);
         return {
-          body: {
-            type: "page",
+          body: ui.page([
+            ui.columns([
+              ui.stat("Greeted orders", greeted),
+              ui.stat("Paid events", paid ?? 0),
+              ui.stat("New orders", created ?? 0),
+            ]),
+            ui.card("Recent greetings", [
+              ui.table({
+                columns: [{ key: "order", label: "Order" }, { key: "greeting", label: "Greeting" }, { key: "at", label: "When" }],
+                rows: page.records.map((record) => ({
+                  id: record.id,
+                  to: ui.to.resource("order", record.id),
+                  cells: {
+                    order: { text: record.id, to: ui.to.resource("order", record.id) },
+                    greeting: String(record.data.greeting ?? ""),
+                    at: { date: new Date(Number(record.data.createdAt) || 0).toISOString() },
+                  },
+                })),
+                pagination: { next: page.nextCursor },
+                empty: { title: "No greetings yet", text: "Paid orders are greeted here." },
+              }),
+            ]),
+            ui.text(`Store: ${ctx.store.name || "unnamed"}`, { tone: "neutral", size: "sm" }),
+          ], {
             title: "Hello",
-            children: [
-              { type: "stat", label: "Greeted orders", value: greeted },
-              { type: "stat", label: "Paid events", value: paid ?? 0 },
-              { type: "stat", label: "New orders", value: created ?? 0 },
-              { type: "text", value: `Store: ${ctx.store.name || "unnamed"}` },
-            ],
-          },
+            description: "What the Hello app did for this store.",
+            actions: [ui.button("Reset counters", { route: "reset" }, {
+              tone: "critical",
+              confirm: { title: "Reset the counters?", text: "Greetings stay; the counts start again at zero.", confirmLabel: "Reset", destructive: true },
+            })],
+          }),
         };
       },
       reset: async (request, ctx) => {
         await Promise.all([ctx.kv.delete("paid_count"), ctx.kv.delete("created_count"), ctx.kv.delete("greet_visits")]);
         ctx.log.info("Counters reset", { by: request.staffId });
-        return { body: { reset: true } };
+        return { body: ui.result({ toast: "Counters reset.", refresh: true }) };
+      },
+      "order-card": async (request, ctx) => {
+        const { id } = adminContext(request);
+        const greeting = id ? await greetings(ctx).get(id) : null;
+        return {
+          body: ui.view(greeting
+            ? [ui.badge("Greeted", "success"), ui.keyValue([{ label: "Greeting", value: String(greeting.greeting ?? "") }])]
+            : [ui.text("Not greeted yet: Hello greets an order once it is paid.", { tone: "neutral", size: "sm" })]),
+        };
+      },
+      wave: async (request, ctx) => {
+        const { ids } = adminContext(request);
+        if (ids.length === 0) return { status: 422, body: ui.result({ toast: { message: "Select at least one product.", tone: "critical" } }) };
+        const waved = ((await ctx.kv.get<number>("waves")) ?? 0) + ids.length;
+        await ctx.kv.set("waves", waved);
+        ctx.log.info("Waved at products", { count: ids.length });
+        return { body: ui.result({ toast: `${String(ctx.settings.greeting ?? "Hello")} to ${ids.length} product${ids.length === 1 ? "" : "s"}!` }) };
+      },
+      widget: async (_request, ctx) => {
+        const [greeted, waves] = await Promise.all([greetings(ctx).count(), ctx.kv.get<number>("waves")]);
+        return {
+          body: ui.view([
+            ui.columns([ui.stat("Greeted orders", greeted), ui.stat("Waves", waves ?? 0)]),
+            ui.link("Open Hello", ui.to.page("overview")),
+          ]),
+        };
       },
     },
     public: {
@@ -154,6 +243,25 @@ export default definePlugin({
         const visits = ((await ctx.kv.get<number>("greet_visits")) ?? 0) + 1;
         await ctx.kv.set("greet_visits", visits, { ttlSeconds: DAY_MS / 1000 });
         return { status: 201, body: { message: `Welcome, ${name}!`, visits } };
+      },
+      // Storefront output: drawn from settings alone (no `reads`), cached until they change.
+      "greeting-section": (request) => {
+        const settings = request.render?.settings ?? {};
+        const heading = String(settings.heading ?? "").trim();
+        const text = String(settings.text ?? "").trim();
+        if (!heading && !text) return { body: { html: "" } };
+        return {
+          body: {
+            html: `<div class="mx-auto max-w-7xl px-3 py-6 text-center sm:px-6">${heading ? `<h2 class="text-xl font-bold">${escapeHtml(heading)}</h2>` : ""}${text ? `<p class="mt-2 text-muted-foreground">${escapeHtml(text)}</p>` : ""}</div>`,
+            head: { meta: [{ name: "hello-greeting", content: heading || text }] },
+          },
+        };
+      },
+      "product-note": (request) => {
+        const note = String(request.render?.settings.note ?? "").trim();
+        const product = request.render?.product;
+        if (!note || !product) return { body: { html: "" } };
+        return { body: { html: `<p class="text-sm text-muted-foreground" data-product="${escapeHtml(product.id)}">${escapeHtml(note)}</p>` } };
       },
     },
     webhooks: {

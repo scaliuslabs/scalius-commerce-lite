@@ -40,13 +40,11 @@ describe("storefront Worker gateway cache", () => {
         sentAt: 2_000, changes: [],
       })),
     );
-    const kvGet = vi.fn();
     const apiFetch = vi.fn();
     const waitUntil = vi.fn();
     const { default: StorefrontGateway } = await import("./worker");
     const worker = Object.assign(new StorefrontGateway(), {
       env: {
-        CACHE: { get: kvGet },
         SCALIUS_SECRET: "storefront-test-master-secret-with-enough-length-0123456789",
         BACKEND_API: { fetch: apiFetch },
         CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
@@ -59,7 +57,6 @@ describe("storefront Worker gateway cache", () => {
 
     expect(await response.text()).toBe("cached page");
     expect(response.headers.get("X-Cache-Status")).toBe("HIT");
-    expect(kvGet).not.toHaveBeenCalled();
     expect(apiFetch).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
     expect(handle).not.toHaveBeenCalled();

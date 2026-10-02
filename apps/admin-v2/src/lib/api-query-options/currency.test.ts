@@ -7,11 +7,9 @@ describe("Admin currency settings input", () => {
     expect(normalizeCurrencySettingsInput({
       currencyCode: " bdt ",
       currencySymbol: "৳",
-      usdExchangeRate: "1",
     })).toEqual({
       currencyCode: "BDT",
       currencySymbol: "৳",
-      usdExchangeRate: "1",
     });
   });
 

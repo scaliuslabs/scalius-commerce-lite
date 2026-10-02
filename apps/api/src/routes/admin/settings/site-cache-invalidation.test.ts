@@ -36,6 +36,12 @@ const mocks = vi.hoisted(() => ({
   readSettingsForEdit: vi.fn(),
   readThemeMedia: vi.fn(),
   readStoreShape: vi.fn(),
+  listPluginInstallations: vi.fn(async () => [] as unknown[]),
+}));
+
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
+  listPluginInstallations: mocks.listPluginInstallations,
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -117,7 +123,6 @@ function createTestApp() {
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
     currencySymbol: "Tk",
-    usdExchangeRate: "1",
   });
   mocks.isCurrencyCodeLocked.mockResolvedValue(false);
   mocks.saveCurrencySettings.mockResolvedValue({ value: {}, revision: 2 });
@@ -353,7 +358,6 @@ describe("site settings write behavior", () => {
     mocks.getCurrencySettings.mockResolvedValueOnce({
       currencyCode: "BDT",
       currencySymbol: "T".repeat(10_000),
-      usdExchangeRate: "1".repeat(10_000),
     });
     mocks.getMediaOptimizationSettings.mockResolvedValueOnce({
       canonicalCdnUrl: "c".repeat(10_000),
@@ -713,7 +717,7 @@ describe("site settings write behavior", () => {
     {
       path: "/currency",
       method: "POST" as const,
-      body: { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "1" },
+      body: { currencyCode: "BDT", currencySymbol: "Tk" },
     },
     {
       path: "/media",
@@ -774,7 +778,6 @@ describe("site settings write behavior", () => {
     const response = await requestJson(app, env, "POST", "/currency", {
       currencyCode: " usd ",
       currencySymbol: "$",
-      usdExchangeRate: "1",
     });
 
     expect(response.status).toBe(200);
@@ -793,24 +796,6 @@ describe("site settings write behavior", () => {
       const response = await requestJson(app, env, "POST", "/currency", {
         currencyCode,
         currencySymbol: "$",
-        usdExchangeRate: "1",
-      });
-
-      expect(response.status).toBe(400);
-      expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
-
-    },
-  );
-
-  it.each(["", "0", "-1", "Infinity", "NaN", "1foo"])(
-    "rejects invalid USD exchange rate %j before saving",
-    async (usdExchangeRate) => {
-      const { app, env } = createTestApp();
-
-      const response = await requestJson(app, env, "POST", "/currency", {
-        currencyCode: "BDT",
-        currencySymbol: "Tk",
-        usdExchangeRate,
       });
 
       expect(response.status).toBe(400);
@@ -823,14 +808,13 @@ describe("site settings write behavior", () => {
     const { app, env } = createTestApp();
     mocks.saveCurrencySettings.mockRejectedValueOnce(
       new ConflictError(
-        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
+        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol.",
       ),
     );
 
     const response = await requestJson(app, env, "POST", "/currency", {
       currencyCode: "USD",
       currencySymbol: "$",
-      usdExchangeRate: "1",
     });
     const payload = (await response.json()) as {
       error?: { code?: string; message?: string };
@@ -840,7 +824,7 @@ describe("site settings write behavior", () => {
     expect(payload.error).toEqual({
       code: "CONFLICT",
       message:
-        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
+        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol.",
     });
 
   });
@@ -949,6 +933,52 @@ describe("site settings write behavior", () => {
       media,
     });
     expect(body.data).not.toHaveProperty("sectionMedia");
+    expect(body.data?.apps).toEqual([]);
+  });
+
+  it("offers the theme editor the sections and product blocks of active apps approved for the storefront", async () => {
+    const { app, env } = createTestApp();
+    mocks.getThemeWorkspace.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
+      draft: { theme: DEFAULT_STOREFRONT_THEME, revision: 1, basePublishedRevision: 1, updatedAt: new Date(1_000) },
+    });
+    mocks.readThemeMedia.mockResolvedValueOnce([]);
+    const { parsePluginManifest } = await import("@scalius/shared/plugins");
+    const manifest = (id: string, extra: Record<string, unknown>) => {
+      const parsed = parsePluginManifest({
+        id, name: id === "acme.reviews" ? "Reviews" : "Hidden", version: "1.0.0", apiVersion: "2026-10", description: "An app.", author: { name: "Acme" },
+        routes: { public: [{ name: "draw", methods: ["GET"] }] },
+        storefront: {
+          sections: [{ type: "latest", name: "Latest reviews", route: "draw", settings: [{ key: "heading", label: "Heading", type: "text", default: "Loved" }] }],
+          productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }],
+        },
+        ...extra,
+      });
+      if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+      return parsed.manifest;
+    };
+    const surfaces = { storefrontSurfaces: true };
+    mocks.listPluginInstallations.mockResolvedValueOnce([
+      { pluginId: "acme.reviews", status: "active", grant: surfaces, manifest: manifest("acme.reviews", {}) },
+      { pluginId: "acme.hidden", status: "disabled", grant: surfaces, manifest: manifest("acme.hidden", {}) },
+      { pluginId: "acme.ungranted", status: "active", grant: { storefrontSurfaces: false }, manifest: manifest("acme.ungranted", {}) },
+    ]);
+
+    const response = await app.request("/api/v1/admin/settings/theme/workspace", { method: "GET" }, env);
+    const body = (await response.json()) as { data: { apps: unknown[] } };
+    expect(response.status).toBe(200);
+    expect(body.data.apps).toEqual([{
+      id: "acme.reviews",
+      name: "Reviews",
+      sections: [{
+        key: "acme.reviews/latest",
+        type: "latest",
+        name: "Latest reviews",
+        description: null,
+        settings: [expect.objectContaining({ key: "heading", type: "text", default: "Loved" })],
+      }],
+      productBlocks: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", placement: "buy-box", settings: [] }],
+    }]);
   });
 
   it("bounds the history list to the versions publishing keeps", async () => {

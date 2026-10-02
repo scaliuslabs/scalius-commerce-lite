@@ -14,4 +14,5 @@ export * from "./policy";
 export * from "./abandoned/snapshot";
 export * from "./abandoned/cleanup";
 export * from "./app-functions";
+export * from "./manual-order-apps";
 export * from "./pricing";

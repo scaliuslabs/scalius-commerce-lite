@@ -174,20 +174,7 @@ type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 // ─────────────────────────────────────────
 
 const CURRENCY_CHANGE_CONFLICT_MESSAGE =
-  "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.";
-
-function normalizeUsdExchangeRate(value: string): string {
-  const trimmed = value.trim();
-  const rate = Number(trimmed);
-
-  if (!trimmed || !Number.isFinite(rate) || rate <= 0) {
-    throw new ValidationError(
-      "USD exchange rate must be a finite number greater than 0.",
-    );
-  }
-
-  return String(rate);
-}
+  "Currency code cannot be changed after products or orders exist. You can still update the currency symbol.";
 
 /** Catalog, shipping and order amounts are minor units of this currency, so it locks once any exist. */
 export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
@@ -209,7 +196,6 @@ export async function saveCurrencySettings(
   data: {
     currencyCode?: string;
     currencySymbol?: string;
-    usdExchangeRate?: string;
   },
   options: SettingsSaveOptions = {},
 ) {
@@ -225,13 +211,12 @@ export async function saveCurrencySettings(
   const currencySymbol = typeof data.currencySymbol === "string" && data.currencySymbol.trim()
     ? data.currencySymbol.trim()
     : current.currencySymbol;
-  const usdExchangeRate = normalizeUsdExchangeRate(data.usdExchangeRate ?? current.usdExchangeRate);
 
   if (currencyCode !== current.currencyCode && await isCurrencyCodeLocked(db)) {
     throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
   }
 
-  return currencyDocument.write(db, { currencyCode, currencySymbol, usdExchangeRate }, {}, options);
+  return currencyDocument.write(db, { currencyCode, currencySymbol }, {}, options);
 }
 
 // ─────────────────────────────────────────

@@ -48,6 +48,7 @@ import {
   DEFAULT_STOREFRONT_THEME,
   homeSectionRequests,
   parseStoredStorefrontThemeDocument,
+  type HomeAppSectionRequest,
   type HomeSectionRequests,
 } from "@scalius/shared/storefront-theme";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -58,6 +59,13 @@ import { planPublishedNavigationPlacements } from "../navigation/navigation.auth
 import { planNavigationResourceSnapshots } from "../navigation/navigation.resolver";
 import { categoryNavigationFromRows, selectCategoryNavigationRows, trimCategoryNavigation } from "../navigation/navigation.categories";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import {
+  activePluginInstallationsFromRows,
+  activePluginStorefrontScripts,
+  selectActivePluginInstallations,
+} from "../plugins/storefront";
+import type { PluginInstallationRow } from "@scalius/database/schema";
+import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
 import { deps } from "../../cache-deps";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -162,7 +170,25 @@ function planHomeProduct(db: Database, productId: string | null) {
  * `requests` (a preview's draft, `homeSectionRequests(draft.pages.home,
  * draft.pages.homeMode)`) replaces the published theme's.
  */
-export async function getHomepageData(db: Database, options: { requests?: HomeSectionRequests } = {}) {
+/** One app section drawn by its app (apps/api plugins/storefront-render.ts). */
+export interface HomepageAppSection {
+  sectionId: string;
+  html: string;
+  head: { meta: Array<{ attribute: "name" | "property"; key: string; content: string }>; jsonLd: string[] };
+}
+
+export async function getHomepageData(
+  db: Database,
+  options: {
+    requests?: HomeSectionRequests;
+    /**
+     * Draws the page's app sections (the API's plugin host); runs beside the
+     * second batch, so a homepage with app sections adds no wave before its
+     * apps' own reads. Without it, app sections draw nothing.
+     */
+    renderApps?: (requests: HomeAppSectionRequest[]) => Promise<HomepageAppSection[]>;
+  } = {},
+) {
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO document (homepage title and description)
@@ -204,6 +230,15 @@ export async function getHomepageData(db: Database, options: { requests?: HomeSe
   const theme = parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
     ?? DEFAULT_STOREFRONT_THEME;
   const requests = options.requests ?? homeSectionRequests(theme.pages.home, theme.pages.homeMode);
+  // The apps draw their sections while batch 2 reads the platform sections' data.
+  const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
+    ? options.renderApps(requests.apps ?? []).catch((error: unknown) => {
+      console.warn(`[Storefront] App sections could not be drawn (${error instanceof Error ? error.name : "error"}).`);
+      // Draw the page without them, and try them again soon.
+      deps.validUntil(Date.now() + PLUGIN_RENDER_RETRY_SECONDS * 1000);
+      return [];
+    })
+    : Promise.resolve([]);
 
   // === BATCH 2: every product list, its card media, section images ===
   const activeCollections = (
@@ -300,6 +335,8 @@ export async function getHomepageData(db: Database, options: { requests?: HomeSe
       // Only while the product is public; the storefront then answers `/`
       // with a redirect to the product's own page.
       homeProduct: productPlan.resolve(results, productOffset),
+      // App sections that drew something, by section id (sanitized HTML).
+      apps: await appSections,
     },
   };
 }
@@ -316,7 +353,7 @@ export async function getPageRenderData(db: Database, slug: string) {
 // ── Layout data ───────────────────────────────────────────────────────────────
 
 /** Where the navigation plan's statements start in the layout batch. */
-const LAYOUT_NAVIGATION_OFFSET = 7;
+const LAYOUT_NAVIGATION_OFFSET = 8;
 
 const LAYOUT_DOCUMENTS = [
   currencyDocument,
@@ -420,7 +457,10 @@ export async function getLayoutData(
     // 6. The published theme's brand images (logo, footer logo, tab icon)
     brandMedia.statement,
 
-    // 7-8. The placement manifest and the placed menus' published items
+    // 7. Active apps (their approved storefront scripts)
+    selectActivePluginInstallations(db),
+
+    // 8-9. The placement manifest and the placed menus' published items
     ...navigationPlan.statements,
   ]);
 
@@ -435,6 +475,7 @@ export async function getLayoutData(
     storeShapeResults,
     categoryNavigationRows,
     brandMediaRows,
+    activePluginRows,
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
@@ -570,6 +611,10 @@ export async function getLayoutData(
     cspAllowedDomains: security.value.cspAllowedDomains,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
     policies: publicPolicies,
+    // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
+    appScripts: activePluginStorefrontScripts(
+      activePluginInstallationsFromRows(activePluginRows as PluginInstallationRow[]).values(),
+    ),
   };
 }
 

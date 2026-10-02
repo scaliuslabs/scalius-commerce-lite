@@ -51,7 +51,10 @@ import {
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
+import { appSettingField, appSettingFieldSchema } from "../../../schemas/app-settings";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
+import { listPluginInstallations } from "@scalius/core/modules/plugins";
+import { pluginSurfaceKey } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -62,7 +65,6 @@ const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), re
 // ─────────────────────────────────────────
 
 const CURRENCY_SYMBOL_MAX_LENGTH = 16;
-const CURRENCY_EXCHANGE_RATE_MAX_LENGTH = 64;
 
 const supportedCurrencyCodeSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toUpperCase() : value),
@@ -74,7 +76,6 @@ const supportedCurrencyCodeSchema = z.preprocess(
 const currencySettingsSchema = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH),
-  usdExchangeRate: z.string().max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH),
   currencyCodeLocked: z.boolean(),
   revision: revisionSchema,
 });
@@ -104,10 +105,6 @@ app.openapi(getCurrencyRoute, async (c) => {
     ...result,
     revision,
     currencySymbol: result.currencySymbol.slice(0, CURRENCY_SYMBOL_MAX_LENGTH),
-    usdExchangeRate: result.usdExchangeRate.slice(
-      0,
-      CURRENCY_EXCHANGE_RATE_MAX_LENGTH,
-    ),
     currencyCodeLocked,
   });
 });
@@ -116,15 +113,6 @@ const saveCurrencySchema = z.object({
   expectedRevision: revisionSchema,
   currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH).optional(),
-  usdExchangeRate: z
-    .string()
-    .trim()
-    .max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH)
-    .refine((value) => {
-      const rate = Number(value);
-      return value.length > 0 && Number.isFinite(rate) && rate > 0;
-    }, "USD exchange rate must be a finite number greater than 0.")
-    .optional(),
 });
 
 const saveCurrencyRoute = createRoute({
@@ -175,6 +163,27 @@ const themeWorkspaceSchema = z.object({
   draft: themeDraftSchema,
 });
 
+/** An active app's storefront sections and product blocks, with the settings the editor draws for each. */
+const themeAppSurfacesSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sections: z.array(z.object({
+    /** `<app id>/<type>`: what a theme's app section names. */
+    key: z.string(),
+    type: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    settings: z.array(appSettingFieldSchema),
+  })),
+  productBlocks: z.array(z.object({
+    key: z.string(),
+    type: z.string(),
+    name: z.string(),
+    placement: z.enum(["buy-box", "below"]),
+    settings: z.array(appSettingFieldSchema),
+  })),
+}).openapi("ThemeAppSurfaces");
+
 const getThemeWorkspaceRoute = createRoute({
   method: "get",
   path: "/theme/workspace",
@@ -197,6 +206,8 @@ const getThemeWorkspaceRoute = createRoute({
               width: z.number().int().nullable(),
               height: z.number().int().nullable(),
             })),
+            /** Sections and product blocks the store's active apps offer (the editor adds them; the apps draw them). */
+            apps: z.array(themeAppSurfacesSchema),
           })),
         },
       },
@@ -205,14 +216,45 @@ const getThemeWorkspaceRoute = createRoute({
   },
 });
 
+/** Active apps whose approved grant covers storefront surfaces, with what they offer the theme. */
+async function readThemeAppSurfaces(db: Parameters<typeof listPluginInstallations>[0]) {
+  const installations = await listPluginInstallations(db);
+  return installations
+    .filter((installation) => installation.status === "active" && installation.grant?.storefrontSurfaces === true)
+    .map((installation) => {
+      const { storefront, name } = installation.manifest;
+      return {
+        id: installation.pluginId,
+        name,
+        sections: storefront.sections.map((section) => ({
+          key: pluginSurfaceKey(installation.pluginId, section.type),
+          type: section.type,
+          name: section.name,
+          description: section.description ?? null,
+          settings: section.settings.map(appSettingField),
+        })),
+        productBlocks: storefront.productBlocks.map((block) => ({
+          key: pluginSurfaceKey(installation.pluginId, block.type),
+          type: block.type,
+          name: block.name,
+          placement: block.placement,
+          settings: block.settings.map(appSettingField),
+        })),
+      };
+    })
+    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length > 0)
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+}
+
 app.openapi(getThemeWorkspaceRoute, async (c) => {
   const db = c.get("db");
-  const [[workspace, media], storeShape] = await Promise.all([
+  const [[workspace, media], storeShape, apps] = await Promise.all([
     getThemeWorkspace(db).then(async (workspace) =>
       [workspace, await readThemeMedia(db, workspace.draft.theme)] as const),
     readStoreShape(db),
+    readThemeAppSurfaces(db),
   ]);
-  return ok(c, { ...workspace, storeShape, media });
+  return ok(c, { ...workspace, storeShape, media, apps });
 });
 
 const saveThemeDraftSchema = z.object({

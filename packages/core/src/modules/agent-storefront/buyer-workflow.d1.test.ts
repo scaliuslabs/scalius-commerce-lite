@@ -25,7 +25,7 @@ describe("agent storefront checkout submission on D1 storage", () => {
     const now = Math.floor(Date.now() / 1000);
     sqlite.exec(`
       INSERT INTO settings (id, key, value, type, category) VALUES
-        ('s_currency', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","usdExchangeRate":"1"}', 'json', 'currency'),
+        ('s_currency', 'document', '{"currencyCode":"BDT","currencySymbol":"৳"}', 'json', 'currency'),
         ('s_countries', 'document', '{"allowedCountries":["BD"],"allowedCountriesMode":"include"}', 'json', 'customer_countries'),
         ('s_methods', 'document', '{"enabledMethods":["cod"],"defaultMethod":"cod"}', 'json', 'payment_methods'),
         ('s_checkout', 'document', '{"guestCheckoutEnabled":true,"checkoutMode":"all","partialPaymentEnabled":false,"partialPaymentAmount":0}', 'json', 'checkout');
@@ -227,7 +227,7 @@ describe("agent storefront carts and buyer inputs", () => {
     }));
     sqlite.exec(`
       INSERT INTO settings (id, key, value, type, category) VALUES
-        ('s_currency', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","usdExchangeRate":"1"}', 'json', 'currency');
+        ('s_currency', 'document', '{"currencyCode":"BDT","currencySymbol":"৳"}', 'json', 'currency');
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
       VALUES ('variant_pen', 'prod_pen', 'PEN-1', 10000, 10, 1, 1);
       INSERT INTO user (id, name, email) VALUES ('owner_1', 'Owner', 'owner@example.com');

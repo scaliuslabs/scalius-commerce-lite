@@ -6,6 +6,7 @@ import { AdminNavigationProgress } from "@/components/admin/layout/AdminNavigati
 import { GlobalSearch } from "@/components/admin/layout/GlobalSearch";
 import { ShellProvider } from "@/components/admin/layout/shell";
 import { SETTINGS_ITEM, visibleNav } from "@/components/admin/layout/AdminNav";
+import { useAppNavPages } from "@/components/admin/apps/ui/surfaces";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
 import { AdminSessionSync } from "@/components/auth/AdminSessionSync";
@@ -61,7 +62,9 @@ function AdminLayout() {
     (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin }),
     [permissions, isSuperAdmin],
   );
-  const nav = useMemo(() => visibleNav(canOpen), [canOpen]);
+  // Active apps' pages join the section their placement names (apps.view only).
+  const appPages = useAppNavPages(canOpen("/admin/apps"));
+  const nav = useMemo(() => visibleNav(canOpen, appPages), [canOpen, appPages]);
   useWarmEverydayRouteCode(canOpen);
   // The theme editor is a workspace of its own (Shopify's): the frame steps aside.
   const fullWindow = Boolean(useMatchRoute()({ to: "/admin/online-store/theme/editor" }));

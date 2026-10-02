@@ -234,9 +234,10 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.CONVERSATIONS_VIEW },
   },
 
-  // Apps: one app (activation, settings and removal are gated inside)
+  // Apps: one app (activation, settings and removal are gated inside), and
+  // one of an app's own pages (its actions need apps.use, checked by the API).
   {
-    pattern: /^\/admin\/apps\/[^/]+$/,
+    pattern: /^\/admin\/apps\/[^/]+(?:\/pages\/[^/]+)?$/,
     config: { permission: PERMISSIONS.APPS_VIEW },
   },
 

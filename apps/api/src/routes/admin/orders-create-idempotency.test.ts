@@ -11,8 +11,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     ...await importOriginal<typeof import("@scalius/core/modules/orders")>(),
     createOrder: mocks.createOrder,
+    // The route runs the apps' checkout functions; a store with no app commits as before.
+    createManualOrder: async (...args: unknown[]) => ({ response: await mocks.createOrder(...args), committed: null }),
 }));
 
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+    ...await importOriginal<typeof import("@scalius/core/modules/plugins")>(),
+    listActiveFunctionRegistrations: async () => [],
+}));
 
 
 import { adminOrdersRoutes } from "./orders";

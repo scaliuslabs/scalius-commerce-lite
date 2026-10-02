@@ -6,6 +6,10 @@ import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
+import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
+import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
+import { installHello, PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
+import { manifest as wishlistManifest } from "../../../plugins/wishlist/src/index";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
@@ -46,9 +50,23 @@ const PAGE_D1_BUDGETS = {
   search: { roundTrips: 7, waves: 2 },
 } as const;
 
+/**
+ * The same pages with one app drawing on them (Hello's homepage section,
+ * Wishlist's product block), measured. Home: the apps' installations and
+ * store facts are one batch beside the homepage's second batch (one round
+ * trip, no wave). Product: the product-apps part reads the theme, product,
+ * active apps and store facts in its one batch whether or not an app draws,
+ * so drawing adds nothing. Apps that read their storage add their own reads.
+ */
+const APP_PAGE_D1_BUDGETS = {
+  home: { roundTrips: 12, waves: 2 },
+  product: { roundTrips: 20, waves: 3 },
+} as const;
+
 const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   home: ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
-  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
+  // The product page's app blocks are a part of their own (theme, product and active apps in one read).
+  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
   category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest"],
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
 };
@@ -241,16 +259,29 @@ class MemoryCache {
 async function renderPage(
   page: keyof typeof PAGE_PARTS,
   extraSeed = "",
-  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void> } = {},
+  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean } = {},
 ) {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   if (extraSeed) sqlite.exec(extraSeed);
   await options.prepare?.(db);
+  if (options.apps) {
+    // Hello draws a homepage section; Wishlist draws a product block (both bundled, active).
+    await installHello(db, sqlite);
+    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
+  }
   if (page === "home") {
     sqlite.exec(HOME_SEED);
+    const theme = everySectionTheme();
+    if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak" } } });
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
-      .run(JSON.stringify(everySectionTheme()));
+      .run(JSON.stringify(theme));
+  } else if (options.apps) {
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
+    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
+      .run(JSON.stringify(theme));
   }
   // The steady state of a live store (unmetered): the catalogue projections
   // and sales stats a release rebuild and the nightly run keep, and every
@@ -263,7 +294,8 @@ async function renderPage(
     CF_VERSION_METADATA: { id: "render-budget-version", tag: "", timestamp: "" },
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "render-budget-secret-0123456789abcdef",
-    CREDENTIAL_ENCRYPTION_KEY: "render-budget-credential-key-0123456789abcdef",
+    // Hello's secret settings were sealed with the fixtures' key.
+    CREDENTIAL_ENCRYPTION_KEY: options.apps ? PLUGIN_TEST_CREDENTIAL_KEY : "render-budget-credential-key-0123456789abcdef",
   };
   const cache = new MemoryCache();
   const readBatch = async (env: Env, paths: readonly string[]) => {
@@ -497,6 +529,24 @@ describe("storefront page render D1 budget", () => {
       expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
     },
   );
+
+  it("draws an app section on the home page and an app block on the product page within their app budgets, and hits run no app code", async () => {
+    // Load the app modules first, as beforeAll does for the routes (production is one bundle).
+    await renderPage("home", "", { apps: true });
+    await renderPage("product", "", { apps: true });
+    const home = await renderPage("home", "", { apps: true });
+    expect((home.bodies[1] as { data: { sections: { apps: Array<{ sectionId: string }> } } }).data.sections.apps).toEqual([expect.objectContaining({ sectionId: "hello" })]);
+    // One batch for the apps beside the second batch: one round trip, no wave.
+    expect({ roundTrips: home.render.roundTrips, waves: home.render.waves })
+      .toEqual({ roundTrips: Math.min(home.render.roundTrips, APP_PAGE_D1_BUDGETS.home.roundTrips), waves: Math.min(home.render.waves, APP_PAGE_D1_BUDGETS.home.waves) });
+    expect(home.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.home.map(() => "hit"), sameBodies: true });
+
+    const product = await renderPage("product", "", { apps: true });
+    expect((product.bodies[4] as { data: { blocks: Array<{ placement: string }> } }).data.blocks).toEqual([expect.objectContaining({ placement: "buy-box" })]);
+    expect({ roundTrips: product.render.roundTrips, waves: product.render.waves })
+      .toEqual({ roundTrips: Math.min(product.render.roundTrips, APP_PAGE_D1_BUDGETS.product.roundTrips), waves: Math.min(product.render.waves, APP_PAGE_D1_BUDGETS.product.waves) });
+    expect(product.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.product.map(() => "hit"), sameBodies: true });
+  });
 
   it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(
     "%s page again is all validated hits: one statement, one wave",

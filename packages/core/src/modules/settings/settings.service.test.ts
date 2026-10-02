@@ -53,13 +53,11 @@ describe("buyer currency config", () => {
         const db = storeDocument(createSqliteD1Database(), "currency", {
             currencyCode: " jpy ",
             currencySymbol: "¥",
-            usdExchangeRate: "150",
         });
 
         await expect(getCurrencyConfig(db)).resolves.toEqual({
             code: "JPY",
             symbol: "¥",
-            usdExchangeRate: 150,
             decimalPlaces: 0,
         });
     });
@@ -68,13 +66,11 @@ describe("buyer currency config", () => {
         const db = storeDocument(createSqliteD1Database(), "currency", {
             currencyCode: "USDT",
             currencySymbol: "₿",
-            usdExchangeRate: "999",
         });
 
         await expect(getCurrencyConfig(db)).resolves.toEqual({
             code: "BDT",
             symbol: "৳",
-            usdExchangeRate: 1,
             decimalPlaces: 2,
         });
     });

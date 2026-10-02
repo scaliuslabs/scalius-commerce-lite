@@ -160,7 +160,14 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     };
     const sections = nav.flatMap((item): Entry[] => [
       { id: `nav:${item.key}`, label: t(item.key), to: item.to, icon: ArrowRight, hint: hint(item.to) },
-      ...item.children.map((child) => ({ id: `nav:${child.key}`, label: t(child.key), to: child.to, icon: ArrowRight, hint: hint(child.to) })),
+      // App pages carry their own title (and share their section's key, so their address names them).
+      ...item.children.map((child) => ({
+        id: child.label ? `nav:${child.to}` : `nav:${child.key}`,
+        label: child.label ?? t(child.key),
+        to: child.to,
+        icon: ArrowRight,
+        hint: hint(child.to),
+      })),
     ]);
     // With no query, offer the sections themselves (their G-key hints teach the shortcuts).
     if (!needle) return sections.filter((entry) => nav.some((item) => `nav:${item.key}` === entry.id));

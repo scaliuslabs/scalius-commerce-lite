@@ -2,6 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
@@ -43,8 +44,11 @@ function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = fals
   const [variants, setVariants] = React.useState(initial);
   latest = variants;
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  // The table reads apps' variant actions (none here: no apps.view).
+  const [queryClient] = React.useState(() => new QueryClient());
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   return (
+    <QueryClientProvider client={queryClient}>
     <VariantTable
       options={options}
       variants={variants}
@@ -66,6 +70,7 @@ function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = fals
       printingDisabled={false}
       fulfilmentColumn={fulfilmentColumn}
     />
+    </QueryClientProvider>
   );
 }
 

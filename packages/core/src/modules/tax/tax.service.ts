@@ -170,7 +170,6 @@ export async function calculateStorefrontTaxQuote(
             code: suppliedCurrencyCode,
             decimalPlaces: input.currency.decimalPlaces,
             symbol: suppliedCurrencyCode,
-            usdExchangeRate: 1,
         })
         : getCurrencyConfig(db);
     if (authoritySnapshot && !isTrustedStorefrontTaxAuthority(authoritySnapshot)) {

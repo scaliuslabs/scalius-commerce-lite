@@ -3,6 +3,10 @@
 // waits; the results are advice the merchant sees on the order page (the
 // customer card, next to the courier fraud check). Nothing cancels, holds or
 // changes the order. Retried runs add nothing (one fact per order and app).
+// Every channel runs it the same way: the online store and buyer agents
+// (`runOrderRiskChecks`, from the prepared storefront order) and staff
+// orders (`runAppOrderRiskChecks`, from the manual order's cart). Callers run
+// it only for a commit they made, never for a replay.
 
 import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
@@ -23,34 +27,37 @@ export interface OrderRiskInput {
   channel: FunctionCart["channel"];
 }
 
-export async function runOrderRiskChecks(input: OrderRiskInput): Promise<void> {
+export interface AppOrderRiskInput {
+  db: Database;
+  apps: CheckoutAppFunctions;
+  orderId: string;
+  paymentMethod: string;
+  totalMinor: number;
+  /** The cart apps saw at checkout, or built now (after the commit). */
+  cart: () => Promise<FunctionCart>;
+  customerId: string | null;
+  accountOwnerCustomerId: string | null;
+}
+
+export async function runAppOrderRiskChecks(input: AppOrderRiskInput): Promise<void> {
   if (!input.apps.points.has("order.risk")) return;
-  const { prepared } = input;
   try {
     const [cart, history] = await Promise.all([
-      prepared.appCart
-        ? Promise.resolve(prepared.appCart)
-        : buildAppCartFromOrderPayload(input.db, {
-          payload: prepared.commitPayload,
-          appDiscounts: prepared.appDiscounts,
-          discountCodes: input.discountCodes,
-          customerId: input.accountOwnerCustomerId,
-          channel: input.channel,
-        }),
+      input.cart(),
       readOrderRiskHistory(input.db, {
-        orderId: prepared.orderId,
+        orderId: input.orderId,
         customerId: input.customerId,
         accountOwnerCustomerId: input.accountOwnerCustomerId,
       }),
     ]);
     const results = await input.apps.run("order.risk", {
-      orderId: prepared.orderId,
+      orderId: input.orderId,
       cart,
-      totalMinor: prepared.commitPayload.orderData.totalAmountMinor,
-      paymentMethod: prepared.paymentMethod.slice(0, 64),
+      totalMinor: input.totalMinor,
+      paymentMethod: input.paymentMethod.slice(0, 64),
       history,
     });
-    await recordAppRiskChecks(input.db, prepared.orderId, results.map((result) => ({
+    await recordAppRiskChecks(input.db, input.orderId, results.map((result) => ({
       pluginId: result.pluginId,
       appName: result.appName,
       level: result.output.level,
@@ -60,4 +67,26 @@ export async function runOrderRiskChecks(input: OrderRiskInput): Promise<void> {
     // Advice only: a failed check never touches the order. No order or buyer facts in the log.
     console.error(`[plugins] order.risk could not be recorded: ${error instanceof Error ? error.name : "error"}`);
   }
+}
+
+export async function runOrderRiskChecks(input: OrderRiskInput): Promise<void> {
+  const { prepared } = input;
+  await runAppOrderRiskChecks({
+    db: input.db,
+    apps: input.apps,
+    orderId: prepared.orderId,
+    paymentMethod: prepared.paymentMethod,
+    totalMinor: prepared.commitPayload.orderData.totalAmountMinor,
+    cart: () => prepared.appCart
+      ? Promise.resolve(prepared.appCart)
+      : buildAppCartFromOrderPayload(input.db, {
+        payload: prepared.commitPayload,
+        appDiscounts: prepared.appDiscounts,
+        discountCodes: input.discountCodes,
+        customerId: input.accountOwnerCustomerId,
+        channel: input.channel,
+      }),
+    customerId: input.customerId,
+    accountOwnerCustomerId: input.accountOwnerCustomerId,
+  });
 }

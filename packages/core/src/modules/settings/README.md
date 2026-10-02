@@ -33,7 +33,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `security` | `cspAllowedDomains` | -- |
 | `media` | image optimization / delivery hosts | -- |
 | `business` | company, TIN, logo, address, invoice prefix/logo | -- |
-| `currency` | `currencyCode`, `currencySymbol`, `usdExchangeRate` | -- |
+| `currency` | `currencyCode`, `currencySymbol` | -- |
 | `customer_countries` | `allowedCountries`, `allowedCountriesMode` | -- |
 | `checkout` | `guestCheckoutEnabled`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount` (admin CAS revision) | -- |
 | `customer_auth` | Customer accounts: `email` / `whatsapp` collection and code `channels` (any other shape resets to defaults) | -- |
@@ -75,7 +75,7 @@ with a 60s `Cache-Control`; the storefront gets them in the `platform` block of
 
 ## Currency
 
-`getCurrencyConfig(db)` returns `{ code, symbol, usdExchangeRate, decimalPlaces }`
+`getCurrencyConfig(db)` returns `{ code, symbol, decimalPlaces }`
 from the `currency` document; `decimalPlaces` comes from ISO 4217 via
 `getDecimalPlaces()` in `@scalius/shared/currency`. A missing document yields
 the BDT defaults; a relational read error throws. Catalog, shipping and order

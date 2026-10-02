@@ -7,6 +7,7 @@ import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_APP_OPERATIONS = {
   "dashboard.apps.list": { limits: { response: 65_536 } },
+  "dashboard.apps.surfaces": { limits: { response: 65_536 } },
   "dashboard.apps.get": { limits: { response: 65_536 } },
   "dashboard.apps.activate": {
     exposure: "excluded",

@@ -79,7 +79,17 @@ describe("scalius.hello through the bundled loader", () => {
     await putPluginRecord(db, "scalius.hello", "greetings", declaration, "old", { orderId: "old", kind: "paid", createdAt: now - 40 * 86_400_000 });
     await putPluginRecord(db, "scalius.hello", "greetings", declaration, "new", { orderId: "new", kind: "paid", createdAt: now - 86_400_000 });
     const dashboard = await host.invokeRoute(installation, "admin", "dashboard", { ...request, query: {} });
-    expect(dashboard.value?.body).toMatchObject({ type: "page", children: [{ type: "stat", label: "Greeted orders", value: 3 }, { type: "stat", label: "Paid events", value: 0 }, { type: "stat", label: "New orders", value: 0 }, expect.anything()] });
+    expect(dashboard.value?.body).toMatchObject({
+      version: 1,
+      root: {
+        type: "page",
+        children: [
+          { type: "columns", children: [{ type: "stat", label: "Greeted orders", value: 3 }, { type: "stat", label: "Paid events", value: 0 }, { type: "stat", label: "New orders", value: 0 }] },
+          expect.anything(),
+          expect.anything(),
+        ],
+      },
+    });
 
     expect(await host.invokeCron(installation, "tidy", new Date(now).toISOString())).toEqual({ ok: true, value: null, error: null });
     expect(await getPluginRecord(db, "scalius.hello", "greetings", "old")).toBeNull();

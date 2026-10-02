@@ -373,7 +373,7 @@ export async function seedLiveCheckoutTarget(
           partialPaymentEnabled: false,
           partialPaymentAmount: 0,
         },
-        currency: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "110" },
+        currency: { currencyCode: "BDT", currencySymbol: "৳" },
         payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" },
         customer_countries: { allowedCountries: ["BD"], allowedCountriesMode: "include" },
       }).map(([category, value]) => ({

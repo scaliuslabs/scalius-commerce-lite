@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import {
   DEFAULT_STOREFRONT_THEME,
   STOREFRONT_MAX_SECTIONS,
   storefrontSectionDefault,
+  storefrontThemeDocumentSchema,
   type StorefrontSection,
+  type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import type { ThemeApp, ThemeAppSettingField } from "~/lib/api-query-options/online-store";
 import {
   HISTORY_COALESCE_MS,
+  addAppSection,
   addSection,
+  appSectionsByKey,
+  appSectionsInvalid,
   canAddSectionType,
   changedLeaf,
   duplicateSection,
@@ -18,13 +25,14 @@ import {
   previewChange,
   removeSection,
   restoreSection,
+  setAppSectionValues,
   startHistory,
   withSections,
 } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
 
-const section = (type: StorefrontSection["type"], id: string, settings: Record<string, unknown> = {}) =>
+const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 const HOME = [section("hero", "hero"), section("product-rail", "rail", { title: "New" }), section("faq", "faq")];
@@ -149,5 +157,85 @@ describe("merging edits onto a newer draft", () => {
     const theirs = { ...base, tokens: { ...base.tokens, density: "airy" as const } };
     const merged = mergeDrafts(mine, base, theirs);
     expect(merged.tokens.density).toBe("airy");
+  });
+});
+
+describe("app sections", () => {
+  const field = (key: string, extra: Partial<ThemeAppSettingField> = {}): ThemeAppSettingField => ({
+    key, label: key, help: null, type: "text", required: false, options: null, default: null,
+    min: null, max: null, integer: false, maxLength: 80, ...extra,
+  });
+  const APPS: ThemeApp[] = [{
+    id: "acme.reviews",
+    name: "Acme Reviews",
+    sections: [{
+      key: "acme.reviews/carousel",
+      type: "carousel",
+      name: "Reviews carousel",
+      description: null,
+      settings: [field("heading", { default: "What buyers say" }), field("count", { type: "number", min: 1, max: 12, integer: true, default: 4, maxLength: null })],
+    }],
+    productBlocks: [],
+  }];
+  const byKey = appSectionsByKey(APPS);
+  const appSection = (id: string) => ({ ...addAppSection([], "acme.reviews/carousel", {}).sections[0]!, id });
+
+  it("adds an app section under a free id with its values, and the document accepts it", () => {
+    const first = addAppSection(HOME, "acme.reviews/carousel", { heading: "What buyers say", count: 4 }, 0);
+    expect(first.id).toBe("app");
+    expect(first.sections[1]).toEqual({
+      id: "app",
+      type: "app",
+      version: 1,
+      settings: { app: "acme.reviews/carousel", values: { heading: "What buyers say", count: 4 } },
+    });
+    const second = addAppSection(first.sections, "acme.reviews/carousel", {});
+    expect(second.id).toBe("app-2");
+    expect(ids(second.sections)).toEqual(["hero", "app", "rail", "faq", "app-2"]);
+    expect(storefrontThemeDocumentSchema.safeParse(theme(second.sections)).success).toBe(true);
+    // A copy is another app section with the same values.
+    const copy = duplicateSection(second.sections, "app")!;
+    expect(copy.id).toBe("app-3");
+    expect(copy.sections[2]).toMatchObject({ type: "app", settings: first.sections[1]!.settings });
+  });
+
+  it("stops at the app sections a homepage draws", () => {
+    const apps = Array.from({ length: PLUGIN_HOME_SECTIONS_MAX }, (_, index) => appSection(`app-${index}`));
+    expect(canAddSectionType(apps.slice(1), "app")).toBe(true);
+    expect(canAddSectionType(apps, "app")).toBe(false);
+    expect(duplicateSection(apps, "app-0")).toBeNull();
+    // Platform sections still fit.
+    expect(canAddSectionType(apps, "faq")).toBe(true);
+    // Undo cannot bring one back past the limit.
+    const removed = removeSection(apps, "app-0")!;
+    const refilled = [...removed.sections, appSection("app-new")];
+    expect(restoreSection(refilled, removed.removed, removed.index)).toHaveLength(PLUGIN_HOME_SECTIONS_MAX);
+  });
+
+  it("writes values and judges them against the app, never a section whose app is not active", () => {
+    const added = addAppSection(HOME, "acme.reviews/carousel", { heading: "Reviews", count: 4 });
+    expect(appSectionsInvalid(added.sections, byKey)).toBe(false);
+    const broken = setAppSectionValues(added.sections, "app", { heading: "Reviews", count: 40 });
+    expect(broken.find((each) => each.id === "app")!.settings).toEqual({ app: "acme.reviews/carousel", values: { heading: "Reviews", count: 40 } });
+    expect(appSectionsInvalid(broken, byKey)).toBe(true);
+    // Other sections keep their identity.
+    expect(broken[0]).toBe(added.sections[0]);
+    const gone = addAppSection(HOME, "acme.gone/banner", { anything: "kept" });
+    expect(appSectionsInvalid(gone.sections, byKey)).toBe(false);
+  });
+
+  it("swaps an app section in the preview when only its values changed", () => {
+    const added = theme(addAppSection(HOME, "acme.reviews/carousel", { count: 4 }).sections);
+    const edited = withSections(added, setAppSectionValues(added.pages.home, "app", { count: 6 }));
+    expect(previewChange(added, edited)).toEqual({ kind: "sections", ids: ["app"] });
+    expect(previewChange(theme(), added)).toEqual({ kind: "reload" });
+  });
+
+  it("keeps the merchant's app values and the other session's edits when merging", () => {
+    const base = theme(addAppSection(HOME, "acme.reviews/carousel", { heading: "Reviews", count: 4 }).sections);
+    const mine = withSections(base, setAppSectionValues(base.pages.home, "app", { heading: "Mine", count: 4 }));
+    const theirs = withSections(base, setAppSectionValues(base.pages.home, "app", { heading: "Reviews", count: 8 }));
+    expect(mergeDrafts(mine, base, theirs).pages.home.find((each) => each.id === "app")!.settings)
+      .toEqual({ app: "acme.reviews/carousel", values: { heading: "Mine", count: 8 } });
   });
 });

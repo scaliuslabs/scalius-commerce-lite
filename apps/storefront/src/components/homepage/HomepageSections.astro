@@ -9,10 +9,12 @@
 // with `data-theme-section-id` and states the page's layout (units, phone
 // order, lead) in `data-theme-preview-layout`; `only` renders the one unit
 // holding a section, which the preview-only section route returns so the
-// editor can swap it in place.
+// editor can swap it in place. App sections (`type: "app"`) are units like
+// any other: what their app drew, marked the same way, never the lead.
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
+  homepageAppSurface,
   homepageCategoryTiles,
   homepageCategoryTilesTitle,
   homepageCollections,
@@ -46,6 +48,7 @@ import ShopByCards from "./ShopByCards.astro";
 import BannerMosaic from "./BannerMosaic.astro";
 import BrandWall from "./BrandWall.astro";
 import RecentlyViewed from "./RecentlyViewed.astro";
+import AppSection from "./AppSection.astro";
 import NewsletterSection from "./NewsletterSection.astro";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
 
@@ -117,6 +120,7 @@ const root = only
     const { section } = unit;
     const lead = section.id === leadSectionId;
     const list = homepageSectionProducts(section, content);
+    const appSurface = homepageAppSurface(section, content);
     const headingId = `home-${section.id}-title`;
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id} data-theme-section-id={marks ? section.id : undefined}>
@@ -240,6 +244,8 @@ const root = only
         {section.type === "seo-text" && <SeoText section={section} />}
 
         {section.type === "newsletter" && <NewsletterSection section={section} language={language} />}
+
+        {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} />}
       </div>
     );
   })}

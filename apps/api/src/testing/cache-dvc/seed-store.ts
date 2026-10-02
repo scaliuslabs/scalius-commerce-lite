@@ -223,7 +223,7 @@ function seedSql(): string {
   INSERT INTO settings (id, key, value, type, category) VALUES
     ('set_seo', 'document', ${q({ homepageTitle: "Scalius Test Store", homepageMetaDescription: "Handmade clothing", socialImage: "", discovery: {}, returnPolicy: {} })}, 'json', 'seo'),
     ('set_business', 'document', ${q({ companyName: "Test Store", legalName: "Test Store Ltd", addressLine1: "Road 1", addressLine2: "", city: "Dhaka", stateRegion: "", postalCode: "1207", country: "Bangladesh", phone: "01700000000", email: "shop@example.com", taxId: "", invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "", socialLinks: [{ id: "facebook", label: "Facebook", url: "https://facebook.com/store" }] })}, 'json', 'business'),
-    ('set_currency', 'document', ${q({ currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "120" })}, 'json', 'currency'),
+    ('set_currency', 'document', ${q({ currencyCode: "BDT", currencySymbol: "৳" })}, 'json', 'currency'),
     ('set_checkout', 'document', ${q({ guestCheckoutEnabled: true, checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 })}, 'json', 'checkout'),
     ('set_inventory', 'document', ${q({ defaultLowStockThreshold: 2 })}, 'json', 'inventory'),
     ('set_emi', 'document', ${q({ enabled: true, plans: [{ id: "city-6", provider: "City Bank", months: 6, feeBps: 300, minAmountMinor: 0 }] })}, 'json', 'emi'),

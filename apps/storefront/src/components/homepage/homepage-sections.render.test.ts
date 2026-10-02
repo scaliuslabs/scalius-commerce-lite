@@ -771,6 +771,55 @@ describe("homepage sections from the theme's own data", () => {
   });
 });
 
+describe("app sections", () => {
+  const app = (id: string, key = "scalius.hello/greeting") =>
+    ({ id, type: "app", version: 1, settings: { app: key, values: {} } }) as StorefrontSection;
+  const drawn = (content: HomepageContent, surfaces: Record<string, string>): HomepageContent => ({
+    ...content,
+    apps: new Map(Object.entries(surfaces).map(([sectionId, html]) => [sectionId, { sectionId, html, head: { meta: [], jsonLd: [] } }])),
+  });
+
+  async function renderWith(sections: StorefrontSection[], content: HomepageContent, extra: Record<string, unknown>): Promise<Document> {
+    const html = await container.renderToString(HomepageSections, {
+      props: { sections, content, leadSectionId: homepageLeadSection(sections, content)?.id ?? null, currencySymbol: "৳", currencyCode: "BDT", ...extra },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(DEFAULT_STOREFRONT_THEME)) },
+      request: new Request("https://shop.test/"),
+    });
+    return parse(html);
+  }
+
+  it("renders what the app drew in page order, and nothing (no box) for a section the app did not draw", async () => {
+    const sections = [app("greeting"), section("product-rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];
+    const content = drawn(store("large"), { greeting: '<p class="hello">Hello <a href="/sale">sale</a></p>' });
+    const page = await render(sections, content);
+    expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")))
+      .toEqual(["app", "product-rail"]);
+    const surface = page.querySelector('[data-home-section="app"] [data-app-section="scalius.hello/greeting"] [data-app-surface]')!;
+    expect(surface.innerHTML).toBe('<p class="hello">Hello <a href="/sale">sale</a></p>');
+    expect(page.querySelector('[data-section-id="gone"]')).toBeNull();
+    // An app section never leads: the rail's photos keep the page's priority.
+    expect(homepageLeadSection(sections, content)?.id).toBe("rail");
+    expect(homepageRenderUnits(sections, content)).toHaveLength(2);
+    // Nothing drawn at all: no app section, no enhancer script.
+    const none = await render([app("greeting")], store("large"));
+    expect(none.querySelector("[data-home-section]")).toBeNull();
+    expect(none.querySelector("script")).toBeNull();
+  });
+
+  it("marks app sections for the theme editor and renders one alone for the section route", async () => {
+    const sections = [section("faq", "faq", { heading: "", items: [{ question: "Q?", answer: "A." }] }), app("greeting")];
+    const content = drawn(store("large"), { greeting: "<p>Hello</p>" });
+    const marked = await renderWith(sections, content, { previewMarks: true });
+    expect(marked.querySelector('[data-theme-section-id="greeting"][data-home-section="app"]')).not.toBeNull();
+    const layout = JSON.parse(marked.querySelector("[data-theme-preview-layout]")!.getAttribute("data-theme-preview-layout")!);
+    expect(layout.units).toEqual([["faq"], ["greeting"]]);
+
+    const only = await renderWith(sections, content, { only: "greeting" });
+    expect(Array.from(only.querySelectorAll("[data-theme-section-id]")).map((node) => node.getAttribute("data-theme-section-id"))).toEqual(["greeting"]);
+    expect(only.querySelector("[data-app-surface]")?.textContent).toBe("Hello");
+  });
+});
+
 describe("the newsletter section", () => {
   async function renderIn(sections: StorefrontSection[], languageCode: string | null) {
     const html = await container.renderToString(HomepageSections, {

@@ -266,6 +266,61 @@
           }
         ]
       },
+      "StorefrontAppSurface": {
+        "type": "object",
+        "properties": {
+          "html": {
+            "type": "string",
+            "description": "Sanitized HTML: content, tables, lists, images (https or store paths), links and forms posting to the app's own /apps/<id>/ proxy only."
+          },
+          "head": {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "attribute": {
+                      "type": "string",
+                      "enum": [
+                        "name",
+                        "property"
+                      ]
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "attribute",
+                    "key",
+                    "content"
+                  ]
+                }
+              },
+              "jsonLd": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "schema.org JSON-LD, already serialized for a <script type=\"application/ld+json\">."
+              }
+            },
+            "required": [
+              "meta",
+              "jsonLd"
+            ]
+          }
+        },
+        "required": [
+          "html",
+          "head"
+        ]
+      },
       "StorefrontThemeDocument": {
         "type": "object",
         "properties": {
@@ -2264,6 +2319,55 @@
                       ]
                     },
                     "maxItems": 12
+                  },
+                  "apps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "app": {
+                          "type": "string",
+                          "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                        },
+                        "values": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 5000
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
+                                "maxItems": 50
+                              },
+                              {}
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "app",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 10
                   },
                   "sticky": {
                     "type": "object",
@@ -4490,6 +4594,74 @@
                           "required": [
                             "heading",
                             "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "version",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "app"
+                          ]
+                        },
+                        "version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "app": {
+                              "type": "string",
+                              "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                            },
+                            "values": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 5000
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "maxItems": 50
+                                  },
+                                  {}
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "app",
+                            "values"
                           ],
                           "additionalProperties": false
                         }
@@ -7169,6 +7341,194 @@
           "closedAt"
         ]
       },
+      "ThemeAppSurfaces": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "settings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppSettingField"
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "type",
+                "name",
+                "description",
+                "settings"
+              ]
+            }
+          },
+          "productBlocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "placement": {
+                  "type": "string",
+                  "enum": [
+                    "buy-box",
+                    "below"
+                  ]
+                },
+                "settings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppSettingField"
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "type",
+                "name",
+                "placement",
+                "settings"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sections",
+          "productBlocks"
+        ]
+      },
+      "AppSettingField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "help": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "textarea",
+              "number",
+              "boolean",
+              "select",
+              "multiselect",
+              "secret",
+              "url",
+              "email",
+              "color"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ]
+            }
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {}
+            ]
+          },
+          "min": {
+            "type": "number",
+            "nullable": true
+          },
+          "max": {
+            "type": "number",
+            "nullable": true
+          },
+          "integer": {
+            "type": "boolean"
+          },
+          "maxLength": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "help",
+          "type",
+          "required",
+          "options",
+          "default",
+          "min",
+          "max",
+          "integer",
+          "maxLength"
+        ]
+      },
       "WarrantyClaim": {
         "type": "object",
         "properties": {
@@ -7892,6 +8252,194 @@
           "functions"
         ]
       },
+      "AppAdminSurfaces": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "placement": {
+                  "type": "string",
+                  "enum": [
+                    "apps",
+                    "orders",
+                    "products",
+                    "customers",
+                    "marketing",
+                    "content",
+                    "analytics",
+                    "settings"
+                  ]
+                },
+                "route": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "placement",
+                "route"
+              ]
+            }
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "product",
+                    "variant",
+                    "order",
+                    "customer",
+                    "category",
+                    "collection",
+                    "brand",
+                    "page",
+                    "return"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "route": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "target",
+                "title",
+                "route"
+              ]
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "product",
+                    "variant",
+                    "order",
+                    "customer",
+                    "category",
+                    "collection",
+                    "brand",
+                    "page",
+                    "return"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "route": {
+                  "type": "string"
+                },
+                "bulk": {
+                  "type": "boolean"
+                },
+                "destructive": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "target",
+                "label",
+                "route",
+                "bulk",
+                "destructive"
+              ]
+            }
+          },
+          "widgets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "route": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "route"
+              ]
+            }
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "methods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "methods"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "pages",
+          "cards",
+          "actions",
+          "widgets",
+          "routes"
+        ]
+      },
       "AppDetail": {
         "allOf": [
           {
@@ -8374,106 +8922,6 @@
           "customFieldOwners"
         ],
         "description": "What an app may do; the consent screen lists it in plain words."
-      },
-      "AppSettingField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "help": {
-            "type": "string",
-            "nullable": true
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "text",
-              "textarea",
-              "number",
-              "boolean",
-              "select",
-              "multiselect",
-              "secret",
-              "url",
-              "email",
-              "color"
-            ]
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "options": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": "string"
-                },
-                "label": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "value",
-                "label"
-              ]
-            }
-          },
-          "default": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {}
-            ]
-          },
-          "min": {
-            "type": "number",
-            "nullable": true
-          },
-          "max": {
-            "type": "number",
-            "nullable": true
-          },
-          "integer": {
-            "type": "boolean"
-          },
-          "maxLength": {
-            "type": "integer",
-            "nullable": true
-          }
-        },
-        "required": [
-          "key",
-          "label",
-          "help",
-          "type",
-          "required",
-          "options",
-          "default",
-          "min",
-          "max",
-          "integer",
-          "maxLength"
-        ]
       },
       "AppLogLine": {
         "type": "object",
@@ -19910,6 +20358,29 @@
                                 "slug"
                               ],
                               "description": "A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public."
+                            },
+                            "apps": {
+                              "type": "array",
+                              "items": {
+                                "allOf": [
+                                  {
+                                    "$ref": "#/components/schemas/StorefrontAppSurface"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "sectionId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "sectionId"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "maxItems": 8,
+                              "description": "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing."
                             }
                           },
                           "required": [
@@ -19919,7 +20390,8 @@
                             "promotions",
                             "categories",
                             "collections",
-                            "homeProduct"
+                            "homeProduct",
+                            "apps"
                           ]
                         }
                       },
@@ -20031,6 +20503,231 @@
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/storefront/product-apps/{slug}": {
+      "get": {
+        "operationId": "storefront.product_apps.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Get the app blocks a product page shows",
+        "description": "The published theme's product app blocks drawn by their active apps for this public product: sanitized HTML and head tags, each in the buy box or below the modules as its app declares. Takes no query; cached under dependency validation (the theme, the product and each app's installation and declared storage), so a cached answer runs no app code.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The drawn app blocks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "blocks": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/StorefrontAppSurface"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "app": {
+                                    "type": "string"
+                                  },
+                                  "placement": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buy-box",
+                                      "below"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "app",
+                                  "placement"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "blocks"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -21167,6 +21864,48 @@
                             "productBundleTierText",
                             "productBundleSetPriceText"
                           ]
+                        },
+                        "appScripts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "pluginId": {
+                                "type": "string"
+                              },
+                              "src": {
+                                "type": "string"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "head",
+                                  "body-end"
+                                ]
+                              },
+                              "pages": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "all",
+                                    "home",
+                                    "product",
+                                    "listing",
+                                    "cart",
+                                    "checkout",
+                                    "order-success"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "pluginId",
+                              "src",
+                              "placement",
+                              "pages"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -21185,7 +21924,8 @@
                         "platform",
                         "cspAllowedDomains",
                         "policies",
-                        "storefrontCopy"
+                        "storefrontCopy",
+                        "appScripts"
                       ]
                     }
                   },
@@ -22453,6 +23193,29 @@
                             "slug"
                           ],
                           "description": "A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public."
+                        },
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/StorefrontAppSurface"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "sectionId": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "sectionId"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 8,
+                          "description": "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing."
                         }
                       },
                       "required": [
@@ -22462,7 +23225,8 @@
                         "promotions",
                         "categories",
                         "collections",
-                        "homeProduct"
+                        "homeProduct",
+                        "apps"
                       ]
                     }
                   },
@@ -29778,6 +30542,108 @@
                             ]
                           },
                           "maxItems": 99
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "title",
+                              "code",
+                              "amount",
+                              "amountMinor",
+                              "shippingAmount",
+                              "shippingAmountMinor"
+                            ]
+                          },
+                          "description": "Installed apps' discounts included in discountMinor, after the store's own discount. amount is off the items, shippingAmount off delivery."
+                        },
+                        "shippingRates": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery",
+                                  "pickup"
+                                ]
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "kind",
+                              "amount",
+                              "amountMinor"
+                            ]
+                          },
+                          "description": "The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit."
+                        },
+                        "paymentMethods": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ]
+                          },
+                          "description": "The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit."
                         }
                       },
                       "required": [
@@ -29800,7 +30666,10 @@
                         "taxAmount",
                         "totalMinor",
                         "totalAmount",
-                        "items"
+                        "items",
+                        "appDiscounts",
+                        "shippingRates",
+                        "paymentMethods"
                       ]
                     }
                   },
@@ -164317,10 +165186,6 @@
                           "type": "string",
                           "maxLength": 16
                         },
-                        "usdExchangeRate": {
-                          "type": "string",
-                          "maxLength": 64
-                        },
                         "currencyCodeLocked": {
                           "type": "boolean"
                         },
@@ -164332,7 +165197,6 @@
                       "required": [
                         "currencyCode",
                         "currencySymbol",
-                        "usdExchangeRate",
                         "currencyCodeLocked",
                         "revision"
                       ]
@@ -164879,10 +165743,6 @@
                   "currencySymbol": {
                     "type": "string",
                     "maxLength": 16
-                  },
-                  "usdExchangeRate": {
-                    "type": "string",
-                    "maxLength": 64
                   }
                 },
                 "required": [
@@ -165325,13 +166185,20 @@
                               "height"
                             ]
                           }
+                        },
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeAppSurfaces"
+                          }
                         }
                       },
                       "required": [
                         "published",
                         "draft",
                         "storeShape",
-                        "media"
+                        "media",
+                        "apps"
                       ]
                     }
                   },
@@ -181826,7 +182693,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "write",
+          "risk": "security",
           "openWorld": false,
           "idempotency": "none",
           "revision": "required",
@@ -213567,6 +214434,39 @@
                               "lineSubtotal"
                             ]
                           }
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "title",
+                              "amount",
+                              "shippingAmount"
+                            ]
+                          },
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
                         }
                       },
                       "required": [
@@ -214142,6 +215042,39 @@
                               "lineSubtotal"
                             ]
                           }
+                        },
+                        "appDiscounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "title",
+                              "amount",
+                              "shippingAmount"
+                            ]
+                          },
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
                         },
                         "orderId": {
                           "type": "string"
@@ -275097,6 +276030,159 @@
         }
       }
     },
+    "/api/v1/admin/apps/surfaces": {
+      "get": {
+        "operationId": "dashboard.apps.surfaces",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "List what active apps add to the dashboard",
+        "description": "Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.",
+        "responses": {
+          "200": {
+            "description": "Dashboard surfaces of active apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppAdminSurfaces"
+                          }
+                        }
+                      },
+                      "required": [
+                        "apps"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      }
+    },
     "/api/v1/admin/apps/{id}": {
       "get": {
         "operationId": "dashboard.apps.get",
@@ -311110,6 +312196,7 @@
         ],
         "operationIds": [
           "dashboard.apps.list",
+          "dashboard.apps.surfaces",
           "dashboard.apps.get",
           "dashboard.apps.logs_list",
           "dashboard.apps.deliveries_list",
@@ -315239,6 +316326,14 @@
         },
         {
           "operationId": "dashboard.apps.settings_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.surfaces",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [

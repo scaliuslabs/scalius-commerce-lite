@@ -9,6 +9,7 @@ import {
   getApiV1AdminAppsById,
   getApiV1AdminAppsByIdDeliveries,
   getApiV1AdminAppsByIdLogs,
+  getApiV1AdminAppsSurfaces,
   postApiV1AdminAppsByIdActivate,
   postApiV1AdminAppsByIdDeactivate,
   postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry,
@@ -16,6 +17,7 @@ import {
   putApiV1AdminAppsByIdSettings,
 } from "@scalius/api-client/sdk";
 import type {
+  AppAdminSurfaces,
   AppDetail,
   AppEventDelivery,
   AppGrant,
@@ -27,7 +29,7 @@ import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppDetail, AppEventDelivery, AppGrant, AppLogLine, AppSettingField, AppSummary };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppGrant, AppLogLine, AppSettingField, AppSummary };
 
 /** The checkout points an app can implement, in the order checkout reaches them. */
 export const APP_FUNCTION_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "order.risk"] as const;
@@ -56,6 +58,21 @@ export const appQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.apps.detail(id),
     queryFn: async () => (await apiData(getApiV1AdminAppsById({ path: { id } }))).app,
+  });
+
+/** Surfaces change only when an app is activated, updated or removed (which refreshes them). */
+export const APP_SURFACES_STALE_TIME_MS = 5 * 60 * 1000;
+
+/**
+ * Every active app's dashboard surfaces: pages (navigation), resource cards,
+ * actions and home widgets, plus the admin routes each app declares (a
+ * button may only ever call one of those). Read only by staff with apps.view.
+ */
+export const appSurfacesQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.apps.surfaces(),
+    queryFn: async (): Promise<AppAdminSurfaces[]> => (await apiData(getApiV1AdminAppsSurfaces())).apps,
+    staleTime: APP_SURFACES_STALE_TIME_MS,
   });
 
 /** Newest deliveries first, one page per "Load more". `status` narrows to one delivery status. */

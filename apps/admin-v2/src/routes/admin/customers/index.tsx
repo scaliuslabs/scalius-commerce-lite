@@ -125,6 +125,7 @@ function CustomersPage() {
         }
         search={search}
         list="customers"
+        appActions="customer"
         query={listQuery(search, term)}
         pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
         dataKey="customers"

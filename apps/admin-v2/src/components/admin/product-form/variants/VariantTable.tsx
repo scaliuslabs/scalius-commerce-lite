@@ -4,7 +4,7 @@
 // fields. Rows are memoised, so typing re-renders only the row being edited.
 import React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
+import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,8 @@ import { customFieldMessages } from "~/i18n/custom-fields";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { VariantCustomFieldsDialog } from "~/components/admin/custom-fields/CustomFieldsCard";
+import { appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
+import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
 import {
@@ -259,6 +261,16 @@ export function VariantTable(props: VariantTableProps) {
     const variant = variants.find((item) => item.id === id);
     if (variant) setCustomDataFor({ id, sku: variant.sku || props.nameOf(variant) });
   });
+  // Apps' actions for one saved SKU, in its row menu (one runner and its dialogs for the table).
+  const appActions = useAppActionRunner("variant", false);
+  const appActionItems = React.useMemo<AppRowAction[]>(
+    () => appActions.entries.map((entry) => ({ key: appActionKey(entry), label: entry.action.label, destructive: entry.action.destructive })),
+    [appActions.entries],
+  );
+  const onAppAction = useStableCallback((key: string, id: string) => {
+    const entry = appActions.entries.find((item) => appActionKey(item) === key);
+    if (entry) appActions.start(entry, [id]);
+  });
 
   const visibleIds = filtered.map((variant) => variant.id);
   const selectedCount = selected.size;
@@ -294,6 +306,8 @@ export function VariantTable(props: VariantTableProps) {
       onRemove={onRemove}
       onPrint={onPrint}
       onCustomData={onCustomData}
+      appActions={variant.id.startsWith("var_") ? appActionItems : NO_APP_ACTIONS}
+      onAppAction={onAppAction}
     />
   );
 
@@ -442,9 +456,14 @@ export function VariantTable(props: VariantTableProps) {
         open={customDataFor !== null}
         onOpenChange={(open) => (open ? undefined : setCustomDataFor(null))}
       />
+      {appActions.dialogs}
     </div>
   );
 }
+
+/** An app's action in a saved SKU's row menu. */
+type AppRowAction = { key: string; label: string; destructive: boolean };
+const NO_APP_ACTIONS: readonly AppRowAction[] = [];
 
 type VariantRowProps = {
   variant: DraftVariant;
@@ -474,11 +493,14 @@ type VariantRowProps = {
   /** A saved SKU: its custom data can be edited. */
   customData: boolean;
   onCustomData: (id: string) => void;
+  /** Apps' actions for this saved SKU (empty for new rows). */
+  appActions: readonly AppRowAction[];
+  onAppAction: (key: string, id: string) => void;
 };
 
 const VariantRow = React.memo(function VariantRow({
   variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, cost, images, money, canRemove,
-  printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData,
+  printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData, appActions, onAppAction,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
@@ -498,8 +520,9 @@ const VariantRow = React.memo(function VariantRow({
     { label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) },
     ...(printable ? [{ label: t("printLabels"), icon: Printer, onClick: () => onPrint([variant.id]) }] : []),
     ...(customData ? [{ label: cf("variantAction"), icon: Database, onClick: () => onCustomData(variant.id) }] : []),
+    ...appActions.map((action) => ({ label: action.label, icon: Blocks, destructive: action.destructive, onClick: () => onAppAction(action.key, variant.id) })),
     ...(canRemove ? [{ label: t("stopSelling"), icon: Trash2, destructive: true, onClick: () => onRemove(variant.id) }] : []),
-  ], [canRemove, cf, customData, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
+  ], [appActions, canRemove, cf, customData, onAppAction, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
 
   return (
     <div data-variant-row={variant.id} className={cn(layout.grid, "border-b py-1.5", selected && "bg-muted/50")}>
@@ -603,6 +626,8 @@ const VariantRow = React.memo(function VariantRow({
             onChange={change}
             cost={cost === undefined ? null : { value: cost, customerPays, onChange: (next) => onCostChange(variant.id, next) }}
           />
+          {/* Apps' cards for this saved SKU (`resource=variant`), inside the variant card. */}
+          {customData ? <AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /> : null}
         </div>
       ) : null}
     </div>

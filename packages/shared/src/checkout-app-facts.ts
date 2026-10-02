@@ -3,6 +3,8 @@
 // the checkout (which computes them) and orders (which persist and show
 // them), so neither core domain depends on the other for them.
 
+import type { FunctionCart } from "./plugins/functions";
+
 export type AppDiscountTarget = "order" | "lines" | "shipping";
 
 /** One app discount as it applied; amounts are what it actually took. */
@@ -31,4 +33,73 @@ export interface CheckoutRateOption {
   baseAmountMinor: number;
   /** A platform free-delivery rule (a free-delivery product, a free-over threshold) applies: it stays free. */
   waived: boolean;
+}
+
+// ── Staff-created (manual) orders, channel "admin" ───────────────────────
+//
+// The apps' checkout functions on a manual order. The checkout module
+// implements `ManualOrderAppFunctions` (it owns the merge rules); the API
+// builds one per request and hands it to the orders module's quote and
+// create, so orders never depends on checkout.
+
+/** One priced line of a manual order as apps see it, by its tax allocation line id. */
+export interface ManualOrderAppLine {
+  lineId: string;
+  productId: string;
+  variantId: string;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+  unitPriceMinor: number;
+  isGiftCard: boolean;
+  /** The serialized buyer inputs (`order_items.properties`), or null. */
+  properties: string | null;
+}
+
+export interface ManualOrderAppDeliveryMethod {
+  id: string;
+  name: string;
+  /** The method's own fee (`shipping_methods.fee_minor`). */
+  feeMinor: number;
+  kind: "delivery" | "pickup";
+}
+
+export interface ManualOrderAppInput {
+  currency: { code: string; decimalPlaces: number };
+  lines: readonly ManualOrderAppLine[];
+  /** The staff discount, already checked against the discountable subtotal. */
+  manualDiscountMinor: number;
+  /** The staff delivery charge. */
+  shippingMinor: number;
+  /** The chosen method; null for a custom charge or nothing physical. */
+  deliveryMethod: ManualOrderAppDeliveryMethod | null;
+  requiresShipping: boolean;
+  address: { city: string; zone: string; area: string | null } | null;
+  locationNames: { cityName: string | null; zoneName: string | null };
+}
+
+export interface ManualOrderAppOutcome {
+  /** The delivery charge after the apps (an app may have priced the method). */
+  shippingMinor: number;
+  /** The chosen method as the order keeps it (an app may have renamed or priced it). */
+  deliveryMethod: ManualOrderAppDeliveryMethod | null;
+  appDiscounts: AppliedAppDiscount[];
+  /** The staff discount plus the apps', for the tax quote; undefined without app discounts. */
+  discountAllocation: { lines: Array<{ lineId: string; amountMinor: number }>; shippingMinor: number } | undefined;
+  /** The cart apps saw; null when no app implements a cart point. */
+  appCart: FunctionCart | null;
+}
+
+/** What `order.risk` needs to see a committed manual order's cart. */
+export type ManualOrderAppCartInput = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "locationNames" | "manualDiscountMinor">;
+
+/**
+ * The apps' checkout functions on a staff order, bound to the request's
+ * database and apps. `price` applies their rules, delivery options, payment
+ * method and discounts (it throws the checkout refusals); `orderCart` builds
+ * the cart `order.risk` sees after the order committed.
+ */
+export interface ManualOrderAppFunctions {
+  price(input: ManualOrderAppInput): Promise<ManualOrderAppOutcome>;
+  orderCart(input: ManualOrderAppCartInput): Promise<FunctionCart>;
 }

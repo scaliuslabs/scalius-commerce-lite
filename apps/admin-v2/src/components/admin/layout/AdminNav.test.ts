@@ -71,4 +71,46 @@ describe("admin sidebar", () => {
     }
     expect(viewer(PERMISSIONS.ORDERS_VIEW)("/admin/inventory/purchase-orders")).toBe(false);
   });
+
+  describe("apps' pages", () => {
+    const pages = [
+      { placement: "products", title: "Most wished", to: "/admin/apps/acme.wish/pages/most-wished" },
+      { placement: "apps", title: "Hello", to: "/admin/apps/scalius.hello/pages/overview" },
+      { placement: "marketing", title: "Campaigns", to: "/admin/apps/acme.mail/pages/campaigns" },
+      { placement: "analytics", title: "Reports", to: "/admin/apps/acme.stats/pages/reports" },
+      { placement: "orders", title: "Pick lists", to: "/admin/apps/acme.pick/pages/lists" },
+    ];
+
+    it("lists each page under the section its placement names, with its own title", () => {
+      const nav = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.ORDERS_VIEW, PERMISSIONS.DISCOUNTS_VIEW, PERMISSIONS.APPS_VIEW), pages);
+      const children = (key: string) => nav.find((item) => item.key === key)!.children.filter((child) => child.label).map((child) => [child.label, child.to]);
+
+      expect(children("products")).toEqual([["Most wished", "/admin/apps/acme.wish/pages/most-wished"]]);
+      expect(children("orders")).toEqual([["Pick lists", "/admin/apps/acme.pick/pages/lists"]]);
+      // Marketing pages sit with Discounts; analytics (no section here) with Apps.
+      expect(children("discounts")).toEqual([["Campaigns", "/admin/apps/acme.mail/pages/campaigns"]]);
+      expect(children("apps")).toEqual([
+        ["Hello", "/admin/apps/scalius.hello/pages/overview"],
+        ["Reports", "/admin/apps/acme.stats/pages/reports"],
+      ]);
+    });
+
+    it("lists no app page without apps.view", () => {
+      const nav = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.ORDERS_VIEW), pages);
+
+      expect(nav.flatMap((item) => item.children).some((child) => child.label)).toBe(false);
+      expect(nav.map((item) => item.key)).not.toContain("apps");
+    });
+
+    it("marks only the listing section active on an app page", () => {
+      const nav = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.APPS_VIEW), pages);
+      const products = nav.find((item) => item.key === "products")!;
+      const apps = nav.find((item) => item.key === "apps")!;
+
+      expect(isSectionActive("/admin/apps/acme.wish/pages/most-wished", products)).toBe(true);
+      expect(isSectionActive("/admin/apps/acme.wish/pages/most-wished", apps)).toBe(false);
+      expect(isSectionActive("/admin/apps/scalius.hello/pages/overview", apps)).toBe(true);
+      expect(isSectionActive("/admin/apps/acme.wish", apps)).toBe(true);
+    });
+  });
 });

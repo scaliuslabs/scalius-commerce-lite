@@ -10,6 +10,8 @@ import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { createActionsColumn, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { AppBulkActionsMenu } from "~/components/admin/apps/ui/AppActions";
+import { useAppActions, type AppTarget } from "~/components/admin/apps/ui/surfaces";
 import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
 import { listSearchKey, useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -90,6 +92,8 @@ export interface ResourceListPageProps<T extends { id: string }> {
   lifecycle?: ResourceLifecycle<T>;
   /** Extra bulk buttons for the non-trash tabs; call `done` after success. */
   bulkActions?: (rows: T[], done: () => void) => ReactNode;
+  /** The resource apps' bulk actions run on (`bulk: true` manifest actions, apps.use). */
+  appActions?: AppTarget;
   rowTo?: (row: T) => string | undefined;
   /** Names the row for its checkbox and menu ("Select Cotton panjabi"). */
   rowLabel?: (row: T) => string;
@@ -134,9 +138,11 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     void navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never, replace: true });
   }, [navigate, setTerm, urlTerm]);
 
+  const appBulkActions = useAppActions(props.appActions ?? "product", true);
+  const hasAppBulkActions = Boolean(props.appActions) && appBulkActions.length > 0;
   const canBulk = trashed
     ? Boolean(lifecycle?.canRestore || lifecycle?.canDelete)
-    : Boolean(lifecycle?.canTrash || props.bulkActions);
+    : Boolean(lifecycle?.canTrash || props.bulkActions || hasAppBulkActions);
 
   const mutation = useMutation({
     mutationFn: ({ action, rows }: { action: ResourceAction; rows: T[] }) =>
@@ -326,6 +332,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         </Button>
       ) : null}
       {!trashed ? props.bulkActions?.(bulkRows, clearAll) : null}
+      {!trashed && props.appActions && hasAppBulkActions ? (
+        <AppBulkActionsMenu target={props.appActions} ids={bulkRows.map((row) => row.id)} onDone={clearAll} />
+      ) : null}
       {!trashed && lifecycle?.canTrash ? (
         <Button variant="outline" size="sm" onClick={() => request("trash", bulkRows)}>
           {t("moveToTrash")}

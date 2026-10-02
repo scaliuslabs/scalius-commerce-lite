@@ -3,14 +3,18 @@
  * homepage section operations, and what a saved change means for the
  * preview (swap the changed sections, or load the page again).
  */
+import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import {
   STOREFRONT_MAX_SECTIONS,
   storefrontSectionDefault,
+  type StorefrontAppSection,
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import type { ThemeApp, ThemeAppSection } from "~/lib/api-query-options/online-store";
 import { newSectionId } from "../SectionSettings";
+import { appValuesInvalid, type AppSettingValues } from "../schema-form/app-settings";
 import { rebaseDraft } from "../shared";
 
 type Theme = StorefrontThemeDocument;
@@ -107,9 +111,16 @@ export function moveSectionTo(sections: readonly Section[], from: number, to: nu
   return next;
 }
 
-/** Only one hero leads a page: a store adds or copies it once. */
-export function canAddSectionType(sections: readonly Section[], type: StorefrontSectionType): boolean {
-  return sections.length < STOREFRONT_MAX_SECTIONS && (type !== "hero" || !sections.some((section) => section.type === "hero"));
+/**
+ * Only one hero leads a page: a store adds or copies it once. A homepage
+ * draws at most `PLUGIN_HOME_SECTIONS_MAX` app sections (later ones render
+ * nothing), so the editor stops there.
+ */
+export function canAddSectionType(sections: readonly Section[], type: Section["type"]): boolean {
+  if (sections.length >= STOREFRONT_MAX_SECTIONS) return false;
+  if (type === "hero") return !sections.some((section) => section.type === "hero");
+  if (type === "app") return sections.filter((section) => section.type === "app").length < PLUGIN_HOME_SECTIONS_MAX;
+  return true;
 }
 
 /** A new section of a type at its defaults, after `afterIndex` (or last). */
@@ -118,6 +129,53 @@ export function addSection(sections: readonly Section[], type: StorefrontSection
   const next = [...sections];
   next.splice(afterIndex + 1, 0, storefrontSectionDefault(type, id) as Section);
   return { sections: next, id };
+}
+
+/**
+ * A new app section (`<plugin id>/<type>`) with the merchant's starting
+ * values (the app's defaults), after `afterIndex` (or last).
+ */
+export function addAppSection(
+  sections: readonly Section[],
+  app: string,
+  values: AppSettingValues,
+  afterIndex = sections.length - 1,
+): { sections: Section[]; id: string } {
+  const id = newSectionId("app", sections);
+  const section: StorefrontAppSection = { id, type: "app", version: 1, settings: { app, values: { ...values } } };
+  const next = [...sections];
+  next.splice(afterIndex + 1, 0, section);
+  return { sections: next, id };
+}
+
+/** An app's homepage section as the workspace offers it, with its app. */
+export interface AppSectionEntry {
+  app: ThemeApp;
+  section: ThemeAppSection;
+}
+
+/** The active apps' homepage sections by key (`<plugin id>/<type>`). */
+export function appSectionsByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppSectionEntry> {
+  return new Map(apps.flatMap((app) => app.sections.map((section) => [section.key, { app, section }] as const)));
+}
+
+/**
+ * True while an app section's values break what its app declares. A section
+ * whose app is not active is not judged: it keeps its values for when the
+ * app is back.
+ */
+export function appSectionsInvalid(sections: readonly Section[], byKey: ReadonlyMap<string, AppSectionEntry>): boolean {
+  return sections.some((section) => {
+    if (section.type !== "app") return false;
+    const entry = byKey.get(section.settings.app);
+    return entry !== undefined && appValuesInvalid(entry.section.settings, section.settings.values);
+  });
+}
+
+/** The sections with one app section's values replaced (other sections untouched). */
+export function setAppSectionValues(sections: readonly Section[], id: string, values: AppSettingValues): Section[] {
+  return sections.map((section) =>
+    section.id === id && section.type === "app" ? { ...section, settings: { ...section.settings, values } } : section);
 }
 
 /** A copy of a section with its settings, right after it. */
@@ -138,9 +196,9 @@ export function removeSection(sections: readonly Section[], id: string): { secti
   return { sections: sections.filter((section) => section.id !== id), removed: sections[index]!, index };
 }
 
-/** A removed section back at its place (unless its id was reused meanwhile). */
+/** A removed section back at its place (unless its id was reused, or its place taken, meanwhile). */
 export function restoreSection(sections: readonly Section[], section: Section, index: number): Section[] {
-  if (sections.some((each) => each.id === section.id) || sections.length >= STOREFRONT_MAX_SECTIONS) return [...sections];
+  if (sections.some((each) => each.id === section.id) || !canAddSectionType(sections, section.type)) return [...sections];
   const next = [...sections];
   next.splice(Math.min(index, next.length), 0, section);
   return next;

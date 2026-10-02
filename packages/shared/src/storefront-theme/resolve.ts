@@ -272,6 +272,8 @@ function fittingSections(
   fallbacks: StorefrontThemeFallback[],
 ): StorefrontSection[] {
   return sections.filter((each) => {
+    // An app section fits whenever its app renders it (the API decides).
+    if (each.type === "app") return true;
     const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[each.type].requires, context);
     if (failed.length > 0) fallbacks.push({ kind: "section", key: each.id, requested: each.type, resolved: null, failed });
     return failed.length === 0;

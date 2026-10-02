@@ -27,15 +27,16 @@ import {
 } from "@scalius/core/modules/plugins";
 import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permissions";
 import {
+  PLUGIN_ADMIN_TARGETS,
   PLUGIN_ID_PATTERN,
   PLUGIN_FUNCTION_POINTS,
-  PLUGIN_SETTING_TYPES,
+  PLUGIN_NAV_PLACEMENTS,
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
   type PluginGrantRequest,
-  type PluginSettingField,
 } from "@scalius/shared/plugins";
+import { appSettingField, appSettingFieldSchema, appSettingValueSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -106,21 +107,8 @@ const appSummarySchema = z.object({
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
-const settingValueSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]);
-
-const settingFieldSchema = z.object({
-  key: z.string(),
-  label: z.string(),
-  help: z.string().nullable(),
-  type: z.enum(PLUGIN_SETTING_TYPES),
-  required: z.boolean(),
-  options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
-  default: settingValueSchema,
-  min: z.number().nullable(),
-  max: z.number().nullable(),
-  integer: z.boolean(),
-  maxLength: z.number().int().nullable(),
-}).openapi("AppSettingField");
+const settingValueSchema = appSettingValueSchema;
+const settingFieldSchema = appSettingFieldSchema;
 
 const routeSchema = z.object({ name: z.string(), methods: z.array(z.string()) });
 
@@ -222,23 +210,7 @@ function summary(installation: PluginInstallation) {
   };
 }
 
-function settingField(field: PluginSettingField) {
-  const withOptions = field.type === "select" || field.type === "multiselect" ? field.options : null;
-  const fallback = field.type !== "secret" && "default" in field && field.default !== undefined ? field.default : null;
-  return {
-    key: field.key,
-    label: field.label,
-    help: field.help ?? null,
-    type: field.type,
-    required: field.required,
-    options: withOptions ? withOptions.map((option) => ({ value: option.value, label: option.label })) : null,
-    default: fallback as string | number | boolean | string[] | null,
-    min: field.type === "number" ? field.min ?? null : null,
-    max: field.type === "number" ? field.max ?? null : null,
-    integer: field.type === "number" ? field.integer : false,
-    maxLength: field.type === "text" || field.type === "textarea" ? field.maxLength : null,
-  };
-}
+const settingField = appSettingField;
 
 function missingSettings(installation: PluginInstallation, described: ReturnType<typeof describePluginSettings>): string[] {
   return installation.manifest.settings
@@ -423,6 +395,77 @@ app.openapi(listRoute, async (c) => {
   await syncBundledPlugins(db);
   const installations = await listPluginInstallations(db);
   return ok(c, { apps: installations.map(summary), sandboxAvailable: sandboxAvailable(c) });
+});
+
+// ── Dashboard surfaces of active apps ──
+
+const surfaceRouteSchema = z.object({
+  name: z.string(),
+  methods: z.array(z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])),
+});
+
+const appAdminSurfacesSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  pages: z.array(z.object({ id: z.string(), title: z.string(), placement: z.enum(PLUGIN_NAV_PLACEMENTS), route: z.string() })),
+  cards: z.array(z.object({ id: z.string(), target: z.enum(PLUGIN_ADMIN_TARGETS), title: z.string(), route: z.string() })),
+  actions: z.array(z.object({
+    id: z.string(),
+    target: z.enum(PLUGIN_ADMIN_TARGETS),
+    label: z.string(),
+    route: z.string(),
+    bulk: z.boolean(),
+    destructive: z.boolean(),
+  })),
+  widgets: z.array(z.object({ id: z.string(), title: z.string(), route: z.string() })),
+  /** The app's admin routes: buttons and forms in its UI may call only these, with these methods. */
+  routes: z.array(surfaceRouteSchema),
+}).openapi("AppAdminSurfaces");
+
+const surfacesRoute = createRoute({
+  method: "get",
+  path: "/surfaces",
+  operationId: "dashboard.apps.surfaces",
+  tags: ["Admin - Apps"],
+  summary: "List what active apps add to the dashboard",
+  description: "Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.",
+  responses: {
+    200: {
+      description: "Dashboard surfaces of active apps",
+      content: { "application/json": { schema: successEnvelope(z.object({ apps: z.array(appAdminSurfacesSchema) })) } },
+    },
+    401: errorResponses[401],
+    403: errorResponses[403],
+  },
+});
+
+app.openapi(surfacesRoute, async (c) => {
+  noStore(c);
+  const installations = await listPluginInstallations(c.get("db"));
+  const apps = installations
+    .filter((installation) => installation.status === "active" && installation.grant !== null)
+    .map((installation) => {
+      const { admin, routes, name } = installation.manifest;
+      return {
+        id: installation.pluginId,
+        name,
+        pages: admin.pages.map((page) => ({ id: page.id, title: page.title, placement: page.placement, route: page.route })),
+        cards: admin.cards.map((card) => ({ id: card.id, target: card.target, title: card.title, route: card.route })),
+        actions: admin.actions.map((action) => ({
+          id: action.id,
+          target: action.target,
+          label: action.label,
+          route: action.route,
+          bulk: action.bulk,
+          destructive: action.destructive,
+        })),
+        widgets: admin.widgets.map((widget) => ({ id: widget.id, title: widget.title, route: widget.route })),
+        routes: routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
+      };
+    })
+    .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length > 0)
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  return ok(c, { apps });
 });
 
 // ── Get ──

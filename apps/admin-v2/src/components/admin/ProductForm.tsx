@@ -33,6 +33,8 @@ import {
 } from "./shared/SaveBar";
 import { PageHeader } from "./resource/PageHeader";
 import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
+import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { ProductStatusBadge } from "./product-list/ProductStatusBadge";
 import { ProductPager } from "./product-form/ProductPager";
 import {
@@ -378,11 +380,12 @@ function ProductEditor({
   const affectedCount = mediaRemovalConflict?.affectedCount ?? 0;
   const productId = defaultValues?.id;
   const productName = defaultValues?.name ?? "";
+  const appActions = useAppActionRunner("product", false);
 
   const moreActions = isEdit && productId ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline">
+        <Button variant="outline" loading={appActions.pending !== null}>
           {r("moreActions")}
           <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
         </Button>
@@ -398,6 +401,16 @@ function ProductEditor({
             <Link to="/admin/inventory/labels" search={{ variants: variantIds.join(",") }}>{t("printLabels")}</Link>
           </DropdownMenuItem>
         ) : null}
+        {/* Apps' actions for this product (apps.use). */}
+        {appActions.entries.map((entry) => (
+          <DropdownMenuItem
+            key={appActionKey(entry)}
+            variant={entry.action.destructive ? "destructive" : undefined}
+            onSelect={() => appActions.start(entry, [productId])}
+          >
+            {entry.action.label}
+          </DropdownMenuItem>
+        ))}
         {can.canDelete ? (
           <DropdownMenuItem variant="destructive" onSelect={() => setTrashOpen(true)}>{r("moveToTrash")}</DropdownMenuItem>
         ) : null}
@@ -498,6 +511,7 @@ function ProductEditor({
                 </React.Suspense>
               ) : null}
               {isEdit && productId ? <CustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
+              {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}
             </div>
           </fieldset>
           </ProductSectionsProvider>
@@ -562,6 +576,7 @@ function ProductEditor({
           if (productId && aggregateRevision) trash.mutate({ id: productId, expectedAggregateRevision: aggregateRevision });
         }}
       />
+      {appActions.dialogs}
     </>
   );
 }

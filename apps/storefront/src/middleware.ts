@@ -22,6 +22,7 @@ import {
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
+import { appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import {
   applyBrowserCachePolicyForPublicResponse,
   isSuccessfulPublicDiscoveryResponse,
@@ -90,8 +91,9 @@ function setPrivateResponse(response: Response, status: string): void {
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url, locals } = context;
   const response = await next();
-  // The CSP below needs the platform origins; pages already awaited this read.
-  await getLayoutData();
+  // The CSP below needs the platform origins and the app scripts the page
+  // loads; pages already awaited this read.
+  const layout = await getLayoutData();
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
@@ -156,6 +158,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       },
       getRuntimeCspAllowedDomains(),
       frameAncestors,
+      // The same choice Layout.astro makes: the scripts of this page kind.
+      appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
     ),
   });
 });

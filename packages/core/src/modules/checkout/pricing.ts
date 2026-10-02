@@ -427,6 +427,8 @@ export async function previewStorefrontAppDiscounts(
     platformAllocation: TaxDiscountAllocationInput | undefined;
     shippingMinor: number;
     discountCodes: readonly string[];
+    /** The channel apps see (a buyer agent's cart previews as "agent"). */
+    channel?: FunctionCart["channel"];
   },
 ): Promise<AppDiscountResolution | null> {
   const { apps } = input;
@@ -438,7 +440,7 @@ export async function previewStorefrontAppDiscounts(
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
-    channel: "online_store",
+    channel: input.channel ?? "online_store",
     lines: input.lines.map((line) => ({
       lineId: line.lineId,
       productId: line.productId,

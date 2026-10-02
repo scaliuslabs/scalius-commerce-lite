@@ -75,7 +75,7 @@ describe("storefront layout data", () => {
   ])("carries the ISO 4217 decimal places of %s", async (code, symbol, decimalPlaces) => {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO settings (id, key, value, category, type)
-      VALUES ('set_currency', 'document', '${JSON.stringify({ currencyCode: code, currencySymbol: symbol, usdExchangeRate: "150" })}', 'currency', 'json')`);
+      VALUES ('set_currency', 'document', '${JSON.stringify({ currencyCode: code, currencySymbol: symbol })}', 'currency', 'json')`);
 
     expect((await getLayoutData(db)).currency).toEqual({ code, symbol, decimalPlaces });
   });
@@ -333,7 +333,7 @@ describe("storefront homepage data", () => {
     publishTheme(sqlite, [section({ id: "text", type: "editorial", settings: { layout: "rich-text", heading: "Hi", body: "" } })]);
     const homepage = await getHomepageData(db);
     expect(batches).toBe(1);
-    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null });
+    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null, apps: [] });
   });
 
   it("reads hero slide images by media id, at their published rendition, phone images too", async () => {

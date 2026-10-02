@@ -9,7 +9,7 @@ import {
 import { requestRuntime, type StorefrontRuntime } from "./runtime";
 import { apiFetch } from "./transport";
 import { getLayoutData, getHomepageData } from "./storefront";
-import { getAllProducts, getProductBySlugResult, getProductsByCategory } from "./products";
+import { getAllProducts, getProductAppBlocks, getProductBySlugResult, getProductsByCategory } from "./products";
 import { getCities, getShippingMethods } from "./shipping";
 import { getActiveCheckoutLanguage } from "./settings";
 import { getCheckoutConfig } from "./checkout";
@@ -44,6 +44,10 @@ function bodyFor(path: string): { status: number; body: string } {
       }),
     };
   }
+  if (path === "/api/v1/storefront/product-apps/linen") {
+    return { status: 200, body: envelope({ blocks: [{ id: "heart", app: "scalius.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] }) };
+  }
+  if (path === "/api/v1/storefront/product-apps/broken") return { status: 500, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/missing")) return { status: 404, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/")) {
     return { status: 200, body: envelope({ product: { id: "p1", slug: "linen" }, variants: [], media: [], recommendations: { reason: "popular", products: [] } }) };
@@ -79,13 +83,17 @@ function backend(options: { batchStatus?: number; proof?: boolean } = {}): Backe
       return Response.json({
         success: true,
         data: {
-          parts: parts.map((part) => ({
-            ...bodyFor(part.pathname),
-            contentType: "application/json",
-            ...(options.proof
-              ? { cache: { apiVersion: "api-a", status: "miss", s0: part.pathname.length, deps: [hashCacheDep(part.pathname)], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 } }
-              : {}),
-          })),
+          parts: parts.map((part) => {
+            const answer = bodyFor(part.pathname);
+            return {
+              ...answer,
+              contentType: "application/json",
+              // Like the API: only a successful part carries a dependency proof.
+              ...(options.proof && answer.status < 300
+                ? { cache: { apiVersion: "api-a", status: "miss", s0: part.pathname.length, deps: [hashCacheDep(part.pathname)], validUntil: null, softMaxAgeSeconds: null, renderedAt: 1 } }
+                : {}),
+            };
+          }),
         },
       });
     }
@@ -115,21 +123,36 @@ afterEach(() => {
 });
 
 describe("page render API budget", () => {
-  it("renders a product page from one API call", async () => {
+  it("renders a product page, with its app blocks, from one API call", async () => {
     const api = backend();
-    const [layout, product, shipping, config] = await render(api, () => Promise.all([
+    const [layout, product, shipping, config, apps] = await render(api, () => Promise.all([
       getLayoutData(),
       getProductBySlugResult("linen"),
       getShippingMethods(),
       getCheckoutConfig(),
+      getProductAppBlocks("linen"),
     ]));
 
     expect(api.calls).toHaveLength(PAGE_API_CALL_BUDGET);
     expect(api.calls[0]).toContain(STOREFRONT_BATCH_PATH);
+    expect(parseStorefrontBatchParts(new URL(api.calls[0]!, "https://api.example.test"))?.map((part) => part.pathname))
+      .toContain("/api/v1/storefront/product-apps/linen");
     expect(layout?.platform?.apiUrl).toBe("https://api.example.test");
     expect(product.state).toBe("found");
     expect(shipping).toEqual([{ id: "s1" }]);
     expect(config.gateways).toEqual([{ id: "cod" }]);
+    expect(apps).toEqual({ failed: false, blocks: [{ id: "heart", app: "scalius.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] });
+  });
+
+  it("proves a product page whose app blocks part answered, and none whose part failed", async () => {
+    const proven = createPageDependencies();
+    await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductAppBlocks("linen")]), proven);
+    expect(pageEntryFromDependencies(proven)).not.toBeNull();
+
+    const failed = createPageDependencies();
+    const [, apps] = await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductAppBlocks("broken")]), failed);
+    expect(apps).toEqual({ failed: true, blocks: [] });
+    expect(pageEntryFromDependencies(failed)).toBeNull();
   });
 
   it("renders the home page, with its delivery facts, from one API call", async () => {

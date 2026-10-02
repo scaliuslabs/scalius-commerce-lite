@@ -262,7 +262,6 @@ beforeEach(() => {
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
     currencySymbol: "৳",
-    usdExchangeRate: "1",
   });
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
   mocks.quoteStorefrontDiscount.mockResolvedValue({
@@ -539,7 +538,6 @@ describe("cart validation preflight", () => {
       mocks.getCurrencySettings.mockResolvedValue({
         currencyCode,
         currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
-        usdExchangeRate: "1",
       });
       const { app, kv } = createTestApp();
 
@@ -935,7 +933,6 @@ describe("authoritative tax quote", () => {
       mocks.getCurrencySettings.mockResolvedValue({
         currencyCode,
         currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
-        usdExchangeRate: "1",
       });
       mocks.validateStorefrontCartItems.mockResolvedValue({
         valid: true,
@@ -1393,7 +1390,6 @@ describe("create order currency parity", () => {
       mocks.getCurrencySettings.mockResolvedValue({
         currencyCode,
         currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
-        usdExchangeRate: "1",
       });
       mocks.validateStorefrontCartItems.mockResolvedValue(cartValidation);
       mocks.createStorefrontOrder.mockResolvedValue({
@@ -2524,7 +2520,6 @@ describe("create order commit/KV ordering", () => {
     mocks.getCurrencySettings.mockResolvedValue({
       currencyCode: "KWD",
       currencySymbol: "د.ك",
-      usdExchangeRate: "1",
     });
     mocks.getActivePaymentMethods.mockResolvedValue({
       enabledMethods: ["sslcommerz"],

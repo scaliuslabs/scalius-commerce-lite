@@ -199,6 +199,30 @@ export function readManualOrderDiscountLimitError(
   };
 }
 
+/** An installed app's rule an order breaks (checkout functions, `cart.validate`). */
+export interface CheckoutRuleError {
+  code: string;
+  /** Written by the app; shown as text. */
+  message: string;
+  /** The order line it is about, or null for the whole order. */
+  index: number | null;
+}
+
+/** The apps' rule errors of a refused quote or order (`details.reason` = `cart_rules`), or null. */
+export function readCheckoutRuleErrors(error: unknown): CheckoutRuleError[] | null {
+  const parsed = readAdminApiError(error);
+  if (parsed?.status !== 400 || !parsed.details || typeof parsed.details !== "object") return null;
+  const details = parsed.details as { reason?: unknown; ruleErrors?: unknown };
+  if (details.reason !== "cart_rules" || !Array.isArray(details.ruleErrors)) return null;
+  const errors = details.ruleErrors.flatMap((entry: unknown): CheckoutRuleError[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const { code, message, index } = entry as { code?: unknown; message?: unknown; index?: unknown };
+    if (typeof code !== "string" || typeof message !== "string") return [];
+    return [{ code, message, index: typeof index === "number" && Number.isInteger(index) && index >= 0 ? index : null }];
+  });
+  return errors.length > 0 ? errors : null;
+}
+
 export function readAdminOrderCreateRequestMismatch(
   error: unknown,
 ): AdminOrderCreateRequestMismatch | null {

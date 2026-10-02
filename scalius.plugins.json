@@ -11,15 +11,21 @@
     },
     {
       "id": "scalius.hello",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "source": "plugins/hello",
-      "sha256": "b6a2d34a5144a7a042ec8405c6a57c12079a627244c5101b93a8c572baf9c258"
+      "sha256": "1f01c6ce43988416dffb4aa3270330ba2402adc47328403971bec9b0a84ae59b"
     },
     {
       "id": "scalius.order-tagger",
       "version": "0.1.0",
       "source": "plugins/order-tagger",
       "sha256": "bd1c5c6d90d226f7469d76fb74b37da7a9801ea2d948f9c47f4edde66ed2181f"
+    },
+    {
+      "id": "scalius.wishlist",
+      "version": "0.1.0",
+      "source": "plugins/wishlist",
+      "sha256": "fc9b8002c47d754f744d2ea58263c067b061d2e5b87c5288430fa02ea5223bc8"
     }
   ]
 }

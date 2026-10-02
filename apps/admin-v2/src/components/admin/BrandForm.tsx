@@ -29,6 +29,8 @@ import { readAdminApiErrorCode } from "@/lib/admin-api-error";
 import { useMessages } from "~/i18n";
 import { brandMessages } from "~/i18n/brands";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { AppActionsMenu } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 
 /** The saved brand as editor values (the logo as the file picker's value). */
 export function brandFormValues(brand: BrandDetail): BrandFormInput {
@@ -147,6 +149,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("brand") : t("addBrand")}
+      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="brand" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/brands"
       canSave={canSave}
@@ -325,6 +328,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
             </CardContent>
           </Card>
           {defaultValues?.id ? <CustomFieldsCard ownerType="brand" ownerId={defaultValues.id} canEdit={canSave} /> : null}
+          {defaultValues?.id ? <AppResourceCards target="brand" id={defaultValues.id} /> : null}
         </div>
       </div>
     </FormContainer>

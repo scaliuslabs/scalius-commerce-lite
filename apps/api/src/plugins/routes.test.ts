@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, deactivatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
 import { createRuntimeApiApp } from "../runtime/base-app";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
@@ -50,6 +51,30 @@ const echoModule = {
         },
       },
       webhooks: { hook: async (request: unknown) => ({ body: request }) },
+    },
+  },
+};
+
+const PROXY_SHA = "e".repeat(64);
+const proxyManifest = {
+  id: "acme.who",
+  name: "Who",
+  version: "1.0.0",
+  apiVersion: PLUGIN_API_VERSION,
+  description: "Tells who is signed in.",
+  author: { name: "Acme" },
+  routes: { public: [{ name: "who", methods: ["GET", "POST"] }] },
+  storefront: { proxy: true },
+};
+const proxyModule = {
+  default: {
+    manifest: proxyManifest,
+    routes: {
+      public: {
+        who: async (request: { customer?: unknown; render?: unknown; headers: Record<string, string> }) => ({
+          body: { customer: request.customer ?? null, render: request.render ?? null, cookie: request.headers.cookie ?? null },
+        }),
+      },
     },
   },
 };
@@ -122,6 +147,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     const loader = new BundledLoader(bridgeEnvironment, {
       ...BUNDLED_PLUGINS,
       "acme.echo": { version: "1.0.0", sha256: ECHO_SHA, load: async () => echoModule },
+      "acme.who": { version: "1.0.0", sha256: PROXY_SHA, load: async () => proxyModule },
     });
     app = createRuntimeApiApp();
     app.route("/", createPluginRoutes({ loaderFor: () => loader }));
@@ -184,6 +210,8 @@ describe("plugin routes", { timeout: 30_000 }, () => {
       body: null,
       rawBody: null,
       staffId: null,
+      render: null,
+      customer: null,
     });
     // Its own cache wish beyond 300 s is refused; it can never redirect.
     expect(seen.headers.get("cache-control")).toBe("no-store");
@@ -223,17 +251,36 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect((await call("/api/v1/plugins/acme.echo/public/inspect", { headers: { "x-scalius-app-proxy": "1" } })).status).toBe(404);
   });
 
+  it("tells a proxied public route who is signed in, from the store's session, never the cookie itself", async () => {
+    env = { ...env, CUSTOMER_SESSION_HASH_KEY: "plugin-proxy-session-hash-key-0123456789" } as unknown as Env;
+    sqlite.exec("INSERT INTO customers (id, name, email, phone) VALUES ('cust_buyer', 'Buyer', 'buyer@example.test', '+8801711000009')");
+    sqlite.prepare("INSERT INTO customer_sessions (token_hash, customer_id, expires_at) VALUES (?, ?, unixepoch() + 3600)")
+      .run(await hashCustomerSessionToken("cs-session-token-buyer", "plugin-proxy-session-hash-key-0123456789"), "cust_buyer");
+    await installPlugin(db, { manifest: proxyManifest, source: "bundled", bundleSha256: PROXY_SHA });
+    await activatePlugin(db, "acme.who", { actorUserId: "owner", expectedRevision: 1 });
+
+    const signedIn = await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=cs-session-token-buyer; other=1" } });
+    expect(signedIn.json).toEqual({ customer: { id: "cust_buyer" }, render: null, cookie: null });
+    // Guests, unknown sessions and requests that did not come through the storefront proxy carry no customer.
+    expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1" } })).json.customer).toBeNull();
+    expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=forged" } })).json.customer).toBeNull();
+    expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { Cookie: "cs_tok=cs-session-token-buyer" } })).json.customer).toBeNull();
+    // A plugin without the proxy never learns anyone, even with the header.
+    const echo = await call("/api/v1/plugins/acme.echo/public/inspect", { headers: { Cookie: "cs_tok=cs-session-token-buyer" } });
+    expect(echo.json.customer).toBeNull();
+  });
+
   it("guards admin routes with the dashboard session: apps.view to read, apps.use to change", async () => {
     expect((await call("/api/v1/plugins/scalius.hello/admin/dashboard")).status).toBe(401);
     expect((await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "clerk" })).status).toBe(403);
     const page = await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "viewer" });
     expect(page.status).toBe(200);
-    expect(page.json).toMatchObject({ type: "page", title: "Hello" });
+    expect(page.json).toMatchObject({ version: 1, root: { type: "page", title: "Hello" } });
     expect(page.headers.get("cache-control")).toBe("private, no-store");
 
     expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "viewer" })).status).toBe(403);
     const reset = await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "operator", headers: { Origin: "https://admin.shop.test" } });
-    expect(reset).toMatchObject({ status: 200, json: { reset: true } });
+    expect(reset).toMatchObject({ status: 200, json: { toast: { message: "Counters reset.", tone: "success" }, refresh: true } });
     expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "owner", headers: { Origin: "https://evil.example" } })).status).toBe(403);
 
     const seen = await call("/api/v1/plugins/acme.echo/admin/look?tab=1", { as: "owner", headers: { "X-Custom": "no" } });

@@ -231,7 +231,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
         {open && item.children.length > 0 ? (
           <ul data-nav-sub="" className="flex min-w-0 flex-col motion-safe:animate-nav-grow">
             {item.children.map((child) => (
-              <li key={child.key}>
+              <li key={child.to}>
                 <ShellLink
                   to={child.to}
                   preload="intent"
@@ -239,7 +239,8 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
                   onClick={onClose}
                   className={cn(NAV_ROW, "pl-8 text-sidebar-muted-foreground")}
                 >
-                  <span className="truncate">{t(child.key)}</span>
+                  {/* An app page's title is the app's own text (plain, never translated). */}
+                  <span className="truncate">{child.label ?? t(child.key)}</span>
                   {child.badge === "reviews" ? <ReviewsNavBadge /> : null}
                 </ShellLink>
               </li>

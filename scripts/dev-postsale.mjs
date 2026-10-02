@@ -125,7 +125,7 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
 export function buildFixtureSql() {
   return [
     ...otpFixtureStatements(),
-    patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "110" }),
+    patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳" }),
     patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     `INSERT INTO shipping_methods (
       id, name, fee_minor, description, is_active, sort_order, created_at, updated_at, deleted_at

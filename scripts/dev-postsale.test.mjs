@@ -142,7 +142,6 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'checkout'");
     expect(sql).toContain("'payment_methods'");
     expect(sql).toContain('"currencyCode":"BDT"');
-    expect(sql).toContain('"usdExchangeRate":"110"');
     expect(sql).toContain("'customer_auth'");
     expect(sql).toContain('"allowedCountries":["BD"]');
     expect(sql).toContain("'ops006_shipping_standard'");

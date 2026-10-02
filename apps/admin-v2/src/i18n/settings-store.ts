@@ -79,9 +79,6 @@ export const storeSettingsMessages = defineMessages({
     currencySearch: "Search currencies",
     currencyNone: "No currency found.",
     currencySymbol: "Currency symbol",
-    usdRate: "Price of 1 US dollar",
-    usdRateHelp: "In {code}. Used for reports only.",
-    usdRateInvalid: "Enter a number above 0.",
     loadCurrency: "Store currency",
 
     countriesTitle: "Customer countries",
@@ -174,9 +171,6 @@ export const storeSettingsMessages = defineMessages({
     currencySearch: "কারেন্সি খুঁজুন",
     currencyNone: "কোনো কারেন্সি পাওয়া যায়নি।",
     currencySymbol: "কারেন্সির চিহ্ন",
-    usdRate: "১ মার্কিন ডলারের দাম",
-    usdRateHelp: "{code}-এ। শুধু রিপোর্টের জন্য।",
-    usdRateInvalid: "০-এর বেশি একটি সংখ্যা দিন।",
     loadCurrency: "স্টোরের কারেন্সি",
 
     countriesTitle: "কাস্টমারের দেশ",
