@@ -14,7 +14,7 @@ import type { SetTheme } from "../theme-fields";
 
 export type EditorPage = "home" | "product" | "collection" | "search" | `landing:${string}`;
 export type FixedEditorPage = "product" | "collection" | "search";
-const BLOCK_LABEL = {
+export const BLOCK_LABEL = {
   gallery: "block_gallery", "title-price": "block_titlePrice", options: "block_options", "buy-buttons": "block_buyButtons",
   description: "block_description", specs: "block_specs", reviews: "block_reviews", "related-products": "block_relatedProducts",
   apps: "block_apps", breadcrumbs: "block_breadcrumbs", banner: "block_banner", filters: "block_filters", grid: "block_grid",

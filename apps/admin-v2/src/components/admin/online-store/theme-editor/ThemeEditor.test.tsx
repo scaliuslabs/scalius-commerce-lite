@@ -599,7 +599,7 @@ describe("theme editor: history and safeguards", () => {
     act(() => button("Preview version").click());
     expect(preview.props.sourceRevision).toBe(8);
     act(() => button("Compare with draft").click());
-    expect(container.querySelector('ul[aria-label="Compare with draft"]')?.textContent).toContain("Homepage: changed rail");
+    expect(container.querySelector('ul[aria-label="Compare with draft"]')?.textContent).toContain("Homepage: changed Old honey");
     act(() => button("Restore to draft").click());
     expect(api.restore).not.toHaveBeenCalled();
     expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Your live store changes only when you publish.");

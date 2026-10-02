@@ -622,7 +622,7 @@ export function ThemeEditor({ workspace, refetch }: {
                   </>}
                 </SettingsGroup>
               </TabsContent>
-              <TabsContent value="history" className="mt-0"><ThemeHistory theme={theme} busy={saving || draftAction || conflict} previewRevision={previewRevision} onPreview={setPreviewRevision} onRestore={setPendingRestore} /><div className="p-4"><Button type="button" variant="outline" disabled={saving || draftAction || conflict || !hasUnpublishedDraft} onClick={() => setConfirmDiscard(true)}>{t("discard")}</Button></div></TabsContent>
+              <TabsContent value="history" className="mt-0"><ThemeHistory theme={theme} sectionName={sectionName} busy={saving || draftAction || conflict} previewRevision={previewRevision} onPreview={setPreviewRevision} onRestore={setPendingRestore} /><div className="p-4"><Button type="button" variant="outline" disabled={saving || draftAction || conflict || !hasUnpublishedDraft} onClick={() => setConfirmDiscard(true)}>{t("discard")}</Button></div></TabsContent>
               <TabsContent value="theme" className="mt-0">
                 <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
               </TabsContent>
