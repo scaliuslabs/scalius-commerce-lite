@@ -146,18 +146,24 @@ describe("digital SKUs in the variant editor", () => {
     const inventory = slot("inventory-slot");
     expect(quantityInput()).toBeNull();
     expect(inventory.textContent).toContain(d("stockKeys", { count: "12" }));
-    expect(inventory.textContent).toContain(d("stockTrackedHelp"));
+    // The pool is the stock: tracking can't be turned off under it.
+    expect(inventory.textContent).toContain(d("stockPoolKeepsTracking"));
+    expect(inventory.querySelector<HTMLButtonElement>('button[role="checkbox"]')!.disabled).toBe(true);
     expect(inventory.textContent).not.toContain(d("stockNotSellable"));
     const importKeys = [...inventory.querySelectorAll("button")].find((button) => button.textContent === d("importKeys"))!;
     await act(async () => importKeys.click());
     expect((reveal.mock.calls[0]?.[0] as CustomEvent).detail).toBe("product-digital");
     window.removeEventListener("scalius:reveal-card", reveal);
 
-    // Switching tracking off (unlimited files) saves the SKU, never its quantity.
-    await act(async () => inventory.querySelector<HTMLButtonElement>('button[role="checkbox"]')!.click());
+    // Any other change saves the SKU, never its quantity (the keys move it).
+    const skuInput = [...inventory.querySelectorAll<HTMLInputElement>("input")].find((input) => input.value === "EBOOK-1")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(skuInput, "EBOOK-1A");
+      skuInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => ref.current!.save());
     expect(mocks.putApiV1AdminProductsByIdVariantsByVariantId.mock.lastCall?.[0]).toMatchObject({
-      body: { trackInventory: false, sku: "EBOOK-1" },
+      body: { trackInventory: true, sku: "EBOOK-1A" },
     });
     expect(mocks.putApiV1AdminProductsByIdVariantsByVariantId.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({ body: expect.not.objectContaining({ stock: expect.anything() }) }),

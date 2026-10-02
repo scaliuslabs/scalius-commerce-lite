@@ -70,6 +70,7 @@ import {
 } from "./option-matrix-editor-model";
 import { constrainSkuForKind, isDigitalSku, productKindRules, useProductKindRules } from "../product-kind-rules";
 import { DigitalStockStatus } from "../DigitalStock";
+import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
 import { useProductEditorSlots } from "../editor-slots";
 import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
 import { barcodePatch, Field, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
@@ -194,6 +195,10 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     return digitalSimple && defaultSku && shown.stock !== defaultSku.stock ? { ...shown, stock: defaultSku.stock } : shown;
   }, [defaultSku, digitalSimple, kindRules, simpleSku]);
   const slots = useProductEditorSlots();
+  // A licence-key pool is the SKU's stock: tracking stays on while it has one (the server refuses otherwise).
+  const digitalAssets = useQuery({ ...digitalAssetsQueryOptions(productId ?? ""), enabled: digitalSimple && Boolean(productId) });
+  const keepsTracking = digitalSimple && simpleSku.trackInventory
+    && digitalSkuStock(defaultSku?.id, digitalAssets.data ?? []).keys !== null;
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
   // Stock that must reach the new rows (the server's rule): a simple product's stock when
@@ -651,13 +656,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
+              disabled={keepsTracking}
               onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
             />
             {t("trackQuantity")}
           </label>
           {digitalSimple ? (
             <p className="text-body text-muted-foreground">
-              {d(shownSimpleSku.trackInventory ? "stockTrackedHelp" : "stockUntrackedHelp")}
+              {d(keepsTracking ? "stockPoolKeepsTracking" : shownSimpleSku.trackInventory ? "stockTrackedHelp" : "stockUntrackedHelp")}
             </p>
           ) : null}
         </div>
