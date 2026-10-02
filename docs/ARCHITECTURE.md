@@ -242,6 +242,13 @@ Worker installs exactly one master secret, `SCALIUS_SECRET` (plus
 HKDF-derived from the master at Worker entry in
 `packages/shared/src/runtime-secrets.ts`.
 
+The Workers plan is the one other deploy-time input: `--plan paid` (default
+Free) generates a Wrangler config that adds the Paid profile's CPU limit, queue
+batch sizes and the build constant `__SCALIUS_PLAN__`; every plan-sized value
+(password hash cost, queue chunk sizes, KV hints, cron slices, list caps) lives in
+`packages/shared/src/plan-limits.ts` and is read through `planLimits()`. See
+[FREE-PLAN.md](./FREE-PLAN.md).
+
 Public origins are merchant settings, not deployment configuration. The API
 resolves them per invocation in `apps/api/src/runtime/runtime-env.ts` through
 the `platform` domain, which returns a request-scoped env carrying the derived
