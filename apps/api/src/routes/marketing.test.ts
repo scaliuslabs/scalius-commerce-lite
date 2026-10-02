@@ -20,6 +20,10 @@ const { marketingRoutes } = await import("./marketing");
 
 const SECRET = "test-master-secret-that-is-long-enough-123456";
 
+// Response bodies are asserted field by field.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Envelope = { data?: any; error?: any };
+
 function createApp(options: { limited?: boolean } = {}) {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin, account_claimed_at, phone_verified_at, email_verified_at)
@@ -48,7 +52,7 @@ function createApp(options: { limited?: boolean } = {}) {
             headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", ...(auth ? { Authorization: "Bearer storefront" } : {}) },
             body: JSON.stringify(body),
         });
-        return { status: response.status, body: await response.json() as { data?: any; error?: any } };
+        return { status: response.status, body: await response.json() as Envelope };
     };
     return { sqlite, post, sent };
 }

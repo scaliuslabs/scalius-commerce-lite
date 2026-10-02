@@ -59,7 +59,7 @@ export async function buildCustomerCsvExport(
 ): Promise<CustomerCsvExport> {
     const maxRows = Math.min(Math.max(input.maxRows ?? CUSTOMER_EXPORT_MAX_ROWS, 1), CUSTOMER_EXPORT_MAX_ROWS);
     const encoder = new TextEncoder();
-    const chunks: string[] = [`﻿${CUSTOMER_CSV_HEADERS.map(spreadsheetSafeCsvCell).join(",")}`];
+    const chunks: string[] = [`\uFEFF${CUSTOMER_CSV_HEADERS.map(spreadsheetSafeCsvCell).join(",")}`];
     let byteLength = encoder.encode(chunks[0]!).byteLength;
     let rowCount = 0;
     let limited = false;

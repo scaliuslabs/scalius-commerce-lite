@@ -11,6 +11,10 @@ import { errorResponseFromError } from "../../utils/api-response";
 import { adminCustomerMarketingRoutes } from "./customer-marketing";
 import { adminCustomerRoutes } from "./customers";
 
+// Response bodies are asserted field by field.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Envelope = { success: boolean; data: any; error?: any };
+
 function createApp(options: { plugin?: string } = {}) {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`
@@ -43,7 +47,7 @@ function createApp(options: { plugin?: string } = {}) {
             headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
         });
         const text = await response.text();
-        return { status: response.status, body: (text ? JSON.parse(text) : null) as { success: boolean; data: any; error?: any } };
+        return { status: response.status, body: (text ? JSON.parse(text) : null) as Envelope };
     };
     return { app, sqlite, json };
 }

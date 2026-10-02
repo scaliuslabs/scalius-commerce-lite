@@ -16,7 +16,6 @@ import {
     CUSTOMER_SEGMENT_VALUES_MAX,
     customerSegmentDefinitionSchema,
     type CustomerSegmentCondition,
-    type CustomerSegmentDefinition,
     type MarketingChannel,
 } from "@scalius/shared/customer-marketing";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
@@ -260,7 +259,7 @@ describe("customer segments", () => {
         const exported = await buildCustomerCsvExport(db, { filters: { subscribed: "sms" } });
         expect(exported.rowCount).toBe(subscribedSms.length);
         expect(exported.limited).toBe(false);
-        const [header, firstLine] = exported.body.replace(/^﻿/, "").split("\n");
+        const [header, firstLine] = exported.body.replace(/^\uFEFF/, "").split("\n");
         expect(header).toContain('"SMS marketing"');
         expect(firstLine).toContain('"subscribed"');
         // Phones stay data; formula-looking cells are neutralised.
@@ -294,12 +293,8 @@ describe("customer segments", () => {
         expect(Math.max(...boundCounts)).toBeLessThanOrEqual(Math.floor(D1_MAX_BOUND_PARAMETERS / 2));
 
         // No order aggregation at read time: segment SQL reads stored facts only.
-        const plan = (definition: CustomerSegmentDefinition) => {
-            const captured: string[] = [];
-            const probe = createSqliteD1Database({ sqlite, onQuery: (query) => captured.push(query) });
-            return { probe, captured };
-        };
-        const { probe, captured } = plan(everyone);
+        const captured: string[] = [];
+        const probe = createSqliteD1Database({ sqlite, onQuery: (query) => captured.push(query) });
         await customerSegmentMembership(probe.db, "cust_0000001", [{ id: "a", definition: largest }]);
         expect(captured.join("\n")).not.toMatch(/from\s+"orders"/i);
         const explained = sqlite.prepare(`EXPLAIN QUERY PLAN ${captured[0]}`).all() as Array<{ detail: string }>;
