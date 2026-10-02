@@ -4,7 +4,9 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import type { Order, OrderCustomerRecord } from "./types";
+import { setLocale } from "~/i18n";
+import { formatOrderTimestamp } from "./formatters";
+import type { Order, OrderAppRiskCheck, OrderCustomerRecord } from "./types";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: ReactNode }) => (
@@ -26,6 +28,7 @@ const baseOrder = {
   id: "ord_1069", customerName: "R3-SB Guest Two", customerPhone: phone, customerEmail: null, customerId: "cust_1",
   shippingAddress: "House 1", areaName: null, zoneName: null, cityName: null, shippingMethodName: null,
   editReadiness: { items: { allowed: false, reason: null }, details: { allowed: false, reason: null } },
+  appRiskChecks: [],
 };
 const orderWith = (customerRecord?: OrderCustomerRecord | null) =>
   ({ ...baseOrder, ...(customerRecord === undefined ? {} : { customerRecord }) }) as unknown as Order;
@@ -41,6 +44,7 @@ describe("order customer card", () => {
   });
 
   afterEach(() => {
+    setLocale("en");
     act(() => root.unmount());
     container.remove();
   });
@@ -77,5 +81,57 @@ describe("order customer card", () => {
     show(orderWith(undefined));
     expect(container.textContent).toContain("R3-SB Guest Two");
     expect(recordLink()).toBeNull();
+  });
+
+  describe("apps' risk checks", () => {
+    const checks: OrderAppRiskCheck[] = [
+      {
+        appId: "acme.radar", appName: "Risk radar", level: "high",
+        reasons: ["Phone has 3 returned orders", "Address doesn't match the area"], checkedAt: "2026-10-01T08:00:00.000Z",
+      },
+      // Order timestamps may come as unix seconds.
+      { appId: "acme.trust", appName: "Trust score", level: "medium", reasons: ["New customer"], checkedAt: 1_790_000_000 },
+      { appId: "acme.verify", appName: "Phone verify", level: "low", reasons: [], checkedAt: "2026-10-01T08:06:00.000Z" },
+    ];
+    const withChecks = (appRiskChecks: OrderAppRiskCheck[]) => ({ ...baseOrder, appRiskChecks }) as unknown as Order;
+    const items = () => [...container.querySelectorAll("section:last-of-type > ul > li")];
+
+    it("lists each app's level as a word, its reasons and when it checked, and says it is advice", () => {
+      // The courier fraud check is hidden for this viewer; apps' advice is part of the order and still shows.
+      show(withChecks(checks));
+      expect(container.textContent).toContain("Risk checks by apps");
+      expect(container.textContent).toContain("Nothing was cancelled automatically");
+      expect(container.textContent).not.toContain("Courier fraud check");
+
+      const [high, medium, low] = items();
+      expect(high!.querySelector("a")?.getAttribute("href")).toBe("/admin/apps/acme.radar");
+      expect(high!.querySelector("a")?.textContent).toBe("Risk radar");
+      expect(high!.textContent).toContain("High risk");
+      expect([...high!.querySelectorAll("ul > li")].map((reason) => reason.textContent)).toEqual([
+        "Phone has 3 returned orders",
+        "Address doesn't match the area",
+      ]);
+      expect(high!.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-01T08:00:00.000Z");
+      expect(high!.querySelector("time")?.textContent).toBe(`Checked ${formatOrderTimestamp("2026-10-01T08:00:00.000Z")}`);
+      expect(medium!.textContent).toContain("Medium risk");
+      expect(medium!.querySelector("time")?.getAttribute("datetime")).toBe(new Date(1_790_000_000 * 1000).toISOString());
+      expect(medium!.querySelector("time")?.textContent).toBe(`Checked ${formatOrderTimestamp(1_790_000_000)}`);
+      expect(low!.textContent).toContain("Low risk");
+      expect(low!.querySelector("ul")).toBeNull();
+    });
+
+    it("shows nothing when no app checked the order", () => {
+      show(withChecks([]));
+      expect(container.textContent).not.toContain("Risk checks by apps");
+      expect(container.querySelector("time")).toBeNull();
+    });
+
+    it("speaks Bangla", () => {
+      setLocale("bn");
+      show(withChecks(checks));
+      expect(container.textContent).toContain("অ্যাপের ঝুঁকি যাচাই");
+      expect(container.textContent).toContain("বেশি ঝুঁকি");
+      expect(container.textContent).toContain("শুধু পরামর্শ");
+    });
   });
 });

@@ -109,4 +109,30 @@ describe("InvoiceSheet", () => {
     // 2,400 − 285 + 0 delivery = 2,115.
     expect(totals).toContain(`${en["summary.total"]}2,115`);
   });
+
+  it("prints an app's discounts like a promotion's, by title only: the buyer's invoice doesn't name apps", async () => {
+    const app = { source: "app", promotionId: null, appId: "acme.bulk", appName: "Bulk discount app" };
+    const discounted = {
+      ...document_,
+      order: {
+        ...document_.order,
+        totalAmount: 1995, shippingCharge: 80, discountAmount: 485, refundedAmount: 0,
+        discounts: [
+          { name: "Amount off order", code: "R2MKTORD15", kind: "order", amount: 285, shippingAmount: 0 },
+          { ...app, name: "Bulk savings", code: null, kind: "order", amount: 120, shippingAmount: 0 },
+          { ...app, name: "Free delivery", code: null, kind: "shipping", amount: 80, shippingAmount: 80 },
+        ],
+      },
+    } as unknown as InvoiceDocument;
+    await act(async () => root.render(<InvoiceSheet document={discounted} />));
+    const totals = [...host.querySelectorAll(".invoice-totals div")].map((row) => row.textContent ?? "");
+    expect(totals).toContain(`${en["delivery.label"]}${en["invoice.deliveryWas"].replace("{amount}", "80")}${en["delivery.free"]} (Free delivery)`);
+    expect(totals.filter((row) => row.startsWith(en["summary.discount"]))).toEqual([
+      `${en["summary.discount"]} · Amount off order (R2MKTORD15)−285`,
+      `${en["summary.discount"]} · Bulk savings−120`,
+    ]);
+    expect(host.textContent).not.toContain("Bulk discount app");
+    // 2,400 − 285 − 120 + 0 delivery = 1,995.
+    expect(totals).toContain(`${en["summary.total"]}1,995`);
+  });
 });

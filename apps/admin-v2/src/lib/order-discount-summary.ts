@@ -4,14 +4,16 @@ import { discountDisplayName } from "@scalius/shared/checkout-language-format";
  * How an order summary shows its discounts (brief decision 4), in minor units
  * so the lines add up exactly: savings on delivery sit on the delivery line
  * ("~~৳80~~ Free (CODE)" or the reduced fee), savings on the items are one
- * "Discount · Title (CODE)" line each, and a discount with no promotion behind
- * it (a manual order) is one plain "Discount" line.
+ * "Discount · Title (CODE)" line each, and a saving not in the order's
+ * discounts (typed on a manual order) is one plain "Discount" line. An app's
+ * discount (a checkout function) is split the same way as a promotion's.
  *
  * subtotal + delivery charged − item discounts − manual discount (+ tax when
  * added on top) = order total.
  */
 export interface SummaryDiscountInput {
-  promotionId?: string;
+  /** Null for an app's discount. */
+  promotionId?: string | null;
   name: string;
   code: string | null;
   /** Everything the discount saved, items and delivery (major units). */
@@ -35,7 +37,7 @@ export interface OrderDiscountSummary<T extends SummaryDiscountInput> {
   /** Codes (or titles) of the discounts that lowered delivery. */
   deliveryDiscountNames: string[];
   itemDiscounts: ItemDiscountLine<T>[];
-  /** A discount not tied to any promotion, e.g. typed on a manual order. */
+  /** Savings not in the order's discounts, e.g. typed on a manual order. */
   otherDiscountMinor: number;
 }
 

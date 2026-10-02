@@ -11,7 +11,7 @@ import {
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
-import type { Order } from "./types";
+import type { Order, OrderDiscount } from "./types";
 
 /** The store's default tax label is ours to translate; a merchant's own label is shown as typed. */
 export function taxLabelText(label: string, t: (key: "summary.tax") => string): string {
@@ -19,6 +19,28 @@ export function taxLabelText(label: string, t: (key: "summary.tax") => string): 
 }
 
 type SummaryRow = { label: ReactNode; value: ReactNode; detail?: ReactNode };
+
+/** A promotion links to its discount page; an app's discount names the app, linking to the app's page. */
+function DiscountName({ discount, name }: { discount: OrderDiscount; name: string }) {
+  const t = useMessages(orderDetailMessages);
+  if (discount.source === "app" && discount.appId) {
+    // "from {app}", with the app's name linked wherever the language puts it.
+    const [before, after] = t("summary.fromApp", { app: "\u0000" }).split("\u0000");
+    return (
+      <>
+        {name} · {before}
+        <Link to="/admin/apps/$pluginId" params={{ pluginId: discount.appId }} className="text-link hover:underline">
+          {discount.appName ?? discount.appId}
+        </Link>
+        {after}
+      </>
+    );
+  }
+  if (discount.promotionId) {
+    return <Link to="/admin/discounts/$discountId" params={{ discountId: discount.promotionId }} className="text-link hover:underline">{name}</Link>;
+  }
+  return <>{name}</>;
+}
 
 /** Units of each order line that came back, from the order's returns. */
 export function returnedQuantities(returns: readonly Pick<OrderReturnDto, "lines">[]): Map<string, number> {
@@ -59,17 +81,11 @@ export function OrderSummaryCard({ order }: { order: Order }) {
   const deliveryCodes = discountSummary.deliveryDiscountNames.length > 0
     ? ` (${discountSummary.deliveryDiscountNames.join(", ")})`
     : "";
-  // One line per discount on the items: "Discount · Title (CODE)", the name linking to it.
+  // One line per discount on the items: "Discount · Title (CODE)", the name linking to the
+  // promotion, or "Discount · Title · from App" for an app's, the app's name linking to the app.
   const discounts: SummaryRow[] = [
     ...discountSummary.itemDiscounts.map(({ discount, name, amountMinor }) => ({
-      label: (
-        <>
-          {t("summary.discount")} ·{" "}
-          <Link to="/admin/discounts/$discountId" params={{ discountId: discount.promotionId }} className="text-link hover:underline">
-            {name}
-          </Link>
-        </>
-      ),
+      label: <>{t("summary.discount")} · <DiscountName discount={discount} name={name} /></>,
       value: `−${minor(amountMinor)}`,
     })),
     // A manual order discount has no promotion behind it.

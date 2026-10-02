@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
+import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraudCheckIndicator";
@@ -10,7 +11,8 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { formatLocationParts } from "~/lib/location-presentation";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
-import type { Order } from "./types";
+import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
+import type { Order, OrderAppRiskCheck } from "./types";
 
 // The edit dialog checks phones with libphonenumber's metadata: it loads
 // just after the page, not as part of it.
@@ -18,10 +20,59 @@ const OrderDetailsDialog = lazy(() => import("./OrderDetailsDialog").then((modul
 
 const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
+const RISK_VARIANT: Record<OrderAppRiskCheck["level"], BadgeVariant> = {
+  low: "success",
+  medium: "warning",
+  high: "destructive",
+};
+
 /**
- * Customer, delivery address and the manual courier fraud check. The order
- * keeps the name it was placed with; the record it's filed under is linked
- * separately, since a guest record (keyed by phone) can hold several people.
+ * Apps' risk checks of the order (`order.risk`), as advice: the level is a
+ * word on the badge, not only its colour, and nothing here acts on the order.
+ * Part of the order read, so everyone who can open the order sees it.
+ */
+function AppRiskChecks({ checks }: { checks: OrderAppRiskCheck[] }) {
+  const t = useMessages(orderDetailMessages);
+  return (
+    <section className="space-y-3 px-6 py-4">
+      <div className="space-y-1">
+        <h2 className="font-semibold">{t("appRisk.title")}</h2>
+        <p className="text-muted-foreground">{t("appRisk.advice")}</p>
+      </div>
+      <ul className="space-y-3">
+        {checks.map((check, index) => {
+          const when = formatOrderTimestamp(check.checkedAt);
+          return (
+            <li key={`${check.appId}:${index}`} className="space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Link to="/admin/apps/$pluginId" params={{ pluginId: check.appId }} className="font-medium text-link hover:underline">
+                  {check.appName}
+                </Link>
+                <Badge variant={RISK_VARIANT[check.level]}>{t(`appRisk.${check.level}`)}</Badge>
+              </div>
+              {check.reasons.length > 0 ? (
+                <ul className="list-disc space-y-0.5 ps-5">
+                  {check.reasons.map((reason, reasonIndex) => <li key={reasonIndex}>{reason}</li>)}
+                </ul>
+              ) : null}
+              {when ? (
+                <p className="text-muted-foreground">
+                  <time dateTime={orderTimestampIso(check.checkedAt)}>{t("appRisk.checkedAt", { when })}</time>
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Customer, delivery address, the manual courier fraud check and apps' risk
+ * checks. The order keeps the name it was placed with; the record it's filed
+ * under is linked separately, since a guest record (keyed by phone) can hold
+ * several people.
  */
 export function OrderCustomerCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
@@ -98,6 +149,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} />
           </section>
         ) : null}
+        {order.appRiskChecks.length > 0 ? <AppRiskChecks checks={order.appRiskChecks} /> : null}
       </div>
       <Suspense fallback={null}>
         <OrderDetailsDialog order={order} open={editing} onOpenChange={setEditing} />

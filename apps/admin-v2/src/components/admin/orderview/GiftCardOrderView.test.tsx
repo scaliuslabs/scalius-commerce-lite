@@ -49,7 +49,7 @@ const baseOrder: Order = {
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "delivered",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,
   customerId: null, paymentMethod: "cod", paymentStatus: "paid", paidAmount: 1800,
-  balanceDue: 0, orderNumber: 1001, archivedAt: null, discounts: [], refundDue: 0, refundedAmount: 0,
+  balanceDue: 0, orderNumber: 1001, archivedAt: null, discounts: [], appRiskChecks: [], refundDue: 0, refundedAmount: 0,
   editReadiness: { items: { allowed: false, reason: "closed" }, details: { allowed: false, reason: "closed" } },
 };
 

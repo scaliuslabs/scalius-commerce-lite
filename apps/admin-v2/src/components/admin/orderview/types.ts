@@ -217,6 +217,8 @@ export interface Order {
   taxLabel?: string | null;
   pricesIncludeTax?: boolean | null;
   discounts: OrderDiscount[];
+  /** Apps' advisory risk checks (never acted on automatically); empty when none. */
+  appRiskChecks: OrderAppRiskCheck[];
   customerId: string | null;
   /** The customer record the order is filed under (a guest record, an account or a merchant-added customer). */
   customerRecord?: OrderCustomerRecord | null;
@@ -277,8 +279,15 @@ export interface OrderCustomerRecord {
   phone: string;
 }
 
+/** A saving on the order: a promotion's, or one an app gave at checkout (`checkout.discounts`). */
 export interface OrderDiscount {
-  promotionId: string;
+  source: "promotion" | "app";
+  /** The promotion behind it; null for an app's discount. */
+  promotionId: string | null;
+  /** The app that gave it; null for a promotion. */
+  appId: string | null;
+  appName: string | null;
+  /** The promotion's title, or the app's title for its discount. */
   name: string;
   code: string | null;
   method: "automatic" | "code";
@@ -287,6 +296,16 @@ export interface OrderDiscount {
   amount: number;
   /** The part off delivery, shown on the delivery line. */
   shippingAmount: number;
+}
+
+/** An app's risk assessment made after the order was placed (`order.risk`): advice only, nothing acts on it. */
+export interface OrderAppRiskCheck {
+  appId: string;
+  appName: string;
+  level: "low" | "medium" | "high";
+  reasons: string[];
+  /** When the app checked: an ISO string or unix seconds, like every order timestamp. */
+  checkedAt: OrderTimestamp;
 }
 
 export type OrderEditLockReason =
