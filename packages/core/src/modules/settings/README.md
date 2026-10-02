@@ -87,6 +87,21 @@ discard under Settings view/edit RBAC. The curated `theme.draft-landing-page.v1`
 workflow reads the revision, saves only approved campaign content, and verifies
 the saved draft without publishing.
 
+The editor keeps its full JSON responses; stable agent operation IDs use sibling
+`/theme/agent/*` routes. Draft writes and workspace reads return revision receipts
+bounded to 4 KiB, while history pages return at most five metadata entries, three
+240-character summary lines each, and a revision cursor. No mutation stages an
+artifact. Theme documents are capped at 512 KiB UTF-8 on write; full document or
+single-page reads use the existing one-use authenticated JSON artifact transport
+(1 MiB cap), available to merchant MCP/CLI connections. Generic plugin principals
+cannot consume this read-only artifact operation.
+
+The landing workflow verifies approved page content through the read-risk POST
+`page-check`: it normalizes the submitted page with the current strict schema,
+compares it with the draft, and checks both draft and live revisions. It returns
+only bounded booleans and revisions, needs Settings view permission, and performs
+no writes or cache invalidations.
+
 ## Platform origins
 
 `env.STOREFRONT_URL` and the other public origins are resolved at Worker entry

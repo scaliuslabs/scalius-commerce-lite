@@ -31,6 +31,10 @@ collection and search blocks; publishing is the only way draft changes go live.
 - Agent page edits, draft reads/saves, history, restore/discard and previews use
   stable operations with theme RBAC and revision requirements. The curated
   `theme.draft-landing-page.v1` workflow ends at review; publish is explicit.
+  Browser responses retain complete documents; agent commands use compact
+  revision receipts. Agent history is paginated five versions at a time. Full
+  theme/page reads use authenticated JSON artifacts. The landing workflow's
+  read-only page check proves exact approved content and draft/live revisions.
 
 Public landing/CMS data uses the existing section query planner with `deps.theme`
 and the planners' media, catalog, category, collection, promotion and app keys.
@@ -42,3 +46,9 @@ category 6/3, search 6/2, collection 7/3, landing 10/2, CMS override 11/2.
 Authoritative validation adds 1/1; repeat hits cost 1/1. Landing pages retain
 the homepage budget of 13/2. No schema migration, Worker binding or dependency
 was added.
+
+Real MCP/D1 checks with a large Bangla campaign measured a maximum compact
+result of 1,100 bytes (4 KiB ceiling), a five-version metadata page of 33,520
+bytes (64 KiB ceiling), and a page artifact of 426,732 bytes (1 MiB ceiling).
+Artifact reads support merchant MCP/CLI connections; generic plugin principals
+use the compact commands and cannot consume the full-document artifact.
