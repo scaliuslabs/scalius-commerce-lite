@@ -102,6 +102,29 @@ describe("list cursors", () => {
   });
 });
 
+describe("reference cursors (sorts whose values are personal data)", () => {
+  const referenceShape = { sort: "customerName", direction: "asc", kinds: [] } as const;
+
+  it("name the row and carry no sort value", () => {
+    const cursor: ListCursor = { sort: "customerName", direction: "asc", values: [], id: "ord_7" };
+    const encoded = encodeListCursor(cursor);
+    expect(JSON.parse(atob(encoded.replace(/-/g, "+").replace(/_/g, "/")))).toEqual({
+      v: 1, s: "customerName", d: "asc", k: [], i: "ord_7",
+    });
+    expect(decodeListCursor(encoded, referenceShape)).toEqual(cursor);
+    expect(encodeListCursorOrNull(cursor)).toBe(encoded);
+  });
+
+  it("are refused when a value is still inside, when the id is missing, and by a sort that expects a value", () => {
+    const withValue = token({ v: 1, s: "customerName", d: "asc", k: ["Karim Ali"], i: "ord_7" });
+    const withoutId = token({ v: 1, s: "customerName", d: "asc", k: [], i: "" });
+    const reference = token({ v: 1, s: "customerName", d: "asc", k: [], i: "ord_7" });
+    expect(() => decodeListCursor(withValue, referenceShape)).toThrow(InvalidCursorError);
+    expect(() => decodeListCursor(withoutId, referenceShape)).toThrow(InvalidCursorError);
+    expect(() => decodeListCursor(reference, { sort: "customerName", direction: "asc", kinds: ["text"] })).toThrow(InvalidCursorError);
+  });
+});
+
 describe("cursors that cannot be carried", () => {
   it("encodes a normal position and gives no cursor for a value too long to decode again", () => {
     const normal: ListCursor = { sort: "customerName", direction: "asc", values: ["Anika Rahman"], id: "ord_1" };

@@ -222,6 +222,48 @@ export interface KeysetListSpec {
     kind: CursorValueKind;
     /** A ranked result (search by relevance): page by position over this ORDER BY. */
     ranked?: SQL[];
+    /**
+     * The sort column holds personal data (a customer's name): its cursors
+     * name the row and carry no value, so nothing personal enters a URL. The
+     * caller reads the boundary row's value by id first
+     * (`resolveReferencedBoundary`) and passes it as `input.boundary`.
+     * Such a sort column must not be NULL.
+     */
+    referenced?: boolean;
+}
+
+/** What a list request carries to `planKeysetPage`. */
+export interface KeysetPageInput {
+    page: number;
+    limit: number;
+    after?: string | null;
+    before?: string | null;
+    /** A referenced sort only: the cursor row's current sort value (see `resolveReferencedBoundary`). */
+    boundary?: CursorValue;
+}
+
+/**
+ * Reads the sort value of the row a reference cursor names, for a sort whose
+ * values are personal data. `read` is one primary-key lookup of the sort
+ * column. Resolves to `undefined` when the request has no cursor; a cursor for
+ * a row that no longer exists is a typed 400, not a silently empty page.
+ */
+export async function resolveReferencedBoundary(
+    input: { after?: string | null; before?: string | null },
+    spec: { sort: string; direction: CursorDirection },
+    read: (id: string) => Promise<CursorValue | undefined>,
+): Promise<CursorValue | undefined> {
+    const after = input.after?.trim() || undefined;
+    const before = input.before?.trim() || undefined;
+    // Both together is refused by `resolveListPaging`, with its own message.
+    const token = after && before ? undefined : (after ?? before);
+    if (!token) return undefined;
+    const cursor = readListCursor(token, { sort: spec.sort, direction: spec.direction, kinds: [] });
+    const value = await read(cursor.id);
+    if (value === undefined || value === null) {
+        throw invalidCursor("This page cursor points at a row that no longer exists. Start again from the first page.");
+    }
+    return value;
 }
 
 /** A row of a keyset-paged read: its id and its sort column exactly as stored. */
@@ -241,20 +283,26 @@ export interface KeysetRow {
  * the id as `id`.
  */
 export function planKeysetPage(
-    input: { page: number; limit: number; after?: string | null; before?: string | null },
+    input: KeysetPageInput,
     spec: KeysetListSpec,
     lists: ListLimits = planLimits().lists,
 ) {
     const { limit } = input;
     const positional = spec.ranked ? resolvePositionalPaging(input, spec.sort, lists.maxOffset) : null;
-    const paging: ListPaging = positional
+    let paging: ListPaging = positional
         ? { mode: "offset", offset: positional.offset }
         : resolveListPaging(input, {
             sort: spec.sort,
             direction: spec.order.direction,
-            kinds: [spec.kind],
+            kinds: spec.referenced ? [] : [spec.kind],
             nullable: spec.order.nullable,
         }, lists.maxOffset);
+    if (spec.referenced && paging.mode !== "offset") {
+        if (input.boundary === undefined) {
+            throw new Error(`The ${spec.sort} sort pages by reference: read the boundary with resolveReferencedBoundary first.`);
+        }
+        paging = { mode: paging.mode, cursor: { ...paging.cursor, values: [input.boundary] } };
+    }
     const backward = paging.mode === "before";
     const take = positional?.take ?? limit;
 
@@ -303,7 +351,8 @@ export function planKeysetPage(
                         : encodeListCursorOrNull({
                             sort: spec.sort,
                             direction: spec.order.direction,
-                            values: [row.keysetValue],
+                            // A referenced sort never puts its (personal) value in the cursor.
+                            values: spec.referenced ? [] : [row.keysetValue],
                             id: row.id,
                         }),
                 },

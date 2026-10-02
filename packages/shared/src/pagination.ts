@@ -26,6 +26,15 @@
  * can already see, so it is not signed. It is strictly validated instead, and
  * a cursor made for another sort or direction is rejected rather than
  * silently walking the wrong order.
+ *
+ * A sort whose values are personal data (the orders list by customer name,
+ * the customers list by name) must not put them in a URL, and base64 is not
+ * protection. Those cursors are REFERENCES: they name the row (sort, direction,
+ * id) and carry no value; the server reads the boundary row's value by id when
+ * the cursor comes back (`resolveReferencedBoundary` in
+ * `@scalius/core/utils/keyset`). Their shape has `kinds: []`, so a cursor that
+ * still carries a value for such a sort, and a reference for any other sort,
+ * are both refused.
  */
 import { z } from "zod";
 import { planLimits } from "./plan-limits";
@@ -49,7 +58,7 @@ export interface ListCursor {
   /** The sort the cursor was issued for ("createdAt", "name"...). */
   sort: string;
   direction: CursorDirection;
-  /** The last row's sort value(s); one entry per sort column. */
+  /** The last row's sort value(s); one entry per sort column. Empty for a reference cursor. */
   values: CursorValue[];
   /** The last row's id: the unique tiebreaker. Empty only for positional cursors. */
   id: string;
@@ -68,7 +77,8 @@ const cursorEnvelope = z.strictObject({
   v: z.literal(LIST_CURSOR_VERSION),
   s: z.string().min(1).max(64),
   d: z.enum(["asc", "desc"]),
-  k: z.array(z.union([z.string().max(MAX_CURSOR_TEXT_LENGTH), z.number().finite(), z.null()])).min(1).max(4),
+  // Empty for a reference cursor (a sort whose values are personal data).
+  k: z.array(z.union([z.string().max(MAX_CURSOR_TEXT_LENGTH), z.number().finite(), z.null()])).max(4),
   i: z.string().max(MAX_CURSOR_ID_LENGTH),
 });
 
@@ -116,7 +126,7 @@ export interface ListCursorShape {
   sort: string;
   /** The direction the request asked for. */
   direction: CursorDirection;
-  /** The type of each sort value, in order. */
+  /** The type of each sort value, in order. Empty for a reference cursor (personal data: the cursor names the row only). */
   kinds: readonly CursorValueKind[];
   /** A sort column may hold NULL (the cursor then carries `null`). */
   nullable?: boolean;

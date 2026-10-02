@@ -10,9 +10,11 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import {
     keysetCondition,
     keysetOrderBy,
+    planKeysetPage,
     positionCursor,
     resolveListPaging,
     resolvePositionalPaging,
+    resolveReferencedBoundary,
     type KeysetOrder,
 } from "./keyset";
 
@@ -116,6 +118,56 @@ describe("request paging", () => {
         );
         // The bound is a value: the same call can name another one.
         expect(() => resolveListPaging({ page: 3, limit: 50 }, shape, 100)).toThrow(expect.objectContaining({ code: "PAGE_TOO_DEEP" }));
+    });
+});
+
+describe("referenced sorts (personal data stays out of the cursor)", () => {
+    const spec = {
+        sort: "name",
+        order: { column: sql`name`, id: sql`id`, direction: "asc" as const },
+        kind: "text" as const,
+        referenced: true,
+    };
+    const reference = encodeListCursor({ sort: "name", direction: "asc", values: [], id: "r03" });
+
+    it("reads the boundary row's value by id, and nothing at all when there is no cursor", async () => {
+        const read = vi.fn(async (id: string) => (id === "r03" ? "Karim" : undefined));
+        await expect(resolveReferencedBoundary({}, { sort: "name", direction: "asc" }, read)).resolves.toBeUndefined();
+        await expect(resolveReferencedBoundary({ after: reference }, { sort: "name", direction: "asc" }, read)).resolves.toBe("Karim");
+        await expect(resolveReferencedBoundary({ before: reference }, { sort: "name", direction: "asc" }, read)).resolves.toBe("Karim");
+        expect(read).toHaveBeenCalledTimes(2);
+        // Both cursors at once is the paging resolver's error, not a lookup.
+        await expect(resolveReferencedBoundary({ after: reference, before: reference }, { sort: "name", direction: "asc" }, read)).resolves.toBeUndefined();
+        expect(read).toHaveBeenCalledTimes(2);
+    });
+
+    it("answers a cursor whose row is gone, or one made for another sort, with a typed 400", async () => {
+        const gone = vi.fn(async () => undefined);
+        await expect(resolveReferencedBoundary({ after: reference }, { sort: "name", direction: "asc" }, gone))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR", message: expect.stringContaining("no longer exists") });
+        const wrongSort = encodeListCursor({ sort: "createdAt", direction: "asc", values: [], id: "r03" });
+        await expect(resolveReferencedBoundary({ after: wrongSort }, { sort: "name", direction: "asc" }, vi.fn()))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+    });
+
+    it("plans a page from the boundary and puts no value in the cursors it issues", () => {
+        const plan = planKeysetPage({ page: 1, limit: 2, after: reference, boundary: "Karim" }, spec);
+        expect(plan.pageWhere(undefined)).toBeDefined();
+        const { pageInfo } = plan.finish([
+            { id: "r04", keysetValue: "Karim" },
+            { id: "r05", keysetValue: "Rahim" },
+            { id: "r06", keysetValue: "Zarin" },
+        ]);
+        expect(JSON.parse(Buffer.from(pageInfo.endCursor!, "base64url").toString())).toEqual({
+            v: 1, s: "name", d: "asc", k: [], i: "r05",
+        });
+        expect(decodeListCursor(pageInfo.endCursor!, { sort: "name", direction: "asc", kinds: [] }).values).toEqual([]);
+    });
+
+    it("refuses to plan a cursor page without its boundary, so a caller cannot forget the lookup", () => {
+        expect(() => planKeysetPage({ page: 1, limit: 2, after: reference }, spec)).toThrow(/resolveReferencedBoundary/);
+        // A first page needs no boundary.
+        expect(() => planKeysetPage({ page: 1, limit: 2 }, spec)).not.toThrow();
     });
 });
 

@@ -14,6 +14,8 @@ interface Seeded {
     updatedAt: number;
     totalAmount: number;
     customerName: string;
+    customerPhone: string;
+    customerEmail: string;
     status: string;
 }
 
@@ -36,10 +38,10 @@ function setup(count: number, queries: Array<{ query: string; values: readonly u
     const harness = createSqliteD1Database({ onQuery: (query, values) => queries.push({ query, values }) });
     harnesses.push(harness);
     const insert = harness.sqlite.prepare(`INSERT INTO orders (
-        id, customer_name, customer_phone, shipping_address, city, zone,
+        id, customer_name, customer_phone, customer_email, shipping_address, city, zone,
         total_amount_minor, shipping_amount_minor, payment_method, status, payment_status,
         paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places, created_at, updated_at
-    ) VALUES (?, ?, '+8801711111111', 'Mirpur', 'city', 'zone', ?, 0, 'cod', ?, 'unpaid', 0, ?, 'BDT', 2, ?, ?)`);
+    ) VALUES (?, ?, ?, ?, 'Mirpur', 'city', 'zone', ?, 0, 'cod', ?, 'unpaid', 0, ?, 'BDT', 2, ?, ?)`);
     const rows: Seeded[] = [];
     harness.sqlite.exec("BEGIN");
     for (let index = 0; index < count; index += 1) {
@@ -49,10 +51,12 @@ function setup(count: number, queries: Array<{ query: string; values: readonly u
             updatedAt: 1_700_100_000 + ((index * 7) % 5) * 60,
             totalAmount: ((index * 13) % 6) * 500,
             customerName: NAMES[index % NAMES.length]!,
+            customerPhone: `+88017${String(30000000 + index * 7919)}`,
+            customerEmail: `buyer.${index}.zq${index * 31}@mailbox.example`,
             status: STATUSES[index % STATUSES.length]!,
         };
         rows.push(row);
-        insert.run(row.id, row.customerName, row.totalAmount, row.status, row.totalAmount, row.createdAt, row.updatedAt);
+        insert.run(row.id, row.customerName, row.customerPhone, row.customerEmail, row.totalAmount, row.status, row.totalAmount, row.createdAt, row.updatedAt);
     }
     harness.sqlite.exec("COMMIT");
     return { ...harness, rows };
@@ -186,17 +190,19 @@ describe.each(PLANS)("order list keyset pagination on the %s plan", (plan) => {
         }
     });
 
-    it("hands out no cursor for a row whose sort value is too long to carry, instead of one that fails", async () => {
+    it("pages a customer-name sort even when a name is far longer than a cursor could carry, because the cursor never carries it", async () => {
         const { db, sqlite } = setup(6);
         // 600 zeros sort before every name, so the first page ends on this row.
         sqlite.exec("UPDATE orders SET customer_name = hex(zeroblob(300)) WHERE id = 'ord_0002'");
         const page = await listOrders(db, { sort: "customerName", order: "asc", limit: 1 });
         expect(page.orders.map((order) => order.id)).toEqual(["ord_0002"]);
-        expect(page.pageInfo).toMatchObject({ hasNextPage: true, endCursor: null, startCursor: null });
-        // The next row's cursor is fine and keeps walking.
-        const second = await listOrders(db, { sort: "customerName", order: "asc", limit: 1, page: 2 });
-        expect(second.pageInfo.endCursor).toEqual(expect.any(String));
-        await expect(listOrders(db, { sort: "customerName", order: "asc", limit: 1, after: second.pageInfo.endCursor! })).resolves.toBeDefined();
+        expect(page.pageInfo.endCursor).toEqual(expect.any(String));
+        expect(page.pageInfo.endCursor!.length).toBeLessThan(120);
+        const second = await listOrders(db, { sort: "customerName", order: "asc", limit: 1, after: page.pageInfo.endCursor! });
+        expect(second.orders).toHaveLength(1);
+        expect(second.orders[0]!.id).not.toBe("ord_0002");
+        const back = await listOrders(db, { sort: "customerName", order: "asc", limit: 1, before: second.pageInfo.startCursor! });
+        expect(back.orders.map((order) => order.id)).toEqual(["ord_0002"]);
     });
 
     it("answers a numbered page beyond the offset bound with a typed error that names the cursor", async () => {
@@ -284,5 +290,97 @@ describe.each(PLANS)("order list relevance search on the %s plan", (plan) => {
             .rejects.toMatchObject({ code: "INVALID_CURSOR" });
         await expect(listOrders(db, { search: "Karim", sort: "relevance", limit: 50, page: lists.maxOffset / 50 + 1 }))
             .rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
+    });
+});
+
+/** What a cursor reveals to anyone holding the URL: its raw token and the JSON it decodes to. */
+function cursorText(token: string): string {
+    return `${token}\n${Buffer.from(token, "base64url").toString("utf8")}`;
+}
+
+function craftedCursor(payload: Record<string, unknown>): string {
+    return Buffer.from(JSON.stringify({ v: 1, ...payload })).toString("base64url");
+}
+
+describe.each(PLANS)("order list cursors carry no personal data on the %s plan", (plan) => {
+    useProfile(plan);
+
+    it("never puts a customer's name, phone or email in a cursor, whatever the sort, direction or page", async () => {
+        const { db, rows } = setup(30);
+        const personal = [...new Set(rows.flatMap((row) => [
+            row.customerName,
+            row.customerPhone,
+            row.customerPhone.replace(/\D/g, ""),
+            row.customerEmail,
+            row.customerEmail.split("@")[0]!,
+        ]))];
+        const cursors: Array<{ sort: string; token: string }> = [];
+        for (const sort of SORTS) {
+            for (const direction of ["asc", "desc"] as const) {
+                const fetchPage = fetcher(db, { sort, order: direction, limit: 7 });
+                const forward = await walkForward(fetchPage);
+                const backward = await walkBackward(fetchPage, forward[forward.length - 1]!);
+                for (const page of [...forward, ...backward]) {
+                    for (const token of [page.pageInfo.startCursor, page.pageInfo.endCursor]) {
+                        if (token) cursors.push({ sort, token });
+                    }
+                }
+            }
+        }
+        const search = await walkForward(fetcher(db, { search: "Karim", sort: "relevance", limit: 2 }));
+        for (const page of search) {
+            for (const token of [page.pageInfo.startCursor, page.pageInfo.endCursor]) {
+                if (token) cursors.push({ sort: "relevance", token });
+            }
+        }
+
+        expect(cursors.length).toBeGreaterThan(100);
+        for (const { sort, token } of cursors) {
+            const text = cursorText(token).toLowerCase();
+            for (const value of personal) {
+                expect(text.includes(value.toLowerCase()), `a ${sort} cursor contains "${value}"`).toBe(false);
+            }
+        }
+    });
+
+    it("names the order and no value for the customer-name sort, while a plain sort still carries its own value", async () => {
+        const { db } = setup(12);
+        const byName = await listOrders(db, { sort: "customerName", order: "asc", limit: 4 });
+        expect(JSON.parse(Buffer.from(byName.pageInfo.endCursor!, "base64url").toString())).toEqual({
+            v: 1,
+            s: "customerName",
+            d: "asc",
+            k: [],
+            i: byName.orders[3]!.id,
+        });
+        // The control: the decode above would show a value if the cursor held one.
+        const byStatus = await listOrders(db, { sort: "status", order: "asc", limit: 4 });
+        expect(JSON.parse(Buffer.from(byStatus.pageInfo.endCursor!, "base64url").toString()).k).toEqual([expect.any(String)]);
+    });
+
+    it("refuses a cursor that still carries a customer name, and a reference cursor for another sort", async () => {
+        const { db } = setup(12);
+        const withName = craftedCursor({ s: "customerName", d: "asc", k: ["Karim Ali"], i: "ord_0001" });
+        await expect(listOrders(db, { sort: "customerName", order: "asc", after: withName }))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+        const reference = craftedCursor({ s: "status", d: "desc", k: [], i: "ord_0001" });
+        await expect(listOrders(db, { sort: "status", order: "desc", after: reference }))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+        const noId = craftedCursor({ s: "customerName", d: "asc", k: [], i: "" });
+        await expect(listOrders(db, { sort: "customerName", order: "asc", after: noId }))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+    });
+
+    it("reads the boundary order's name by id, and a vanished order is a typed 400 rather than an empty page", async () => {
+        const { db, sqlite, rows } = setup(20);
+        const first = await listOrders(db, { sort: "customerName", order: "asc", limit: 5 });
+        const cursor = first.pageInfo.endCursor!;
+        const expected = expectedOrder(rows, "customerName", "asc");
+        const next = await listOrders(db, { sort: "customerName", order: "asc", limit: 5, after: cursor });
+        expect(next.orders.map((order) => order.id)).toEqual(expected.slice(5, 10));
+
+        sqlite.exec(`DELETE FROM orders WHERE id = '${first.orders[4]!.id}'`);
+        await expect(listOrders(db, { sort: "customerName", order: "asc", limit: 5, after: cursor }))
+            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR", message: expect.stringContaining("no longer exists") });
     });
 });

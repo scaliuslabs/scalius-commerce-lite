@@ -51,6 +51,7 @@ import {
     cappedCountQuery,
     cappedPagination,
     planKeysetPage,
+    resolveReferencedBoundary,
 } from "../../utils/keyset";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -605,21 +606,30 @@ export async function listCustomers(
     const totalOrders = sql<number>`COALESCE(${customerOrderStats.ordersCount}, 0)`;
     const totalSpentMinor = sql<number>`COALESCE(${customerOrderStats.totalSpentMinor}, 0)`;
     // Every sort walks by keyset (sort value + id). Only `lastOrderAt` can be NULL
-    // (a customer with no orders): first ascending, last descending.
+    // (a customer with no orders): first ascending, last descending. The name is
+    // personal data: its cursors are references (they name the customer and never
+    // carry the name, which must not enter a URL); the name is read back by id.
     const keysetSorts = {
-        name: { column: customers.name, kind: "text", nullable: false },
-        totalOrders: { column: totalOrders, kind: "number", nullable: false },
-        totalSpent: { column: totalSpentMinor, kind: "number", nullable: false },
-        lastOrderAt: { column: customerOrderStats.lastOrderAt, kind: "number", nullable: true },
-        createdAt: { column: customers.createdAt, kind: "number", nullable: false },
-        updatedAt: { column: customers.updatedAt, kind: "number", nullable: false },
-    } as const satisfies Record<string, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean }>;
+        name: { column: customers.name, kind: "text", nullable: false, referenced: true },
+        totalOrders: { column: totalOrders, kind: "number", nullable: false, referenced: false },
+        totalSpent: { column: totalSpentMinor, kind: "number", nullable: false, referenced: false },
+        lastOrderAt: { column: customerOrderStats.lastOrderAt, kind: "number", nullable: true, referenced: false },
+        createdAt: { column: customers.createdAt, kind: "number", nullable: false, referenced: false },
+        updatedAt: { column: customers.updatedAt, kind: "number", nullable: false, referenced: false },
+    } as const satisfies Record<string, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean; referenced: boolean }>;
     const sortKey = (sort in keysetSorts ? sort : "updatedAt") as keyof typeof keysetSorts;
     const keysetSpec = keysetSorts[sortKey];
-    const plan = planKeysetPage({ page, limit, after, before }, {
+    const boundary = keysetSpec.referenced
+        ? await resolveReferencedBoundary({ after, before }, { sort: sortKey, direction: order }, async (id) => {
+            const [row] = await db.select({ value: sql<string>`${keysetSpec.column}` }).from(customers).where(eq(customers.id, id)).limit(1);
+            return row?.value;
+        })
+        : undefined;
+    const plan = planKeysetPage({ page, limit, after, before, boundary }, {
         sort: sortKey,
         order: { column: keysetSpec.column, id: customers.id, direction: order, nullable: keysetSpec.nullable },
         kind: keysetSpec.kind,
+        referenced: keysetSpec.referenced,
     });
 
     // Filters read `customer_order_stats`, so every count joins it too.

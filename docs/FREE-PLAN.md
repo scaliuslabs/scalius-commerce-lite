@@ -180,6 +180,32 @@ column on `cache_dep`. The triggers that write `cache_dep` run in SQLite, so tha
 compute (or the storefront holding keys in a form the API can index): a migration, which this round did
 not allow.
 
+### Large lists
+
+`OFFSET` reads and discards every row before the page, and an unfiltered `count(*)` reads every index row;
+at 200,000 orders a first dashboard page read 200,000 rows and a page at row 150,000 about 350,000. Large
+lists therefore walk by keyset cursor with a capped count (`@scalius/shared/pagination`,
+`@scalius/core/utils/keyset`): `after`/`before` cursors, `pageInfo` from `limit + 1` rows, a total that is
+exact up to `planLimits().lists.countCap` (1,000 Free, 10,000 Paid) and "1,000+" above it, and numbered
+pages only up to `maxOffset`. The same on both plans; only the two numbers differ. Orders then read 1,001
+rows for the total instead of 200,000.
+
+A cursor is a URL, so it never carries personal data. A sort whose values are personal (orders by customer
+name, customers by name) issues a reference cursor: sort, direction and the row's id, no value. The server
+reads the boundary row's name by id when the cursor comes back (`resolveReferencedBoundary`); a cursor for a
+row that no longer exists is a typed 400 (`INVALID_CURSOR`), and a cursor that still carries a name is refused.
+The tests decode every cursor of every sort, direction and page of both lists and assert none contains a
+seeded name, phone or email. Other sorts (dates, totals, status, product names) carry their value.
+
+Design note, not built (no schema changes this round): without these indexes the default customer and
+product lists still scan the table, and the shop-all count its price column.
+
+```sql
+CREATE INDEX product_buyer_state_to_price_idx ON product_buyer_state (is_public, to_minor);
+CREATE INDEX customers_admin_updated_idx ON customers (deleted_at, updated_at, id);
+CREATE INDEX products_admin_updated_idx ON products (deleted_at, updated_at, id);
+```
+
 ### Worker size
 
 The size gate budgets the uncompressed size, the number the 64 MiB limit counts (`scripts/check-api-bundle.mjs`):

@@ -22,6 +22,7 @@ import {
     cappedCountQuery,
     cappedPagination,
     planKeysetPage,
+    resolveReferencedBoundary,
 } from "../../../utils/keyset";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
 import { fromMinor } from "@scalius/shared/money";
@@ -56,15 +57,17 @@ type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "
 /**
  * The sorts that walk by keyset: the sort column (read raw, exactly as the
  * ORDER BY compares it) and the type of its cursor value. `id` is the unique
- * tiebreaker. None of these columns is nullable.
+ * tiebreaker. None of these columns is nullable. The customer's name is
+ * personal data, so its cursors are references: they name the order and never
+ * carry the name (a URL must not hold it); the name is read back by id.
  */
 const ORDER_KEYSET_SORTS = {
     createdAt: { column: orders.createdAt, kind: "number" },
     updatedAt: { column: orders.updatedAt, kind: "number" },
     totalAmount: { column: orders.totalAmountMinor, kind: "number" },
-    customerName: { column: orders.customerName, kind: "text" },
+    customerName: { column: orders.customerName, kind: "text", referenced: true },
     status: { column: orders.status, kind: "text" },
-} as const satisfies Record<Exclude<OrderListSort, "relevance">, { column: SQLWrapper; kind: CursorValueKind }>;
+} as const satisfies Record<Exclude<OrderListSort, "relevance">, { column: SQLWrapper; kind: CursorValueKind; referenced?: boolean }>;
 type OrderListItemCountRow = {
     orderId: string;
     count: number;
@@ -412,10 +415,18 @@ export async function listOrders(db: Database, options: {
     const relevanceRanked = sort === "relevance" && rankExpression !== undefined;
     const keysetSort = sort === "relevance" ? "updatedAt" : sort;
     const keysetSpec = ORDER_KEYSET_SORTS[keysetSort as keyof typeof ORDER_KEYSET_SORTS] ?? ORDER_KEYSET_SORTS.updatedAt;
-    const plan = planKeysetPage({ page, limit, after, before }, {
+    const referenced = !relevanceRanked && "referenced" in keysetSpec && keysetSpec.referenced === true;
+    const boundary = referenced
+        ? await resolveReferencedBoundary({ after, before }, { sort: keysetSort, direction: order }, async (id) => {
+            const [row] = await db.select({ value: sql<string>`${keysetSpec.column}` }).from(orders).where(eq(orders.id, id)).limit(1);
+            return row?.value;
+        })
+        : undefined;
+    const plan = planKeysetPage({ page, limit, after, before, boundary }, {
         sort: relevanceRanked ? "relevance" : keysetSort,
         order: { column: keysetSpec.column, id: orders.id, direction: order },
         kind: keysetSpec.kind,
+        referenced,
         ranked: relevanceRanked
             ? [
                 rankExpression!,
