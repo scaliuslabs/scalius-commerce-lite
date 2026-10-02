@@ -72,13 +72,20 @@ export function AnalyticsOverview({
     />
   );
   const toolbar = (
-    <AnalyticsToolbar
-      selection={selection}
-      today={today}
-      granularity={granularity}
-      showGranularity
-      onChange={onChange}
-    />
+    <>
+      <AnalyticsToolbar
+        selection={selection}
+        today={today}
+        granularity={granularity}
+        showGranularity
+        onChange={onChange}
+      />
+      {/* The toolbar doesn't print: the printed page still says which days it covers. */}
+      <p className="hidden text-body text-muted-foreground print:block">
+        {formatRangeLabel(selection)}
+        {selection.comparison !== "none" ? ` · ${t(`comparison.${selection.comparison}`)}` : null}
+      </p>
+    </>
   );
 
   if (overview.isError && !overview.data) {
