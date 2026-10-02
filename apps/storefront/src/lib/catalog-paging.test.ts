@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   catalogViewStorageKey,
+  catalogCountText,
   catalogProgressLabel,
   setupCatalogPaging,
   setupCatalogViewToggle,
@@ -45,6 +46,13 @@ describe("catalog paging", () => {
   it("labels progress with Indian digit grouping", () => {
     expect(catalogProgressLabel(1, 20, 12_500)).toBe("Showing 1–20 of 12,500 products");
     expect(catalogProgressLabel(1, 1, 1)).toBe("Showing 1–1 of 1 product");
+  });
+
+  it("says a capped total is a lower bound", () => {
+    expect(catalogProgressLabel(21, 40, 1_000, true)).toBe("Showing 21–40 of 1,000+ products");
+    expect(catalogProgressLabel(0, 0, 1_000, true)).toBe("1,000+ products");
+    expect(catalogCountText(37)).toBe("37");
+    expect(catalogCountText(1_000, true)).toBe("1,000+");
   });
 
   it("appends the next page's cards, follows its URL and moves focus to the first new product", async () => {

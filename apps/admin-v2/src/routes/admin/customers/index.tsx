@@ -10,6 +10,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { customerTitle } from "~/lib/customer-title";
+import { NO_CURSOR } from "~/lib/list-helpers";
 import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
@@ -44,8 +45,10 @@ type Customer = CustomersListPayload["customers"][number];
 const searchKey = (search: CustomerListSearch) => listSearchKey("customers", search, "view");
 
 function listQuery(search: CustomerListSearch, term: string) {
+  // A numbered page (older links) or a cursor, never both.
+  const cursor = search.after ? { after: search.after } : search.before ? { before: search.before } : null;
   return customersQueryOptions({
-    page: search.page,
+    ...(cursor ?? { page: search.page }),
     limit: search.limit,
     search: term || undefined,
     sort: search.sort,
@@ -134,7 +137,8 @@ function CustomersPage() {
         list="customers"
         appActions="customer"
         query={listQuery(search, term)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term)}
+        cursorPaging
         dataKey="customers"
         columns={columns}
         invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
@@ -177,7 +181,8 @@ function CustomersPage() {
         onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
         filters={customerListFilters(search)}
         selectedIds={exporting.ids}
-        total={term ? null : listed?.pagination.total ?? null}
+        // A capped count is a lower bound: the dialog then names the filters, not a number.
+        total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
         searchActive={Boolean(term)}
       />
     </>

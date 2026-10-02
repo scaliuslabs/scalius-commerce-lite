@@ -1184,7 +1184,11 @@ function mergeReservationItemsByVariant(items: ReservationBatchItem[]): Reservat
   return Array.from(merged.values());
 }
 
-/** Buyer-sellable counter rows; composable into a caller's read batch. */
+/**
+ * Buyer-sellable counter rows; composable into a caller's read batch. The ids
+ * ride one bound `json_each` set, never one parameter each: D1 allows 100
+ * bound parameters per statement and a cart can hold more lines than that.
+ */
 export function selectReservationVariantStates(
   db: Database,
   variantIds: readonly string[],
@@ -1206,7 +1210,9 @@ export function selectReservationVariantStates(
     .innerJoin(products, eq(products.id, productVariants.productId))
     .where(
       and(
-        inArray(productVariants.id, [...variantIds]),
+        sql`${productVariants.id} IN (
+          SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(variantIds)])})
+        )`,
         isNull(productVariants.deletedAt),
         eq(products.isActive, true),
         isNull(products.deletedAt),

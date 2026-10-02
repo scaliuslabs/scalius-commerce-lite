@@ -8,7 +8,7 @@ import { ValidationError } from "../../utils/api-error";
 import { getCheckoutStatusKvKey } from "../../utils/order-receipt-token";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-import { scheduleCheckoutSuccessRecoveryHints, scheduleCheckoutFailureStatusHint } from "./shared";
+import { checkoutRecoveryHintsEnabled, scheduleCheckoutSuccessRecoveryHints, scheduleCheckoutFailureStatusHint } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -89,13 +89,13 @@ app.openapi(getOrderStatusRoute, async (c) => {
     throw new ValidationError("Invalid checkout status token");
   }
 
-  if (!c.env.CACHE) {
-    console.warn("[Orders] Polling endpoint hit but CACHE KV is not bound!");
-    return ok(c, { status: "processing" });
+  // The KV status marker is an accelerator (see checkoutRecoveryHintsEnabled):
+  // without it a poll reads the checkout attempt in D1, which is the authority.
+  let statusStr: string | null = null;
+  if (checkoutRecoveryHintsEnabled(c.env)) {
+    const kvKey = await getCheckoutStatusKvKey(statusToken);
+    statusStr = await c.env.CACHE.get(kvKey);
   }
-
-  const kvKey = await getCheckoutStatusKvKey(statusToken);
-  const statusStr = await c.env.CACHE.get(kvKey);
 
   if (!statusStr) {
     const db = c.get("db");

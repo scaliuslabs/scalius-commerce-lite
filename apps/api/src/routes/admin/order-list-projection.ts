@@ -7,9 +7,17 @@ type OrderListResult = {
   orders: Array<Record<string, unknown>>;
   pagination: {
     total: number;
+    totalIsCapped: boolean;
     page: number;
     limit: number;
     totalPages: number;
+    offset: number | null;
+  };
+  pageInfo: {
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    startCursor: string | null;
+    endCursor: string | null;
   };
 };
 

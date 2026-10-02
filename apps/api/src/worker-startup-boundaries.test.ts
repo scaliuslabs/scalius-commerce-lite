@@ -417,6 +417,8 @@ describe("API Worker startup boundaries", () => {
   });
 
   it("loads only the scheduled graph for cron invocations", async () => {
+    // One slice (Paid): the agent-access housekeeping rides every tick.
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     const loaded = {
       app: false,
       queue: false,
@@ -469,6 +471,31 @@ describe("API Worker startup boundaries", () => {
       queue: false,
       scheduled: true,
     });
+  });
+
+  it("runs the agent-access housekeeping once an hour on the Free rotation, in the last slice", async () => {
+    const runScheduledMaintenance = vi.fn();
+    const purgeExpiredOAuthData = vi.fn();
+    const purgeExpiredAgentArtifacts = vi.fn();
+    vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
+    vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData }));
+    vi.doMock("./agent-access/artifact-delivery", () => ({ purgeExpiredAgentArtifacts }));
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(undefined as never, runtimeEnv()) as unknown as TestApiWorker;
+    const tickMs = 15 * 60 * 1_000;
+    const ranFor = async (tick: number) => {
+      purgeExpiredOAuthData.mockClear();
+      await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: tick * tickMs } as unknown as ScheduledController);
+      return purgeExpiredOAuthData.mock.calls.length;
+    };
+
+    // Free: every fourth tick. The maintenance itself runs on every tick (it picks its own slice).
+    expect([await ranFor(8_000), await ranFor(8_001), await ranFor(8_002), await ranFor(8_003)]).toEqual([0, 0, 0, 1]);
+    expect(runScheduledMaintenance).toHaveBeenCalledTimes(4);
+
+    // Paid: every tick.
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
+    expect([await ranFor(8_000), await ranFor(8_001)]).toEqual([1, 1]);
   });
 
   it("retries queues and skips cron work while the database migration freeze is active", async () => {

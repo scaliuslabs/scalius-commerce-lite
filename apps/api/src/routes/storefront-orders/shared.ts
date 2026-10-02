@@ -5,6 +5,8 @@ import { CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES, type StorefrontGiftCardTenderSumm
 import { GIFT_CARD_APPLY_HANDLE_MAX_LENGTH } from "@scalius/core/modules/gift-cards";
 import { MAX_GIFT_CARDS_PER_ORDER } from "@scalius/shared/gift-card-tender";
 import { fromMinor } from "@scalius/shared/money";
+import { putKvHint } from "@scalius/shared/kv-hints";
+import { planLimits } from "@scalius/shared/plan-limits";
 import type { WaitUntilExecutionContext } from "../../utils/execution-context";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
@@ -31,6 +33,17 @@ function scheduleCheckoutRecoveryHint(
   void guardedTask;
 }
 
+/**
+ * The checkout recovery hints (status and receipt markers in KV) are an
+ * accelerator for polling: D1 holds the same facts (`checkout_attempts`,
+ * `order_receipts`) and answers a poll with one primary-key read. Where the
+ * plan profile turns them off (Workers Free: 1,000 KV writes a day, two per
+ * order), nothing is written on the checkout path and polls read D1 only.
+ */
+export function checkoutRecoveryHintsEnabled(env: Env): boolean {
+  return Boolean(env.CACHE) && planLimits().kv.checkoutRecoveryHints;
+}
+
 export function scheduleCheckoutSuccessRecoveryHints(
   env: Env,
   statusToken: string,
@@ -38,13 +51,14 @@ export function scheduleCheckoutSuccessRecoveryHints(
   orderId: string,
   executionCtx: WaitUntilExecutionContext | undefined,
 ): void {
-  if (!env.CACHE) return;
+  if (!checkoutRecoveryHintsEnabled(env)) return;
 
   try {
     scheduleCheckoutRecoveryHint(
       Promise.all([
         getCheckoutStatusKvKey(statusToken).then((statusKey) =>
-          env.CACHE.put(
+          putKvHint(
+            env.CACHE,
             statusKey,
             JSON.stringify({
               status: "completed",
@@ -54,7 +68,8 @@ export function scheduleCheckoutSuccessRecoveryHints(
             { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
           ),
         ),
-        getReceiptTokenKvKey(receiptToken).then((receiptKey) => env.CACHE.put(
+        getReceiptTokenKvKey(receiptToken).then((receiptKey) => putKvHint(
+          env.CACHE,
           receiptKey,
           JSON.stringify({ orderId }),
           { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
@@ -74,12 +89,13 @@ export function scheduleCheckoutFailureStatusHint(
   errorMessage: string,
   executionCtx: WaitUntilExecutionContext | undefined,
 ): void {
-  if (!env.CACHE) return;
+  if (!checkoutRecoveryHintsEnabled(env)) return;
 
   try {
     scheduleCheckoutRecoveryHint(
       getCheckoutStatusKvKey(statusToken).then((statusKey) =>
-        env.CACHE.put(
+        putKvHint(
+          env.CACHE,
           statusKey,
           JSON.stringify({
             status: "failed",

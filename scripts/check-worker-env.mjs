@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { collectCommittedPlanViolations } from "./plan.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -377,6 +378,8 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
     for (const configPath of app.configs) {
       const config = readJsoncWith(configPath);
       errors.push(...collectVersionMetadataViolations(configPath, config));
+      // The committed configs are the Free config; Paid is a deploy-time profile.
+      errors.push(...collectCommittedPlanViolations(configPath, config));
       errors.push(...collectWranglerVarsViolations(configPath, config));
       errors.push(...collectResourceBindingViolations(configPath, config));
       for (const name of collectConfigNames(config)) {
