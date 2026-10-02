@@ -8,6 +8,7 @@ import { adminInventoryRoutes } from "../routes/admin/inventory";
 import { adminMediaRoutes } from "../routes/admin/media";
 import { adminProductsRoutes } from "../routes/admin/products";
 import { adminReviewRoutes } from "../routes/admin/reviews";
+import { adminExportRoutes, adminImportRoutes } from "../routes/admin/store-transfer";
 import {
   adminDigitalAssetRoutes,
   adminDigitalEntitlementRoutes,
@@ -29,5 +30,8 @@ app.route("/admin/reviews", adminReviewRoutes);
 app.route("/admin/digital-assets", adminDigitalAssetRoutes);
 app.route("/admin/digital-entitlements", adminDigitalEntitlementRoutes);
 app.route("/admin/warranty-policies", adminWarrantyPolicyRoutes);
+// Store migration: products, customers and inventory in one family.
+app.route("/admin/import", adminImportRoutes);
+app.route("/admin/export", adminExportRoutes);
 
 export default app;

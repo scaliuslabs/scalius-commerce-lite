@@ -1,4 +1,5 @@
 import {
+  ArrowDownUp,
   Bell,
   Blocks,
   CreditCard,
@@ -39,6 +40,7 @@ export const SETTINGS_NAV = [
   { key: "webhooks", to: "/admin/settings/webhooks", icon: Webhook, group: "more" },
   { key: "customData", to: "/admin/settings/custom-data", icon: Database, group: "more" },
   { key: "policies", to: "/admin/settings/policies", icon: FileText, group: "general" },
+  { key: "importExport", to: "/admin/settings/import-export", icon: ArrowDownUp, group: "more" },
   { key: "advanced", to: "/admin/settings/advanced", icon: SlidersHorizontal, group: "more" },
 ] as const satisfies ReadonlyArray<{ key: string; to: string; icon: LucideIcon; group: string }>;
 

@@ -99,6 +99,7 @@ import {
 import { adminWarrantyPolicyRoutes } from "./routes/admin/warranty-policies";
 import { adminGiftCardRoutes } from "./routes/admin/gift-cards";
 import { adminWarrantyClaimRoutes } from "./routes/admin/warranty-claims";
+import { adminExportRoutes, adminImportRoutes } from "./routes/admin/store-transfer";
 import { productReviewRoutes } from "./routes/product-reviews";
 import { checkoutGiftCardRoutes } from "./routes/checkout-gift-cards";
 
@@ -272,6 +273,8 @@ app.route("/admin/digital-entitlements", adminDigitalEntitlementRoutes);
 app.route("/admin/warranty-policies", adminWarrantyPolicyRoutes);
 app.route("/admin/gift-cards", adminGiftCardRoutes);
 app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
+app.route("/admin/import", adminImportRoutes);
+app.route("/admin/export", adminExportRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);

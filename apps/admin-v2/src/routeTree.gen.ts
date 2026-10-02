@@ -64,6 +64,7 @@ import { Route as AdminSettingsAdvancedRouteImport } from './routes/admin/settin
 import { Route as AdminSettingsCheckoutRouteImport } from './routes/admin/settings/checkout'
 import { Route as AdminSettingsCustomDataRouteImport } from './routes/admin/settings/custom-data'
 import { Route as AdminSettingsCustomerAccountsRouteImport } from './routes/admin/settings/customer-accounts'
+import { Route as AdminSettingsImportExportRouteImport } from './routes/admin/settings/import-export'
 import { Route as AdminSettingsIntegrationsRouteImport } from './routes/admin/settings/integrations'
 import { Route as AdminSettingsLocationsRouteImport } from './routes/admin/settings/locations'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
@@ -381,6 +382,12 @@ const AdminSettingsCustomerAccountsRoute =
     path: '/customer-accounts',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminSettingsImportExportRoute =
+  AdminSettingsImportExportRouteImport.update({
+    id: '/import-export',
+    path: '/import-export',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
 const AdminSettingsIntegrationsRoute =
   AdminSettingsIntegrationsRouteImport.update({
     id: '/integrations',
@@ -626,6 +633,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -716,6 +724,7 @@ export interface FileRoutesByTo {
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -810,6 +819,7 @@ export interface FileRoutesById {
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -905,6 +915,7 @@ export interface FileRouteTypes {
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
@@ -995,6 +1006,7 @@ export interface FileRouteTypes {
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
@@ -1088,6 +1100,7 @@ export interface FileRouteTypes {
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
@@ -1538,6 +1551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsCustomerAccountsRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/import-export': {
+      id: '/admin/settings/import-export'
+      path: '/import-export'
+      fullPath: '/admin/settings/import-export'
+      preLoaderRoute: typeof AdminSettingsImportExportRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/integrations': {
       id: '/admin/settings/integrations'
       path: '/integrations'
@@ -1798,6 +1818,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsCheckoutRoute: typeof AdminSettingsCheckoutRoute
   AdminSettingsCustomDataRoute: typeof AdminSettingsCustomDataRoute
   AdminSettingsCustomerAccountsRoute: typeof AdminSettingsCustomerAccountsRoute
+  AdminSettingsImportExportRoute: typeof AdminSettingsImportExportRoute
   AdminSettingsIntegrationsRoute: typeof AdminSettingsIntegrationsRoute
   AdminSettingsLocationsRoute: typeof AdminSettingsLocationsRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
@@ -1823,6 +1844,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsCheckoutRoute: AdminSettingsCheckoutRoute,
   AdminSettingsCustomDataRoute: AdminSettingsCustomDataRoute,
   AdminSettingsCustomerAccountsRoute: AdminSettingsCustomerAccountsRoute,
+  AdminSettingsImportExportRoute: AdminSettingsImportExportRoute,
   AdminSettingsIntegrationsRoute: AdminSettingsIntegrationsRoute,
   AdminSettingsLocationsRoute: AdminSettingsLocationsRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,

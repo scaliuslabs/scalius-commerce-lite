@@ -1,0 +1,3 @@
+﻿customer_id,user_login,user_email,first_name,last_name,billing_first_name,billing_last_name,billing_company,billing_address_1,billing_address_2,billing_city,billing_state,billing_postcode,billing_country,billing_email,billing_phone,orders_count,total_spent
+11,farhana,farhana@example.com,Farhana,Akter,Farhana,Akter,,Zindabazar,,Sylhet,BD-60,,BD,farhana@example.com,০১৭১১২২৩৩৪৪,2,3100
+12,tanvir,tanvir@example.com,Tanvir,Hasan,,,,Shaheb Bazar,,Rajshahi,,,BD,tanvir@example.com,+880 1611-223344,0,0

@@ -1,0 +1,8 @@
+Customer ID,First Name,Last Name,Email,Accepts Email Marketing,Default Address Company,Default Address Address1,Default Address Address2,Default Address City,Default Address Province Code,Default Address Country Code,Default Address Zip,Default Address Phone,Phone,Accepts SMS Marketing,Total Spent,Total Orders,Note,Tax Exempt,Tags
+'7001,রহিম,উদ্দিন,rahim@example.com,yes,,"House 12, Road 5",,Dhaka,,BD,1209,,'+8801712345678,yes,4500.00,3,Prefers evening delivery,no,"VIP, Dhaka"
+'7002,Karim,Ahmed,karim@example.com,no,,Agrabad,,Chattogram,,BD,,,01812-345678,,0.00,0,,no,
+'7003,Nusrat,Jahan,,yes,,,,,,,,8801912345678,,no,,1,,no,wholesale
+'7004,Bad,Number,bad@example.com,yes,,,,,,,,,12345,,,,,no,
+'7005,No,Phone,nophone@example.com,yes,,,,,,,,,,,,,,no,
+'7006,Rahim,Again,rahim2@example.com,,,,,,,,,,+880 1712-345678,,,,,no,
+'7007,Excel,Mangled,excel@example.com,,,,,,,,,,8.80171E+12,,,,,no,

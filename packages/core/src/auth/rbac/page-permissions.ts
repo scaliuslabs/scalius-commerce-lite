@@ -154,6 +154,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
   },
   "/admin/settings/advanced": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  // Imports and exports of products, customers, inventory and orders.
+  "/admin/settings/import-export": {
+    anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.ORDERS_VIEW],
+  },
 };
 
 // Dynamic route patterns for pages with parameters (e.g., /admin/products/[id]/edit)

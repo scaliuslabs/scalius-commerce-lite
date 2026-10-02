@@ -79833,6 +79833,726 @@ export type PatchApiV1AdminWarrantyClaimsByIdResponses = {
 
 export type PatchApiV1AdminWarrantyClaimsByIdResponse = PatchApiV1AdminWarrantyClaimsByIdResponses[keyof PatchApiV1AdminWarrantyClaimsByIdResponses];
 
+export type PostApiV1AdminImportProductsData = {
+    body: {
+        mode: 'create' | 'upsert' | 'price';
+        dryRun?: boolean;
+        items: Array<{
+            ref: string;
+            lines?: Array<number>;
+            handle: string | null;
+            handleIsIdentity?: boolean;
+            title: string;
+            descriptionHtml: string | null;
+            brand: string | null;
+            categoryPath: Array<string>;
+            status: 'active' | 'draft';
+            seoTitle: string | null;
+            seoDescription: string | null;
+            isGiftCard?: boolean;
+            condition?: 'new' | 'refurbished' | 'used' | null;
+            options: Array<{
+                name: string;
+                values: Array<string>;
+            }>;
+            variants: Array<{
+                optionValues: Array<string>;
+                sku: string | null;
+                price: number;
+                compareAtPrice: number | null;
+                cost: number | null;
+                stock: number | null;
+                trackInventory: boolean;
+                weightGrams: number | null;
+                barcode: string | null;
+                requiresShipping: boolean;
+                imageUrl: string | null;
+            }>;
+            images?: Array<{
+                url: string;
+                alt: string | null;
+            }>;
+            attributes?: Array<{
+                name: string;
+                value: string;
+            }>;
+            expected?: {
+                productId: string;
+                aggregateRevision: number;
+            } | null;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/import/products';
+};
+
+export type PostApiV1AdminImportProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminImportProductsError = PostApiV1AdminImportProductsErrors[keyof PostApiV1AdminImportProductsErrors];
+
+export type PostApiV1AdminImportProductsResponses = {
+    /**
+     * What happened to each item
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                ref: string;
+                status: 'created' | 'updated' | 'unchanged' | 'skipped' | 'failed' | 'would_create' | 'would_update' | 'would_skip';
+                productId: string | null;
+                slug: string | null;
+                aggregateRevision: number | null;
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    variantIndex?: number;
+                    field?: string;
+                }>;
+            }>;
+            /**
+             * Items handled. When fewer than sent, send the rest again.
+             */
+            processed: number;
+            stoppedEarly: boolean;
+            references: {
+                brandsToCreate: Array<string>;
+                categoriesToCreate: Array<string>;
+                attributesToCreate: Array<string>;
+            };
+            notes: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminImportProductsResponse = PostApiV1AdminImportProductsResponses[keyof PostApiV1AdminImportProductsResponses];
+
+export type PostApiV1AdminImportProductImagesData = {
+    body: {
+        items: Array<{
+            productId: string;
+            images: Array<{
+                url: string;
+                alt: string | null;
+                skus?: Array<string>;
+            }>;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/import/product-images';
+};
+
+export type PostApiV1AdminImportProductImagesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminImportProductImagesError = PostApiV1AdminImportProductImagesErrors[keyof PostApiV1AdminImportProductImagesErrors];
+
+export type PostApiV1AdminImportProductImagesResponses = {
+    /**
+     * What happened to each image
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                productId: string;
+                aggregateRevision: number | null;
+                error: string | null;
+                images: Array<{
+                    url: string;
+                    status: 'attached' | 'already_attached' | 'failed' | 'pending';
+                    mediaId: string | null;
+                    message: string | null;
+                }>;
+            }>;
+            stoppedEarly: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminImportProductImagesResponse = PostApiV1AdminImportProductImagesResponses[keyof PostApiV1AdminImportProductImagesResponses];
+
+export type PostApiV1AdminImportCustomersData = {
+    body: {
+        mode: 'create' | 'upsert';
+        dryRun?: boolean;
+        items: Array<{
+            ref: string;
+            line?: number | null;
+            name: string | null;
+            phone: string;
+            email: string | null;
+            address: string | null;
+            tags?: Array<string>;
+            marketing?: {
+                email?: boolean;
+                sms?: boolean;
+                whatsapp?: boolean;
+            };
+            consentEvidence?: string | null;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/import/customers';
+};
+
+export type PostApiV1AdminImportCustomersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminImportCustomersError = PostApiV1AdminImportCustomersErrors[keyof PostApiV1AdminImportCustomersErrors];
+
+export type PostApiV1AdminImportCustomersResponses = {
+    /**
+     * What happened to each customer
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                ref: string;
+                status: 'created' | 'updated' | 'unchanged' | 'skipped' | 'failed' | 'would_create' | 'would_update' | 'would_skip';
+                customerId: string | null;
+                subscribed: Array<'email' | 'sms' | 'whatsapp'>;
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    variantIndex?: number;
+                    field?: string;
+                }>;
+            }>;
+            /**
+             * Items handled. When fewer than sent, send the rest again.
+             */
+            processed: number;
+            stoppedEarly: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminImportCustomersResponse = PostApiV1AdminImportCustomersResponses[keyof PostApiV1AdminImportCustomersResponses];
+
+export type PostApiV1AdminImportInventoryData = {
+    body: {
+        dryRun?: boolean;
+        runId: string;
+        items: Array<{
+            ref: string;
+            line?: number | null;
+            sku: string;
+            location?: string | null;
+            onHand: number;
+            expectedOnHand?: number | null;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/import/inventory';
+};
+
+export type PostApiV1AdminImportInventoryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminImportInventoryError = PostApiV1AdminImportInventoryErrors[keyof PostApiV1AdminImportInventoryErrors];
+
+export type PostApiV1AdminImportInventoryResponses = {
+    /**
+     * What happened to each count
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                ref: string;
+                status: 'updated' | 'unchanged' | 'failed' | 'would_update' | 'would_skip';
+                sku: string;
+                variantId: string | null;
+                location: {
+                    id: string;
+                    name: string;
+                } | null;
+                previousOnHand: number | null;
+                onHand: number | null;
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    variantIndex?: number;
+                    field?: string;
+                }>;
+            }>;
+            /**
+             * Items handled. When fewer than sent, send the rest again.
+             */
+            processed: number;
+            stoppedEarly: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminImportInventoryResponse = PostApiV1AdminImportInventoryResponses[keyof PostApiV1AdminImportInventoryResponses];
+
+export type GetApiV1AdminExportProductsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The X-Export-Next-Cursor of the previous page.
+         */
+        after?: string;
+        limit?: number;
+        /**
+         * false leaves out the header row (for pages after the first).
+         */
+        header?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/export/products';
+};
+
+export type GetApiV1AdminExportProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminExportProductsError = GetApiV1AdminExportProductsErrors[keyof GetApiV1AdminExportProductsErrors];
+
+export type GetApiV1AdminExportProductsResponses = {
+    /**
+     * CSV page
+     */
+    200: string;
+};
+
+export type GetApiV1AdminExportProductsResponse = GetApiV1AdminExportProductsResponses[keyof GetApiV1AdminExportProductsResponses];
+
+export type GetApiV1AdminExportInventoryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The X-Export-Next-Cursor of the previous page.
+         */
+        after?: string;
+        limit?: number;
+        /**
+         * false leaves out the header row (for pages after the first).
+         */
+        header?: 'true' | 'false';
+        locationId?: string;
+    };
+    url: '/api/v1/admin/export/inventory';
+};
+
+export type GetApiV1AdminExportInventoryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminExportInventoryError = GetApiV1AdminExportInventoryErrors[keyof GetApiV1AdminExportInventoryErrors];
+
+export type GetApiV1AdminExportInventoryResponses = {
+    /**
+     * CSV page
+     */
+    200: string;
+};
+
+export type GetApiV1AdminExportInventoryResponse = GetApiV1AdminExportInventoryResponses[keyof GetApiV1AdminExportInventoryResponses];
+
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
         ids: Array<string>;

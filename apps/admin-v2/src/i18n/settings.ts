@@ -17,6 +17,7 @@ export const settingsNavMessages = defineMessages({
     policies: "Policies",
     integrations: "Integrations",
     customerAccounts: "Customer accounts",
+    importExport: "Import and export",
     advanced: "Advanced",
   },
   bn: {
@@ -34,6 +35,7 @@ export const settingsNavMessages = defineMessages({
     policies: "পলিসি",
     integrations: "ইন্টিগ্রেশন",
     customerAccounts: "কাস্টমার অ্যাকাউন্ট",
+    importExport: "ইমপোর্ট ও এক্সপোর্ট",
     advanced: "অ্যাডভান্সড",
   },
 });
@@ -60,6 +62,7 @@ export const settingsSummaryMessages = defineMessages({
     policies: "Return policy",
     integrations: "Tracking, Facebook, fraud check, AI",
     customerAccounts: "How customers sign in",
+    importExport: "Move in from Shopify or WooCommerce, CSV exports",
     advanced: "Trusted websites, sign-in and refresh",
   },
   bn: {
@@ -76,6 +79,7 @@ export const settingsSummaryMessages = defineMessages({
     policies: "রিটার্ন পলিসি",
     integrations: "ট্র্যাকিং, ফেসবুক, ফ্রড চেক, AI",
     customerAccounts: "কাস্টমার কীভাবে সাইন ইন করবে",
+    importExport: "Shopify বা WooCommerce থেকে আনুন, CSV এক্সপোর্ট",
     advanced: "বিশ্বস্ত ওয়েবসাইট, সাইন ইন ও রিফ্রেশ",
   },
 });

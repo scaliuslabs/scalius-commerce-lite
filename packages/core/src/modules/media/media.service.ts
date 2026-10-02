@@ -273,17 +273,24 @@ export async function listMediaFiles(db: Database, input: {
     };
 }
 
+/** Ids a caller may choose for new media (store import names them after their source URL). */
+const CHOSEN_MEDIA_ID = /^media_[A-Za-z0-9_-]{8,100}$/u;
+
 export async function initiateMediaUpload(
     db: Database,
     input: InitiateMediaUploadInput,
     bucket: R2Bucket,
+    options: { mediaId?: string } = {},
 ) {
     const validation = validateMediaFileMetadata(input);
     if (!validation.ok) throw new ValidationError(validation.error);
+    if (options.mediaId !== undefined && !CHOSEN_MEDIA_ID.test(options.mediaId)) {
+        throw new ValidationError("Media asset ID is invalid.");
+    }
     await assertActiveFolder(db, input.folderId);
     const file = validation.value;
     const parts = expectedPartCount(file.size);
-    const mediaId = `media_${nanoid()}`;
+    const mediaId = options.mediaId ?? `media_${nanoid()}`;
     const sessionId = `mup_${nanoid()}`;
     const objectKey = buildMediaObjectKey(mediaId, file.mimeType);
     const expiresAt = new Date(Date.now() + UPLOAD_SESSION_TTL_MS);

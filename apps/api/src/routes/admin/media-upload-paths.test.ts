@@ -48,8 +48,14 @@ describe("media upload paths", () => {
     expect(callers(serverFiles, /\b(?:completeMediaUpload|importMediaFromUrl)\(/)).toEqual([
       "apps/api/src/routes/admin/media-url-import.ts",
       "apps/api/src/routes/admin/media.ts",
+      "apps/api/src/routes/admin/store-transfer.ts",
       "packages/core/src/modules/media/media.service.ts",
     ]);
+    // Store import downloads product images through the same import and queues their renditions.
+    const importRoute = readFileSync(join(repoRoot, "apps/api/src/routes/admin/store-transfer.ts"), "utf8");
+    const importAt = importRoute.indexOf("await importMediaFromUrl(");
+    expect(importAt).toBeGreaterThan(-1);
+    expect(importRoute.slice(importAt, importRoute.indexOf("\n});", importAt))).toContain("await enqueueMediaVariantsJob(");
     const routes = readFileSync(join(repoRoot, "apps/api/src/routes/admin/media.ts"), "utf8");
     for (const commit of ["await importMediaFromUrl(", "await completeMediaUpload("]) {
       const at = routes.indexOf(commit);
