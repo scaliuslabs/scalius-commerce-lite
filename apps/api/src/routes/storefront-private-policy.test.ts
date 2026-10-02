@@ -11,8 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/storefront", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/storefront")>()),
   getHomepageData: vi.fn(),
+  getLandingPageData: vi.fn(),
   getLayoutData: vi.fn(),
   getPageRenderData: vi.fn(),
+  readProductAppContext: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -20,7 +22,7 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   resolveThemePreviewSession: mocks.resolveThemePreviewSession,
 }));
 
-import { getHomepageData } from "@scalius/core/modules/storefront";
+import { getHomepageData, getLandingPageData, readProductAppContext } from "@scalius/core/modules/storefront";
 import { storefrontRoutes } from "./storefront";
 
 function createTestApp() {
@@ -160,5 +162,50 @@ describe("storefront private cache policy", () => {
       body: JSON.stringify({ token, product: ["36~newest"] }),
     });
     expect(extra.status).toBe(400);
+  });
+
+  it("reads only the selected landing page and rejects public query overrides", async () => {
+    const draft = storefrontTemplateTheme("marketplace");
+    const landing = { title: "Eid offers", sections: [], overrideCms: false };
+    draft.pages.landing["eid-offers"] = landing;
+    mocks.resolveThemePreviewSession.mockResolvedValue({ theme: draft });
+    vi.mocked(getHomepageData).mockResolvedValue({ sections: { lists: [], media: [] } } as never);
+    const preview = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: `tpv_${"a".repeat(48)}`, pageSlug: "eid-offers" }),
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("Cache-Control")).toContain("no-store");
+    expect(vi.mocked(getHomepageData).mock.calls[0]![1]?.requests?.lists).toEqual([]);
+
+    vi.mocked(getLandingPageData).mockResolvedValue({ landing, sections: { lists: [], media: [] } } as never);
+    const published = await createTestApp().request("/api/v1/storefront/landing/eid-offers");
+    expect(published.status).toBe(200);
+    expect(getLandingPageData).toHaveBeenCalledWith({}, "eid-offers", { renderApps: expect.any(Function) });
+    vi.mocked(getLandingPageData).mockClear();
+    const query = await createTestApp().request("/api/v1/storefront/landing/eid-offers?draft=true");
+    expect(query.status).toBe(400);
+    expect(getLandingPageData).not.toHaveBeenCalled();
+  });
+
+  it("draws product apps from the authorized preview and fails expired tokens privately", async () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    const token = `tpv_${"a".repeat(48)}`;
+    mocks.resolveThemePreviewSession.mockResolvedValue({ theme });
+    vi.mocked(readProductAppContext).mockResolvedValue({ blocks: [] } as never);
+    const request = () => createTestApp().request("/api/v1/storefront/theme-preview/product-apps/phone", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }),
+    });
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    await expect(response.json()).resolves.toMatchObject({ data: { blocks: [] } });
+    expect(readProductAppContext).toHaveBeenCalledWith({}, "phone", theme);
+    vi.mocked(readProductAppContext).mockClear();
+    mocks.resolveThemePreviewSession.mockResolvedValue(null);
+    const expired = await request();
+    expect(expired.status).toBe(404);
+    expect(expired.headers.get("Cache-Control")).toContain("no-store");
+    expect(readProductAppContext).not.toHaveBeenCalled();
   });
 });
