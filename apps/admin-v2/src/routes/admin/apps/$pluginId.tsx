@@ -9,7 +9,11 @@ import { appQueryOptions } from "~/lib/api-query-options/apps";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/apps/$pluginId")({
-  loader: ({ context: { queryClient }, params }) => queryClient.ensureQueryData(appQueryOptions(params.pluginId)),
+  // The read's module comes with the page's own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient }, params }) => {
+    const { appQueryOptions: options } = await import("~/lib/api-query-options/apps");
+    return queryClient.ensureQueryData(options(params.pluginId));
+  },
   head: ({ loaderData }) => titleHead(loaderData?.name ?? translate(shellMessages, "apps")),
   errorComponent: RouteErrorComponent,
   component: AppRoute,

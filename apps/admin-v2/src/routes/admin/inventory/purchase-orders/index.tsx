@@ -4,7 +4,6 @@ import {
   purchaseOrderListQuery,
   validatePurchaseOrderListSearch,
 } from "~/components/admin/purchasing/purchasing-list-state";
-import { purchaseOrdersQueryOptions } from "~/lib/api-query-options/purchasing";
 import { readListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -14,11 +13,14 @@ export const Route = createFileRoute("/admin/inventory/purchase-orders/")({
   // The status tab and supplier may be shared; the search stays in this tab's session.
   validateSearch: validatePurchaseOrderListSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) =>
-    warmRouteQuery(
+  // The read's module comes with the page's own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient }, deps }) => {
+    const { purchaseOrdersQueryOptions: options } = await import("~/lib/api-query-options/purchasing");
+    return warmRouteQuery(
       queryClient,
-      purchaseOrdersQueryOptions(purchaseOrderListQuery(deps.status ?? "all", readListSearch("purchaseOrders"), 1, 50, deps.supplier)),
-    ),
+      options(purchaseOrderListQuery(deps.status ?? "all", readListSearch("purchaseOrders"), 1, 50, deps.supplier)),
+    );
+  },
   head: () => pageHead("purchaseOrders"),
   errorComponent: RouteErrorComponent,
   component: PurchaseOrdersPage,

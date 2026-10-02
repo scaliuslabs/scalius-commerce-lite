@@ -37,7 +37,8 @@ export const Route = createFileRoute("/admin/apps/$pluginId_/pages/$pageId")({
   // `never`. At runtime it is the sanitized query (`appPageQuery`).
   validateSearch: (search: Record<string, unknown>): object => appPageQuery(search),
   loader: async ({ context: { queryClient }, params }) => {
-    const apps = await queryClient.ensureQueryData(appSurfacesQueryOptions()).catch(() => null);
+    const { appSurfacesQueryOptions: options } = await import("~/lib/api-query-options/apps");
+    const apps = await queryClient.ensureQueryData(options()).catch(() => null);
     const page = apps?.find((app) => app.id === params.pluginId)?.pages.find((entry) => entry.id === params.pageId);
     return { title: page?.title ?? null };
   },

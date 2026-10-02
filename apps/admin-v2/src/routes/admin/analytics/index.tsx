@@ -8,7 +8,6 @@ import {
   resolveAnalyticsSelection,
   validateAnalyticsSearch,
 } from "~/components/admin/analytics/analytics-selection";
-import { analyticsOverviewQueryOptions } from "~/lib/api-query-options/analytics";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { pageHead } from "~/i18n/page-titles";
 
@@ -16,7 +15,8 @@ export const Route = createFileRoute("/admin/analytics/")({
   validateSearch: validateAnalyticsSearch,
   loaderDeps: ({ search }) => search,
   // The overview read starts with the navigation, for the range the page will show.
-  loader: ({ context: { queryClient, user }, deps }) => {
+  loader: async ({ context: { queryClient, user }, deps }) => {
+    const { analyticsOverviewQueryOptions } = await import("~/lib/api-query-options/analytics");
     const today = analyticsToday();
     const selection = resolveAnalyticsSelection(deps, readSavedSelection(user?.id, today), today);
     void queryClient.prefetchQuery(analyticsOverviewQueryOptions({
