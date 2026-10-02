@@ -55,13 +55,14 @@ export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChan
       cell: ({ row }) => canEdit ? (
         <button
           type="button"
-          className="line-clamp-2 break-words text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={row.original.name}
+          className="block max-w-full truncate text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => openEditor(row.original)}
         >
           {row.original.name}
         </button>
       ) : (
-        <span className="line-clamp-2 break-words font-medium">{row.original.name}</span>
+        <span className="block truncate font-medium" title={row.original.name}>{row.original.name}</span>
       ),
     },
     {
@@ -71,7 +72,7 @@ export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChan
       cell: ({ row }) => {
         const parts = [row.original.contactName, row.original.phone].filter(Boolean);
         return parts.length > 0
-          ? <span className="truncate">{parts.join(" · ")}</span>
+          ? <span className="block truncate" title={parts.join(" · ")}>{parts.join(" · ")}</span>
           : <span className="text-muted-foreground">—</span>;
       },
     },
@@ -80,7 +81,7 @@ export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChan
       header: t("colEmail"),
       meta: { priority: 50, minWidth: 180 },
       cell: ({ row }) => row.original.email
-        ? <span className="truncate">{row.original.email}</span>
+        ? <span className="block truncate" title={row.original.email}>{row.original.email}</span>
         : <span className="text-muted-foreground">—</span>,
     },
     {
