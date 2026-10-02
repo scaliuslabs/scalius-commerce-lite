@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { isAnalyticsReportId, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
+import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
 import { ReportPage, type ReportView } from "~/components/admin/analytics/ReportPage";
 import { useAnalyticsSelection } from "~/components/admin/analytics/AnalyticsToolbar";
 import { validateAnalyticsSearch, type AnalyticsSearch } from "~/components/admin/analytics/analytics-selection";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate } from "~/i18n";
-import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
+import type { AnalyticsMessageKey } from "~/i18n/analytics";
 import { titleHead } from "~/i18n/page-titles";
 
 type ReportSearch = AnalyticsSearch & ReportView;
@@ -23,12 +23,19 @@ function validateReportSearch(search: Record<string, unknown>): ReportSearch {
 export const Route = createFileRoute("/admin/analytics/reports/$reportId")({
   validateSearch: validateReportSearch,
   // Only catalogued reports exist; anything else is a page that doesn't exist (no request).
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    const { isAnalyticsReportId } = await import("@scalius/shared/analytics-reports");
     if (!isAnalyticsReportId(params.reportId)) throw new AdminApiResponseError("Report not found", 404);
   },
-  head: ({ params }) => titleHead(isAnalyticsReportId(params.reportId)
-    ? translate(analyticsMessages, `report.${params.reportId}` as AnalyticsMessageKey)
-    : translate(analyticsMessages, "reports")),
+  head: async ({ params }) => {
+    const [{ isAnalyticsReportId }, { analyticsMessages }] = await Promise.all([
+      import("@scalius/shared/analytics-reports"),
+      import("~/i18n/analytics"),
+    ]);
+    return titleHead(isAnalyticsReportId(params.reportId)
+      ? translate(analyticsMessages, `report.${params.reportId}` as AnalyticsMessageKey)
+      : translate(analyticsMessages, "reports"));
+  },
   errorComponent: RouteErrorComponent,
   component: AnalyticsReportRoute,
 });

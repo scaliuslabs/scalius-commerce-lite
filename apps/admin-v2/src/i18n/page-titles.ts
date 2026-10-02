@@ -1,4 +1,6 @@
 import { defineMessages, translate } from "./index";
+import { settingsNavMessages } from "./settings";
+import type { SettingsNavKey } from "~/components/admin/settings/settings-nav";
 
 /**
  * Browser tab titles. Route `head` runs in the always-loaded route tree, so
@@ -152,4 +154,9 @@ export function titleHead(title: string) {
 /** Route `head` for a page title key, in the dashboard language. */
 export function pageHead(key: PageTitleKey, vars?: Record<string, string | number>) {
   return titleHead(translate(pageTitleMessages, key, vars));
+}
+
+/** Settings tab titles stay independent of the navigation icons. */
+export function settingsHead(key: SettingsNavKey) {
+  return titleHead(translate(settingsNavMessages, key));
 }

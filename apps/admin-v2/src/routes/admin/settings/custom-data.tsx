@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { settingsHead } from "~/i18n/page-titles";
 import { CustomDataSettings } from "~/components/admin/settings/custom-data/CustomDataSettings";
 import { customFieldDefinitionsQueryOptions } from "~/lib/api-query-options/custom-fields";
 import { RouteErrorComponent } from "~/lib/route-error";

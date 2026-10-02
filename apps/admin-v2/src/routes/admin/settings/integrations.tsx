@@ -7,7 +7,7 @@ import {
   TrackingCard,
 } from "~/components/admin/settings/AppsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { settingsHead } from "~/i18n/page-titles";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";

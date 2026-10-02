@@ -5,7 +5,7 @@ import {
   CustomerRequestsCard,
 } from "~/components/admin/settings/CheckoutSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { settingsHead } from "~/i18n/page-titles";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import {

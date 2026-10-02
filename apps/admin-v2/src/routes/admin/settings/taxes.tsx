@@ -7,7 +7,7 @@ import {
   TaxRatesCard,
 } from "~/components/admin/taxes/TaxesSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { settingsHead } from "~/i18n/page-titles";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import {
   firstTaxOverridesQuery,
