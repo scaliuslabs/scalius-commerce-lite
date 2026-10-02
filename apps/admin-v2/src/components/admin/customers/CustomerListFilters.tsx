@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { fetchCustomerTags, customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
+import { NO_CURSOR } from "~/lib/list-helpers";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
@@ -22,7 +23,7 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
   const set = (updates: Partial<Record<"tag" | "segmentId" | "channel", string | undefined>>) =>
     void navigate({
       to: "/admin/customers",
-      search: ((prev: Record<string, unknown>) => ({ ...prev, ...updates, page: 1 })) as never,
+      search: ((prev: Record<string, unknown>) => ({ ...prev, ...updates, page: 1, ...NO_CURSOR })) as never,
     });
 
   const loadTags = useCallback<SearchableSelectLoader>(async ({ search: typed, signal }) => {

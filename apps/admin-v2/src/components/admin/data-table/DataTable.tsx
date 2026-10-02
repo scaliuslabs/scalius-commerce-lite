@@ -31,7 +31,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { DataTablePagination } from "./DataTablePagination";
+import { DataTablePagination, type DataTableCursorPaging } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
 import { DataTableBodyRow, DataTableHeadCell, rowClickHandler } from "./DataTableBodyRow";
@@ -84,6 +84,11 @@ interface DataTableProps<TData extends TableRowData> {
   layoutKey?: string;
   /** False for a list that shows every row at once (no page footer). */
   paginate?: boolean;
+  /**
+   * Previous/Next by the API's cursors with an approximate count ("51–100 of
+   * 1,000+") for a list too large to count; without it the footer pages by number.
+   */
+  cursorPaging?: DataTableCursorPaging;
   /** What the list is sorted by when no sort is chosen (the column menu's first choice); false for none. */
   defaultSortLabel?: string | false;
   /**
@@ -116,6 +121,7 @@ export function DataTable<TData extends TableRowData>({
   getRowHref,
   layoutKey,
   paginate = true,
+  cursorPaging,
   defaultSortLabel,
   cardLayoutBelow = CARD_LAYOUT_BELOW,
 }: DataTableProps<TData>) {
@@ -331,6 +337,7 @@ export function DataTable<TData extends TableRowData>({
         <DataTablePagination
           table={table}
           pageSizeOptions={pageSizeOptions}
+          cursorPaging={cursorPaging}
         />
       )}
     </div>

@@ -9,6 +9,7 @@ import {
   applyCatalogFilterCounts,
   catalogCountQuery,
   catalogFacetGroups,
+  catalogApplyButton,
   catalogFilterSearchParams,
   catalogRatingRows,
   setupCatalogFilters,
@@ -309,6 +310,16 @@ describe("catalog filter form", () => {
       "https://api.test/api/v1/categories/footwear/products?search=running+shoe&option.size=42&limit=1",
     );
     expect(apply.textContent).toBe("Show 5 products");
+  });
+
+  it("offers the apply button with a lower bound when the API counted to its cap", () => {
+    expect(catalogApplyButton(6)).toEqual({ label: "Show 6 products", disabled: false });
+    expect(catalogApplyButton(1_000, true)).toEqual({ label: "Show 1,000+ products", disabled: false });
+    expect(catalogApplyButton(0)).toEqual({ label: "No matching products", disabled: true });
+    const form = document.createElement("form");
+    form.innerHTML = '<button type="submit" data-catalog-filter-apply>Show products</button>';
+    applyCatalogFilterCounts(form, null, 1_000, null, true);
+    expect(form.querySelector("button")!.textContent).toBe("Show 1,000+ products");
   });
 
   it("updates every value's count to the pending selection and never offers a dead end", async () => {

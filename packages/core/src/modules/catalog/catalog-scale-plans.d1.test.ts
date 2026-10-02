@@ -1,6 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
+import { planLimits } from "@scalius/shared/plan-limits";
 
 import { resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
@@ -214,7 +215,8 @@ describe("catalogue-scale query plans", () => {
         }
         await project(db, queries);
         const large = await getStorefrontProducts(db, { page: 1, limit: 2 });
-        expect(large.pagination.total).toBe(2_001);
+        // The total is a lower bound beyond the plan's count cap (and reads that many rows at most).
+        expect(large.pagination).toMatchObject({ total: planLimits().lists.countCap, totalIsCapped: true });
         expect(large.facets).toEqual([]);
         expect(queries.filter((query) => query.sql.includes("product_facet_values"))).toEqual([]);
         const scoped = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });

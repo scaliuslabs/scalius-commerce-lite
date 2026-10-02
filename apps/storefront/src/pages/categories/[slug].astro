@@ -188,7 +188,7 @@ const collectionJsonLd =
           ? { description: categorySchemaDescription }
           : {}),
         url: categoryUrl,
-        numberOfItems: pagination.total,
+        ...(pagination.totalIsCapped ? {} : { numberOfItems: pagination.total }),
       })
     : null;
 ---
@@ -234,6 +234,7 @@ const collectionJsonLd =
       breadcrumb: ancestors.map((crumb) => ({ label: crumb.name, href: `/categories/${encodeURIComponent(crumb.slug)}` })),
       description: pagination.page === 1 ? categoryDescription : null,
       count: pagination.total,
+      countCapped: pagination.totalIsCapped,
       banner: category.imageUrl
         ? { src: mediaImageUrl(category.imageUrl, 1440), srcset: mediaImageSrcSet(category.imageUrl), alt: "" }
         : null,

@@ -746,6 +746,35 @@ caps and measurements are in `packages/core/src/modules/catalog/README.md`
 ("Facets"); `facets-scale.local.test.ts` checks every count against a brute
 force on the 30k seed.
 
+### Listing totals, page depth and cursors
+
+A listing's `pagination.total` is exact up to the plan's count cap
+(`planLimits().lists.countCap`: 1,000 on Free, 10,000 on Paid) and a lower
+bound above it (`totalIsCapped`, shown as "1,000+"; JSON-LD leaves
+`numberOfItems` out then). Numbered pages reach the first
+`planLimits().lists.maxOffset` products; a deeper `?page=` is an empty page
+(`page > totalPages`, which the storefront answers with 404) and reads no rows.
+Past that, `newest`, `price-asc` and `price-desc` continue with the opaque
+`cursor` (`pageInfo.endCursor` of the previous page; keyset on the buyer
+state's own indexed columns, ties by product id). Name, discount, rating and
+relevance have no cursor (`INVALID_CURSOR`).
+
+- Plain shop-all page: the count is `SELECT count(*) FROM (SELECT 1 ... LIMIT cap + 1)`
+  and the price range is a lone `MIN(from_minor)` and a lone `MAX(to_minor)` over
+  the public rows. `MIN` is one probe of `product_buyer_state_price_idx`. `MAX`
+  scans the public rows until the buyer state has an index on
+  `(is_public, to_minor)`:
+  `CREATE INDEX product_buyer_state_to_price_idx ON product_buyer_state (is_public, to_minor);`
+  With it the whole statement reads about 3k rows at 30k products instead of
+  30k.
+- Any scope (category, brand, collection, search) or filter keeps one scan of
+  its own rows for count, `MIN` and `MAX` (bounded by the scope; a lone
+  `MIN`/`MAX` there walks the global price index looking for the scope's rows),
+  and the count is capped when reported.
+- Rows read per page view on the 30k-product seed: a numbered page 500 of the
+  shop-all newest order 36,000 → 0; price-asc page 1,000 72,000 → 0; the
+  same position by cursor ≈ 76.
+
 Measured on the 30k seed (in-process, p50 ms, D1 rows read, before → after):
 shop-all newest 3,219 → 35 (6.05M → 31k), shop-all price 3,696 → 35,
 Laptop (3.3k) newest 600 → 139 (1.02M → 180k), search "asus" 213 → 49, product

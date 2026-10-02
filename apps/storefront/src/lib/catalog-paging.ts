@@ -5,11 +5,16 @@
 // scroll). With JavaScript, the next page's own HTML (edge-cached like any
 // page) supplies the cards, and the address bar follows the last page shown.
 
+/** "484", or "1,000+" when the API counted to its cap and more products match. */
+export function catalogCountText(total: number, capped = false): string {
+  return `${total.toLocaleString("en-IN")}${capped ? "+" : ""}`;
+}
+
 /** "Showing 21–40 of 484 products". */
-export function catalogProgressLabel(from: number, to: number, total: number): string {
-  const noun = total === 1 ? "product" : "products";
-  if (to <= 0) return `${total} ${noun}`;
-  return `Showing ${from.toLocaleString("en-IN")}–${to.toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")} ${noun}`;
+export function catalogProgressLabel(from: number, to: number, total: number, capped = false): string {
+  const noun = total === 1 && !capped ? "product" : "products";
+  if (to <= 0) return `${catalogCountText(total, capped)} ${noun}`;
+  return `Showing ${from.toLocaleString("en-IN")}–${to.toLocaleString("en-IN")} of ${catalogCountText(total, capped)} ${noun}`;
 }
 
 /** Infinite scroll loads this many pages by itself, then hands over to the button so the footer stays reachable. */
@@ -58,7 +63,7 @@ export async function loadNextCatalogPage(parts: PagingParts, fetcher: typeof fe
   grid.append(...next.cards.map((card) => document.adoptNode(card)));
   if (progress && Number.isFinite(next.to)) {
     progress.dataset.to = String(next.to);
-    progress.textContent = catalogProgressLabel(Number(progress.dataset.from), next.to, Number(progress.dataset.total));
+    progress.textContent = catalogProgressLabel(Number(progress.dataset.from), next.to, Number(progress.dataset.total), progress.dataset.capped === "true");
   }
   history.replaceState(history.state, "", href);
   if (next.next) link.setAttribute("href", next.next);

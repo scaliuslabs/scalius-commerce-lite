@@ -97,7 +97,7 @@ const collectionJsonLd =
         name: brand.name,
         description,
         url: brandUrl,
-        numberOfItems: pagination.total,
+        ...(pagination.totalIsCapped ? {} : { numberOfItems: pagination.total }),
         about: {
           "@type": "Brand",
           name: brand.name,
@@ -129,6 +129,7 @@ const collectionJsonLd =
       title: brand.name,
       description: pagination.page === 1 ? brand.description : null,
       count: pagination.total,
+      countCapped: pagination.totalIsCapped,
     }}
     listing={{
       products,

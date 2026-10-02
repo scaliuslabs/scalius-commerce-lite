@@ -10,6 +10,7 @@ import {
 } from "~/components/admin/order-list/order-list-search";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { readListSearch } from "~/lib/list-search";
+import { resetCursorUnlessPaging } from "~/lib/list-helpers";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { pageHead } from "~/i18n/page-titles";
@@ -34,8 +35,9 @@ function OrdersIndexPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const onChange = useCallback(
     (updates: Partial<OrderListSearch>, options?: { replace?: boolean }) => {
+      // A cursor is a position in one filtered, sorted list: anything but a Previous/Next move starts over.
       void navigate({
-        search: (previous) => ({ ...previous, ...updates }),
+        search: (previous) => ({ ...previous, ...resetCursorUnlessPaging(updates) }),
         replace: options?.replace,
       });
     },
