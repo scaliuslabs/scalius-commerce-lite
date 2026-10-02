@@ -7,6 +7,7 @@ import {
   cappedCountLimit,
   decodeListCursor,
   encodeListCursor,
+  encodeListCursorOrNull,
   finishKeysetPage,
   type ListCursor,
 } from "./pagination";
@@ -98,6 +99,30 @@ describe("list cursors", () => {
     const keyset = encodeListCursor({ sort: "relevance", direction: "desc", values: [3], id: "ord_1" });
     expect(() => decodeListCursor(keyset, shape)).toThrow(InvalidCursorError);
     expect(() => decodeListCursor(ok, { ...shape, positional: false })).toThrow(InvalidCursorError);
+  });
+});
+
+describe("cursors that cannot be carried", () => {
+  it("encodes a normal position and gives no cursor for a value too long to decode again", () => {
+    const normal: ListCursor = { sort: "customerName", direction: "asc", values: ["Anika Rahman"], id: "ord_1" };
+    expect(encodeListCursorOrNull(normal)).toBe(encodeListCursor(normal));
+    const long: ListCursor = { sort: "customerName", direction: "asc", values: ["x".repeat(513)], id: "ord_1" };
+    expect(encodeListCursorOrNull(long)).toBeNull();
+    // What it does return always decodes.
+    const edge: ListCursor = { sort: "customerName", direction: "asc", values: ["é".repeat(300)], id: "ord_1" };
+    const token = encodeListCursorOrNull(edge);
+    if (token) expect(decodeListCursor(token, { sort: "customerName", direction: "asc", kinds: ["text"] })).toEqual(edge);
+    expect(encodeListCursorOrNull({ ...normal, id: "i".repeat(300) })).toBeNull();
+  });
+
+  it("builds page info with a missing cursor when a row's position cannot be carried", () => {
+    const page = finishKeysetPage(["a", "b"], 5, false);
+    expect(buildPageInfo(page, { backward: false, anchored: false, cursorOf: () => null })).toEqual({
+      hasNextPage: false,
+      hasPreviousPage: false,
+      startCursor: null,
+      endCursor: null,
+    });
   });
 });
 

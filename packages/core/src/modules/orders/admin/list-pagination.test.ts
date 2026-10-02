@@ -186,6 +186,19 @@ describe.each(PLANS)("order list keyset pagination on the %s plan", (plan) => {
         }
     });
 
+    it("hands out no cursor for a row whose sort value is too long to carry, instead of one that fails", async () => {
+        const { db, sqlite } = setup(6);
+        // 600 zeros sort before every name, so the first page ends on this row.
+        sqlite.exec("UPDATE orders SET customer_name = hex(zeroblob(300)) WHERE id = 'ord_0002'");
+        const page = await listOrders(db, { sort: "customerName", order: "asc", limit: 1 });
+        expect(page.orders.map((order) => order.id)).toEqual(["ord_0002"]);
+        expect(page.pageInfo).toMatchObject({ hasNextPage: true, endCursor: null, startCursor: null });
+        // The next row's cursor is fine and keeps walking.
+        const second = await listOrders(db, { sort: "customerName", order: "asc", limit: 1, page: 2 });
+        expect(second.pageInfo.endCursor).toEqual(expect.any(String));
+        await expect(listOrders(db, { sort: "customerName", order: "asc", limit: 1, after: second.pageInfo.endCursor! })).resolves.toBeDefined();
+    });
+
     it("answers a numbered page beyond the offset bound with a typed error that names the cursor", async () => {
         const { db } = setup(3);
         await expect(listOrders(db, { page: lists.maxOffset / 50 + 1, limit: 50 })).rejects.toMatchObject({

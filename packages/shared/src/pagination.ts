@@ -97,6 +97,20 @@ export function encodeListCursor(cursor: ListCursor): string {
   }));
 }
 
+/**
+ * The token, or null when the position cannot be carried: a text sort value
+ * longer than a cursor holds (an imported 600-character name) would encode into
+ * a token `decodeListCursor` refuses, so the page says it has no cursor
+ * instead of handing out one that fails.
+ */
+export function encodeListCursorOrNull(cursor: ListCursor): string | null {
+  const tooLong = cursor.values.some((value) => typeof value === "string" && value.length > MAX_CURSOR_TEXT_LENGTH)
+    || cursor.id.length > MAX_CURSOR_ID_LENGTH;
+  if (tooLong) return null;
+  const token = encodeListCursor(cursor);
+  return token.length > MAX_CURSOR_LENGTH ? null : token;
+}
+
 export interface ListCursorShape {
   /** The sort the request asked for. */
   sort: string;
@@ -198,7 +212,7 @@ export function finishKeysetPage<T>(fetched: readonly T[], limit: number, backwa
  */
 export function buildPageInfo<T>(
   page: KeysetPage<T>,
-  options: { backward: boolean; anchored: boolean; cursorOf: (row: T) => string },
+  options: { backward: boolean; anchored: boolean; cursorOf: (row: T) => string | null },
 ): PageInfo {
   const first = page.rows[0];
   const last = page.rows[page.rows.length - 1];

@@ -23,6 +23,7 @@ import {
     capTotal,
     decodeListCursor,
     encodeListCursor,
+    encodeListCursorOrNull,
     finishKeysetPage,
     type CursorDirection,
     type CursorValue,
@@ -299,7 +300,7 @@ export function planKeysetPage(
                     anchored: paging.mode !== "offset" || paging.offset > 0,
                     cursorOf: ({ row, index }) => positional
                         ? positionCursor(spec.sort, positional.offset + index)
-                        : encodeListCursor({
+                        : encodeListCursorOrNull({
                             sort: spec.sort,
                             direction: spec.order.direction,
                             values: [row.keysetValue],
