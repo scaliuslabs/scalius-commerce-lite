@@ -7,6 +7,7 @@ import {
 } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import RichTextStyles from "./RichTextStyles.astro";
 
 interface Props {
   content: string;
@@ -45,4 +46,5 @@ if (!content) {
 }
 ---
 
+<RichTextStyles />
 <div class={allClasses} set:html={processedContent} />

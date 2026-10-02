@@ -93,6 +93,7 @@ import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discove
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import RichTextStyles from "@/components/RichTextStyles.astro";
 
 const { slug } = Astro.params;
 // Handles are lowercase: a mis-cased link redirects to the one real URL.
@@ -659,6 +660,7 @@ const productCategoryAnalytics = productCategory
   ogCurrency={currencyCode}
   noindex={product.noIndex === true}
 >
+  <RichTextStyles slot="head" />
   <Fragment slot="preload">
     {
       initialGalleryPreload && (

@@ -1,0 +1,23 @@
+---
+// The rich-text sheet (styles/rich-text.css: Typography's `.prose`), once
+// per page. Pages whose rich text can render in the first screen (product,
+// CMS and blog pages, listings with a description or guide) put it in the
+// head (`<RichTextStyles slot="head" />` inside Layout), so the text paints
+// styled. RichContent and the columns footer render it as well: when the
+// head already has it they render nothing, otherwise it lands beside the
+// text, so a page that renders rich text is never unstyled. Pages without
+// rich text never load the sheet.
+import href from "@/styles/rich-text.css?url";
+
+interface Props {
+  /** False renders nothing (a page whose listing has no description). */
+  when?: boolean;
+}
+
+const { when = true } = Astro.props;
+const locals = Astro.locals as { richTextStyles?: boolean };
+const render = when && !locals.richTextStyles;
+if (render) locals.richTextStyles = true;
+---
+
+{render && <link rel="stylesheet" href={href} />}

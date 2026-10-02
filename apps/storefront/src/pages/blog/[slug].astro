@@ -5,6 +5,7 @@ import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
+import RichTextStyles from "@/components/RichTextStyles.astro";
 import { resolveStoreShareImage } from "@/lib/store-identity";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
@@ -157,6 +158,7 @@ const breadcrumbJsonLd =
   noindex={article.noIndex === true}
 >
   <Fragment slot="head">
+    <RichTextStyles />
     <link
       rel="alternate"
       type="application/rss+xml"
