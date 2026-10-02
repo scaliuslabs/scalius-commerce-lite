@@ -16,6 +16,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
+import { BundledLoader } from "./loaders/bundled";
 import { runPluginFunctions } from "./functions";
 import { installHello, pluginTestCtx, pluginTestEnv, testCart as cart } from "./testing/fixtures";
 import helloModule from "../../../../plugins/hello/src/index";
@@ -35,7 +36,7 @@ describe("scalius.hello through the bundled loader", () => {
   afterEach(() => sqlite.close());
 
   it("bundles the same version and fingerprint the lockfile records", () => {
-    expect(BUNDLED_PLUGINS["scalius.hello"]).toMatchObject({ version: "0.1.0", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(BUNDLED_PLUGINS["scalius.hello"]).toMatchObject({ version: helloModule.manifest.version, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(helloModule.manifest.id).toBe("scalius.hello");
   });
 
@@ -78,7 +79,7 @@ describe("scalius.hello through the bundled loader", () => {
     await putPluginRecord(db, "scalius.hello", "greetings", declaration, "old", { orderId: "old", kind: "paid", createdAt: now - 40 * 86_400_000 });
     await putPluginRecord(db, "scalius.hello", "greetings", declaration, "new", { orderId: "new", kind: "paid", createdAt: now - 86_400_000 });
     const dashboard = await host.invokeRoute(installation, "admin", "dashboard", { ...request, query: {} });
-    expect(dashboard.value?.body).toMatchObject({ type: "page", children: [{ type: "stat", label: "Greeted orders", value: 3 }, { type: "stat", label: "Paid events", value: 0 }, expect.anything()] });
+    expect(dashboard.value?.body).toMatchObject({ type: "page", children: [{ type: "stat", label: "Greeted orders", value: 3 }, { type: "stat", label: "Paid events", value: 0 }, { type: "stat", label: "New orders", value: 0 }, expect.anything()] });
 
     expect(await host.invokeCron(installation, "tidy", new Date(now).toISOString())).toEqual({ ok: true, value: null, error: null });
     expect(await getPluginRecord(db, "scalius.hello", "greetings", "old")).toBeNull();
@@ -101,13 +102,24 @@ describe("scalius.hello through the bundled loader", () => {
       .toEqual([{ pluginId: "scalius.hello", priority: 100, output: { discounts: [] } }]);
   });
 
-  it("refuses to run code that is not the installed version and marks the plugin failed", async () => {
+  it("never runs code that is not the installed version: an installation behind the deployed build is updated in place", async () => {
     sqlite.prepare("UPDATE plugin_installations SET bundle_sha256 = ? WHERE plugin_id = 'scalius.hello'").run("f".repeat(64));
     const stale = await requirePluginInstallation(db, "scalius.hello");
     const host = new PluginHost({ env: pluginTestEnv(binding), ctx: pluginTestCtx(), db });
     const outcome = await host.invokeCron(stale, "tidy", new Date().toISOString());
-    expect(outcome.ok).toBe(false);
-    expect(outcome.error).toMatch(/update the installation/);
+    expect(outcome).toMatchObject({ ok: false, failure: "outdated", error: expect.stringMatching(/was updated to/) });
+    const fresh = await requirePluginInstallation(db, "scalius.hello");
+    // Same grant request: it stays active on the deployed fingerprint, and the next call runs.
+    expect(fresh).toMatchObject({ status: "active", bundleSha256: BUNDLED_PLUGINS["scalius.hello"]!.sha256 });
+    expect((await host.invokeCron(fresh, "tidy", new Date().toISOString())).ok).toBe(true);
+  });
+
+  it("marks a plugin failed when this deployment does not carry its code at all", async () => {
+    const env = pluginTestEnv(binding);
+    const emptyDeployment = new BundledLoader({ env, ctx: pluginTestCtx(), db: () => db, composedEnv: async () => env }, {});
+    const outcome = await new PluginHost({ env, ctx: pluginTestCtx(), db, loaderFor: () => emptyDeployment })
+      .invokeCron(installation, "tidy", new Date().toISOString());
+    expect(outcome).toMatchObject({ ok: false, failure: "load_failed", error: expect.stringMatching(/not compiled into this deployment/) });
     expect((await requirePluginInstallation(db, "scalius.hello")).status).toBe("failed");
   });
 });
