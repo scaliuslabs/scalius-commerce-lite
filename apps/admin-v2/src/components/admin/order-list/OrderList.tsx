@@ -16,7 +16,7 @@ import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
-import { appUiMessages } from "~/i18n/app-ui";
+import { appActionMessages } from "~/i18n/app-actions";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -90,7 +90,7 @@ export function OrderList({
   const actions = useOrderActions(orderActions, selection);
   const { archive, restore, changeStatus, updatingStatusIds } = actions;
   const appActions = useAppActionRunner("order", true);
-  const appCopy = useMessages(appUiMessages);
+  const appCopy = useMessages(appActionMessages);
 
   const columns = useMemo(
     () =>

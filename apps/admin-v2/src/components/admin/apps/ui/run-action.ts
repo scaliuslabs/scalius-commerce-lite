@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   parsePluginUiActionResult,
   type PluginUiActionResult,
+  type PluginUiDocument,
   type PluginUiRouteAction,
   type PluginUiTarget,
 } from "@scalius/shared/plugins/ui";
@@ -14,7 +15,7 @@ import { appUiMessages } from "~/i18n/app-ui";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { ADMIN_API_READ_TIMEOUT_CODE } from "~/lib/admin-api-timeout";
 import { fetchAppRoute } from "~/lib/app-route";
-import { isAppRouteDeclared, targetLocation, type AppSurfaces } from "./surfaces";
+import { isAppRouteDeclared, targetLocation, type AppAction, type AppSurfaces, type AppTarget } from "./surfaces";
 
 /** A button or form named a route (or method) the app never declared: nothing is sent. */
 export class UndeclaredAppRouteError extends Error {
@@ -70,7 +71,44 @@ export function showActionToast(result: PluginUiActionResult, ok: boolean): void
   else toast.success(result.toast.message);
 }
 
-type Navigate = (options: { to: string; search?: Record<string, string> }) => unknown;
+export type Navigate = (options: { to: string; search?: Record<string, string> }) => unknown;
+
+/**
+ * Runs an app's manifest action on records (`{ resource, ids, action }` to
+ * its declared route) and applies the answer: a toast, a refresh, a page to
+ * open, or a tree for `showAnswer`. True when the app answered 2xx.
+ */
+export async function runManifestAction(
+  entry: { app: AppSurfaces; action: AppAction },
+  target: AppTarget,
+  ids: readonly string[],
+  effects: { refresh: () => void; navigate: Navigate; showAnswer: (document: PluginUiDocument) => void },
+): Promise<boolean> {
+  let outcome: AppActionOutcome;
+  try {
+    outcome = await runAppRoute(entry.app, { route: entry.action.route, method: "POST" }, {
+      resource: target,
+      ids: [...ids],
+      action: entry.action.id,
+    });
+  } catch (error) {
+    toast.error(appErrorMessage(error));
+    return false;
+  }
+  const { ok, result } = outcome;
+  if (!ok && !hasActionEffect(result)) {
+    toast.error(translate(appUiMessages, "actionFailed"));
+    return false;
+  }
+  showActionToast(result, ok);
+  if (result.errors && !result.toast) toast.error(Object.values(result.errors).join(" "));
+  if (ok && !hasActionEffect(result)) toast.success(translate(appUiMessages, "actionSent"));
+  if (result.ui) effects.showAnswer(result.ui as PluginUiDocument);
+  // The records changed: every query on screen reads them again (app cards included).
+  if (result.refresh) effects.refresh();
+  if (result.navigate) openTarget(effects.navigate, entry.app, result.navigate);
+  return ok;
+}
 
 /** Opens an action's `navigate` target: a dashboard page in place, an https site in a new tab. */
 export function openTarget(navigate: Navigate, app: Pick<AppSurfaces, "id">, target: PluginUiTarget): void {
