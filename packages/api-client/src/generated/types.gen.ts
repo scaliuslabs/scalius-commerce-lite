@@ -3411,6 +3411,10 @@ export type GetApiV1CollectionsByIdData = {
     query?: {
         page?: number;
         limit?: number;
+        /**
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         */
+        cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
@@ -3559,10 +3563,27 @@ export type GetApiV1CollectionsByIdResponses = {
                 } | null;
             };
             pagination: {
+                /**
+                 * Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More products match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+            };
+            pageInfo: {
+                hasNextPage: boolean;
+                /**
+                 * Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.
+                 */
+                endCursor: string | null;
             };
             priceRange: {
                 min: number;
@@ -3812,13 +3833,17 @@ export type GetApiV1BrandsBySlugProductsData = {
     };
     query?: {
         /**
-         * Page number
+         * Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper
          */
         page?: number;
         /**
          * Items per page
          */
         limit?: number;
+        /**
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         */
+        cursor?: string;
         /**
          * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
@@ -3966,10 +3991,27 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 } | null;
             }>;
             pagination: {
+                /**
+                 * Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More products match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+            };
+            pageInfo: {
+                hasNextPage: boolean;
+                /**
+                 * Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.
+                 */
+                endCursor: string | null;
             };
             priceRange: {
                 min: number;
@@ -18037,13 +18079,17 @@ export type GetApiV1ProductsData = {
          */
         search?: string;
         /**
-         * Page number
+         * Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper
          */
         page?: number;
         /**
          * Items per page
          */
         limit?: number;
+        /**
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         */
+        cursor?: string;
         /**
          * Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last.
          */
@@ -18160,10 +18206,27 @@ export type GetApiV1ProductsResponses = {
                 [key: string]: unknown;
             }>;
             pagination: {
+                /**
+                 * Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More products match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+            };
+            pageInfo: {
+                hasNextPage: boolean;
+                /**
+                 * Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.
+                 */
+                endCursor: string | null;
             };
             priceRange: {
                 min: number;
@@ -19916,13 +19979,17 @@ export type GetApiV1CategoriesBySlugProductsData = {
     };
     query?: {
         /**
-         * Page number
+         * Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper
          */
         page?: number;
         /**
          * Items per page
          */
         limit?: number;
+        /**
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         */
+        cursor?: string;
         /**
          * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
@@ -20142,10 +20209,27 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 } | null;
             }>;
             pagination: {
+                /**
+                 * Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More products match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+            };
+            pageInfo: {
+                hasNextPage: boolean;
+                /**
+                 * Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.
+                 */
+                endCursor: string | null;
             };
             priceRange: {
                 min: number;
@@ -20247,6 +20331,10 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         includeSubcategories?: 'true' | 'false';
         page?: number;
         limit?: number;
+        /**
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         */
+        cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
@@ -20363,10 +20451,27 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 } | null;
             }>;
             pagination: {
+                /**
+                 * Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More products match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+            };
+            pageInfo: {
+                hasNextPage: boolean;
+                /**
+                 * Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.
+                 */
+                endCursor: string | null;
             };
             priceRange: {
                 min: number;
@@ -31361,13 +31466,21 @@ export type GetApiV1AdminCustomersData = {
     path?: never;
     query?: {
         /**
-         * Page number
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
          * Items per page
          */
         limit?: number | null;
+        /**
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         */
+        after?: string;
+        /**
+         * Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.
+         */
+        before?: string;
         /**
          * Search term
          */
@@ -31473,7 +31586,7 @@ export type GetApiV1AdminCustomersError = GetApiV1AdminCustomersErrors[keyof Get
 
 export type GetApiV1AdminCustomersResponses = {
     /**
-     * Customer list with pagination
+     * Cursor-paginated customer list with a capped total
      */
     200: {
         success: true;
@@ -31500,10 +31613,39 @@ export type GetApiV1AdminCustomersResponses = {
                 updatedAt: string;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };
@@ -40980,6 +41122,10 @@ export type GetApiV1AdminNavigationPreviewProductsResponses = {
         success: true;
         data: {
             count: number;
+            /**
+             * More products match than `count` (a lower bound: 1,000; 10,000 on a Paid deployment).
+             */
+            countIsCapped: boolean;
         };
     };
 };
@@ -63992,10 +64138,39 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 } | null;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };
@@ -64008,13 +64183,21 @@ export type GetApiV1AdminOrdersData = {
     path?: never;
     query?: {
         /**
-         * Page number
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
          * Items per page
          */
         limit?: number | null;
+        /**
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         */
+        after?: string;
+        /**
+         * Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.
+         */
+        before?: string;
         /**
          * Search query
          */
@@ -64083,9 +64266,80 @@ export type GetApiV1AdminOrdersData = {
     url: '/api/v1/admin/orders';
 };
 
+export type GetApiV1AdminOrdersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersError = GetApiV1AdminOrdersErrors[keyof GetApiV1AdminOrdersErrors];
+
 export type GetApiV1AdminOrdersResponses = {
     /**
-     * Paginated order list
+     * Cursor-paginated order list with a capped total
      */
     200: {
         success: true;
@@ -64204,10 +64458,39 @@ export type GetApiV1AdminOrdersResponses = {
                 pickupReadyAt: NullableTimestamp;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };
@@ -64459,13 +64742,21 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
     path?: never;
     query?: {
         /**
-         * Page number
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
          * Items per page
          */
         limit?: number | null;
+        /**
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         */
+        after?: string;
+        /**
+         * Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.
+         */
+        before?: string;
         /**
          * Search query
          */
@@ -64571,7 +64862,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryError = GetApiV1AdminOrdersPayment
 
 export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
     /**
-     * Paginated hosted-payment recovery order list
+     * Cursor-paginated hosted-payment recovery order list with a capped total
      */
     200: {
         success: true;
@@ -64690,10 +64981,39 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 pickupReadyAt: NullableTimestamp;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };
@@ -69123,13 +69443,21 @@ export type GetApiV1AdminProductsData = {
     path?: never;
     query?: {
         /**
-         * Page number
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
          */
         page?: number;
         /**
          * Items per page
          */
         limit?: number;
+        /**
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         */
+        after?: string;
+        /**
+         * Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.
+         */
+        before?: string;
         /**
          * Search term
          */
@@ -69235,7 +69563,7 @@ export type GetApiV1AdminProductsError = GetApiV1AdminProductsErrors[keyof GetAp
 
 export type GetApiV1AdminProductsResponses = {
     /**
-     * Product list with pagination
+     * Cursor-paginated product list with a capped total
      */
     200: {
         success: true;
@@ -69292,10 +69620,39 @@ export type GetApiV1AdminProductsResponses = {
                 sku?: string;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };
@@ -69547,6 +69904,14 @@ export type GetApiV1AdminProductsSummariesData = {
     query?: {
         page?: number;
         limit?: number;
+        /**
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         */
+        after?: string;
+        /**
+         * Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.
+         */
+        before?: string;
         search?: string;
         category?: string;
         trashed?: 'true' | 'false';
@@ -69629,7 +69994,7 @@ export type GetApiV1AdminProductsSummariesError = GetApiV1AdminProductsSummaries
 
 export type GetApiV1AdminProductsSummariesResponses = {
     /**
-     * Bounded product summaries with pagination
+     * Bounded product summaries, cursor-paginated with a capped total
      */
     200: {
         success: true;
@@ -69648,10 +70013,39 @@ export type GetApiV1AdminProductsSummariesResponses = {
                 sku?: string;
             }>;
             pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
                 page: number;
                 limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
                 total: number;
                 totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
+            /**
+             * Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).
+             */
+            pageInfo: {
+                hasNextPage: boolean;
+                hasPreviousPage: boolean;
+                /**
+                 * Cursor of the first row; pass as `before` for the previous page. Null for an empty page.
+                 */
+                startCursor: string | null;
+                /**
+                 * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
+                 */
+                endCursor: string | null;
             };
         };
     };

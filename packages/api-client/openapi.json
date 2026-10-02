@@ -15427,6 +15427,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 1024,
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "newest",
                 "price-asc",
@@ -15893,23 +15904,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More products match than `total` counts (show \"1,000+\")."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped"
+                          ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "endCursor"
                           ]
                         },
                         "priceRange": {
@@ -16063,6 +16098,7 @@
                         "categories",
                         "products",
                         "pagination",
+                        "pageInfo",
                         "priceRange",
                         "facets",
                         "ratingFacet"
@@ -16792,10 +16828,10 @@
               "minimum": 1,
               "maximum": 1000,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -16810,6 +16846,17 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -17185,23 +17232,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More products match than `total` counts (show \"1,000+\")."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped"
+                          ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "endCursor"
                           ]
                         },
                         "priceRange": {
@@ -17457,6 +17528,7 @@
                         "brand",
                         "products",
                         "pagination",
+                        "pageInfo",
                         "priceRange",
                         "facets",
                         "ratingFacet",
@@ -68992,10 +69064,10 @@
               "minimum": 1,
               "maximum": 1000,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -69010,6 +69082,17 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -69296,23 +69379,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More products match than `total` counts (show \"1,000+\")."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped"
+                          ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "endCursor"
                           ]
                         },
                         "priceRange": {
@@ -69469,6 +69576,7 @@
                       "required": [
                         "products",
                         "pagination",
+                        "pageInfo",
                         "priceRange",
                         "facets",
                         "ratingFacet",
@@ -75942,10 +76050,10 @@
               "minimum": 1,
               "maximum": 1000,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -75960,6 +76068,17 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -76572,23 +76691,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More products match than `total` counts (show \"1,000+\")."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped"
+                          ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "endCursor"
                           ]
                         },
                         "priceRange": {
@@ -76845,6 +76988,7 @@
                         "products",
                         "shelfProducts",
                         "pagination",
+                        "pageInfo",
                         "priceRange",
                         "facets",
                         "ratingFacet",
@@ -77054,6 +77198,17 @@
             },
             "required": false,
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -77367,23 +77522,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More products match than `total` counts (show \"1,000+\")."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped"
+                          ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "endCursor"
                           ]
                         },
                         "priceRange": {
@@ -77639,6 +77818,7 @@
                         "category",
                         "products",
                         "pagination",
+                        "pageInfo",
                         "priceRange",
                         "facets",
                         "ratingFacet",
@@ -118253,10 +118433,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -118271,6 +118451,28 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`."
+            },
+            "required": false,
+            "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+            "name": "before",
             "in": "query"
           },
           {
@@ -118357,7 +118559,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Customer list with pagination",
+            "description": "Cursor-paginated customer list with a capped total",
             "content": {
               "application/json": {
                 "schema": {
@@ -118478,29 +118680,71 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "customers",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
@@ -153322,10 +153566,15 @@
                       "properties": {
                         "count": {
                           "type": "number"
+                        },
+                        "countIsCapped": {
+                          "type": "boolean",
+                          "description": "More products match than `count` (a lower bound: 1,000; 10,000 on a Paid deployment)."
                         }
                       },
                       "required": [
-                        "count"
+                        "count",
+                        "countIsCapped"
                       ]
                     }
                   },
@@ -244471,29 +244720,71 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "products",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
@@ -244779,10 +245070,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -244796,6 +245087,28 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`."
+            },
+            "required": false,
+            "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+            "name": "before",
             "in": "query"
           },
           {
@@ -245029,7 +245342,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated order list",
+            "description": "Cursor-paginated order list with a capped total",
             "content": {
               "application/json": {
                 "schema": {
@@ -245551,35 +245864,305 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "orders",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
                   "required": [
                     "success",
                     "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
                   ]
                 }
               }
@@ -246548,10 +247131,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -246566,6 +247149,28 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`."
+            },
+            "required": false,
+            "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+            "name": "before",
             "in": "query"
           },
           {
@@ -246667,7 +247272,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated hosted-payment recovery order list",
+            "description": "Cursor-paginated hosted-payment recovery order list with a capped total",
             "content": {
               "application/json": {
                 "schema": {
@@ -247189,29 +247794,71 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "orders",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
@@ -264301,10 +264948,10 @@
               "type": "integer",
               "minimum": 1,
               "default": 1,
-              "description": "Page number"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -264319,6 +264966,28 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`."
+            },
+            "required": false,
+            "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+            "name": "before",
             "in": "query"
           },
           {
@@ -264421,7 +265090,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Product list with pagination",
+            "description": "Cursor-paginated product list with a capped total",
             "content": {
               "application/json": {
                 "schema": {
@@ -264588,29 +265257,71 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "products",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
@@ -265773,6 +266484,28 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 1024,
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+            },
+            "required": false,
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`."
+            },
+            "required": false,
+            "description": "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+            "name": "before",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 120
             },
             "required": false,
@@ -265832,7 +266565,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded product summaries with pagination",
+            "description": "Bounded product summaries, cursor-paginated with a capped total",
             "content": {
               "application/json": {
                 "schema": {
@@ -265911,29 +266644,71 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
                             },
                             "limit": {
                               "type": "number"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
                             },
                             "totalPages": {
                               "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
-                            "totalPages"
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean"
+                            },
+                            "startCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the first row; pass as `before` for the previous page. Null for an empty page."
+                            },
+                            "endCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Cursor of the last row; pass as `after` for the next page. Null for an empty page."
+                            }
+                          },
+                          "required": [
+                            "hasNextPage",
+                            "hasPreviousPage",
+                            "startCursor",
+                            "endCursor"
+                          ],
+                          "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
                         }
                       },
                       "required": [
                         "products",
-                        "pagination"
+                        "pagination",
+                        "pageInfo"
                       ]
                     }
                   },
