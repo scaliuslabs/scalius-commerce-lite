@@ -16,7 +16,21 @@ const SCANNER_API_ALLOWLIST = new Set([
   "GET /api/v1/admin/inventory/locations",
   "POST /api/v1/admin/inventory/stock-adjust",
   "POST /api/v1/admin/inventory/stock-set",
+  // Receiving by scan (0109): pick an open purchase order or transfer.
+  "GET /api/v1/admin/inventory/purchase-orders",
+  "GET /api/v1/admin/inventory/transfers",
 ]);
+
+/** One document id path segment (`po_…`, `trf_…`). */
+const DOCUMENT_ID = "[A-Za-z0-9_-]{1,100}";
+
+/** Receiving by scan (0109): read one open document and receive its lines. */
+const SCANNER_API_PATTERNS: ReadonlyArray<readonly [method: string, path: RegExp]> = [
+  ["GET", new RegExp(`^/api/v1/admin/inventory/purchase-orders/${DOCUMENT_ID}$`)],
+  ["POST", new RegExp(`^/api/v1/admin/inventory/purchase-orders/${DOCUMENT_ID}/receive$`)],
+  ["GET", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}$`)],
+  ["POST", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}/receive$`)],
+];
 
 export async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -64,5 +78,7 @@ export function isAllowedScannerApiRequest(pathname: string, method: string): bo
   const normalizedPath = pathname.startsWith("/api/v1")
     ? pathname
     : `/api/v1${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
-  return SCANNER_API_ALLOWLIST.has(`${method.toUpperCase()} ${normalizedPath}`);
+  const upperMethod = method.toUpperCase();
+  return SCANNER_API_ALLOWLIST.has(`${upperMethod} ${normalizedPath}`)
+    || SCANNER_API_PATTERNS.some(([allowedMethod, path]) => allowedMethod === upperMethod && path.test(normalizedPath));
 }
