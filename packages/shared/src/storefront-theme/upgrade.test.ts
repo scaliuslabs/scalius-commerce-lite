@@ -1,12 +1,20 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import v1 from "./fixtures/v1.json";
+import v2 from "./fixtures/v2.json";
+import v3 from "./fixtures/v3.json";
+import v4 from "./fixtures/v4.json";
+import v5 from "./fixtures/v5.json";
+import v6 from "./fixtures/v6.json";
+import partialV1 from "./fixtures/v1-partial.json";
+import colorsV1 from "./fixtures/v1-colors.json";
 import {
   DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, homeSectionRequests, homeSectionsShowDeliveryFacts,
   parseStoredStorefrontThemeDocument, resolveStorefrontTheme, storefrontSectionDefault,
   storefrontThemeDocumentSchema, upgradeThemeDocument, buildStorefrontTokenCss,
 } from "../storefront-theme";
 
-const fixture = (version: number) => JSON.parse(readFileSync(new URL(`./fixtures/v${version}.json`, import.meta.url), "utf8"));
+const historicalFixtures = [v1, v2, v3, v4, v5, v6];
+const fixture = (version: number) => JSON.parse(JSON.stringify(historicalFixtures[version - 1]));
 
 describe("step-wise stored theme upgrades", () => {
   for (const version of [1, 2, 3, 4, 5, 6]) {
@@ -48,7 +56,7 @@ describe("step-wise stored theme upgrades", () => {
   });
 
   it("enriches partial semantic settings with historical defaults and preserves supplied choices", () => {
-    const partial = JSON.parse(readFileSync(new URL("./fixtures/v1-partial.json", import.meta.url), "utf8"));
+    const partial = structuredClone(partialV1);
     const before = structuredClone(partial);
     const theme = upgradeThemeDocument(partial);
     expect(partial).toEqual(before);
@@ -60,7 +68,7 @@ describe("step-wise stored theme upgrades", () => {
   });
 
   it("upgrades the original flat colour map while preserving overrides", () => {
-    const colors = JSON.parse(readFileSync(new URL("./fixtures/v1-colors.json", import.meta.url), "utf8"));
+    const colors = structuredClone(colorsV1);
     const theme = upgradeThemeDocument(colors);
     expect(theme.tokens.colors).toMatchObject({ primary: "#123456", "primary-foreground": "#ffffff", border: "#aabbcc", foreground: "#18181b" });
     expect(theme.tokens).toMatchObject({ typography: "retail", density: "comfortable", radius: "subtle", container: "1440", surface: "hairline" });

@@ -20,7 +20,7 @@ const V1_HOME = ["hero", "collections", "categories", "delivery"] as const;
 const V1_LAYOUT = {
   header: "classic" as const, footer: "columns" as const,
   productCard: { imageRatio: "square" as const, hoverImage: false, quickBuy: false, badge: "image" as const },
-  grid: { desktop: 4, mobile: 2 }, productPage: { gallery: "beside" as const, thumbnails: "beside" as const }, homepage: [...V1_HOME],
+  grid: { desktop: 4 as const, mobile: 2 as const }, productPage: { gallery: "beside" as const, thumbnails: "beside" as const }, homepage: [...V1_HOME],
 };
 // Missing pre-v2 choices receive their own historical defaults, never modern template defaults.
 const v1SettingsSchema = z.object({
