@@ -9,7 +9,7 @@ import {
     productAttributeValues,
     inventoryMovements,
 } from "@scalius/database/schema";
-import { and, sql, eq, asc, inArray, isNull, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, sql, eq, asc, inArray, isNull, or, type SQLWrapper } from "drizzle-orm";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,

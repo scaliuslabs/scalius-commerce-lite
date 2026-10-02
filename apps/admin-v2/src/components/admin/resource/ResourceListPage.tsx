@@ -12,7 +12,13 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { AppBulkActionsMenu } from "~/components/admin/apps/ui/AppActions";
 import { useAppActions, type AppTarget } from "~/components/admin/apps/ui/surfaces";
-import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
+import {
+  NO_CURSOR,
+  createDataSelector,
+  isPagingRefusal,
+  resetCursorUnlessPaging,
+  type ListSearchParams,
+} from "~/lib/list-helpers";
 import { listSearchKey, useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
@@ -104,6 +110,13 @@ export interface ResourceListPageProps<T extends { id: string }> {
   onReorder?: (oldIndex: number, newIndex: number, rows: T[]) => void;
   /** The list's order when no sort is chosen (the API's default); "Recently updated" unless given. */
   defaultSortLabel?: string;
+  /**
+   * The API pages this list by cursor (`pageInfo`, a total capped at 1,000):
+   * Previous/Next follow the cursors with an approximate count, and any change
+   * of filter, sort, tab or search starts again from the first page. `query`
+   * must send `search.after` / `search.before` (and no `page` beside them).
+   */
+  cursorPaging?: boolean;
 }
 
 /**
@@ -123,10 +136,16 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   // `kept`: selected rows a permanent delete leaves in Trash (canDeleteRow is false).
   const [confirm, setConfirm] = useState<{ action: "trash" | "delete"; rows: T[]; kept: number } | null>(null);
 
+  const cursorPaging = props.cursorPaging === true;
   const setSearch = useCallback(
     (updates: Record<string, unknown>) =>
-      void navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, ...updates })) as never }),
-    [navigate],
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({
+          ...prev,
+          ...(cursorPaging ? resetCursorUnlessPaging(updates) : updates),
+        })) as never,
+      }),
+    [cursorPaging, navigate],
   );
 
   // A `?q=` link was adopted as the session term by the loader; the address drops it
@@ -205,18 +224,25 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   }, [canBulk, contentColumns, lifecycle, navigate, request, rowActions, rowLabel, rowTo, t, trashed, viewUrl]);
 
   const dataSelector = useMemo(() => createDataSelector<T>(props.dataKey), [props.dataKey]);
-  const { table, error, isFetching, isLoading, refetch, selectedRows, clearSelection, pagination } = useServerTable<T>({
+  const { table, error, isFetching, isLoading, refetch, selectedRows, clearSelection, pagination, pageInfo } = useServerTable<T>({
     columns,
     queryOptions: props.query,
     dataSelector,
-    currentPage: search.page,
+    currentPage: cursorPaging ? 1 : search.page,
     currentLimit: search.limit,
     currentSort: search.sort,
     currentOrder: search.order,
-    onPaginationChange: (page, limit) => setSearch({ page, limit }),
+    onPaginationChange: (page, limit) => setSearch({ page: cursorPaging ? 1 : page, limit }),
     onSortingChange: (sort, order) => setSearch({ sort, order, page: 1 }),
     enableRowSelection: props.canSelectRow ? (row) => props.canSelectRow!(row.original) : true,
   });
+
+  // A cursor or page the API refuses (an old bookmark, a hand-edited URL, a
+  // list whose sort changed) starts the list again from its first page.
+  const refused = isPagingRefusal(error);
+  useEffect(() => {
+    if (refused) setSearch({ page: 1, ...NO_CURSOR });
+  }, [refused, setSearch]);
 
   // "Select all N" across pages (Polaris IndexTable): offered once the whole
   // page is ticked; it loads every row so bulk actions keep their contracts.
@@ -374,6 +400,14 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         sortable={Boolean(props.sortable) && pagination.page === 1 && rowCount > 1 && pagination.total === rowCount && pagination.total <= 90}
         onReorder={props.onReorder ? (from, to) => props.onReorder!(from, to, table.getRowModel().rows.map((row) => row.original)) : undefined}
         getRowLabel={rowLabel}
+        cursorPaging={cursorPaging ? {
+          total: pagination.total,
+          totalIsCapped: pagination.totalIsCapped,
+          offset: pagination.offset,
+          pageInfo,
+          onNext: (endCursor) => setSearch({ after: endCursor, before: undefined, page: 1 }),
+          onPrevious: (startCursor) => setSearch({ before: startCursor, after: undefined, page: 1 }),
+        } : undefined}
         toolbar={
           <>
             {tabBar}
@@ -382,7 +416,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
                 searchValue={term}
                 onSearchChange={(value) => {
                   setTerm(value);
-                  if (search.page !== 1) setSearch({ page: 1 });
+                  if (search.page !== 1 || search.after || search.before) setSearch({ page: 1 });
                 }}
                 searchPlaceholder={props.searchPlaceholder ?? t("search")}
                 selectedCount={bulkRows.length}

@@ -337,8 +337,7 @@ app.openapi(exportOrdersRoute, async (c) => {
     let after: string | undefined;
     // Rows remain beyond the file; the list's own total is only a capped count.
     let moreRows = false;
-    let total = 0;
-    let totalIsCapped = false;
+    let counted: { total: number; totalIsCapped: boolean } | undefined;
 
     exportPages: for (;;) {
         const result = await listOrders(db, {
@@ -362,8 +361,7 @@ app.openapi(exportOrdersRoute, async (c) => {
             startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
-        total = result.pagination.total;
-        totalIsCapped = result.pagination.totalIsCapped;
+        counted = { total: result.pagination.total, totalIsCapped: result.pagination.totalIsCapped };
         const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
         for (const order of result.orders) {
             const detail = details.get(order.id);
@@ -411,8 +409,8 @@ app.openapi(exportOrdersRoute, async (c) => {
         "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
         "X-Export-Row-Count": String(artifact.rowCount),
         // Exact up to the list's count cap; above it a lower bound (X-Export-Total-Capped).
-        "X-Export-Total-Count": String(totalIsCapped ? Math.max(total, artifact.rowCount) : total),
-        "X-Export-Total-Capped": totalIsCapped ? "true" : "false",
+        "X-Export-Total-Count": String(counted?.totalIsCapped ? Math.max(counted.total, artifact.rowCount) : counted?.total ?? 0),
+        "X-Export-Total-Capped": counted?.totalIsCapped ? "true" : "false",
     });
 });
 
@@ -527,8 +525,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
     let exportedRows = 0;
     let after: string | undefined;
     let moreRows = false;
-    let total = 0;
-    let totalIsCapped = false;
+    let counted: { total: number; totalIsCapped: boolean } | undefined;
 
     exportPages: for (;;) {
         const result = await listOrders(db, {
@@ -546,8 +543,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
             startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
-        total = result.pagination.total;
-        totalIsCapped = result.pagination.totalIsCapped;
+        counted = { total: result.pagination.total, totalIsCapped: result.pagination.totalIsCapped };
         for (const order of result.orders) {
             if (exportedRows >= maxRows || !csvBuilder.append(order)) {
                 moreRows = true;
@@ -583,8 +579,8 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
         "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
         "X-Export-Row-Count": String(artifact.rowCount),
         // Exact up to the list's count cap; above it a lower bound (X-Export-Total-Capped).
-        "X-Export-Total-Count": String(totalIsCapped ? Math.max(total, artifact.rowCount) : total),
-        "X-Export-Total-Capped": totalIsCapped ? "true" : "false",
+        "X-Export-Total-Count": String(counted?.totalIsCapped ? Math.max(counted.total, artifact.rowCount) : counted?.total ?? 0),
+        "X-Export-Total-Capped": counted?.totalIsCapped ? "true" : "false",
     });
 });
 

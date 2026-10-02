@@ -7,7 +7,6 @@ import { compareSqliteValues } from "../../testing/keyset-walk";
 import { getStorefrontCategoryProducts, getStorefrontProducts } from "./listing";
 
 type Captured = { sql: string; params: readonly SQLInputValue[] };
-type Db = ReturnType<typeof createSqliteD1Database>["db"];
 
 const PLANS = ["free", "paid"] as const;
 
