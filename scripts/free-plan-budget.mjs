@@ -188,7 +188,7 @@ export function renderWorkerdTable(report) {
     return sorted.length === 0 ? 0 : sorted[Math.floor(sorted.length / 2)];
   };
   const lines = [
-    "Real CPU in workerd (Miniflare), milliseconds: wall time minus time waiting on the D1 proxy",
+    `Real CPU in workerd (Miniflare), plan profile ${report.plan ?? "free"}, milliseconds: wall time minus time waiting on the D1 proxy`,
     `${"operation".padEnd(34)} ${pad("cold", 7)} ${pad("warm med", 9)} ${pad("warm min", 9)} ${pad("D1 calls", 9)}`,
   ];
   for (const row of report.rows) {
@@ -231,10 +231,16 @@ function main(argv) {
     }
     if (options.record) console.log(`\n${budgetsSource(report)}`);
     if (options.workerd) {
-      const workerdPath = join(scratch, "workerd.json");
-      const workerdStatus = vitest("apps/api/src/free-plan-workerd.test.ts", { FREE_PLAN_WORKERD: "1", FREE_PLAN_WORKERD_REPORT: workerdPath });
-      status ||= workerdStatus;
-      console.log(`\n${renderWorkerdTable(JSON.parse(readFileSync(workerdPath, "utf8")))}`);
+      for (const plan of ["free", "paid"]) {
+        const workerdPath = join(scratch, `workerd-${plan}.json`);
+        const workerdStatus = vitest("apps/api/src/free-plan-workerd.test.ts", {
+          FREE_PLAN_WORKERD: "1",
+          FREE_PLAN_WORKERD_PLAN: plan,
+          FREE_PLAN_WORKERD_REPORT: workerdPath,
+        });
+        status ||= workerdStatus;
+        console.log(`\n${renderWorkerdTable(JSON.parse(readFileSync(workerdPath, "utf8")))}`);
+      }
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });

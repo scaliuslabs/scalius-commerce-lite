@@ -6,13 +6,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database, type SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
 import { user as userTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { savePlatformSettings } from "@scalius/core/modules/platform";
-import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
+import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import { storefrontBatchPath } from "@scalius/shared/public-api-cache-routes";
 import { composeApiRuntimeEnv } from "./runtime/runtime-env";
 import { STORE } from "./testing/free-plan-store";
@@ -33,6 +33,8 @@ import { cartItems, seedCatalog, seedOrders } from "./testing/free-plan-seed";
  */
 
 const enabled = process.env.FREE_PLAN_WORKERD === "1";
+/** The plan profile the bundled Worker is built for (`define` in its config, as the Paid deploy generates). */
+const PLAN: WorkersPlan = process.env.FREE_PLAN_WORKERD_PLAN === "paid" ? "paid" : "free";
 const apiDir = resolve(import.meta.dirname, "..");
 const HARNESS = resolve(import.meta.dirname, "testing/workerd-harness.worker.ts");
 const COMPATIBILITY_DATE = "2026-07-30";
@@ -92,6 +94,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       minify: true,
       compatibility_date: COMPATIBILITY_DATE,
       compatibility_flags: COMPATIBILITY_FLAGS,
+      ...(PLAN === "paid" ? { define: { __SCALIUS_PLAN__: JSON.stringify(PLAN) } } : {}),
     }));
     execFileSync(join(apiDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "--outdir", join(workdir, "dist"), "--config", join(workdir, "wrangler.json")], {
       cwd: apiDir,
@@ -137,14 +140,17 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     const composed = await composeApiRuntimeEnv({
       DB: created.binding, CACHE: kv, SCALIUS_SECRET: STORE.masterSecret, CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY,
     } as unknown as Env);
+    // The owner's hash is the one this plan's sign-in verifies (no upgrade write inside a measurement).
+    vi.stubGlobal("__SCALIUS_PLAN__", PLAN);
     const auth = createAuth(composed);
     const owner = await auth.api.signUpEmail({ body: { email: STORE.ownerEmail, password: STORE.ownerPassword, name: "Owner" } });
+    vi.unstubAllGlobals();
     await db.update(userTable).set({ isSuperAdmin: true, role: "admin" }).where(eq(userTable.id, owner.user.id));
   }, 240_000);
 
   afterAll(async () => {
     const target = process.env.FREE_PLAN_WORKERD_REPORT;
-    if (target) writeFileSync(target, `${JSON.stringify({ rows, passwords }, null, 2)}\n`);
+    if (target) writeFileSync(target, `${JSON.stringify({ plan: PLAN, rows, passwords }, null, 2)}\n`);
     await mf?.dispose();
     created?.sqlite.close();
     if (workdir) rmSync(workdir, { recursive: true, force: true });
