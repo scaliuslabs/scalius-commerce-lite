@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
@@ -23,9 +23,7 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
-import { CustomerBulkActions } from "~/components/admin/customers/CustomerBulkActions";
 import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
-import { ExportCustomersDialog } from "~/components/admin/customers/ExportCustomersDialog";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 import { resourceMessages } from "~/i18n/resource";
 import {
@@ -58,6 +56,11 @@ function listQuery(search: CustomerListSearch, term: string) {
   });
 }
 
+// The bulk tag dialog and the export dialog load when first used: the list
+// renders without their tag field, radio choices and CSV writer.
+const CustomerBulkActions = lazy(() => import("~/components/admin/customers/CustomerBulkActions").then((module) => ({ default: module.CustomerBulkActions })));
+const ExportCustomersDialog = lazy(() => import("~/components/admin/customers/ExportCustomersDialog").then((module) => ({ default: module.ExportCustomersDialog })));
+
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
@@ -86,7 +89,13 @@ function CustomersPage() {
   const [importing, setImporting] = useState(false);
   const openTo = (row: Customer) => `/admin/customers/${row.id}/edit`;
   // The export dialog: from the header (the filters) or the bulk bar (the selection).
-  const [exporting, setExporting] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
+  const [exporting, setExportingState] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
+  // Once opened, the export dialog stays mounted (it closes with its own animation).
+  const [exportLoaded, setExportLoaded] = useState(false);
+  const setExporting: typeof setExportingState = (next) => {
+    setExportLoaded(true);
+    setExportingState(next);
+  };
   // Same query as the table (shared cache): the export dialog names how many match.
   const { data: listed } = useQuery(listQuery(search, term));
 
@@ -149,12 +158,14 @@ function CustomersPage() {
         filterParams={CUSTOMER_FILTER_PARAMS}
         filters={<CustomerListFilters search={search} />}
         bulkActions={(rows, done) => (
-          <CustomerBulkActions
-            rows={rows}
-            done={done}
-            canEdit={canEdit}
-            onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
-          />
+          <Suspense fallback={null}>
+            <CustomerBulkActions
+              rows={rows}
+              done={done}
+              canEdit={canEdit}
+              onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
+            />
+          </Suspense>
         )}
         rowTo={openTo}
         rowLabel={(row) => customerTitle(row, t).title}
@@ -176,15 +187,19 @@ function CustomersPage() {
         }}
       />
       <LazyImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
-      <ExportCustomersDialog
-        open={exporting.open}
-        onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
-        filters={customerListFilters(search)}
-        selectedIds={exporting.ids}
-        // A capped count is a lower bound: the dialog then names the filters, not a number.
-        total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
-        searchActive={Boolean(term)}
-      />
+      {exporting.open || exportLoaded ? (
+        <Suspense fallback={null}>
+          <ExportCustomersDialog
+            open={exporting.open}
+            onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
+            filters={customerListFilters(search)}
+            selectedIds={exporting.ids}
+            // A capped count is a lower bound: the dialog then names the filters, not a number.
+            total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
+            searchActive={Boolean(term)}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
