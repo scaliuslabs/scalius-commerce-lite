@@ -47,6 +47,9 @@ export interface DiscountDraft {
   limitTotal: boolean;
   totalUses: string;
   oncePerCustomer: boolean;
+  /** "segments": only signed-in customers in any of `customerSegmentIds`. */
+  eligibility: "all" | "segments";
+  customerSegmentIds: string[];
   combines: Record<DiscountClass, boolean>;
   startDate: string;
   startTime: string;
@@ -69,6 +72,8 @@ export const DISCOUNT_CLASS: Record<DiscountType, DiscountClass> = {
 const LOCAL_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const LOCAL_TIME = /^(\d{2}):(\d{2})$/u;
 const CODE_PATTERN = /^[A-Z0-9_-]{3,50}$/u;
+/** Customer segments one discount can be limited to (the API's limit). */
+export const MAX_CUSTOMER_SEGMENTS = 5;
 
 function partsIn(epochMs: number) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -194,6 +199,8 @@ export function emptyDraft(type: DiscountType, now = Date.now()): DiscountDraft 
     limitTotal: false,
     totalUses: "",
     oncePerCustomer: false,
+    eligibility: "all",
+    customerSegmentIds: [],
     combines: { product: false, order: false, shipping: false },
     startDate: start.date,
     startTime: start.time,
@@ -264,6 +271,8 @@ export function draftFromDiscount(record: DiscountRecord, currencyCode: string):
     limitTotal: record.maxRedemptions !== null,
     totalUses: String(record.maxRedemptions ?? ""),
     oncePerCustomer: record.maxRedemptionsPerCustomer !== null,
+    eligibility: record.customerSegmentIds.length > 0 ? "segments" : "all",
+    customerSegmentIds: [...record.customerSegmentIds],
     combines: { ...record.combinesWith },
     startDate: start?.date ?? "",
     startTime: start?.time ?? "",
@@ -314,6 +323,10 @@ export function validateDraft(
   }
   if (draft.method === "code" && draft.limitTotal) {
     set("totalUses", quantityError(draft.totalUses, Number.MAX_SAFE_INTEGER));
+  }
+  if (draft.eligibility === "segments") {
+    if (draft.customerSegmentIds.length === 0) errors.customerSegmentIds = "errorPickSegments";
+    else if (draft.customerSegmentIds.length > MAX_CUSTOMER_SEGMENTS) errors.customerSegmentIds = "errorSegmentsMax";
   }
   const start = storeTimeToEpoch(draft.startDate, draft.startTime);
   if (start === null) errors.startDate = "errorDate";
@@ -416,6 +429,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
     codes: isCode ? [{ code, isActive: true }] : [],
     conditions,
     effects,
+    customerSegmentIds: draft.eligibility === "segments" ? draft.customerSegmentIds : [],
   };
 }
 
@@ -489,6 +503,8 @@ export interface SummaryFormat {
   date: (epochSeconds: number) => string;
   /** The picked items by name ("Panjabi, Attar and 1 more") or by count ("3 products"). */
   scope: (scope: Scope) => string;
+  /** The picked customer segments by name ("VIP, Dhaka buyers"). */
+  segments?: (ids: string[]) => string;
 }
 
 const one = (value: string) => latinDigits(value).trim() === "1";
@@ -577,6 +593,12 @@ export function summarizeDraft(
     else if (draft.minimum === "quantity" && minimumCount) {
       lines.push({ key: one(draft.minimumValue) ? "summaryMinimumQuantityOne" : "summaryMinimumQuantity", vars: { count: minimumCount } });
     }
+  }
+  if (draft.eligibility === "segments" && draft.customerSegmentIds.length > 0) {
+    lines.push({
+      key: "summarySegments",
+      vars: { names: format.segments?.(draft.customerSegmentIds) ?? format.number(String(draft.customerSegmentIds.length)) },
+    });
   }
   if (draft.method === "code") {
     const total = count(draft.totalUses, Number.MAX_SAFE_INTEGER);

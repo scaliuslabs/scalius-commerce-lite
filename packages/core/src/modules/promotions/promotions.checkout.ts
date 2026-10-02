@@ -6,6 +6,7 @@ import {
     products,
     promotionCodes,
     promotionConditions,
+    promotionCustomerSegments,
     promotionEffects,
     promotionRedemptions,
     promotions,
@@ -29,7 +30,7 @@ import {
     type PromotionRejectionReason,
     type PromotionScope,
 } from "./promotions.evaluator";
-import { promotionCandidateRecord } from "./promotions.service";
+import { matchCustomerSegments, promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
 import { deps } from "../../cache-deps";
 
@@ -158,6 +159,13 @@ export interface StorefrontDiscountInput {
     /** Buyer identity for per-customer limits: a known id, else the checkout phone. */
     customerId?: string | null;
     customerPhone?: string | null;
+    /**
+     * The signed-in customer account, for promotions limited to customer
+     * segments; absent or null for a guest, who is never in a segment (a
+     * typed phone must not unlock one). The quote and the order commit's
+     * re-check must pass the same account.
+     */
+    segmentCustomerId?: string | null;
     evaluatedAtEpochSeconds?: number;
 }
 
@@ -166,8 +174,12 @@ export const MAX_SUBMITTED_DISCOUNT_CODES = 5;
 const MAX_AUTOMATIC_CANDIDATES = 20;
 const MAX_OFFER_PRODUCTS = 3;
 
+const SEGMENT_SIGN_IN_MESSAGE = "This code is for selected customers. Sign in with an eligible account.";
+const SEGMENT_NOT_ELIGIBLE_MESSAGE = "This code is for selected customers, and your account isn't one of them.";
+
 function genericRejectionMessage(reason: PromotionRejectionReason | "inactive"): string {
     switch (reason) {
+        case "customer_not_eligible": return SEGMENT_SIGN_IN_MESSAGE;
         case "not_started": return "This discount is not available yet.";
         case "expired": return "This discount has expired.";
         case "condition_currency_mismatch":
@@ -204,9 +216,20 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
 }
 
 /**
+ * The outer `promotions` row is limited to no customer segment. Public offer
+ * reads and guests never see a limited automatic promotion: whether it
+ * applies depends on who is signed in. (The link table advances the
+ * `promo:` keys these reads declare.)
+ */
+const untargetedPromotionSql = sql`NOT EXISTS (SELECT 1 FROM promotion_customer_segments AS segment_limit WHERE segment_limit.promotion_id = "promotions"."id")`;
+
+/**
  * Loads the codes' promotions (any status, so the buyer hears why they fail)
- * plus the currently scheduled active automatic promotions, with code usage,
- * in one read batch.
+ * plus the currently scheduled active automatic promotions, with code usage
+ * and customer-segment limits, in one read batch. Automatic promotions
+ * limited to segments compete only for a signed-in customer; then, when a
+ * loaded active promotion is limited, the customer's membership of those
+ * segments is read once per distinct segment (`matchCustomerSegments`).
  */
 async function loadCandidates(
     db: Database,
@@ -222,6 +245,7 @@ async function loadCandidates(
           AND ${promotions.deletedAt} IS NULL
           AND (${promotions.startsAt} IS NULL OR ${promotions.startsAt} <= ${now})
           AND (${promotions.endsAt} IS NULL OR ${promotions.endsAt} > ${now})
+          ${input.segmentCustomerId ? sql`` : sql`AND ${untargetedPromotionSql}`}
         ORDER BY ${promotions.priority}, ${promotions.id} LIMIT ${MAX_AUTOMATIC_CANDIDATES}) AS automatic`;
     const candidateIds = sql`(${codeIds} UNION ${automaticIds})`;
     const customerMatch = input.customerId
@@ -229,7 +253,7 @@ async function loadCandidates(
         : input.customerPhone
             ? sql`${promotionRedemptions.customerId} IN (SELECT ${customers.id} FROM ${customers} WHERE ${customers.phone} = ${input.customerPhone})`
             : sql`1 = 0`;
-    const [parents, codeRows, conditionRows, effectRows, usageRows, transitionRows] = await db.batch([
+    const [parents, codeRows, conditionRows, effectRows, segmentRows, usageRows, transitionRows] = await db.batch([
         db.select().from(promotions).where(sql`${promotions.id} IN ${candidateIds}`),
         db.select().from(promotionCodes)
             .where(sql`${promotionCodes.promotionId} IN ${candidateIds}`)
@@ -240,6 +264,9 @@ async function loadCandidates(
         db.select().from(promotionEffects)
             .where(and(sql`${promotionEffects.promotionId} IN ${candidateIds}`, isNull(promotionEffects.deletedAt)))
             .orderBy(asc(promotionEffects.position), asc(promotionEffects.id)),
+        db.select({ promotionId: promotionCustomerSegments.promotionId, segmentId: promotionCustomerSegments.segmentId })
+            .from(promotionCustomerSegments)
+            .where(sql`${promotionCustomerSegments.promotionId} IN ${candidateIds}`),
         db.select({
             promotionId: promotionRedemptions.promotionId,
             redemptionCount: sql<number>`count(*)`,
@@ -254,18 +281,29 @@ async function loadCandidates(
         declareNextAutomaticPromotionTransition(transitionRows as Array<{ nextStart: number | null; nextEnd: number | null }> | undefined);
     }
     const usage = new Map(usageRows.map((row) => [row.promotionId, row]));
+    // Only an active promotion can apply; the others fail on their status first.
+    const activeIds = new Set(parents.filter((parent) => parent.status === "active").map(({ id }) => id));
+    const members = await matchCustomerSegments(
+        db,
+        input.segmentCustomerId,
+        segmentRows.filter((row) => activeIds.has(row.promotionId)).map(({ segmentId }) => segmentId),
+        now,
+    );
     return parents.map((parent) => {
         const stats = usage.get(parent.id);
+        const segments = segmentRows.filter((row) => row.promotionId === parent.id);
         return {
             ...promotionCandidateRecord(
                 parent,
                 codeRows.filter((row) => row.promotionId === parent.id),
                 conditionRows.filter((row) => row.promotionId === parent.id),
                 effectRows.filter((row) => row.promotionId === parent.id),
+                segments,
             ),
             redemptionCount: Number(stats?.redemptionCount ?? 0),
             customerRedemptionCount: Number(stats?.customerRedemptionCount ?? 0),
             discountSpendMinor: Number(stats?.discountSpendMinor ?? 0),
+            customerInSegment: segments.some(({ segmentId }) => members.has(segmentId)),
         };
     });
 }
@@ -502,7 +540,11 @@ export async function quoteStorefrontDiscount(
         if (!candidate && knownCodes.has(code)) rejected.push({ code, reason: "unavailable" });
         else if (!candidate) rejected.push({ code, reason: "not_found", message: "This discount code is not valid." });
         else if (candidate.method !== "code") rejected.push({ code, reason: "unavailable" });
-        else if (candidate.maxRedemptionsPerCustomer && !input.customerId && !input.customerPhone) {
+        else if (
+            candidate.maxRedemptionsPerCustomer && !input.customerId && !input.customerPhone
+            // A phone can't make a guest eligible for a segment-limited code.
+            && (candidate.customerSegmentIds.length === 0 || candidate.customerInSegment)
+        ) {
             rejected.push({
                 code,
                 reason: "needs_phone",
@@ -543,7 +585,14 @@ export async function quoteStorefrontDiscount(
         const appliedDelivery = discountClass === "shipping"
             ? applied?.discounts.find((other) => other.discountClass === "shipping")
             : undefined;
-        if (appliedDelivery && appliedDelivery.totalDiscountMinor >= input.cart.shippingAmountMinor && input.cart.shippingAmountMinor > 0) {
+        if (reason === "customer_not_eligible") {
+            // Nothing in the cart can make it apply: only who is signed in.
+            rejected.push({
+                code,
+                reason: "unavailable",
+                message: input.segmentCustomerId ? SEGMENT_NOT_ELIGIBLE_MESSAGE : SEGMENT_SIGN_IN_MESSAGE,
+            });
+        } else if (appliedDelivery && appliedDelivery.totalDiscountMinor >= input.cart.shippingAmountMinor && input.cart.shippingAmountMinor > 0) {
             // Delivery is already free: no minimum this code still needs can make it better.
             rejected.push({
                 code,
@@ -730,7 +779,11 @@ export interface ProductBuyGetOffer {
     products: DiscountOfferProduct[];
 }
 
-/** Active automatic Buy X get Y discounts this product counts toward or is given by. */
+/**
+ * Active automatic Buy X get Y discounts this product counts toward or is
+ * given by. A publicly cached read with no buyer: promotions limited to
+ * customer segments are never listed.
+ */
 export async function listProductBuyGetOffers(
     db: Database,
     productId: string,
@@ -807,6 +860,18 @@ function canonicalApplied(applied: AppliedPromotion): string {
     });
 }
 
+/** Who commits the order, for the commit-time re-check of its discount. */
+export interface PromotionCheckoutBuyer {
+    /** The order's customer record (per-customer limits). */
+    customerId: string;
+    /**
+     * The signed-in account the checkout was prepared for, or null for a
+     * guest: never a customer record matched by the guest's phone or e-mail,
+     * so the re-check sees the same segments the quote saw.
+     */
+    segmentCustomerId: string | null;
+}
+
 /**
  * Re-evaluates a prepared discount at order-commit time for the committing
  * customer. The redemption triggers (code limits, lifecycle) and the
@@ -816,14 +881,15 @@ function canonicalApplied(applied: AppliedPromotion): string {
 export async function verifyPromotionCheckoutSnapshot(
     db: Database,
     snapshot: PromotionCheckoutSnapshot,
-    customerId: string,
+    buyer: PromotionCheckoutBuyer,
     evaluatedAtEpochSeconds?: number,
 ): Promise<AppliedPromotion> {
     const { submittedCodes, ...cart } = snapshot.cart;
     const quote = await quoteStorefrontDiscount(db, {
         codes: submittedCodes,
         cart,
-        customerId,
+        customerId: buyer.customerId,
+        segmentCustomerId: buyer.segmentCustomerId,
         evaluatedAtEpochSeconds,
     });
     assertDiscountCodesApplied(quote);

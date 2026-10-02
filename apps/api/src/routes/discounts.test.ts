@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => ({
   quoteStorefrontDiscount: vi.fn(),
   previewStorefrontBundleSavings: vi.fn(),
   selectStorefrontCartProductRows: vi.fn(),
+  getCustomerBySession: vi.fn(),
+}));
+
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
+  getCustomerBySession: mocks.getCustomerBySession,
 }));
 
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
@@ -43,11 +49,11 @@ function createTestApp() {
   return { app, db };
 }
 
-const post = (app: OpenAPIHono<{ Bindings: Env }>, body: unknown) => app.request("/api/v1/discounts/validate", {
+const post = (app: OpenAPIHono<{ Bindings: Env }>, body: unknown, headers: Record<string, string> = {}) => app.request("/api/v1/discounts/validate", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", ...headers },
   body: JSON.stringify(body),
-});
+}, {} as never);
 
 describe("public discount validation", () => {
   beforeEach(() => {
@@ -111,8 +117,11 @@ describe("public discount validation", () => {
         rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallAmount: 200 }],
       },
     });
+    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(db, {
       codes: ["save10", "SHIP"],
+      customerId: null,
+      segmentCustomerId: null,
       customerPhone: "+8801712345678",
       shippingKnown: true,
       cart: {
@@ -121,6 +130,27 @@ describe("public discount validation", () => {
         shippingAmountMinor: 6_000,
       },
     });
+  });
+
+  it("previews a signed-in buyer as their account (segment discounts), a stale session as a guest", async () => {
+    const { app } = createTestApp();
+    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, discounts: [], offers: [], rejectedCodes: [] });
+    const body = { codes: [], items: [{ id: "prod_1", variantId: "var_1", price: 1500, quantity: 1 }] };
+
+    mocks.getCustomerBySession.mockResolvedValueOnce({ customerId: "cust_account" });
+    expect((await post(app, body, { "X-Customer-Session": "session-token" })).status).toBe(200);
+    expect(mocks.getCustomerBySession).toHaveBeenLastCalledWith(expect.anything(), "session-token", undefined);
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
+      customerId: "cust_account",
+      segmentCustomerId: "cust_account",
+    }));
+
+    mocks.getCustomerBySession.mockResolvedValueOnce(null);
+    expect((await post(app, body, { "X-Customer-Session": "expired-token" })).status).toBe(200);
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
+      customerId: null,
+      segmentCustomerId: null,
+    }));
   });
 
   it("applies the bundle saving when it beats a typed code, and names the code it beat", async () => {

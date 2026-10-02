@@ -187,6 +187,7 @@ async function resolveAuthoritativeTaxQuote(
   input: {
     discountCodes: string[];
     customerPhone?: string | null;
+    /** The signed-in account (per-customer limits and segment-limited promotions). */
     customerId?: string | null;
   },
   cartValidation: TaxQuoteCartValidationResult,
@@ -197,6 +198,7 @@ async function resolveAuthoritativeTaxQuote(
   const discount = await quoteStorefrontDiscount(db, {
     codes: input.discountCodes,
     customerId: input.customerId,
+    segmentCustomerId: input.customerId ?? null,
     customerPhone: input.customerPhone,
     cart: {
       currencyCode,
@@ -253,17 +255,20 @@ async function resolveAuthoritativeTaxQuote(
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
+  // A signed-in buyer is quoted as the order will be: their per-customer
+  // limits and the promotions limited to their customer segments. A missing
+  // or stale session quotes as a guest (checkout itself reports it).
   const customerSessionToken = getCustomerSessionTokenFromRequest(c);
-  const sessionCustomer = customerSessionToken && data.discountCodes.length > 0
-    ? await getCustomerBySession(
-        db,
-        customerSessionToken,
-        getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
-      )
-    : null;
-  const [currency, paymentMethods] = await Promise.all([
+  const [currency, paymentMethods, sessionCustomer] = await Promise.all([
     getCurrencySettings(db),
     getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
+    customerSessionToken
+      ? getCustomerBySession(
+          db,
+          customerSessionToken,
+          getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+        )
+      : null,
   ]);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,

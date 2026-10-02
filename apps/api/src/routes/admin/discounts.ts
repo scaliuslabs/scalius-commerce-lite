@@ -66,6 +66,9 @@ const discountSchema = z.object({
         allocation: z.enum(["across", "once"]),
         config: z.record(z.string(), z.unknown()),
     })),
+    customerSegmentIds: z.array(z.string()).openapi({
+        description: "Only signed-in customers in any of these customer segments get this discount; empty means every customer.",
+    }),
 });
 
 const mutationSchema = z.object({
@@ -165,7 +168,9 @@ app.openapi(createRoute({
                 "application/json": {
                     schema: z.object({
                         expectedRevision: z.number().int().positive(),
-                        customerId: z.string().trim().min(1).max(180).nullable().optional(),
+                        customerId: z.string().trim().min(1).max(180).nullable().optional().openapi({
+                            description: "Preview as this customer, signed in: their usage and customer segments. Without one, a discount limited to segments does not apply.",
+                        }),
                         cart: promotionEvaluationCartSchema,
                     }).strict(),
                 },

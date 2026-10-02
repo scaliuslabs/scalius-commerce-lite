@@ -101,6 +101,7 @@
     "products -> inventory",
     "products -> settings",
     "promotions -> collections",
+    "promotions -> customers",
     "promotions -> products",
     "promotions -> tax",
     "reviews -> media",

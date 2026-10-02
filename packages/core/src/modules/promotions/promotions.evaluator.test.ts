@@ -60,6 +60,8 @@ function candidate(id: string, effect: Effect, overrides: Partial<PromotionCandi
         codes: [],
         conditions: [],
         effects: [effect],
+        customerSegmentIds: [],
+        customerInSegment: false,
         ...overrides,
     };
 }
@@ -78,6 +80,26 @@ function lineDiscounts(result: ReturnType<typeof evaluate>): Record<string, numb
 }
 
 describe("discount evaluator", () => {
+    it("applies a discount limited to customer segments only to a customer known to be in one", () => {
+        const limited = { customerSegmentIds: ["seg_vip"] };
+        const vip = evaluate({}, [candidate("vip", orderEffect({ basisPoints: 2_000 }), { ...limited, customerInSegment: true })]);
+        expect(vip.applied?.totalDiscountMinor).toBe(300);
+        // Not computed (a guest, or an unknown customer) fails closed, like a non-member.
+        const guest = evaluate({}, [
+            candidate("vip", orderEffect({ basisPoints: 2_000 }), limited),
+            candidate("all", orderEffect({ basisPoints: 500 })),
+        ]);
+        expect(guest.applied?.discounts.map(({ promotionId }) => promotionId)).toEqual(["all"]);
+        expect(guest.rejected).toEqual([{ promotionId: "vip", reason: "customer_not_eligible" }]);
+        // Without segments the flag means nothing.
+        expect(evaluate({}, [candidate("all", orderEffect({ basisPoints: 500 }), { customerInSegment: false })]).applied).not.toBeNull();
+        // At most five segments per rule.
+        const six = evaluate({}, [candidate("six", orderEffect({ basisPoints: 500 }), {
+            customerSegmentIds: ["a", "b", "c", "d", "e", "f"], customerInSegment: true,
+        })]);
+        expect(six.rejected).toEqual([{ promotionId: "six", reason: "invalid_configuration" }]);
+    });
+
     it("turns a product percentage into immutable per-line allocation facts", () => {
         const result = evaluate({}, [candidate("p10", lineEffect({ basisPoints: 1_000 }))]);
         expect(result.applied).toEqual({

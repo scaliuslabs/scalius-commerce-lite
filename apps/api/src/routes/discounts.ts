@@ -3,6 +3,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { getCustomerBySession } from "@scalius/core/modules/customers";
 import {
   previewStorefrontBundleSavings,
   resolveBundlePromotionInterplay,
@@ -13,6 +14,8 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
 import { ok } from "../utils/api-response";
+import { getCustomerSessionHashKey } from "../utils/encryption-key";
+import { getCustomerSessionTokenFromRequest } from "./storefront-orders/shared";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   quotedDiscountLineSchema,
@@ -94,10 +97,17 @@ app.openapi(validateDiscountRoute, async (c) => {
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
   }
-  const [currency, giftCardProductIds] = await Promise.all([
+  // A signed-in buyer previews as checkout will price them (their segment
+  // discounts and per-customer limits); a missing or stale session is a guest.
+  const sessionToken = getCustomerSessionTokenFromRequest(c);
+  const [currency, giftCardProductIds, sessionCustomer] = await Promise.all([
     getCurrencyConfig(db),
     selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
+    sessionToken
+      ? getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
+      : null,
   ]);
+  const signedInCustomerId = sessionCustomer?.customerId ?? null;
   const cartLines = lines.map(({ item, index, variantId }) => ({
     id: `cart:${index}:${variantId}`,
     productId: item.id,
@@ -107,6 +117,8 @@ app.openapi(validateDiscountRoute, async (c) => {
   }));
   const discount = await quoteStorefrontDiscount(db, {
     codes,
+    customerId: signedInCustomerId,
+    segmentCustomerId: signedInCustomerId,
     customerPhone,
     shippingKnown: shippingCost !== undefined,
     cart: {
