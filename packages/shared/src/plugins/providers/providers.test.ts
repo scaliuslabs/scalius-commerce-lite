@@ -151,6 +151,16 @@ describe("provider declarations", () => {
     expect(pluginGrantRequest(parsed.manifest).providers).toEqual(["courier", "payment"]);
   });
 
+  it("re-parses a stored (parsed) manifest to the same providers", () => {
+    const first = parsePluginManifest({
+      ...manifest,
+      providers: { payment: [{ id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS, amountCodecs: { BDT: { minorIncrement: 100 } } }] },
+    });
+    if (!first.ok) throw new Error("fixture");
+    const again = parsePluginManifest(JSON.parse(JSON.stringify(first.manifest)));
+    expect(again.ok && again.manifest.providers).toEqual(first.manifest.providers);
+  });
+
   it("still parses the first flat shape and maps its old kind names", () => {
     const parsed = parsePluginManifest({ ...manifest, providers: [{ kind: "messaging", id: "sms", name: "SMS" }, { kind: "shipping", id: "parcel", name: "Parcel" }] });
     expect(parsed.ok && parsed.manifest.providers.map((provider) => provider.kind)).toEqual(["sms", "courier"]);

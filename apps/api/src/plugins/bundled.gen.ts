@@ -7,22 +7,22 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.bulk-discount": {
     version: "0.1.0",
-    sha256: "5dbf2cc5545c38de70b2e52d46f2b0e87670369bab2dd2527d1d9b9cd9157005",
+    sha256: "ae607e7d776ea05e2572845136dbb93900bfcd50d4b0654f242d720a218d8ca0",
     load: () => import("../../../../plugins/bulk-discount/src/index"),
   },
   "scalius.hello": {
     version: "0.3.0",
-    sha256: "1f01c6ce43988416dffb4aa3270330ba2402adc47328403971bec9b0a84ae59b",
+    sha256: "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c",
     load: () => import("../../../../plugins/hello/src/index"),
   },
   "scalius.order-tagger": {
     version: "0.1.0",
-    sha256: "bd1c5c6d90d226f7469d76fb74b37da7a9801ea2d948f9c47f4edde66ed2181f",
+    sha256: "deb33b13dc0cd7dc36c26c4cdeb9957a19411f8e7618f7deff6f7f193c7c875f",
     load: () => import("../../../../plugins/order-tagger/src/index"),
   },
   "scalius.wishlist": {
     version: "0.1.0",
-    sha256: "fc9b8002c47d754f744d2ea58263c067b061d2e5b87c5288430fa02ea5223bc8",
+    sha256: "5b394f4bcf48ccd60e41e26ba872a68e3be5ffb3524da52877b203d6dd4e0989",
     load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

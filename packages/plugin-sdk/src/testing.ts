@@ -15,6 +15,7 @@ import {
   type PluginRenderContext,
   type PluginSettingValue,
 } from "@scalius/shared/plugins";
+import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -226,6 +227,41 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       },
     }),
     fn: (point: string, input: unknown) => run({ kind: "function", point, input }),
+    /**
+     * Runs one provider operation the way the platform does: the input must
+     * match the port (a mismatch throws, as it would be a platform bug), the
+     * answer is validated (an invalid one fails as `provider.invalid_response`)
+     * and the store's messaging is refused. A `ProviderError` the operation
+     * raises comes back as `error.category` / `error.uncertain`.
+     */
+    provider: async (providerId: string, operation: string, input: unknown): Promise<PluginInvocationResult> => {
+      const declaration = manifest.providers.find((entry) => entry.id === providerId);
+      if (!declaration) throw new Error(`The manifest declares no provider ${providerId}.`);
+      const schemas = providerOperationSchemas(declaration.kind, operation);
+      if (!schemas) throw new Error(`The ${declaration.kind} port has no ${operation} operation.`);
+      const checked = schemas.input.safeParse(input);
+      if (!checked.success) throw new TypeError(`Invalid ${declaration.kind}.${operation} input: ${checked.error.issues[0]?.path.join(".")} ${checked.error.issues[0]?.message}`);
+      const notAllowed = async () => refuse("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
+      const result = await run(
+        { kind: "provider", provider: providerId, operation, input: checked.data },
+        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed },
+      );
+      if (!result.ok) return result;
+      const answer = schemas.output.safeParse(result.value);
+      if (answer.success) return { ...result, value: answer.data };
+      const issue = answer.error.issues[0];
+      return {
+        ...result,
+        ok: false,
+        value: null,
+        error: {
+          code: "provider.invalid_response",
+          message: `Invalid ${operation} answer at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`,
+          category: "retryable",
+          uncertain: true,
+        },
+      };
+    },
     route: (surface: "admin" | "public" | "webhooks", name: string, request: Partial<PluginRouteRequest> = {}) => run({
       kind: "route",
       surface,

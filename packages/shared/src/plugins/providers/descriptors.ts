@@ -88,26 +88,30 @@ export type PluginProviderDeclaration =
   | ({ kind: "courier" } & CourierProviderDescriptor)
   | ({ kind: "sms" | "email" | "fraud" | "tax" } & PlainProviderDescriptor);
 
-/** The manifest's `providers`: grouped by port. Earlier manifests listed `{ kind, id, name }` entries; those still parse. */
+/**
+ * The manifest's `providers`: grouped by port, as authors write it. The flat
+ * list (`[{ kind, ...descriptor }]`) is what a parsed manifest stores and
+ * re-parses; it also accepts the first manifest shape, whose kinds were
+ * named `shipping` (now `courier`) and `messaging` (now `sms`).
+ */
 export const pluginProvidersSchema = z.union([
   z.object(Object.fromEntries(PROVIDER_KINDS.map((kind) => [kind, z.array(PROVIDER_DESCRIPTOR_SCHEMAS[kind]).max(10).optional()])) as {
     [K in ProviderKind]: z.ZodOptional<z.ZodArray<(typeof PROVIDER_DESCRIPTOR_SCHEMAS)[K]>>;
   }).strict().transform((groups) => PROVIDER_KINDS.flatMap((kind) =>
     (groups[kind] ?? []).map((descriptor) => ({ kind, ...descriptor }) as PluginProviderDeclaration))),
-  // The first manifest shape: a flat list naming the kind (with the original `shipping`/`messaging` names).
-  z.array(z.object({
-    kind: z.enum([...PROVIDER_KINDS, "shipping", "messaging"]),
-    id: providerId,
-    name: title,
-  }).strict()).max(10).transform((entries, context) => entries.map((entry) => {
-    const kind: ProviderKind = entry.kind === "shipping" ? "courier" : entry.kind === "messaging" ? "sms" : entry.kind;
-    const parsed = PROVIDER_DESCRIPTOR_SCHEMAS[kind].safeParse({ id: entry.id, name: entry.name });
-    if (!parsed.success) {
-      context.addIssue({ code: "custom", message: `Declare ${kind} providers in the grouped form (providers.${kind}).` });
-      return z.NEVER;
-    }
-    return { kind, ...parsed.data } as PluginProviderDeclaration;
-  })),
+  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping", "messaging"]) })).max(10)
+    .transform((entries, context) => entries.map((entry, index) => {
+      const { kind: named, ...descriptor } = entry;
+      const kind: ProviderKind = named === "shipping" ? "courier" : named === "messaging" ? "sms" : named;
+      const parsed = PROVIDER_DESCRIPTOR_SCHEMAS[kind].safeParse(descriptor);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          context.addIssue({ code: "custom", path: [index, ...issue.path.map((part) => (typeof part === "symbol" ? String(part) : part))], message: issue.message });
+        }
+        return z.NEVER;
+      }
+      return { kind, ...parsed.data } as PluginProviderDeclaration;
+    })),
 ]).default([]).refine((providers) => providers.length <= 10, "At most 10 providers.");
 
 /** The operations the host may call on a declared provider: the port's required ones and the declared optional ones. */

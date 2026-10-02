@@ -39,6 +39,12 @@ export interface PluginBridgeProps {
    * entry carries. Every other method is refused.
    */
   render?: { collections: string[] };
+  /**
+   * Set while the plugin runs a provider operation: the store's messaging is
+   * refused (an SMS or email provider sending through the store's messaging
+   * would call itself), everything else its grant allows is available.
+   */
+  provider?: { kind: string };
 }
 
 /** Bridge methods a storefront render may call (reads of declared collections). */
@@ -137,6 +143,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
     try {
       if (this.props.render && !RENDER_METHODS.has(method)) {
         fail("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
+      }
+      if (this.props.provider && method.startsWith("messaging")) {
+        fail("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
       }
       return await work();
     } catch (error) {

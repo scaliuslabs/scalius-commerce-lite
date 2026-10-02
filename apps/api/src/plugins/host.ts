@@ -4,13 +4,17 @@
 // manifest's wall time, validates what comes back and writes the plugin's
 // log lines plus any incident. A plugin that throws, times out or returns an
 // invalid value fails open: the caller gets no output and the merchant sees
-// the incident in the plugin's log. Create one host per request.
+// the incident in the plugin's log. Provider operations are the exception:
+// they answer with the port's output or raise the port's `ProviderError`, and
+// the caller (checkout, delivery, notifications) applies its own policy.
+// Create one host per request.
 
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
   effectivePluginPermissions,
   markPluginFailed,
+  maskPluginLogText,
   readPluginRuntimeSettings,
   writePluginLogs,
   type PluginInstallation,
@@ -22,10 +26,21 @@ import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 import {
   PLUGIN_FUNCTION_SCHEMAS,
   pluginHandlerInventory,
+  validatePluginSettingValues,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins";
+import {
+  ProviderError,
+  declaredProviderOperations,
+  providerOperationSchemas,
+  type ProviderErrorCategory,
+  type ProviderKind,
+  type ProviderOperation,
+  type ProviderOperationInput,
+  type ProviderOperationOutput,
+} from "@scalius/shared/plugins/providers";
 import type { PluginEvent, PluginRouteRequest, PluginRouteResponse, PluginStoreInfo } from "@scalius/plugin-sdk";
 import type { PluginBridgeAuthority, PluginBridgeEnvironment, PluginBridgeProps } from "./bridge";
 import { BundledLoader } from "./loaders/bundled";
@@ -43,10 +58,11 @@ const ROUTE_FORBIDDEN_HEADERS = /^(?:set-cookie|content-length|transfer-encoding
  * Why an invocation did not produce a value: the plugin is not active, the
  * installation was just updated to the deployed build (try again), the
  * platform cannot load it here (no sandbox), its code could not be loaded
- * (the plugin is now failed), it ran out of wall time, it threw, or it
- * returned an invalid value.
+ * (the plugin is now failed), it ran out of wall time, it threw, it
+ * returned an invalid value, or (provider operations only) its secrets could
+ * not be opened.
  */
-export type PluginInvocationFailure = "inactive" | "outdated" | "unavailable" | "load_failed" | "timeout" | "error" | "invalid";
+export type PluginInvocationFailure = "inactive" | "outdated" | "unavailable" | "load_failed" | "timeout" | "error" | "invalid" | "settings_unreadable";
 
 export interface PluginInvocationOutcome<T = null> {
   ok: boolean;
@@ -178,6 +194,55 @@ export class PluginHost {
     return { ok: true, value: parsed.data as PluginFunctionOutput<P>, error: null };
   }
 
+  /**
+   * One operation of an app provider, as the port defines it: the input is
+   * the platform's own (a mismatch is a platform bug and throws), the answer
+   * is validated, and every failure becomes the port's `ProviderError`: the
+   * provider's own category, `retryable` + `uncertain` for a timeout, a
+   * throw or an invalid answer (it may have acted), `misconfigured` when the
+   * app cannot run (inactive, not approved, unreadable secrets, no sandbox).
+   * Messages are masked against the app's secrets.
+   */
+  async invokeProvider<K extends ProviderKind, M extends ProviderOperation<K>>(
+    installation: PluginInstallation,
+    kind: K,
+    providerId: string,
+    operation: M,
+    input: ProviderOperationInput<K, M>,
+    options: { wallMs?: number } = {},
+  ): Promise<ProviderOperationOutput<K, M>> {
+    const source = `provider:${providerId}.${operation}`;
+    const declaration = installation.manifest.providers.find((provider) => provider.id === providerId && provider.kind === kind);
+    if (!declaration) throw new ProviderError("misconfigured", `${installation.manifest.name} does not provide this ${kind} provider.`);
+    if (!installation.grant?.providers.includes(kind)) {
+      throw new ProviderError("misconfigured", `${installation.manifest.name} is not approved to provide ${kind}.`);
+    }
+    if (!declaredProviderOperations(declaration).includes(operation)) {
+      throw new ProviderError("misconfigured", `${declaration.name} does not support ${operation}.`, { code: "provider.unsupported" });
+    }
+    const schemas = providerOperationSchemas(kind, operation)!;
+    const checked = schemas.input.safeParse(input);
+    if (!checked.success) throw new TypeError(`invokeProvider(${kind}.${operation}) received an input that does not match the port.`);
+
+    const wallMs = Math.min(installation.manifest.limits.wallMs, options.wallMs ?? Number.POSITIVE_INFINITY);
+    const outcome = await this.run(
+      installation,
+      { kind: "provider", provider: providerId, operation, input: checked.data },
+      source,
+      wallMs,
+      { provider: { kind } },
+    );
+    if (!outcome.ok) throw providerFailure(outcome, declaration.name);
+    const parsed = schemas.output.safeParse(outcome.value);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      // The path only: an invalid answer can hold provider payloads or buyer data.
+      await this.incident(installation, source, `Invalid ${operation} answer${issue ? ` at ${issue.path.join(".") || "(root)"}` : ""}.`);
+      throw new ProviderError("retryable", `${declaration.name} returned an invalid answer.`, { uncertain: true, code: "provider.invalid_response" });
+    }
+    return parsed.data as ProviderOperationOutput<K, M>;
+  }
+
   async invokeEvent(installation: PluginInstallation, event: PluginEvent): Promise<PluginInvocationOutcome> {
     const outcome = await this.run(installation, { kind: "event", event }, `event:${event.topic}`, installation.manifest.limits.wallMs);
     return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
@@ -200,7 +265,7 @@ export class PluginHost {
       { kind: "route", surface, name, request },
       source,
       wallMs,
-      options.render ? { collections: [...options.render.collections] } : undefined,
+      options.render ? { render: { collections: [...options.render.collections] } } : {},
     );
     if (!outcome.ok) return failed(outcome);
     const response = validatePluginRouteResponse(outcome.value);
@@ -275,12 +340,13 @@ export class PluginHost {
     };
   }
 
-  private bridgeProps(installation: PluginInstallation, render?: PluginBridgeProps["render"]): PluginBridgeProps {
+  private bridgeProps(installation: PluginInstallation, mode: BridgeMode): PluginBridgeProps {
     return {
       pluginId: installation.pluginId,
       version: installation.version,
       authority: pluginBridgeAuthority(installation),
-      ...(render ? { render } : {}),
+      ...(mode.render ? { render: mode.render } : {}),
+      ...(mode.provider ? { provider: mode.provider } : {}),
     };
   }
 
@@ -294,7 +360,7 @@ export class PluginHost {
     invocation: PluginInvocation,
     source: string,
     wallMs: number,
-    render?: PluginBridgeProps["render"],
+    mode: BridgeMode = {},
   ): Promise<RunOutcome> {
     if (installation.status !== "active") {
       return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
@@ -303,6 +369,15 @@ export class PluginHost {
     const lines: PluginLogInput[] = [];
     if (unreadable.length > 0) {
       lines.push({ level: "warn", source: "host", message: `Secret settings could not be opened: ${unreadable.join(", ")}.` });
+    }
+    // A provider never runs with credentials it cannot read or settings the
+    // merchant has not completed (fail closed).
+    if (mode.provider && (unreadable.length > 0 || !validatePluginSettingValues(installation.manifest.settings, seed.settings).ok)) {
+      const error = unreadable.length > 0
+        ? "The app's credentials could not be opened; save them again."
+        : "The app's settings are incomplete.";
+      await this.writeLogs(installation, [...lines, { level: "error", source: "host", message: `${source}: ${error}` }], secrets);
+      return { ok: false, value: null, error, failure: "settings_unreadable" };
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -313,7 +388,7 @@ export class PluginHost {
     let failure: PluginInvocationFailure = "error";
     try {
       result = await Promise.race([
-        this.loaderFor(installation).invoke({ installation, invocation, seed, bridgeProps: this.bridgeProps(installation, render) }),
+        this.loaderFor(installation).invoke({ installation, invocation, seed, bridgeProps: this.bridgeProps(installation, mode) }),
         timeout,
       ]);
     } catch (thrown) {
@@ -341,6 +416,7 @@ export class PluginHost {
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }
+    let provider: RunProviderError | undefined;
     if (result) {
       for (const line of result.logs) lines.push({ level: line.level, source, message: line.message, fields: line.fields });
       if (result.droppedLogs > 0) lines.push({ level: "warn", source: "host", message: `${result.droppedLogs} log lines past the limit were dropped.` });
@@ -349,12 +425,20 @@ export class PluginHost {
         if (result.error?.code === "plugin.handlers_mismatch" || result.error?.code === "plugin.identity_mismatch") {
           await markPluginFailed(this.db, installation.pluginId, error);
           failure = "load_failed";
+        } else if (result.error?.category) {
+          provider = {
+            category: result.error.category,
+            uncertain: result.error.uncertain === true,
+            code: result.error.code,
+            message: maskPluginLogText(result.error.message, secrets),
+          };
         }
       }
     }
     if (error) lines.push({ level: failure === "outdated" ? "info" : "error", source: "host", message: `${source}: ${error}` });
     await this.writeLogs(installation, lines, secrets);
-    return error ? { ok: false, value: null, error, failure } : { ok: true, value: result?.value ?? null, error: null };
+    if (!error) return { ok: true, value: result?.value ?? null, error: null };
+    return { ok: false, value: null, error: maskPluginLogText(error, secrets), failure, ...(provider ? { provider } : {}) };
   }
 
   private async incident(installation: PluginInstallation, source: string, message: string): Promise<void> {
@@ -372,12 +456,47 @@ export class PluginHost {
   }
 }
 
+/** What the bridge is set up for besides the default: a storefront render, or a provider operation. */
+type BridgeMode = Pick<PluginBridgeProps, "render" | "provider">;
+
+/** A `ProviderError` an operation raised, as it crossed the loader (message already masked). */
+interface RunProviderError {
+  category: ProviderErrorCategory;
+  uncertain: boolean;
+  code: string | null;
+  message: string;
+}
+
 type RunOutcome =
   | { ok: true; value: unknown; error: null }
-  | { ok: false; value: null; error: string; failure: PluginInvocationFailure };
+  | { ok: false; value: null; error: string; failure: PluginInvocationFailure; provider?: RunProviderError };
 
 function failed<T>(outcome: Extract<RunOutcome, { ok: false }>): PluginInvocationOutcome<T> {
   return { ok: false, value: null, error: outcome.error, failure: outcome.failure };
+}
+
+/** A failed provider run as the port's error (see `invokeProvider`). */
+function providerFailure(outcome: Extract<RunOutcome, { ok: false }>, providerName: string): ProviderError {
+  if (outcome.provider) {
+    return new ProviderError(outcome.provider.category, outcome.provider.message.slice(0, 300), {
+      uncertain: outcome.provider.uncertain,
+      ...(outcome.provider.code ? { code: outcome.provider.code } : {}),
+    });
+  }
+  switch (outcome.failure) {
+    case "timeout":
+      return new ProviderError("retryable", `${providerName} did not answer in time.`, { uncertain: true, code: "provider.timeout" });
+    case "outdated":
+      return new ProviderError("retryable", `${providerName} was just updated; try again.`, { code: "provider.updated" });
+    case "inactive":
+    case "unavailable":
+    case "load_failed":
+    case "settings_unreadable":
+      return new ProviderError("misconfigured", outcome.error.slice(0, 300), { code: `provider.${outcome.failure}` });
+    default:
+      // A throw that was not a ProviderError: the provider may have acted before it.
+      return new ProviderError("retryable", `${providerName} could not complete the operation.`, { uncertain: true, code: "provider.error" });
+  }
 }
 
 class PluginTimeoutError extends Error {

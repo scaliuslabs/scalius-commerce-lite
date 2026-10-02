@@ -22,6 +22,7 @@ import {
   type PluginHandlerInventory,
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins/handlers";
+import { providerErrorOf, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 
 /** What the host hands every invocation: identity, store facts, settings, declared collections, handler inventory. */
 export interface PluginContextSeed {
@@ -35,6 +36,8 @@ export interface PluginContextSeed {
 export type PluginInvocation =
   | { kind: "event"; event: PluginEvent }
   | { kind: "function"; point: string; input: unknown }
+  /** One operation of a declared provider (`providers.<id>.<operation>`). */
+  | { kind: "provider"; provider: string; operation: string; input: unknown }
   | { kind: "route"; surface: "admin" | "public" | "webhooks"; name: string; request: PluginRouteRequest }
   | { kind: "cron"; name: string; scheduledAt: string }
   | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean };
@@ -47,9 +50,10 @@ export interface PluginLogRecord {
 
 export interface PluginInvocationResult {
   ok: boolean;
-  /** A function's output or a route's response; null for events, cron and lifecycle. */
+  /** A function's or provider operation's output, or a route's response; null for events, cron and lifecycle. */
   value: unknown;
-  error: { code: string | null; message: string } | null;
+  /** `category` and `uncertain`: a `ProviderError` a provider operation raised. */
+  error: { code: string | null; message: string; category?: ProviderErrorCategory; uncertain?: boolean } | null;
   logs: PluginLogRecord[];
   /** Log lines past the in-memory cap. */
   droppedLogs: number;
@@ -167,7 +171,11 @@ function handlerIn(group: unknown, name: string): Handler | null {
   return typeof handler === "function" ? handler as Handler : null;
 }
 
-function errorOf(error: unknown): { code: string | null; message: string } {
+function errorOf(error: unknown): NonNullable<PluginInvocationResult["error"]> {
+  const provider = error instanceof Error && error.name === "ProviderError" ? providerErrorOf(error) : null;
+  if (provider) {
+    return { code: provider.code, message: provider.message.slice(0, MAX_ERROR_MESSAGE), category: provider.category, uncertain: provider.uncertain };
+  }
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   const code = error instanceof PluginPlatformError ? error.code : null;
   return { code, message: message.slice(0, MAX_ERROR_MESSAGE) };
@@ -203,6 +211,17 @@ export async function invokePluginDefinition(
 
   try {
     switch (invocation.kind) {
+      case "provider": {
+        // Only an operation the manifest declares for this provider runs.
+        const declared = seed.inventory.providers.find((entry) => entry.id === invocation.provider);
+        const handler = declared?.operations.includes(invocation.operation)
+          ? handlerIn((definition.providers as Record<string, unknown> | undefined)?.[invocation.provider], invocation.operation)
+          : null;
+        if (!handler) {
+          return result(false, null, { code: "plugin.no_handler", message: `No ${invocation.operation} operation on provider ${invocation.provider}.` });
+        }
+        return result(true, await handler(invocation.input, createContext(seed, requireBridge(bridge), logs)), null);
+      }
       case "function": {
         const handler = handlerIn(definition.functions, invocation.point);
         if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No function handler for ${invocation.point}.` });
