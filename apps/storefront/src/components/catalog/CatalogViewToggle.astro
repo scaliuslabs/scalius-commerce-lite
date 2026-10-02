@@ -4,7 +4,7 @@
 // variant; CatalogResults applies it before the grid paints. It is in the
 // initial markup, and a `<noscript>`
 // style removes it where it could not work.
-import { LayoutGrid, List } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   defaultView: "grid" | "list";
@@ -24,11 +24,11 @@ const button =
   class:list={["items-center gap-0.5 rounded-lg border border-border bg-background p-0.5", mobile ? "inline-flex lg:hidden" : "hidden lg:inline-flex"]}
 >
   <button type="button" data-view="grid" aria-pressed={defaultView === "grid" ? "true" : "false"} class={button}>
-    <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+    <Icon name="layout-grid" class="h-4 w-4" aria-hidden="true" />
     <span class="sr-only">Grid</span>
   </button>
   <button type="button" data-view="list" aria-pressed={defaultView === "list" ? "true" : "false"} class={button}>
-    <List className="h-4 w-4" aria-hidden="true" />
+    <Icon name="list" class="h-4 w-4" aria-hidden="true" />
     <span class="sr-only">List</span>
   </button>
 </div>

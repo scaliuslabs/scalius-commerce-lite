@@ -391,9 +391,8 @@ function toPublicPage<T extends { revision: number }>(row: T): Omit<T, "revision
  * switch among the rows `where` selects bounds the entry (`deps.validUntil`).
  * Outside a scope nothing is read.
  */
-async function declareNextPagePublication(db: Database, where: SQL | undefined): Promise<void> {
-  if (!deps.active()) return;
-  const row = await db
+function selectNextPagePublication(db: Database, where: SQL | undefined) {
+  return db
     .select({ next: sql<number | null>`min(${pages.publishedAt})` })
     .from(pages)
     .where(and(
@@ -401,26 +400,39 @@ async function declareNextPagePublication(db: Database, where: SQL | undefined):
       isNull(pages.deletedAt),
       eq(pages.isPublished, true),
       sql`${pages.publishedAt} > unixepoch()`,
-    ))
-    .get();
+    ));
+}
+
+function declareNextPublicationRow(row: { next: number | null } | undefined): void {
   const next = Number(row?.next);
   if (row?.next != null && Number.isFinite(next)) deps.validUntil(next * 1000);
 }
 
+async function declareNextPagePublication(db: Database, where: SQL | undefined): Promise<void> {
+  if (!deps.active()) return;
+  declareNextPublicationRow(await selectNextPagePublication(db, where).get());
+}
+
 /**
- * Declares what a read of these pages by id depends on: each page's own key
- * and, inside a dependency scope, the next scheduled publication among them.
+ * What a read of these pages by id depends on, as statements for the
+ * caller's batch: each page's own key now and, inside a dependency scope,
+ * the statement whose result `declare` turns into the next scheduled
+ * publication among them.
  */
-export async function declarePublicPagesById(
-  db: Database,
-  ids: readonly string[],
-): Promise<void> {
+export function planPublicPagesByIdDeclaration(db: Database, ids: readonly string[]) {
   deps.pages(ids);
-  if (ids.length === 0) return;
-  await declareNextPagePublication(
-    db,
-    sql`${pages.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`,
-  );
+  const statement = ids.length > 0 && deps.active()
+    ? selectNextPagePublication(
+      db,
+      sql`${pages.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`,
+    )
+    : null;
+  return {
+    statements: statement ? [statement] : [],
+    declare(results: readonly unknown[], offset: number): void {
+      if (statement) declareNextPublicationRow((results[offset] as Array<{ next: number | null }>)[0]);
+    },
+  };
 }
 
 export async function getPublicArticleBySlug(db: Database, slug: string) {

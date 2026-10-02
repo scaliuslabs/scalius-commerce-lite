@@ -9,7 +9,7 @@ import type { Product } from "@/lib/api";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import SectionHeader from "./SectionHeader.astro";
-import { ArrowRight } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
@@ -50,7 +50,7 @@ const {
 {products.length > 0 && collection && (
   <section class="w-full py-2 md:py-6">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
+      {/* Header */}
       <div
         class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-3 md:mb-5"
       >
@@ -81,13 +81,13 @@ const {
               class="group hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
             >
               View collection
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <Icon name="arrow-right" class="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </a>
           )}
         </div>
       </div>
 
-      <!-- Products Grid -->
+      {/* Products Grid */}
       <ProductGrid>
         {products.map((product, index) => (
           <ProductCard
@@ -107,7 +107,7 @@ const {
             class="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
           >
             View collection
-            <ArrowRight className="h-4 w-4" />
+            <Icon name="arrow-right" class="h-4 w-4" />
           </a>
         </div>
       )}

@@ -58,9 +58,10 @@ import {
     type NavigationMenuItemStorage,
 } from "./navigation.authority";
 import {
-    chunkNavigationResourceIds,
     loadNavigationResourceSnapshots,
+    planNavigationResourceSnapshots,
     resolveNavigationItemsForPublic,
+    type NavigationResourceSnapshotMap,
 } from "./navigation.resolver";
 import {
     ftsMatch,
@@ -1444,107 +1445,131 @@ export async function getPublishedNavigationMenuTree(
 }
 
 /**
- * Resolve every storefront placement in one bounded projection. Placement
- * definitions currently cap the public surface at five menus and 150 items per
- * placement, but menu IDs are still chunked to respect D1's parameter limit if
- * the registry grows. Reused menus are loaded and resolved only once.
+ * The storefront's placed menus as statements for one batch: the placement
+ * manifest and the published items of every menu an enabled placement shows
+ * (selected by subquery, so neither statement waits for the other and no
+ * menu ID is bound). `resolve` builds each valid placement's item tree and
+ * names the items' targets; once the caller has read those resources
+ * (planNavigationResourceSnapshots), `publish` resolves the placements.
+ * Placement definitions cap the public surface at five menus and 150 items
+ * per placement; reused menus are built only once.
+ */
+export function planPublishedNavigationPlacements(db: Database) {
+    deps.anyNavigation();
+    const manifest = selectNavigationPlacementManifest(db);
+    const items = db
+        .select({
+            menuId: navigationMenuPublicationItems.menuId,
+            id: navigationMenuPublicationItems.itemId,
+            parentId: navigationMenuPublicationItems.parentId,
+            position: navigationMenuPublicationItems.position,
+            label: navigationMenuPublicationItems.label,
+            labelMode: navigationMenuPublicationItems.labelMode,
+            targetType: navigationMenuPublicationItems.targetType,
+            targetId: navigationMenuPublicationItems.targetId,
+            targetValue: navigationMenuPublicationItems.targetValue,
+            targetQuery: navigationMenuPublicationItems.targetQuery,
+            openInNewTab: navigationMenuPublicationItems.openInNewTab,
+            isEnabled: navigationMenuPublicationItems.isEnabled,
+        })
+        .from(navigationMenuPublicationItems)
+        .innerJoin(
+            navigationMenus,
+            and(
+                eq(navigationMenus.id, navigationMenuPublicationItems.menuId),
+                eq(navigationMenus.publishedRevision, navigationMenuPublicationItems.revision),
+            ),
+        )
+        .where(and(
+            isNull(navigationMenus.deletedAt),
+            inArray(
+                navigationMenuPublicationItems.menuId,
+                db.select({ menuId: navigationPlacements.menuId })
+                    .from(navigationPlacements)
+                    .where(eq(navigationPlacements.isEnabled, true)),
+            ),
+        ))
+        .orderBy(
+            asc(navigationMenuPublicationItems.menuId),
+            asc(navigationMenuPublicationItems.position),
+            asc(navigationMenuPublicationItems.itemId),
+        );
+    type PlacementItemRow = Awaited<typeof items>[number];
+
+    return {
+        statements: [manifest, items] as const,
+        resolve(results: readonly unknown[], offset: number) {
+            const placements = placementManifestFromRows(results[offset] as PlacementManifestRow[]);
+            const rowsByMenu = new Map<string, AuthorityProjectionRow[]>();
+            for (const row of results[offset + 1] as PlacementItemRow[]) {
+                const menuRows = rowsByMenu.get(row.menuId) ?? [];
+                menuRows.push(row);
+                rowsByMenu.set(row.menuId, menuRows);
+            }
+
+            // A menu re-published past its placement's budget still renders: its
+            // first items, top levels first (the storefront reaches the rest through
+            // category pages and /categories). Only a publication whose rows do not
+            // match its own count, or that no longer forms a tree, is skipped.
+            const targetsByPlacement = new Map<string, NavigationTargetItem[]>();
+            const hierarchies = new Map<string, NavigationHierarchyNode<AuthorityProjectionRow>[] | null>();
+            const validPlacements = [] as typeof placements;
+            for (const placement of placements) {
+                const rows = rowsByMenu.get(placement.menuId) ?? [];
+                if (!hierarchies.has(placement.menuId)) {
+                    let hierarchy: NavigationHierarchyNode<AuthorityProjectionRow>[] | null = null;
+                    if (rows.length === placement.itemCount) {
+                        try {
+                            hierarchy = buildNavigationHierarchy(rows);
+                        } catch {
+                            hierarchy = null;
+                        }
+                    }
+                    hierarchies.set(placement.menuId, hierarchy);
+                }
+                const hierarchy = hierarchies.get(placement.menuId);
+                if (!hierarchy) {
+                    console.warn("[Navigation] Skipping an invalid public placement", {
+                        placementId: placement.id,
+                        menuId: placement.menuId,
+                    });
+                    continue;
+                }
+                validPlacements.push(placement);
+                const maxItems = placement.definition.maxItems;
+                targetsByPlacement.set(
+                    placement.id,
+                    publishedHierarchyToTargets(rows.length > maxItems ? trimNavigationHierarchy(hierarchy, maxItems) : hierarchy),
+                );
+            }
+
+            return {
+                /** Every placed item, for the resource read. */
+                targets: [...targetsByPlacement.values()].flat(),
+                publish(resources: NavigationResourceSnapshotMap) {
+                    return validPlacements.map((placement) => ({
+                        ...placement,
+                        items: resolveNavigationItemsForPublic(
+                            targetsByPlacement.get(placement.id) ?? [],
+                            resources,
+                        ),
+                    }));
+                },
+            };
+        },
+    };
+}
+
+/**
+ * Every storefront placement resolved for buyers: two batches (the placed
+ * menus, then the resources their items link to; none when they link none).
  */
 export async function getPublishedNavigationPlacements(db: Database) {
-    const placements = await getNavigationPlacementManifest(db);
-    if (!placements.length) return [];
-
-    const menuIds = [...new Set(placements.map((placement) => placement.menuId))];
-    const rowsByMenu = new Map<string, AuthorityProjectionRow[]>();
-
-    for (const chunk of chunkNavigationResourceIds(menuIds)) {
-        const rows = await db
-            .select({
-                menuId: navigationMenuPublicationItems.menuId,
-                id: navigationMenuPublicationItems.itemId,
-                parentId: navigationMenuPublicationItems.parentId,
-                position: navigationMenuPublicationItems.position,
-                label: navigationMenuPublicationItems.label,
-                labelMode: navigationMenuPublicationItems.labelMode,
-                targetType: navigationMenuPublicationItems.targetType,
-                targetId: navigationMenuPublicationItems.targetId,
-                targetValue: navigationMenuPublicationItems.targetValue,
-                targetQuery: navigationMenuPublicationItems.targetQuery,
-                openInNewTab: navigationMenuPublicationItems.openInNewTab,
-                isEnabled: navigationMenuPublicationItems.isEnabled,
-            })
-            .from(navigationMenuPublicationItems)
-            .innerJoin(
-                navigationMenus,
-                and(
-                    eq(navigationMenus.id, navigationMenuPublicationItems.menuId),
-                    eq(navigationMenus.publishedRevision, navigationMenuPublicationItems.revision),
-                ),
-            )
-            .where(inArray(navigationMenuPublicationItems.menuId, chunk))
-            .orderBy(
-                asc(navigationMenuPublicationItems.menuId),
-                asc(navigationMenuPublicationItems.position),
-                asc(navigationMenuPublicationItems.itemId),
-            )
-            .all();
-
-        for (const row of rows) {
-            const menuRows = rowsByMenu.get(row.menuId) ?? [];
-            menuRows.push(row);
-            rowsByMenu.set(row.menuId, menuRows);
-        }
-    }
-
-    // A menu re-published past its placement's budget still renders: its
-    // first items, top levels first (the storefront reaches the rest through
-    // category pages and /categories). Only a publication whose rows do not
-    // match its own count, or that no longer forms a tree, is skipped.
-    const targetsByPlacement = new Map<string, NavigationTargetItem[]>();
-    const hierarchies = new Map<string, NavigationHierarchyNode<AuthorityProjectionRow>[] | null>();
-    const validPlacements = [] as typeof placements;
-    for (const placement of placements) {
-        const rows = rowsByMenu.get(placement.menuId) ?? [];
-        if (!hierarchies.has(placement.menuId)) {
-            let hierarchy: NavigationHierarchyNode<AuthorityProjectionRow>[] | null = null;
-            if (rows.length === placement.itemCount) {
-                try {
-                    hierarchy = buildNavigationHierarchy(rows);
-                } catch {
-                    hierarchy = null;
-                }
-            }
-            hierarchies.set(placement.menuId, hierarchy);
-        }
-        const hierarchy = hierarchies.get(placement.menuId);
-        if (!hierarchy) {
-            console.warn("[Navigation] Skipping an invalid public placement", {
-                placementId: placement.id,
-                menuId: placement.menuId,
-            });
-            continue;
-        }
-        validPlacements.push(placement);
-        const maxItems = placement.definition.maxItems;
-        targetsByPlacement.set(
-            placement.id,
-            publishedHierarchyToTargets(rows.length > maxItems ? trimNavigationHierarchy(hierarchy, maxItems) : hierarchy),
-        );
-    }
-
-    const allTargets = [...targetsByPlacement.values()].flat();
-    const resources = await loadNavigationResourceSnapshots(
-        db,
-        { navigation: allTargets },
-        {},
-    );
-
-    return validPlacements.map((placement) => ({
-        ...placement,
-        items: resolveNavigationItemsForPublic(
-            targetsByPlacement.get(placement.id) ?? [],
-            resources,
-        ),
-    }));
+    const plan = planPublishedNavigationPlacements(db);
+    const placed = plan.resolve(await safeBatch(db, plan.statements), 0);
+    const resources = planNavigationResourceSnapshots(db, placed.targets);
+    const results = resources.statements.length > 0 ? await safeBatch(db, resources.statements) : [];
+    return placed.publish(resources.resolve(results, 0));
 }
 
 export async function listPublishedNavigationMenuItems(
@@ -1777,10 +1802,13 @@ export async function saveNavigationPlacement(
     }
 }
 
-export async function getNavigationPlacementManifest(db: Database) {
-    // Every enabled placement and its menu's published revision.
-    deps.anyNavigation();
-    const rows = await db
+/**
+ * Every enabled placement and its menu's published revision (one statement).
+ * Its column names stay unique (the menu id is the placement's `menu_id`,
+ * equal by the join): a D1 batch maps result rows by column name.
+ */
+function selectNavigationPlacementManifest(db: Database) {
+    return db
         .select({
             id: navigationPlacements.id,
             surface: navigationPlacements.surface,
@@ -1788,7 +1816,7 @@ export async function getNavigationPlacementManifest(db: Database) {
             position: navigationPlacements.position,
             labelOverride: navigationPlacements.labelOverride,
             placementRevision: navigationPlacements.revision,
-            menuId: navigationMenus.id,
+            menuId: navigationPlacements.menuId,
             menuName: navigationMenus.name,
             publishedRevision: navigationMenus.publishedRevision,
             dependencyRevision: navigationMenus.dependencyRevision,
@@ -1817,8 +1845,12 @@ export async function getNavigationPlacementManifest(db: Database) {
             asc(navigationPlacements.slot),
             asc(navigationPlacements.position),
             asc(navigationPlacements.id),
-        )
-        .all();
+        );
+}
+
+type PlacementManifestRow = Awaited<ReturnType<typeof selectNavigationPlacementManifest>>[number];
+
+function placementManifestFromRows(rows: readonly PlacementManifestRow[]) {
     return rows.flatMap((row) => {
         try {
             return [{
@@ -1832,6 +1864,12 @@ export async function getNavigationPlacementManifest(db: Database) {
             return [];
         }
     });
+}
+
+export async function getNavigationPlacementManifest(db: Database) {
+    // Every enabled placement and its menu's published revision.
+    deps.anyNavigation();
+    return placementManifestFromRows(await selectNavigationPlacementManifest(db).all());
 }
 
 export class NavigationAuthorityUnavailableError extends AppError {

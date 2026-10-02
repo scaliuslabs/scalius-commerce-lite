@@ -33,6 +33,12 @@ const visible = items.filter((item) => item?.title);
       const children = navigationChildren(item);
       const state = navigationCurrent(item, Astro.url);
       const expanded = children.length > 0 && state !== null;
+      // A nested row that is only a link needs no row wrapper (the link fills the row).
+      if (depth > 0 && children.length === 0 && item.href) {
+        return (
+          <li><a href={item.href} class="nav-tree-link" aria-current={ariaCurrent(state)} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} {...navigationLinkAttributes(item)}>{item.title}</a></li>
+        );
+      }
       return (
         <li>
           <div class="nav-tree-row">
@@ -58,7 +64,6 @@ const visible = items.filter((item) => item?.title);
                 data-disclosure="tree"
               >
                 {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
-                <i class="nav-chevron" aria-hidden="true"></i>
               </button>
             )}
           </div>
@@ -131,19 +136,21 @@ const visible = items.filter((item) => item?.title);
     color: inherit;
   }
 
-  .nav-tree-toggle .nav-chevron {
+  /* The disclosure chevron (the header's .nav-chevron mask, 1rem), drawn by
+     the button itself instead of an element in every parent row. */
+  .nav-tree-toggle::after {
+    content: "";
+    display: inline-block;
+    flex-shrink: 0;
     width: 1rem;
     height: 1rem;
-    flex-shrink: 0;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.75;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    background: currentColor;
+    -webkit-mask: var(--nav-chevron-down) center / contain no-repeat;
+    mask: var(--nav-chevron-down) center / contain no-repeat;
     transition: transform 200ms ease;
   }
 
-  .nav-tree-toggle[aria-expanded="true"] .nav-chevron {
+  .nav-tree-toggle[aria-expanded="true"]::after {
     transform: rotate(180deg);
   }
 
@@ -226,7 +233,7 @@ const visible = items.filter((item) => item?.title);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .nav-tree-toggle .nav-chevron {
+    .nav-tree-toggle::after {
       transition: none;
     }
 

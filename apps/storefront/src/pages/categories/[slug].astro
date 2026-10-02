@@ -34,6 +34,7 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import RichTextStyles from "@/components/RichTextStyles.astro";
 
 const { slug } = Astro.params;
 // Handles are lowercase: a mis-cased link redirects to the one real URL.
@@ -202,6 +203,7 @@ const collectionJsonLd =
   noindex={shouldNoindexCategoryView}
 >
   <Fragment slot="head">
+    <RichTextStyles when={Boolean((pagination.page === 1 && categoryDescription?.trim()) || (!hasListingQuery && categoryContent?.trim()))} />
     {
       collectionJsonLd && (
         <script

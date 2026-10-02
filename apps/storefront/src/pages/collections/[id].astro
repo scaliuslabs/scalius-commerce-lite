@@ -16,6 +16,7 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import RichTextStyles from "@/components/RichTextStyles.astro";
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
@@ -146,6 +147,7 @@ const collectionJsonLd =
   noindex={shouldNoindexCollectionView}
 >
   <Fragment slot="head">
+    <RichTextStyles when={Boolean((pagination.page === 1 && collectionDescription?.trim()) || (!hasListingQuery && collectionContent?.trim()))} />
     {
       collectionJsonLd && (
         <script

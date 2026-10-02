@@ -1,5 +1,9 @@
 ---
 // src/components/recursive-footer-link.astro
+// A footer menu, to any depth. Every link repeats on every page, so its look
+// lives once in the rules below (zero specificity, Tailwind's own values: the
+// footers' own rules still win where they did) instead of a dozen utility
+// classes and an underline <span> per link.
 import type { FooterMenuLink } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
@@ -20,14 +24,9 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
       links.map((link) => (
         <li>
           {link.href ? (
-          <a href={link.href} data-astro-prefetch={getStorefrontPrefetchAttribute(link.href, Astro.url)} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="inline-flex items-center gap-2 text-base font-medium group" style={`padding-left: ${paddingLeft}`}>
-            {depth > 0 && (
-              <span class="w-1.5 h-1.5 bg-current rounded-full shrink-0" />
-            )}
-            <span class="relative">
-              {link.title}
-              <span class="absolute -bottom-0.5 left-0 w-0 h-px bg-current transition-all duration-300 group-hover:w-full group-focus-visible:w-full" />
-            </span>
+          <a href={link.href} data-astro-prefetch={getStorefrontPrefetchAttribute(link.href, Astro.url)} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="footer-link font-medium" style={depth > 0 ? `padding-left: ${paddingLeft}` : undefined}>
+            {depth > 0 && <span class="footer-link-dot" />}
+            <span class="footer-link-label">{link.title}</span>
           </a>
           ) : (
           <span class="inline-flex items-center gap-2 text-base font-medium" style={`padding-left: ${paddingLeft}`}>
@@ -48,3 +47,52 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
       ))
   }
 </ul>
+
+<style is:global>
+  /* The former `inline-flex items-center gap-2 text-base font-medium group`. */
+  :where(.footer-link) {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  /* A nested link's bullet (`w-1.5 h-1.5 bg-current rounded-full shrink-0`). */
+  :where(.footer-link-dot) {
+    flex-shrink: 0;
+    width: calc(var(--spacing) * 1.5);
+    height: calc(var(--spacing) * 1.5);
+    border-radius: 2147483647px;
+    background-color: currentColor;
+  }
+
+  /* The label's underline grows on hover and keyboard focus. */
+  :where(.footer-link-label) {
+    position: relative;
+  }
+
+  :where(.footer-link-label)::after {
+    content: "";
+    position: absolute;
+    bottom: calc(var(--spacing) * -0.5);
+    left: 0;
+    width: 0;
+    height: 1px;
+    background-color: currentColor;
+    transition-property: all;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    --tw-duration: 0.3s;
+    transition-duration: 0.3s;
+  }
+
+  :where(.footer-link:focus-visible .footer-link-label)::after {
+    width: 100%;
+  }
+
+  @media (hover: hover) {
+    :where(.footer-link:hover .footer-link-label)::after {
+      width: 100%;
+    }
+  }
+</style>

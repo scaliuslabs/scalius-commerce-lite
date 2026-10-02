@@ -3,10 +3,10 @@
 // terms, shipping and contact policy. Buyers see only published pages.
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { ValidationError } from "../../errors";
-import { declarePublicPagesById, publicPageVisibilityCondition } from "../pages/pages.service";
+import { planPublicPagesByIdDeclaration, publicPageVisibilityCondition } from "../pages/pages.service";
 import {
   policiesDocument,
   STORE_POLICY_KINDS,
@@ -56,21 +56,43 @@ export async function saveStorePolicies(
   return { ...value, revision };
 }
 
-/** The linked policies buyers can open right now, in policy order. */
+type BatchItem = Parameters<typeof safeBatch>[1][number];
+
+/**
+ * The linked policies buyers can open right now, as statements for the
+ * caller's batch (none when no policy links a page) and how to read them
+ * from its results, in policy order.
+ */
+export function planPublicStorePolicies(db: Database, policies: StorePolicies) {
+  const ids = linkedPageIds(policies);
+  const declaration = planPublicPagesByIdDeclaration(db, ids);
+  const pagesRead = ids.length > 0
+    ? db
+      .select({ id: pages.id, title: pages.title, slug: pages.slug })
+      .from(pages)
+      .where(and(inArray(pages.id, ids), publicPageVisibilityCondition("page")))
+    : null;
+  type PolicyPageRow = Awaited<NonNullable<typeof pagesRead>>[number];
+  return {
+    statements: [...declaration.statements, ...(pagesRead ? [pagesRead] : [])] as BatchItem[],
+    resolve(results: readonly unknown[], offset: number): PublicStorePolicy[] {
+      if (!pagesRead) return [];
+      declaration.declare(results, offset);
+      const rows = results[offset + declaration.statements.length] as PolicyPageRow[];
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      return STORE_POLICY_KINDS.flatMap((kind) => {
+        const page = policies[kind] ? byId.get(policies[kind]!) : undefined;
+        return page ? [{ kind, title: page.title, path: `/${page.slug}` }] : [];
+      });
+    },
+  };
+}
+
+/** The linked policies buyers can open right now, in policy order (one batch). */
 export async function resolvePublicStorePolicies(
   db: Database,
   policies: StorePolicies,
 ): Promise<PublicStorePolicy[]> {
-  const ids = linkedPageIds(policies);
-  if (ids.length === 0) return [];
-  await declarePublicPagesById(db, ids);
-  const rows = await db
-    .select({ id: pages.id, title: pages.title, slug: pages.slug })
-    .from(pages)
-    .where(and(inArray(pages.id, ids), publicPageVisibilityCondition("page")));
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  return STORE_POLICY_KINDS.flatMap((kind) => {
-    const page = policies[kind] ? byId.get(policies[kind]!) : undefined;
-    return page ? [{ kind, title: page.title, path: `/${page.slug}` }] : [];
-  });
+  const plan = planPublicStorePolicies(db, policies);
+  return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : [], 0);
 }

@@ -137,6 +137,11 @@ de-duplicated by target in `apps/storefront/src/components/header/nav-tree.ts`).
 - A placed menu cannot grow past its placement's `maxItems` (150): publishing
   or restoring a bigger revision of a placed menu is refused
   (`assertPlacedMenuFits`), as assigning one already was.
+- Public placements read in two batches: `planPublishedNavigationPlacements`
+  (the manifest and every placed menu's published items, selected by
+  subquery so nothing waits for the manifest) and
+  `planNavigationResourceSnapshots` (the linked resources, at most 90 IDs per
+  statement). `getLayoutData` sends them inside its own two batches.
 - A publication that is over budget anyway (written before the guard) still
   renders: `getPublishedNavigationPlacements` trims it to its first
   `maxItems` items, level by level and round-robin across parents

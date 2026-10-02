@@ -1,7 +1,7 @@
 ---
 // The product's key features: Star Tech's list in the buy box, Target's
 // chips, or Amazon's "About this item" bullets below the fold.
-import { Check } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   features: readonly string[];
@@ -27,7 +27,7 @@ const { features, variant, title = null, compact = false } = Astro.props;
       <ul class="space-y-1 text-sm text-foreground">
         {features.map((feature) => (
           <li class="flex items-start gap-1.5">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <Icon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <span>{feature}</span>
           </li>
         ))}

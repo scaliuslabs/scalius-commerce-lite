@@ -48,9 +48,14 @@ export default defineConfig({
     // changes. Scope the whole asset directory to BUILD_ID so a browser can safely
     // cache deployed JS/CSS as immutable without executing a previous build.
     assets: buildAssetsDirectory,
-    // Keep only genuinely small route styles inline. The shared Tailwind output
-    // is large enough that forcing it into every edge-cached HTML response delays
-    // body discovery and prevents browsers from reusing it across navigations.
+    // Bundled CSS stays out of the HTML: route and component sheets are
+    // cached, immutable files the browser reuses across pages, discovered in
+    // the head beside the shared sheet (no extra round trip). Only sheets
+    // under 1 KB (`assetsInlineLimit`) inline, where a request would cost
+    // more than the bytes; the page's theme tokens and font faces
+    // (Layout.astro, ThemeFonts.astro) are inline because they differ per
+    // store. An 8 KB limit used to put 6-13 KB of identical route CSS into
+    // every edge-cached HTML response.
     inlineStylesheets: "auto",
   },
 
@@ -107,9 +112,10 @@ export default defineConfig({
     },
     build: {
       cssCodeSplit: true,
-      // With inlineStylesheets:auto, keep compact layout/route CSS in the HTML
-      // while externalizing the much larger shared Tailwind stylesheet.
-      assetsInlineLimit: 8_192,
+      // The same 1 KB limit for module scripts and assets: page scripts are
+      // deferred modules, so as immutable files they cost no render time and
+      // are cached across pages instead of repeating 4-9 KB in every response.
+      assetsInlineLimit: 1_024,
       minify: true,
     },
     server: {

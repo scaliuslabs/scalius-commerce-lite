@@ -1,96 +1,16 @@
 /* src/styles/global.css */
 
 @import "tailwindcss" source("../");
+/* Tests and their recorded markup render nothing: their class strings must
+   not add utilities to the sheet every page loads. */
+@source not "../**/*.test.ts";
+@source not "../**/*.test.tsx";
+@source not "../**/__fixtures__";
 @import "./theme-foundation.css";
 @import "./rating-stars.css";
 
-@plugin '@tailwindcss/typography';
-
-/*
- * Rich text follows the theme: Typography's grey palette would be unreadable
- * on dark themes (Midnight) and off-brand on tinted ones.
- */
-.prose {
-  --tw-prose-body: var(--foreground);
-  --tw-prose-headings: var(--foreground);
-  --tw-prose-lead: var(--muted-foreground);
-  --tw-prose-links: var(--foreground);
-  --tw-prose-bold: var(--foreground);
-  --tw-prose-counters: var(--muted-foreground);
-  --tw-prose-bullets: var(--muted-foreground);
-  --tw-prose-hr: var(--border);
-  --tw-prose-quotes: var(--foreground);
-  --tw-prose-quote-borders: var(--border);
-  --tw-prose-captions: var(--muted-foreground);
-  --tw-prose-kbd: var(--foreground);
-  --tw-prose-code: var(--foreground);
-  --tw-prose-pre-code: var(--foreground);
-  --tw-prose-pre-bg: var(--muted);
-  --tw-prose-th-borders: var(--border);
-  --tw-prose-td-borders: var(--border);
-}
-
-/* Rich content table fixes — ensure side-by-side layouts work in prose */
-.prose table {
-  table-layout: fixed;
-}
-
-.prose td,
-.prose th {
-  vertical-align: top;
-}
-
-/* Images inside table cells: remove prose's default 2em margins */
-.prose td img,
-.prose th img {
-  margin-top: 0;
-  margin-bottom: 0;
-  max-width: 100%;
-  height: auto;
-}
-
-/* Prevent excessive spacing inside table cells */
-.prose td > *:first-child,
-.prose th > *:first-child {
-  margin-top: 0;
-}
-
-.prose td > *:last-child,
-.prose th > *:last-child {
-  margin-bottom: 0;
-}
-
-/* Image alignment from editor inline styles */
-.prose img[style*="margin-left: auto"][style*="margin-right: auto"] {
-  display: block;
-}
-
-.prose img[style*="margin-left: auto"]:not([style*="margin-right: auto"]) {
-  display: block;
-}
-
-.prose img[style*="margin-right: auto"]:not([style*="margin-left: auto"]) {
-  display: block;
-}
-
-/* Safe merchant video embeds share one responsive presentation contract. */
-.prose :where(.rich-video-embed, [data-youtube-video]) {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  margin-block: 1.5rem;
-  border-radius: var(--radius-lg);
-  background: var(--muted);
-}
-
-.prose :where(.rich-video-embed, [data-youtube-video]) iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
+/* Rich text (Typography's `.prose`) is its own sheet, linked only by pages
+   that render it: rich-text.css and components/RichTextStyles.astro. */
 
 /* 7. Global utility classes. */
 .line-clamp-2 {

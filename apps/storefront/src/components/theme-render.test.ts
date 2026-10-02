@@ -33,8 +33,8 @@ import {
   productGridFluidCss,
   productGridSpec,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX } from "@/components/cards/card-model";
-import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX, cardLookTokens, cardPhotoSizes } from "@/components/cards/card-model";
+import { scaleSizes } from "@/lib/responsive-image";
 import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
@@ -861,10 +861,13 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(cards).toHaveLength(Object.keys(CARD_PRODUCTS).length);
   const [onSale, withOptions, soldOut, plain] = cards as [Element, Element, Element, Element];
 
+  // Every card but standard draws its look from the page's token block.
+  const look = Object.fromEntries(cardLookTokens(resolved.blocks.card.variant, card));
   cards.forEach((element, index) => {
     // The resolved card variant, in its photo ratio (nearest token).
     expect(element.getAttribute("data-card-variant")).toBe(resolved.blocks.card.variant);
-    expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
+    if (resolved.blocks.card.variant === "standard") expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
+    else expect(look["pc-ratio"]).toBe(String(card.look.image.ratio));
     const media = element.querySelector(".product-card-media")!;
     const photo = media.querySelector("img")!;
     // `sizes` follows the density's fluid grid within the container cap; every
@@ -875,16 +878,16 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
     expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
     const variant = resolved.blocks.card.variant;
     const photoMax = variant === "standard" ? undefined : CARD_PHOTO_MAX_PX[variant];
-    expect(photo.getAttribute("sizes")).toBe(variant === "standard"
-      ? slot
-      : capSizesDensity(photoMax ? `${photoMax}px` : scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0))));
-    const style = element.getAttribute("style") ?? "";
-    if (photoMax) expect(style).toContain(`--pc-photo-max:${photoMax}px`);
-    else expect(style).not.toContain("--pc-photo-max");
+    expect(photo.getAttribute("sizes")).toBe(cardPhotoSizes(variant, slot));
+    if (variant !== "standard" && !photoMax) expect(photo.getAttribute("sizes")).toContain(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)).split(", ")[0]);
+    expect(element.getAttribute("style") ?? "").not.toContain("--pc-");
+    if (photoMax) expect(look["pc-photo-max"]).toBe(`${photoMax}px`);
+    else expect(look).not.toHaveProperty("pc-photo-max");
     expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
-    expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : "auto");
+    // "auto" is the default priority: the attribute is left out.
+    expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : null);
     // One link per card (the stretched title link) plus at most Buy now (and Compare).
     const links = element.querySelectorAll("a");
     expect(links.length).toBeLessThanOrEqual(card.compare ? 3 : 2);
@@ -909,7 +912,13 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(Boolean(buyAction(plain))).toBe(card.quickBuy);
   expect(buyAction(withOptions)).toBeNull();
   expect(buyAction(soldOut)).toBeNull();
-  if (card.quickBuy) expect(buyAction(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
+  // Positioned above the stretched card link: the standard card's utilities,
+  // every other card's action rules in theme-cards.css (a.pc-act, a.product-card-round-action).
+  if (card.quickBuy) {
+    expect(buyAction(onSale)!.className).toMatch(cardVariant === "standard"
+      ? /\b(?:relative|absolute)\b.*\bz-10\b/
+      : /\b(?:pc-act|product-card-round-action)\b/);
+  }
 
   // The discount badge sits on the photo, next to the price, or both (Fabrilife).
   expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge !== "price");
@@ -1405,7 +1414,7 @@ describe("navigation", () => {
       const drawer = page.querySelector("#mobile-menu-panel")!;
       expect(drawer.querySelector("h2")!.textContent, template).toBe("Shop by department");
       const roots = Array.from(
-        drawer.querySelectorAll(":scope nav .drill > .drill-list > .drill-row, :scope nav .nav-tree:not(.nav-tree--nested) > li"),
+        drawer.querySelectorAll(":scope nav .drill > .drill-list > li, :scope nav .nav-tree:not(.nav-tree--nested) > li"),
       ).map((row) => (row.querySelector("a, summary")!.textContent ?? "").replace(/\s+/g, " ").trim());
       expect(roots.at(-1), template).toBe("All categories");
       expect(roots.length - 1, template).toBe(Math.min(resolved.blocks.navigation.maxTopItems, 27));
@@ -1510,19 +1519,23 @@ function assertOverflowMoves(list: HTMLElement) {
 function assertDrill(drawer: Element) {
   const drill = drawer.querySelector(".drill[data-menu-root]")!;
   expect(drill).not.toBeNull();
-  const women = drill.querySelector(":scope > .drill-list > .drill-row > details[data-menu='drill']")!;
+  const women = drill.querySelector(":scope > .drill-list > li > details[data-menu='drill']")!;
   expect(women.querySelector(":scope > summary")!.textContent).toContain("Women");
   expect(women.hasAttribute("open")).toBe(false);
   const level = women.querySelector(":scope > [data-menu-panel]")!;
-  expect(level.querySelector(":scope > .drill-list > .drill-row:first-child a")!.getAttribute("href")).toBe("/categories/women");
+  // The open level's back-bar twin is its ::before (data-ghost) and the
+  // chevrons are the row's pseudo-elements: no extra elements per parent.
+  expect(level.getAttribute("data-ghost")).toBe(women.querySelector(":scope > summary")!.textContent!.trim());
+  expect(drill.querySelector("summary i, .drill-level-ghost")).toBeNull();
+  expect(level.querySelector(":scope > .drill-list > li:first-child a")!.getAttribute("href")).toBe("/categories/women");
   expect(level.querySelector("details[data-menu='drill'] a[href='/categories/silk-sarees']")!.getAttribute("aria-current")).toBe("page");
   // A linkless parent has no "All" row, only its children.
-  const men = Array.from(drill.querySelectorAll(":scope > .drill-list > .drill-row > details")).find((node) =>
+  const men = Array.from(drill.querySelectorAll(":scope > .drill-list > li > details")).find((node) =>
     node.querySelector("summary")!.textContent!.includes("Men"),
   )!;
   expect(men.querySelector("[data-menu-panel] .drill-link--all")).toBeNull();
   // Sibling levels are one open group (exclusive <details name>).
-  const names = Array.from(drill.querySelectorAll(":scope > .drill-list > .drill-row > details")).map((node) => node.getAttribute("name"));
+  const names = Array.from(drill.querySelectorAll(":scope > .drill-list > li > details")).map((node) => node.getAttribute("name"));
   expect(new Set(names).size).toBe(1);
 }
 
