@@ -272,6 +272,68 @@ describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-
     expect(sqlite.prepare("SELECT deleted_at IS NOT NULL AS retired FROM customers WHERE id = ?").get(guestRecord))
       .toEqual({ retired: 1 });
   });
+
+  it("carries a merged guest record's tags, consent with its history, custom fields and order stats into the account", async () => {
+    const guestOrder = await placeGuestOrder({ phone: STRANGER_PHONE, email: BUYER_EMAIL, name: "Buyer Five" });
+    const guest = orderLinks(guestOrder)!.customerId as string;
+    // The buyer agreed at checkout, later stopped SMS; staff tagged the record and noted a field.
+    sqlite.exec(`
+      INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, consent_text, subscribed_at, created_at, updated_at)
+        VALUES ('${guest}', 'email', 'subscribed', '${BUYER_EMAIL}', 'checkout', 'buyer', 'Send me offers', 1700000000, 1700000000, 1700000000),
+               ('${guest}', 'sms', 'subscribed', '${STRANGER_PHONE}', 'checkout', 'buyer', NULL, 1700000000, 1700000000, 1700000000);
+      UPDATE customer_marketing_consents SET state = 'unsubscribed', unsubscribed_at = 1700000500, source = 'admin', actor = 'staff', updated_at = 1700000500
+        WHERE customer_id = '${guest}' AND channel = 'sms';
+      INSERT INTO customer_tag_links (customer_id, tag) VALUES ('${guest}', 'qa oct3 vip'), ('${guest}', 'wholesale');
+      INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type)
+        VALUES ('cfd_customer_size', 'customer', 'custom', 'size', 'Size', 'single_line_text');
+      INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES ('cfd_customer_size', 'customer', '${guest}', 'XL');
+    `);
+    const guestEvents = sqlite.prepare("SELECT id, channel, previous_state, state FROM customer_marketing_consent_events WHERE customer_id = ? ORDER BY id").all(guest);
+    expect(guestEvents).toHaveLength(3);
+
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const accountId = account.customer.customerId!;
+
+    expect(sqlite.prepare("SELECT merged_into_customer_id AS mergedInto FROM customers WHERE id = ?").get(guest)).toEqual({ mergedInto: accountId });
+    expect(sqlite.prepare("SELECT tag FROM customer_tag_links WHERE customer_id = ? ORDER BY tag").all(accountId))
+      .toEqual([{ tag: "qa oct3 vip" }, { tag: "wholesale" }]);
+    expect(sqlite.prepare("SELECT channel, state, contact, source, consent_text AS text FROM customer_marketing_consents WHERE customer_id = ? ORDER BY channel").all(accountId))
+      .toEqual([
+        { channel: "email", state: "subscribed", contact: BUYER_EMAIL, source: "checkout", text: "Send me offers" },
+        { channel: "sms", state: "unsubscribed", contact: STRANGER_PHONE, source: "admin", text: null },
+      ]);
+    // The whole audit trail moved with it, untouched; moving it was not a consent change.
+    expect(sqlite.prepare("SELECT id, channel, previous_state, state FROM customer_marketing_consent_events WHERE customer_id = ? ORDER BY id").all(accountId))
+      .toEqual(guestEvents);
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox WHERE topic = 'customer.consent_changed' AND resource_id = ?").get(accountId)).toEqual({ n: 0 });
+    expect(sqlite.prepare("SELECT value FROM custom_field_values WHERE owner_id = ?").all(accountId)).toEqual([{ value: "XL" }]);
+    expect(sqlite.prepare("SELECT orders_count FROM customer_order_stats WHERE customer_id = ?").get(accountId)).toEqual({ orders_count: 1 });
+  });
+
+  it("keeps the account's own newer consent and tags when a guest record merges into it", async () => {
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const accountId = account.customer.customerId!;
+    // Signed out, the buyer orders with their (still unproven) phone; staff tag that guest record.
+    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Buyer Five" });
+    const guest = orderLinks(guestOrder)!.customerId as string;
+    expect(guest).not.toBe(accountId);
+    sqlite.exec(`
+      INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, subscribed_at, created_at, updated_at)
+        VALUES ('${guest}', 'sms', 'subscribed', '${BUYER_PHONE}', 'checkout', 'buyer', 1700000000, 1700000000, 1700000000),
+               ('${accountId}', 'sms', 'unsubscribed', '${BUYER_PHONE}', 'account', 'buyer', NULL, 1700000900, 1700000900);
+      INSERT INTO customer_tag_links (customer_id, tag) VALUES ('${guest}', 'vip'), ('${accountId}', 'vip');
+    `);
+
+    await verifyAccountPhoneCode(db, { accountId, code: await issuePhoneCode(BUYER_PHONE), encryptionKey: KEY, credentialEncryptionKey: KEY });
+
+    expect(orderLinks(guestOrder)).toEqual({ customerId: accountId, owner: accountId });
+    expect(sqlite.prepare("SELECT state, source FROM customer_marketing_consents WHERE customer_id = ?").all(accountId))
+      .toEqual([{ state: "unsubscribed", source: "account" }]);
+    // Both histories are the account's now.
+    expect(sqlite.prepare("SELECT state FROM customer_marketing_consent_events WHERE customer_id = ? ORDER BY state").all(accountId))
+      .toEqual([{ state: "subscribed" }, { state: "unsubscribed" }]);
+    expect(sqlite.prepare("SELECT tag FROM customer_tag_links WHERE customer_id = ?").all(accountId)).toEqual([{ tag: "vip" }]);
+  });
 });
 
 describe("a shared phone never exposes or files one person's orders under another (R4)", () => {
