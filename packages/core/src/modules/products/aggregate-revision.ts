@@ -10,6 +10,7 @@ import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
 import { catalogProjectionRefreshStatements } from "./catalog-projections";
 import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "./gift-card-rules";
+import { rethrowDigitalStockRuleViolation } from "./digital-stock-rules";
 import {
     inventoryLocationErrorFrom,
     isInventoryLevelShortfallError,
@@ -194,6 +195,8 @@ export async function executeProductAggregateMutationBatch(
         };
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
+        // A SKU that turned digital or lost tracking under a concurrent write.
+        rethrowDigitalStockRuleViolation(error);
         // Editor stock edits apply at the default location; it may hold
         // fewer units than the edit removes when stock sits elsewhere.
         if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {

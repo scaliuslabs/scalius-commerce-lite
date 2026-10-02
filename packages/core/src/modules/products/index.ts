@@ -22,3 +22,4 @@ export * from "./catalog-projections";
 export * from "./content-blocks";
 export * from "./bundles";
 export * from "./emi";
+export * from "./digital-stock-rules";

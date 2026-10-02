@@ -24,6 +24,12 @@ import {
 } from "./locations";
 import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import {
+  buildNotDigitalSkuGuard,
+  digitalStockError,
+  isDigitalKind,
+  rethrowDigitalStockRuleViolation,
+} from "../products/digital-stock-rules";
+import {
   validateAbsoluteStockCount,
   validateSignedStockAdjustment,
 } from "./validation";
@@ -99,6 +105,7 @@ type InventoryVariantState = {
   reservedStock: number;
   preorderStock: number;
   stockVersion: number;
+  fulfillmentKind?: string;
 };
 
 type ExistingOperationRow = {
@@ -169,6 +176,15 @@ export async function executeInventoryOperation(
     const countedAfter = normalized.mode === "relative"
       ? counted + normalized.delta
       : normalized.newStock;
+    // A digital SKU's stock is its licence keys: only key import and revoke
+    // move it (a count that matches changes nothing and is fine).
+    if (
+      normalized.operationType !== "licence_keys"
+      && isDigitalKind(variant.fulfillmentKind)
+      && countedAfter !== counted
+    ) {
+      throw digitalStockError({ variantId: normalized.variantId });
+    }
     if (location && countedAfter < 0) {
       throw new ValidationError(
         `${location.name} has ${counted} on hand, so at most ${counted} can be removed there.`,
@@ -234,6 +250,8 @@ export async function executeInventoryOperation(
       if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
         throw inventoryLocationErrorFrom(error, location?.name);
       }
+      // The SKU turned digital since the read: its stock is now its keys.
+      rethrowDigitalStockRuleViolation(error);
       const racedOperation = await selectInventoryOperation(
         db,
         normalized.operationKey,
@@ -347,6 +365,9 @@ async function commitCounterOperation(
       stockUpdate,
       // Buyer state reads the counter this batch just wrote.
       ...catalogBuyerStateRefreshStatementsForSkus(db, [input.variantId]),
+      // Only key import and revoke move a digital SKU: a kind change racing
+      // this manual write aborts it.
+      ...(input.operationType === "licence_keys" ? [] : [buildNotDigitalSkuGuard(db, input.variantId)]),
       ...(companionStatements.length > 0
         ? [
           buildBatchGuard(db, sql`EXISTS (
@@ -441,6 +462,7 @@ async function selectInventoryVariant(
       reservedStock: productVariants.reservedStock,
       preorderStock: productVariants.preorderStock,
       stockVersion: productVariants.stockVersion,
+      fulfillmentKind: productVariants.fulfillmentKind,
     })
     .from(productVariants)
     .where(and(

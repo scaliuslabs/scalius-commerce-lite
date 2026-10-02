@@ -17,6 +17,11 @@ import { sql } from "drizzle-orm";
 import type { InventoryImportBatch } from "@scalius/shared/store-transfer/inventory";
 import { AppError } from "@scalius/core/errors";
 import { executeInventoryOperation } from "../inventory/inventory-operations";
+import {
+  DIGITAL_STOCK_IS_KEYS_MESSAGE,
+  DIGITAL_STOCK_IS_KEYS_REASON,
+  isDigitalKind,
+} from "../products/digital-stock-rules";
 import { readLocationOnHand } from "../inventory/locations";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 
@@ -41,6 +46,13 @@ export interface InventoryImportResponse {
 }
 
 const lower = (value: string) => value.trim().toLocaleLowerCase("en-US");
+
+/** A row issue's code: the rule's own reason when it names one (e.g. digital_stock_is_keys). */
+function issueCodeOf(error: unknown): string {
+  if (!(error instanceof AppError)) return "write_failed";
+  const reason = (error.details as { reason?: unknown } | undefined)?.reason;
+  return typeof reason === "string" && reason ? reason : error.code.toLowerCase();
+}
 
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -67,6 +79,7 @@ export async function importInventory(
       id: productVariants.id,
       sku: productVariants.sku,
       trackInventory: productVariants.trackInventory,
+      fulfillmentKind: productVariants.fulfillmentKind,
       variantDeletedAt: productVariants.deletedAt,
       productDeletedAt: products.deletedAt,
     }).from(productVariants)
@@ -146,6 +159,12 @@ export async function importInventory(
     }
     const current = onHandByLocation.get(location.id)?.get(variant.id) ?? 0;
     result.previousOnHand = current;
+    // A digital SKU's stock is its licence keys: a row may only confirm it.
+    if (isDigitalKind(variant.fulfillmentKind) && item.onHand !== current) {
+      result.issues.push({ code: DIGITAL_STOCK_IS_KEYS_REASON, message: `SKU ${variant.sku}: ${DIGITAL_STOCK_IS_KEYS_MESSAGE}`, field: "onHand" });
+      results.push(result);
+      continue;
+    }
     if (!variant.trackInventory && item.onHand > 0) {
       result.issues.push({ code: "untracked_sku", message: `SKU ${variant.sku} doesn't track quantity. Turn on tracking in the product first.`, field: "sku" });
       results.push(result);
@@ -187,7 +206,7 @@ export async function importInventory(
         break;
       }
       result.issues.push({
-        code: error instanceof AppError ? error.code.toLowerCase() : "write_failed",
+        code: issueCodeOf(error),
         message: error instanceof Error ? error.message : "The count could not be saved.",
       });
     }

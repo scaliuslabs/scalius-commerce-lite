@@ -242,7 +242,11 @@ describe("purchase orders", () => {
 
   it("refuses non-physical SKUs and archiving a destination with open orders", async () => {
     seedSku("var_key", 3, null, "digital");
-    await expect(createPurchaseOrder(db, { lines: [{ variantId: "var_key", quantity: 1, unitCost: 1 }] })).rejects.toThrow(/not a physical item/);
+    seedSku("var_service", 0, null, "service");
+    // A digital SKU's stock is its licence keys (digital-stock.d1.test.ts covers every path).
+    await expect(createPurchaseOrder(db, { lines: [{ variantId: "var_key", quantity: 1, unitCost: 1 }] }))
+      .rejects.toMatchObject({ details: { reason: "digital_stock_is_keys", field: "lines.0.variantId" } });
+    await expect(createPurchaseOrder(db, { lines: [{ variantId: "var_service", quantity: 1, unitCost: 1 }] })).rejects.toThrow(/not a physical item/);
     const order = await createPurchaseOrder(db, { destinationLocationId: "loc_shop", lines: [{ variantId: "var_b", quantity: 1, unitCost: 1 }] });
     await markPurchaseOrderOrdered(db, order.id, 1);
     await expect(archiveInventoryLocation(db, "loc_shop")).rejects.toThrow(/Purchase orders or transfers/);

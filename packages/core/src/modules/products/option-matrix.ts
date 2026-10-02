@@ -49,6 +49,12 @@ import {
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
 import { editableFulfillmentKindSchema } from "./customization-schema";
+import {
+    DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
+    digitalStockError,
+    isDigitalKind,
+    planDigitalSkuWrites,
+} from "./digital-stock-rules";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -396,7 +402,14 @@ type StockAllocationVariant = {
     reservedStock?: number;
     preorderStock?: number;
     trackInventory: boolean;
+    /** Digital stock is licence keys, which stay with their SKU: never allocated. */
+    fulfillmentKind?: string;
 };
+
+/** Units a replaced or new combination brings to an allocation (physical, tracked). */
+function allocatableUnits(variant: Pick<StockAllocationVariant, "stock" | "trackInventory" | "fulfillmentKind">): number {
+    return variant.trackInventory && !isDigitalKind(variant.fulfillmentKind) ? variant.stock : 0;
+}
 
 /**
  * Converting a tracked simple SKU to an option matrix is a stock allocation,
@@ -458,18 +471,12 @@ export async function assertSimpleConversionStockAtDefaultLocation(
 
 /** Preserve physical stock when a topology edit replaces old combinations. */
 export function assertOptionMatrixReplacementStockAllocation(
-    retiringVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory">[],
-    creatingVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory">[],
+    retiringVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory" | "fulfillmentKind">[],
+    creatingVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory" | "fulfillmentKind">[],
 ): void {
     if (retiringVariants.length === 0 || creatingVariants.length === 0) return;
-    const retiringStock = retiringVariants.reduce(
-        (total, variant) => total + (variant.trackInventory ? variant.stock : 0),
-        0,
-    );
-    const creatingStock = creatingVariants.reduce(
-        (total, variant) => total + (variant.trackInventory ? variant.stock : 0),
-        0,
-    );
+    const retiringStock = retiringVariants.reduce((total, variant) => total + allocatableUnits(variant), 0);
+    const creatingStock = creatingVariants.reduce((total, variant) => total + allocatableUnits(variant), 0);
     if (creatingStock !== retiringStock) {
         throw new ValidationError(
             `Allocate exactly ${retiringStock} on-hand units from the replaced combinations. Currently allocated: ${creatingStock}.`,
@@ -642,6 +649,27 @@ export async function saveProductOptionMatrix(
         ...restoredVariantById,
     ]);
 
+    // A digital SKU's stock is its licence keys: new digital rows start at 0,
+    // saved digital rows keep their stock, rows turning digital hold none, and
+    // a digital row with a key pool keeps tracking. The guards run after the
+    // row updates, so a stock change racing this save cannot slip through.
+    const digitalGuards = await planDigitalSkuWrites(db, normalizedVariants.map((variant, index) => {
+        const existing = variantById.get(variant.id);
+        return {
+            variantId: variant.id,
+            sku: variant.sku,
+            fieldPrefix: `variants.${index}`,
+            before: existing
+                ? { kind: existing.fulfillmentKind, stock: existing.stock, trackInventory: existing.trackInventory }
+                : null,
+            after: {
+                kind: variant.fulfillmentKind ?? existing?.fulfillmentKind ?? "physical",
+                stock: variant.stock,
+                trackInventory: variant.trackInventory,
+            },
+        };
+    }));
+
     for (const variant of normalizedVariants) {
         const existing = variantById.get(variant.id);
         if (!existing || existing.reservedStock === 0) continue;
@@ -720,6 +748,13 @@ export async function saveProductOptionMatrix(
         if (openOrder) throw new ConflictError("Finish or cancel open orders before retiring combinations.");
     }
 
+    // Adding options zeroes the simple SKU's stock; a digital one's is its keys.
+    if (wasSimple && defaultSku && isDigitalKind(defaultSku.fulfillmentKind) && defaultSku.stock !== 0) {
+        throw digitalStockError(
+            { field: "variants", sku: defaultSku.sku, variantId: defaultSku.id },
+            DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
+        );
+    }
     assertOptionMatrixStockAllocation(existingVariants, normalizedVariants);
     if (wasSimple && defaultSku && defaultSku.stock > 0) {
         await assertSimpleConversionStockAtDefaultLocation(db, defaultSku.id);
@@ -1029,6 +1064,7 @@ export async function saveProductOptionMatrix(
                 isNull(productVariants.deletedAt),
             )));
     }
+    statements.push(...digitalGuards);
 
     let result;
     try {

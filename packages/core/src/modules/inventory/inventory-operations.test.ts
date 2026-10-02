@@ -140,6 +140,8 @@ describe("merchant inventory operation idempotency", () => {
       expect.objectContaining({ kind: "insert", table: inventoryMovements }),
       expect.objectContaining({ kind: "insert", table: inventoryOperations }),
       expect.objectContaining({ kind: "update", table: productVariants }),
+      // The guard that the SKU is not digital (its stock is its licence keys).
+      expect.anything(),
     ]);
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
