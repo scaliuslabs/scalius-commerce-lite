@@ -224,8 +224,10 @@ function checkPackageScripts(checks) {
 
   const apiPackage = readJson(resolve(root, "apps", "api", "package.json"));
   const apiDev = apiPackage?.scripts?.dev ?? "";
-  if (apiDev.includes("wrangler.local.jsonc") && apiDev.includes("--local")) {
-    pass(checks, "API local dev script", "API dev uses wrangler.local.jsonc and --local.");
+  // The plugin tooling picks wrangler.local.jsonc (or its sandbox variant) for local dev.
+  const localConfig = apiDev.includes("wrangler.local.jsonc") || apiDev.includes("plugins.mjs wrangler-config --local");
+  if (localConfig && apiDev.includes("--local")) {
+    pass(checks, "API local dev script", "API dev uses the local Wrangler config and --local.");
   } else {
     fail(checks, "API local dev script", "API dev script is not using the local Wrangler config.", "Keep apps/api/package.json dev on wrangler.local.jsonc --local.");
   }
