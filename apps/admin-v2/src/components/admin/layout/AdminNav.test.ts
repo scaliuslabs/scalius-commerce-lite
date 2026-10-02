@@ -31,6 +31,14 @@ describe("admin sidebar", () => {
     expect(withoutGiftCards!.children.map((child) => child.key)).not.toContain("giftCards");
   });
 
+  it("lists Segments under Customers and keeps Customers open on a segment", () => {
+    const [customers] = visibleNav(viewer(PERMISSIONS.CUSTOMERS_VIEW));
+
+    expect(customers).toMatchObject({ key: "customers", to: "/admin/customers" });
+    expect(customers!.children).toEqual([{ key: "segments", to: "/admin/customers/segments" }]);
+    expect(isSectionActive("/admin/customers/segments/seg_abc", customers!)).toBe(true);
+  });
+
   it("keeps a section active on its sub-pages and detail routes", () => {
     const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW));
 

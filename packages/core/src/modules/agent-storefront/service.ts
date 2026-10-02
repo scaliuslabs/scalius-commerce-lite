@@ -648,9 +648,12 @@ async function quoteAgentStorefrontDiscount(
   customerPhone?: string | null,
 ) {
   const currency = await getCurrencySettings(db);
+  // Only a context bound to a live customer session counts as signed in.
+  const signedInCustomerId = await getLiveContextCustomerId(db, row);
   const quote = await quoteStorefrontDiscount(db, {
     codes: code ? [code] : [],
-    customerId: await getLiveContextCustomerId(db, row),
+    customerId: signedInCustomerId,
+    segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
     cart: {
       currencyCode: currency.currencyCode,

@@ -130,7 +130,7 @@ function trackedReceiptUrl(orderId: string): string {
 }
 
 /** The API's per-IP limit must see the buyer, not the storefront Worker. */
-function buyerIpHeaders(request: Request): Record<string, string> {
+export function buyerIpHeaders(request: Request): Record<string, string> {
   const ip = request.headers.get("cf-connecting-ip")?.trim();
   return ip ? { "cf-connecting-ip": ip } : {};
 }

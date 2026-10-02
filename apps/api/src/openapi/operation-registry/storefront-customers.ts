@@ -2,6 +2,36 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const STOREFRONT_CUSTOMER_OPERATIONS = {
+  "storefront.customer_auth_marketing.get": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason: "Customer-cookie marketing preferences for the hosted account page; consent must be given by the buyer there.",
+  },
+  "storefront.customer_auth_marketing.update": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason: "Marketing consent is the buyer's own choice, made in the hosted account page; agents never change it for them.",
+  },
+  "storefront.marketing.subscribe": {
+    exposure: "excluded",
+    openWorld: true,
+    reason: "Newsletter signups record a buyer's marketing consent and may send a confirmation e-mail; only the buyer can give consent, in the storefront form.",
+  },
+  "storefront.marketing.confirm": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "Consumes the single-use confirmation token from the buyer's e-mail; the buyer confirms in the hosted page.",
+  },
+  "storefront.marketing.unsubscribe_preview": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "Reads a signed unsubscribe link from the buyer's message; only the hosted unsubscribe page uses it.",
+  },
+  "storefront.marketing.unsubscribe": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "Uses a signed unsubscribe link from the buyer's message (RFC 8058 one-click and the hosted page).",
+  },
   "storefront.customer_auth_account_summary.get_account_summary": {
     exposure: "excluded",
     principals: ["customer"],

@@ -33,6 +33,10 @@ export const STOREFRONT_CATEGORY_TILES_LIMIT = 12;
 /** Collections one collections section shows, each a row of its products. */
 export const STOREFRONT_COLLECTIONS_LIMIT = 8;
 export const STOREFRONT_HERO_SLIDE_TEXT_LIMITS = { alt: 160, heading: 160, text: 160, buttonLabel: 40 } as const;
+/** How a newsletter signup asks for the e-mail (the phone is always asked). */
+export const STOREFRONT_NEWSLETTER_EMAIL_FIELDS = ["optional", "required", "hidden"] as const;
+export type StorefrontNewsletterEmailField = (typeof STOREFRONT_NEWSLETTER_EMAIL_FIELDS)[number];
+export const STOREFRONT_NEWSLETTER_BUTTON_LABEL_MAX = 40;
 
 /**
  * Where a photo's subject is, as percentages of its width (`x`) and height
@@ -350,10 +354,25 @@ export const STOREFRONT_SECTION_REGISTRY = {
     settings: z.object({ title }).strict(),
     defaults: { title: "" },
   }),
+  /**
+   * The newsletter signup (Dawn's email signup, Fabrilife's band): the
+   * phone always (customer identity; it subscribes to SMS), the e-mail as
+   * `email` says, and with `whatsapp` a box that adds WhatsApp for the same
+   * number. The form states the channels it subscribes. An empty heading,
+   * text or button label shows the storefront's own words in the store's
+   * language. `email`, `whatsapp` and `buttonLabel` are optional, so stored
+   * version 1 newsletters stay valid (no `email`: optional).
+   */
   newsletter: section({
     type: "newsletter",
-    settings: z.object({ heading, text: z.string().trim().max(300) }).strict(),
-    defaults: { heading: "", text: "" },
+    settings: z.object({
+      heading,
+      text: z.string().trim().max(300),
+      email: z.enum(STOREFRONT_NEWSLETTER_EMAIL_FIELDS).optional(),
+      whatsapp: z.boolean().optional(),
+      buttonLabel: z.string().trim().max(STOREFRONT_NEWSLETTER_BUTTON_LABEL_MAX).optional(),
+    }).strict(),
+    defaults: { heading: "", text: "", email: "optional", whatsapp: false },
   }),
 };
 
@@ -394,7 +413,7 @@ export function storefrontSectionDefault<Type extends StorefrontSectionType>(typ
   } as StorefrontSectionOf<Type>;
 }
 
-/** Section types the storefront renders. The newsletter waits for a subscriber list. */
+/** Section types the storefront renders (every registered type today). */
 export const STOREFRONT_SECTION_RENDERERS = [
   "hero",
   "usp-strip",
@@ -415,6 +434,7 @@ export const STOREFRONT_SECTION_RENDERERS = [
   "endless-grid",
   "seo-text",
   "recently-viewed",
+  "newsletter",
 ] as const satisfies readonly StorefrontSectionType[];
 export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
 
@@ -468,6 +488,9 @@ export function storefrontSectionNeedsContent(each: StorefrontSection): boolean 
       return each.settings.cards.length === 0;
     case "seo-text":
       return !filled(each.settings.body);
+    // A signup always has its form and the storefront's default words.
+    case "newsletter":
+      return false;
     default:
       return false;
   }

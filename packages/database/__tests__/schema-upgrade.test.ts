@@ -450,6 +450,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 14,
         postgresStatements: 14,
       },
+      {
+        version: 108,
+        name: "0108_customer_marketing",
+        // SQLite rebuilds the notification outbox/receipts; PostgreSQL swaps their CHECKs.
+        sqliteStatements: 56,
+        postgresStatements: 33,
+      },
     ]);
   });
 
@@ -606,6 +613,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 105, name: "0105_plugin_runtime" },
           { version: 106, name: "0106_theme_document_v6" },
           { version: 107, name: "0107_plugin_platform" },
+          { version: 108, name: "0108_customer_marketing" },
         ],
       });
     } finally {

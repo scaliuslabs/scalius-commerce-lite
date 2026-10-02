@@ -10,6 +10,22 @@ export interface SendEmailOptions {
   fromName?: string;
   text?: string;
   idempotencyKey?: string;
+  /**
+   * Extra message headers. Only the list headers marketing mail needs
+   * (RFC 2369 `List-Unsubscribe`, RFC 8058 `List-Unsubscribe-Post`) pass
+   * `safeEmailHeaders`; everything else is dropped.
+   */
+  headers?: Record<string, string>;
+}
+
+const ALLOWED_EMAIL_HEADERS = new Set(["List-Unsubscribe", "List-Unsubscribe-Post"]);
+
+/** The allowed headers with header-safe values (no line breaks), or undefined when none. */
+export function safeEmailHeaders(headers: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!headers) return undefined;
+  const safe = Object.entries(headers)
+    .filter(([name, value]) => ALLOWED_EMAIL_HEADERS.has(name) && typeof value === "string" && value.length > 0 && value.length <= 2000 && !/[\r\n]/.test(value));
+  return safe.length > 0 ? Object.fromEntries(safe) : undefined;
 }
 
 export interface SendEmailResult {
@@ -26,6 +42,7 @@ export interface CloudflareEmailBinding {
     subject: string;
     html?: string;
     text?: string;
+    headers?: Record<string, string>;
   }): Promise<{ messageId: string }>;
 }
 

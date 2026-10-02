@@ -200,18 +200,20 @@ const taxQuoteRoute = createRoute({
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
+  // A signed-in buyer is quoted as the order will be: their per-customer
+  // limits and the promotions limited to their customer segments. A missing
+  // or stale session quotes as a guest (checkout itself reports it).
   const customerSessionToken = getCustomerSessionTokenFromRequest(c);
-  const readSessionCustomer = () => customerSessionToken
-    ? getCustomerBySession(db, customerSessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
-    : Promise.resolve(null);
-  // The apps' checkout functions ride the first read wave: none, no app work.
-  // The signed-in buyer is read for per-customer discount limits (codes) and
-  // for apps' customer segments.
-  const [currency, paymentMethods, registrations, codeCustomer] = await Promise.all([
+  // The apps' checkout functions ride the first read wave (none, no app work),
+  // beside the signed-in buyer: their per-customer limits, their segments for
+  // segment-limited promotions (automatic ones need no code) and apps' facts.
+  const [currency, paymentMethods, registrations, sessionCustomer] = await Promise.all([
     getCurrencySettings(db),
     getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
     listActiveFunctionRegistrations(db),
-    data.discountCodes.length > 0 ? readSessionCustomer() : Promise.resolve(null),
+    customerSessionToken
+      ? getCustomerBySession(db, customerSessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
+      : null,
   ]);
   const apps = createCheckoutAppFunctions({
     env: c.env,
@@ -219,9 +221,6 @@ app.openapi(taxQuoteRoute, async (c) => {
     db,
     registrations,
   });
-  const sessionCustomer = data.discountCodes.length > 0 || apps.points.size === 0
-    ? codeCustomer
-    : await readSessionCustomer();
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
@@ -245,6 +244,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     delivery,
     discountCodes: data.discountCodes,
     customerId: sessionCustomer?.customerId ?? null,
+    segmentCustomerId: sessionCustomer?.customerId ?? null,
     customerPhone: data.customerPhone,
     currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
     apps,

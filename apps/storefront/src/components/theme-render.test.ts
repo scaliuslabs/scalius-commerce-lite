@@ -1595,6 +1595,31 @@ describe("theme brand and words", () => {
     expect(utility.querySelector('a[href^="tel:"]')).not.toBeNull();
   });
 
+  it("puts the newsletter signup in the newsletter-grey footer, once per page, in the store's language", async () => {
+    const footerForm = async (template: "heritage-editorial" | "fashion-value", url: string, languageCode = "en") => {
+      const page = parse(await render(
+        "/src/layouts/Layout.astro",
+        withStoreContent(storefrontTemplateTheme(template)),
+        { title: "Home", layoutData: { ...layoutData({ business: true }), storefrontCopy: { languageCode } } },
+        undefined,
+        url,
+      ));
+      expect(duplicateIds(page)).toEqual([]);
+      return page.querySelector("footer [data-footer-newsletter]");
+    };
+    // Aarong's template has no newsletter section: the footer carries the form everywhere.
+    const signup = (await footerForm("heritage-editorial", "https://shop.test/"))!;
+    const form = signup.querySelector("form[data-newsletter-form]")!;
+    expect(form.getAttribute("action")).toBe("/api/newsletter/subscribe");
+    expect(form.querySelector('input[name="phone"][type="tel"]')).not.toBeNull();
+    expect(signup.querySelector("h2")!.textContent).toBe("Get news and offers");
+    // Fabrilife's homepage ends with the newsletter band, so its footer leaves the form out there only.
+    expect(await footerForm("fashion-value", "https://shop.test/")).toBeNull();
+    const elsewhere = (await footerForm("fashion-value", "https://shop.test/categories/shirts", "bn"))!;
+    expect(elsewhere.querySelector("h2")!.textContent).toBe("নতুন খবর ও অফার পান");
+    expect(await footerForm("heritage-editorial", "https://shop.test/newsletter")).toBeNull();
+  });
+
   it("writes the footer block's words, its about text as escaped paragraphs and the © name", async () => {
     const theme = withStoreContent(storefrontTemplateTheme("boutique"));
     theme.blocks.footer = {
@@ -1694,7 +1719,7 @@ describe("theme sections", () => {
         { id: "hero", type: "hero", version: 1, settings: { layout: "full-screen", slides: HERO_SLIDES } },
         { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: COLLECTION_IDS } },
         { id: "care", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "", body: "Dry clean only." } },
-        // Waits for a subscriber list: renders nothing.
+        // A version 1 newsletter (heading and text only): the signup form with its defaults.
         { id: "brands", type: "newsletter", version: 1, settings: { heading: "Join", text: "" } },
         { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
       ],
@@ -1714,8 +1739,13 @@ describe("theme sections", () => {
     const page = parse(html);
     expect(
       Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-section-id")),
-    ).toEqual(["story", "hero", "collections", "care", "delivery"]);
+    ).toEqual(["story", "hero", "collections", "care", "brands", "delivery"]);
     expect(duplicateIds(page)).toEqual([]);
+    const signup = page.querySelector('[data-section-id="brands"] form[data-newsletter-form]')!;
+    expect(signup.getAttribute("action")).toBe("/api/newsletter/subscribe");
+    expect(page.querySelector('[data-section-id="brands"] h2')!.textContent).toBe("Join");
+    // No `email` setting stored: the e-mail is asked, optional.
+    expect(signup.querySelector('input[name="email"]')!.hasAttribute("required")).toBe(false);
 
     const story = page.querySelector('[data-section-id="story"] section')!;
     const heading = story.querySelector("h2")!;

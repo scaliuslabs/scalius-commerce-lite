@@ -223,12 +223,13 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const db = openStore(provider);
         const promotion = await live(db, { name: "Tee", codes: [{ code: "TEE10" }], effects: [percentOff(1_000, { productIds: ["prod_tee"] })] });
         const prepared = await quote(db, "TEE10");
-        await expect(verifyPromotionCheckoutSnapshot(db, prepared.snapshot!, "cust_1", NOW))
+        const buyer = { customerId: "cust_1", segmentCustomerId: null };
+        await expect(verifyPromotionCheckoutSnapshot(db, prepared.snapshot!, buyer, NOW))
             .resolves.toEqual(prepared.applied);
         const edited = { ...prepared.snapshot!, cart: { ...prepared.snapshot!.cart, lines: [{ ...cart.lines[0]!, quantity: 3 }] } };
-        await expect(verifyPromotionCheckoutSnapshot(db, edited, "cust_1", NOW)).rejects.toThrow("changed while you were checking out");
+        await expect(verifyPromotionCheckoutSnapshot(db, edited, buyer, NOW)).rejects.toThrow("changed while you were checking out");
         await pausePromotion(db, promotion.id, promotion.revision);
-        await expect(verifyPromotionCheckoutSnapshot(db, prepared.snapshot!, "cust_1", NOW)).rejects.toThrow("not active");
+        await expect(verifyPromotionCheckoutSnapshot(db, prepared.snapshot!, buyer, NOW)).rejects.toThrow("not active");
     });
 
     it("changes the checkout quote fingerprint whenever the applied discount changes", async () => {

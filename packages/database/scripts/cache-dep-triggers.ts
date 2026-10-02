@@ -58,6 +58,7 @@ const PROJECTION_TABLES = new Set(["product_recommendations", "product_sales_sta
 export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   custom_field_definitions: "0104_custom_fields",
   custom_field_values: "0104_custom_fields",
+  promotion_customer_segments: "0108_customer_marketing",
 };
 const isBaselineTable = (table: string) => !PROJECTION_TABLES.has(table) && !(table in CACHE_DEP_LATER_TABLES);
 

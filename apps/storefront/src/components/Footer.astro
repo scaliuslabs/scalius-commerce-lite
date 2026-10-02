@@ -28,8 +28,12 @@ import BrandFooter from "./footer/BrandFooter.astro";
 import NewsletterFooter from "./footer/NewsletterFooter.astro";
 import DirectoryFooter from "./footer/DirectoryFooter.astro";
 import FooterBottom from "./footer/FooterBottom.astro";
+import { newsletterLanguage } from "@/lib/newsletter-copy";
+import { newsletterFormModel, themeNewsletterSettings } from "@/lib/newsletter-form";
 
 interface Props {
+  /** The store's language (the layout's `storefrontCopy.languageCode`) for the signup's words. */
+  languageCode?: string | null;
   /** The footer menus (Online store -> Navigation; the layout read's `footerMenus`). */
   menus: FooterMenu[];
   /** Business settings identity and the store's single social set. */
@@ -43,9 +47,19 @@ interface Props {
   business: StorefrontBusinessInfo | null | undefined;
 }
 
-const { menus, storeName, storePhone, social, policies, business } = Astro.props;
+const { menus, storeName, storePhone, social, policies, business, languageCode } = Astro.props;
 const { resolved, brand } = await currentRequestTheme(Astro.locals);
 const variant = resolved.blocks.footer.variant;
+// newsletter-grey carries the signup form, with the homepage newsletter
+// section's settings when the theme has one. A homepage that shows that
+// section, and the newsletter's own pages, already have their form (or are
+// about leaving the list), so the footer leaves its own out there.
+const newsletterSettings = themeNewsletterSettings(resolved.pages.home);
+const pageHasSignup = /^\/newsletter(?:\/|$)/.test(Astro.url.pathname)
+  || (Astro.url.pathname === "/" && resolved.pages.homeMode.kind === "sections" && newsletterSettings !== null);
+const signup = variant === "newsletter-grey" && !pageHasSignup
+  ? newsletterFormModel(newsletterSettings, newsletterLanguage(languageCode))
+  : null;
 const marketplaceDirectory = variant === "directory" && resolved.blocks.footer.settings.style === "bands";
 const model = footerModel({
   words: footerWords(resolved.blocks.footer.settings),
@@ -75,7 +89,7 @@ const TONES: Record<string, string | undefined> = {
     {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} collapsibleMenus={variant === "product-widgets"} />}
     {variant === "support-dark" && <SupportFooter model={model} />}
     {variant === "brand-black" && <BrandFooter model={model} />}
-    {variant === "newsletter-grey" && <NewsletterFooter model={model} />}
+    {variant === "newsletter-grey" && <NewsletterFooter model={model} signup={signup} />}
     {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
     {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "newsletter-grey" && variant !== "brand-black"} />}
   </div>

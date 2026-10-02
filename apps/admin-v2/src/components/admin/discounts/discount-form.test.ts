@@ -116,6 +116,30 @@ describe("discount form model", () => {
     }
   });
 
+  it("limits a discount to customer segments, or to nobody in particular", () => {
+    const vip = draft("order", { value: "10", eligibility: "segments", customerSegmentIds: ["seg_vip", "seg_dhaka"] });
+    expect(validateDraft(vip, "BDT", NOW_SECONDS)).toEqual({});
+    expect(draftToInput(vip, "BDT").customerSegmentIds).toEqual(["seg_vip", "seg_dhaka"]);
+    const restored = draftFromDiscount(record(draftToInput(vip, "BDT")), "BDT");
+    expect(restored).toMatchObject({ eligibility: "segments", customerSegmentIds: ["seg_vip", "seg_dhaka"] });
+
+    // Everyone: picked segments are kept in the form but never sent.
+    expect(draftToInput({ ...vip, eligibility: "all" }, "BDT").customerSegmentIds).toEqual([]);
+    expect(draftFromDiscount(record(draftToInput(draft("order", { value: "10" }), "BDT")), "BDT"))
+      .toMatchObject({ eligibility: "all", customerSegmentIds: [] });
+
+    expect(validateDraft({ ...vip, customerSegmentIds: [] }, "BDT", NOW_SECONDS)).toEqual({ customerSegmentIds: "errorPickSegments" });
+    expect(validateDraft({ ...vip, customerSegmentIds: ["a", "b", "c", "d", "e", "f"] }, "BDT", NOW_SECONDS))
+      .toEqual({ customerSegmentIds: "errorSegmentsMax" });
+
+    const summary = (value: DiscountDraft, format: SummaryFormat = FORMAT) => summarizeDraft(value, "BDT", format)
+      .filter(({ key }) => key === "summarySegments");
+    expect(summary(vip, { ...FORMAT, segments: (ids) => ids.join(" + ") }))
+      .toEqual([{ key: "summarySegments", vars: { names: "seg_vip + seg_dhaka" } }]);
+    expect(summary(vip)).toEqual([{ key: "summarySegments", vars: { names: "2" } }]);
+    expect(summary({ ...vip, eligibility: "all" })).toEqual([]);
+  });
+
   it("drops usage limits from automatic discounts", () => {
     const input = draftToInput(draft("order", {
       method: "automatic", title: "Eid 10%", value: "10", limitTotal: true, totalUses: "5", oncePerCustomer: true,

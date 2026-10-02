@@ -24,12 +24,15 @@ export function applyTransportSecurityHeaders(
   },
 ): Response {
   const privateDownload = isDigitalDownloadPathname(new URL(request.url).pathname);
+  // A page that carries a token in its URL (the newsletter's confirm and
+  // unsubscribe links) asks for no referrer; the baseline never weakens it.
+  const pageWantsNoReferrer = response.headers.get("Referrer-Policy")?.trim().toLowerCase() === "no-referrer";
   const secured = applyBaselineSecurityHeaders(request, response, {
     frameProtection: options.framedByPolicy && !privateDownload
       ? "preserve"
       : options.privateRelay || privateDownload ? "deny" : "same-origin",
   });
-  if (options.privateRelay || privateDownload) secured.headers.set("Referrer-Policy", "no-referrer");
+  if (options.privateRelay || privateDownload || pageWantsNoReferrer) secured.headers.set("Referrer-Policy", "no-referrer");
   return secured;
 }
 

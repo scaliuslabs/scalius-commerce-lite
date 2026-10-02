@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isWholeCashAmountMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
 
-import { checkPromotionRule, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
+import { checkPromotionRule, PROMOTION_CUSTOMER_SEGMENT_LIMIT, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
 
 const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
@@ -110,6 +110,13 @@ const promotionRuleShape = {
     conditions: z.array(promotionConditionInputSchema).max(20).default([]),
     /** One value; a product or order value may add free shipping as a second effect. */
     effects: z.array(promotionEffectInputSchema).min(1).max(2),
+    /**
+     * Only signed-in customers in any of these saved segments (checked when
+     * the buyer checks out); empty means every customer.
+     */
+    customerSegmentIds: z.array(z.string().trim().min(1).max(40))
+        .max(PROMOTION_CUSTOMER_SEGMENT_LIMIT)
+        .default([]),
 } as const;
 
 /** In BDT every amount (a fixed discount, a minimum, a Buy X amount, a budget) is whole taka. */
@@ -135,11 +142,14 @@ function requireWholeCashAmounts(rule: Parameters<typeof checkPromotionRule>[0],
 }
 
 function refinePromotionRule(
-    rule: Parameters<typeof checkPromotionRule>[0] & { timezone: string },
+    rule: Parameters<typeof checkPromotionRule>[0] & { timezone: string; customerSegmentIds: string[] },
     context: z.RefinementCtx,
 ): void {
     checkPromotionRule(rule, context);
     requireWholeCashAmounts(rule, context);
+    if (new Set(rule.customerSegmentIds).size !== rule.customerSegmentIds.length) {
+        context.addIssue({ code: "custom", path: ["customerSegmentIds"], message: "Choose each customer segment once." });
+    }
     try {
         new Intl.DateTimeFormat("en", { timeZone: rule.timezone }).format(0);
     } catch {

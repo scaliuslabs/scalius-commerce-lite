@@ -31,6 +31,12 @@ describe("download stream security headers", () => {
     expect(response.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
+  it("keeps a page's own no-referrer (a token in its URL) and gives other pages the baseline", () => {
+    const tokenPage = new Response("<html></html>", { headers: { "Content-Type": "text/html", "Referrer-Policy": "no-referrer" } });
+    expect(secure("/newsletter/unsubscribe", tokenPage).headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(secure("/newsletter", page()).headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+  });
+
   it("lets only a theme preview the dashboard frames state its framing in CSP alone", () => {
     const request = new Request("https://shop.example.test/");
     const buyer = applyTransportSecurityHeaders(request, setPageCspHeader(page()), { privateRelay: false });

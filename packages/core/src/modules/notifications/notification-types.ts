@@ -89,8 +89,24 @@ export const TEMPLATED_NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
 
 export type TemplatedNotificationType = (typeof TEMPLATED_NOTIFICATION_TYPES)[number];
 
+/**
+ * Buyer messages about a customer record that are part of a flow the buyer
+ * started, not a merchant channel choice (Customers & marketing): the e-mail
+ * double opt-in confirmation. Not in NOTIFICATION_TYPES, so the notification
+ * settings never list or switch them off; subject `customer`.
+ */
+export const CUSTOMER_FLOW_NOTIFICATION_TYPES = ["marketing_opt_in"] as const;
+export type CustomerFlowNotificationType = (typeof CUSTOMER_FLOW_NOTIFICATION_TYPES)[number];
+
+/** Every type an outbox row or a delivery receipt may carry. */
+export type OutboxNotificationType = NotificationType | CustomerFlowNotificationType;
+
+export function isCustomerFlowNotificationType(value: string): value is CustomerFlowNotificationType {
+    return (CUSTOMER_FLOW_NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
 /** What a notification is about; the outbox and receipts are keyed by it. */
-export const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital"] as const;
+export const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital", "customer"] as const;
 export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number];
 
 export const NOTIFICATION_AUDIENCES = ["customer", "staff"] as const;

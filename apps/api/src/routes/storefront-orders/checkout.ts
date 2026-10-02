@@ -12,6 +12,7 @@ import {
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
+import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-marketing";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
@@ -274,6 +275,12 @@ const createOrderSchema = z.object({
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
     .default(InventoryPool.REGULAR),
   giftCards: giftCardHandlesSchema,
+  /**
+   * The buyer ticked the marketing consent checkbox (Customers & marketing),
+   * shown in this storefront language. Absent or null: no consent recorded.
+   * Never required; recorded after the order commits.
+   */
+  marketingConsent: z.object({ language: z.string().trim().max(16).nullable() }).strict().nullable().optional(),
   expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
     description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.",
   }),
@@ -643,6 +650,19 @@ app.openapi(createOrderRoute, async (c) => {
           accountOwnerCustomerId: committed.accountOwnerCustomerId,
           channel: "online_store",
         }),
+      // The buyer's marketing consent: recorded after the commit, never able to fail the order.
+      data.marketingConsent && committed.customerId && !committed.alreadyCommitted
+        ? recordCheckoutMarketingConsent(db, {
+          customerId: committed.customerId,
+          signedInCustomerId: result.commitPayload.existingCustomer?.id ?? null,
+          order: {
+            phone: result.commitPayload.orderData.customerPhone,
+            email: result.commitPayload.orderData.customerEmail,
+            whatsapp: result.commitPayload.orderData.customerWhatsapp ?? null,
+          },
+          language: data.marketingConsent.language,
+        }, { env: c.env as never, queue: c.env.JOBS_QUEUE })
+        : null,
     ]);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(postCommit);

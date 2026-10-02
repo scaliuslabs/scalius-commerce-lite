@@ -54,6 +54,12 @@ const checkoutConfigSchema = z.object({
   }),
   unavailable: z.boolean(),
   unavailableMessage: z.string().optional(),
+  /** The marketing consent checkbox: unchecked by default, never required. */
+  marketingConsent: z.object({
+    enabled: z.boolean(),
+    channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
+    label: z.object({ en: z.string().max(200), bn: z.string().max(200) }),
+  }),
 });
 
 // ─── GET /config ─────────────────────────────────────────────────────────────

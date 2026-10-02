@@ -275,6 +275,7 @@ const EVERY_SECTION: StorefrontSection[] = [
   section("utility-cards", "utility", { cards: [{ title: "Track order", text: "Where is my parcel", href: "/track-order" }, { title: "Stores", text: "", href: "/pages/stores" }] }),
   section("endless-grid", "endless", { title: "", pageSize: 24 }),
   section("seo-text", "seo", { heading: "About us", body: "## Sarees in Bangladesh\nHandwoven.\n\nMore text." }),
+  section("newsletter", "news", { heading: "", text: "", email: "optional", whatsapp: true }),
 ];
 
 // ─── Tests ────────────────────────────────────────────────────────────────
@@ -321,9 +322,9 @@ describe("homepage section library", () => {
     // Only the merchant's own words remain: a banner with a heading (the
     // photo-only one is gone), the story, the FAQ, the cards and the copy,
     // plus the recently-viewed island, which ships hidden and fills itself
-    // from the buyer's own browser.
+    // from the buyer's own browser, and the newsletter signup (no data).
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-section-id")))
-      .toEqual(["recent", "banner-1", "story", "faq", "utility", "seo"].sort((a, b) =>
+      .toEqual(["recent", "banner-1", "story", "faq", "utility", "seo", "news"].sort((a, b) =>
         EVERY_SECTION.findIndex((each) => each.id === a) - EVERY_SECTION.findIndex((each) => each.id === b)));
     expect(page.querySelector("[data-recently-viewed]")!.hasAttribute("hidden")).toBe(true);
     // No placeholders: no product grid, no rail, no hero, no empty list.
@@ -767,5 +768,88 @@ describe("homepage sections from the theme's own data", () => {
     expect(text(without.body)).not.toContain("Cash on delivery");
     // A strip without facts to show renders nothing.
     expect((await render([section("usp-strip", "usp")], { ...store("large"), deliveryFacts: [] })).querySelector("[data-home-section]")).toBeNull();
+  });
+});
+
+describe("the newsletter section", () => {
+  async function renderIn(sections: StorefrontSection[], languageCode: string | null) {
+    const html = await container.renderToString(HomepageSections, {
+      props: { sections, content: EMPTY, leadSectionId: null, currencySymbol: "৳", currencyCode: "BDT", languageCode },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(DEFAULT_STOREFRONT_THEME)) },
+      request: new Request("https://shop.test/"),
+    });
+    return parse(html);
+  }
+
+  it("is a working form without JavaScript: a labelled phone, the e-mail as set, the consent line and a hidden honeypot", async () => {
+    const page = await renderIn([section("newsletter", "news", { heading: "Join the club", text: "Eid offers first.", whatsapp: true, buttonLabel: "Join" })], "en");
+    const root = page.querySelector('[data-home-section="newsletter"]')!;
+    expect(text(root.querySelector("h2"))).toBe("Join the club");
+    expect(text(root.querySelector("h2 + p"))).toBe("Eid offers first.");
+    const form = root.querySelector("form")!;
+    expect(form.getAttribute("method")).toBe("post");
+    expect(form.getAttribute("action")).toBe("/api/newsletter/subscribe");
+    expect(form.querySelector<HTMLInputElement>('input[name="language"]')!.value).toBe("en");
+
+    const phone = form.querySelector<HTMLInputElement>('input[name="phone"]')!;
+    expect([phone.getAttribute("type"), phone.getAttribute("autocomplete"), phone.getAttribute("inputmode"), phone.hasAttribute("required")])
+      .toEqual(["tel", "tel", "tel", true]);
+    expect(text(form.querySelector(`label[for="${phone.id}"]`))).toBe("Phone number");
+    const email = form.querySelector<HTMLInputElement>('input[name="email"]')!;
+    expect([email.getAttribute("type"), email.getAttribute("autocomplete"), email.hasAttribute("required")]).toEqual(["email", "email", false]);
+    expect(text(form.querySelector(`label[for="${email.id}"]`))).toBe("Email (optional)");
+    const whatsapp = form.querySelector<HTMLInputElement>('input[name="whatsapp"]')!;
+    expect([whatsapp.getAttribute("type"), whatsapp.hasAttribute("checked")]).toEqual(["checkbox", false]);
+    expect(text(form.querySelector(`label[for="${whatsapp.id}"]`))).toBe("Also send offers to this number on WhatsApp");
+
+    const button = form.querySelector('button[type="submit"]')!;
+    expect(text(button)).toBe("Join");
+    const consent = form.querySelector(`#${button.getAttribute("aria-describedby")}`)!;
+    expect(text(consent)).toBe("Get news and offers by SMS and email. Unsubscribe anytime.");
+
+    // The honeypot: off screen, out of the tab order and the accessibility tree.
+    const trap = form.querySelector<HTMLInputElement>('input[name="company_website"]')!;
+    expect(trap.getAttribute("tabindex")).toBe("-1");
+    expect(trap.getAttribute("autocomplete")).toBe("off");
+    expect(trap.closest('[aria-hidden="true"]')).not.toBeNull();
+    // A live region for the enhanced outcome, empty until a post.
+    const message = form.querySelector("[data-newsletter-message]")!;
+    expect(message.getAttribute("aria-live")).toBe("polite");
+    expect(message.hasAttribute("hidden")).toBe(true);
+    expect(duplicateIds(page)).toEqual([]);
+  });
+
+  it("asks for the e-mail as the section says and names only the channels it offers", async () => {
+    const required = (await renderIn([section("newsletter", "news", { email: "required" })], "en")).querySelector("form")!;
+    expect(required.querySelector('input[name="email"]')!.hasAttribute("required")).toBe(true);
+    expect(text(required.querySelector('label[for$="-email"]'))).toBe("Email");
+
+    const phoneOnly = (await renderIn([section("newsletter", "news", { email: "hidden" })], "en")).querySelector("form")!;
+    expect(phoneOnly.querySelector('input[name="email"]')).toBeNull();
+    expect(phoneOnly.querySelector('input[name="whatsapp"]')).toBeNull();
+    expect(text(phoneOnly)).toContain("Get news and offers by SMS. Unsubscribe anytime.");
+  });
+
+  it("speaks Bangla in a Bangla store, merchant words first", async () => {
+    const page = await renderIn([section("newsletter", "news", { whatsapp: true })], "bn-BD");
+    const root = page.querySelector('[data-home-section="newsletter"]')!;
+    expect(text(root.querySelector("h2"))).toBe("নতুন খবর ও অফার পান");
+    expect(root.querySelector<HTMLInputElement>('input[name="language"]')!.getAttribute("value")).toBe("bn");
+    expect(text(root.querySelector('label[for$="-phone"]'))).toBe("মোবাইল নম্বর");
+    expect(text(root.querySelector('label[for$="-email"]'))).toBe("ইমেইল (ঐচ্ছিক)");
+    expect(text(root.querySelector('button[type="submit"]'))).toBe("সাবস্ক্রাইব করুন");
+    expect(text(root)).toContain("এসএমএস ও ইমেইলে নতুন খবর ও অফার পাবেন। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।");
+    // The script's outcome words are the page's language too.
+    const copy = JSON.parse(root.querySelector("form")!.getAttribute("data-newsletter-copy")!) as { status: Record<string, { title: string }> };
+    expect(copy.status.pending!.title).toBe("আপনার ইমেইল দেখুন");
+
+    const own = await renderIn([section("newsletter", "news", { heading: "ক্লাবে যোগ দিন" })], "bn");
+    expect(text(own.querySelector('[data-home-section="newsletter"] h2'))).toBe("ক্লাবে যোগ দিন");
+  });
+
+  it("keeps two signups on one page apart", async () => {
+    const page = await renderIn([section("newsletter", "news"), section("newsletter", "news-2")], "en");
+    expect(page.querySelectorAll("form[data-newsletter-form]")).toHaveLength(2);
+    expect(duplicateIds(page)).toEqual([]);
   });
 });

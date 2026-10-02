@@ -660,6 +660,14 @@ export const customerDetailSchema = z.object({
   deletedAt: nullableTimestampSchema,
   /** On a retired guest record whose every order joined this account by a verified contact. */
   mergedInto: z.object({ id: z.string(), name: z.string() }).nullable(),
+  /** Normalised tags, alphabetical. */
+  tags: z.array(z.string()),
+  /** Marketing consent per channel for the customer's current address. */
+  marketing: z.array(z.object({
+    channel: z.enum(["email", "sms", "whatsapp"]),
+    status: z.enum(["subscribed", "pending", "unsubscribed", "not_subscribed"]),
+    updatedAt: z.string().nullable(),
+  })),
 });
 
 // ─────────────────────────────────────────

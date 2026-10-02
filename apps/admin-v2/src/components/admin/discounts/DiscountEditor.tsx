@@ -7,6 +7,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import {
   MAX_AMOUNT_MAJOR,
+  MAX_CUSTOMER_SEGMENTS,
   MAX_QUANTITY,
   combinableClasses,
   combinationPreview,
@@ -25,6 +26,7 @@ import {
 } from "./discount-form";
 import type { DiscountType } from "./discount-kinds";
 import { ScopeField, useScopeItems, useScopeLabel } from "./ScopeField";
+import { SegmentField, useSegmentLabel, useSegmentNames } from "./SegmentField";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { SaveBarProvider, SaveErrorBanner, useSaveBar, useSaveScope } from "~/components/admin/shared/SaveBar";
@@ -195,6 +197,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     places: formatNumber(getDecimalPlaces(currencyCode)),
     max: fmt(MAX_AMOUNT_MAJOR),
     maxQuantity: formatNumber(MAX_QUANTITY),
+    maxSegments: formatNumber(MAX_CUSTOMER_SEGMENTS),
   };
   // Messages show once Save is pressed; a finished end date is checked as soon as it's picked.
   const shown = (field: keyof DiscountDraft) =>
@@ -207,11 +210,13 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const getItems = useScopeItems(draft.getScope);
   const scopeLabel = useScopeLabel();
   const items = new Map([...appliesItems, ...buyItems, ...getItems]);
+  const segmentLabel = useSegmentLabel(useSegmentNames(draft.eligibility === "segments").names);
   const format: SummaryFormat = {
     money: (major) => fmt(Number(major)),
     number: (value) => formatNumber(Number(value)),
     date: (epoch) => formatDateTime(new Date(epoch * 1_000), { dateStyle: "medium", timeStyle: "short" }),
     scope: (picked: Scope) => scopeLabel(picked, items),
+    segments: segmentLabel,
   };
   const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
   const preview = combinationPreview(draft, allDiscounts, discount?.id);
@@ -537,6 +542,27 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                 </CardContent>
               </Card>
             )}
+
+            <Card>
+              <CardHeader><CardTitle>{t("eligibilityCard")}</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <RadioGroup
+                  value={draft.eligibility}
+                  onValueChange={(eligibility) => update({ eligibility: eligibility as DiscountDraft["eligibility"] })}
+                >
+                  <RadioRow value="all" id="eligibility-all" label={t("eligibilityAll")} />
+                  <RadioRow value="segments" id="eligibility-segments" label={t("eligibilitySegments")} />
+                </RadioGroup>
+                {draft.eligibility === "segments" ? (
+                  <SegmentField
+                    ids={draft.customerSegmentIds}
+                    disabled={!canSave}
+                    error={shown("customerSegmentIds")}
+                    onChange={(customerSegmentIds) => update({ customerSegmentIds })}
+                  />
+                ) : null}
+              </CardContent>
+            </Card>
 
             {draft.method === "code" ? (
               <Card>

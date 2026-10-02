@@ -13,6 +13,9 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 | `customer-auth-rate-limit.ts` | D1-authoritative OTP send throttling for client IP buckets, plus bounded cleanup of expired windows |
 | `otp-transport.ts` | `OtpTransport` interface + three implementations: `EmailOtpTransport`, `SmsOtpTransport`, `WhatsAppOtpTransport`. Factory: `getOtpTransport()` |
 | `otp-delivery-receipts.ts` | D1 receipt helper for OTP delivery claims, accepted/failed/skipped marks, recipient hashing/masking, and provider client references |
+| `customer-tags.ts` | Normalised tags (`customer_tag_links`): set one customer's tags, bulk add/remove (ids and tags bound as one JSON value each), store tag list with counts |
+| `customer-segments.ts` | Saved segments: definition → one WHERE over `customers` LEFT JOIN `customer_order_stats` (≤36 bound values), capped live counts, keyset member walks, primary-key membership checks, soft-delete guarded by live promotions |
+| `customer-export.ts` | CSV export of a filter/segment/subscriber view (keyset pages, consent per channel, tags; spreadsheet-safe, ≤10,000 rows, ≤16 MB) |
 
 ## Features
 
@@ -35,6 +38,10 @@ All phone numbers are validated and stored in **E.164 format** (e.g. `+880171234
 - **`formatPhoneForDisplay()`** (`@scalius/shared/phone-input`): Shows an E.164 number for reading (`+880 1712 345678`; other countries as `+44 7700900123`) without phone metadata, so dashboard lists stay light.
 
 Both admin-created and storefront-created customers now use the same E.164 format, eliminating the previous format mismatch.
+
+### Order facts for lists and segments
+
+`customer_order_stats` (0108) holds orders count, positive paid spend in minor units and first/last order time per customer, counting real orders only (not `incomplete`, not deleted). Triggers on `orders` recompute a customer's row from its orders on every write that can change it (insert, delete, customer move, paid amount, deletion, created time, leaving or entering `incomplete`), so it cannot drift. The admin list, its sorting, segment filters and the CSV export read it; a customer without a row has none. List filters: `tag`, `segment` (definition) and `subscribed` (`customerListFilterSql`).
 
 ### Customer Stats Materialization
 

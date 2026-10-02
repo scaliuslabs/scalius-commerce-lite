@@ -3,7 +3,7 @@
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
-import { resolveSender } from "./provider";
+import { resolveSender, safeEmailHeaders } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
 function maskEmailForLog(value: string): string {
@@ -19,7 +19,7 @@ export class CloudflareEmailProvider implements EmailProvider {
   readonly name = "cloudflare";
 
   async sendEmail(
-    { to, subject, html, from, fromName, text }: SendEmailOptions,
+    { to, subject, html, from, fromName, text, headers }: SendEmailOptions,
     context?: EmailRuntimeContext,
   ): Promise<SendEmailResult> {
     const binding = context?.env?.EMAIL;
@@ -29,12 +29,14 @@ export class CloudflareEmailProvider implements EmailProvider {
 
     const settings = await getEmailRuntimeSettings(context);
     const sender = resolveSender({ from, fromName }, settings);
+    const extraHeaders = safeEmailHeaders(headers);
     const result = await binding.send({
       to,
       from: sender.name ? sender : sender.email,
       subject,
       html,
       text,
+      ...(extraHeaders ? { headers: extraHeaders } : {}),
     });
 
     console.log(`[Email] Sent via Cloudflare to ${maskEmailForLog(to)} (${result.messageId})`);

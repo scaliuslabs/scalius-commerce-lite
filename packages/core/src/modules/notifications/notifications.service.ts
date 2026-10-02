@@ -36,6 +36,7 @@ import {
     ORDER_NOTIFICATION_LABELS,
     type NotificationSubjectType,
     type NotificationType,
+    type OutboxNotificationType,
     type OrderNotificationType,
 } from "./notification-types";
 import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
@@ -1166,7 +1167,7 @@ function templateText(value: unknown, fallback: string, maxLength: number): stri
 export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;
@@ -1272,7 +1273,7 @@ function redactingSend(
 export async function recordProviderBlockedDeliveryIfNeeded(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;
@@ -1337,7 +1338,7 @@ export async function blockProviderForMerchantActionableFailure(
 export async function recordSkippedDelivery(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;

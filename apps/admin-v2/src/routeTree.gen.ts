@@ -79,6 +79,9 @@ import { Route as AdminBrandsBrandIdEditRouteImport } from './routes/admin/brand
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
 import { Route as AdminCollectionsCollectionIdEditRouteImport } from './routes/admin/collections/$collectionId/edit'
 import { Route as AdminCustomersCustomerIdEditRouteImport } from './routes/admin/customers/$customerId/edit'
+import { Route as AdminCustomersSegmentsIndexRouteImport } from './routes/admin/customers/segments/index'
+import { Route as AdminCustomersSegmentsSegmentIdRouteImport } from './routes/admin/customers/segments/$segmentId'
+import { Route as AdminCustomersSegmentsNewRouteImport } from './routes/admin/customers/segments/new'
 import { Route as AdminOnlineStoreNavigationIndexRouteImport } from './routes/admin/online-store/navigation/index'
 import { Route as AdminOnlineStoreNavigationMenuIdRouteImport } from './routes/admin/online-store/navigation/$menuId'
 import { Route as AdminOnlineStoreThemeEditorRouteImport } from './routes/admin/online-store/theme_.editor'
@@ -458,6 +461,24 @@ const AdminCustomersCustomerIdEditRoute =
     path: '/customers/$customerId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminCustomersSegmentsIndexRoute =
+  AdminCustomersSegmentsIndexRouteImport.update({
+    id: '/customers/segments/',
+    path: '/customers/segments/',
+    getParentRoute: () => AdminRoute,
+  } as any)
+const AdminCustomersSegmentsSegmentIdRoute =
+  AdminCustomersSegmentsSegmentIdRouteImport.update({
+    id: '/customers/segments/$segmentId',
+    path: '/customers/segments/$segmentId',
+    getParentRoute: () => AdminRoute,
+  } as any)
+const AdminCustomersSegmentsNewRoute =
+  AdminCustomersSegmentsNewRouteImport.update({
+    id: '/customers/segments/new',
+    path: '/customers/segments/new',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminOnlineStoreNavigationIndexRoute =
   AdminOnlineStoreNavigationIndexRouteImport.update({
     id: '/online-store/navigation/',
@@ -628,6 +649,8 @@ export interface FileRoutesByFullPath {
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
+  '/admin/customers/segments/$segmentId': typeof AdminCustomersSegmentsSegmentIdRoute
+  '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -638,6 +661,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/customers/segments/': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/': typeof AdminOrdersListIndexRoute
@@ -714,6 +738,8 @@ export interface FileRoutesByTo {
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
+  '/admin/customers/segments/$segmentId': typeof AdminCustomersSegmentsSegmentIdRoute
+  '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -724,6 +750,7 @@ export interface FileRoutesByTo {
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/customers/segments': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders': typeof AdminOrdersListIndexRoute
@@ -804,6 +831,8 @@ export interface FileRoutesById {
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
+  '/admin/customers/segments/$segmentId': typeof AdminCustomersSegmentsSegmentIdRoute
+  '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme_/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -814,6 +843,7 @@ export interface FileRoutesById {
   '/admin/settings/policies_/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users_/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/customers/segments/': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/_list/': typeof AdminOrdersListIndexRoute
@@ -895,6 +925,8 @@ export interface FileRouteTypes {
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
+    | '/admin/customers/segments/$segmentId'
+    | '/admin/customers/segments/new'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
@@ -905,6 +937,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
+    | '/admin/customers/segments/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/'
@@ -981,6 +1014,8 @@ export interface FileRouteTypes {
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
+    | '/admin/customers/segments/$segmentId'
+    | '/admin/customers/segments/new'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
@@ -991,6 +1026,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
+    | '/admin/customers/segments'
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
     | '/admin/orders'
@@ -1070,6 +1106,8 @@ export interface FileRouteTypes {
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
     | '/admin/customers/$customerId/edit'
+    | '/admin/customers/segments/$segmentId'
+    | '/admin/customers/segments/new'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme_/editor'
     | '/admin/orders/$orderId/edit'
@@ -1080,6 +1118,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies_/warranty'
     | '/admin/settings/shipping_/areas'
     | '/admin/settings/users_/$userId'
+    | '/admin/customers/segments/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/_list/'
@@ -1591,6 +1630,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCustomersCustomerIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/customers/segments/': {
+      id: '/admin/customers/segments/'
+      path: '/customers/segments'
+      fullPath: '/admin/customers/segments/'
+      preLoaderRoute: typeof AdminCustomersSegmentsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/customers/segments/$segmentId': {
+      id: '/admin/customers/segments/$segmentId'
+      path: '/customers/segments/$segmentId'
+      fullPath: '/admin/customers/segments/$segmentId'
+      preLoaderRoute: typeof AdminCustomersSegmentsSegmentIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/customers/segments/new': {
+      id: '/admin/customers/segments/new'
+      path: '/customers/segments/new'
+      fullPath: '/admin/customers/segments/new'
+      preLoaderRoute: typeof AdminCustomersSegmentsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/online-store/navigation/': {
       id: '/admin/online-store/navigation/'
       path: '/online-store/navigation'
@@ -1840,11 +1900,14 @@ interface AdminRouteChildren {
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
   AdminCollectionsCollectionIdEditRoute: typeof AdminCollectionsCollectionIdEditRoute
   AdminCustomersCustomerIdEditRoute: typeof AdminCustomersCustomerIdEditRoute
+  AdminCustomersSegmentsSegmentIdRoute: typeof AdminCustomersSegmentsSegmentIdRoute
+  AdminCustomersSegmentsNewRoute: typeof AdminCustomersSegmentsNewRoute
   AdminOnlineStoreNavigationMenuIdRoute: typeof AdminOnlineStoreNavigationMenuIdRoute
   AdminOnlineStoreThemeEditorRoute: typeof AdminOnlineStoreThemeEditorRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
+  AdminCustomersSegmentsIndexRoute: typeof AdminCustomersSegmentsIndexRoute
   AdminOnlineStoreNavigationIndexRoute: typeof AdminOnlineStoreNavigationIndexRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
 }
@@ -1892,11 +1955,14 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
   AdminCollectionsCollectionIdEditRoute: AdminCollectionsCollectionIdEditRoute,
   AdminCustomersCustomerIdEditRoute: AdminCustomersCustomerIdEditRoute,
+  AdminCustomersSegmentsSegmentIdRoute: AdminCustomersSegmentsSegmentIdRoute,
+  AdminCustomersSegmentsNewRoute: AdminCustomersSegmentsNewRoute,
   AdminOnlineStoreNavigationMenuIdRoute: AdminOnlineStoreNavigationMenuIdRoute,
   AdminOnlineStoreThemeEditorRoute: AdminOnlineStoreThemeEditorRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,
+  AdminCustomersSegmentsIndexRoute: AdminCustomersSegmentsIndexRoute,
   AdminOnlineStoreNavigationIndexRoute: AdminOnlineStoreNavigationIndexRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,
 }

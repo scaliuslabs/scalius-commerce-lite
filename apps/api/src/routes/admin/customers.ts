@@ -23,6 +23,7 @@ import { customers, customerHistory, orders, deliveryLocations, user } from "@sc
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
+import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
 
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
@@ -49,7 +50,8 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+            ...customerListFilterQuery,
         })
     },
     responses: {
@@ -104,7 +106,7 @@ const customerHistoryOrderSchema = z.object({
     createdAt: timestampSchema,
 });
 
-const customerHistoryCustomerSchema = customerDetailSchema.extend({
+const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, marketing: true }).extend({
     lastOrderAt: nullableTimestampSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
@@ -144,7 +146,8 @@ app.openapi(listRoute, async (c) => {
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: q.sort as "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt" | undefined,
-        order: q.order as "asc" | "desc" | undefined
+        order: q.order as "asc" | "desc" | undefined,
+        filters: await customerListFiltersFromQuery(db, q),
     });
     return ok(c, result);
 });
