@@ -68,7 +68,7 @@ describe("agent workflow catalog", () => {
       "operations.daily-snapshot.v1",
       "operations.thirty-day-booked-brief.v1",
     ]);
-    expect(catalog.routes).toHaveLength(63);
+    expect(catalog.routes).toHaveLength(64);
     expect(catalog.controls).toHaveLength(30);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);

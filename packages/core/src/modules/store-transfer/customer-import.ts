@@ -35,7 +35,6 @@ import {
   type PreparedConsentChanges,
 } from "../customer-marketing/consent";
 import type { MarketingLinkEnv } from "../customer-marketing/links";
-import type { NotificationQueue } from "../notifications/notification-outbox";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 
 export type CustomerImportStatus = "created" | "updated" | "unchanged" | "skipped" | "failed" | "would_create" | "would_update" | "would_skip";
@@ -65,7 +64,8 @@ export interface CustomerImportResponse {
 export interface CustomerImportContext {
   actorId?: string | null;
   env: MarketingLinkEnv;
-  queue?: NotificationQueue;
+  /** Where consent confirmations would be queued (imports subscribe directly, so none are). */
+  queue?: Parameters<typeof enqueueConsentNotifications>[1];
   budget?: ImportBudget;
 }
 

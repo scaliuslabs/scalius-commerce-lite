@@ -743,6 +743,19 @@ export async function importProducts(
           result.status = batch.dryRun ? "would_skip" : "skipped";
           result.aggregateRevision = match.aggregateRevision || null;
           result.issues.push({ code: "already_exists", message: `Already in the store as /products/${match.slug}.` });
+        } else if (batch.dryRun) {
+          // A dry run needs only the revision the write must match (one light read).
+          const current = await db.select({ slug: products.slug, aggregateRevision: products.aggregateRevision, deletedAt: products.deletedAt })
+            .from(products).where(sql`${products.id} = ${match.productId}`).get();
+          if (!current || current.deletedAt) throw new ItemError({ code: "product_in_trash", message: "This product is in trash. Restore or delete it, then import again." });
+          result.slug = current.slug;
+          result.aggregateRevision = current.aggregateRevision;
+          result.status = "would_update";
+          if (batch.mode === "upsert") {
+            await references.brand(item.brand);
+            if (item.categoryPath.length > 0) await references.category(item.categoryPath);
+            await resolveAttributes(references, item, result.issues);
+          }
         } else {
           const details = await getProductDetails(db, match.productId);
           if (!details || details.deletedAt) throw new ItemError({ code: "product_in_trash", message: "This product is in trash. Restore or delete it, then import again." });
@@ -751,27 +764,18 @@ export async function importProducts(
           if (item.expected && item.expected.productId === details.id && item.expected.aggregateRevision !== details.aggregateRevision) {
             throw new ItemError({ code: "changed_since_preview", message: "This product changed after the preview. Preview the file again." });
           }
-          if (batch.dryRun) {
-            result.status = "would_update";
-            if (batch.mode === "upsert") {
-              await references.brand(item.brand);
-              if (item.categoryPath.length > 0) await references.category(item.categoryPath);
-              await resolveAttributes(references, item, result.issues);
+          const scope = batch.mode === "price" ? "price" : "all";
+          const resolved = scope === "all"
+            ? {
+              brandId: await references.brand(item.brand),
+              categoryId: item.categoryPath.length > 0 ? await references.category(item.categoryPath) : null,
+              attributes: await resolveAttributes(references, item, result.issues),
             }
-          } else {
-            const scope = batch.mode === "price" ? "price" : "all";
-            const resolved = scope === "all"
-              ? {
-                brandId: await references.brand(item.brand),
-                categoryId: item.categoryPath.length > 0 ? await references.category(item.categoryPath) : null,
-                attributes: await resolveAttributes(references, item, result.issues),
-              }
-              : null;
-            const outcome = await applyUpdate(db, details, item, scope, resolved, actorId, currency);
-            result.status = outcome.status;
-            result.aggregateRevision = outcome.aggregateRevision;
-            result.issues.push(...outcome.issues);
-          }
+            : null;
+          const outcome = await applyUpdate(db, details, item, scope, resolved, actorId, currency);
+          result.status = outcome.status;
+          result.aggregateRevision = outcome.aggregateRevision;
+          result.issues.push(...outcome.issues);
         }
       }
     } catch (error) {

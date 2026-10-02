@@ -6,7 +6,6 @@ import type { OperationRegistryEntry } from "./entry";
 const IMPORT_REQUEST_BYTES = 1024 * 1024;
 
 const csvPage = {
-  risk: "read",
   batch: "forbidden",
   artifact: {
     mediaTypes: ["text/csv"],

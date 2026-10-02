@@ -1212,11 +1212,11 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     id: "dashboard.store-migration",
     surface: "dashboard",
     kind: "mixed",
-    title: "Move a store in or out",
-    summary: "Import products, images, customers and stock counts in bounded idempotent batches, or export products and inventory as CSV.",
+    title: "Import or export store data",
+    summary: "Import products, images, customers and inventory from CSV in bounded idempotent batches, or export products and inventory as CSV.",
     examples: [
       "Import these products from my old WooCommerce store, then attach their images.",
-      "Set the counted stock at the Dhanmondi shop from this sheet of SKUs and quantities.",
+      "Import this spreadsheet of SKU quantities for the Dhanmondi shop location.",
       "Export my whole catalogue as a Shopify product CSV.",
     ],
     tags: ["import", "export", "migration", "shopify", "woocommerce", "csv"],
@@ -1233,7 +1233,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresVerification: true,
     rules: [
       "Send a dry run first and show what will be created, updated and skipped; write only after the merchant confirms, passing each item's `expected` revision or count from the dry run.",
-      "Send at most 50 products, 20 image jobs or 100 customers or counts per request; when `processed` is less than what was sent, send the rest again. Re-sending items is safe.",
+      "Send at most 50 products, 20 image jobs or 100 customers or inventory rows per request; when `processed` is less than what was sent, send the rest again. Re-sending items is safe.",
       "Never invent marketing consent: mark a channel true only when the source says the customer agreed, and say where in `consentEvidence`.",
       "Report items that failed with their reasons; do not retry them unchanged.",
     ],

@@ -105,7 +105,7 @@ describe("store migration over the API", () => {
 
     // Dry run: every product would be created; the write sends the items as they are.
     const preview = await sendAll(mapped.items, 3, async (batch) => (await post("/products", { mode: "upsert", dryRun: true, items: batch })).data);
-    expect(preview.map((result: { status: string }) => result.status)).toEqual(Array(6).fill("would_create"));
+    expect((preview as Array<{ status: string }>).map((result) => result.status)).toEqual(Array(6).fill("would_create"));
     expect(one<{ n: number }>(sqlite, "SELECT count(*) AS n FROM products").n).toBe(0);
 
     type Result = { ref: string; status: string; productId: string };
@@ -146,7 +146,7 @@ describe("store migration over the API", () => {
     const counts = mapInventory(parseImportText(await exported.text()).table);
     expect(counts.issues).toEqual([]);
     const inventory = await sendAll(counts.items, 50, async (batch) => (await post("/inventory", { runId: "run_e2e_inventory", items: batch })).data) as Array<{ status: string }>;
-    expect(new Set(inventory.map((result) => result.status))).toEqual(new Set(["unchanged"]));
+    expect(new Set(inventory.map((result) => (result as { status: string }).status))).toEqual(new Set(["unchanged"]));
   });
 
   it("imports the Shopify customer fixture with consent only where the file says yes", async () => {

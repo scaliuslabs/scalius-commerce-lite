@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
@@ -39,6 +39,8 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
+import { storeTransferMessages } from "~/i18n/store-transfer";
+import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
 
 const STATUSES = ["active", "draft"] as const;
 const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });
@@ -88,6 +90,8 @@ function ProductsPage() {
   const { getStorefrontPath } = useStorefrontUrl();
   const { products: can } = useCatalogActionPermissions();
   const duplicate = useDuplicateProduct();
+  const s = useMessages(storeTransferMessages);
+  const [importing, setImporting] = useState(false);
   const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
 
@@ -97,92 +101,98 @@ function ProductsPage() {
   );
 
   return (
-    <ResourceListPage<ProductListItem>
-      title={t("products")}
-      list="products"
-      actions={
-        <>
-          <Button variant="outline" asChild>
-            <Link to="/admin/inventory/labels">{t("printLabels")}</Link>
-          </Button>
-          {can.canCreate ? (
-            <Button asChild>
-              <Link to="/admin/products/new">{t("addProduct")}</Link>
+    <>
+      <ResourceListPage<ProductListItem>
+        title={t("products")}
+        list="products"
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/admin/inventory/labels">{t("printLabels")}</Link>
             </Button>
-          ) : null}
-        </>
-      }
-      search={search}
-      query={listQuery(search, term)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
-      dataKey="products"
-      columns={columns}
-      invalidate={[queryKeys.products.all, queryKeys.dashboard.all, queryKeys.inventory.list()]}
-      empty={{ icon: Package, title: t("emptyTitle"), description: t("emptyHint") }}
-      views={{ param: "status", tabs: [
-        { value: "active", label: t("statusActive") },
-        { value: "draft", label: t("statusDraft") },
-      ] }}
-      searchPlaceholder={t("searchPlaceholder")}
-      countLabel={(count) => t("productsCount", { count })}
-      filterParams={["category"]}
-      filters={
-        <SearchableSelect
-          value={search.category ?? "all"}
-          onValueChange={(value) => void navigate({
-            to: "/admin/products",
-            search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1 })) as never,
-          })}
-          options={[
-            { value: "all", label: t("allCategories") },
-            ...(categoryData?.categories ?? []).map((category) => ({ value: category.id, label: category.name })),
-          ]}
-          placeholder={t("allCategories")}
-          searchPlaceholder={t("searchCategories")}
-          emptyMessage={r("noResults")}
-          ariaLabel={t("filterCategory")}
-          triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-40"
-        />
-      }
-      rowTo={rowTo}
-      rowLabel={(row) => row.name}
-      viewUrl={(row) => (row.isActive ? getStorefrontPath(`/products/${row.slug}`) : undefined)}
-      rowActions={(row) => [
-        ...(can.canCreate ? [duplicateProductAction(() => duplicate.mutate({ id: row.id, name: row.name }))] : []),
-        productShortcodeAction(row.slug),
-      ]}
-      bulkActions={can.canBulkDelete ? (rows, done) => <ProductBulkActions rows={rows} done={done} /> : undefined}
-      lifecycle={{
-        canTrash: can.canDelete,
-        canRestore: can.canRestore,
-        canDelete: can.canPermanentDelete,
-        // Stock history keeps a product in Trash (AGENTS.md), so never offer a delete that fails.
-        canDeleteRow: (row) => !row.hasStockHistory,
-        deleteBlockedNote: (count) => t("keptForHistoryNote", { count }),
-        run: async (action, rows) => {
-          if (action === "trash" && rows.length === 1) {
-            const { id, expectedAggregateRevision } = claim(rows[0]!);
-            await apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } }));
-            return;
-          }
-          if (action === "restore") {
-            for (const row of rows) {
-              await apiData(postApiV1AdminProductsByIdRestore({ path: { id: row.id }, query: { expectedAggregateRevision: row.aggregateRevision } }));
+            {can.canCreate || can.canEdit ? (
+              <Button variant="outline" onClick={() => setImporting(true)}>{s("import")}</Button>
+            ) : null}
+            {can.canCreate ? (
+              <Button asChild>
+                <Link to="/admin/products/new">{t("addProduct")}</Link>
+              </Button>
+            ) : null}
+          </>
+        }
+        search={search}
+        query={listQuery(search, term)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
+        dataKey="products"
+        columns={columns}
+        invalidate={[queryKeys.products.all, queryKeys.dashboard.all, queryKeys.inventory.list()]}
+        empty={{ icon: Package, title: t("emptyTitle"), description: t("emptyHint") }}
+        views={{ param: "status", tabs: [
+          { value: "active", label: t("statusActive") },
+          { value: "draft", label: t("statusDraft") },
+        ] }}
+        searchPlaceholder={t("searchPlaceholder")}
+        countLabel={(count) => t("productsCount", { count })}
+        filterParams={["category"]}
+        filters={
+          <SearchableSelect
+            value={search.category ?? "all"}
+            onValueChange={(value) => void navigate({
+              to: "/admin/products",
+              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1 })) as never,
+            })}
+            options={[
+              { value: "all", label: t("allCategories") },
+              ...(categoryData?.categories ?? []).map((category) => ({ value: category.id, label: category.name })),
+            ]}
+            placeholder={t("allCategories")}
+            searchPlaceholder={t("searchCategories")}
+            emptyMessage={r("noResults")}
+            ariaLabel={t("filterCategory")}
+            triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-40"
+          />
+        }
+        rowTo={rowTo}
+        rowLabel={(row) => row.name}
+        viewUrl={(row) => (row.isActive ? getStorefrontPath(`/products/${row.slug}`) : undefined)}
+        rowActions={(row) => [
+          ...(can.canCreate ? [duplicateProductAction(() => duplicate.mutate({ id: row.id, name: row.name }))] : []),
+          productShortcodeAction(row.slug),
+        ]}
+        bulkActions={can.canBulkDelete ? (rows, done) => <ProductBulkActions rows={rows} done={done} /> : undefined}
+        lifecycle={{
+          canTrash: can.canDelete,
+          canRestore: can.canRestore,
+          canDelete: can.canPermanentDelete,
+          // Stock history keeps a product in Trash (AGENTS.md), so never offer a delete that fails.
+          canDeleteRow: (row) => !row.hasStockHistory,
+          deleteBlockedNote: (count) => t("keptForHistoryNote", { count }),
+          run: async (action, rows) => {
+            if (action === "trash" && rows.length === 1) {
+              const { id, expectedAggregateRevision } = claim(rows[0]!);
+              await apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } }));
+              return;
             }
-            return;
-          }
-          if (action === "delete" && rows.length === 1) {
-            const { id, expectedAggregateRevision } = claim(rows[0]!);
-            await apiData(deleteApiV1AdminProductsByIdPermanent({ path: { id }, query: { expectedAggregateRevision } }));
-            return;
-          }
-          const result = await apiData(postApiV1AdminProductsBulkDelete({
-            body: { products: rows.map(claim), permanent: action === "delete" },
-          }));
-          const kept = result.outcomes.filter((outcome) => outcome.status === "blocked" || outcome.status === "failed").length;
-          if (kept > 0) throw new Error(t("bulkDeletePartial", { deleted: result.deletedIds.length, kept }));
-        },
-      }}
-    />
+            if (action === "restore") {
+              for (const row of rows) {
+                await apiData(postApiV1AdminProductsByIdRestore({ path: { id: row.id }, query: { expectedAggregateRevision: row.aggregateRevision } }));
+              }
+              return;
+            }
+            if (action === "delete" && rows.length === 1) {
+              const { id, expectedAggregateRevision } = claim(rows[0]!);
+              await apiData(deleteApiV1AdminProductsByIdPermanent({ path: { id }, query: { expectedAggregateRevision } }));
+              return;
+            }
+            const result = await apiData(postApiV1AdminProductsBulkDelete({
+              body: { products: rows.map(claim), permanent: action === "delete" },
+            }));
+            const kept = result.outcomes.filter((outcome) => outcome.status === "blocked" || outcome.status === "failed").length;
+            if (kept > 0) throw new Error(t("bulkDeletePartial", { deleted: result.deletedIds.length, kept }));
+          },
+        }}
+      />
+      <ImportDialog kind="products" open={importing} onOpenChange={setImporting} />
+    </>
   );
 }
