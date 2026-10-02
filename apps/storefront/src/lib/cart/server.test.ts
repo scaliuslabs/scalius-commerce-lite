@@ -321,6 +321,30 @@ describe("cart server order processing", () => {
     expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
+  it("refuses a cart a store app's rule blocks, before commit, with the rules for the cart", async () => {
+    const ruleErrors = [{ code: "max_qty", message: "At most 10 per order.", index: 0, cartKey: "line_1" }];
+    mocks.validateCartItems.mockResolvedValueOnce({
+      success: true,
+      data: {
+        valid: false,
+        issues: [],
+        ruleErrors,
+        items: [],
+        subtotal: 0,
+        hasFreeDeliveryProduct: false,
+      },
+    });
+
+    const result = await processOrder(buildCodFormData());
+
+    expect(result).toEqual({
+      success: false,
+      error: { message: "At most 10 per order." },
+      details: { reason: "cart_rules", ruleErrors },
+    });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
   it("returns all cart validation item issues with original cart keys for COD repair", async () => {
     const formData = buildCodFormData();
     formData.set("cartItems", JSON.stringify({

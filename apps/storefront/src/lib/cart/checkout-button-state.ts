@@ -11,6 +11,9 @@ export function applyCheckoutButtonState(
     isEmpty: boolean;
     cartBlocked?: boolean;
     cartBlockedMessage?: string;
+    /** A store app's rule blocks the order (its messages are on the page). */
+    cartRulesBlocked?: boolean;
+    cartRulesBlockedMessage?: string;
     checkoutPending?: boolean;
     discountValidationPending?: boolean;
     discountValidationPendingMessage?: string;
@@ -20,6 +23,7 @@ export function applyCheckoutButtonState(
     options.checkoutUnavailable ||
     options.isEmpty ||
     options.cartBlocked === true ||
+    options.cartRulesBlocked === true ||
     options.checkoutPending === true ||
     options.discountValidationPending === true;
   submitButton.disabled = disabled;
@@ -31,6 +35,8 @@ export function applyCheckoutButtonState(
       ? "Your cart is empty"
       : options.cartBlocked
         ? options.cartBlockedMessage || "Some cart items need attention"
+      : options.cartRulesBlocked
+        ? options.cartRulesBlockedMessage || "This order can't be placed yet."
       : options.checkoutPending
         ? "Continue or review the existing checkout before placing another order"
       : options.discountValidationPending

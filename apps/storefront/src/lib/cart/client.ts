@@ -19,6 +19,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { renderCartLineProperties } from "./line-properties-view";
 import type {
+  CartRuleError,
   CartValidationIssue,
   CartValidationResult,
 } from "@/lib/api/orders";
@@ -46,6 +47,13 @@ import {
 } from "./bulk-repair-actions";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import {
+  cartLineRuleErrorsId,
+  fillCartRuleBanner,
+  groupCartRuleErrors,
+  mergeCartRuleErrors,
+  renderCartLineRuleErrors,
+} from "./rule-errors";
+import {
   clearHostedPaymentRecoverySession,
   matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
@@ -54,11 +62,15 @@ import {
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteCartRulesError,
   TaxQuoteDeliveryLocationError,
   TaxQuoteDeliveryRateError,
 } from "../checkout/tax-quote-client";
 import {
+  cartRuleRefusal,
   isDeliveryRateUnavailable,
+  parseCartRuleErrors,
+  refusedDeliveryRates,
   unavailableDeliveryLocation,
   type DeliveryLocationLevel,
 } from "../checkout/tax-quote-error-contract";
@@ -71,11 +83,20 @@ import {
 function rejectDeliveryLocation(field: DeliveryLocationLevel): void {
   window.dispatchEvent(new CustomEvent("delivery-location-unavailable", { detail: { field } }));
 }
+
+/**
+ * The checkout refused the chosen delivery option: the options drop it and
+ * choose again, from the options still offered when a store app hid it.
+ */
+function rejectDeliveryRate(shippingRates: QuotedShippingRate[] | null): void {
+  window.dispatchEvent(new CustomEvent("delivery-rate-rejected", { detail: { shippingRates } }));
+}
 import type { ShippingMethodDetail } from "../checkout/shipping-methods";
 import type {
   CheckoutDiscountFacts,
   CheckoutDiscountOffer,
   CheckoutTaxQuote,
+  QuotedShippingRate,
 } from "../checkout/tax-quote-contract";
 import {
   cartItemVariantLabel as optionVariantLabel,
@@ -118,6 +139,15 @@ const pageCheckoutLanguage = () =>
 const activeCheckoutCopy = () => pageCheckoutLanguage().languageData;
 let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
+/**
+ * Store app rules that block the order, from the latest availability check
+ * and from the latest quote (which knows the address, codes and phone). A
+ * later answer without rules clears its own list.
+ */
+let validationRuleErrors: CartRuleError[] = [];
+let quoteRuleErrors: CartRuleError[] = [];
+/** The line rules the painted lines show, so a rule answer repaints only on change. */
+let paintedLineRuleErrors = "{}";
 let cartValidationGlobalError = "";
 let cartValidationSummaryMessage = "";
 let cartQuantityLimits: Record<string, number | null> = {};
@@ -202,6 +232,8 @@ function resetCartRuntimeListeners(): AbortSignal {
   latestAllowedPaymentMethods = null;
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
+  validationRuleErrors = [];
+  quoteRuleErrors = [];
   cartStoreUnsubscribe?.();
   cartStoreUnsubscribe = null;
   cartRuntimeAbortController?.abort();
@@ -625,7 +657,14 @@ function renderAuthoritativeCartQuote(
     // re-read the rates and say "Delivery fee changed…" now, so the option label
     // and the summary never disagree.
     const chosen = window.lastShippingEventDetail;
-    if (chosen && chosen.id === quote.shippingMethod.id && chosen.fee !== quotedFee) {
+    // A store app's options carry this quote's own fees (applied below).
+    if (
+      !quote.shippingRates &&
+      chosen &&
+      !chosen.quoted &&
+      chosen.id === quote.shippingMethod.id &&
+      chosen.fee !== quotedFee
+    ) {
       window.dispatchEvent(new CustomEvent("delivery-rate-changed"));
     }
     renderShippingLine(elements.shipping, {
@@ -653,6 +692,11 @@ function renderAuthoritativeCartQuote(
   }
   setTaxStatus(elements, "");
   renderDiscountFacts(quote);
+  // The delivery options as a store app left them for this cart; null keeps
+  // the store's own (and takes back an earlier app change).
+  window.dispatchEvent(new CustomEvent("delivery-rates-quoted", {
+    detail: { shippingRates: quote.shippingRates ?? null },
+  }));
 }
 
 function setTaxStatus(elements: TotalsElements, message: string): void {
@@ -760,12 +804,34 @@ function codRefusedForCart(): boolean {
   return codOnly && latestAllowedPaymentMethods !== null && !latestAllowedPaymentMethods.includes("cod");
 }
 
+function cartRuleErrors(): CartRuleError[] {
+  return mergeCartRuleErrors(validationRuleErrors, quoteRuleErrors);
+}
+
+function hasCartRuleErrors(): boolean {
+  return validationRuleErrors.length > 0 || quoteRuleErrors.length > 0;
+}
+
 function hasBlockingCartIssues(): boolean {
-  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || codRefusedForCart();
+  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || hasCartRuleErrors() || codRefusedForCart();
+}
+
+/** The banner above the checkout action, repainted only when what it says changes. */
+function renderCartRuleBanner(): boolean {
+  const banner = document.getElementById("cartRuleErrors");
+  if (!banner) return false;
+  const groups = groupCartRuleErrors(cartRuleErrors(), cartStore.get().items);
+  const key = JSON.stringify([groups.cart, Object.keys(groups.lines)]);
+  if (banner.dataset.ruleKey !== key) {
+    banner.dataset.ruleKey = key;
+    fillCartRuleBanner(banner, groups, activeCheckoutCopy());
+  }
+  return !banner.classList.contains("hidden");
 }
 
 function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
+  if (cartIssueCount() === 0 && hasCartRuleErrors()) return activeCheckoutCopy().cartRulesBlockedText;
   if (cartIssueCount() === 0 && codRefusedForCart()) return activeCheckoutCopy().noPaymentMethodsText;
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
@@ -776,10 +842,13 @@ function cartBlockedMessage(): string {
 }
 
 function updateCartValidationMessage() {
+  const ruleBannerShown = renderCartRuleBanner();
   const message = document.getElementById("cartValidationMessage");
   if (!message) return;
 
-  if (hasBlockingCartIssues()) {
+  // Rules alone are said once, by the banner above the checkout action.
+  const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0 && !codRefusedForCart();
+  if (hasBlockingCartIssues() && !rulesOnly) {
     message.textContent = cartBlockedMessage();
     if (!cartValidationGlobalError) {
       message.insertAdjacentHTML(
@@ -804,6 +873,12 @@ function applyPendingCartRepairState(): boolean {
   if (state.issues.length > 0) {
     setCartValidationIssues(state.issues, cartStore.get().items, state.message);
     preserveCartValidationSummaryOnce = true;
+  } else if (state.ruleErrors?.length) {
+    // What the checkout's quote or order said; this page's next quote replaces it.
+    cartValidationIssues = {};
+    clearCartValidationSummary();
+    quoteRuleErrors = state.ruleErrors;
+    updateCartValidationMessage();
   } else {
     cartValidationIssues = {};
     clearCartValidationSummary();
@@ -824,6 +899,8 @@ export async function validateCartSnapshot(
 
   if (payloadItems.length === 0) {
     cartValidationIssues = {};
+    validationRuleErrors = [];
+    quoteRuleErrors = [];
     cartValidationGlobalError = "";
     clearCartValidationSummary();
     updateCartValidationMessage();
@@ -853,7 +930,7 @@ export async function validateCartSnapshot(
 
     // What the lines show: a check that changes none of it re-renders (and
     // re-prices) nothing, so choosing a delivery option quotes once.
-    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
+    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartRuleErrors(), cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
     const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     const issues = Array.isArray(rawIssues) ? rawIssues : [];
@@ -862,6 +939,10 @@ export async function validateCartSnapshot(
         ? cartValidationSummaryMessage
         : "";
     preserveCartValidationSummaryOnce = false;
+    // Rules are checked only once nothing else is wrong; no rules clears them.
+    validationRuleErrors = response.ok && json?.success && json.data
+      ? parseCartRuleErrors(json.data.ruleErrors)
+      : cartRuleRefusal(json) ?? [];
     if (response.ok && json?.success && json.data) {
       isApplyingCartSnapshot = true;
       try {
@@ -877,9 +958,7 @@ export async function validateCartSnapshot(
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     const deliveryRateRefused =
       !response.ok && issues.length === 0 && isDeliveryRateUnavailable(json);
-    if (deliveryRateRefused) {
-      window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
-    }
+    if (deliveryRateRefused) rejectDeliveryRate(refusedDeliveryRates(json));
     const locationGone = !response.ok && issues.length === 0 ? unavailableDeliveryLocation(json) : null;
     if (locationGone) rejectDeliveryLocation(locationGone);
     if (!response.ok || !json?.success) {
@@ -904,6 +983,7 @@ export async function validateCartSnapshot(
   } catch (error) {
     console.warn("Could not refresh cart availability before checkout.", error);
     cartValidationIssues = {};
+    validationRuleErrors = [];
     clearCartValidationSummary();
     cartValidationGlobalError =
       activeCheckoutCopy().cartAvailabilityFailedText;
@@ -1025,6 +1105,7 @@ export async function updateTotals() {
     if (expectedQuoteFingerprintInput) {
       expectedQuoteFingerprintInput.value = quote.quoteFingerprint;
     }
+    setQuoteRuleErrors([]);
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
   } catch (error) {
@@ -1032,6 +1113,7 @@ export async function updateTotals() {
     // An item that changed is shown on its line and a refused delivery rate
     // re-reads the address's rates; only a real outage asks for a retry.
     const cartChanged = error instanceof TaxQuoteCartChangedError;
+    const rulesRefused = error instanceof TaxQuoteCartRulesError;
     const rateRefused = error instanceof TaxQuoteDeliveryRateError;
     const locationGone = error instanceof TaxQuoteDeliveryLocationError;
     if (cartChanged) {
@@ -1041,14 +1123,32 @@ export async function updateTotals() {
         scheduleCartValidation();
       }
     }
-    if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
+    // A store app's rule is said at its line or above the checkout action.
+    if (rulesRefused) setQuoteRuleErrors(error.ruleErrors);
+    if (rateRefused) rejectDeliveryRate(error.shippingRates ?? null);
     if (locationGone) rejectDeliveryLocation(error.field);
-    await renderEstimate(cartChanged || rateRefused || locationGone ? "" : activeCheckoutCopy().taxVerificationFailedText);
+    await renderEstimate(cartChanged || rulesRefused || rateRefused || locationGone ? "" : activeCheckoutCopy().taxVerificationFailedText);
     updateCheckoutButtonState();
   }
 }
 
-function renderCartLine(cartKey: string, item: VariantCartItem): string {
+/** The quote's rules changed: say so on the lines and above the checkout action. */
+function setQuoteRuleErrors(next: CartRuleError[]): void {
+  if (JSON.stringify(next) === JSON.stringify(quoteRuleErrors)) return;
+  quoteRuleErrors = next;
+  const lineRules = JSON.stringify(groupCartRuleErrors(cartRuleErrors(), cartStore.get().items).lines);
+  // Only the lines repaint (no new quote); the totals already have this answer.
+  if (lineRules !== paintedLineRuleErrors) paintCartLines();
+  updateCartValidationMessage();
+  updateCheckoutButtonState();
+}
+
+function renderCartLine(
+  cartKey: string,
+  item: VariantCartItem,
+  position: number,
+  ruleErrors: CartRuleError[],
+): string {
   const rawName = item.name || "";
   const safeName = escapeHtml(rawName);
   const safeImage = escapeHtml(getProductImageUrl(item.image, 96));
@@ -1056,6 +1156,10 @@ function renderCartLine(cartKey: string, item: VariantCartItem): string {
   const copy = activeCheckoutCopy();
   const options = normalizeCartItemOptions(item.options) ?? [];
   const issueBlock = renderCartItemIssues(cartKey);
+  // A store app's rule about this line: under its controls, which name it for assistive technology.
+  const ruleErrorsId = cartLineRuleErrorsId(position);
+  const ruleBlock = renderCartLineRuleErrors(ruleErrors, ruleErrorsId);
+  const describedBy = ruleBlock ? ` aria-describedby="${ruleErrorsId}"` : "";
   const quantityKnown = Object.prototype.hasOwnProperty.call(
     cartQuantityLimits,
     cartKey,
@@ -1088,18 +1192,31 @@ function renderCartLine(cartKey: string, item: VariantCartItem): string {
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
-              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}" class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
+                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
                 <span class="flex h-full w-8 items-center justify-center text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
-                <button type="button" aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
+                <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
             </div>`}
+            ${ruleBlock}
           </div>
         </div></li>`;
+}
+
+/** The lines, each with its availability issue and any store app rule about it. */
+function paintCartLines(): void {
+  const container = document.getElementById("cartItems");
+  const { items } = cartStore.get();
+  if (!container || Object.keys(items).length === 0) return;
+  const lineRules = groupCartRuleErrors(cartRuleErrors(), items).lines;
+  paintedLineRuleErrors = JSON.stringify(lineRules);
+  container.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
+    .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? []))
+    .join("")}</ul>`;
 }
 
 export async function renderCartItems() {
@@ -1131,10 +1248,7 @@ export async function renderCartItems() {
   }
   renderCheckoutRecoveryNotice();
 
-  cartItemsContainer.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
-    .map(([cartKey, item]) => renderCartLine(cartKey, item))
-    .join("")}</ul>`;
-
+  paintCartLines();
   await updateTotals();
   syncCartPagePresentation(true);
 }
@@ -1168,6 +1282,8 @@ export function updateCheckoutButtonState() {
     isEmpty: isEmpty || !cartReady,
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
+    cartRulesBlocked: hasCartRuleErrors(),
+    cartRulesBlockedMessage: activeCheckoutCopy().cartRulesBlockedText,
     checkoutPending: hostedPaymentRecoverySession !== null,
     discountValidationPending: isDiscountValidationPending(),
     discountValidationPendingMessage: activeCheckoutCopy().processingText,
@@ -1347,6 +1463,7 @@ export async function initCartFunctionality() {
   window.handleAbandonedCheckout = handleAbandonedCheckout;
   window.validateCartSnapshot = validateCartSnapshot;
   window.hasCartValidationIssues = () => hasBlockingCartIssues();
+  window.hasCartRuleErrors = () => hasCartRuleErrors();
   window.getCartBlockedMessage = () => cartBlockedMessage();
 
   window.updateCartQuantity = (cartKey, qty) => {

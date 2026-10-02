@@ -767,7 +767,9 @@ export interface OrderReceiptSupportRequestAction {
 }
 
 export interface OrderReceiptDiscount {
-  promotionId: string;
+  /** Null for a discount a store app gave (`appId` names the app). */
+  promotionId: string | null;
+  appId?: string | null;
   title: string;
   code: string | null;
   /** The discount's main effect; delivery savings are in `shippingAmount` whatever the kind. */

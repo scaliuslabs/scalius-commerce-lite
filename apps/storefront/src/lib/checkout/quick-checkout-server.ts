@@ -4,14 +4,16 @@
  * storefront server exactly as the browser asks for them through its proxies.
  */
 import { apiFetch } from "@/lib/api/transport";
+import type { CartRuleError } from "@/lib/api/orders";
 import type { ShippingMethod } from "@/lib/api/types";
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteCartRulesError,
   TaxQuoteDeliveryLocationError,
   TaxQuoteDeliveryRateError,
 } from "./tax-quote-client";
-import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import type { CheckoutTaxQuote, QuotedShippingRate } from "./tax-quote-contract";
 
 const QUOTE_TIMEOUT_MS = 8_000;
 
@@ -34,7 +36,11 @@ export async function fetchQuickCheckoutRates(
 
 export type QuickCheckoutQuoteResult =
   | { ok: true; quote: CheckoutTaxQuote }
-  | { ok: false; reason: "items" | "rate" | "location" | "unavailable"; message?: string };
+  /** A store app's rules block the order: shown in the app's words. */
+  | { ok: false; reason: "rules"; ruleErrors: CartRuleError[] }
+  /** The option was refused; `shippingRates` are the ones left when a store app hid it. */
+  | { ok: false; reason: "rate"; shippingRates: QuotedShippingRate[] | null }
+  | { ok: false; reason: "items" | "location" | "unavailable"; message?: string };
 
 export async function fetchQuickCheckoutQuote(
   input: Record<string, unknown>,
@@ -62,7 +68,12 @@ export async function fetchQuickCheckoutQuote(
     if (error instanceof TaxQuoteCartChangedError) {
       return { ok: false, reason: "items", message: error.issues[0]?.message };
     }
-    if (error instanceof TaxQuoteDeliveryRateError) return { ok: false, reason: "rate" };
+    if (error instanceof TaxQuoteCartRulesError) {
+      return { ok: false, reason: "rules", ruleErrors: error.ruleErrors };
+    }
+    if (error instanceof TaxQuoteDeliveryRateError) {
+      return { ok: false, reason: "rate", shippingRates: error.shippingRates };
+    }
     if (error instanceof TaxQuoteDeliveryLocationError) return { ok: false, reason: "location" };
     return { ok: false, reason: "unavailable" };
   }

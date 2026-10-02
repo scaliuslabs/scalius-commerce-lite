@@ -31,7 +31,8 @@ import { termsSegments } from "@/lib/checkout/terms-text";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import type { CartValidationIssue } from "@/lib/api/orders";
+import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
+import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
@@ -120,6 +121,7 @@ let codCartRepairState: {
   source: "cart";
   message: string;
   issues: CartValidationIssue[];
+  ruleErrors?: CartRuleError[];
   createdAt: number;
 } | null = null;
 
@@ -215,18 +217,34 @@ if (Astro.request.method === "POST" && codOnly) {
           });
           staleCustomerSession = true;
         }
+        // A store app's rules: the page says them at their lines and above Place order.
+        const ruleErrors = cartRuleRefusal({
+          details: "details" in result ? result.details : undefined,
+        });
+        const quoteConflict =
+          "errorCode" in result &&
+          result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT";
         errorMessage =
-          ("errorCode" in result &&
-          result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
-            ? copy.totalChangedReviewText
-            : (typeof resultError === "string"
+          (ruleErrors
+            ? copy.cartRulesBlockedText
+            : quoteConflict
+              ? copy.totalChangedReviewText
+              : typeof resultError === "string"
                 ? resultError
-                : resultError?.message)) ||
+                : resultError?.message) ||
           copy.orderProcessingFailedText;
         const itemIssues = extractItemIssues(
           "details" in result ? result.details : undefined,
         );
-        if (itemIssues.length > 0) {
+        if (ruleErrors && itemIssues.length === 0) {
+          codCartRepairState = {
+            source: "cart",
+            message: errorMessage,
+            issues: [],
+            ruleErrors,
+            createdAt: Date.now(),
+          };
+        } else if (itemIssues.length > 0) {
           codCartRepairState = {
             source: "cart",
             message:
@@ -677,6 +695,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             }
 
             <div>
+              {/* A store app's rule that blocks the order (lib/cart/client.ts fills it, as text). */}
+              <div
+                id="cartRuleErrors"
+                class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+                tabindex="-1"
+              >
+              </div>
               <p
                 id="checkoutFormMessage"
                 class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
@@ -930,6 +956,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     showCheckoutLoadingOverlay,
   } from "@/lib/checkout/loading-overlay";
   import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
+  import type { QuotedShippingRate } from "@/lib/checkout/tax-quote-contract";
 
   type CustomerAutofillProfile = {
     customerId?: string | null;
@@ -1027,9 +1054,23 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     () => void shippingMethods?.recheck(),
     { signal: cartPageSignal },
   );
+  // The detail's `shippingRates` are the options still offered when a store
+  // app hid the chosen one (null: re-read the store's own).
   window.addEventListener(
     "delivery-rate-rejected",
-    () => void shippingMethods?.rejectSelected(),
+    (event) =>
+      void shippingMethods?.rejectSelected(
+        (event as CustomEvent<{ shippingRates?: QuotedShippingRate[] | null } | null>).detail?.shippingRates ?? null,
+      ),
+    { signal: cartPageSignal },
+  );
+  // Each quote says which options a store app changed for this cart (null: none).
+  window.addEventListener(
+    "delivery-rates-quoted",
+    (event) =>
+      shippingMethods?.applyQuotedRates(
+        (event as CustomEvent<{ shippingRates?: QuotedShippingRate[] | null } | null>).detail?.shippingRates ?? null,
+      ),
     { signal: cartPageSignal },
   );
   const locationRoot = document.querySelector<HTMLElement>("[data-location-fields]");
@@ -1704,6 +1745,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             if (locationControl) {
               locationControl.scrollIntoView?.({ behavior: "smooth", block: "center" });
               locationControl.focus({ preventScroll: true });
+              return;
+            }
+            // A store app's rule is already said above this button.
+            const ruleBanner = document.getElementById("cartRuleErrors");
+            if (window.hasCartRuleErrors?.() && ruleBanner && !ruleBanner.classList.contains("hidden")) {
+              ruleBanner.scrollIntoView?.({ behavior: "smooth", block: "center" });
+              ruleBanner.focus({ preventScroll: true });
               return;
             }
             // A refused delivery rate is explained next to the delivery options,

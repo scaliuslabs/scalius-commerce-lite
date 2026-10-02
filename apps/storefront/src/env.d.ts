@@ -162,6 +162,8 @@ interface Window {
   handleAbandonedCheckout?: () => void;
   validateCartSnapshot?: () => Promise<boolean>;
   hasCartValidationIssues?: () => boolean;
+  /** A store app's rule blocks the order (said on its line or above the checkout action). */
+  hasCartRuleErrors?: () => boolean;
   getCartBlockedMessage?: () => string;
   updateCartQuantity?: (cartKey: string, quantity: number) => void;
   removeFromCart?: (cartKey: string) => void;

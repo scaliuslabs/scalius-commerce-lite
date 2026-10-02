@@ -3,15 +3,18 @@ import {
   parseTaxQuoteEnvelope,
   TaxQuoteContractError,
   type CheckoutTaxQuote,
+  type QuotedShippingRate,
   type TaxQuoteRequest,
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { isCheckoutDeliveryMode } from "./delivery-mode";
 import { giftCardRequestFields } from "./gift-cards";
-import type { CartValidationIssue } from "../api/orders";
+import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import {
+  cartRuleRefusal,
   isDeliveryRateUnavailable,
   parseTaxQuoteCartIssues,
+  refusedDeliveryRates,
   unavailableDeliveryLocation,
   type DeliveryLocationLevel,
 } from "./tax-quote-error-contract";
@@ -60,9 +63,20 @@ export class TaxQuoteCartChangedError extends Error {
   }
 }
 
-/** The chosen delivery rate no longer serves the address: re-read the rates. */
+/** A store app's rule blocks the order; its messages say why (shown as text). */
+export class TaxQuoteCartRulesError extends Error {
+  constructor(public readonly ruleErrors: CartRuleError[]) {
+    super("This order can't be placed yet.");
+    this.name = "TaxQuoteCartRulesError";
+  }
+}
+
+/**
+ * The chosen delivery rate no longer serves the address: re-read the rates.
+ * When a store app hid it, `shippingRates` are the options still offered.
+ */
 export class TaxQuoteDeliveryRateError extends Error {
-  constructor() {
+  constructor(public readonly shippingRates: QuotedShippingRate[] | null = null) {
     super("The chosen delivery option isn't available for this address.");
     this.name = "TaxQuoteDeliveryRateError";
   }
@@ -178,7 +192,11 @@ export async function fetchAuthoritativeTaxQuote(
       const payload = await response.json().catch(() => null);
       const issues = parseTaxQuoteCartIssues(payload);
       if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
-      if (isDeliveryRateUnavailable(payload)) throw new TaxQuoteDeliveryRateError();
+      const ruleErrors = cartRuleRefusal(payload);
+      if (ruleErrors) throw new TaxQuoteCartRulesError(ruleErrors);
+      if (isDeliveryRateUnavailable(payload)) {
+        throw new TaxQuoteDeliveryRateError(refusedDeliveryRates(payload));
+      }
       const locationGone = unavailableDeliveryLocation(payload);
       if (locationGone) throw new TaxQuoteDeliveryLocationError(locationGone);
       throw new TaxQuoteUnavailableError();
@@ -214,6 +232,7 @@ export async function fetchAuthoritativeTaxQuote(
     return quote;
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) throw error;
+    if (error instanceof TaxQuoteCartRulesError) throw error;
     if (error instanceof TaxQuoteDeliveryRateError) throw error;
     if (error instanceof TaxQuoteDeliveryLocationError) throw error;
     if (error instanceof TaxQuoteUnavailableError) throw error;

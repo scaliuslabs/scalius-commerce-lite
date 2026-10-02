@@ -24,16 +24,17 @@ import {
   isDepositPaymentRequired,
   resolveCheckoutPaymentRequest,
 } from "./payment-mode";
-import type { CartValidationIssue } from "../api/orders";
+import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import { trackStorefrontAddPaymentInfoOnce } from "../analytics";
 import { writeCartRepairState } from "../cart/repair-state";
 import { getCheckoutStatusErrorMessage } from "./error-messages";
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteCartRulesError,
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
-import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import { discountLineKey, type CheckoutTaxQuote } from "./tax-quote-contract";
 import { isGatewayTestMode } from "./gateway-environment";
 import {
   hideCheckoutLoadingOverlay,
@@ -443,7 +444,7 @@ function appendSummaryRow(
   className = "flex justify-between",
   /** The original amount, struck through before the value (a waived delivery fee). */
   struck?: string,
-): void {
+): HTMLElement {
   const row = document.createElement("div");
   row.className = className;
   appendTextElement(row, "span", "", label);
@@ -455,6 +456,7 @@ function appendSummaryRow(
     valueElement.prepend(original);
   }
   parent.appendChild(row);
+  return row;
 }
 
 function displayString(value: unknown): string | null {
@@ -590,6 +592,8 @@ function appendCheckoutReview(
 type CheckoutCartFreshnessResult = {
   valid: boolean;
   issues: CartValidationIssue[];
+  /** A store app's rules that block the order; the cart says them in the app's words. */
+  ruleErrors?: CartRuleError[];
   message: string;
 };
 
@@ -607,12 +611,39 @@ function checkoutFreshnessMessage(
 }
 
 function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
+  // Session storage, never the URL: the messages and lines are buyer content.
   writeCartRepairState({
     source: "checkout",
     message: result.message,
     issues: result.issues,
+    ...(result.ruleErrors?.length ? { ruleErrors: result.ruleErrors } : {}),
   });
   window.location.href = "/cart?checkoutIssues=1";
+}
+
+/**
+ * A quote refused for the cart itself (a changed line, or a store app's rule)
+ * is fixed on the cart page: true when the buyer is sent there.
+ */
+function redirectForCartRefusal(error: unknown): boolean {
+  if (error instanceof TaxQuoteCartChangedError) {
+    redirectToCartForRepair({
+      valid: false,
+      issues: error.issues,
+      message: checkoutFreshnessMessage(error.issues),
+    });
+    return true;
+  }
+  if (error instanceof TaxQuoteCartRulesError) {
+    redirectToCartForRepair({
+      valid: false,
+      issues: [],
+      ruleErrors: error.ruleErrors,
+      message: checkoutCopy.cartRulesBlockedText,
+    });
+    return true;
+  }
+  return false;
 }
 
 function readCheckoutAttemptId(data: Record<string, unknown>): string | undefined {
@@ -737,15 +768,18 @@ export function renderOrderSummaryDetails(
       deliveryCharged < deliveryFee ? currencyFmt(deliveryFee, quote) : undefined,
     );
   }
-  // One line per discount on the items, named as the buyer knows it.
-  for (const discount of quote.discounts.filter(({ amount }) => amount > 0)) {
-    appendSummaryRow(
+  // One line per discount on the items, named as the buyer knows it (a store
+  // app's discount too: it has no promotion, so its key is the app and position).
+  quote.discounts.forEach((discount, position) => {
+    if (discount.amount <= 0) return;
+    const row = appendSummaryRow(
       details,
       formatDiscountLineLabel(checkoutCopy.discountText, discount),
       `-${currencyFmt(discount.amount, quote)}`,
       "flex justify-between gap-3 text-primary",
     );
-  }
+    row.dataset.discountLine = discountLineKey(discount, position);
+  });
   if (quote.taxMinor > 0) {
     appendSummaryRow(
       details,
@@ -851,7 +885,7 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
       ? [{ id: GIFT_CARD_PAYMENT_METHOD, flow: "cod", name: giftCopy.paidWithGiftCardText }]
       : [];
   }
-  return gateways.filter(
+  const eligible = gateways.filter(
     (gateway) => (
       gateway.id !== GIFT_CARD_PAYMENT_METHOD
       && !(currentConfig.partialPaymentEnabled && gateway.id === "cod")
@@ -863,6 +897,26 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
       )
     ),
   );
+  // A store app changed the methods for this order: only the ones it lists,
+  // in its order (never one this page would not offer).
+  const quoted = currentQuote.paymentMethods;
+  if (!quoted) return eligible;
+  const byId = new Map(eligible.map((gateway) => [gateway.id, gateway]));
+  return quoted.flatMap(({ id }) => {
+    const gateway = byId.get(id);
+    return gateway ? [gateway] : [];
+  });
+}
+
+/**
+ * The name a store app gave a method on this quote, when it differs from the
+ * store's own (the same name keeps the page's localized wording).
+ */
+function quotedPaymentMethodName(gateway: CheckoutConfig["gateways"][number]): string | null {
+  const quoted = authoritativeTaxQuote?.paymentMethods?.find(({ id }) => id === gateway.id);
+  if (!quoted) return null;
+  const ownName = typeof gateway.name === "string" ? gateway.name.trim() : "";
+  return quoted.name !== ownName ? quoted.name : null;
 }
 
 function paymentActionLabel(methodId: string): string {
@@ -920,10 +974,12 @@ async function renderGateways(): Promise<void> {
     const handler = handlerFor(gw.id);
     const fallbackLabel =
       (gw as { name?: string }).name || handler?.meta.label || gw.id;
-    const presentation = localizedGatewayPresentation(
+    const localized = localizedGatewayPresentation(
       gw.id,
       getGatewayPresentation(gw.id, fallbackLabel),
     );
+    const quotedName = quotedPaymentMethodName(gw);
+    const presentation = quotedName ? { ...localized, buyerLabel: quotedName } : localized;
     const card = document.createElement("div");
     card.className =
       "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
@@ -1183,6 +1239,36 @@ async function processPayment(): Promise<void> {
         });
         return;
       }
+      if (result.refusal?.reason === "cart_rules") {
+        hideCheckoutLoadingOverlay({ restoreFocus: false });
+        redirectToCartForRepair({
+          valid: false,
+          issues: [],
+          ruleErrors: result.refusal.ruleErrors,
+          message: checkoutCopy.cartRulesBlockedText,
+        });
+        return;
+      }
+      if (result.refusal?.reason === "payment_method_unavailable") {
+        // A store app hid this method for the order: the current quote lists
+        // the methods left, and the page selects one of them.
+        hideCheckoutLoadingOverlay();
+        let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
+        try {
+          refreshed = await fetchQuoteForCheckout();
+        } catch (error) {
+          if (redirectForCartRefusal(error)) return;
+          showReturnToCartAction();
+          throw error;
+        }
+        adoptQuote(refreshed.quote);
+        showGiftCardMessage(refreshed.notice);
+        renderSummary();
+        isProcessing = false;
+        await renderGateways();
+        showError(checkoutCopy.paymentMethodUnavailableMessage);
+        return;
+      }
 
       const recovery = getPaymentResultRecovery(result);
       if (recovery) {
@@ -1199,14 +1285,7 @@ async function processPayment(): Promise<void> {
         try {
           refreshed = await fetchQuoteForCheckout();
         } catch (error) {
-          if (error instanceof TaxQuoteCartChangedError) {
-            redirectToCartForRepair({
-              valid: false,
-              issues: error.issues,
-              message: checkoutFreshnessMessage(error.issues),
-            });
-            return;
-          }
+          if (redirectForCartRefusal(error)) return;
           showReturnToCartAction();
           throw error;
         }
@@ -1384,14 +1463,7 @@ async function requoteForGiftCards(): Promise<boolean> {
     result = await fetchQuoteForCheckout();
   } catch (error) {
     if (currentInitVersion !== initVersion) return false;
-    if (error instanceof TaxQuoteCartChangedError) {
-      redirectToCartForRepair({
-        valid: false,
-        issues: error.issues,
-        message: checkoutFreshnessMessage(error.issues),
-      });
-      return false;
-    }
+    if (redirectForCartRefusal(error)) return false;
     showReturnToCartAction();
     showError(error instanceof Error ? error.message : checkoutCopy.totalVerificationFailedText);
     setPayButton(checkoutCopy.totalUnavailableText, true);
@@ -1532,14 +1604,7 @@ export async function initCheckoutPage(): Promise<void> {
     adoptQuote(quote);
     showGiftCardMessage(notice);
   } catch (error) {
-    if (error instanceof TaxQuoteCartChangedError) {
-      redirectToCartForRepair({
-        valid: false,
-        issues: error.issues,
-        message: checkoutFreshnessMessage(error.issues),
-      });
-      return;
-    }
+    if (redirectForCartRefusal(error)) return;
     clearCheckoutPresentation();
     showReturnToCartAction();
     showError(

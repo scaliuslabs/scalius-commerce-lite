@@ -9,6 +9,7 @@ import type {
 } from "@scalius/shared/fulfilment";
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
+import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
 
 export class OrderReceiptAccessError extends Error {
   constructor(public readonly status: number) {
@@ -57,6 +58,19 @@ export type CartValidationIssue = {
   propertyKey?: string | null;
 };
 
+/**
+ * A store app's checkout rule that blocks the order ("At most 10 per order").
+ * `message` is the app's own buyer-facing text: shown as text, never markup,
+ * and never translated. `index`/`cartKey` name the line like `issues[]` do;
+ * both null mean the whole cart.
+ */
+export type CartRuleError = {
+  code: string;
+  message: string;
+  index: number | null;
+  cartKey: string | null;
+};
+
 export type CartValidationRequestItem = {
   cartKey?: string | null;
   productId: string;
@@ -100,6 +114,11 @@ export type CartValidationItem = {
 export type CartValidationResult = {
   valid: boolean;
   issues: CartValidationIssue[];
+  /**
+   * Store app rules that block checkout; checked only when `issues` is empty
+   * (`valid` is false whenever there is one). Absent from older APIs.
+   */
+  ruleErrors?: CartRuleError[];
   items: CartValidationItem[];
   subtotal: number;
   hasFreeDeliveryProduct: boolean;
@@ -354,7 +373,11 @@ export async function validateCartItems(
       };
     }
 
-    return { success: true, data: json.data };
+    // App rule messages are bounded and checked here, once, for every reader.
+    const data = json.data.ruleErrors === undefined
+      ? json.data
+      : { ...json.data, ruleErrors: parseCartRuleErrors(json.data.ruleErrors) };
+    return { success: true, data };
   } catch (error: unknown) {
     console.error("Error validating cart:", error);
     return {

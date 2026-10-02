@@ -24,6 +24,11 @@ const MAX_DISPLAY_LABEL_LENGTH = 80;
 const MAX_SHIPPING_METHOD_NAME_LENGTH = 100;
 const MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH = 255;
 const MAX_QUANTITY = 99;
+/** Bounds for the options and methods a store app leaves on a quote. */
+const MAX_QUOTED_SHIPPING_RATES = 100;
+const MAX_QUOTED_PAYMENT_METHODS = 32;
+const MAX_PAYMENT_METHOD_ID_LENGTH = 64;
+const MAX_PAYMENT_METHOD_NAME_LENGTH = 100;
 const MAX_MAJOR_AMOUNT = 1_000_000_000_000;
 const FINGERPRINT_PATTERN = /^taxq_[A-Za-z0-9_-]{22}$/;
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
@@ -93,9 +98,14 @@ export interface TaxQuoteShippingMethod {
   feeWaived: boolean;
 }
 
-/** One line per applied discount (automatic by title, codes with their code). */
+/**
+ * One line per applied discount (automatic by title, codes with their code).
+ * A discount a store app gave has no promotion: `promotionId` is null and
+ * `appId` names the app (present only then).
+ */
 export interface CheckoutDiscountLine {
-  promotionId: string;
+  promotionId: string | null;
+  appId?: string | null;
   title: string;
   code: string | null;
   /** Off the items: a discount line. */
@@ -104,6 +114,36 @@ export interface CheckoutDiscountLine {
   shippingAmount: number;
   /** A code only: the automatic discount it replaced (it saves more; they can't be combined). */
   replaces?: string;
+}
+
+/**
+ * A stable identity for a discount line in a rendered list: its promotion, or
+ * for an app's discount the app and the line's position in the quote.
+ */
+export function discountLineKey(
+  line: Pick<CheckoutDiscountLine, "promotionId" | "appId">,
+  position: number,
+): string {
+  return line.promotionId ?? `app:${line.appId ?? ""}:${position}`;
+}
+
+/**
+ * A delivery or pickup option as a store app left it on this quote: shown in
+ * this order, with this name and this fee (what the buyer pays, platform
+ * free-delivery waivers already applied).
+ */
+export interface QuotedShippingRate {
+  id: string;
+  name: string;
+  kind: "delivery" | "pickup";
+  amount: number;
+  amountMinor: number;
+}
+
+/** A payment method as a store app left it on this quote: shown in this order, with this name. */
+export interface QuotedPaymentMethod {
+  id: string;
+  name: string;
 }
 
 export interface CheckoutOfferProduct {
@@ -216,6 +256,13 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCar
   pickup: TaxQuotePickup | null;
   /** Payment methods this cart may use (no cash on delivery when nothing is handed over). */
   allowedPaymentMethods: string[];
+  /**
+   * The delivery options to show, when a store app changed them (absent when
+   * none did: the options stay as read from the store).
+   */
+  shippingRates?: QuotedShippingRate[] | null;
+  /** The payment methods to show, when a store app changed them (absent when none did). */
+  paymentMethods?: QuotedPaymentMethod[] | null;
   items: TaxQuoteItem[];
 }
 
@@ -543,6 +590,9 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     fail();
   }
 
+  const shippingRates = parseQuotedShippingRates(data.shippingRates, decimalPlaces);
+  const paymentMethods = parseQuotedPaymentMethods(data.paymentMethods);
+
   const discountFacts = parseDiscountFacts(data);
   // Quantity-bundle savings are part of `discountMinor` but are not a
   // promotion line; without their own line the summary would not add up.
@@ -588,10 +638,65 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     requiresShipping,
     pickup,
     allowedPaymentMethods,
+    // Only when an app changed them: a quote without apps is exactly the old one.
+    ...(shippingRates ? { shippingRates } : {}),
+    ...(paymentMethods ? { paymentMethods } : {}),
     ...discountFacts,
     ...giftCardFacts,
     items,
   };
+}
+
+function parseQuotedRateKind(value: unknown): QuotedShippingRate["kind"] {
+  return value === "delivery" || value === "pickup" ? value : fail();
+}
+
+/** One quoted delivery option; amounts are checked against their minor units when the scale is known. */
+export function parseQuotedShippingRate(
+  value: unknown,
+  decimalPlaces: number | null,
+): QuotedShippingRate {
+  if (!isRecord(value)) fail();
+  const amount = nonNegativeAmount(value.amount);
+  const amountMinor = nonNegativeSafeInteger(value.amountMinor);
+  if (decimalPlaces !== null) assertAmountMatchesMinor(amount, amountMinor, decimalPlaces);
+  return {
+    id: requiredString(value.id, MAX_ID_LENGTH),
+    name: requiredString(value.name, MAX_SHIPPING_METHOD_NAME_LENGTH),
+    kind: parseQuotedRateKind(value.kind),
+    amount,
+    amountMinor,
+  };
+}
+
+/**
+ * The delivery options a store app left on the quote, or null when no app
+ * changed them. Any malformed entry refuses the whole quote.
+ */
+export function parseQuotedShippingRates(
+  value: unknown,
+  decimalPlaces: number,
+): QuotedShippingRate[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length > MAX_QUOTED_SHIPPING_RATES) fail();
+  const rates = value.map((rate) => parseQuotedShippingRate(rate, decimalPlaces));
+  if (new Set(rates.map(({ id }) => id)).size !== rates.length) fail();
+  return rates;
+}
+
+/** The payment methods a store app left on the quote, or null when no app changed them. */
+export function parseQuotedPaymentMethods(value: unknown): QuotedPaymentMethod[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length > MAX_QUOTED_PAYMENT_METHODS) fail();
+  const methods = value.map((method): QuotedPaymentMethod => {
+    if (!isRecord(method)) fail();
+    return {
+      id: requiredString(method.id, MAX_PAYMENT_METHOD_ID_LENGTH),
+      name: requiredString(method.name, MAX_PAYMENT_METHOD_NAME_LENGTH),
+    };
+  });
+  if (new Set(methods.map(({ id }) => id)).size !== methods.length) fail();
+  return methods;
 }
 
 const MAX_GIFT_CARD_ISSUES = 10;
@@ -761,8 +866,13 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
   return {
     discounts: discounts.map((line) => {
       if (!isRecord(line)) fail();
+      // A promotion's line, or (promotion null) a line a store app gave.
+      const promotionId = line.promotionId === null ? null : requiredString(line.promotionId, MAX_ID_LENGTH);
+      const appId = line.appId === undefined || line.appId === null ? null : requiredString(line.appId, MAX_ID_LENGTH);
+      if (promotionId === null && appId === null) fail();
       return {
-        promotionId: requiredString(line.promotionId, MAX_ID_LENGTH),
+        promotionId,
+        ...(appId !== null ? { appId } : {}),
         title: requiredString(line.title, 160),
         code: line.code === null ? null : requiredString(line.code, MAX_CODE_LENGTH),
         amount: nonNegativeAmount(line.amount),

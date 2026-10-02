@@ -260,7 +260,11 @@ async function quickBuy({
     if (!validation.success) {
       return productRedirect(slug, "validation_unavailable");
     }
-    if (!validation.data.valid) {
+    // A store app's rule ("at most 10 per order") is not this item's problem:
+    // the cart says it in the app's words and blocks checkout until it holds.
+    const blockedOnlyByRules =
+      validation.data.issues.length === 0 && (validation.data.ruleErrors?.length ?? 0) > 0;
+    if (!validation.data.valid && !blockedOnlyByRules) {
       return productRedirect(slug, issueToQuickBuyError(validation.data.issues[0]));
     }
 

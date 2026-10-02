@@ -7,10 +7,11 @@
 import { formatMoney } from "@scalius/shared/currency";
 import { formatCheckoutLanguageText, formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import type {
-  CheckoutDiscountFacts,
-  CheckoutDiscountOffer,
-  CheckoutRejectedCode,
+import {
+  discountLineKey,
+  type CheckoutDiscountFacts,
+  type CheckoutDiscountOffer,
+  type CheckoutRejectedCode,
 } from "../checkout/tax-quote-contract";
 
 export interface DiscountPanelActions {
@@ -137,11 +138,14 @@ export function renderDiscountPanel(
   const offers = root.querySelector<HTMLElement>("#discountOffers");
   const facts = state.facts;
 
-  // Delivery savings show on the delivery line, so only savings on the items are listed here.
-  lines?.replaceChildren(...(facts?.discounts ?? []).filter((line) => line.amount > 0).map((line) => {
+  // Delivery savings show on the delivery line, so only savings on the items are
+  // listed here (a store app's discount too, keyed by its app and position).
+  lines?.replaceChildren(...(facts?.discounts ?? []).flatMap((line, position) => {
+    if (line.amount <= 0) return [];
     const row = element("div", "flex justify-between gap-3 text-sm text-primary");
+    row.dataset.discountLine = discountLineKey(line, position);
     row.append(element("span", "min-w-0", formatDiscountLineLabel(copy.discountText, line)), element("span", "shrink-0 font-medium tabular-nums", `-${formatMoney(line.amount)}`));
-    return row;
+    return [row];
   }));
 
   // Compact code chips in one wrapping row; a code that doesn't apply says why underneath.

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   enhanceShippingMethods,
   fetchDeliveryRates,
+  overlayQuotedRates,
   type DeliveryAddress,
   type DeliveryRate,
   type ShippingMethodDetail,
@@ -280,6 +281,93 @@ describe("delivery options follow the Delivery/Pickup switch", () => {
     expect(events.at(-1)).toBeNull();
     expect(window.lastShippingEventDetail).toBeUndefined();
     await expect(methods.recheck()).resolves.toBe(false);
+  });
+});
+
+describe("delivery options a store app changed for this cart", () => {
+  const express = rate("express", 150, { freeOver: 3000 });
+  const appRates = [
+    { id: "express", name: "Express (app)", kind: "delivery" as const, amount: 99, amountMinor: 9_900 },
+    { id: "standard", name: "Standard", kind: "delivery" as const, amount: 0, amountMinor: 0 },
+  ];
+
+  it("shows only the options the quote lists, in its order, with its names and fees", () => {
+    expect(overlayQuotedRates([standard, express, pickup], appRates)).toEqual([
+      { ...express, name: "Express (app)", fee: 99, freeOver: null, quoted: true },
+      { ...standard, name: "Standard", fee: 0, freeOver: null, quoted: true },
+    ]);
+    // An option this path does not offer is never added; null leaves the list as read.
+    expect(overlayQuotedRates([standard], [{ ...appRates[0]!, id: "unknown" }])).toEqual([]);
+    expect(overlayQuotedRates([standard, express], null)).toEqual([standard, express]);
+  });
+
+  it("renames, reprices and reorders the cards, keeps the buyer's visible choice, and takes it back with null", async () => {
+    const { methods, options, events } = setup({ byCity: { dhaka: [standard, express] } });
+    await methods.setAddress(DHAKA);
+    expect(events.at(-1)).toMatchObject({ id: "standard", fee: 80 });
+
+    methods.applyQuotedRates(appRates);
+    expect(options()).toEqual([
+      // The quote's fee is what the buyer pays: no free-over note.
+      { id: "express", checked: false, fee: "৳99", note: "" },
+      { id: "standard", checked: true, fee: "Free", note: "" },
+    ]);
+    expect(document.querySelector('[data-rate-id="express"]')?.textContent).toContain("Express (app)");
+    // The totals hear the fee the buyer pays, with no threshold left to apply.
+    expect(events.at(-1)).toEqual({ id: "standard", fee: 0, freeOver: null, name: "Standard", kind: "delivery", quoted: true });
+    const announced = events.length;
+    methods.applyQuotedRates(appRates.map((entry) => ({ ...entry })));
+    expect(events).toHaveLength(announced);
+    // The quote prices these options and the order checks it: nothing to re-read.
+    await expect(methods.recheck()).resolves.toBe(false);
+
+    methods.applyQuotedRates(null);
+    expect(options().map(({ id, fee }) => [id, fee])).toEqual([["standard", "৳80"], ["express", "৳150"]]);
+    expect(events.at(-1)).toEqual({ id: "standard", fee: 80, freeOver: null, name: "standard", kind: "delivery" });
+  });
+
+  it("chooses the first option left when an app hides the chosen one", async () => {
+    const { methods, options, events } = setup({ byCity: { dhaka: [standard, express] } });
+    await methods.setAddress(DHAKA);
+    methods.applyQuotedRates([appRates[0]!]);
+    expect(options()).toEqual([{ id: "express", checked: true, fee: "৳99", note: "" }]);
+    expect(events.at(-1)).toMatchObject({ id: "express", fee: 99, quoted: true });
+  });
+
+  it("drops a refused option, picks the first one the app left, and says what changed", async () => {
+    const { methods, options, events } = setup({ byCity: { dhaka: [standard, express] } });
+    await methods.setAddress(DHAKA);
+    // The refusal lists the options still offered (never the refused one, even if repeated).
+    await methods.rejectSelected([appRates[1]!, appRates[0]!]);
+    expect(options()).toEqual([{ id: "express", checked: true, fee: "৳99", note: "" }]);
+    expect(events.at(-1)).toMatchObject({ id: "express", fee: 99 });
+    expect(document.querySelector("[data-shipping-notice]")!.textContent)
+      .toBe("standard is gone, so Express (app) is selected. Delivery was ৳80, now ৳99.");
+  });
+
+  it("forgets an earlier quote's options when the address changes", async () => {
+    const { methods, options } = setup({ byCity: { dhaka: [standard, express], ctg: [ctg] } });
+    await methods.setAddress(DHAKA);
+    methods.applyQuotedRates([appRates[0]!]);
+    await methods.setAddress(CTG);
+    expect(options().map(({ id, fee }) => [id, fee])).toEqual([["ctg", "৳150"]]);
+  });
+
+  it("ignores a quote for the address the buyer left that answers while the new options load", async () => {
+    let releaseCtg: (rates: DeliveryRate[]) => void = () => {};
+    const { methods, options } = setup({
+      loadRates: (address) =>
+        address.cityId === "ctg"
+          ? new Promise((resolve) => { releaseCtg = resolve; })
+          : Promise.resolve([standard, express]),
+    });
+    await methods.setAddress(DHAKA);
+    const moving = methods.setAddress(CTG);
+    // Dhaka's quote lands late: its options must not filter Chattogram's.
+    methods.applyQuotedRates([appRates[0]!]);
+    releaseCtg([ctg]);
+    await moving;
+    expect(options().map(({ id, checked }) => [id, checked])).toEqual([["ctg", true]]);
   });
 });
 

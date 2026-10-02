@@ -1404,3 +1404,164 @@ describe("payment page on the pickup and no-delivery paths (Wave A)", () => {
     expect(document.querySelector('[data-method="sslcommerz"]')).not.toBeNull();
   });
 });
+
+describe("payment page with store app checkout functions", () => {
+  const appRule = { code: "max_qty", message: "At most 10 per order.", index: 0, cartKey: "line_1" };
+
+  function installPaymentPage(activeDefaultMethod = "cod"): void {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      checkoutId: "chk_session_app_functions_1",
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1, name: "Product" },
+      }),
+      customerName: "Buyer",
+      customerPhone: "+8801700000000",
+      shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod,
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" },
+        { id: "bkash", name: "bKash", flow: "hosted" },
+      ],
+    };
+  }
+
+  const shownMethods = () =>
+    [...document.querySelectorAll<HTMLElement>(".payment-method-card")].map((card) => card.dataset.method);
+
+  it("keeps every method in the store's order when no app changed them", async () => {
+    installPaymentPage();
+    await initCheckoutPage();
+    expect(shownMethods()).toEqual(["cod", "sslcommerz", "bkash"]);
+  });
+
+  it("shows only the methods an app left, in its order, with its names, and selects one left", async () => {
+    installPaymentPage("cod");
+    vi.stubGlobal("fetch", successfulCheckoutFetch(taxQuote({
+      allowedPaymentMethods: ["bkash", "sslcommerz"],
+      paymentMethods: [
+        { id: "bkash", name: "bKash (5% off)" },
+        // The store's own name keeps the page's own wording.
+        { id: "sslcommerz", name: "SSLCommerz" },
+      ],
+    })));
+    await initCheckoutPage();
+
+    expect(shownMethods()).toEqual(["bkash", "sslcommerz"]);
+    const bkash = document.querySelector('[data-method="bkash"]')!;
+    expect(bkash.textContent).toContain("bKash (5% off)");
+    expect(document.querySelector('[data-method="sslcommerz"]')?.textContent).toContain("Pay online");
+    // The saved default (cash on delivery) is hidden for this order: the first method left is selected.
+    expect(bkash.querySelector('[role="radio"]')?.getAttribute("aria-checked")).toBe("true");
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("lists an app's discount line in the summary with a stable key, as text", async () => {
+    installPaymentPage();
+    vi.stubGlobal("fetch", successfulCheckoutFetch(taxQuote({
+      discountMinor: 1_500,
+      discountAmount: 15,
+      totalMinor: 8_500,
+      totalAmount: 85,
+      discounts: [
+        { promotionId: "promo_1", title: "Eid 5%", code: null, amount: 5, shippingAmount: 0 },
+        { promotionId: null, appId: "app_loyalty", title: "Loyalty <b>reward</b>", code: null, amount: 10, shippingAmount: 0 },
+      ],
+    })));
+    await initCheckoutPage();
+
+    const lines = [...document.querySelectorAll<HTMLElement>("#summaryDetails [data-discount-line]")];
+    expect(lines.map((line) => line.dataset.discountLine)).toEqual(["promo_1", "app:app_loyalty:1"]);
+    expect(lines[1]?.textContent).toBe("Discount · Loyalty <b>reward</b>-৳10");
+    expect(lines[1]?.querySelector("b")).toBeNull();
+  });
+
+  it("sends a quote blocked by an app's rule back to the cart, the rules in session storage only", async () => {
+    installPaymentPage();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { reason: "cart_rules", ruleErrors: [appRule] },
+    }), { status: 400 })));
+    await initCheckoutPage();
+
+    const repair = JSON.parse(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY) || "{}") as {
+      message?: string;
+      ruleErrors?: unknown[];
+    };
+    expect(repair.message).toBe("This order can't be placed yet.");
+    expect(repair.ruleErrors).toEqual([appRule]);
+    expect(window.location.href).toContain("/cart?checkoutIssues=1");
+    expect(window.location.href).not.toContain("max_qty");
+    expect(window.location.href).not.toContain("At%20most");
+  });
+
+  function orderRefusingFetch(refusal: Record<string, unknown>, requote = taxQuote()) {
+    let quotes = 0;
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/checkout/tax-quote") {
+        quotes += 1;
+        return new Response(JSON.stringify({ success: true, data: quotes === 1 ? taxQuote() : requote }));
+      }
+      if (url === "/api/checkout/create-order") {
+        return new Response(JSON.stringify({
+          success: false,
+          error: "This payment method isn't available for this order. Choose another.",
+          errorCode: "VALIDATION_ERROR",
+          details: refusal,
+        }), { status: 400 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+  }
+
+  it("re-prices and offers the methods left when the order refuses a method an app hid", async () => {
+    installPaymentPage("cod");
+    const fetchMock = orderRefusingFetch(
+      { reason: "payment_method_unavailable" },
+      taxQuote({ allowedPaymentMethods: ["sslcommerz"], paymentMethods: [{ id: "sslcommerz", name: "SSLCommerz" }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await initCheckoutPage();
+    expect(shownMethods()).toEqual(["cod", "sslcommerz", "bkash"]);
+
+    (document.getElementById("payButton") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(shownMethods()).toEqual(["sslcommerz"]));
+
+    expect(document.getElementById("errorMsg")?.textContent).toBe(
+      "This payment method is not available. Choose another method.",
+    );
+    expect(document.getElementById("errorMsg")?.classList.contains("hidden")).toBe(false);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/checkout/tax-quote")).toHaveLength(2);
+  });
+
+  it("sends an order an app's rule refused back to the cart with the rules", async () => {
+    installPaymentPage("cod");
+    vi.stubGlobal("fetch", orderRefusingFetch({ reason: "cart_rules", ruleErrors: [appRule] }));
+    await initCheckoutPage();
+
+    (document.getElementById("payButton") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).not.toBeNull());
+    expect(window.location.href).toContain("/cart?checkoutIssues=1");
+    const repair = JSON.parse(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY) || "{}") as {
+      ruleErrors?: unknown[];
+    };
+    expect(repair.ruleErrors).toEqual([appRule]);
+  });
+});

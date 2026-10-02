@@ -40,6 +40,8 @@ import {
   fetchQuickCheckoutQuote,
   fetchQuickCheckoutRates,
 } from "@/lib/checkout/quick-checkout-server";
+import { overlayQuotedRates } from "@/lib/checkout/shipping-methods";
+import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -120,28 +122,47 @@ if (mode === "pickup") {
   ratesFailed = addressRates === null;
   rates = (addressRates ?? []).filter((rate) => rate.kind !== "pickup");
 }
-const rateId = mode === "none" ? "" : chooseQuickCheckoutRate(rates, form.shippingLocation);
+let rateId = mode === "none" ? "" : chooseQuickCheckoutRate(rates, form.shippingLocation);
 
 const customerSessionToken = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie"));
-const quoteInput = quickCheckoutQuoteInput(form, mode, rateId);
-const quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
+let quoteInput = quickCheckoutQuoteInput(form, mode, rateId);
+let quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
+// A store app hid the chosen option for this order: list the options it left
+// and price the first of them, once (the buyer reviews it before placing).
+if (quoteResult && !quoteResult.ok && quoteResult.reason === "rate" && quoteResult.shippingRates) {
+  const refused = rateId;
+  rates = overlayQuotedRates(rates, quoteResult.shippingRates.filter((rate) => rate.id !== refused));
+  rateId = chooseQuickCheckoutRate(rates, "");
+  quoteInput = quickCheckoutQuoteInput(form, mode, rateId);
+  quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
+}
 const quote = quoteResult?.ok ? quoteResult.quote : null;
+// The options as a store app left them on the quote: its order, names and fees.
+if (quote?.shippingRates) rates = overlayQuotedRates(rates, quote.shippingRates);
 
 // Settings → Customer accounts decides the contact fields (phone always).
 const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
 let errorMessage = "";
+/** A store app's own words for what blocks the order, listed under the message. */
+let ruleMessages: string[] = [];
 let fieldErrors: QuickCheckoutFieldError[] = [];
 if (quoteResult && !quoteResult.ok) {
-  errorMessage = quoteResult.reason === "items"
-    ? quoteResult.message || copy.cartItemChangedText
-    : quoteResult.reason === "rate"
-      ? copy.deliveryRequiredText
-      : quoteResult.reason === "location"
-        ? copy.cityZoneRequiredText
-        : copy.taxVerificationFailedText;
+  if (quoteResult.reason === "rules") {
+    errorMessage = copy.cartRulesBlockedText;
+    ruleMessages = quoteResult.ruleErrors.map(({ message }) => message).filter(Boolean);
+  } else {
+    errorMessage = quoteResult.reason === "items"
+      ? quoteResult.message || copy.cartItemChangedText
+      : quoteResult.reason === "rate"
+        ? copy.deliveryRequiredText
+        : quoteResult.reason === "location"
+          ? copy.cityZoneRequiredText
+          : copy.taxVerificationFailedText;
+  }
 }
 if (!codAvailable) {
   errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
+  ruleMessages = [];
 } else if (form.intent === "place" && !errorMessage) {
   fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH, contactFields.email);
   if (checkoutConfig.guestCheckoutEnabled === false && !customerSessionToken) {
@@ -171,12 +192,16 @@ if (!codAvailable) {
       return new Response(null, { status: 303, headers });
     }
     const resultError = "error" in result ? result.error : undefined;
+    const ruleErrors = cartRuleRefusal({ details: "details" in result ? result.details : undefined });
+    if (ruleErrors) ruleMessages = ruleErrors.map(({ message }) => message).filter(Boolean);
     errorMessage =
-      ("errorCode" in result && result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
-        ? copy.totalChangedReviewText
-        : typeof resultError === "string"
-          ? resultError
-          : resultError?.message) || copy.orderProcessingFailedText;
+      (ruleErrors
+        ? copy.cartRulesBlockedText
+        : "errorCode" in result && result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
+          ? copy.totalChangedReviewText
+          : typeof resultError === "string"
+            ? resultError
+            : resultError?.message) || copy.orderProcessingFailedText;
   }
 }
 
@@ -233,6 +258,11 @@ const secondaryButtonClass =
     {errorMessage && (
       <div class="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">
         {errorMessage}
+        {ruleMessages.length > 0 && (
+          <ul class="mt-1 list-disc space-y-0.5 pl-5 font-normal">
+            {ruleMessages.map((message) => <li>{message}</li>)}
+          </ul>
+        )}
       </div>
     )}
 
