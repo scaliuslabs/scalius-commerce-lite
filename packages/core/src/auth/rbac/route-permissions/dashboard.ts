@@ -1,4 +1,4 @@
-// Route permissions for the analytics, dashboard and search API.
+// Route permissions for the analytics integrations, dashboard, reports and search API.
 import { PERMISSIONS } from "../permissions";
 import type { RoutePermissionMap } from "./shared";
 
@@ -46,5 +46,18 @@ export const DASHBOARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/dashboard/*": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
+  // =============================================
+  // Analytics overview and reports (sales numbers). Reports naming customers
+  // also need customers.view, checked by the route.
+  // =============================================
+  "/api/v1/admin/reports": {
+    GET: { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
+  },
+  "/api/v1/admin/reports/*": {
+    GET: { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
+  },
+  "/api/v1/admin/reports/*/export": {
+    GET: { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
   },
 };

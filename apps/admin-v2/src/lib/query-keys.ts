@@ -31,6 +31,14 @@ export const queryKeys = {
     activity: () => ["dashboard", "activity"] as const,
   },
 
+  // ── Analytics overview and reports (sales numbers) ───────────────
+  reports: {
+    all: ["reports"] as const,
+    overview: (params: Record<string, unknown>) => ["reports", "overview", params] as const,
+    catalog: () => ["reports", "catalog"] as const,
+    report: (reportId: string, params: Record<string, unknown>) => ["reports", "report", reportId, params] as const,
+  },
+
   // ── Products ─────────────────────────────────────────────────────
   products: {
     all: ["products"] as const,
