@@ -13,7 +13,12 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { and, eq } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "../plugins/storefront";
+import {
+  activePluginInstallationsFromRows,
+  planPluginRenderStoreFacts,
+  selectActivePluginInstallations,
+  type PluginRenderStoreFacts,
+} from "../plugins/storefront";
 import type { PluginInstallation } from "../plugins/installations";
 
 export interface ProductAppContext {
@@ -21,12 +26,19 @@ export interface ProductAppContext {
   /** The published theme's product app blocks, in the merchant's order. */
   blocks: StorefrontProductAppBlock[];
   installations: Map<string, PluginInstallation>;
+  /** `ctx.store` for the apps that draw. */
+  store: PluginRenderStoreFacts;
 }
 
-/** Null when no public product has this slug (the part answers 404 and is never stored). */
+/**
+ * Null when no public product has this slug (the part answers 404 and is
+ * never stored). One batch whether or not the theme has app blocks: the
+ * store facts ride along so drawing adds no round trip.
+ */
 export async function readProductAppContext(db: Database, slug: string): Promise<ProductAppContext | null> {
   deps.theme();
-  const [themeRows, productRows, pluginRows] = await safeBatch(db, [
+  const facts = planPluginRenderStoreFacts(db);
+  const results = await safeBatch(db, [
     db.select({ value: themeSettings.colors }).from(themeSettings).where(eq(themeSettings.id, "default")).limit(1),
     db.select({ id: products.id, slug: products.slug, categoryId: products.categoryId, brandId: products.brandId })
       .from(products)
@@ -35,7 +47,9 @@ export async function readProductAppContext(db: Database, slug: string): Promise
       .limit(1),
     // Every active app (`plg:*`): which apps draw is decided per block below.
     selectActivePluginInstallations(db),
+    ...facts.statements,
   ]);
+  const [themeRows, productRows, pluginRows] = results;
   const product = (productRows as ProductAppContext["product"][])[0];
   if (!product) return null;
   deps.product(product.id);
@@ -44,5 +58,6 @@ export async function readProductAppContext(db: Database, slug: string): Promise
     product,
     blocks: theme.blocks.product.apps ?? [],
     installations: activePluginInstallationsFromRows(pluginRows as PluginInstallationRow[]),
+    store: await facts.resolve(results, 3),
   };
 }

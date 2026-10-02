@@ -27,28 +27,50 @@ export interface PluginRenderStoreFacts {
 /**
  * `ctx.store` for storefront renders, from exactly the rows whose keys the
  * render declares: the business, platform and currency documents and the
- * active checkout language (one batch).
+ * active checkout language. Two statements a caller puts into the batch it
+ * already sends, so drawing an app costs no round trip of its own.
  */
-export async function readPluginRenderStoreFacts(db: Database): Promise<PluginRenderStoreFacts> {
+export function planPluginRenderStoreFacts(db: Database) {
   deps.checkoutLanguages();
-  const [documentRows, languageRows] = await safeBatch(db, [
+  const statements = [
     selectSettingsDocuments(db, [businessDocument, platformDocument, currencyDocument]),
     db.select({ code: checkoutLanguages.code }).from(checkoutLanguages)
       .where(and(eq(checkoutLanguages.isActive, true), isNull(checkoutLanguages.deletedAt)))
       .limit(1),
-  ]);
-  const rows = documentRows as SettingsDocumentRow[];
-  const [business, platform, currency] = await Promise.all([
-    businessDocument.fromRows(rows),
-    platformDocument.fromRows(rows),
-    currencyDocument.fromRows(rows),
-  ]);
-  const language = checkoutLanguageBaseCode((languageRows as Array<{ code: string }>)[0]?.code) === "bn" ? "bn-BD" : "en";
+  ] as const;
   return {
-    name: storeDisplayName(business.value, platform.value.storefrontUrl) ?? "",
-    currency: currency.value.currencyCode,
-    decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
-    locale: language,
+    statements,
+    async resolve(results: readonly unknown[], offset: number): Promise<PluginRenderStoreFacts> {
+      const rows = results[offset] as SettingsDocumentRow[];
+      const [business, platform, currency] = await Promise.all([
+        businessDocument.fromRows(rows),
+        platformDocument.fromRows(rows),
+        currencyDocument.fromRows(rows),
+      ]);
+      const language = checkoutLanguageBaseCode((results[offset + 1] as Array<{ code: string }>)[0]?.code) === "bn" ? "bn-BD" : "en";
+      return {
+        name: storeDisplayName(business.value, platform.value.storefrontUrl) ?? "",
+        currency: currency.value.currencyCode,
+        decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
+        locale: language,
+      };
+    },
+  };
+}
+
+/**
+ * What drawing these apps' storefront output reads first, in one batch: the
+ * active installations of these ids (`plg:<id>` each) and the store facts.
+ */
+export async function readPluginRenderContext(db: Database, pluginIds: readonly string[]): Promise<{
+  installations: Map<string, PluginInstallation>;
+  store: PluginRenderStoreFacts;
+}> {
+  const facts = planPluginRenderStoreFacts(db);
+  const results = await safeBatch(db, [selectActivePluginInstallations(db, pluginIds), ...facts.statements]);
+  return {
+    installations: activePluginInstallationsFromRows(results[0] as PluginInstallationRow[]),
+    store: await facts.resolve(results, 1),
   };
 }
 

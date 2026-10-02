@@ -447,7 +447,7 @@ app.openapi(productAppsRoute, async (c) => {
     env: c.env,
     ctx: executionContextOf(c),
     db,
-    installations: context.installations,
+    context: { installations: context.installations, store: context.store },
   });
   const appOf = new Map(context.blocks.map((block) => [block.id, block.app]));
   return ok(c, {

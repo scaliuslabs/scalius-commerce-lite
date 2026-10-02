@@ -24,12 +24,10 @@
 import type { Database } from "@scalius/database/client";
 import { deps } from "@scalius/core/cache-deps";
 import {
-  activePluginInstallationsFromRows,
-  readPluginRenderStoreFacts,
-  selectActivePluginInstallations,
+  readPluginRenderContext,
   type PluginInstallation,
+  type PluginRenderStoreFacts,
 } from "@scalius/core/modules/plugins";
-import type { PluginInstallationRow } from "@scalius/database/schema";
 import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 import {
   EMPTY_PLUGIN_HEAD,
@@ -73,8 +71,11 @@ export interface AppSurfaceRenderOptions {
   env: Env;
   ctx: ExecutionContext;
   db: Database;
-  /** Active installations already read (product-apps reads them with the theme); else read here. */
-  installations?: Map<string, PluginInstallation>;
+  /**
+   * Active installations and store facts already read in the caller's batch
+   * (product-apps reads them with the theme); else read here, in one batch.
+   */
+  context?: { installations: Map<string, PluginInstallation>; store: PluginRenderStoreFacts };
   /** Test seam: replaces the loader choice. */
   loaderFor?: PluginHostOptions["loaderFor"];
   /** Test seam: observe each run. */
@@ -92,14 +93,6 @@ function surfaceOf(installation: PluginInstallation, request: AppSurfaceRequest)
   return block ? { route: block.route, reads: block.reads, settings: block.settings, placement: block.placement } : null;
 }
 
-/** Reads the active installations these requests name (one statement, declaring each `plg:<id>`). */
-export async function readRenderInstallations(db: Database, requests: readonly AppSurfaceRequest[]): Promise<Map<string, PluginInstallation>> {
-  const ids = [...new Set(requests.map((request) => request.pluginId))];
-  if (ids.length === 0) return new Map();
-  const rows = await selectActivePluginInstallations(db, ids);
-  return activePluginInstallationsFromRows(rows as PluginInstallationRow[]);
-}
-
 /**
  * Draws every placement, at most `PLUGIN_RENDER_CONCURRENCY` at once, and
  * returns those that drew something, in request order. Never throws for an
@@ -108,7 +101,8 @@ export async function readRenderInstallations(db: Database, requests: readonly A
  */
 export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], options: AppSurfaceRenderOptions): Promise<AppSurfaceRender[]> {
   if (requests.length === 0) return [];
-  const installations = options.installations ?? await readRenderInstallations(options.db, requests);
+  const { installations, store } = options.context
+    ?? await readPluginRenderContext(options.db, [...new Set(requests.map((request) => request.pluginId))]);
   for (const request of requests) deps.plugin(request.pluginId);
 
   // Placements whose app is active, approved for storefront surfaces and still declares the type.
@@ -129,14 +123,7 @@ export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], 
       ctx: options.ctx,
       db: options.db,
       ...(options.loaderFor ? { loaderFor: options.loaderFor } : {}),
-      store: async () => {
-        const facts = await readPluginRenderStoreFacts(options.db);
-        return {
-          ...facts,
-          url: options.env.STOREFRONT_URL?.trim() || null,
-          timezone: COMMERCE_TIME_ZONE,
-        };
-      },
+      store: async () => ({ ...store, url: options.env.STOREFRONT_URL?.trim() || null, timezone: COMMERCE_TIME_ZONE }),
     }));
     return host;
   };
