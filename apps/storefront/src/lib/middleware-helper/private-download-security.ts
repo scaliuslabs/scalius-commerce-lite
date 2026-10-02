@@ -13,11 +13,21 @@ export function isDigitalDownloadPathname(pathname: string): boolean {
 export function applyTransportSecurityHeaders(
   request: Request,
   response: Response,
-  options: { privateRelay: boolean },
+  options: {
+    privateRelay: boolean;
+    /**
+     * The response states who may frame it in its CSP frame-ancestors (a
+     * theme editor preview or its relay, framed by the dashboard), so no
+     * X-Frame-Options overrides that for older browsers.
+     */
+    framedByPolicy?: boolean;
+  },
 ): Response {
   const privateDownload = isDigitalDownloadPathname(new URL(request.url).pathname);
   const secured = applyBaselineSecurityHeaders(request, response, {
-    frameProtection: options.privateRelay || privateDownload ? "deny" : "same-origin",
+    frameProtection: options.framedByPolicy && !privateDownload
+      ? "preserve"
+      : options.privateRelay || privateDownload ? "deny" : "same-origin",
   });
   if (options.privateRelay || privateDownload) secured.headers.set("Referrer-Policy", "no-referrer");
   return secured;

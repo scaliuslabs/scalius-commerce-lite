@@ -31,6 +31,29 @@ describe("download stream security headers", () => {
     expect(response.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
+  it("lets only a theme preview the dashboard frames state its framing in CSP alone", () => {
+    const request = new Request("https://shop.example.test/");
+    const buyer = applyTransportSecurityHeaders(request, setPageCspHeader(page()), { privateRelay: false });
+    expect(buyer.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
+    expect(buyer.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'self'");
+    expect(buyer.headers.get("Content-Security-Policy")).not.toContain("admin.example.test");
+
+    const preview = applyTransportSecurityHeaders(
+      request,
+      setPageCspHeader(page(), {}, "", ["https://admin.example.test"]),
+      { privateRelay: false, framedByPolicy: true },
+    );
+    expect(preview.headers.get("X-Frame-Options")).toBeNull();
+    expect(preview.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'self' https://admin.example.test");
+    // A purchased file is never framed, whatever the request says.
+    const download = applyTransportSecurityHeaders(
+      new Request("https://shop.example.test/api/downloads/account/dge_1/1900000000/sig"),
+      stream(),
+      { privateRelay: false, framedByPolicy: true },
+    );
+    expect(download.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
   it("gives every other page the page CSP", () => {
     const response = secure("/account/downloads", page());
     const csp = response.headers.get("Content-Security-Policy") ?? "";

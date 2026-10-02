@@ -10,6 +10,7 @@ vi.mock("@/lib/api/transport", () => mocks);
 
 import { requestRuntime } from "@/lib/api/runtime";
 import { ALL, GET, POST } from "../../pages/theme-preview/continue";
+import { GET as EMBED_GET, POST as EMBED_POST } from "../../pages/theme-preview/embed";
 
 const CONTINUATION_CODE = `tpc_${"a".repeat(48)}`;
 const TOKEN = `tpv_${"b".repeat(48)}`;
@@ -177,6 +178,64 @@ describe("theme preview continuation route", () => {
       url: new URL(ROUTE_URL),
     } as never);
     expect(response.status).toBe(400);
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("theme editor embed continuation", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const embedContext = (origin = "https://storefront.example.test") => {
+    const url = "https://storefront.example.test/theme-preview/embed";
+    return {
+      request: new Request(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "Origin": origin },
+        body: new URLSearchParams({ continuationCode: CONTINUATION_CODE, path: "/", device: "full" }).toString(),
+      }),
+      url: new URL(url),
+    } as never;
+  };
+
+  it("serves a relay only the dashboard may frame, answering its parent window", async () => {
+    const response = await requestRuntime.run({
+      DASHBOARD_URL: "https://dashboard.example.test/admin",
+      PUBLIC_API_BASE_URL: "https://api.example.test",
+    }, () => EMBED_GET({} as never));
+    const html = await response.text();
+    expect(response.headers.get("Content-Security-Policy")).toContain("frame-ancestors https://dashboard.example.test");
+    expect(response.headers.get("X-Frame-Options")).toBeNull();
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(html).toContain("window.parent");
+    expect(html).not.toContain("window.opener");
+    // The API's agent flow opens tabs; it never frames the editor's relay.
+    expect(html).not.toContain("https://api.example.test");
+    expect(html).not.toContain(CONTINUATION_CODE);
+  });
+
+  it("is never framable without a dashboard origin", async () => {
+    const response = await EMBED_GET({} as never);
+    expect(response.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
+  it("sets a partitioned preview cookie and lands the frame on the page itself", async () => {
+    mocks.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { token: TOKEN, expiresAt: "2026-10-02T00:30:00.000Z" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const response = await EMBED_POST(embedContext());
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("https://storefront.example.test/");
+    const cookie = response.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toContain(TOKEN);
+    expect(cookie).toContain("SameSite=None");
+    expect(cookie).toContain("Partitioned");
+    expect(cookie).toContain("HttpOnly");
+  });
+
+  it("accepts the code only from the storefront's own origin", async () => {
+    await expect(EMBED_POST(embedContext("https://dashboard.example.test"))).resolves.toMatchObject({ status: 403 });
     expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../../../../..", import.meta.url));
 const VIRTUAL_MODULES: Record<string, string> = {
   "cloudflare:workers": "export const env = {}; export class WorkerEntrypoint {};",
   "astro:react:opts": "export default {};",
@@ -37,6 +38,7 @@ interface RuntimeModule {
 let server: ViteDevServer;
 let container: Container;
 let HomePage: unknown;
+let SectionPage: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -68,6 +70,7 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   HomePage = (await server.ssrLoadModule("/src/pages/index.astro")).default;
+  SectionPage = (await server.ssrLoadModule("/src/pages/theme-preview/section.astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -155,8 +158,12 @@ function sectionData() {
 
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 
-function layout(document: StorefrontThemeDocument) {
+/** The platform origins (Platform settings) every live store has; the baseline was captured without them. */
+const PLATFORM = { apiUrl: "https://api.shop.test", storefrontUrl: "https://shop.test", dashboardUrl: "https://admin.shop.test" };
+
+function layout(document: StorefrontThemeDocument, platform: boolean) {
   return {
+    ...(platform ? { platform: PLATFORM } : {}),
     analytics: [],
     navigation: [],
     footerMenus: [],
@@ -172,12 +179,14 @@ interface Api {
   document: StorefrontThemeDocument;
   /** The draft a valid preview token resolves to; without it every token is unknown. */
   preview?: StorefrontThemeDocument;
+  /** Platform origins in the layout (always with a preview). */
+  platform?: boolean;
 }
 
 function stubApi(api: Api) {
   const calls: string[] = [];
   const answer = (path: string): { status: number; body: string } => {
-    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout(api.document)) };
+    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout(api.document, api.platform === true || api.preview !== undefined)) };
     if (path === "/api/v1/storefront/homepage") {
       return { status: 200, body: envelope({ seo: { homepageTitle: null, homepageMetaDescription: null }, sections: sectionData() }) };
     }
@@ -238,6 +247,87 @@ describe("a buyer's homepage", () => {
   it("is byte-identical to the captured baseline for a fixed theme", async () => {
     const { response, html } = await renderPage(HomePage, { document: fixedTheme() });
     expect(response.status).toBe(200);
-    await expect(html).toMatchFileSnapshot("./__snapshots__/homepage-published.html");
+    // Dev-server module paths name this checkout: the snapshot names none.
+    await expect(html.replaceAll(root, "/@storefront/").replaceAll(repoRoot, "/@repo/")).toMatchFileSnapshot("./__snapshots__/homepage-published.html");
+  });
+});
+
+/** The page's layout statement (or a section unit's), as the bridge compares them. */
+const layoutOf = (html: string) => /data-theme-preview-layout="([^"]*)"/.exec(html)?.[1];
+const marked = (html: string) => [...html.matchAll(/ data-theme-section-id="([a-z0-9][a-z0-9_-]*)"/g)].map((match) => match[1]);
+
+describe("a theme preview of the homepage", () => {
+  it("marks every section and carries the bridge for the dashboard origin, only under a valid preview", async () => {
+    const buyer = await renderPage(HomePage, { document: fixedTheme() });
+    for (const marker of ["data-theme-section-id", "data-theme-preview-layout", "scalius-theme-preview", "admin.shop.test"]) {
+      expect(buyer.html).not.toContain(marker);
+    }
+
+    // A cookie the API does not know renders the published theme, unmarked.
+    const stale = await renderPage(HomePage, { document: fixedTheme(), platform: true }, { cookie: PREVIEW_COOKIE });
+    expect(stale.html).not.toContain("data-theme-section-id");
+    expect(stale.html).not.toContain("scalius-theme-preview");
+
+    const preview = await renderPage(HomePage, { document: fixedTheme(), preview: fixedTheme() }, { cookie: PREVIEW_COOKIE });
+    expect(preview.response.status).toBe(200);
+    expect(marked(preview.html)).toEqual(["hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo"]);
+    expect(layoutOf(preview.html)).toBeDefined();
+    // The bridge talks to the dashboard origin only; it names no token.
+    expect(preview.html).toContain("scalius-theme-preview");
+    expect(preview.html).toContain(JSON.stringify("https://admin.shop.test"));
+    expect(preview.html).not.toContain(PREVIEW_TOKEN);
+    expect(preview.response.headers.get("Cache-Control")).toContain("no-store");
+  });
+});
+
+describe("the preview section route", () => {
+  const sectionUrl = (id: string) => `https://shop.test/theme-preview/section?id=${id}`;
+  const draft = () => ({ document: fixedTheme(), preview: fixedTheme() });
+
+  it("refuses without a valid preview, and never lets a response be stored", async () => {
+    const anonymous = await renderPage(SectionPage, draft(), { url: sectionUrl("story") });
+    expect(anonymous.response.status).toBe(401);
+    expect(anonymous.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(anonymous.calls.some((call) => call.includes("theme-preview"))).toBe(false);
+
+    const stale = await renderPage(SectionPage, { document: fixedTheme() }, { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
+    expect(stale.response.status).toBe(401);
+    expect(stale.response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(stale.calls).not.toContain("/api/v1/storefront/theme-preview/homepage");
+
+    expect((await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("..%2Fx") })).response.status).toBe(400);
+    expect((await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("nope") })).response.status).toBe(404);
+  });
+
+  it("renders one section of the draft with the homepage's renderers and layout statement", async () => {
+    const page = await renderPage(HomePage, draft(), { cookie: PREVIEW_COOKIE });
+    const story = await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
+    expect(story.response.status).toBe(200);
+    expect(story.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(story.response.headers.get("X-Robots-Tag")).toContain("noindex");
+    expect(story.html).not.toContain("<html");
+    expect(story.html).toContain("data-theme-preview-unit");
+    expect(marked(story.html)).toEqual(["story"]);
+    expect(story.html).toContain("Our story");
+    // The same unit the page rendered, under the same layout statement.
+    expect(layoutOf(story.html)).toBe(layoutOf(page.html));
+    const unit = story.html.slice(story.html.indexOf("<div", story.html.indexOf("data-theme-preview-unit")), story.html.lastIndexOf("</div>"));
+    expect(unit.length).toBeGreaterThan(0);
+    expect(page.html).toContain(unit);
+    expect(story.calls).toContain("/api/v1/storefront/theme-preview/homepage");
+  });
+
+  it("renders a grouped banner's whole row, each banner marked", async () => {
+    const banner = await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("banner-b") });
+    expect(banner.response.status).toBe(200);
+    expect(marked(banner.html)).toEqual(["banner-a", "banner-b"]);
+  });
+
+  it("states another layout once a change moved the page", async () => {
+    const page = await renderPage(HomePage, draft(), { cookie: PREVIEW_COOKIE });
+    const document = fixedTheme();
+    const moved = { ...document, pages: { ...document.pages, home: [document.pages.home[6]!, ...document.pages.home.filter((_, index) => index !== 6)] } };
+    const story = await renderPage(SectionPage, { document, preview: moved }, { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
+    expect(layoutOf(story.html)).not.toBe(layoutOf(page.html));
   });
 });

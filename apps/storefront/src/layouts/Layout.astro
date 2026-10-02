@@ -12,6 +12,7 @@ import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
+  getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime";
@@ -24,6 +25,8 @@ import {
   buildOnlineStoreJsonLd,
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { themePreviewBridgeScript } from "@/lib/theme-preview-bridge";
+import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import {
   buildDocumentTitle,
   resolveStoreDisplayName,
@@ -102,6 +105,10 @@ const {
   preview: themePreview,
 } = await resolveRequestTheme(Astro, layoutData);
 const isThemePreview = themePreview !== null;
+// The theme editor's bridge, only under a valid preview: buyers never get it.
+const themeEditorBridge = isThemePreview
+  ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
+  : "";
 if (themePreviewToken) {
   Astro.response.headers.set(
     "Cache-Control",
@@ -571,6 +578,8 @@ if (!window.$RefreshReg$) {
     </script>
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    {themeEditorBridge && <script is:inline set:html={themeEditorBridge} />}
 
     {
       reactRefreshPreamble && (

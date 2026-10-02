@@ -165,6 +165,8 @@ export function setPageCspHeader(
   response: Response,
   origins: CspPlatformOrigins = {},
   merchantSources = "",
+  /** Origins besides the storefront that may frame the page (the dashboard, under a theme preview only). */
+  frameAncestors: readonly string[] = [],
 ): Response {
   const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
   const additionalDomains = merchantSources
@@ -190,7 +192,7 @@ export function setPageCspHeader(
     directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
     "base-uri 'self'",
     "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com",
-    "frame-ancestors 'self'",
+    ["frame-ancestors 'self'", ...frameAncestors].join(" "),
   ];
 
   response.headers.set(

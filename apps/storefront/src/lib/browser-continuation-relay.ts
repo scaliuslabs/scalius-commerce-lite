@@ -2,7 +2,10 @@ const RELAY_PATHS = new Set([
   "/checkout/continue",
   "/agent/continue",
   "/theme-preview/continue",
+  "/theme-preview/embed",
 ]);
+/** Relays a parent window frames (the theme editor): they set their own frame-ancestors. */
+const FRAMED_RELAY_PATHS = new Set(["/theme-preview/embed"]);
 const READY_MESSAGE = "scalius-continuation-ready-v1";
 const FIELDS_MESSAGE = "scalius-continuation-fields-v1";
 const ACCEPTED_MESSAGE = "scalius-continuation-accepted-v1";
@@ -29,6 +32,10 @@ export function isBrowserContinuationRelayPathname(pathname: string): boolean {
   return RELAY_PATHS.has(pathname);
 }
 
+export function isFramedBrowserContinuationRelayPathname(pathname: string): boolean {
+  return FRAMED_RELAY_PATHS.has(pathname);
+}
+
 const PRIVATE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
   "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
@@ -51,9 +58,17 @@ function scriptJson(value: unknown): string {
 export function browserContinuationRelayResponse(
   fields: readonly BrowserContinuationRelayField[],
   additionalParentOrigins: readonly string[] = [],
+  options: {
+    /** The relay runs in a frame and answers its parent (else its opener). */
+    parent?: boolean;
+    /** Origins that may frame the relay (with `parent`); none frames it otherwise. */
+    frameAncestors?: readonly string[];
+  } = {},
 ): Response {
   const spec = scriptJson(fields);
   const allowed = scriptJson(additionalParentOrigins);
+  const peer = options.parent ? "window.parent" : "window.opener";
+  const framed = options.parent === true && (options.frameAncestors?.length ?? 0) > 0;
   const script = `(() => {
   const fail = () => { document.body.textContent = "This secure continuation is invalid or expired."; };
   const trustedParentOrigin = (rawOrigin) => {
@@ -66,7 +81,7 @@ export function browserContinuationRelayResponse(
     } catch { return false; }
   };
   const receive = async (event) => {
-    if (event.source !== window.opener || !trustedParentOrigin(event.origin)) return;
+    if (event.source !== PEER() || !trustedParentOrigin(event.origin)) return;
     const message = event.data;
     if (!message || typeof message !== "object" || message.type !== ${scriptJson(FIELDS_MESSAGE)}) return;
     try {
@@ -92,21 +107,24 @@ export function browserContinuationRelayResponse(
       });
       const destination = new URL(response.url);
       if (!response.ok || !response.redirected || destination.origin !== window.location.origin) return fail();
-      window.opener.postMessage({ type: ${scriptJson(ACCEPTED_MESSAGE)} }, event.origin);
+      PEER().postMessage({ type: ${scriptJson(ACCEPTED_MESSAGE)} }, event.origin);
       window.removeEventListener("message", receive);
       window.location.replace(destination.toString());
     } catch { fail(); }
   };
-  if (!window.opener) return fail();
+  if (!PEER() || PEER() === window) return fail();
   window.addEventListener("message", receive);
-  window.opener.postMessage({ type: ${scriptJson(READY_MESSAGE)} }, "*");
-})();`;
+  PEER().postMessage({ type: ${scriptJson(READY_MESSAGE)} }, "*");
+})();`.replace(/PEER\(\)/g, peer);
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow,noarchive"><title>Continue securely</title></head><body><noscript>JavaScript is required to continue securely.</noscript><script>${script}</script></body></html>`;
-  return new Response(html, {
-    status: 200,
-    headers: {
-      ...PRIVATE_HEADERS,
-      "Content-Type": "text/html; charset=utf-8",
-    },
-  });
+  const headers = new Headers({ ...PRIVATE_HEADERS, "Content-Type": "text/html; charset=utf-8" });
+  if (framed) {
+    // Only the listed origins may frame it; frame-ancestors governs, so no X-Frame-Options.
+    headers.set("Content-Security-Policy", PRIVATE_HEADERS["Content-Security-Policy"].replace(
+      "frame-ancestors 'none'",
+      `frame-ancestors ${options.frameAncestors!.join(" ")}`,
+    ));
+    headers.delete("X-Frame-Options");
+  }
+  return new Response(html, { status: 200, headers });
 }
