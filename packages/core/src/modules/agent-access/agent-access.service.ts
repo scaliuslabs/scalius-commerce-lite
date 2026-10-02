@@ -15,7 +15,8 @@ import {
   agentStorefrontOrderGrants,
   user,
 } from "@scalius/database/schema";
-import { getAllPermissionNames, isSensitivePermission } from "../../auth/rbac/permissions";
+import { getAllPermissionNames } from "../../auth/rbac/permissions";
+import { isSensitivePermission } from "../../auth/rbac/permission-metadata";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
 
 export type AgentResource = "dashboard" | "storefront";

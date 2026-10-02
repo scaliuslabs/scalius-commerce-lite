@@ -25,7 +25,7 @@ import {
   type PluginEventDeliveryView,
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
-import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permissions";
+import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permission-metadata";
 import {
   PLUGIN_ADMIN_TARGETS,
   PLUGIN_ID_PATTERN,
