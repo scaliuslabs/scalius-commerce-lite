@@ -89,9 +89,10 @@ describe("a Paid deploy's generated config", () => {
     expect(jobs).toMatchObject({ queue: "jobs", max_batch_size: PLAN_LIMITS.paid.queue.consumerBatchSize, max_retries: 5, dead_letter_queue: "jobs-dlq" });
     expect(dlq).toMatchObject({ queue: "jobs-dlq", max_batch_size: PLAN_LIMITS.paid.queue.dlqBatchSize });
     // Nothing else moved: bindings, routes, assets, crons.
-    const { limits: _limits, define: _define, queues: _queues, ...rest } = paid;
-    const { queues: _baseQueues, ...baseRest } = base;
-    expect(rest).toEqual(baseRest);
+    const withoutProfile = (config) => Object.fromEntries(
+      Object.entries(config).filter(([key]) => !["limits", "define", "queues"].includes(key)),
+    );
+    expect(withoutProfile(paid)).toEqual(withoutProfile(base));
     expect(paid.queues.producers).toEqual(base.queues.producers);
   });
 

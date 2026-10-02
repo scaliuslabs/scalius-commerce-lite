@@ -216,7 +216,7 @@ function vitest(file, env) {
 function main(argv) {
   const options = parseArgs(argv);
   const scratch = mkdtempSync(join(tmpdir(), "scalius-free-plan-"));
-  let status = 0;
+  let status;
   try {
     const reportPath = join(scratch, "report.json");
     status = vitest("apps/api/src/free-plan-budget.test.ts", {
