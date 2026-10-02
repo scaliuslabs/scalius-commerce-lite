@@ -61,10 +61,10 @@ import { Route as AdminProductsNewRouteImport } from './routes/admin/products/ne
 import { Route as AdminReviewsIndexRouteImport } from './routes/admin/reviews/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminSettingsAdvancedRouteImport } from './routes/admin/settings/advanced'
-import { Route as AdminSettingsAppsRouteImport } from './routes/admin/settings/apps'
 import { Route as AdminSettingsCheckoutRouteImport } from './routes/admin/settings/checkout'
 import { Route as AdminSettingsCustomDataRouteImport } from './routes/admin/settings/custom-data'
 import { Route as AdminSettingsCustomerAccountsRouteImport } from './routes/admin/settings/customer-accounts'
+import { Route as AdminSettingsIntegrationsRouteImport } from './routes/admin/settings/integrations'
 import { Route as AdminSettingsLocationsRouteImport } from './routes/admin/settings/locations'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsPaymentsRouteImport } from './routes/admin/settings/payments'
@@ -361,11 +361,6 @@ const AdminSettingsAdvancedRoute = AdminSettingsAdvancedRouteImport.update({
   path: '/advanced',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
-const AdminSettingsAppsRoute = AdminSettingsAppsRouteImport.update({
-  id: '/apps',
-  path: '/apps',
-  getParentRoute: () => AdminSettingsRouteRoute,
-} as any)
 const AdminSettingsCheckoutRoute = AdminSettingsCheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -380,6 +375,12 @@ const AdminSettingsCustomerAccountsRoute =
   AdminSettingsCustomerAccountsRouteImport.update({
     id: '/customer-accounts',
     path: '/customer-accounts',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
+const AdminSettingsIntegrationsRoute =
+  AdminSettingsIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
 const AdminSettingsLocationsRoute = AdminSettingsLocationsRouteImport.update({
@@ -594,10 +595,10 @@ export interface FileRoutesByFullPath {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
-  '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
@@ -680,10 +681,10 @@ export interface FileRoutesByTo {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
-  '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
@@ -770,10 +771,10 @@ export interface FileRoutesById {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
-  '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
@@ -861,10 +862,10 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/products/new'
     | '/admin/settings/advanced'
-    | '/admin/settings/apps'
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
@@ -947,10 +948,10 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/products/new'
     | '/admin/settings/advanced'
-    | '/admin/settings/apps'
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
@@ -1036,10 +1037,10 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/products/new'
     | '/admin/settings/advanced'
-    | '/admin/settings/apps'
     | '/admin/settings/checkout'
     | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/integrations'
     | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
@@ -1464,13 +1465,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAdvancedRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
-    '/admin/settings/apps': {
-      id: '/admin/settings/apps'
-      path: '/apps'
-      fullPath: '/admin/settings/apps'
-      preLoaderRoute: typeof AdminSettingsAppsRouteImport
-      parentRoute: typeof AdminSettingsRouteRoute
-    }
     '/admin/settings/checkout': {
       id: '/admin/settings/checkout'
       path: '/checkout'
@@ -1490,6 +1484,13 @@ declare module '@tanstack/react-router' {
       path: '/customer-accounts'
       fullPath: '/admin/settings/customer-accounts'
       preLoaderRoute: typeof AdminSettingsCustomerAccountsRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
+    '/admin/settings/integrations': {
+      id: '/admin/settings/integrations'
+      path: '/integrations'
+      fullPath: '/admin/settings/integrations'
+      preLoaderRoute: typeof AdminSettingsIntegrationsRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
     '/admin/settings/locations': {
@@ -1714,10 +1715,10 @@ declare module '@tanstack/react-router' {
 
 interface AdminSettingsRouteRouteChildren {
   AdminSettingsAdvancedRoute: typeof AdminSettingsAdvancedRoute
-  AdminSettingsAppsRoute: typeof AdminSettingsAppsRoute
   AdminSettingsCheckoutRoute: typeof AdminSettingsCheckoutRoute
   AdminSettingsCustomDataRoute: typeof AdminSettingsCustomDataRoute
   AdminSettingsCustomerAccountsRoute: typeof AdminSettingsCustomerAccountsRoute
+  AdminSettingsIntegrationsRoute: typeof AdminSettingsIntegrationsRoute
   AdminSettingsLocationsRoute: typeof AdminSettingsLocationsRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsPaymentsRoute: typeof AdminSettingsPaymentsRoute
@@ -1739,10 +1740,10 @@ interface AdminSettingsRouteRouteChildren {
 
 const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsAdvancedRoute: AdminSettingsAdvancedRoute,
-  AdminSettingsAppsRoute: AdminSettingsAppsRoute,
   AdminSettingsCheckoutRoute: AdminSettingsCheckoutRoute,
   AdminSettingsCustomDataRoute: AdminSettingsCustomDataRoute,
   AdminSettingsCustomerAccountsRoute: AdminSettingsCustomerAccountsRoute,
+  AdminSettingsIntegrationsRoute: AdminSettingsIntegrationsRoute,
   AdminSettingsLocationsRoute: AdminSettingsLocationsRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsPaymentsRoute: AdminSettingsPaymentsRoute,

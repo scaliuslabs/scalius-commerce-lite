@@ -57,7 +57,7 @@ export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger
         {notConnected ? (
           <p className="text-body text-muted-foreground">
             {t("fraudNotConnected")}{" "}
-            <Link to="/admin/settings/apps" className="text-link hover:underline">
+            <Link to="/admin/settings/integrations" className="text-link hover:underline">
               {t("fraudSettingsLink")}
             </Link>
           </p>

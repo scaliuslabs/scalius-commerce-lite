@@ -34,7 +34,7 @@ export const SETTINGS_NAV = [
   { key: "shipping", to: "/admin/settings/shipping", icon: Truck, group: "selling" },
   { key: "taxes", to: "/admin/settings/taxes", icon: Receipt, group: "selling" },
   { key: "locations", to: "/admin/settings/locations", icon: MapPin, group: "general" },
-  { key: "apps", to: "/admin/settings/apps", icon: Blocks, group: "more" },
+  { key: "integrations", to: "/admin/settings/integrations", icon: Blocks, group: "more" },
   { key: "notifications", to: "/admin/settings/notifications", icon: Bell, group: "customers" },
   { key: "webhooks", to: "/admin/settings/webhooks", icon: Webhook, group: "more" },
   { key: "customData", to: "/admin/settings/custom-data", icon: Database, group: "more" },

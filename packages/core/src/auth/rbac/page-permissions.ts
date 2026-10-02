@@ -23,7 +23,7 @@ const SHIPPING_PAGE_PERMISSIONS = [
   PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
   PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
 ] as const;
-const APPS_PAGE_PERMISSIONS = [
+const INTEGRATIONS_PAGE_PERMISSIONS = [
   PERMISSIONS.ANALYTICS_VIEW,
   PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
   PERMISSIONS.AGENT_ACCESS_VIEW,
@@ -38,7 +38,7 @@ const SETTINGS_PAGE_PERMISSIONS = [
   PERMISSIONS.PRODUCTS_VIEW,
   ...TEAM_PAGE_PERMISSIONS,
   ...SHIPPING_PAGE_PERMISSIONS,
-  ...APPS_PAGE_PERMISSIONS,
+  ...INTEGRATIONS_PAGE_PERMISSIONS,
 ] as const;
 
 // Admin page route to permission mapping.
@@ -145,7 +145,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/policies": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/custom-data": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/warranty-policies": { permission: PERMISSIONS.PRODUCTS_EDIT },
-  "/admin/settings/apps": { anyOf: [...APPS_PAGE_PERMISSIONS] },
+  "/admin/settings/integrations": { anyOf: [...INTEGRATIONS_PAGE_PERMISSIONS] },
   "/admin/settings/webhooks": { permission: PERMISSIONS.WEBHOOKS_VIEW },
   "/admin/settings/customer-accounts": {
     permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,

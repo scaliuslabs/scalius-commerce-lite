@@ -14,7 +14,7 @@ import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud
 import { aiAccessQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
-export const Route = createFileRoute("/admin/settings/apps")({
+export const Route = createFileRoute("/admin/settings/integrations")({
   // Cards hide themselves for roles that can't view them; a refused read is fine here.
   loader: ({ context: { queryClient } }) =>
     Promise.allSettled([
@@ -23,9 +23,9 @@ export const Route = createFileRoute("/admin/settings/apps")({
       queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
       queryClient.ensureQueryData(aiAccessQuery),
     ]),
-  head: () => settingsHead("apps"),
+  head: () => settingsHead("integrations"),
   errorComponent: RouteErrorComponent,
-  component: AppsPage,
+  component: IntegrationsPage,
 });
 
 const EDIT_PERMISSIONS = [
@@ -37,10 +37,10 @@ const EDIT_PERMISSIONS = [
   ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE,
 ];
 
-function AppsPage() {
+function IntegrationsPage() {
   const { hasPermission } = usePermissions();
   return (
-    <SettingsPage page="apps" readOnly={!EDIT_PERMISSIONS.some(hasPermission)}>
+    <SettingsPage page="integrations" readOnly={!EDIT_PERMISSIONS.some(hasPermission)}>
       <TrackingCard />
       <FacebookCard />
       <FraudCheckCard />

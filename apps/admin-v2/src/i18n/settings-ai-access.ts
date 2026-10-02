@@ -93,7 +93,7 @@ export const aiAccessMessages = defineMessages({
     replaceBody: "The old key stops working right away. Anything using it needs the new key.",
     replaceFailed: "Couldn't replace the key. Nothing changed. Try again.",
 
-    backToApps: "Back to apps",
+    backToIntegrations: "Back to integrations",
     approveTitle: "Connect {name} to your store?",
     approveUnnamed: "this AI assistant",
     returnsTo: "You'll go back to {site} after you choose.",
@@ -215,7 +215,7 @@ export const aiAccessMessages = defineMessages({
     replaceBody: "পুরোনো কী সঙ্গে সঙ্গে কাজ বন্ধ করবে। যা এটি ব্যবহার করছে, সেখানে নতুন কী লাগবে।",
     replaceFailed: "কী বদলানো যায়নি। কিছু বদলায়নি। আবার চেষ্টা করুন।",
 
-    backToApps: "অ্যাপসে ফিরে যান",
+    backToIntegrations: "ইন্টিগ্রেশনে ফিরে যান",
     approveTitle: "{name} আপনার স্টোরে যুক্ত করবেন?",
     approveUnnamed: "এই AI অ্যাসিস্ট্যান্ট",
     returnsTo: "বেছে নেওয়ার পর আপনি {site}-এ ফিরে যাবেন।",

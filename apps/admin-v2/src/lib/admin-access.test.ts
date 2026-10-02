@@ -127,7 +127,7 @@ describe("admin shell access", () => {
       "/admin/settings/store",
       "/admin/settings/users",
       "/admin/settings/shipping",
-      "/admin/settings/apps",
+      "/admin/settings/integrations",
       "/admin/settings/taxes",
       "/admin/experimental",
     ];
