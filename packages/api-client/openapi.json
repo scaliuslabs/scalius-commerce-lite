@@ -173517,7 +173517,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "write",
+          "risk": "security",
           "openWorld": false,
           "idempotency": "none",
           "revision": "required",
