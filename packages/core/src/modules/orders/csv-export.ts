@@ -78,7 +78,11 @@ function row(values: unknown[]): string {
   return values.map(spreadsheetSafeCsvCell).join(",");
 }
 
-function createCsvArtifactBuilder<T>(
+/**
+ * A byte-capped, spreadsheet-safe CSV: UTF-8 BOM, every cell quoted and
+ * formula-escaped. Shared by the order, payment-recovery and report exports.
+ */
+export function createCsvArtifactBuilder<T>(
   headers: string[],
   values: (order: T) => unknown[][],
   maxBytes: number,
