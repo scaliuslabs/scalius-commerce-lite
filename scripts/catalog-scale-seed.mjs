@@ -199,7 +199,6 @@ const insOptionDef = insert(`INSERT INTO product_option_definitions (id, product
 const insOptionValue = insert(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
 const insVariant = insert(`INSERT INTO product_variants (id, product_id, option_combination_key, image_id, weight, sku, price_minor, stock, reserved_stock, preorder_stock, is_default, track_inventory, version, stock_version, low_stock_threshold, discount_bps, discount_type, discount_amount_minor, barcode, barcode_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 1, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?)`);
 const insVariantOption = insert(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)`);
-const insMovement = insert(`INSERT INTO inventory_movements (id, variant_id, order_id, type, quantity, previous_stock, new_stock, notes, created_by, ledger_version, pool, reservation_generation, stock_version_before, stock_version_after, stock_delta, previous_reserved_stock, new_reserved_stock, reserved_stock_delta, previous_preorder_stock, new_preorder_stock, preorder_stock_delta, created_at) VALUES (?, ?, NULL, 'adjusted', ?, 0, ?, 'Stocktake: catalog-scale seed', NULL, 2, 'regular', NULL, 1, 2, ?, 0, 0, 0, 0, 0, 0, ?)`);
 const insAttrValue = insert(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value, created_at) VALUES (?, ?, ?, ?, ?)`);
 const insCollection = insert(`INSERT INTO collections (id, name, description, presentation, config, sort_order, is_active, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`);
 const insCustomer = insert(`INSERT INTO customers (id, name, email, phone, address, city, city_name, total_orders, last_order_at, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'order', ?, ?)`);
@@ -277,7 +276,7 @@ log(`brands: ${brandIds.size}; attributes: ${attributes.size} (Brand has ${brand
 
 // ---------------------------------------------------------------- products
 const publishedCategories = categories.filter((category) => category.status === "published");
-const stats = { products: 0, simple: 0, optioned: 0, variants: 0, media: 0, movements: 0, attributeValues: 0 };
+const stats = { products: 0, simple: 0, optioned: 0, variants: 0, media: 0, attributeValues: 0 };
 const productRows = [];
 let barcodeSerial = 1;
 const BATCH = 1000;
@@ -362,21 +361,17 @@ function seedProduct(index) {
     stats.attributeValues += 1;
   }
 
-  const stockFor = (variantId, trackInventory, stock) => {
-    if (!trackInventory || stock <= 0) return;
-    insMovement.run(`mov_scale_${variantId.slice(4)}`, variantId, stock, stock, stock, createdAt);
-    stats.movements += 1;
-  };
-
+  // A SKU inserted with stock holds it at the default location (migration
+  // 0102's SKU-insert trigger books the level once), so the seed writes no
+  // stocktake movement and the SKU keeps its first stock version.
   if (!optioned) {
     const variantId = `var_scale_${pad(index, 6)}_d`;
     const trackInventory = chance(0.85) ? 1 : 0;
     const stock = trackInventory ? (chance(0.12) ? 0 : int(1, 250)) : 0;
     const barcode = chance(0.5) ? ean13(barcodeSerial++) : null;
     insVariant.run(variantId, id, null, null, chance(0.6) ? Number((rand() * 5).toFixed(2)) : null,
-      `SC-${pad(index, 6)}`, priceMinor, stock, 1, trackInventory, stock > 0 ? 2 : 1, chance(0.3) ? 5 : null,
+      `SC-${pad(index, 6)}`, priceMinor, stock, 1, trackInventory, 1, chance(0.3) ? 5 : null,
       0, barcode, barcode ? "ean13" : null, createdAt, updatedAt);
-    stockFor(variantId, trackInventory, stock);
     stats.simple += 1;
     stats.variants += 1;
     return;
@@ -404,10 +399,9 @@ function seedProduct(index) {
     const imageId = productMediaIds.length > 1 && chance(0.4) ? productMediaIds[comboIndex % productMediaIds.length] : null;
     insVariant.run(variantId, id, selected.join("|"), imageId, null,
       `SC-${pad(index, 6)}-${combo.map((value) => slugify(value).toUpperCase()).join("-")}`,
-      variantPrices[comboIndex] * 100, stock, 0, trackInventory, stock > 0 ? 2 : 1, null,
+      variantPrices[comboIndex] * 100, stock, 0, trackInventory, 1, null,
       chance(0.2) ? pick([500, 1000]) : 0, barcode, barcode ? "ean13" : null, createdAt, updatedAt);
     selected.forEach((valueId, axisIndex) => insVariantOption.run(variantId, definitionIds[axisIndex], valueId));
-    stockFor(variantId, trackInventory, stock);
     stats.variants += 1;
   });
   stats.optioned += 1;

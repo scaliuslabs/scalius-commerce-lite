@@ -38,6 +38,7 @@ import { resolveDigitalDeliveryContent } from "./notification-content/digital";
 import { resolveGiftCardIssuedContent, resolveGiftCardSentContent } from "./notification-content/gift-card";
 import { resolveReviewRequestContent } from "./notification-content/review-request";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
+import { sendMarketingOptInEmail } from "@scalius/core/modules/customer-marketing";
 import { logOpsEvent } from "./utils/ops-log";
 
 type Db = ReturnType<typeof getDb>;
@@ -363,6 +364,23 @@ async function dispatchClaimedNotification(
       data: claim.data,
     });
     return failures.length > 0 ? { kind: "retry", failures } : { kind: "done" };
+  }
+
+  if (claim.subjectType === "customer") {
+    if (claim.notificationType !== "marketing_opt_in") {
+      return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
+    }
+    // The double opt-in confirmation: the token is derived here from the
+    // row's nonce and SCALIUS_SECRET; it never sits in the outbox or a log.
+    return fromDispatch(await sendMarketingOptInEmail(db, {
+      outboxId: claim.outboxId,
+      customerId: claim.subjectId,
+      data: claim.data,
+    }, {
+      env: env as never,
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      storefrontUrl: env.STOREFRONT_URL,
+    }));
   }
 
   if (claim.subjectType === "conversation") {

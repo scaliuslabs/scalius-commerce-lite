@@ -13,6 +13,7 @@ const PUBLIC_PREFIXES = [
   "/api/v1/customer-auth",
   "/api/v1/discounts",
   "/api/v1/locations",
+  "/api/v1/marketing",
   "/api/v1/media",
   "/api/v1/meta",
   "/api/v1/navigation",

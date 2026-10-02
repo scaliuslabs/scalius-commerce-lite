@@ -23,7 +23,7 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
     matchesPrefix(pathname, `/api/v1/${segment}`)
   )) return "content";
   if (
-    ["discounts", "analytics", "meta", "customer-auth", "abandoned-checkouts", "orders"]
+    ["discounts", "analytics", "meta", "customer-auth", "abandoned-checkouts", "orders", "marketing"]
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "buyer";
   return null;

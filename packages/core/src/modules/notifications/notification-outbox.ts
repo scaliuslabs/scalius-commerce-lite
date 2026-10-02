@@ -10,7 +10,7 @@ import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import type {
     NotificationAudience,
     NotificationSubjectType,
-    NotificationType,
+    OutboxNotificationType,
 } from "./notification-types";
 
 export type NotificationOutboxStatus =
@@ -44,7 +44,7 @@ export interface NotificationInput {
     subjectType: NotificationSubjectType;
     subjectId: string;
     audience: NotificationAudience;
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     dedupeKey: string;
     source: string;
     data?: Record<string, unknown>;
@@ -58,7 +58,7 @@ export interface NotificationInput {
 
 /** What the outbox row stores as its payload. */
 export interface NotificationPayload {
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     data?: NotificationData;
 }
 
@@ -90,7 +90,7 @@ export interface ClaimedNotificationOutbox {
     subjectType: NotificationSubjectType;
     subjectId: string;
     audience: NotificationAudience;
-    notificationType: NotificationType;
+    notificationType: OutboxNotificationType;
     data: NotificationData;
 }
 
@@ -158,7 +158,7 @@ export function parseNotificationPayload(payload: string, fallbackType: string):
         parsed = {};
     }
     const record = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
-    const notificationType = (typeof record.notificationType === "string" ? record.notificationType : fallbackType) as NotificationType;
+    const notificationType = (typeof record.notificationType === "string" ? record.notificationType : fallbackType) as OutboxNotificationType;
     const data = sanitizeNotificationData(record.data as Record<string, unknown> | undefined);
     return { notificationType, ...(data ? { data } : {}) };
 }
@@ -454,7 +454,7 @@ export async function claimNotificationOutboxForProcessing(
             subjectType: row.subjectType,
             subjectId: row.subjectId,
             audience: row.audience,
-            notificationType: row.notificationType as NotificationType,
+            notificationType: row.notificationType as OutboxNotificationType,
             data: payload.data ?? {},
         };
     }

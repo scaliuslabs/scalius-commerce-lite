@@ -301,6 +301,7 @@ export const webhookTopicMessages = defineMessages<EventTopicFilter>({
     "inventory.level_changed": "Stock level changed",
     "customer.created": "Customer created",
     "customer.updated": "Customer updated",
+    "customer.consent_changed": "Marketing consent changed",
   },
   bn: {
     "*": "সব ইভেন্ট",
@@ -322,5 +323,6 @@ export const webhookTopicMessages = defineMessages<EventTopicFilter>({
     "inventory.level_changed": "স্টকের পরিমাণ বদলেছে",
     "customer.created": "কাস্টমার যোগ হয়েছে",
     "customer.updated": "কাস্টমার আপডেট হয়েছে",
+    "customer.consent_changed": "মার্কেটিং সম্মতি বদলেছে",
   },
 });

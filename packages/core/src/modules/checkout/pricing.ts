@@ -58,6 +58,8 @@ export interface StorefrontCheckoutPricingInput {
   delivery: CheckoutPricingDelivery;
   discountCodes: readonly string[];
   customerId?: string | null;
+  /** The signed-in account whose segments may unlock segment-limited promotions (never a guest). */
+  segmentCustomerId?: string | null;
   customerPhone?: string | null;
   currency: { code: string; decimalPlaces: number };
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
@@ -158,6 +160,7 @@ export async function priceStorefrontCheckout(
     const discount = await quoteStorefrontDiscount(db, {
       codes: [...input.discountCodes],
       customerId: input.customerId,
+      segmentCustomerId: input.segmentCustomerId ?? null,
       customerPhone: input.customerPhone,
       cart: {
         currencyCode: currency.code,

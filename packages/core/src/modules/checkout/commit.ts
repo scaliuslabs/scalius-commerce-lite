@@ -838,7 +838,11 @@ export async function commitStorefrontOrderPayload(
         ]);
         reads = undefined;
         const appliedPromotion = payload.promotion
-            ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, customer.id)
+            ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, {
+                customerId: customer.id,
+                // The account the checkout was prepared for, never a record matched by contact.
+                segmentCustomerId: payload.existingCustomer?.id ?? null,
+            })
             : null;
 
         const checkoutAttemptPlan = checkoutCommit

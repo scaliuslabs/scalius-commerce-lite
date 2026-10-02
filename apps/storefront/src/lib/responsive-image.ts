@@ -53,6 +53,18 @@ export function responsiveImageSources(
   return { src, srcset, sizes: slot.sizes };
 }
 
+/**
+ * A card's hover photo from its CDN URL: the 480px rendition as `src` and
+ * every rendition up to the card's cap (`maxWidth`, the photo's own) as
+ * `srcset`; plain `src` for images without renditions. The card names only
+ * the URL, and its intent script builds these, so the HTML never carries a
+ * second rendition list per card.
+ */
+export function hoverImageSources(url: string, maxWidth?: number): { src: string; srcset?: string } {
+  const all = mediaImageSrcSet(url) || undefined;
+  return { src: mediaImageUrl(url, 480), srcset: maxWidth ? capImageSrcSet(all, maxWidth) : all };
+}
+
 /** Screens at or above this density are asked for about 2x, not 3x, pixels. */
 const DENSITY_CAP_MEDIA = "(min-resolution: 2.5dppx)";
 /** 3 x 0.666 = 1.998: just under 2x, so a slot never rounds past a ladder step. */
@@ -138,5 +150,32 @@ export function capSizesDensity(sizes: string): string {
     const media = condition ? `${DENSITY_CAP_MEDIA} and ${condition}` : DENSITY_CAP_MEDIA;
     return `${media} ${scaledLength(length, Number(DENSITY_CAP_SCALE))}`;
   });
+  return [...capped, ...entries].join(", ");
+}
+
+/** The widest viewport the card photos' density cap covers: phones (below Tailwind's `sm`). */
+export const PHONE_DENSITY_CAP_MAX_VIEWPORT_PX = 639;
+
+/**
+ * `capSizesDensity` for phones only, for the photos repeated on every card:
+ * the capped copies stop at `maxViewportPx`, so a listing does not repeat
+ * every desktop step twice on every card. DPR 2.5+ screens wider than that
+ * (rare: some tablets and foldables) choose at their full density, still
+ * bounded by the card's capped `srcset`. `sizes` whose conditions are not
+ * plain `(max-width: Npx)` steps get the full cap.
+ */
+export function capPhoneSizesDensity(sizes: string, maxViewportPx = PHONE_DENSITY_CAP_MAX_VIEWPORT_PX): string {
+  const entries = splitTopLevel(sizes);
+  const capped: string[] = [];
+  let covered = 0;
+  for (const entry of entries) {
+    if (covered >= maxViewportPx) break;
+    const { condition, length } = splitSizesEntry(entry);
+    const max = condition === null ? null : /^\(max-width: (\d+)px\)$/.exec(condition)?.[1];
+    if (max === undefined) return capSizesDensity(sizes);
+    const until = max === null ? maxViewportPx : Math.min(Number(max), maxViewportPx);
+    capped.push(`${DENSITY_CAP_MEDIA} and (max-width: ${until}px) ${scaledLength(length, Number(DENSITY_CAP_SCALE))}`);
+    covered = until;
+  }
   return [...capped, ...entries].join(", ");
 }

@@ -30,6 +30,7 @@ export const EVENT_TOPICS = [
   "inventory.level_changed",
   "customer.created",
   "customer.updated",
+  "customer.consent_changed",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -52,6 +53,7 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "inventory.level_changed": "variant",
   "customer.created": "customer",
   "customer.updated": "customer",
+  "customer.consent_changed": "customer",
 };
 
 const id = z.string().min(1).max(128);
@@ -132,6 +134,18 @@ export const EVENT_FACT_SCHEMAS = {
   }),
   "customer.updated": z.object({
     customerId: id,
+  }),
+  /**
+   * Marketing consent for one channel changed state (0108). `previousState`
+   * is null for the first consent fact on that channel. The address and the
+   * consent text stay private; `data` carries the customer's consents.
+   */
+  "customer.consent_changed": z.object({
+    customerId: id,
+    channel: z.enum(["email", "sms", "whatsapp"]),
+    previousState: z.enum(["subscribed", "unsubscribed", "pending"]).nullable(),
+    state: z.enum(["subscribed", "unsubscribed", "pending"]),
+    source: state,
   }),
 } as const satisfies Record<EventTopic, z.ZodType>;
 

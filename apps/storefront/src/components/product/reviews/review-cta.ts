@@ -44,7 +44,7 @@ export async function fetchProductReviewState(productId: string, fetcher: typeof
 
 function readCopy(root: HTMLElement): CtaCopy | null {
   try {
-    const copy = JSON.parse(root.dataset.reviewFormCopy ?? "") as Partial<CtaCopy>;
+    const copy = JSON.parse(root.querySelector(":scope > script[data-review-form-copy]")?.textContent ?? "") as Partial<CtaCopy>;
     return typeof copy.reviewSubmitText === "string" ? copy as CtaCopy : null;
   } catch {
     return null;

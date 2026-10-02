@@ -180,8 +180,10 @@ function stackRows() {
 describe("theme editor: sections", () => {
   it("lists the homepage sections with why buyers don't see some", () => {
     const boutique = storefrontTemplateTheme("boutique");
-    render({ ...boutique, pages: { ...boutique.pages, home: [...boutique.pages.home, storefrontSectionDefault("newsletter", "newsletter")] } });
-    expect(rowText("newsletter")).toBe("NewsletterNot on your store yet.");
+    render({ ...boutique, pages: { ...boutique.pages, home: [...boutique.pages.home, storefrontSectionDefault("newsletter", "signup")] } });
+    // The newsletter signup shows on the store as it is (its form needs no content).
+    expect(rowText("newsletter")).toBe("Newsletter");
+    expect(rowText("signup")).toBe("Newsletter");
     // A hero without slides shows nothing until its slides are added.
     expect(rowText(boutique.pages.home.find((each) => each.type === "hero")!.id)).toBe("BannersHidden until you add its content.");
   });

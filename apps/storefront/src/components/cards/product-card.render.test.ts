@@ -26,7 +26,15 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_MAX_PX, KEY_SPECS_MAX } from "./card-model";
+import {
+  CARD_ICONS,
+  CARD_IMAGE_DIMENSIONS,
+  CARD_PHOTO_MAX_PX,
+  KEY_SPECS_MAX,
+  cardIconIds,
+  cardLookTokens,
+  cardPageAttributes,
+} from "./card-model";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -189,6 +197,15 @@ async function renderCards(
 }
 
 const CARD_VARIANTS = storefrontBlockVariants("card");
+/**
+ * Bytes of one card with every fact on a sidebar listing (the cards repeat
+ * 20-40 times per listing: the look, flags, icons and shared utilities live
+ * once per page, so a card carries only its own content).
+ */
+const CARD_HTML_BUDGET: Record<string, number> = {
+  boutique: 2300, showcase: 2300, portrait: 1900, "fashion-value": 2500, spec: 2850, "tech-rounded": 2200,
+  retail: 2900, marketplace: 2400, "quick-add": 2450, mall: 1550, detailed: 3300,
+};
 const MATRIX = CARD_VARIANTS.flatMap((card) =>
   STOREFRONT_DENSITIES.flatMap((density) =>
     STOREFRONT_IMAGE_RATIOS.flatMap((imageRatio) =>
@@ -209,8 +226,9 @@ const DISCOUNT_WORDING: Record<StorefrontCardRenderer["discount"], string> = {
  * Compare.
  */
 function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["layout"]["productCard"]): Record<string, string> {
-  const style = card.getAttribute("style") ?? "";
-  const cssVar = (name: string) => new RegExp(`--${name}:([^;]+)`).exec(style)?.[1] ?? "theme";
+  // The card's look lives in the page's token block (cardLookTokens), shared by every card.
+  const look = Object.fromEntries(cardLookTokens(card.getAttribute("data-card-variant") ?? "standard", anatomy));
+  const cssVar = (name: string) => look[name] ?? "theme";
   const body = card.querySelector(".product-card-body")!;
   const order = Array.from(body.children).map((child) =>
     child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("[data-card-price]") ? "price" : null)
@@ -254,7 +272,9 @@ describe("product card matrix", () => {
     theme.blocks.card.settings.quickAction = true;
     const cards = await renderCards(theme);
     const sale = cards.onSale;
-    expect(sale.hasAttribute("data-card-quick-retail")).toBe(true);
+    // A store-wide flag: the page's body carries it (Layout.astro), not every card.
+    expect(cardPageAttributes("retail", requestThemeFor(theme).layout.productCard)).toHaveProperty("data-card-quick-retail", "");
+    expect(sale.hasAttribute("data-card-quick-retail")).toBe(false);
     expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
     expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
@@ -309,7 +329,7 @@ describe("product card matrix", () => {
       expect(hint.getAttribute("aria-hidden")).toBe("true");
       expect(card.querySelector("[data-card-quick-add], a[href^='/buy/']"), variant).toBeNull();
       expect(card.querySelector(".product-card-link")?.getAttribute("href")).toBe("/products/product-sale");
-      if (variant === "quick-add") expect(hint.querySelector("path")?.getAttribute("d")).toBe("M5 12h14m-6-6 6 6-6 6");
+      if (variant === "quick-add") expect(hint.querySelector("use")?.getAttribute("href")).toBe("#pci-arrow");
       else expect(text(hint)).toBe("View product");
     }
 
@@ -347,7 +367,7 @@ describe("product card matrix", () => {
     theme.blocks.card.settings.fullAction = true;
     const cards = await renderCards(theme);
     const sale = cards.onSale;
-    expect(sale.hasAttribute("data-card-full-essentials")).toBe(true);
+    expect(cardPageAttributes("quick-add", requestThemeFor(theme).layout.productCard)).toHaveProperty("data-card-full-essentials", "");
     expect(sale.querySelector(".product-card-name")?.nextElementSibling?.classList.contains("product-card-price-row")).toBe(true);
     expect(text(sale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
     expect(sale.querySelector(".product-card-action")?.classList.contains("pc-action-outline")).toBe(true);
@@ -355,6 +375,7 @@ describe("product card matrix", () => {
     expect(cards.allFacts.querySelector("[data-card-fact='pack-size'], [data-card-fact='delivery']")).toBeNull();
     expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
     const compact = await renderCards(themeWith("quick-add", {}));
+    expect(cardPageAttributes("quick-add", requestThemeFor(themeWith("quick-add", {})).layout.productCard)).not.toHaveProperty("data-card-full-essentials");
     expect(compact.onSale.hasAttribute("data-card-full-essentials")).toBe(false);
     expect(compact.onSale.querySelector(".product-card-round-action")).not.toBeNull();
     expect(compact.onSale.querySelector("[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
@@ -375,10 +396,17 @@ describe("product card matrix", () => {
       ? CARD_IMAGE_DIMENSIONS[imageRatio]
       : { width: 400, height: Math.round(400 / anatomy.look.image.ratio) };
 
+    // The card's own look is the page's token block (Layout.astro), never a per-card style.
+    const look = Object.fromEntries(cardLookTokens(card, anatomy));
+    if (card !== "standard") expect(look["pc-ratio"]).toBe(String(anatomy.look.image.ratio));
     for (const fixture of FIXTURES) {
       const element = cards[fixture];
       expect(element.getAttribute("data-card-variant")).toBe(card);
-      expect(element.getAttribute("data-card-ratio")).toBe(ownRatio);
+      if (card === "standard") expect(element.getAttribute("data-card-ratio")).toBe(ownRatio);
+      else {
+        expect(element.hasAttribute("data-card-ratio")).toBe(false);
+        expect(element.getAttribute("style") ?? "").not.toContain("--pc-");
+      }
       // The photo box is always there; its ratio is the token (CSS), so a
       // missing photo keeps the same box: the placeholder, never a gap.
       const media = element.querySelector(":scope > .product-card-media")!;
@@ -486,7 +514,8 @@ describe("product card matrix", () => {
       const buy = action(cards.onSale)!;
       expect(buy.getAttribute("href")).toBe(cartAction ? "/products/product-sale" : "/buy/product-sale");
       expect(buy.getAttribute("rel")).toBe("nofollow");
-      expect(buy.className).toMatch(/\bz-10\b/);
+      // Above the stretched card link: z-index 10 from the action's own rule (theme-cards.css).
+      expect(buy.className).toMatch(anatomy.action === "round" ? /\bproduct-card-round-action\b/ : /\bpc-act\b/);
       expect(buy.hasAttribute("aria-label")).toBe(false);
       expect(text(buy)).toBe(card === "showcase" ? "Add – ৳960: Product sale" : `${label}: Product sale`);
       if (anatomy.action === "round") {
@@ -498,7 +527,9 @@ describe("product card matrix", () => {
         // link, not a second tab stop); sold out has no ghost action.
         const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
         expect(hint.getAttribute("aria-hidden")).toBe("true");
-        expect(hint.className).toContain("pointer-events-none");
+        // span.pc-act: pointer-events none (theme-cards.css), so taps reach the card link.
+        expect(hint.tagName).toBe("SPAN");
+        expect(hint.classList.contains("pc-act")).toBe(true);
         expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
       }
     } else {
@@ -510,7 +541,8 @@ describe("product card matrix", () => {
     const priceClass = cards.onSale.querySelector(".product-card-price")!.classList;
     const tone = anatomy.priceTone === "primary" ? "text-primary"
       : anatomy.priceTone === "sale" || anatomy.priceTone === "sale-always" ? "text-destructive" : "text-foreground";
-    expect(priceClass.contains(tone)).toBe(true);
+    // (Amazon's superscript price is ink through its own class, theme-cards.css.)
+    expect(priceClass.contains(tone) || (tone === "text-foreground" && priceClass.contains("pc-price-super"))).toBe(true);
     // Without a discount the sale colour stays for Star Tech's always-red price only.
     const plainTone = cards.withOptions.querySelector(".product-card-price")!.classList;
     expect(plainTone.contains("text-destructive")).toBe(anatomy.priceTone === "sale-always");
@@ -622,24 +654,52 @@ describe("product card matrix", () => {
   it("renders the department mall's measured card by default", async () => {
     const { onSale } = await renderCards(DEFAULT_STOREFRONT_THEME);
     expect(onSale.getAttribute("data-card-variant")).toBe("mall");
-    expect(onSale.getAttribute("style")).toContain("--pc-title-d:14px");
-    expect(onSale.getAttribute("style")).toContain("--pc-title-w:700");
-    expect(onSale.getAttribute("style")).toContain("--pc-price-d:20px");
-    expect(onSale.getAttribute("style")).toContain("--pc-price-w:400");
+    const anatomy = requestThemeFor(DEFAULT_STOREFRONT_THEME).layout.productCard;
+    const look = Object.fromEntries(cardLookTokens("mall", anatomy));
+    expect(look).toMatchObject({ "pc-title-d": "14px", "pc-title-w": "700", "pc-price-d": "20px", "pc-price-w": "400" });
     expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
     // One number for the drawn photo and its `sizes`: the CSS caps the photo
-    // at the --pc-photo-max the card sets from CARD_PHOTO_MAX_PX.
+    // at the --pc-photo-max the page's token block sets from CARD_PHOTO_MAX_PX.
     const photoMax = CARD_PHOTO_MAX_PX.mall;
     expect(photoMax).toBe(170);
-    expect(onSale.getAttribute("style")).toContain(`--pc-photo-max:${photoMax}px`);
+    expect(look["pc-photo-max"]).toBe(`${photoMax}px`);
     expect(onSale.querySelector(".product-card-photo")?.getAttribute("sizes")).toMatch(new RegExp(`(^|\\s)${photoMax}px$`));
     const css = readFileSync(new URL("../../styles/theme-cards.css", import.meta.url), "utf8");
     expect(css).toMatch(
       /\.product-card\[data-card-variant="mall"\] \.product-card-photo \{[^}]*width: min\(var\(--pc-photo-max\), 100%\);/,
     );
     // Only the fixed-width card sets it.
-    const spec = await renderCards(themeWith("spec", {}));
-    expect(spec.onSale.getAttribute("style")).not.toContain("--pc-photo-max");
+    const spec = requestThemeFor(themeWith("spec", {})).layout.productCard;
+    expect(Object.fromEntries(cardLookTokens("spec", spec))).not.toHaveProperty("pc-photo-max");
+  });
+
+  it("writes the look once per page and keeps each card small", async () => {
+    // The standard card keeps its tokens; every other card's look and flags are page-level.
+    expect(cardLookTokens("standard", requestThemeFor(themeWith("standard", {})).layout.productCard)).toEqual([]);
+    expect(cardPageAttributes("standard", requestThemeFor(themeWith("standard", {})).layout.productCard)).toEqual({});
+    for (const card of CARD_VARIANTS.filter((variant) => variant !== "standard")) {
+      const theme = themeWith(card, {});
+      const anatomy = requestThemeFor(theme).layout.productCard;
+      const tokens = cardLookTokens(card, anatomy);
+      // Values only from the registry's numbers and enums: safe in a <style> block.
+      for (const [, value] of tokens) expect(value).toMatch(/^[\d.]+(?:px|%)?$|^[a-z-]+$/);
+      expect(cardPageAttributes(card, anatomy)["data-card-fit"]).toBe(anatomy.look.image.fit);
+      const cards = await renderCards(theme);
+      // Every icon a card draws is one of the page sprite's symbols.
+      const icons = new Set(cardIconIds(card, anatomy));
+      for (const element of Object.values(cards)) {
+        for (const use of Array.from(element.querySelectorAll("use"))) {
+          const id = use.getAttribute("href")!.slice(1);
+          expect(id in CARD_ICONS, `${card} ${id}`).toBe(true);
+          expect(icons.has(id as keyof typeof CARD_ICONS), `${card} ${id}`).toBe(true);
+        }
+        expect(element.querySelector("svg path"), card).toBeNull();
+      }
+      // Per-card byte budget: the full card (every fact, a photo with its
+      // renditions, a discount and a buy action) on a sidebar listing.
+      const listing = await renderCards(theme, { context: "beside-filters", filterColumnPx: 240 });
+      expect(listing.allFacts.outerHTML.length, card).toBeLessThanOrEqual(CARD_HTML_BUDGET[card]!);
+    }
   });
 
   it("asks for options on a spec card only when a SKU choice is required", async () => {
@@ -672,7 +732,7 @@ describe("product card matrix", () => {
     expect(spec.allFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(true);
     expect(spec.zeroFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
     expect(spec.zeroFacts.classList.contains("self-start")).toBe(true);
-    expect(spec.zeroFacts.getAttribute("style")).toContain("min-height:0");
+    expect(spec.zeroFacts.classList.contains("product-card-compact")).toBe(true);
     expect((await renderCards(themeWith("standard", {}))).zeroFacts.querySelector("[data-card-price]")?.classList.contains("mt-auto")).toBe(false);
   });
 

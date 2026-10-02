@@ -535,6 +535,32 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     });
     // Only identity goes to the order: labels and prices come from the server.
     expect(JSON.stringify(payload.items)).not.toContain("displayValue");
+    // No consent box ticked: no consent field; no WhatsApp typed: null.
+    expect(payload).not.toHaveProperty("marketingConsent");
+    expect(payload.customerWhatsapp).toBeNull();
+  });
+
+  it("sends the WhatsApp number and a ticked marketing consent box with a cash on delivery order", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: "pickup", requiresShipping: false,
+        allowedPaymentMethods: ["cod"],
+        delivery: {
+          kind: "pickup", shippingCharge: 0, cityName: null, zoneName: null, areaName: null,
+          shippingMethod: { id: "pickup_1", name: "Shop pickup", description: null, baseAmountMinor: 0, feeWaived: false },
+          pickup: { address: "Shop 12, Dhanmondi", hours: "10am–8pm" },
+        },
+      },
+    });
+
+    await processOrder(formWith({ deliveryMode: "pickup", shippingLocation: "pickup_1", customerWhatsapp: " 01812345678 ", marketingConsent: "bn" }));
+
+    expect(mocks.createOrder.mock.calls[0]![0]).toMatchObject({
+      customerWhatsapp: "01812345678",
+      marketingConsent: { language: "bn" },
+    });
   });
 
   it("needs only name and phone when nothing in the cart is physical", async () => {

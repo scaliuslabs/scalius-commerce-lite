@@ -32,4 +32,41 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/customers/*/permanent": {
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
+  // Customers & marketing: tags, saved segments, export, consent.
+  "/api/v1/admin/customers/tags": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  "/api/v1/admin/customers/tags/bulk": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  "/api/v1/admin/customers/export": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  "/api/v1/admin/customers/segments": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  // A preview evaluates an unsaved filter and changes nothing.
+  "/api/v1/admin/customers/segments/preview": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  // Deleting a saved filter deletes no customer: an edit, not customers.delete.
+  "/api/v1/admin/customers/segments/*": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+    PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+    DELETE: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  "/api/v1/admin/customers/segments/*/count": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  "/api/v1/admin/customers/segments/*/members": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  "/api/v1/admin/customers/*/tags": {
+    PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  "/api/v1/admin/customers/*/marketing": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+    PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
 };

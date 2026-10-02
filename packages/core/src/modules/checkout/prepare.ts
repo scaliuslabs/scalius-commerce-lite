@@ -574,6 +574,8 @@ export async function createStorefrontOrder(
         discountCodes: data.discountCodes,
         customerId: accountOwnerCustomer?.id,
         customerPhone: data.customerPhone,
+        // Segment-limited promotions: the signed-in account only, as the commit re-check sees it.
+        segmentCustomerId: accountOwnerCustomer?.id ?? null,
         currency: requestCurrency,
         taxAuthority: taxAuthoritySnapshot,
         apps: appOptions.apps,

@@ -1,0 +1,121 @@
+---
+// /newsletter/unsubscribe: the signed unsubscribe link in marketing messages
+// (`?token=u1.…`), also the e-mails' RFC 8058 `List-Unsubscribe` URL.
+// - GET asks first and changes nothing: "Stop e-mail messages to a•••@…?"
+//   (the API's preview) with an Unsubscribe button that posts the token in
+//   the form body. Mail scanners open links; only a POST unsubscribes.
+// - The button's POST (same-origin) unsubscribes and answers a 303 to
+//   /newsletter?status=unsubscribed|link_invalid.
+// - A mail client's one-click POST (`List-Unsubscribe=One-Click`, from its
+//   own servers: no cookies, no Origin) arrives from the gateway as that
+//   exact body in JSON (lib/newsletter-one-click.ts), unsubscribes the
+//   URL's token and gets a plain-text 200.
+// Private, never cached, no referrer, no analytics (the token is in the
+// URL), the token taken out of the address bar; tokens are never logged.
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
+import { NEWSLETTER_UNSUBSCRIBE_PATH } from "@/lib/newsletter-form";
+import {
+  NEWSLETTER_TOKEN_PAGE_HEADERS,
+  isCrossOriginPost,
+  isOneClickPost,
+  newsletterForbidden,
+  newsletterRedirect,
+  oneClickText,
+  previewNewsletterUnsubscribe,
+  readNewsletterForm,
+  unsubscribeFromNewsletter,
+} from "@/lib/newsletter-server";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+export const prerender = false;
+
+const method = Astro.request.method;
+const contentType = Astro.request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+
+if (method === "POST" && contentType === "application/json") {
+  // RFC 8058 one-click: exactly the one-click body, the token from the URL.
+  const layout = await getLayoutData();
+  const copy = newsletterCopy(newsletterLanguage(layout?.storefrontCopy?.languageCode));
+  if (!(await isOneClickPost(Astro.request))) return oneClickText(copy.oneClickInvalid, 400);
+  const outcome = await unsubscribeFromNewsletter(Astro.request, Astro.url.searchParams.get("token"));
+  if (outcome.status === "unsubscribed") return oneClickText(copy.oneClickDone, 200);
+  if (outcome.status === "link_invalid") return oneClickText(copy.oneClickInvalid, 400);
+  if (outcome.status === "rate_limited") {
+    const response = oneClickText(copy.status.rate_limited.text, 429);
+    response.headers.set("Retry-After", String(outcome.retryAfterSeconds ?? 60));
+    return response;
+  }
+  return oneClickText(copy.status.error.text, 503);
+}
+if (method === "POST") {
+  if (shouldRejectCrossOriginCookieRequest(Astro.request) || isCrossOriginPost(Astro.request)) {
+    return newsletterForbidden(Astro.request);
+  }
+  const form = await readNewsletterForm(Astro.request);
+  const outcome = await unsubscribeFromNewsletter(Astro.request, form?.get("token"));
+  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" });
+}
+if (method !== "GET" && method !== "HEAD") {
+  return new Response(null, { status: 405, headers: { Allow: "GET, HEAD, POST", ...NEWSLETTER_TOKEN_PAGE_HEADERS } });
+}
+for (const [name, value] of Object.entries(NEWSLETTER_TOKEN_PAGE_HEADERS)) Astro.response.headers.set(name, value);
+
+const token = Astro.url.searchParams.get("token");
+const [layoutData, preview] = await Promise.all([
+  getLayoutData(),
+  previewNewsletterUnsubscribe(Astro.request, token),
+]);
+const language = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
+const copy = newsletterCopy(language);
+const shown = typeof preview === "object" && preview !== null ? preview : null;
+const notice = shown
+  ? null
+  : preview === "rate_limited"
+    ? copy.status.rate_limited
+    : preview === null
+      ? copy.status.error
+      : copy.status.link_invalid;
+if (preview === null) Astro.response.status = 503;
+const channel = shown ? copy.channelName[shown.channel] : "";
+---
+
+<Layout title={shown ? copy.unsubscribeTitle : notice!.title} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar analytics={false}>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  <script is:inline>
+    // The token stays in the form, not in the address bar or history.
+    if (location.search) history.replaceState(null, "", location.pathname);
+  </script>
+  <section class="container mx-auto px-4 py-10 sm:py-14" data-newsletter-unsubscribe>
+    <div class="mx-auto w-full max-w-xl text-center">
+      {shown ? (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">{copy.unsubscribeTitle}</h1>
+          {shown.alreadyOff ? (
+            <p class="mt-2 text-base text-muted-foreground [overflow-wrap:anywhere]">{copy.unsubscribeAlready({ channel, contact: shown.contactMasked })}</p>
+          ) : (
+            <>
+              <p class="mt-2 text-base text-foreground [overflow-wrap:anywhere]">{copy.unsubscribeQuestion({ channel, contact: shown.contactMasked })}</p>
+              <form method="post" action={NEWSLETTER_UNSUBSCRIBE_PATH} class="mt-6">
+                <input type="hidden" name="token" value={token} />
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:w-auto">
+                  {copy.unsubscribeButton}
+                </button>
+              </form>
+            </>
+          )}
+          <p class="mt-4 text-sm text-muted-foreground">{copy.unsubscribeNote}</p>
+        </>
+      ) : (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">{notice!.title}</h1>
+          <p class="mt-2 text-base text-muted-foreground">{notice!.text}</p>
+          <a href="/" class="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-5 text-sm font-medium text-foreground hover:bg-muted">
+            {copy.continueShopping}
+          </a>
+        </>
+      )}
+    </div>
+  </section>
+</Layout>

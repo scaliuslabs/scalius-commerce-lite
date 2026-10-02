@@ -5,6 +5,12 @@
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import { readAccountSummary, type AccountSummary } from "@/lib/account-tabs";
+import {
+  MARKETING_CONSENT_STATUSES,
+  isMarketingChannel,
+  type MarketingChannel,
+  type MarketingConsentStatus,
+} from "@scalius/shared/customer-marketing";
 import type {
   CustomerInfo,
   CustomerOrder,
@@ -123,6 +129,51 @@ export interface ProfileUpdate {
 export type ProfileSaveResult =
   | { ok: true; customer: CustomerInfo }
   | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
+
+export interface AccountMarketingChannel {
+  channel: MarketingChannel;
+  /** `subscribed`, `pending` (e-mail waiting for its link), `unsubscribed` or `not_subscribed`. */
+  status: MarketingConsentStatus;
+  /** The account has an address for this channel (an e-mail, a phone). */
+  available: boolean;
+}
+
+function readMarketingChannels(data: unknown): AccountMarketingChannel[] | null {
+  const channels = (data as { channels?: unknown } | null)?.channels;
+  if (!Array.isArray(channels)) return null;
+  return channels.flatMap((each) => {
+    const row = each as Partial<AccountMarketingChannel> | null;
+    return row && isMarketingChannel(row.channel)
+      && (MARKETING_CONSENT_STATUSES as readonly string[]).includes(String(row.status))
+      ? [{ channel: row.channel, status: row.status as MarketingConsentStatus, available: row.available === true }]
+      : [];
+  });
+}
+
+/** The account's marketing preferences, one row per channel. */
+export async function readAccountMarketing(request: Request): Promise<AccountRead<AccountMarketingChannel[]>> {
+  const answer = await callAccountApi(request, "/api/v1/customer-auth/marketing");
+  const channels = answer?.status === 200 ? readMarketingChannels(answer.data) : null;
+  return channels ? { ok: true, data: channels } : failed(answer);
+}
+
+export type AccountMarketingSaveResult =
+  | { ok: true; channels: AccountMarketingChannel[]; confirmationRequested: boolean }
+  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
+
+/** Turns channels on or off (only the ones named); an unverified e-mail waits for its link. */
+export async function saveAccountMarketing(
+  request: Request,
+  update: Partial<Record<MarketingChannel, boolean>> & { language?: string },
+): Promise<AccountMarketingSaveResult> {
+  const answer = await callAccountApi(request, "/api/v1/customer-auth/marketing", { method: "PUT", body: update });
+  const channels = answer?.status === 200 ? readMarketingChannels(answer.data) : null;
+  if (channels) {
+    return { ok: true, channels, confirmationRequested: (answer!.data as { confirmationRequested?: unknown }).confirmationRequested === true };
+  }
+  if (answer?.status === 400 || answer?.status === 422) return { ok: false, reason: "invalid", message: answer.error };
+  return { ...failed(answer), message: null };
+}
 
 /** Saves the name or the delivery address; the API validates and resolves the location. */
 export async function saveAccountProfile(request: Request, update: ProfileUpdate): Promise<ProfileSaveResult> {

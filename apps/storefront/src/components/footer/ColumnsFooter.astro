@@ -5,6 +5,7 @@
 // menu. Kept pixel-identical to the version 3 columns footer, the default
 // template's.
 import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+import RichTextStyles from "../RichTextStyles.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import type { FooterModel } from "./footer-model";
 
@@ -75,6 +76,7 @@ if (!collapsibleMenus && menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-col
     }
 
     {/* The footer's about text: plain paragraphs, escaped. */}
+    {about.length > 0 && <RichTextStyles />}
     {
       about.length > 0 && (
         <div

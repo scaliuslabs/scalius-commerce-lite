@@ -5,7 +5,7 @@ import type { OrderNotificationType } from "../notifications/notification-types"
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/refund-attempt-views";
 import type { TaxQuote } from "../tax/types";
 import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
-import type { AppliedAppDiscount, CheckoutRateOption } from "../checkout/app-functions";
+import type { AppliedAppDiscount, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";

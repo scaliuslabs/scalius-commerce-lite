@@ -1,5 +1,6 @@
 ---
-import { Banknote, RotateCcw, Store, Truck } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
+import type { LucideIconName } from "@/components/icons/lucide-icons";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
@@ -10,7 +11,7 @@ interface Props {
 }
 
 const { facts, variant = "strip" } = Astro.props;
-const ICONS = { delivery: Truck, pickup: Store, cod: Banknote, returns: RotateCcw } as const;
+const ICONS: Record<DeliveryFact["kind"], LucideIconName> = { delivery: "truck", pickup: "store", cod: "banknote", returns: "rotate-ccw" };
 // Up to three facts sit side by side from small screens; four (delivery,
 // pickup, cash on delivery, returns) stack until there is room for a row.
 const columns = [
@@ -33,11 +34,10 @@ const columns = [
           : "divide-y divide-border rounded-lg border border-border bg-card"}
       >
         {facts.map((fact) => {
-          const Icon = ICONS[fact.kind];
           const content = (
             <>
               <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-                <Icon className="size-4" aria-hidden="true" />
+                <Icon name={ICONS[fact.kind]} class="size-4" aria-hidden="true" />
               </span>
               <span class="min-w-0">
                 <span class="block text-sm font-semibold text-foreground">{fact.title}</span>

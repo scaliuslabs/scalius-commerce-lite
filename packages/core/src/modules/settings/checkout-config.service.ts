@@ -29,6 +29,7 @@ import {
     currencyDocument,
     customerAuthDocument,
     customerCountriesDocument,
+    marketingConsentDocument,
 } from "./documents";
 import { selectSettingsDocuments } from "./settings-store";
 
@@ -51,6 +52,16 @@ export interface CheckoutConfig {
     checkoutReadiness: CheckoutReadiness;
     unavailable: boolean;
     unavailableMessage?: string;
+    /**
+     * The marketing consent checkbox (Customers & marketing): shown unchecked,
+     * never required, with the merchant's label per language. `channels`
+     * says which channels a tick subscribes (those the order has a contact for).
+     */
+    marketingConsent: {
+        enabled: boolean;
+        channels: Array<"email" | "sms" | "whatsapp">;
+        label: { en: string; bn: string };
+    };
 }
 
 /**
@@ -67,13 +78,20 @@ export async function getCheckoutConfig(
         currencyDocument,
         customerAuthDocument,
         customerCountriesDocument,
+        marketingConsentDocument,
     ]);
-    const [checkout, currency, customerAuth, allowedCountriesConfig] = await Promise.all([
+    const [checkout, currency, customerAuth, allowedCountriesConfig, marketing] = await Promise.all([
         checkoutDocument.fromRows(rows).then((result) => result.value),
         currencyDocument.fromRows(rows).then((result) => result.value),
         customerAuthDocument.fromRows(rows).then((result) => result.value),
         customerCountriesDocument.fromRows(rows).then((result) => result.value),
+        marketingConsentDocument.fromRows(rows).then((result) => result.value),
     ]);
+    const marketingConsent = {
+        enabled: marketing.checkout.enabled,
+        channels: [...marketing.checkout.channels],
+        label: { ...marketing.checkout.label },
+    };
 
     const localCurrencyCode = currency.currencyCode;
     const localCurrencySymbol = currency.currencySymbol;
@@ -102,6 +120,7 @@ export async function getCheckoutConfig(
             checkoutReadiness,
             unavailable: true,
             unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
+            marketingConsent,
         };
     }
 
@@ -157,5 +176,6 @@ export async function getCheckoutConfig(
         unavailableMessage: unavailable
             ? "Checkout is temporarily unavailable while the merchant finishes payment setup."
             : undefined,
+        marketingConsent,
     };
 }

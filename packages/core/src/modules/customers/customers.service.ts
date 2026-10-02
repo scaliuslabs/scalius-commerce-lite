@@ -3,6 +3,9 @@
 
 import {
     codTracking,
+    customerMarketingConsents,
+    customerOrderStats,
+    customerTagLinks,
     customers,
     customerHistory,
     customerSessions,
@@ -32,6 +35,15 @@ import {
 } from "../orders/line-presentation";
 import { findOrderConversationId, listBuyerOrderFulfilments } from "../orders/fulfilment-reads";
 import { customerKind } from "./customer-identity";
+import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
+import {
+    MARKETING_CHANNELS,
+    marketingConsentContact,
+    marketingConsentStatus,
+    type CustomerSegmentDefinition,
+    type MarketingChannel,
+} from "@scalius/shared/customer-marketing";
+import { listCustomerTags } from "./customer-tags";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -496,6 +508,37 @@ export function latestOrderNameSql(customerId: SQLWrapper) {
     return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
 }
 
+/** Extra list filters (Customers & marketing): a tag, a segment's filters, a subscribed channel. */
+export interface CustomerListFilters {
+    /** Normalised tag the customer carries. */
+    tag?: string;
+    /** A segment definition (saved or inline) the customer must match. */
+    segment?: CustomerSegmentDefinition;
+    /** Customers subscribed on this channel now (`any`: on at least one). */
+    subscribed?: MarketingChannel | "any";
+}
+
+/** The WHERE for the list filters (needs `customer_order_stats` LEFT JOINed). */
+export function customerListFilterSql(filters: CustomerListFilters = {}): SQL[] {
+    const conditions: SQL[] = [];
+    if (filters.tag) {
+        conditions.push(sql`EXISTS (SELECT 1 FROM ${customerTagLinks} WHERE ${customerTagLinks.customerId} = ${customers.id} AND ${customerTagLinks.tag} = ${filters.tag})`);
+    }
+    if (filters.segment) conditions.push(segmentWhereSql(filters.segment));
+    if (filters.subscribed) {
+        const channels = filters.subscribed === "any" ? (["email", "sms", "whatsapp"] as const) : [filters.subscribed];
+        const subscribed = channels.map((channel) => sql`EXISTS (SELECT 1 FROM ${customerMarketingConsents} WHERE ${customerMarketingConsents.customerId} = ${customers.id} AND ${customerMarketingConsents.channel} = ${channel} AND ${customerMarketingConsents.state} = 'subscribed' AND ${customerMarketingConsents.contact} = ${currentMarketingContactSql(channel)})`);
+        conditions.push(sql`(${sql.join(subscribed, sql` OR `)})`);
+    }
+    return conditions;
+}
+
+/**
+ * Order facts come from `customer_order_stats` (trigger-maintained: real
+ * orders only, not `incomplete` or deleted), so the list, its sorting and
+ * segment filters read one indexed row per customer instead of grouping
+ * every order.
+ */
 export async function listCustomers(
     db: Database,
     options: {
@@ -505,6 +548,7 @@ export async function listCustomers(
         showTrashed?: boolean;
         sort?: "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
+        filters?: CustomerListFilters;
     } = {},
 ) {
     const {
@@ -538,6 +582,8 @@ export async function listCustomers(
         }
     }
 
+    whereConditions.push(...customerListFilterSql(options.filters));
+
     const whereClause =
         whereConditions.length > 0
             ? sql`${sql.join(whereConditions, sql` AND `)}`
@@ -545,13 +591,14 @@ export async function listCustomers(
 
     const offset = (page - 1) * limit;
 
-    const metrics = buildCustomerOrderMetricsProjection();
+    const totalOrders = sql<number>`COALESCE(${customerOrderStats.ordersCount}, 0)`;
+    const totalSpentMinor = sql<number>`COALESCE(${customerOrderStats.totalSpentMinor}, 0)`;
     const sortField = (() => {
         switch (sort) {
             case "name": return customers.name;
-            case "totalOrders": return metrics.totalOrders;
-            case "totalSpent": return metrics.totalSpentMinor;
-            case "lastOrderAt": return metrics.lastOrderAt;
+            case "totalOrders": return totalOrders;
+            case "totalSpent": return totalSpentMinor;
+            case "lastOrderAt": return customerOrderStats.lastOrderAt;
             case "createdAt": return customers.createdAt;
             default: return customers.updatedAt;
         }
@@ -560,6 +607,7 @@ export async function listCustomers(
     const countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(customers)
+        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
         .where(whereClause);
 
     const resultsQuery = db
@@ -578,18 +626,16 @@ export async function listCustomers(
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             origin: customers.origin,
             latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
-            totalOrders: metrics.totalOrders,
-            totalSpentMinor: metrics.totalSpentMinor,
-            spendDecimalPlaces: metrics.spendDecimalPlaces,
-            lastOrderAt: metrics.lastOrderAt,
+            totalOrders,
+            totalSpentMinor,
+            // One store currency (locked once orders exist): any of the customer's orders converts it.
+            spendDecimalPlaces: sql<number>`COALESCE((SELECT ${orders.currencyDecimalPlaces} FROM ${orders} WHERE ${orders.customerId} = ${customers.id} LIMIT 1), 2)`,
+            lastOrderAt: sql<number | null>`${customerOrderStats.lastOrderAt}`,
             createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
         })
         .from(customers)
-        .leftJoin(orders, and(
-            eq(orders.customerId, customers.id),
-            isNull(orders.deletedAt),
-        ))
+        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
         .leftJoin(customerCityLocation, and(
             eq(customerCityLocation.id, customers.city),
             isNull(customerCityLocation.deletedAt),
@@ -603,15 +649,9 @@ export async function listCustomers(
             isNull(customerAreaLocation.deletedAt),
         ))
         .where(whereClause)
-        .groupBy(
-            customers.id,
-            customerCityLocation.name,
-            customerZoneLocation.name,
-            customerAreaLocation.name,
-        )
         .limit(limit)
         .offset(offset)
-        .orderBy(order === "asc" ? asc(sortField) : desc(sortField));
+        .orderBy(order === "asc" ? asc(sortField) : desc(sortField), order === "asc" ? asc(customers.id) : desc(customers.id));
 
     const [countArr, results] = await db.batch([
         countQuery,
@@ -625,9 +665,10 @@ export async function listCustomers(
     const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, origin, ...c }) => ({
         ...c,
         kind: customerKind({ accountClaimedAt: c.accountClaimedAt, origin }),
-        totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
+        totalOrders: Number(c.totalOrders),
+        totalSpent: paidSpendAmount({ totalSpentMinor: Number(totalSpentMinor), spendDecimalPlaces: Number(spendDecimalPlaces) }),
         accountClaimedAt: c.accountClaimedAt ? new Date(c.accountClaimedAt * 1000).toISOString() : null,
-        lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,
+        lastOrderAt: c.lastOrderAt ? new Date(Number(c.lastOrderAt) * 1000).toISOString() : null,
         createdAt: new Date(c.createdAt * 1000).toISOString(),
         updatedAt: new Date(c.updatedAt * 1000).toISOString(),
     }));
@@ -711,14 +752,24 @@ export async function getCustomerById(db: Database, id: string) {
     return db.select().from(customers).where(eq(customers.id, id)).get() ?? null;
 }
 
-/** The customer row plus its paid spend, derived from its orders. */
+/**
+ * The customer row plus its paid spend, derived from its orders, its tags and
+ * its marketing consent status per channel (Customers & marketing).
+ */
 export async function getCustomerDetail(db: Database, id: string) {
-    const [customer, spend, latest] = await Promise.all([
+    const [customer, spend, latest, tags, consentRows] = await Promise.all([
         getCustomerById(db, id),
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
             .get(),
         db.select({ name: latestOrderNameSql(customers.id) }).from(customers).where(eq(customers.id, id)).get(),
+        listCustomerTags(db, id),
+        db.select({
+            channel: customerMarketingConsents.channel,
+            state: customerMarketingConsents.state,
+            contact: customerMarketingConsents.contact,
+            updatedAt: customerMarketingConsents.updatedAt,
+        }).from(customerMarketingConsents).where(eq(customerMarketingConsents.customerId, id)),
     ]);
     if (!customer) return null;
     const mergedInto = customer.mergedIntoCustomerId
@@ -731,6 +782,16 @@ export async function getCustomerDetail(db: Database, id: string) {
         kind: customerKind(customer),
         latestOrderName: latest?.name ?? null,
         totalSpent: spend ? paidSpendAmount(spend) : 0,
+        tags,
+        /** What applies to the current address on each channel (consent covers one address). */
+        marketing: MARKETING_CHANNELS.map((channel) => {
+            const row = consentRows.find((candidate) => candidate.channel === channel);
+            return {
+                channel,
+                status: marketingConsentStatus(row, marketingConsentContact(channel, customer)),
+                updatedAt: row ? new Date(Number(row.updatedAt) * 1000).toISOString() : null,
+            };
+        }),
     };
 }
 

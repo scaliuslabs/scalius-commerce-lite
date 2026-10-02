@@ -3,6 +3,7 @@ import {
     orderDiscountAllocations,
     promotionCodes,
     promotionConditions,
+    promotionCustomerSegments,
     promotionEffects,
     promotionRedemptions,
     promotions,
@@ -12,6 +13,7 @@ import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
+import { customerSegmentMembership, readSegmentDefinitions } from "../customers/customer-segments";
 import {
     evaluatePromotionCandidates,
     promotionCandidateSchema,
@@ -37,7 +39,8 @@ const PROMOTION_LIST_LIMIT = 90;
 
 type PromotionStatus = "draft" | "active" | "paused" | "archived";
 
-export interface PromotionAggregate extends PromotionCandidate {
+/** A stored rule; `customerInSegment` belongs to one buyer's evaluation, not to the rule. */
+export interface PromotionAggregate extends Omit<PromotionCandidate, "customerInSegment"> {
     title: string | null;
     timezone: string;
     createdAtEpochSeconds: number;
@@ -104,12 +107,17 @@ function parseConfig(value: string): unknown {
     }
 }
 
-/** Unvalidated evaluator input; the evaluator rejects a broken rule on its own. */
+/**
+ * Unvalidated evaluator input; the evaluator rejects a broken rule on its
+ * own. A rule limited to customer segments stays closed to everyone until
+ * the caller sets `customerInSegment` for its signed-in customer.
+ */
 export function promotionCandidateRecord(
     parent: typeof promotions.$inferSelect,
     codeRows: Array<typeof promotionCodes.$inferSelect>,
     conditionRows: Array<typeof promotionConditions.$inferSelect>,
     effectRows: Array<typeof promotionEffects.$inferSelect>,
+    segmentRows: ReadonlyArray<{ segmentId: string }> = [],
 ) {
     return {
         id: parent.id,
@@ -146,7 +154,31 @@ export function promotionCandidateRecord(
             allocation: effect.allocation,
             config: parseConfig(effect.config),
         })),
+        customerSegmentIds: segmentRows.map(({ segmentId }) => segmentId).sort(),
+        customerInSegment: false,
     };
+}
+
+/**
+ * Which of these segments one signed-in customer is in now: one read of the
+ * definitions and one batch of primary-key membership lookups. Deleted or
+ * unreadable segments match nobody; no customer matches nothing.
+ */
+export async function matchCustomerSegments(
+    db: Database,
+    customerId: string | null | undefined,
+    segmentIds: readonly string[],
+    nowSeconds = Math.floor(Date.now() / 1_000),
+): Promise<Set<string>> {
+    const unique = [...new Set(segmentIds)];
+    if (!customerId || unique.length === 0) return new Set();
+    const definitions = await readSegmentDefinitions(db, unique);
+    return customerSegmentMembership(
+        db,
+        customerId,
+        unique.map((id) => ({ id, definition: definitions.get(id) ?? null })),
+        { nowSeconds },
+    );
 }
 
 function buildPromotionAggregate(
@@ -154,9 +186,10 @@ function buildPromotionAggregate(
     codeRows: Array<typeof promotionCodes.$inferSelect>,
     conditionRows: Array<typeof promotionConditions.$inferSelect>,
     effectRows: Array<typeof promotionEffects.$inferSelect>,
+    segmentRows: ReadonlyArray<{ segmentId: string }>,
 ): PromotionAggregate {
     const candidate = promotionCandidateSchema.safeParse(
-        promotionCandidateRecord(parent, codeRows, conditionRows, effectRows),
+        promotionCandidateRecord(parent, codeRows, conditionRows, effectRows, segmentRows),
     );
     if (!candidate.success) {
         throw new ValidationError("Promotion configuration is invalid and cannot be evaluated.", {
@@ -165,8 +198,9 @@ function buildPromotionAggregate(
         });
     }
 
+    const { customerInSegment: _buyerOnly, ...rule } = candidate.data;
     return {
-        ...candidate.data,
+        ...rule,
         title: parent.title,
         timezone: parent.timezone,
         createdAtEpochSeconds: toEpochSeconds(parent.createdAt) ?? 0,
@@ -196,6 +230,28 @@ async function assertCodeIdentitiesAvailable(
     if (collision) {
         throw new ConflictError(`The discount code ${collision} is already in use.`);
     }
+}
+
+/** Every chosen segment exists and is not deleted (one read of at most five rows). */
+async function assertCustomerSegmentsUsable(db: Database, segmentIds: readonly string[]): Promise<void> {
+    if (segmentIds.length === 0) return;
+    const definitions = await readSegmentDefinitions(db, segmentIds);
+    const missing = segmentIds.filter((id) => !definitions.get(id));
+    if (missing.length > 0) {
+        throw new ValidationError(
+            "A customer segment you chose no longer exists. Reload the segments and choose again.",
+            { customerSegmentIds: missing },
+        );
+    }
+}
+
+function buildSegmentLinkInserts(db: Database, promotionId: string, input: PromotionRule): BatchItem<"sqlite">[] {
+    if (input.customerSegmentIds.length === 0) return [];
+    return [db.insert(promotionCustomerSegments).values(input.customerSegmentIds.map((segmentId) => ({
+        promotionId,
+        segmentId,
+        createdAt: sql`unixepoch()`,
+    })))];
 }
 
 function combinesWithColumns(input: PromotionRule) {
@@ -264,6 +320,7 @@ function buildChildInsertStatements(
     )) {
         if (rows.length > 0) statements.push(db.insert(promotionEffects).values(rows));
     }
+    statements.push(...buildSegmentLinkInserts(db, promotionId, input));
     return statements;
 }
 
@@ -273,6 +330,7 @@ export async function createPromotionDraft(
 ): Promise<{ id: string; revision: number; status: "draft" }> {
     const input = createPromotionDraftSchema.parse(rawInput);
     await assertCodeIdentitiesAvailable(db, input.codes.map(({ code }) => code));
+    await assertCustomerSegmentsUsable(db, input.customerSegmentIds);
 
     const id = `promo_${nanoid()}`;
     const parentInsert = db.insert(promotions).values({
@@ -322,7 +380,7 @@ export async function getPromotionAggregate(
     const parentWhere = options.includeDeleted
         ? eq(promotions.id, normalizedId)
         : and(eq(promotions.id, normalizedId), isNull(promotions.deletedAt));
-    const [parentRows, codeRows, conditionRows, effectRows] = await db.batch([
+    const [parentRows, codeRows, conditionRows, effectRows, segmentRows] = await db.batch([
         db.select().from(promotions).where(parentWhere).limit(1),
         db.select().from(promotionCodes)
             .where(eq(promotionCodes.promotionId, normalizedId))
@@ -336,11 +394,14 @@ export async function getPromotionAggregate(
                 isNull(promotionEffects.deletedAt),
             ))
             .orderBy(asc(promotionEffects.position), asc(promotionEffects.id)),
+        db.select({ segmentId: promotionCustomerSegments.segmentId })
+            .from(promotionCustomerSegments)
+            .where(eq(promotionCustomerSegments.promotionId, normalizedId)),
     ]);
     const parent = parentRows[0];
     if (!parent) return null;
 
-    return buildPromotionAggregate(parent, codeRows, conditionRows, effectRows);
+    return buildPromotionAggregate(parent, codeRows, conditionRows, effectRows, segmentRows);
 }
 
 export async function listPromotionDrafts(
@@ -356,7 +417,7 @@ export async function listPromotionDrafts(
     if (rows.length === 0) return [];
 
     const ids = rows.map(({ id }) => id);
-    const [codeRows, conditionRows, effectRows, usageRows] = await db.batch([
+    const [codeRows, conditionRows, effectRows, segmentRows, usageRows] = await db.batch([
         db.select().from(promotionCodes)
             .where(inArray(promotionCodes.promotionId, ids))
             .orderBy(asc(promotionCodes.normalizedCode)),
@@ -369,6 +430,9 @@ export async function listPromotionDrafts(
                 isNull(promotionEffects.deletedAt),
             ))
             .orderBy(asc(promotionEffects.position), asc(promotionEffects.id)),
+        db.select({ promotionId: promotionCustomerSegments.promotionId, segmentId: promotionCustomerSegments.segmentId })
+            .from(promotionCustomerSegments)
+            .where(inArray(promotionCustomerSegments.promotionId, ids)),
         orderUsageQuery(db, ids),
     ]);
     const usageByPromotionId = new Map(usageRows.map((usage) => [usage.promotionId, usage]));
@@ -381,6 +445,7 @@ export async function listPromotionDrafts(
                 codeRows.filter((code) => code.promotionId === parent.id),
                 conditionRows.filter((condition) => condition.promotionId === parent.id),
                 effectRows.filter((effect) => effect.promotionId === parent.id),
+                segmentRows.filter((segment) => segment.promotionId === parent.id),
             );
         } catch {
             // A rule the evaluator cannot read never applies; keep the list usable.
@@ -436,6 +501,7 @@ export async function updatePromotionDraft(
         input.codes.map(({ code }) => code),
         promotionId,
     );
+    await assertCustomerSegmentsUsable(db, input.customerSegmentIds);
 
     const allEffectRows = await db.select({
         id: promotionEffects.id,
@@ -446,6 +512,7 @@ export async function updatePromotionDraft(
     const statements: BatchItem<"sqlite">[] = [
         db.delete(promotionCodes).where(eq(promotionCodes.promotionId, promotionId)),
         db.delete(promotionConditions).where(eq(promotionConditions.promotionId, promotionId)),
+        db.delete(promotionCustomerSegments).where(eq(promotionCustomerSegments.promotionId, promotionId)),
         db.update(promotionEffects)
             .set({ deletedAt: sql`unixepoch()` })
             .where(and(
@@ -476,6 +543,7 @@ export async function updatePromotionDraft(
     for (const rows of chunksOf(buildConditionRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
         if (rows.length > 0) statements.push(db.insert(promotionConditions).values(rows));
     }
+    statements.push(...buildSegmentLinkInserts(db, promotionId, input));
     input.effects.forEach((effect, position) => {
         const existing = existingEffectByTarget.get(effect.target);
         if (existing) {
@@ -548,13 +616,19 @@ export async function previewPersistedPromotion(
         );
     }
 
-    const usage = await getPromotionUsageStats(db, promotion.id, input.customerId ?? null);
+    const [usage, segmentsMatched] = await Promise.all([
+        getPromotionUsageStats(db, promotion.id, input.customerId ?? null),
+        // The previewed customer counts as signed in; without one, a promotion
+        // limited to segments previews as it would for a guest.
+        matchCustomerSegments(db, input.customerId, promotion.customerSegmentIds),
+    ]);
     const assumedActive = promotion.status !== "active";
     const result = evaluatePromotionCandidates({
         cart: input.cart,
         candidates: [{
             ...promotion,
             ...usage,
+            customerInSegment: segmentsMatched.size > 0,
             status: "active",
         }],
     });

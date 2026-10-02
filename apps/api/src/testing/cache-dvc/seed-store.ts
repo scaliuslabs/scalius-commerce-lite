@@ -296,6 +296,11 @@ function seedSql(): string {
     ('oda_1', 'o_1', 'oi_1', 'promo_code', 'peff_code', 1, 1, 'code', 'Code SAVE10', 'SAVE10', 'percentage_off', 'order', 'BDT', 10000, 1000, 1);
   INSERT INTO promotion_redemptions (id, promotion_id, order_id, customer_id, promotion_revision, promotion_code, currency_code, discount_amount_minor) VALUES
     ('pred_1', 'promo_code', 'o_1', 'cus_1', 1, 'SAVE10', 'BDT', 1000);
+  -- A promotion limited to a customer segment: public offer reads skip it, so
+  -- the generator's link inserts, re-points and deletes change what they list.
+  INSERT INTO customer_segments (id, name, definition, created_at, updated_at) VALUES
+    ('seg_dvc_vip01', 'VIP', ${q({ version: 1, match: "all", conditions: [{ field: "tags", op: "has_any", tags: ["vip"] }] })}, ${T}, ${T});
+  INSERT INTO promotion_customer_segments (promotion_id, segment_id, created_at) VALUES ('promo_code', 'seg_dvc_vip01', ${T});
 
   INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility) VALUES
     ('lang_en', 'English', 'en', 1, 1, ${q({ pageTitle: "Checkout", placeOrder: "Place order" })}, ${q({ email: true })}),

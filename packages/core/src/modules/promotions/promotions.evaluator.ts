@@ -11,6 +11,8 @@ const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
 const MAX_BUY_GET_APPLICATIONS = 10_000;
 /** Products + collections one rule may target (keeps config JSON small). */
 export const PROMOTION_SCOPE_LIMIT = 90;
+/** Customer segments one rule may be limited to. */
+export const PROMOTION_CUSTOMER_SEGMENT_LIMIT = 5;
 
 export const DISCOUNT_CLASSES = ["product", "order", "shipping"] as const;
 export type DiscountClass = (typeof DISCOUNT_CLASSES)[number];
@@ -282,6 +284,14 @@ export const promotionCandidateSchema = z.object({
     })).max(1_000),
     conditions: z.array(conditionSchema).max(20),
     effects: z.array(effectSchema).min(1).max(2),
+    /** Only signed-in customers in any of these segments; empty means everyone. */
+    customerSegmentIds: z.array(z.string().trim().min(1).max(160)).max(PROMOTION_CUSTOMER_SEGMENT_LIMIT).default([]),
+    /**
+     * Precomputed by the caller, like `customerRedemptionCount`: the
+     * signed-in customer is in one of `customerSegmentIds` now. Always false
+     * for a guest, so a limited promotion fails closed without it.
+     */
+    customerInSegment: z.boolean().default(false),
 }).superRefine((candidate, context) => {
     checkPromotionRule(candidate, context);
     const ids = [...candidate.conditions, ...candidate.effects].map(({ id }) => id);
@@ -307,6 +317,8 @@ export type PromotionRejectionReason =
     | "not_started"
     | "expired"
     | "code_not_submitted"
+    /** Limited to customer segments the (signed-in) customer is not in. */
+    | "customer_not_eligible"
     | "redemption_limit_reached"
     | "customer_redemption_limit_reached"
     | "budget_currency_mismatch"
@@ -746,6 +758,10 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
             : null;
         if (candidate.method === "code" && promotionCode === null) {
             reject(candidate.id, "code_not_submitted");
+            continue;
+        }
+        if (candidate.customerSegmentIds.length > 0 && !candidate.customerInSegment) {
+            reject(candidate.id, "customer_not_eligible");
             continue;
         }
         const effect = candidate.effects[0]!;

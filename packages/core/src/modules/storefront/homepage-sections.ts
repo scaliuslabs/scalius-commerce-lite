@@ -153,7 +153,9 @@ function epochSeconds(value: unknown): number | null {
 /**
  * One statement for the deal countdowns: the named promotions that are
  * active, live, started and not yet ended, with their stored end time. A
- * promotion without an end, paused, archived or over gives no countdown.
+ * promotion without an end, paused, archived or over gives no countdown,
+ * and neither does one limited to customer segments (whether it applies
+ * depends on who is signed in; its links advance the `promo:` keys).
  */
 export function planHomePromotions(db: Database, ids: readonly string[], now = Date.now()): {
     statements: BatchStatement[];
@@ -169,6 +171,7 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
             eq(promotions.status, "active"),
             isNull(promotions.deletedAt),
             isNotNull(promotions.endsAt),
+            sql`NOT EXISTS (SELECT 1 FROM promotion_customer_segments AS segment_limit WHERE segment_limit.promotion_id = "promotions"."id")`,
         ));
     const nowSeconds = Math.floor(now / 1000);
     return {

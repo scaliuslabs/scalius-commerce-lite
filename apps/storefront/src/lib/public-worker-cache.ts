@@ -69,6 +69,7 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
   "checkout",
   "collections",
   "health",
+  "newsletter",
   "order-success",
   "payment-recovery",
   "products",

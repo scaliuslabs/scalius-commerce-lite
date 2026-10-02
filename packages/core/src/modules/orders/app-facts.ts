@@ -9,7 +9,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { chunkRowsForD1 } from "@scalius/database/client";
 import { orderEvents, orders } from "@scalius/database/schema";
-import type { AppliedAppDiscount, AppDiscountTarget } from "../checkout/app-functions";
+import type { AppliedAppDiscount, AppDiscountTarget } from "@scalius/shared/checkout-app-facts";
 import { sha256Hex } from "./admin/create-attempts";
 
 export const ORDER_APP_FACT_KINDS = ["app_discount", "app_risk"] as const;

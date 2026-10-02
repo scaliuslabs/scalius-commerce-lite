@@ -82,6 +82,33 @@ export async function enforceOtpSendRateLimits(
     };
 }
 
+/**
+ * Newsletter signups (Customers & marketing) share the hashed D1 buckets
+ * under their own subjects: a contact gets at most 5 signups an hour (each
+ * may send a confirmation e-mail), an address 20 per 10 minutes (CGNAT puts
+ * many Bangladeshi buyers behind one address).
+ */
+export const NEWSLETTER_CONTACT_RATE_LIMIT = { attempts: 5, windowSeconds: 60 * 60 } as const;
+export const NEWSLETTER_IP_RATE_LIMIT = { attempts: 20, windowSeconds: 10 * 60 } as const;
+
+export async function enforceNewsletterSignupRateLimits(
+    db: Database,
+    input: { ip: string; contacts: string[]; hashKey?: string; nowSeconds?: number },
+): Promise<void> {
+    const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
+    const ip = input.ip.trim() || "unknown";
+    const flood = await consumeRateLimitBucket(db, {
+        scope: "ip", subject: `newsletter|${ip}`, ...NEWSLETTER_IP_RATE_LIMIT, hashKey: input.hashKey, nowSeconds,
+    });
+    if ("retryAfterSeconds" in flood) throw new RateLimitError("Too many signups.", flood.retryAfterSeconds);
+    for (const contact of [...new Set(input.contacts.map((value) => value.trim().toLowerCase()).filter(Boolean))]) {
+        const bucket = await consumeRateLimitBucket(db, {
+            scope: "identifier", subject: `newsletter|${contact}`, ...NEWSLETTER_CONTACT_RATE_LIMIT, hashKey: input.hashKey, nowSeconds,
+        });
+        if ("retryAfterSeconds" in bucket) throw new RateLimitError("Too many signups.", bucket.retryAfterSeconds);
+    }
+}
+
 async function consumeRateLimitBucket(
     db: Database,
     input: {

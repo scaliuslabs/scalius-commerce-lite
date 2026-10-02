@@ -14,10 +14,21 @@ import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import type { LocationData } from "@/lib/api/types";
 import {
   readAccountCustomer,
+  readAccountMarketing,
   readAccountSummaryForRequest,
+  saveAccountMarketing,
   saveAccountProfile,
   type ProfileSaveResult,
 } from "@/lib/account-server";
+import {
+  ACCOUNT_MARKETING_ANCHOR,
+  ACCOUNT_MARKETING_INTENT,
+  accountMarketingLocation,
+  accountMarketingOn,
+  readAccountMarketingFlag,
+  readAccountMarketingForm,
+} from "@/lib/account-marketing";
+import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
 import {
   addressErrors,
   nameError,
@@ -43,6 +54,7 @@ Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 let posted: ProfileForm | null = null;
 let fieldErrors: Partial<Record<keyof AddressDraft | "name", string>> = {};
 let formMessage: string | null = null;
+let marketingFailure: "invalid" | "unavailable" | null = null;
 
 const locationsFor = async (draft: Pick<AddressDraft, "city" | "zone">) => {
   const [cities, zones, areas] = await Promise.all([
@@ -57,9 +69,26 @@ if (Astro.request.method === "POST") {
   if (shouldRejectCrossOriginCookieRequest(Astro.request)) return new Response(null, { status: 403, headers: noStore });
   const declared = Number(Astro.request.headers.get("content-length") ?? "0");
   const form = declared > MAX_FORM_BYTES ? null : await Astro.request.formData().catch(() => null);
-  posted = form ? readProfileForm(form) : null;
+  // News and offers: only the channels the buyer changed go to the API.
+  if (form?.get("intent") === ACCOUNT_MARKETING_INTENT) {
+    const update = readAccountMarketingForm(form);
+    if (Object.keys(update).length === 0) {
+      return new Response(null, { status: 303, headers: { Location: accountMarketingLocation("saved"), ...noStore } });
+    }
+    const saved = await saveAccountMarketing(Astro.request, { ...update, language: newsletterLanguage(form.get("language")) });
+    if (saved.ok) {
+      const location = accountMarketingLocation(saved.confirmationRequested ? "confirm" : "saved");
+      return new Response(null, { status: 303, headers: { Location: location, ...noStore } });
+    }
+    if (saved.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
+    // Answered at the News and offers section below.
+    marketingFailure = saved.reason;
+  }
+  posted = form && !marketingFailure ? readProfileForm(form) : null;
   let saved: ProfileSaveResult | null = null;
-  if (posted?.intent === "name") {
+  if (marketingFailure) {
+    // Nothing else was posted.
+  } else if (posted?.intent === "name") {
     const error = nameError(posted.name);
     if (error) fieldErrors = { name: error };
     else saved = await saveAccountProfile(Astro.request, { name: posted.name });
@@ -84,14 +113,22 @@ if (Astro.request.method === "POST") {
     if (saved.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
     formMessage = saved.reason === "invalid" && saved.message ? saved.message : ACCOUNT_OFFLINE_MESSAGE;
   }
-  Astro.response.status = formMessage === ACCOUNT_OFFLINE_MESSAGE ? 503 : 422;
+  Astro.response.status = marketingFailure
+    ? (marketingFailure === "invalid" ? 422 : 503)
+    : formMessage === ACCOUNT_OFFLINE_MESSAGE ? 503 : 422;
 }
 
-const [layoutData, read, summary] = await Promise.all([
+const [layoutData, read, summary, marketingRead] = await Promise.all([
   getLayoutData(),
   readAccountCustomer(Astro.request),
   readAccountSummaryForRequest(Astro.request),
+  readAccountMarketing(Astro.request),
 ]);
+// News and offers speaks the store's language (the rest of the account is English today).
+const marketingLanguage = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
+const marketingCopy = newsletterCopy(marketingLanguage).account;
+const marketing = marketingRead.ok ? marketingRead.data : null;
+const marketingFlag = posted || marketingFailure ? null : readAccountMarketingFlag(Astro.url.searchParams);
 if (!read.ok && read.reason === "unavailable") Astro.response.status = 503;
 const customer = read.ok ? read.data : null;
 const savedFlag = posted ? null : readProfileSavedFlag(Astro.url.searchParams);
@@ -245,6 +282,56 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                   <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-destructive px-5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90">Remove address</button>
                 </form>
               </AccountDialog>
+            )}
+          </div>
+        </section>
+
+        <section id={ACCOUNT_MARKETING_ANCHOR} class={ui.card} aria-labelledby="marketingHeading" lang={marketingLanguage} data-account-marketing>
+          <h2 id="marketingHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{marketingCopy.heading}</h2>
+          <div class={ui.cardBody}>
+            {marketingFlag && (
+              <p role="status" class={`${ui.notice} mb-4`}>{marketingFlag === "confirm" ? marketingCopy.confirmRequested : marketingCopy.saved}</p>
+            )}
+            {marketingFailure && <p role="alert" class={`${ui.errorNotice} mb-4`}>{marketingCopy.failed}</p>}
+            <p class={ui.muted}>{marketingCopy.text}</p>
+            {marketing ? (
+              <form method="post" action="/account/profile" class="mt-4 space-y-4">
+                <input type="hidden" name="intent" value={ACCOUNT_MARKETING_INTENT} />
+                <input type="hidden" name="language" value={marketingLanguage} />
+                <fieldset class="divide-y divide-border">
+                  <legend class="sr-only">{marketingCopy.heading}</legend>
+                  {marketing.map((entry) => {
+                    const on = accountMarketingOn(entry);
+                    const id = `marketing-${entry.channel}`;
+                    const hintId = `${id}-hint`;
+                    const hint = !entry.available
+                      ? (entry.channel === "email" ? marketingCopy.needsEmail : marketingCopy.needsPhone)
+                      : entry.status === "pending" ? marketingCopy.pending : null;
+                    return (
+                      <div class="py-3 first:pt-0 last:pb-0">
+                        {entry.available && <input type="hidden" name={`was_${entry.channel}`} value={on ? "on" : "off"} />}
+                        <label for={id} class:list={["flex min-h-11 items-center gap-3", entry.available ? "cursor-pointer" : "cursor-not-allowed opacity-60"]}>
+                          <input
+                            id={id}
+                            type="checkbox"
+                            name="channel"
+                            value={entry.channel}
+                            checked={on && entry.available}
+                            disabled={!entry.available}
+                            aria-describedby={hint ? hintId : undefined}
+                            class="size-5 shrink-0 accent-primary"
+                          />
+                          <span class="font-medium text-foreground">{marketingCopy.channelLabel[entry.channel]}</span>
+                        </label>
+                        {hint && <p id={hintId} class={`${ui.muted} pl-8`}>{hint}</p>}
+                      </div>
+                    );
+                  })}
+                </fieldset>
+                <button type="submit" class={ui.primaryButton}>{marketingCopy.save}</button>
+              </form>
+            ) : (
+              <p class={`${ui.muted} mt-4`}>{ACCOUNT_OFFLINE_MESSAGE}</p>
             )}
           </div>
         </section>

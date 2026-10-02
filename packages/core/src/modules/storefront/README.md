@@ -54,13 +54,23 @@ Returns: `{ seo, sections: { lists, media, brands, promotions, categories, colle
 
 ### `getLayoutData(db)`
 
-Fetches and shapes all layout data in a **single batched D1 round-trip**:
-analytics scripts, the settings documents it projects (currency, media
-delivery, Meta CAPI readiness, SEO discovery, business identity, security,
-policies), the published theme (parsed strictly; an unreadable row renders
-the default theme whole), the active checkout language, the store-shape
-counts, the reachable category tree, and the published theme's brand images
-(logo, footer logo, tab icon) through the stored theme row.
+Fetches and shapes all layout data in **two batched D1 round trips**:
+
+1. Analytics scripts, the settings documents it projects (currency, media
+   delivery, Meta CAPI readiness, SEO discovery, business identity,
+   security, policies), the published theme (parsed strictly; an unreadable
+   row renders the default theme whole), the active checkout language, the
+   store-shape counts, the reachable category tree, the published theme's
+   brand images (logo, footer logo, tab icon) through the stored theme row,
+   and the placed menus (`planPublishedNavigationPlacements`: the placement
+   manifest and the published items of every placed menu).
+2. The pages the linked store policies name (`planPublicStorePolicies`) and
+   every resource the menu items link to (`planNavigationResourceSnapshots`,
+   at most 90 IDs per statement). Skipped when there are none.
+
+Meta CAPI readiness decrypts the access token only when the stored document
+turns the pixel on. `storefront-render-budget.test.ts` holds a layout with
+header and footer menus and linked policies to these two waves.
 
 Returns: `{ analytics, navigation, footerMenus, categoryTree, currency, theme, brand, storeShape, media, metaCapi, business, seo, cspAllowedDomains, storefrontCopy, policies }`.
 The look (logo, announcement, footer words) is the theme document and

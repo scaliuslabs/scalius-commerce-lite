@@ -23,6 +23,7 @@
     "./modules/collections/browser": "./src/modules/collections/browser.ts",
     "./modules/conversations": "./src/modules/conversations/index.ts",
     "./modules/conversations/browser": "./src/modules/conversations/browser.ts",
+    "./modules/customer-marketing": "./src/modules/customer-marketing/index.ts",
     "./modules/customers": "./src/modules/customers/index.ts",
     "./modules/customers/browser": "./src/modules/customers/browser.ts",
     "./modules/custom-fields": "./src/modules/custom-fields/index.ts",

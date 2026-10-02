@@ -10,6 +10,7 @@ import { createCacheFrontierClient, type CacheFrontierClient } from "./lib/cache
 import { CACHE_FRONTIER_SECRET_PURPOSE } from "@scalius/shared/cache-frontier";
 import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
+import { oneClickUnsubscribeRequest } from "./lib/newsletter-one-click";
 import { BUILD_ID } from "./config/build-id";
 import {
   RUNTIME_SECRET_PURPOSES,
@@ -61,7 +62,10 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const request = await resolveFrontProxy(incoming, this.env);
     const httpsRedirect = httpsRedirectResponse(request);
     if (httpsRedirect) return httpsRedirect;
-    return servePublicStorefrontRequest(request, {
+    // A mail client's RFC 8058 one-click unsubscribe (no Origin, a form
+    // body) reaches the unsubscribe page as JSON; everything else as sent.
+    const oneClick = await oneClickUnsubscribeRequest(request);
+    return servePublicStorefrontRequest(oneClick ?? request, {
       cache: caches.default,
       buildId: BUILD_ID,
       workerVersion: readWorkerVersion(this.env),

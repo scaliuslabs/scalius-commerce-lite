@@ -50,7 +50,7 @@ import {
 } from "@/lib/catalog-listing";
 import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { SlidersHorizontal, X } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 export interface CatalogBand {
   title: string;
@@ -294,7 +294,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           aria-expanded="false"
           class="relative inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <Icon name="sliders-horizontal" class="h-4 w-4" />
           <span>Filter</span>
           {refinementCount > 0 && (
             <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
@@ -340,7 +340,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
             aria-expanded="false"
             class="catalog-marketplace-filter-toggle relative flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm"
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <Icon name="sliders-horizontal" class="h-4 w-4" />
             <span class="sr-only">Filters</span>
             {refinementCount > 0 && (
               <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
@@ -370,7 +370,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
             aria-expanded="false"
             class="relative inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold text-foreground"
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <Icon name="sliders-horizontal" class="h-4 w-4" />
             <span>Filter</span>
             {refinementCount > 0 && (
               <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
@@ -397,7 +397,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
               boutiqueBar && "catalog-boutique-filter-toggle",
             ]}
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <Icon name="sliders-horizontal" class="h-4 w-4" />
             <span>Filters</span>
             {refinementCount > 0 && (
               <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
@@ -449,7 +449,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
             aria-label="Close filters"
             class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"
           >
-            <X className="h-5 w-5" />
+            <Icon name="x" class="h-5 w-5" />
           </button>
         </div>
         <CatalogFilters
@@ -485,7 +485,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         <div class="catalog-band-tools">
           {drawer && showFilters && (
             <button type="button" data-catalog-filter-toggle aria-controls="filter-section" aria-expanded="false" class="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted">
-              <SlidersHorizontal className="h-4 w-4" /> Filters
+              <Icon name="sliders-horizontal" class="h-4 w-4" /> Filters
             </button>
           )}
           {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}

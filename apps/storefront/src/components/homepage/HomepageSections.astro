@@ -49,6 +49,8 @@ import BannerMosaic from "./BannerMosaic.astro";
 import BrandWall from "./BrandWall.astro";
 import RecentlyViewed from "./RecentlyViewed.astro";
 import AppSection from "./AppSection.astro";
+import NewsletterSection from "./NewsletterSection.astro";
+import { newsletterLanguage } from "@/lib/newsletter-copy";
 
 interface Props {
   sections: StorefrontSection[];
@@ -61,9 +63,12 @@ interface Props {
   previewMarks?: boolean;
   /** Render only the unit holding this section (the preview section route). */
   only?: string;
+  /** The store's language (the layout's `storefrontCopy.languageCode`) for the storefront's own words. */
+  languageCode?: string | null;
 }
 
-const { sections, content, leadSectionId, currencySymbol, currencyCode, previewMarks = false, only } = Astro.props;
+const { sections, content, leadSectionId, currencySymbol, currencyCode, previewMarks = false, only, languageCode } = Astro.props;
+const language = newsletterLanguage(languageCode);
 const units = homepageRenderUnits(sections, content);
 const phoneSections = homepagePhoneSections(sections, content);
 const phoneHeroAfterCategories = phoneSections !== sections;
@@ -237,6 +242,8 @@ const root = only
         )}
 
         {section.type === "seo-text" && <SeoText section={section} />}
+
+        {section.type === "newsletter" && <NewsletterSection section={section} language={language} />}
 
         {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} />}
       </div>

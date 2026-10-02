@@ -115,7 +115,8 @@ describe("homepage section rules", () => {
     expect(homepageSectionRenders(section("banner", "b", { mediaId: "m1" }), content())).toBe(true);
     expect(homepageSectionRenders(section("banner", "b", { heading: "Sale" }), empty)).toBe(true);
     expect(homepageSectionRenders(section("faq", "f"), empty)).toBe(false);
-    expect(homepageSectionRenders(section("newsletter", "n", { heading: "Join" }), content())).toBe(false);
+    // The signup reads no store data: it always has its form.
+    expect(homepageSectionRenders(section("newsletter", "n", { heading: "Join" }), empty)).toBe(true);
     expect(homepageSectionRenders(section("seo-text", "s", { heading: "", body: "\n\n" }), empty)).toBe(false);
   });
 

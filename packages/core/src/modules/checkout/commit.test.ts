@@ -463,7 +463,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(mocks.verifyPromotionCheckoutSnapshot).toHaveBeenCalledWith(
       db,
       payload.promotion,
-      "cust_existing",
+      { customerId: "cust_existing", segmentCustomerId: "cust_existing" },
     );
     expect(db.insertValues).toContainEqual(expect.objectContaining({
       promotionId: "promo_1",

@@ -128,6 +128,8 @@ describe("public storefront cache policy", () => {
     ["account", "/account/orders", {}],
     ["receipt", "/order-success", {}],
     ["recovery", "/payment-recovery", {}],
+    ["newsletter result", "/newsletter?status=subscribed", {}],
+    ["newsletter link", "/newsletter/unsubscribe?token=u1.x", {}],
     ["variant selection", "/products/fish?size=large", {}],
     ["signed-in buyer", "/products/fish", { Cookie: "_fbp=fb.1.1; cs_auth=1" }],
     ["session", "/about", { Cookie: "cs_tok=private" }],
@@ -383,7 +385,7 @@ describe("the cart shell", () => {
     expect(context.cache.put).not.toHaveBeenCalled();
   });
 
-  it.each(["/checkout", "/order-success?orderId=o1", "/payment-recovery", "/account", "/track-order"])(
+  it.each(["/checkout", "/order-success?orderId=o1", "/payment-recovery", "/account", "/track-order", "/newsletter", "/newsletter/confirm"])(
     "still renders %s for every request",
     async (path) => {
       const { context, render } = createContext();
@@ -400,7 +402,7 @@ describe("pages that batch their layout read", () => {
     for (const path of ["/", "/products/linen", "/categories/bags/", "/brands/linen/", "/collections/c1", "/search", "/cart", "/checkout", "/blog", "/blog/post", "/about-us", "/categories", "/navigation/panels"]) {
       expect(isLayoutBatchedPagePath(path), path).toBe(true);
     }
-    for (const path of ["/sitemap.xml", "/robots.txt", "/blog/feed.xml", "/api/product-feed.xml", "/api/cart/validate", "/account", "/order-success", "/llms.txt", "/.well-known/ucp", "/theme-preview"]) {
+    for (const path of ["/sitemap.xml", "/robots.txt", "/blog/feed.xml", "/api/product-feed.xml", "/api/cart/validate", "/account", "/order-success", "/llms.txt", "/.well-known/ucp", "/theme-preview", "/newsletter"]) {
       expect(isLayoutBatchedPagePath(path), path).toBe(false);
     }
   });

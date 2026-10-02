@@ -459,7 +459,10 @@ products it returns, with the media statement of exactly those rows), the
 section images (hero slides included), the category tiles' categories, the
 collections sections' collections and a product homepage's product
 (`packages/core/src/modules/storefront/README.md`). The layout part reads
-the theme's brand images in its one batch.
+in at most two waves too: one batch with the settings, theme, brand images,
+category tree and placed menus, then one batch with the policy pages and the
+resources the menus link to (it was up to nine waves with menus and
+policies).
 
 A "wave" is a round of D1 calls that must wait for the previous one. Each wave
 costs a full database round trip, so a new sequential `await` in a storefront

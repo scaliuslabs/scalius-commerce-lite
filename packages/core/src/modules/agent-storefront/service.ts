@@ -688,9 +688,12 @@ async function quoteAgentStorefrontDiscount(
     ...(item.isGiftCard ? { giftCard: true } : {}),
   }));
   const shippingMinor = projection.delivery?.shippingMinor ?? 0;
+  // Only a context bound to a live customer session counts as signed in.
+  const signedInCustomerId = await getLiveContextCustomerId(db, row);
   const quote = await quoteStorefrontDiscount(db, {
     codes: code ? [code] : [],
-    customerId: await getLiveContextCustomerId(db, row),
+    customerId: signedInCustomerId,
+    segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
     cart: { currencyCode: currency.currencyCode, lines, shippingAmountMinor: shippingMinor },
   });

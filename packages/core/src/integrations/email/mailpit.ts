@@ -1,13 +1,13 @@
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
-import { resolveSender } from "./provider";
+import { resolveSender, safeEmailHeaders } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
 export class MailpitEmailProvider implements EmailProvider {
   readonly name = "mailpit";
 
   async sendEmail(
-    { to, subject, html, from, fromName, text }: SendEmailOptions,
+    { to, subject, html, from, fromName, text, headers }: SendEmailOptions,
     context?: EmailRuntimeContext,
   ): Promise<SendEmailResult> {
     const settings = await getEmailRuntimeSettings(context);
@@ -17,6 +17,7 @@ export class MailpitEmailProvider implements EmailProvider {
     }
 
     const sender = resolveSender({ from, fromName }, settings);
+    const extraHeaders = safeEmailHeaders(headers);
     const response = await fetch(`${baseUrl}/api/v1/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,6 +27,7 @@ export class MailpitEmailProvider implements EmailProvider {
         Subject: subject,
         HTML: html,
         Text: text || "",
+        ...(extraHeaders ? { Headers: extraHeaders } : {}),
       }),
     });
     if (!response.ok) {

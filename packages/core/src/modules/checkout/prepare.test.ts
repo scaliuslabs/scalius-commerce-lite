@@ -399,6 +399,7 @@ describe("createStorefrontOrder tax discount parity", () => {
       codes: ["SAVE15"],
       customerId: "customer_session_owner",
       customerPhone: "+8801700000000",
+      segmentCustomerId: "customer_session_owner",
       cart: {
         currencyCode: "BDT",
         lines: [{

@@ -1,5 +1,5 @@
 ---
-import { Circle, Minus, Plus, ShoppingCart, Tag } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import ProductDetails from "./ProductDetails.astro";
 import ProductBuyerInputs from "./ProductBuyerInputs.astro";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
@@ -301,7 +301,7 @@ function optionAriaLabel(
       {!factsColumn && !factPills && (
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -310,7 +310,7 @@ function optionAriaLabel(
         <ul class="mt-2 space-y-1" data-product-offers>
           {offers.map((offer) => (
             <li class="flex items-start gap-1.5 text-sm text-foreground" data-offer-ends={offer.endsAtEpochSeconds ?? ""}>
-              <Tag className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <Icon name="tag" class="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span>
                 <span class="font-medium">{offer.title}:</span> {offer.text.before}{offer.products.length === 1 && offer.products[0]!.slug !== product.slug
                   ? <a href={`/products/${encodeURIComponent(offer.products[0]!.slug)}`} class="font-medium text-primary underline underline-offset-2">{offer.text.item}</a>
@@ -365,7 +365,7 @@ function optionAriaLabel(
                       <button
                         type="button"
                         class:list={[
-                          "variant-option-btn flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:h-10",
+                          "variant-option-btn cursor-pointer",
                           {
                             "border-primary bg-primary text-primary-foreground": selected && status !== "sold_out",
                             "border-input bg-background text-foreground": !selected && status === "available",
@@ -451,7 +451,7 @@ function optionAriaLabel(
       {factsColumn && (
         <div class="flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -459,9 +459,9 @@ function optionAriaLabel(
       <div>
         <label for="quantity" class:list={["mb-1 block text-sm font-medium text-foreground", look?.cta.inlineQuantity && "lg:sr-only"]}>{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
-          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Minus className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
-          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Plus className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
         </div>
         <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
       </div>
@@ -469,7 +469,7 @@ function optionAriaLabel(
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="buy-box-ctas flex gap-2 pt-1">
         <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          {look?.cta.showBuyNow !== false && <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+          {look?.cta.showBuyNow !== false && <Icon name="shopping-cart" class="mr-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
         {look?.cta.showBuyNow !== false && (
           <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
@@ -492,14 +492,61 @@ function optionAriaLabel(
   {plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} plain />}
 </div>
 
-<style>
+<style is:global>
+  /* An option value's button, once here instead of the same utilities on
+     every value: Tailwind's values at zero specificity (every rule that won
+     over them still wins). Its state colours stay utility classes, which
+     product-controller.ts swaps. */
+  :where(.variant-option-btn) {
+    display: flex;
+    height: calc(var(--spacing) * 11);
+    min-width: calc(var(--spacing) * 11);
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(var(--radius) - 2px);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    padding-inline: calc(var(--spacing) * 3);
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  @media (hover: hover) {
+    :where(.variant-option-btn):hover {
+      border-color: var(--primary);
+    }
+  }
+
+  :where(.variant-option-btn):focus-visible {
+    outline-style: var(--tw-outline-style);
+    outline-width: 2px;
+    outline-offset: 2px;
+    outline-color: var(--ring);
+  }
+
+  @media (min-width: 64rem) {
+    :where(.variant-option-btn) {
+      height: calc(var(--spacing) * 10);
+    }
+  }
+</style>
+
+<style is:global>
+  /* Global, written as Astro scoped it: each `:not(.\#)` (always true) carries
+     the weight of the scope attribute it replaces, so the cascade is unchanged
+     and no element carries data-astro-cid-* (it repeated on every element). */
   /* Template buy boxes (never classic): the reference type scale, button
      shape, height, order and width, a bordered card, a facts column. */
-  .buy-box-price-fact,
-  .buy-box-regular-fact {
+  .buy-box-price-fact:not(.\#),
+  .buy-box-regular-fact:not(.\#) {
     display: contents;
   }
-  [data-fact-pills] :is(.buy-box-price-fact, .buy-box-regular-fact, .buy-box-fact-pill) {
+  [data-fact-pills]:not(.\#) :is(.buy-box-price-fact, .buy-box-regular-fact, .buy-box-fact-pill):not(.\#) {
     display: inline-flex;
     max-width: 100%;
     align-items: center;
@@ -510,97 +557,97 @@ function optionAriaLabel(
     font-size: 0.8125rem;
     line-height: 1.25rem;
   }
-  [data-fact-pills] .buy-box-regular-fact:has(.product-original-price.hidden) {
+  [data-fact-pills]:not(.\#) .buy-box-regular-fact:has(.product-original-price.hidden):not(.\#) {
     display: none;
   }
-  [data-buy-box-look][data-fact-pills] .buy-box-main-price .product-original-price {
+  [data-buy-box-look][data-fact-pills]:not(.\#) .buy-box-main-price:not(.\#) .product-original-price:not(.\#) {
     color: var(--foreground);
     font-size: inherit;
     font-weight: 600;
     line-height: inherit;
   }
-  [data-buy-box-look][data-fact-pills] .buy-box-main-price .product-original-price {
+  [data-buy-box-look][data-fact-pills]:not(.\#) .buy-box-main-price:not(.\#) .product-original-price:not(.\#) {
     text-decoration: none;
   }
-  [data-buy-box-look] h1 {
+  [data-buy-box-look]:not(.\#) h1:not(.\#) {
     font-size: var(--bb-title-phone);
     font-weight: var(--bb-title-weight);
   }
-  [data-buy-box-look] .product-price {
+  [data-buy-box-look]:not(.\#) .product-price:not(.\#) {
     font-size: var(--bb-price-phone);
     font-weight: var(--bb-price-weight);
   }
-  [data-buy-box-look][data-price-tone="primary"] .product-price {
+  [data-buy-box-look][data-price-tone="primary"]:not(.\#) .product-price:not(.\#) {
     color: var(--primary);
   }
-  [data-buy-box-look] .buy-box-ctas {
+  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) {
     max-width: var(--bb-cta-max);
   }
-  .buy-box-purchase {
+  .buy-box-purchase:not(.\#) {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
-  [data-essentials-buy-box] .buy-box-purchase {
+  [data-essentials-buy-box]:not(.\#) .buy-box-purchase:not(.\#) {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
     align-items: end;
     max-width: 380px;
   }
-  [data-essentials-buy-box] .buy-box-ctas {
+  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) {
     display: contents;
   }
-  [data-essentials-buy-box] .buy-box-ctas > [data-action="add-to-cart"] {
+  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
     grid-column: 2;
   }
-  [data-essentials-buy-box] .buy-box-ctas > [data-action="buy-now"] {
+  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
     grid-column: 1 / -1;
   }
-  [data-facts-column] .purchase-price {
+  [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
     display: none;
   }
-  [data-buy-box-look] .buy-box-ctas > button {
+  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
     min-height: var(--bb-cta-height);
     font-size: 0.9375rem;
   }
-  [data-buy-box-look] .buy-box-ctas > button:only-child {
+  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) > button:only-child:not(.\#) {
     background: var(--primary);
     color: var(--primary-foreground);
   }
-  [data-cta-shape="pill"] .buy-box-ctas > button {
+  [data-cta-shape="pill"]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
     border-radius: 9999px;
   }
-  [data-cta-layout="stack"] .buy-box-ctas {
+  [data-cta-layout="stack"]:not(.\#) .buy-box-ctas:not(.\#) {
     flex-direction: column;
   }
   @media (max-width: 39.999rem) {
-    [data-cta-phone-layout="row"] .buy-box-ctas {
+    [data-cta-phone-layout="row"]:not(.\#) .buy-box-ctas:not(.\#) {
       flex-direction: row;
     }
   }
-  [data-cta-first="buy-now"] .buy-box-ctas > [data-action="buy-now"] {
+  [data-cta-first="buy-now"]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
     order: -1;
   }
-  .variant-option-panels > * + * {
+  .variant-option-panels:not(.\#) > *:not(.\#) + *:not(.\#) {
     margin-top: 0.75rem;
   }
-  [data-facts-column] .variant-option-btn {
+  [data-product-summary][data-facts-column] .variant-option-btn:not(.\#) {
     flex-direction: column;
     align-items: flex-start;
     height: auto;
     min-height: 2.75rem;
     text-align: left;
   }
-  [data-option-price]:not([hidden]) {
+  [data-option-price]:not([hidden]):not(.\#) {
     font-size: 0.75rem;
     font-weight: 700;
   }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panel {
+  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panel:not(.\#) {
     border: 1px solid var(--border);
     border-radius: 0.75rem;
     padding: 0.75rem 1rem 1rem;
   }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-btn {
+  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-btn:not(.\#) {
     border-radius: 9999px;
     max-width: 100%;
     height: auto;
@@ -608,128 +655,128 @@ function optionAriaLabel(
     overflow-wrap: anywhere;
     text-align: center;
   }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-values[data-option-overflow] {
+  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-values[data-option-overflow]:not(.\#) {
     max-height: 12rem;
     overflow-y: auto;
     padding: 2px;
   }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"] #quantity-minus {
+  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) #quantity-minus:not(.\#) {
     border-radius: 9999px 0 0 9999px;
   }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"] #quantity-plus {
+  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) #quantity-plus:not(.\#) {
     border-radius: 0 9999px 9999px 0;
   }
-  [data-facts-column] .buy-box-ctas > [data-action="add-to-cart"] {
+  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
     order: -2;
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accent-foreground);
   }
-  [data-facts-column] .buy-box-ctas > [data-action="buy-now"] {
+  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
     border-color: var(--primary);
     background: var(--primary);
     color: var(--primary-foreground);
   }
-  [data-facts-column] .buy-box-ctas > button:hover:not(:disabled) {
+  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > button:hover:not(:disabled):not(.\#) {
     filter: brightness(0.95);
   }
-  [data-facts-column] .buy-box-ctas > button:disabled {
+  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > button:disabled:not(.\#) {
     border-color: var(--border);
     background: var(--muted);
     color: var(--muted-foreground);
   }
-  [data-facts-column][data-price-tone] .purchase-price {
+  [data-product-summary][data-facts-column][data-price-tone] .purchase-price:not(.\#) {
     color: var(--foreground);
     font-size: 1.5rem;
   }
-  [data-buy-box-card] > .buy-box-body {
+  [data-buy-box-card]:not(.\#) > .buy-box-body:not(.\#) {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1rem;
     height: auto;
   }
   @media (min-width: 64rem) {
-    [data-quantity-inline] .buy-box-purchase {
+    [data-quantity-inline]:not(.\#) .buy-box-purchase:not(.\#) {
       display: grid;
       grid-template-columns: 140px minmax(0, 1fr);
       align-items: end;
       gap: 8px;
       max-width: calc(148px + var(--bb-cta-max));
     }
-    [data-quantity-inline] .buy-box-ctas {
+    [data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) {
       width: 100%;
       padding-top: 0;
     }
-    [data-buy-box-card][data-quantity-inline] .buy-box-purchase {
+    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-purchase:not(.\#) {
       display: flex;
       flex-flow: row wrap;
       align-items: flex-end;
       gap: 8px;
       max-width: 100%;
     }
-    [data-buy-box-card][data-quantity-inline] .buy-box-ctas {
+    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) {
       flex: 0 1 auto;
       width: max-content;
       max-width: calc(100% - 148px);
     }
-    [data-buy-box-card][data-quantity-inline] .buy-box-ctas > button {
+    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
       min-width: 115px;
       overflow-wrap: anywhere;
     }
-    [data-quantity-inline] #quantity-minus,
-    [data-quantity-inline] #quantity-plus,
-    [data-quantity-inline] #quantity {
+    [data-quantity-inline]:not(.\#) #quantity-minus:not(.\#),
+    [data-quantity-inline]:not(.\#) #quantity-plus:not(.\#),
+    [data-quantity-inline]:not(.\#) #quantity:not(.\#) {
       height: 45px;
     }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels {
+    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1rem;
     }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels > * + * {
+    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) > *:not(.\#) + *:not(.\#) {
       margin-top: 0;
     }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"] .variant-option-panels > :only-child {
+    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) > :only-child:not(.\#) {
       grid-column: 1 / -1;
     }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"] .buy-box-ctas {
+    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .buy-box-ctas:not(.\#) {
       flex-direction: row;
       max-width: none;
     }
-    [data-buy-box-look] h1 {
+    [data-buy-box-look]:not(.\#) h1:not(.\#) {
       font-size: var(--bb-title-desktop);
     }
-    [data-buy-box-look] .product-price {
+    [data-buy-box-look]:not(.\#) .product-price:not(.\#) {
       font-size: var(--bb-price-desktop);
     }
-    [data-buy-box-card] > .buy-box-body {
+    [data-buy-box-card]:not(.\#) > .buy-box-body:not(.\#) {
       padding: 1.5rem;
     }
   }
   @media (max-width: 63.999rem) {
-    [data-facts-column] .buy-box-title,
-    [data-facts-column] .buy-box-main-price {
+    [data-product-summary][data-facts-column] .buy-box-title:not(.\#),
+    [data-product-summary][data-facts-column] .buy-box-main-price:not(.\#) {
       display: none;
     }
-    [data-facts-column] .purchase-price {
+    [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
       display: block;
     }
   }
   /* Keep the variant selectors in the detail column while the existing form,
      quantity buttons, purchase buttons and delivery facts share one card. */
   @media (min-width: 80rem) {
-    [data-facts-column] #product-actions {
+    [data-product-summary][data-facts-column] #product-actions:not(.\#) {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 15.25rem;
       gap: 1.5rem;
       align-items: start;
     }
-    [data-facts-column] .buy-box-purchase {
+    [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) {
       border: 1px solid var(--border);
       border-radius: 0.5rem;
       padding: 1rem;
     }
-    [data-facts-column] .purchase-price {
+    [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
       display: block;
     }
   }

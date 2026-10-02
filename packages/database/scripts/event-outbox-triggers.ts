@@ -15,8 +15,9 @@
  * strings) and PostgreSQL has no `randomblob`/`hex`. The canonical PostgreSQL
  * schema compiler takes these forms from `eventOutboxPostgresTrigger`.
  *
- * The migration that installs them (0103_order_channel_event_outbox) must
- * contain every generated statement verbatim (`__tests__/event-outbox.test.ts`).
+ * The migration that installs each (0103_order_channel_event_outbox, then the
+ * ones named in `EVENT_TRIGGER_MIGRATIONS`) must contain every generated
+ * statement verbatim (`__tests__/event-outbox.test.ts`).
  *
  * Event ids are `evt_` + milliseconds since the epoch (13 digits) + 12
  * random hex characters: unique, and sortable by time to the millisecond.
@@ -420,7 +421,52 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     resourceId: NEW("id"),
     facts: [["customerId", NEW("id")]],
   },
+  // ── marketing consent (0108) ──────────────────────────────────────────
+  {
+    name: "customer_marketing_consents_created",
+    table: "customer_marketing_consents",
+    event: "insert",
+    topic: "customer.consent_changed",
+    resourceId: NEW("customer_id"),
+    facts: [
+      ["customerId", NEW("customer_id")],
+      ["channel", NEW("channel")],
+      ["previousState", NULL],
+      ["state", NEW("state")],
+      ["source", NEW("source")],
+    ],
+  },
+  {
+    name: "customer_marketing_consents_changed",
+    table: "customer_marketing_consents",
+    event: "update",
+    when: changed("state"),
+    topic: "customer.consent_changed",
+    resourceId: NEW("customer_id"),
+    facts: [
+      ["customerId", NEW("customer_id")],
+      ["channel", NEW("channel")],
+      ["previousState", OLD("state")],
+      ["state", NEW("state")],
+      ["source", NEW("source")],
+    ],
+  },
 ];
+
+/**
+ * The migration that installed each trigger: 0103 installed the first set;
+ * later migrations add theirs and must contain each generated statement
+ * verbatim (`__tests__/event-outbox.test.ts`).
+ */
+export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
+  customer_marketing_consents_created: "0108_customer_marketing",
+  customer_marketing_consents_changed: "0108_customer_marketing",
+};
+
+/** The migration file name (without `.sql`) that installs a trigger spec. */
+export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  return EVENT_TRIGGER_MIGRATIONS[spec.name] ?? "0103_order_channel_event_outbox";
+}
 
 // ---------------------------------------------------------------------------
 // Rendering
@@ -620,12 +666,15 @@ export function eventOutboxPostgresTrigger(name: string): string | undefined {
   return postgresSql === undefined ? undefined : `${postgresSql};`;
 }
 
-/** The SQLite statements (each ends with `;`) in declaration order. */
-export function eventOutboxSqliteStatements(): string[] {
-  return generated.map((trigger) => `${trigger.sqlite};`);
+const inMigration = (migration: string | undefined) => (trigger: GeneratedEventTrigger) =>
+  migration === undefined || eventTriggerMigration({ name: trigger.name.slice(EVENT_OUTBOX_TRIGGER_PREFIX.length) }) === migration;
+
+/** The SQLite statements (each ends with `;`) in declaration order, optionally of one migration. */
+export function eventOutboxSqliteStatements(migration?: string): string[] {
+  return generated.filter(inMigration(migration)).map((trigger) => `${trigger.sqlite};`);
 }
 
-/** The PostgreSQL statements (each ends with `;`) in declaration order. */
-export function eventOutboxPostgresStatements(): string[] {
-  return generated.map((trigger) => `${trigger.postgres};`);
+/** The PostgreSQL statements (each ends with `;`) in declaration order, optionally of one migration. */
+export function eventOutboxPostgresStatements(migration?: string): string[] {
+  return generated.filter(inMigration(migration)).map((trigger) => `${trigger.postgres};`);
 }

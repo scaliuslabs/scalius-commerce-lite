@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
 import {
   deleteApiV1AdminCustomersById,
@@ -8,7 +9,6 @@ import {
   postApiV1AdminCustomersByIdRestore,
 } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { createListSearchValidator } from "~/lib/list-helpers";
 import { customerTitle } from "~/lib/customer-title";
 import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -22,6 +22,15 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
+import { CustomerBulkActions } from "~/components/admin/customers/CustomerBulkActions";
+import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
+import { ExportCustomersDialog } from "~/components/admin/customers/ExportCustomersDialog";
+import {
+  CUSTOMER_FILTER_PARAMS,
+  customerListFilters,
+  validateCustomerSearch,
+  type CustomerListSearch,
+} from "~/components/admin/customers/customer-list-search";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CustomerCell } from "~/components/admin/CustomerCell";
@@ -29,12 +38,10 @@ import { pageHead } from "~/i18n/page-titles";
 
 type Customer = CustomersListPayload["customers"][number];
 
-const validateCustomerSearch = createListSearchValidator(
-  ["name", "totalOrders", "totalSpent", "lastOrderAt", "createdAt", "updatedAt"] as const,
-  { sort: "updatedAt", limit: 20 },
-);
+/** The list's own search key per tab ("customers", "customers.subscribers", "customers.trash"). */
+const searchKey = (search: CustomerListSearch) => listSearchKey("customers", search, "view");
 
-function listQuery(search: ReturnType<typeof validateCustomerSearch>, term: string) {
+function listQuery(search: CustomerListSearch, term: string) {
   return customersQueryOptions({
     page: search.page,
     limit: search.limit,
@@ -42,13 +49,14 @@ function listQuery(search: ReturnType<typeof validateCustomerSearch>, term: stri
     sort: search.sort,
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
+    ...customerListFilters(search),
   });
 }
 
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("customers", deps), deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(searchKey(deps), deps.q))),
   head: () => pageHead("customers"),
   component: CustomersPage,
   errorComponent: RouteErrorComponent,
@@ -63,12 +71,17 @@ async function runEach(rows: Customer[], call: (id: string) => Promise<unknown>)
 
 function CustomersPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch(listSearchKey("customers", search));
+  const [term] = useListSearch(searchKey(search));
   const t = useMessages(customersMessages);
   const { fmt } = useCurrency();
   const { hasPermission } = usePermissions();
   const canDelete = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
+  const canEdit = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
   const openTo = (row: Customer) => `/admin/customers/${row.id}/edit`;
+  // The export dialog: from the header (the filters) or the bulk bar (the selection).
+  const [exporting, setExporting] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
+  // Same query as the table (shared cache): the export dialog names how many match.
+  const { data: listed } = useQuery(listQuery(search, term));
 
   const columns = useMemo<ColumnDef<Customer, unknown>[]>(() => [
     {
@@ -101,36 +114,64 @@ function CustomersPage() {
   ], [t, fmt, search.trashed]);
 
   return (
-    <ResourceListPage<Customer>
-      title={t("customers")}
-      actions={hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
-      search={search}
-      list="customers"
-      appActions="customer"
-      query={listQuery(search, term)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
-      dataKey="customers"
-      columns={columns}
-      invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
-      empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
-      rowTo={openTo}
-      rowLabel={(row) => customerTitle(row, t).title}
-      canSelectRow={search.trashed ? deletable : undefined}
-      lifecycle={{
-        canTrash: canDelete,
-        canRestore: canDelete,
-        canDelete,
-        canDeleteRow: deletable,
-        undoTrash: true,
-        run: (action, rows) => {
-          const customerIds = rows.map((row) => row.id);
-          if (action === "restore") return runEach(rows, (id) => apiData(postApiV1AdminCustomersByIdRestore({ path: { id } })));
-          if (rows.length > 1) return apiData(postApiV1AdminCustomersBulkDelete({ body: { customerIds, permanent: action === "delete" } }));
-          return action === "delete"
-            ? apiData(deleteApiV1AdminCustomersByIdPermanent({ path: { id: customerIds[0]! } }))
-            : apiData(deleteApiV1AdminCustomersById({ path: { id: customerIds[0]! } }));
-        },
-      }}
-    />
+    <>
+      <ResourceListPage<Customer>
+        title={t("customers")}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setExporting({ open: true, ids: [] })}>{t("export")}</Button>
+            {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
+          </>
+        }
+        search={search}
+        list="customers"
+        appActions="customer"
+        query={listQuery(search, term)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
+        dataKey="customers"
+        columns={columns}
+        invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
+        empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
+        views={{ param: "view", tabs: [{ value: "subscribers", label: t("subscribers") }] }}
+        searchPlaceholder={t("searchPlaceholder")}
+        countLabel={(count) => (count === 1 ? t("customersCountOne") : t("customersCount", { count }))}
+        filterParams={CUSTOMER_FILTER_PARAMS}
+        filters={<CustomerListFilters search={search} />}
+        bulkActions={(rows, done) => (
+          <CustomerBulkActions
+            rows={rows}
+            done={done}
+            canEdit={canEdit}
+            onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
+          />
+        )}
+        rowTo={openTo}
+        rowLabel={(row) => customerTitle(row, t).title}
+        canSelectRow={search.trashed ? deletable : undefined}
+        lifecycle={{
+          canTrash: canDelete,
+          canRestore: canDelete,
+          canDelete,
+          canDeleteRow: deletable,
+          undoTrash: true,
+          run: (action, rows) => {
+            const customerIds = rows.map((row) => row.id);
+            if (action === "restore") return runEach(rows, (id) => apiData(postApiV1AdminCustomersByIdRestore({ path: { id } })));
+            if (rows.length > 1) return apiData(postApiV1AdminCustomersBulkDelete({ body: { customerIds, permanent: action === "delete" } }));
+            return action === "delete"
+              ? apiData(deleteApiV1AdminCustomersByIdPermanent({ path: { id: customerIds[0]! } }))
+              : apiData(deleteApiV1AdminCustomersById({ path: { id: customerIds[0]! } }));
+          },
+        }}
+      />
+      <ExportCustomersDialog
+        open={exporting.open}
+        onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
+        filters={customerListFilters(search)}
+        selectedIds={exporting.ids}
+        total={term ? null : listed?.pagination.total ?? null}
+        searchActive={Boolean(term)}
+      />
+    </>
   );
 }

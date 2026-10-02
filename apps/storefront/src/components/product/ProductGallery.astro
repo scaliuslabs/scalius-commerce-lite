@@ -1,14 +1,7 @@
 ---
 import type { Product, ProductMedia } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
-import {
-  ChevronDown,
-  ChevronUp,
-  Maximize2,
-  Play,
-  Video,
-  X,
-} from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import { productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import { responsiveImageSources } from "@/lib/responsive-image";
 import {
@@ -182,7 +175,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             <span
               class="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
             >
-              <Maximize2 className="h-3 w-3" />
+              <Icon name="maximize-2" class="h-3 w-3" />
               Zoom
             </span>
           </button>
@@ -277,7 +270,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                 tabindex="-1"
               >
                 <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
-                  <ChevronUp className="h-3 w-3" />
+                  <Icon name="chevron-up" class="h-3 w-3" />
                 </span>
               </button>
 
@@ -290,7 +283,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                   {galleryItems.map((itemData, index) => (
                     <button
                       type="button"
-                      class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
+                      class="thumbnail-btn group"
                       data-gallery-thumbnail
                       data-product-media-id={itemData.item.id}
                       data-media-id={itemData.item.mediaId}
@@ -329,7 +322,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                           class="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"
                           aria-hidden="true"
                         >
-                          <Video className="h-5 w-5" />
+                          <Icon name="video" class="h-5 w-5" />
                         </span>
                       )}
                       {itemData.item.kind === "video" && (
@@ -339,7 +332,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                             aria-hidden="true"
                           >
                             <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
-                              <Play className="ml-0.5 h-4 w-4 fill-current" />
+                              <Icon name="play" class="ml-0.5 h-4 w-4 fill-current" />
                             </span>
                           </span>
                           <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
@@ -351,7 +344,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                       <span
                         data-thumb-ring
                         class:list={[
-                          "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
+                          "thumb-ring",
                           itemData.item.id === featuredMedia?.id &&
                             "!border-foreground",
                         ]}
@@ -370,7 +363,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                 tabindex="-1"
               >
                 <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
-                  <ChevronDown className="h-3 w-3" />
+                  <Icon name="chevron-down" class="h-3 w-3" />
                 </span>
               </button>
             </div>
@@ -390,7 +383,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             tabindex="-1"
           >
             <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
-              <ChevronUp className="h-4 w-4" />
+              <Icon name="chevron-up" class="h-4 w-4" />
             </span>
           </button>
 
@@ -402,7 +395,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             {galleryItems.map((itemData, index) => (
               <button
                 type="button"
-                class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
+                class="thumbnail-btn group"
                 data-gallery-thumbnail
                 data-product-media-id={itemData.item.id}
                 data-media-id={itemData.item.mediaId}
@@ -439,7 +432,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                     class="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"
                     aria-hidden="true"
                   >
-                    <Video className="h-5 w-5" />
+                    <Icon name="video" class="h-5 w-5" />
                   </span>
                 )}
                 {itemData.item.kind === "video" && (
@@ -449,7 +442,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                       aria-hidden="true"
                     >
                       <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
-                        <Play className="ml-0.5 h-4 w-4 fill-current" />
+                        <Icon name="play" class="ml-0.5 h-4 w-4 fill-current" />
                       </span>
                     </span>
                     <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
@@ -460,7 +453,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                 <span
                   data-thumb-ring
                   class:list={[
-                    "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
+                    "thumb-ring",
                     itemData.item.id === featuredMedia?.id && "!border-foreground",
                   ]}
                   aria-hidden="true"
@@ -477,7 +470,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             tabindex="-1"
           >
             <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
-              <ChevronDown className="h-4 w-4" />
+              <Icon name="chevron-down" class="h-4 w-4" />
             </span>
           </button>
         </div>
@@ -539,7 +532,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
         aria-label="Close image zoom"
         tabindex="-1"
       >
-        <X className="h-6 w-6" />
+        <Icon name="x" class="h-6 w-6" />
       </button>
     </div>
     <div
@@ -564,134 +557,197 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
   </div>
 </div>
 
-<style>
-  [data-gallery-position][hidden] { display: none; }
+<style is:global>
+  /* The thumbnail button and its selection ring, once here instead of the
+     same utility strings on every thumbnail of both rails: Tailwind's values
+     at zero specificity, so every rule that won over the utilities still
+     wins. The ring's `!border-foreground` stays a class (the media
+     controller toggles it). */
+  :where(.thumbnail-btn) {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    min-height: calc(var(--spacing) * 11);
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: calc(var(--radius) + 1px);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--border);
+    background-color: var(--background);
+    scroll-snap-align: start;
+    transition-property: all;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    --tw-duration: 0.2s;
+    transition-duration: 0.2s;
+  }
+
+  :where(.thumbnail-btn):focus-visible {
+    outline-style: var(--tw-outline-style);
+    outline-width: 2px;
+    outline-offset: 2px;
+    outline-color: var(--foreground);
+  }
+
+  :where(.thumbnail-btn):active {
+    --tw-scale-x: 95%;
+    --tw-scale-y: 95%;
+    --tw-scale-z: 95%;
+    scale: var(--tw-scale-x) var(--tw-scale-y);
+  }
+
+  :where(.thumb-ring) {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--radius) + 1px);
+    border-style: var(--tw-border-style);
+    border-width: 2px;
+    border-color: #0000;
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    --tw-duration: 0.2s;
+    transition-duration: 0.2s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(.thumbnail-btn, .thumb-ring) {
+      transition-property: none;
+    }
+  }
+</style>
+
+<style is:global>
+  /* Global, written as Astro scoped it: each `:not(.\#)` (always true) carries
+     the weight of the scope attribute it replaces, so the cascade is unchanged
+     and no element carries data-astro-cid-* (it repeated on every element). */
+  [data-gallery-position][hidden]:not(.\#) { display: none; }
   /* No `contain` on #product-gallery: layout/paint containment makes it the
      containing block and stacking context of the fixed zoom dialog below,
      which then opened inside the photo box under the header on phones. */
-  .thumbnail-btn {
+  .thumbnail-btn:not(.\#) {
     contain: layout style paint;
   }
-  .thumbnail-btn img {
+  .thumbnail-btn:not(.\#) img:not(.\#) {
     contain: strict;
   }
-  .custom-scrollbar::-webkit-scrollbar {
+  .custom-scrollbar:not(.\#)::-webkit-scrollbar {
     width: 3px;
   }
-  .custom-scrollbar::-webkit-scrollbar-track {
+  .custom-scrollbar:not(.\#)::-webkit-scrollbar-track {
     background: transparent;
   }
   /* The thumbnail rail's scrollbar in the theme's own neutrals. */
-  .custom-scrollbar::-webkit-scrollbar-thumb {
+  .custom-scrollbar:not(.\#)::-webkit-scrollbar-thumb {
     background-color: var(--border);
     border-radius: 20px;
   }
-  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  .custom-scrollbar:hover:not(.\#)::-webkit-scrollbar-thumb {
     background-color: var(--muted-foreground);
   }
-  .thumbnail-btn .thumb-ring.\!border-foreground {
+  .thumbnail-btn:not(.\#) .thumb-ring.\!border-foreground:not(.\#) {
     border-color: var(--foreground) !important;
   }
 
   /* Phones and tablets use a strip unless the merchant keeps the side rail. */
   @media (max-width: 1023px) {
-    .gallery-stage-row {
+    .gallery-stage-row:not(.\#) {
       flex-direction: column;
     }
-    .gallery-mobile-rail {
+    .gallery-mobile-rail:not(.\#) {
       width: 100%;
       max-width: none;
       height: 4.5rem;
     }
-    [data-thumbnail-rail="mobile"] {
+    [data-thumbnail-rail="mobile"]:not(.\#) {
       overflow-x: auto;
       overflow-y: hidden;
       touch-action: pan-x;
       scroll-snap-type: x mandatory;
     }
-    [data-thumbnail-rail="mobile"] > div {
+    [data-thumbnail-rail="mobile"]:not(.\#) > div:not(.\#) {
       flex-direction: row;
       height: 100%;
     }
-    .gallery-mobile-rail .thumbnail-btn {
+    .gallery-mobile-rail:not(.\#) .thumbnail-btn:not(.\#) {
       width: 4.25rem;
       height: 4.25rem;
     }
-    .gallery-mobile-rail [data-scroll-control] {
+    .gallery-mobile-rail:not(.\#) [data-scroll-control]:not(.\#) {
       display: none;
     }
-    [data-phone-thumbnails="beside"] .gallery-stage-row {
+    [data-phone-thumbnails="beside"]:not(.\#) .gallery-stage-row:not(.\#) {
       flex-direction: row;
     }
-    [data-phone-thumbnails="beside"] .gallery-mobile-rail {
+    [data-phone-thumbnails="beside"]:not(.\#) .gallery-mobile-rail:not(.\#) {
       order: -1;
       width: 48px;
       max-width: 48px;
       height: auto;
       align-self: stretch;
     }
-    [data-phone-thumbnails="beside"] [data-thumbnail-rail="mobile"] {
+    [data-phone-thumbnails="beside"]:not(.\#) [data-thumbnail-rail="mobile"]:not(.\#) {
       overflow-x: hidden;
       overflow-y: auto;
       touch-action: pan-y;
       scroll-snap-type: y mandatory;
     }
-    [data-phone-thumbnails="beside"] [data-thumbnail-rail="mobile"] > div {
+    [data-phone-thumbnails="beside"]:not(.\#) [data-thumbnail-rail="mobile"]:not(.\#) > div:not(.\#) {
       flex-direction: column;
       height: auto;
     }
-    [data-phone-thumbnails="beside"] .gallery-mobile-rail .thumbnail-btn {
+    [data-phone-thumbnails="beside"]:not(.\#) .gallery-mobile-rail:not(.\#) .thumbnail-btn:not(.\#) {
       width: 48px;
       height: 48px;
     }
   }
   /* Computers, thumbnails below the photo: one horizontal strip. */
-  [data-thumbnails="below"] [data-thumbnail-rail="desktop"] {
+  [data-thumbnails="below"]:not(.\#) [data-thumbnail-rail="desktop"]:not(.\#) {
     overflow-x: auto;
     overflow-y: hidden;
     touch-action: pan-x;
     scroll-snap-type: x mandatory;
   }
-  [data-thumbnails="below"] .gallery-desktop-rail [data-scroll-control] {
+  [data-thumbnails="below"]:not(.\#) .gallery-desktop-rail:not(.\#) [data-scroll-control]:not(.\#) {
     display: none;
   }
   @media (min-width: 64rem) {
-    #product-gallery[data-portrait-stage] {
+    #product-gallery[data-portrait-stage]:not(.\#) {
       max-width: var(--gallery-portrait-max);
       justify-self: center;
     }
-    [data-thumbnails="below"] .gallery-layout {
+    [data-thumbnails="below"]:not(.\#) .gallery-layout:not(.\#) {
       display: flex;
       flex-direction: column;
     }
-    [data-thumbnails="below"] .gallery-desktop-rail {
+    [data-thumbnails="below"]:not(.\#) .gallery-desktop-rail:not(.\#) {
       order: 2;
       height: calc(var(--gallery-thumb, 5.5rem) + 0.5rem);
     }
-    [data-thumbnails="below"] [data-thumbnail-rail="desktop"] {
+    [data-thumbnails="below"]:not(.\#) [data-thumbnail-rail="desktop"]:not(.\#) {
       flex-direction: row;
     }
-    [data-thumbnails="below"] .gallery-desktop-rail .thumbnail-btn {
+    [data-thumbnails="below"]:not(.\#) .gallery-desktop-rail:not(.\#) .thumbnail-btn:not(.\#) {
       width: var(--gallery-thumb, 5.5rem);
       height: var(--gallery-thumb, 5.5rem);
     }
     /* Stacked and grid: the list replaces the stage and the rail. */
-    [data-gallery="stacked"] .gallery-layout,
-    [data-gallery="grid"] .gallery-layout {
+    [data-gallery="stacked"]:not(.\#) .gallery-layout:not(.\#),
+    [data-gallery="grid"]:not(.\#) .gallery-layout:not(.\#) {
       display: none;
     }
-    [data-gallery="grid"] .gallery-list {
+    [data-gallery="grid"]:not(.\#) .gallery-list:not(.\#) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @media (max-width: 1023px) {
-    .mobile-media-stage {
+    .mobile-media-stage:not(.\#) {
       max-height: var(--gallery-mobile-max-height);
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .thumbnail-btn,
-    .thumbnail-btn img {
+    .thumbnail-btn:not(.\#),
+    .thumbnail-btn:not(.\#) img:not(.\#) {
       scroll-behavior: auto;
       animation: none;
     }

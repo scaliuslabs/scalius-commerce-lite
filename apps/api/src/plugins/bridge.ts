@@ -73,8 +73,8 @@ export interface PluginBridgeApi {
   httpFetch(url: string, init?: PluginHttpInit): Promise<PluginHttpResult>;
   customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
-  messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string }): Promise<{ queued: boolean }>;
-  messagingSms(input: { customerId?: string; to?: string; text: string }): Promise<{ queued: boolean }>;
+  messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
 }
 
@@ -373,14 +373,14 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   // ── messaging ──────────────────────────────────────────────────────────
 
-  async messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string }): Promise<{ queued: boolean }> {
+  async messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }> {
     return this.guard("messagingEmail", async () => {
       const { sendPluginEmail } = await import("./messaging");
       return sendPluginEmail(this.messagingContext(), input);
     });
   }
 
-  async messagingSms(input: { customerId?: string; to?: string; text: string }): Promise<{ queued: boolean }> {
+  async messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }> {
     return this.guard("messagingSms", async () => {
       const { sendPluginSms } = await import("./messaging");
       return sendPluginSms(this.messagingContext(), input);

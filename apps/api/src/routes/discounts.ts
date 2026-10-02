@@ -3,6 +3,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { getCustomerBySession } from "@scalius/core/modules/customers";
 import {
   previewStorefrontAppDiscounts,
   previewStorefrontBundleSavings,
@@ -17,6 +18,8 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { ok } from "../utils/api-response";
 import { getOptionalExecutionContext } from "../utils/execution-context";
 import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
+import { getCustomerSessionHashKey } from "../utils/encryption-key";
+import { getCustomerSessionTokenFromRequest } from "./storefront-orders/shared";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   quotedDiscountLineSchema,
@@ -98,12 +101,19 @@ app.openapi(validateDiscountRoute, async (c) => {
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
   }
-  // The apps' checkout functions ride the first read wave: none, no app work.
-  const [currency, giftCardProductIds, registrations] = await Promise.all([
+  // One read wave: the apps' checkout functions (none, no app work) and the
+  // signed-in buyer, who previews as checkout will price them (their segment
+  // discounts and per-customer limits); a missing or stale session is a guest.
+  const sessionToken = getCustomerSessionTokenFromRequest(c);
+  const [currency, giftCardProductIds, registrations, sessionCustomer] = await Promise.all([
     getCurrencyConfig(db),
     selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
     listActiveFunctionRegistrations(db),
+    sessionToken
+      ? getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
+      : null,
   ]);
+  const signedInCustomerId = sessionCustomer?.customerId ?? null;
   const cartLines = lines.map(({ item, index, variantId }) => ({
     id: `cart:${index}:${variantId}`,
     productId: item.id,
@@ -113,6 +123,8 @@ app.openapi(validateDiscountRoute, async (c) => {
   }));
   const discount = await quoteStorefrontDiscount(db, {
     codes,
+    customerId: signedInCustomerId,
+    segmentCustomerId: signedInCustomerId,
     customerPhone,
     shippingKnown: shippingCost !== undefined,
     cart: {

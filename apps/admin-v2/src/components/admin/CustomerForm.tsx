@@ -25,12 +25,17 @@ import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
+import { CustomerTagsCard } from "./customers/CustomerTagsCard";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
   isEdit?: boolean;
-  /** The saved record being edited: titles the page (a guest record by its phone) and says if it's in Trash. */
-  record?: CustomerTitleInput & TrashedCustomer & { deletedAt: unknown };
+  /**
+   * The saved record being edited: titles the page (a guest record by its
+   * phone), says if it's in Trash and carries its tags.
+   */
+  record?: CustomerTitleInput & TrashedCustomer & { deletedAt: unknown; tags?: readonly string[] };
 }
 
 /** Under the phone field after a save: links the customer that already uses the number. */
@@ -202,7 +207,11 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
         </CardContent>
       </Card>
       {isEdit && defaultValues?.id && !trashed ? (
-        <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
+        <>
+          <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
+          <CustomerTagsCard customerId={defaultValues.id} tags={record?.tags ?? []} canEdit={canSave} />
+          <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
+        </>
       ) : null}
       {isEdit && defaultValues?.id && !trashed ? <AppResourceCards target="customer" id={defaultValues.id} /> : null}
     </>

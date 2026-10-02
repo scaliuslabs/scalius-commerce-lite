@@ -194,6 +194,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
+  "dashboard.settings.marketing_consent_get": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.marketing_consent_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.customer_countries_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.customer_countries_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.email_get": {
@@ -208,7 +210,13 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.settings.media_delivery_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.media_delivery_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.platform_get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.platform_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
+  // Public origins, CORS, cookie domain and identity handoff decide who can
+  // sign in: the same tier as email delivery and the team.
+  "dashboard.settings.platform_update": {
+    revision: "required",
+    risk: "security",
+    limits: { request: 16_384, response: 16_384 },
+  },
   "dashboard.settings.storefront_url_get": { limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.storefront_url_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.shipping_methods.list": {},

@@ -11,7 +11,7 @@ import type { Product } from "@/lib/api";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import SectionHeader from "./SectionHeader.astro";
-import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
@@ -95,7 +95,7 @@ const itemClass = shelf
                 class="group hidden items-center gap-1.5 text-xs font-bold text-foreground transition-colors hover:text-primary sm:flex"
               >
                 {shelf ? hrefLabel : "View collection"}
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                <Icon name="arrow-right" class="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
               </a>
             )}
             {products.length > 1 && (
@@ -106,7 +106,7 @@ const itemClass = shelf
                   class="flex h-11 w-11 items-center justify-center rounded-full border border-input bg-background text-foreground shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground md:h-8 md:w-8"
                   aria-label={`Previous products in ${title}`}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <Icon name="chevron-left" class="h-4 w-4" />
                 </button>
                 <button
                   type="button"
@@ -114,7 +114,7 @@ const itemClass = shelf
                   class="flex h-11 w-11 items-center justify-center rounded-full border border-input bg-background text-foreground shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground md:h-8 md:w-8"
                   aria-label={`Next products in ${title}`}
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <Icon name="chevron-right" class="h-4 w-4" />
                 </button>
               </div>
             )}
@@ -148,7 +148,7 @@ const itemClass = shelf
               class="flex min-h-11 items-center gap-2 px-3 text-xs font-semibold text-foreground underline decoration-primary/30 underline-offset-4"
             >
               {shelf ? hrefLabel : "View collection"}
-              <ArrowRight className="h-3 w-3" />
+              <Icon name="arrow-right" class="h-3 w-3" />
             </a>
           </div>
         )}

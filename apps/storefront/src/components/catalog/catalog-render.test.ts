@@ -695,11 +695,11 @@ describe("facet display types", () => {
     // The label shows; the URL value submits.
     expect(Array.from(swatches.querySelectorAll("input[data-catalog-facet]")).map((input) => input.getAttribute("value")))
       .toEqual(["black", "navy", "off-white"]);
-    expect(Array.from(swatches.querySelectorAll("label")).map((label) => label.querySelector("span:not([aria-hidden]):not([data-catalog-facet-count])")!.textContent))
+    expect(Array.from(swatches.querySelectorAll("label")).map((label) => label.querySelector("span:not([aria-hidden]):not(.catalog-facet-count)")!.textContent))
       .toEqual(["Black", "Navy", "Off-white"]);
     expect(swatches.querySelector("span[style]")!.getAttribute("style")).toBe("background:#111111");
     // Each swatch keeps its count, which the live count updates.
-    expect(swatches.querySelectorAll("[data-catalog-facet-count]")).toHaveLength(3);
+    expect(swatches.querySelectorAll(".catalog-facet-count")).toHaveLength(3);
     // Fourteen brands: a search field, hidden until its script runs.
     const search = document.querySelector("[data-catalog-facet-search]")!;
     expect(search.hasAttribute("hidden")).toBe(true);
@@ -830,7 +830,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(new TextEncoder().encode(aside.outerHTML).length).toBeLessThan(42_000);
     expect(aside.querySelectorAll("fieldset[data-facet-kind='values']")).toHaveLength(10);
     expect(aside.querySelectorAll("fieldset[data-facet-kind='values'] .catalog-facet-row")).toHaveLength(100);
-    expect(aside.querySelectorAll("fieldset[data-facet-kind='values'] [data-catalog-facet-row]")).toHaveLength(0);
+    expect(aside.querySelectorAll("[data-catalog-facet-row], [data-catalog-facet-label], [data-catalog-facet-count]")).toHaveLength(0);
     expect(aside.querySelector("fieldset[data-facet-kind='values'] .catalog-facet-label")!.textContent).toContain("Long value");
     const form = aside.querySelector("form")!;
     expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["get", "/categories/sarees"]);
@@ -926,11 +926,11 @@ describe("filter styles (fidelity slice 3)", () => {
     const props = listingProps(url, {}, [CATEGORY_FACET, ...FACETS]);
     const document = await renderListing(DEFAULT_STOREFRONT_THEME, props, TREE_STORE_SHAPE);
     const group = document.querySelector("#catalog-facet-category")!;
-    const text = (row: Element, part: string) => row.querySelector(`[data-catalog-facet-${part}]`)!.textContent;
-    expect(Array.from(group.querySelectorAll("a[data-catalog-facet-row]")).map((link) => [text(link, "label"), text(link, "count"), link.getAttribute("href")]))
+    const text = (row: Element, part: string) => row.querySelector(`.catalog-facet-${part}`)!.textContent;
+    expect(Array.from(group.querySelectorAll("a.catalog-facet-row")).map((link) => [text(link, "label"), text(link, "count"), link.getAttribute("href")]))
       .toEqual([["Cotton", "12", "/categories/cotton?size=M"], ["Linen", "4", "/categories/linen?size=M"]]);
     // A sub-category the filters empty is text, not a dead link.
-    expect(group.querySelector("span[data-catalog-facet-row]")!.textContent).toContain("Silk");
+    expect(group.querySelector("span.catalog-facet-row")!.textContent).toContain("Silk");
     // Category values are never a filter input.
     expect(document.querySelector("input[name='category']")).toBeNull();
 

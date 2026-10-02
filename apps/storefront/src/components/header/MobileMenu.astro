@@ -7,7 +7,7 @@
 // The Marketplace drawer is 80vw on phones and 365px on computers; other
 // themes retain their usual 90vw phone drawer. Each target appears once.
 import type { NavigationItem, SocialLink } from "@/lib/api";
-import { X, Phone, ChevronRight } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
@@ -90,7 +90,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       aria-label="Close menu"
       data-drawer-close
     >
-      <X className="h-5 w-5 stroke-[1.5]" />
+      <Icon name="x" class="h-5 w-5 stroke-[1.5]" />
     </button>
     <noscript>
       <a
@@ -98,7 +98,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
         class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground"
         aria-label="Close menu"
       >
-        <X className="h-5 w-5 stroke-[1.5]" />
+        <Icon name="x" class="h-5 w-5 stroke-[1.5]" />
       </a>
     </noscript>
   </div>
@@ -114,7 +114,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
     {
       tree === "drill" ? (
         <div class="min-h-0 flex-1">
-          <DrillDrawer items={navigation} idPrefix={`${id}-drill`} allCategories={allCategories} />
+          <DrillDrawer items={navigation} idPrefix={`${id}-d`} allCategories={allCategories} />
         </div>
       ) : (
         <NavTree
@@ -197,7 +197,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
           class="flex items-center gap-3 p-3 bg-card border border-border rounded-xl shadow-sm active:scale-[0.99] transition-all group hover:border-primary/50"
         >
           <div class="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Phone className="h-4.5 w-4.5 fill-current" />
+            <Icon name="phone" class="h-4.5 w-4.5 fill-current" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-xs text-muted-foreground font-semibold leading-none mb-1">
@@ -207,7 +207,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
               {phone}
             </p>
           </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
+          <Icon name="chevron-right" class="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
         </a>
       </div>
     )
@@ -216,8 +216,8 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 
 <style>
   @media (max-width: 63.999rem) {
-    .nav-drawer--marketplace :global(.drill-link),
-    .nav-drawer--marketplace :global(.drill-level-ghost) {
+    .nav-drawer--marketplace :global(:is(.drill-link, :where(.drill-list > li > a))),
+    .nav-drawer--marketplace :global(.drill-level)::before {
       min-height: 3.25rem;
     }
   }

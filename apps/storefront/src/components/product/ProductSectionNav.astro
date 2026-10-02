@@ -4,7 +4,7 @@
 // under the header while the product's real below-fold sections pass
 // underneath (Amazon and Daraz on phones, Star Tech on computers). Every
 // link remains a native anchor; the script only marks the current section.
-import { ChevronUp } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   detailsId?: string | null;
@@ -36,7 +36,7 @@ const links = [
     ]}
   >
     <a href="#product-container" class="flex w-[72px] shrink-0 flex-col items-center justify-center bg-muted/50 text-sm leading-tight text-foreground">
-      <ChevronUp className="h-4 w-4" aria-hidden="true" />
+      <Icon name="chevron-up" class="h-4 w-4" aria-hidden="true" />
       Top
     </a>
     {links.map((link, index) => (

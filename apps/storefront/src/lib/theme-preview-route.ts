@@ -14,6 +14,7 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "cart",
   "checkout",
   "health",
+  "newsletter",
   "order-success",
   "payment-recovery",
   "robots.txt",

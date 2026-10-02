@@ -37,6 +37,24 @@ afterEach(() => {
 });
 
 describe("createOrder", () => {
+  it("sends marketing consent only when the buyer ticked the box, with the label's language", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      success: true,
+      data: { id: "ord_1" },
+    }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const sent = (index: number) => JSON.parse(String(fetchMock.mock.calls[index]![1]?.body)) as Record<string, unknown>;
+
+    await createOrder(checkoutData, "cod");
+    expect(sent(0)).not.toHaveProperty("marketingConsent");
+    await createOrder({ ...checkoutData, marketingConsent: "bn" }, "cod");
+    expect(sent(1).marketingConsent).toEqual({ language: "bn" });
+    await createOrder({ ...checkoutData, marketingConsent: "<b>" }, "cod");
+    expect(sent(2).marketingConsent).toEqual({ language: null });
+    await createOrder({ ...checkoutData, marketingConsent: "" }, "cod");
+    expect(sent(3)).not.toHaveProperty("marketingConsent");
+  });
+
   it("sends cart keys and buyer-facing line metadata to the order proxy", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       success: true,

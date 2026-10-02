@@ -105,6 +105,16 @@ export const queryKeys = {
       params !== undefined
         ? (["customers", "history", id, params] as const)
         : (["customers", "history", id] as const),
+    /** The store's tags with counts; without `q`, every tag search (for invalidation). */
+    tags: (q?: string) =>
+      q !== undefined ? (["customers", "tags", q] as const) : (["customers", "tags"] as const),
+    /** One customer's consent per channel, consent log and tags. */
+    marketing: (id: string) => ["customers", "marketing", id] as const,
+    /** Saved segments: the list, and (below it) each segment, its count and previews. */
+    segments: () => ["customers", "segments"] as const,
+    segment: (id: string) => ["customers", "segments", "detail", id] as const,
+    segmentCount: (id: string) => ["customers", "segments", "count", id] as const,
+    segmentPreview: (definition: unknown) => ["customers", "segments", "preview", definition] as const,
   },
 
   // ── Discounts ────────────────────────────────────────────────────
@@ -215,6 +225,7 @@ export const queryKeys = {
     checkoutFlow: () => ["settings", "checkout-flow"] as const,
     checkoutReadiness: () => ["settings", "checkout-readiness"] as const,
     customerRequests: () => ["settings", "customer-requests"] as const,
+    marketingConsent: () => ["settings", "marketing-consent"] as const,
     email: () => ["settings", "email"] as const,
     firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,

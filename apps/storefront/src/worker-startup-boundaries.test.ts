@@ -127,4 +127,24 @@ describe("storefront Worker trusted front proxy", () => {
     expect(unsigned.url).toBe("https://internal.workers.dev/cart");
     expect(unsigned.headers.get("cf-connecting-ip")).toBe("10.0.0.1");
   });
+
+  it("hands a mail client's RFC 8058 one-click unsubscribe to the page as JSON, and other posts as sent", async () => {
+    const url = `https://shop.example/newsletter/unsubscribe?token=u1.Y3VzdF8x.email.${"s".repeat(43)}`;
+    const oneClick = await renderThroughGateway(new Request(url, {
+      method: "POST",
+      body: "List-Unsubscribe=One-Click",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    }));
+    expect(oneClick.url).toBe(url);
+    expect(oneClick.headers.get("Content-Type")).toBe("application/json");
+    expect(await oneClick.json()).toEqual({ "List-Unsubscribe": "One-Click" });
+
+    const pageForm = await renderThroughGateway(new Request("https://shop.example/newsletter/unsubscribe", {
+      method: "POST",
+      body: "token=u1.x",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://shop.example" },
+    }));
+    expect(pageForm.headers.get("Content-Type")).toBe("application/x-www-form-urlencoded");
+    expect(await pageForm.text()).toBe("token=u1.x");
+  });
 });

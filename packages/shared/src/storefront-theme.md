@@ -150,9 +150,7 @@ numbers come from the storefront study
   the listing's and product page's choices, each toolbar piece, product
   module and section setting has a consumer (a renderer, or the variant's
   `renders` mapping), tested by the same file. An option with nothing to
-  render it is removed, not shipped (questions wait for a question model;
-  the newsletter section, registered, waits for a subscriber list and no
-  template ships it).
+  render it is removed, not shipped (questions wait for a question model).
 - **Strict.** Unknown keys, values outside the enums, settings that belong to
   another variant, and other versions are rejected. Writes (API) and reads
   (core, storefront) use the same schema. There is no tolerant or legacy
@@ -278,9 +276,15 @@ numbers come from the storefront study
   gallery, footer, top bar).
 - **Section renderers and data.** `STOREFRONT_SECTION_RENDERERS` lists the
   section types the storefront renders (one component each under
-  `apps/storefront/src/components/homepage/`). `newsletter` waits for a
-  subscriber list with marketing consent and renders nothing (the Theme
-  page says so); no template ships it until then. `home-data.ts` derives what the page reads
+  `apps/storefront/src/components/homepage/`); every registered type has
+  one. `newsletter` is the signup form (phone always, the e-mail optional,
+  required or hidden, an optional WhatsApp box, the consent line in the
+  store's language); it posts to the storefront's `/api/newsletter/subscribe`
+  and works without JavaScript (`apps/storefront/src/lib/newsletter-server.ts`).
+  It reads no data, so it always renders; `boutique` ends its homepage with
+  it and `fashion-value` closes with it as Fabrilife's band. The
+  `newsletter-grey` footer carries the same form (left out on a homepage
+  that already shows the section). `home-data.ts` derives what the page reads
   (`homeSectionRequests(home, homeMode)`: one product list per source at the
   largest limit any section asks, capped at 8 lists of 36; at most 40
   images, hero slides and their phone images included; the category tiles'
