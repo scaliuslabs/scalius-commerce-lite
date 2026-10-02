@@ -185,7 +185,7 @@
   --sidebar-accent: #2a2a2a;
   --sidebar-border: #2a2a2a;
 
-  --chart-1: #4b9bff;
+  --chart-1: #4392f7; /* inside the dark lightness band against the card (dataviz validator) */
   --chart-2: #36b37e;
   --chart-3: #ffb800;
   --chart-4: #a98bff;

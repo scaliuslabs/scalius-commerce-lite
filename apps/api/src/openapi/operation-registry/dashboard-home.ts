@@ -1,7 +1,20 @@
-// Agent operation registry rows for the dashboard home and search routes.
+// Agent operation registry rows for the dashboard home, analytics and search routes.
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_HOME_OPERATIONS = {
+  "dashboard.reports.list": { limits: { request: 16_384 } },
+  "dashboard.reports.overview": { limits: { request: 16_384 } },
+  "dashboard.reports.get": { limits: { request: 16_384 } },
+  "dashboard.reports.export": {
+    batch: "forbidden",
+    artifact: {
+      mediaTypes: ["text/csv"],
+      disposition: "attachment",
+      filenamePolicy: "content-disposition",
+      maxArtifactBytes: 16 * 1024 * 1024,
+      delivery: "authenticated-handle",
+    },
+  },
   "dashboard.home.activity": { limits: { request: 16_384, response: 32_768 } },
   "dashboard.home.summary": { limits: { request: 16_384 } },
   "dashboard.search_reindex.reindex": {

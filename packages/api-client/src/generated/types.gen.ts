@@ -43184,6 +43184,670 @@ export type GetApiV1AdminDashboardActivityResponses = {
 
 export type GetApiV1AdminDashboardActivityResponse = GetApiV1AdminDashboardActivityResponses[keyof GetApiV1AdminDashboardActivityResponses];
 
+export type GetApiV1AdminReportsOverviewData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         */
+        from?: string;
+        /**
+         * Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.
+         */
+        to?: string;
+        /**
+         * Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.
+         */
+        granularity?: 'day' | 'week' | 'month';
+        /**
+         * Compare with the previous period of equal length (default), the same days last year, or nothing.
+         */
+        comparison?: 'previous_period' | 'previous_year' | 'none';
+    };
+    url: '/api/v1/admin/reports/overview';
+};
+
+export type GetApiV1AdminReportsOverviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsOverviewError = GetApiV1AdminReportsOverviewErrors[keyof GetApiV1AdminReportsOverviewErrors];
+
+export type GetApiV1AdminReportsOverviewResponses = {
+    /**
+     * Analytics overview
+     */
+    200: {
+        success: true;
+        data: {
+            currency: {
+                code: string;
+                decimalPlaces: number;
+            };
+            granularity: 'day' | 'week' | 'month';
+            comparison: 'previous_period' | 'previous_year' | 'none';
+            current: {
+                range: {
+                    from: string;
+                    to: string;
+                };
+                totals: {
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                };
+                customers: {
+                    customers: number;
+                    newCustomers: number;
+                    returningCustomers: number;
+                    repeatPurchaseRate: number | null;
+                };
+                payments: {
+                    codOrders: number;
+                    prepaidOrders: number;
+                    codShare: number | null;
+                    returnedToSender: number;
+                    codDelivered: number;
+                    rtsRate: number | null;
+                    refunded: number;
+                };
+                cancellations: {
+                    placed: number;
+                    cancelled: number;
+                    cancellationRate: number | null;
+                };
+                otherCurrencyOrders: number;
+            };
+            previous: {
+                range: {
+                    from: string;
+                    to: string;
+                };
+                totals: {
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                };
+                customers: {
+                    customers: number;
+                    newCustomers: number;
+                    returningCustomers: number;
+                    repeatPurchaseRate: number | null;
+                };
+                payments: {
+                    codOrders: number;
+                    prepaidOrders: number;
+                    codShare: number | null;
+                    returnedToSender: number;
+                    codDelivered: number;
+                    rtsRate: number | null;
+                    refunded: number;
+                };
+                cancellations: {
+                    placed: number;
+                    cancelled: number;
+                    cancellationRate: number | null;
+                };
+                otherCurrencyOrders: number;
+            } | null;
+            breakdowns: {
+                channel: Array<{
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                    key: string;
+                    label: string;
+                }>;
+                paymentMethod: Array<{
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                    key: string;
+                    label: string;
+                }>;
+                city: Array<{
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                    key: string;
+                    label: string;
+                }>;
+                deliveryZone: Array<{
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                    key: string;
+                    label: string;
+                }>;
+                location: Array<{
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    shipping: number;
+                    taxes: number;
+                    totalSales: number;
+                    netItemsSold: number;
+                    averageOrderValue: number;
+                    key: string;
+                    label: string;
+                }>;
+            };
+            series: Array<{
+                key: string;
+                current: {
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    totalSales: number;
+                };
+                previousKey: string | null;
+                previous: {
+                    orders: number;
+                    grossSales: number;
+                    discounts: number;
+                    returns: number;
+                    netSales: number;
+                    totalSales: number;
+                } | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsOverviewResponse = GetApiV1AdminReportsOverviewResponses[keyof GetApiV1AdminReportsOverviewResponses];
+
+export type GetApiV1AdminReportsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reports';
+};
+
+export type GetApiV1AdminReportsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsError = GetApiV1AdminReportsErrors[keyof GetApiV1AdminReportsErrors];
+
+export type GetApiV1AdminReportsResponses = {
+    /**
+     * Report catalog
+     */
+    200: {
+        success: true;
+        data: {
+            reports: Array<{
+                id: 'sales_over_time' | 'sales_by_product' | 'sales_by_variant' | 'sales_by_category' | 'sales_by_brand' | 'sales_by_collection' | 'sales_by_discount' | 'sales_by_channel' | 'sales_by_payment_method' | 'sales_by_city' | 'sales_by_delivery_zone' | 'sales_by_location' | 'customers_top' | 'customers_over_time' | 'inventory_by_location' | 'inventory_on_hand' | 'inventory_low_stock' | 'inventory_sell_through' | 'finance_payments' | 'finance_refunds' | 'finance_cod' | 'finance_gift_cards' | 'taxes' | 'delivery_performance' | 'abandoned_checkouts' | 'profit_by_product';
+                category: 'sales' | 'customers' | 'inventory' | 'finance' | 'operations' | 'profit';
+                period: 'range' | 'snapshot';
+                granularity?: boolean;
+                columns: Array<{
+                    key: string;
+                    type: 'text' | 'enum' | 'money' | 'count' | 'number' | 'percent' | 'date' | 'days';
+                    summable?: boolean;
+                    enum?: string;
+                }>;
+                defaultSort: {
+                    key: string;
+                    direction: 'asc' | 'desc';
+                };
+                requiresCustomerAccess?: boolean;
+                rowLink?: 'product' | 'variant';
+                available: boolean;
+                unavailableReason: 'customer_access' | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsResponse = GetApiV1AdminReportsResponses[keyof GetApiV1AdminReportsResponses];
+
+export type GetApiV1AdminReportsByReportIdData = {
+    body?: never;
+    path: {
+        /**
+         * Report id from the catalog
+         */
+        reportId: 'sales_over_time' | 'sales_by_product' | 'sales_by_variant' | 'sales_by_category' | 'sales_by_brand' | 'sales_by_collection' | 'sales_by_discount' | 'sales_by_channel' | 'sales_by_payment_method' | 'sales_by_city' | 'sales_by_delivery_zone' | 'sales_by_location' | 'customers_top' | 'customers_over_time' | 'inventory_by_location' | 'inventory_on_hand' | 'inventory_low_stock' | 'inventory_sell_through' | 'finance_payments' | 'finance_refunds' | 'finance_cod' | 'finance_gift_cards' | 'taxes' | 'delivery_performance' | 'abandoned_checkouts' | 'profit_by_product';
+    };
+    query?: {
+        /**
+         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         */
+        from?: string;
+        /**
+         * Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.
+         */
+        to?: string;
+        /**
+         * Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.
+         */
+        granularity?: 'day' | 'week' | 'month';
+        /**
+         * Column key to sort by; unknown keys use the report's default
+         */
+        sort?: string;
+        direction?: 'asc' | 'desc';
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/admin/reports/{reportId}';
+};
+
+export type GetApiV1AdminReportsByReportIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsByReportIdError = GetApiV1AdminReportsByReportIdErrors[keyof GetApiV1AdminReportsByReportIdErrors];
+
+export type GetApiV1AdminReportsByReportIdResponses = {
+    /**
+     * Report page
+     */
+    200: {
+        success: true;
+        data: {
+            report: {
+                id: 'sales_over_time' | 'sales_by_product' | 'sales_by_variant' | 'sales_by_category' | 'sales_by_brand' | 'sales_by_collection' | 'sales_by_discount' | 'sales_by_channel' | 'sales_by_payment_method' | 'sales_by_city' | 'sales_by_delivery_zone' | 'sales_by_location' | 'customers_top' | 'customers_over_time' | 'inventory_by_location' | 'inventory_on_hand' | 'inventory_low_stock' | 'inventory_sell_through' | 'finance_payments' | 'finance_refunds' | 'finance_cod' | 'finance_gift_cards' | 'taxes' | 'delivery_performance' | 'abandoned_checkouts' | 'profit_by_product';
+                category: 'sales' | 'customers' | 'inventory' | 'finance' | 'operations' | 'profit';
+                period: 'range' | 'snapshot';
+                granularity?: boolean;
+                columns: Array<{
+                    key: string;
+                    type: 'text' | 'enum' | 'money' | 'count' | 'number' | 'percent' | 'date' | 'days';
+                    summable?: boolean;
+                    enum?: string;
+                }>;
+                defaultSort: {
+                    key: string;
+                    direction: 'asc' | 'desc';
+                };
+                requiresCustomerAccess?: boolean;
+                rowLink?: 'product' | 'variant';
+            };
+            currency: {
+                code: string;
+                decimalPlaces: number;
+            };
+            range: {
+                from: string;
+                to: string;
+            } | null;
+            granularity: 'day' | 'week' | 'month' | null;
+            sort: {
+                key: string;
+                direction: 'asc' | 'desc';
+            };
+            page: number;
+            pageSize: number;
+            totalRows: number;
+            totalPages: number;
+            rows: Array<{
+                id: string;
+                productId?: string | null;
+                values: {
+                    [key: string]: number | string | unknown;
+                };
+            }>;
+            totals: {
+                [key: string]: number | string | unknown;
+            };
+            notes: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsByReportIdResponse = GetApiV1AdminReportsByReportIdResponses[keyof GetApiV1AdminReportsByReportIdResponses];
+
+export type GetApiV1AdminReportsByReportIdExportData = {
+    body?: never;
+    path: {
+        /**
+         * Report id from the catalog
+         */
+        reportId: 'sales_over_time' | 'sales_by_product' | 'sales_by_variant' | 'sales_by_category' | 'sales_by_brand' | 'sales_by_collection' | 'sales_by_discount' | 'sales_by_channel' | 'sales_by_payment_method' | 'sales_by_city' | 'sales_by_delivery_zone' | 'sales_by_location' | 'customers_top' | 'customers_over_time' | 'inventory_by_location' | 'inventory_on_hand' | 'inventory_low_stock' | 'inventory_sell_through' | 'finance_payments' | 'finance_refunds' | 'finance_cod' | 'finance_gift_cards' | 'taxes' | 'delivery_performance' | 'abandoned_checkouts' | 'profit_by_product';
+    };
+    query?: {
+        /**
+         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         */
+        from?: string;
+        /**
+         * Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.
+         */
+        to?: string;
+        /**
+         * Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.
+         */
+        granularity?: 'day' | 'week' | 'month';
+        sort?: string;
+        direction?: 'asc' | 'desc';
+    };
+    url: '/api/v1/admin/reports/{reportId}/export';
+};
+
+export type GetApiV1AdminReportsByReportIdExportErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReportsByReportIdExportError = GetApiV1AdminReportsByReportIdExportErrors[keyof GetApiV1AdminReportsByReportIdExportErrors];
+
+export type GetApiV1AdminReportsByReportIdExportResponses = {
+    /**
+     * Report CSV
+     */
+    200: string;
+};
+
+export type GetApiV1AdminReportsByReportIdExportResponse = GetApiV1AdminReportsByReportIdExportResponses[keyof GetApiV1AdminReportsByReportIdExportResponses];
+
 export type GetApiV1AdminFraudCheckerData = {
     body?: never;
     path?: never;

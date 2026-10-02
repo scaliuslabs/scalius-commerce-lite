@@ -866,10 +866,11 @@ describe("reviewed agent workflow resolver", () => {
     ["daily rolling day", "Give me the daily operations snapshot for the last 1 day with orders and checkout readiness.", "dashboard.daily-operations-snapshot"],
   ])("asks instead of coercing the %s window", (_window, prompt, routeId) => {
     const resolution = resolveWorkflow({ prompt, surface: "dashboard" });
+    // A vague "report" may also be offered the analytics reports, which take any range.
     expect(resolution).toMatchObject({
       kind: "choices",
       disposition: "ask",
-      choices: [expect.objectContaining({ id: routeId })],
+      choices: expect.arrayContaining([expect.objectContaining({ id: routeId })]),
     });
     expect(compileWorkflowRead({ prompt, surface: "dashboard" })).toBeNull();
   });
@@ -896,7 +897,6 @@ describe("reviewed agent workflow resolver", () => {
     "Alongside a rolling thirty-day merchant booked recap, show the preceding accounting month.",
     "Alongside the current 30-day owner booked synopsis, show the prior financial year.",
     "Compare the earlier accounting month with the latest thirty-day merchant operations update.",
-    "Return a rolling 30-day proprietor commerce overview plus the preceding calendar quarter.",
     "Show the prior fiscal week alongside the current thirty-day booked result-set.",
   ])("collects relative periods without relying on report-noun vocabulary: %s", (prompt) => {
     expect(resolveWorkflow({ prompt, surface: "dashboard" })).toMatchObject({
@@ -907,6 +907,25 @@ describe("reviewed agent workflow resolver", () => {
       })],
     });
     expect(compileWorkflowRead({ prompt, surface: "dashboard" })).toBeNull();
+  });
+
+  it("offers the analytics overview, which compares any two ranges, for a commerce overview over two periods", () => {
+    const prompt = "Return a rolling 30-day proprietor commerce overview plus the preceding calendar quarter.";
+    expect(resolveWorkflow({ prompt, surface: "dashboard" })).toMatchObject({
+      kind: "choices",
+      disposition: "ask",
+      choices: [expect.objectContaining({ id: "dashboard.sales-analytics" })],
+    });
+    expect(compileWorkflowRead({ prompt, surface: "dashboard" })).toBeNull();
+  });
+
+  it("routes sales comparisons and report exports to analytics", () => {
+    expect(resolveWorkflow({
+      prompt: "How did last month compare with the month before: net sales, orders, average order value?",
+      surface: "dashboard",
+    })).toMatchObject({ kind: "plan", plan: { routeIds: ["dashboard.sales-analytics"] } });
+    expect(resolveWorkflow({ prompt: "Export sales by product for last month as CSV.", surface: "dashboard" }))
+      .toMatchObject({ kind: "plan", plan: { routeIds: ["dashboard.report-export"], requiresFacts: true } });
   });
 
   it("keeps relative-period labels and weak unrelated text out of fixed routing", () => {

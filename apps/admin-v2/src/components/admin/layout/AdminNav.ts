@@ -4,6 +4,7 @@
 import {
   BadgePercent,
   Blocks,
+  ChartColumn,
   FileText,
   House,
   Inbox,
@@ -85,6 +86,13 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "blogPosts", to: "/admin/articles" },
       { key: "files", to: "/admin/media" },
     ],
+  },
+  // Shopify's Analytics: the overview, with Reports under it.
+  {
+    key: "analytics",
+    to: "/admin/analytics",
+    icon: ChartColumn,
+    children: [{ key: "reports", to: "/admin/analytics/reports" }],
   },
   // Installed apps sit with the store's own sections: the panel draws every
   // ungrouped row above the group labels, so panel and rail keep one order.
