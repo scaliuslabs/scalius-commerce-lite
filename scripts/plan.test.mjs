@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PLAN_LIMITS } from "../packages/shared/src/plan-limits.ts";
 import { stripJsonc } from "./check-worker-env.mjs";
+import { apiWranglerConfig } from "./plugins.mjs";
 import {
   collectCommittedPlanViolations,
   parsePlan,
@@ -111,5 +112,32 @@ describe("a Paid deploy's generated config", () => {
     const before = JSON.stringify(base);
     withPlanProfile(base, "paid");
     expect(JSON.stringify(base)).toBe(before);
+  });
+});
+
+describe("the API config a deploy uses", () => {
+  const generated = resolve(root, "apps/api/wrangler.deploy.gen.json");
+
+  beforeEach(() => rmSync(generated, { force: true }));
+  afterEach(() => rmSync(generated, { force: true }));
+
+  it("is the committed config on Free: nothing is generated", () => {
+    expect(apiWranglerConfig({ plan: "free" })).toBe(resolve(root, "apps/api/wrangler.jsonc"));
+    expect(existsSync(generated)).toBe(false);
+  });
+
+  it("is a generated Paid config beside it, with the profile, the loader on request, and the committed bindings", () => {
+    const path = apiWranglerConfig({ plan: "paid" });
+    expect(path).toBe(generated);
+    const config = JSON.parse(readFileSync(path, "utf8"));
+    expect(config.limits).toEqual({ cpu_ms: 30_000 });
+    expect(config.define).toEqual({ __SCALIUS_PLAN__: "\"paid\"" });
+    expect(config.worker_loaders).toBeUndefined();
+    expect(config.d1_databases).toEqual(committed("apps/api/wrangler.jsonc").d1_databases);
+    expect(config.queues.consumers[0].max_batch_size).toBe(PLAN_LIMITS.paid.queue.consumerBatchSize);
+
+    const sandboxed = JSON.parse(readFileSync(apiWranglerConfig({ plan: "paid", sandbox: true }), "utf8"));
+    expect(sandboxed.worker_loaders).toEqual([{ binding: "LOADER" }]);
+    expect(sandboxed.define).toEqual({ __SCALIUS_PLAN__: "\"paid\"" });
   });
 });
