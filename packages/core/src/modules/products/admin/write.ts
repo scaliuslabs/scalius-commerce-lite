@@ -11,6 +11,9 @@ import {
     productOptionValues,
     productVariantOptionValues,
     warrantyPolicies,
+    taxClasses,
+    customFieldDefinitions,
+    customFieldValues,
 } from "@scalius/database/schema";
 import { and, sql, eq, isNull, or } from "drizzle-orm";
 import {
@@ -1245,10 +1248,12 @@ function customizationInputFromView(view: CustomizationView | null): Customizati
 
 /**
  * Copies a product as a new draft: text, pricing, media, attributes, extra
- * sections, content blocks, quantity bundles, the page template, buyer inputs
- * and its options with every live variant. Copies start with no
- * stock, new SKUs (…-COPY) and fresh generated barcodes, because stock,
- * SKU and barcode identities belong to one sellable item only.
+ * sections, content blocks, quantity bundles, the page template, buyer inputs,
+ * EMI and tax class, custom fields, and its options with every live variant
+ * (each with its cost per item, low-stock alert, backorder and preorder policy,
+ * tax class and custom fields). Copies start with no stock, new SKUs (…-COPY)
+ * and fresh generated barcodes, because stock, SKU and barcode identities
+ * belong to one sellable item only.
  */
 export async function duplicateProduct(
     db: Database,
@@ -1361,21 +1366,112 @@ export async function duplicateProduct(
         });
     }
     const copy = await createProduct(db, parsed.data);
-    // Blocks, bundles and the template are sections of their own: one more guarded
-    // aggregate write on the new draft (nobody else has it open yet).
-    const [blocks, bundles, template] = await Promise.all([
+    // Blocks, bundles, the template, the SKUs' selling settings and the custom
+    // fields are kept outside the create: one more guarded aggregate write on
+    // the new draft (nobody else has it open yet).
+    const [blocks, bundles, settings, copyVariants] = await Promise.all([
         buildProductContentBlockCopyStatements(db, id, copy.id),
         buildProductBundleCopyStatements(db, id, copy.id),
-        db.select({ pageTemplate: products.pageTemplate }).from(products).where(eq(products.id, id)).get(),
+        db.select({
+            pageTemplate: products.pageTemplate,
+            emiEligible: products.emiEligible,
+            // An archived tax class is not offered to new products.
+            taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${products.taxClassId} AND ${taxClasses.deletedAt} IS NULL)`,
+        }).from(products).where(eq(products.id, id)).get(),
+        db.select({ id: productVariants.id, sku: productVariants.sku })
+            .from(productVariants)
+            .where(and(eq(productVariants.productId, copy.id), isNull(productVariants.deletedAt))),
     ]);
+    // Each source SKU's copy, by the copy's new SKU code.
+    const copyIdBySku = new Map(copyVariants.map((variant) => [variant.sku.trim().toLowerCase(), variant.id]));
+    const copyIdOf = new Map(liveVariants.flatMap((variant) => {
+        const copyId = copyIdBySku.get(skuOf.get(variant.id)!.trim().toLowerCase());
+        return copyId ? [[variant.id, copyId] as const] : [];
+    }));
     const statements: BatchItem<"sqlite">[] = [
         ...blocks,
         ...bundles,
-        ...(template?.pageTemplate
-            ? [db.update(products).set({ pageTemplate: template.pageTemplate }).where(eq(products.id, copy.id))]
+        ...(settings && (settings.pageTemplate || settings.emiEligible || settings.taxClassId)
+            ? [db.update(products).set({
+                pageTemplate: settings.pageTemplate,
+                emiEligible: settings.emiEligible,
+                taxClassId: settings.taxClassId,
+            }).where(eq(products.id, copy.id))]
             : []),
+        ...await buildSkuSettingsCopyStatements(db, copyIdOf),
+        ...await buildCustomFieldValueCopyStatements(db, id, copy.id, copyIdOf),
     ];
     if (statements.length === 0) return copy;
     const result = await executeProductAggregateMutationBatch(db, copy.id, copy.aggregateRevision, statements);
     return { id: copy.id, aggregateRevision: result.aggregateRevision };
+}
+
+/**
+ * A copy's SKUs keep what the merchant set on the source's: cost per item,
+ * low-stock alert, backorder and preorder policy and tax class. Never stock,
+ * SKU or barcode (those identify one sellable item).
+ */
+async function buildSkuSettingsCopyStatements(
+    db: Database,
+    copyIdOf: ReadonlyMap<string, string>,
+): Promise<BatchItem<"sqlite">[]> {
+    if (copyIdOf.size === 0) return [];
+    const sources = await db.select({
+        id: productVariants.id,
+        costMinor: productVariants.costMinor,
+        lowStockThreshold: productVariants.lowStockThreshold,
+        allowBackorder: productVariants.allowBackorder,
+        backorderLimit: productVariants.backorderLimit,
+        allowPreorder: productVariants.allowPreorder,
+        preorderDate: productVariants.preorderDate,
+        preorderMessage: productVariants.preorderMessage,
+        taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${productVariants.taxClassId} AND ${taxClasses.deletedAt} IS NULL)`,
+    }).from(productVariants)
+        .where(sql`${productVariants.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...copyIdOf.keys()])}))`);
+    return sources.flatMap(({ id: sourceId, ...facts }) => {
+        const copyId = copyIdOf.get(sourceId);
+        const unset = facts.costMinor === null && facts.lowStockThreshold === null && !facts.allowBackorder
+            && facts.backorderLimit === 0 && !facts.allowPreorder && facts.preorderDate === null
+            && facts.preorderMessage === null && facts.taxClassId === null;
+        return copyId && !unset
+            ? [db.update(productVariants).set({ ...facts, updatedAt: sql`unixepoch()` }).where(eq(productVariants.id, copyId))]
+            : [];
+    });
+}
+
+/**
+ * The merchant's custom field values (namespace `custom`) of the product and
+ * of each SKU, onto the copy and its SKUs. An app's own fields (its
+ * namespace) stay with the source: they may name the source's records.
+ */
+async function buildCustomFieldValueCopyStatements(
+    db: Database,
+    sourceId: string,
+    copyId: string,
+    copyIdOf: ReadonlyMap<string, string>,
+): Promise<BatchItem<"sqlite">[]> {
+    const owners = JSON.stringify([sourceId, ...copyIdOf.keys()]);
+    const values = await db.select({
+        definitionId: customFieldValues.definitionId,
+        ownerType: customFieldValues.ownerType,
+        ownerId: customFieldValues.ownerId,
+        value: customFieldValues.value,
+    }).from(customFieldValues)
+        .innerJoin(customFieldDefinitions, eq(customFieldDefinitions.id, customFieldValues.definitionId))
+        .where(and(
+            eq(customFieldDefinitions.namespace, "custom"),
+            sql`${customFieldValues.ownerId} IN (SELECT CAST(value AS TEXT) FROM json_each(${owners}))`,
+            sql`${customFieldValues.ownerType} IN ('product', 'variant')`,
+        ));
+    const rows = values.flatMap((row) => {
+        const ownerId = row.ownerType === "product"
+            ? row.ownerId === sourceId ? copyId : null
+            : copyIdOf.get(row.ownerId) ?? null;
+        return ownerId ? [{ ...row, ownerId }] : [];
+    });
+    const statements: BatchItem<"sqlite">[] = [];
+    for (let index = 0; index < rows.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
+        statements.push(db.insert(customFieldValues).values(rows.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK)));
+    }
+    return statements;
 }

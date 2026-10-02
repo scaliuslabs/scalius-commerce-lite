@@ -636,7 +636,7 @@ const duplicateProductRoute = createRoute({
     operationId: "dashboard.products.duplicate",
     tags: ["Admin - Products"],
     summary: "Copy a product as a new draft",
-    description: "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+    description: "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, EMI and tax class, custom fields (namespace custom), options and variants with their cost per item and selling settings. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
     request: {
         params: z.object({ id: z.string() }),
         body: {

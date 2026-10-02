@@ -8910,7 +8910,7 @@ export const postApiV1AdminProductsBulkUpdate = <ThrowOnError extends boolean = 
 /**
  * Copy a product as a new draft
  *
- * Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.
+ * Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, EMI and tax class, custom fields (namespace custom), options and variants with their cost per item and selling settings. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.
  */
 export const postApiV1AdminProductsByIdDuplicate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdDuplicateData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError>({
     security: [{
