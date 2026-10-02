@@ -30,6 +30,13 @@ export default defineConfig({
     assetsDir: "assets/immutable",
     sourcemap: false,
     rolldownOptions: {
+      // The workspace packages' modules declare values and functions only: a
+      // module none of a chunk's code uses stays out of it, as a package's
+      // `"sideEffects": false` would say (Bangla transliteration tables, the
+      // plugin schemas…). The dashboard's own modules keep the default.
+      treeshake: {
+        moduleSideEffects: (id) => (/[\\/]packages[\\/](shared|core)[\\/]src[\\/]/.test(id) ? false : undefined),
+      },
       output: {
         // Route boundaries stay lazy, while Rolldown folds the icon library
         // into useful payloads instead of making every cold route pay dozens
