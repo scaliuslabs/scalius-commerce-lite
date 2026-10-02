@@ -120,6 +120,9 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.products_preview_count": { limits: { response: 16_384 } },
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
+  "dashboard.theme.draft_discard": { risk: "destructive", revision: "required" },
+  "dashboard.theme.version_restore": { revision: "required" },
+  "dashboard.theme.page_draft_update": { revision: "required" },
   "dashboard.theme.draft_save": { revision: "required" },
   "dashboard.theme.preview_session_create": {
     exposure: "continuation",

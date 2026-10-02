@@ -1120,8 +1120,52 @@ export const THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW: AgentWorkflowCard = {
   ],
 };
 
+export const DRAFT_LANDING_PAGE_WORKFLOW: AgentWorkflowCard = {
+  id: "theme.draft-landing-page.v1",
+  surface: "dashboard",
+  title: "Draft a landing page",
+  summary: "Compose one campaign page in the shared theme draft and verify its saved content.",
+  examples: ["Draft an Eid campaign landing page at /pages/eid-offers."],
+  tags: ["theme", "landing", "campaign", "draft"],
+  requiredFacts: [
+    { id: "slug", title: "Page handle", description: "Exact non-reserved landing-page URL handle.", required: true, source: { kind: "merchant" }, nonInferenceRule: "Use the merchant's exact handle; do not guess or replace another campaign." },
+    { id: "page", title: "Page content", description: "Merchant-approved title, section IDs/types/settings, images and overrideCms flag.", required: true, source: { kind: "merchant" }, nonInferenceRule: "Use approved copy, ready Files media IDs and supported sections; never invent images or claims." },
+  ],
+  phases: [
+    {
+      id: "read", surface: "dashboard", title: "Read draft", summary: "Read the authoritative shared theme and revision.", dependsOn: [],
+      steps: [{ id: "workspace", title: "Read workspace", operationId: "dashboard.theme.workspace_get", mutation: "read", input: { template: {}, dependencies: [], defaults: [] }, policies: readPolicies }],
+      stopConditions: ["Stop on authorization or read failure."],
+    },
+    {
+      id: "draft", surface: "dashboard", title: "Save landing draft", summary: "Edit only the named page; preserve every other theme setting.", dependsOn: ["read"],
+      steps: [{
+        id: "save", title: "Save page draft", operationId: "dashboard.theme.page_draft_update", mutation: "partial",
+        input: {
+          template: { body: { page: "landing", slug: null, value: null, expectedDraftRevision: null, basePublishedRevision: null } },
+          dependencies: [
+            { templatePointer: "/body/slug", source: { kind: "fact", factId: "slug" } },
+            { templatePointer: "/body/value", source: { kind: "fact", factId: "page" } },
+            { templatePointer: "/body/expectedDraftRevision", source: { kind: "step", phaseId: "read", stepId: "workspace", responsePointer: "/data/draft/revision" } },
+            { templatePointer: "/body/basePublishedRevision", source: { kind: "step", phaseId: "read", stepId: "workspace", responsePointer: "/data/draft/basePublishedRevision" } },
+          ], defaults: [],
+        },
+        policies: { ...createPolicies, revision: "required", stopConditions: ["Conflict: stop, reread and reconfirm; never overwrite other staff edits.", "Validation or authorization failure: stop."], nonInferenceRules: ["Save only merchant-approved sections and copy; publication requires a separate explicit instruction."] },
+      }],
+      stopConditions: ["Do not publish or discard other draft work."],
+    },
+    {
+      id: "verify", surface: "dashboard", title: "Verify saved draft", summary: "Reread the draft and check the named page's exact content and advanced revision.", dependsOn: ["draft"],
+      steps: [{ id: "workspace", title: "Verify workspace", operationId: "dashboard.theme.workspace_get", mutation: "read", input: { template: {}, dependencies: [], defaults: [] }, policies: readPolicies }],
+      stopConditions: ["Unexpected content or concurrent revision: stop and report; never silently retry."],
+    },
+  ],
+  verification: [{ id: "saved", surface: "dashboard", operationId: "dashboard.theme.workspace_get", responsePointers: ["/data/draft/theme/pages/landing", "/data/draft/revision", "/data/published/revision"], proves: ["The exact landing content is in the draft; live publication is unchanged."], bounds: { maxCalls: 1, maxItems: 20, maxResponseBytes: 65_536 } }],
+};
+
 export const CURATED_AGENT_WORKFLOW_CARDS: readonly AgentWorkflowCard[] = [
   OPTIONED_PRODUCT_WORKFLOW,
   DAILY_OPERATING_SNAPSHOT_WORKFLOW,
   THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
+  DRAFT_LANDING_PAGE_WORKFLOW,
 ];

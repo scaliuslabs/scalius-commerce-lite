@@ -31,10 +31,13 @@ import {
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   DEFAULT_STOREFRONT_THEME,
+  compareThemeDocuments,
+  formatThemeDocumentChanges,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeMediaReferences,
   type StorefrontThemeDocument,
+  type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
 import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
@@ -53,7 +56,7 @@ import type { SettingsDocument, SettingsDocumentWriteResult } from "./settings-s
 const THEME_SETTINGS_ID = "default";
 
 /** Published versions kept for history and restore: the most the history list returns. */
-export const THEME_VERSION_HISTORY_LIMIT = 50;
+export const THEME_VERSION_HISTORY_LIMIT = 20;
 
 /** The revision the merchant's editor loaded; a stale one is a 409 conflict. */
 export interface SettingsSaveOptions {
@@ -84,6 +87,13 @@ export interface ThemeDraftDocument {
 export interface ThemeWorkspaceDocument {
   published: ThemeSettingsDocument;
   draft: ThemeDraftDocument;
+  draftDiffersFromLive: boolean;
+  lastPublished: {
+    revision: number;
+    publishedBy: string | null;
+    publishedByName: string | null;
+    createdAt: Date;
+  } | null;
 }
 
 export interface ThemeVersionDocument extends ThemeSettingsDocument {
@@ -91,6 +101,10 @@ export interface ThemeVersionDocument extends ThemeSettingsDocument {
   source: "publish" | "rollback" | "migration";
   sourceRevision: number | null;
   publishedBy: string | null;
+  publishedByName: string | null;
+  summary: string[];
+  changes: ThemeDocumentChange[];
+  note: string | null;
   createdAt: Date;
 }
 
@@ -119,6 +133,35 @@ function parseAuthoritativeThemeSettings(value: string): StorefrontThemeDocument
     );
   }
   return theme;
+}
+
+/** History metadata shares the snapshot JSON; older bare-document rows remain readable. */
+function parseThemeVersionSnapshot(serialized: string): {
+  theme: StorefrontThemeDocument;
+  summary: string[];
+  changes: ThemeDocumentChange[];
+  note: string | null;
+  publishedByName: string | null;
+} {
+  let value: unknown;
+  try { value = JSON.parse(serialized); } catch { return { theme: parseAuthoritativeThemeSettings(serialized), summary: [], changes: [], note: null, publishedByName: null }; }
+  if (value && typeof value === "object" && "theme" in value) {
+    const snapshot = value as { theme: unknown; publication?: unknown };
+    const metadata = snapshot.publication as { summary?: unknown; changes?: unknown; note?: unknown; publishedByName?: unknown } | undefined;
+    if (!metadata || !Array.isArray(metadata.summary) || metadata.summary.length > 51 || metadata.summary.some((entry) => typeof entry !== "string") ||
+      (metadata.changes !== undefined && (!Array.isArray(metadata.changes) || metadata.changes.length > 50 || metadata.changes.some((change: unknown) => {
+        if (!change || typeof change !== "object") return true;
+        const descriptor = change as Partial<ThemeDocumentChange>;
+        return !["added", "removed", "reordered", "settings"].includes(descriptor.kind ?? "") || typeof descriptor.page !== "string" ||
+          (descriptor.sectionId !== undefined && typeof descriptor.sectionId !== "string") || (descriptor.path !== undefined && typeof descriptor.path !== "string");
+      }))) ||
+      (metadata.note !== null && (typeof metadata.note !== "string" || metadata.note.length > 500)) ||
+      (metadata.publishedByName !== null && (typeof metadata.publishedByName !== "string" || metadata.publishedByName.length > 200))) {
+      throw new ServiceUnavailableError("Storefront style history metadata is unreadable.");
+    }
+    return { theme: parseAuthoritativeThemeSettings(JSON.stringify(snapshot.theme)), summary: metadata.summary as string[], changes: Array.isArray(metadata.changes) ? metadata.changes as ThemeDocumentChange[] : [], note: metadata.note as string | null, publishedByName: metadata.publishedByName as string | null };
+  }
+  return { theme: parseAuthoritativeThemeSettings(serialized), summary: [], changes: [], note: null, publishedByName: null };
 }
 
 function assertNonnegativeRevision(value: number, label: string): void {
@@ -279,6 +322,8 @@ export async function getThemeWorkspace(
   const workspaceResults = await safeBatch(db, [
     selectThemeSettingsRows(db),
     selectThemeDraftRows(db),
+    db.select({ revision: themeSettingsVersions.publishedRevision, publishedBy: themeSettingsVersions.publishedBy, theme: themeSettingsVersions.theme, createdAt: themeSettingsVersions.createdAt })
+      .from(themeSettingsVersions).orderBy(desc(themeSettingsVersions.publishedRevision)).limit(1),
   ]);
   const publishedRows = workspaceResults[0] as {
     colors: string;
@@ -294,12 +339,16 @@ export async function getThemeWorkspace(
     ? themeSettingsDocumentFromRow(publishedRows[0])
     : unpublishedThemeSettings();
   const draft = draftRows[0];
+  const draftTheme = draft ? parseAuthoritativeThemeSettings(draft.theme) : published.theme;
+  const latest = (workspaceResults[2] as Array<{ revision: number; publishedBy: string | null; theme: string; createdAt: Date }>)[0];
 
   return {
+    draftDiffersFromLive: compareThemeDocuments(published.theme, draftTheme).length > 0,
+    lastPublished: latest ? { revision: latest.revision, publishedBy: latest.publishedBy, publishedByName: parseThemeVersionSnapshot(latest.theme).publishedByName, createdAt: latest.createdAt } : null,
     published,
     draft: draft
       ? {
-          theme: parseAuthoritativeThemeSettings(draft.theme),
+          theme: draftTheme,
           revision: draft.revision,
           basePublishedRevision: draft.basePublishedRevision,
           updatedAt: draft.updatedAt,
@@ -365,22 +414,21 @@ export async function saveThemeDraft(
         "The published storefront style changed before this draft was created. Reload the latest style and try again.",
       );
     }
-    const inserted = await db
-      .insert(themeSettingsDrafts)
-      .values({
-        id: THEME_SETTINGS_ID,
-        theme: normalized.serialized,
-        revision: 1,
-        basePublishedRevision,
-        updatedBy: actorId,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .onConflictDoNothing()
-      .returning({
-        revision: themeSettingsDrafts.revision,
-        updatedAt: themeSettingsDrafts.updatedAt,
-      });
+    let inserted: Array<{ revision: number; updatedAt: Date }>;
+    try {
+      const results = await safeBatch(db, [
+        buildPublishedThemeRevisionGuard(db, basePublishedRevision),
+        buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${themeSettingsDrafts} WHERE ${themeSettingsDrafts.id} = ${THEME_SETTINGS_ID})`, THEME_REVISION_CONFLICT_SENTINEL),
+        db.insert(themeSettingsDrafts).values({
+          id: THEME_SETTINGS_ID, theme: normalized.serialized, revision: 1, basePublishedRevision,
+          updatedBy: actorId, createdAt: sql`unixepoch()`, updatedAt: sql`unixepoch()`,
+        }).returning({ revision: themeSettingsDrafts.revision, updatedAt: themeSettingsDrafts.updatedAt }),
+      ]);
+      inserted = results[2] as Array<{ revision: number; updatedAt: Date }>;
+    } catch (error) {
+      if (isThemeRevisionConflict(error)) throw themeConflict("The storefront style or draft changed in another session. Reload the saved draft before continuing.");
+      throw error;
+    }
     if (!inserted[0]) {
       throw themeConflict(
         "The storefront style draft changed in another session. Reload the saved draft before continuing.",
@@ -497,6 +545,8 @@ async function runThemePublishBatch(
     actorId: string | null;
     source: "publish" | "rollback";
     sourceRevision?: number | null;
+    note?: string | null;
+    actorName?: string | null;
   },
 ): Promise<ThemeWorkspaceDocument> {
   assertNonnegativeRevision(options.expectedPublishedRevision, "published");
@@ -504,11 +554,21 @@ async function runThemePublishBatch(
     throw new ValidationError("A positive draft revision is required to publish.");
   }
   const normalized = serializeThemeSettings(options.theme);
+  await assertThemeReferences(db, normalized.theme);
+  const previous = await getThemeSettings(db);
+  const changes = compareThemeDocuments(previous.theme, normalized.theme);
+  const allChanges = formatThemeDocumentChanges(changes);
+  const summary = allChanges.length > 50 ? [...allChanges.slice(0, 50), `${allChanges.length - 50} additional changes`] : allChanges;
+  const note = options.note?.trim() || null;
+  if (note && note.length > 500) throw new ValidationError("A publication note must be at most 500 characters.");
+  const actorName = options.actorName?.trim().slice(0, 200) || null;
+  const versionId = `themev_${nanoid()}`;
   const publishedRevision = options.expectedPublishedRevision + 1;
   const draftRevision = options.expectedDraftRevision + 1;
 
+  let publishedAt = new Date();
   try {
-    await safeBatch(db, [
+    const committed = await safeBatch(db, [
       buildPublishedThemeRevisionGuard(db, options.expectedPublishedRevision),
       buildThemeDraftRevisionGuard(
         db,
@@ -521,9 +581,9 @@ async function runThemePublishBatch(
         options.expectedPublishedRevision,
       ) as never,
       db.insert(themeSettingsVersions).values({
-        id: `themev_${nanoid()}`,
+        id: versionId,
         publishedRevision,
-        theme: normalized.serialized,
+        theme: JSON.stringify({ theme: normalized.theme, publication: { summary, changes: changes.slice(0, 50), note, publishedByName: actorName } }),
         source: options.source,
         sourceRevision: options.sourceRevision ?? null,
         publishedBy: options.actorId,
@@ -547,7 +607,9 @@ async function runThemePublishBatch(
           eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
           eq(themeSettingsDrafts.revision, options.expectedDraftRevision),
         )),
+      db.select({ createdAt: themeSettingsVersions.createdAt }).from(themeSettingsVersions).where(eq(themeSettingsVersions.id, versionId)).limit(1),
     ]);
+    publishedAt = (committed.at(-1) as Array<{ createdAt: Date }>)[0]!.createdAt;
   } catch (error) {
     if (isThemeRevisionConflict(error)) {
       throw themeConflict(
@@ -558,12 +620,14 @@ async function runThemePublishBatch(
   }
 
   return {
+    draftDiffersFromLive: false,
+    lastPublished: { revision: publishedRevision, publishedBy: options.actorId, publishedByName: actorName, createdAt: publishedAt },
     published: { theme: normalized.theme, revision: publishedRevision },
     draft: {
       theme: normalized.theme,
       revision: draftRevision,
       basePublishedRevision: publishedRevision,
-      updatedAt: new Date(),
+      updatedAt: publishedAt,
     },
   };
 }
@@ -573,6 +637,8 @@ export async function publishThemeDraft(
   expectedPublishedRevision: number,
   expectedDraftRevision: number,
   actorId: string | null = null,
+  note: string | null = null,
+  actorName: string | null = null,
 ): Promise<ThemeWorkspaceDocument> {
   const draft = await db
     .select({ theme: themeSettingsDrafts.theme })
@@ -594,6 +660,8 @@ export async function publishThemeDraft(
     expectedDraftRevision,
     actorId,
     source: "publish",
+    note,
+    actorName,
   });
 }
 
@@ -618,7 +686,7 @@ export async function listThemeVersions(
   return rows.map((row) => ({
     id: row.id,
     revision: row.revision,
-    theme: parseAuthoritativeThemeSettings(row.theme),
+    ...parseThemeVersionSnapshot(row.theme),
     source: row.source,
     sourceRevision: row.sourceRevision,
     publishedBy: row.publishedBy,
@@ -626,6 +694,68 @@ export async function listThemeVersions(
   }));
 }
 
+/** Restore and discard replace only the draft; the monotonic revision prevents stale editors and ABA. */
+async function replaceThemeDraft(
+  db: Database,
+  theme: StorefrontThemeDocument | null,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null,
+): Promise<ThemeWorkspaceDocument> {
+  assertNonnegativeRevision(expectedDraftRevision, "draft");
+  assertNonnegativeRevision(basePublishedRevision, "base published");
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.published.revision !== basePublishedRevision || workspace.draft.revision !== expectedDraftRevision) {
+    throw themeConflict("The storefront style or draft changed in another session. Reload before replacing the draft.");
+  }
+  const normalized = serializeThemeSettings(theme ?? workspace.published.theme);
+  if (theme) await assertThemeReferences(db, normalized.theme);
+  try {
+    await safeBatch(db, [
+      buildPublishedThemeRevisionGuard(db, basePublishedRevision),
+      expectedDraftRevision === 0
+        ? buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${themeSettingsDrafts} WHERE ${themeSettingsDrafts.id} = ${THEME_SETTINGS_ID})`, THEME_REVISION_CONFLICT_SENTINEL)
+        : buildThemeDraftRevisionGuard(db, expectedDraftRevision, workspace.draft.basePublishedRevision),
+      (expectedDraftRevision === 0
+        ? db.insert(themeSettingsDrafts).values({ id: THEME_SETTINGS_ID, theme: normalized.serialized, revision: 1, basePublishedRevision, updatedBy: actorId, createdAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+        : db.update(themeSettingsDrafts).set({ theme: normalized.serialized, revision: sql`${themeSettingsDrafts.revision} + 1`, basePublishedRevision, updatedBy: actorId, updatedAt: sql`unixepoch()` })
+          .where(eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))) as never,
+    ]);
+  } catch (error) {
+    if (isThemeRevisionConflict(error)) throw themeConflict("The storefront style or draft changed in another session. Reload before replacing the draft.");
+    throw error;
+  }
+  return {
+    ...workspace,
+    draft: { theme: normalized.theme, revision: expectedDraftRevision + 1, basePublishedRevision, updatedAt: new Date() },
+    draftDiffersFromLive: compareThemeDocuments(workspace.published.theme, normalized.theme).length > 0,
+  };
+}
+
+export async function restoreThemeVersion(
+  db: Database,
+  sourceRevision: number,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+): Promise<ThemeWorkspaceDocument> {
+  if (!Number.isInteger(sourceRevision) || sourceRevision < 1) throw new ValidationError("Choose a positive published theme revision to restore.");
+  const source = await db.select({ theme: themeSettingsVersions.theme }).from(themeSettingsVersions)
+    .where(eq(themeSettingsVersions.publishedRevision, sourceRevision)).get();
+  if (!source) throw new ValidationError("That storefront style revision is unavailable.");
+  return replaceThemeDraft(db, parseThemeVersionSnapshot(source.theme).theme, expectedDraftRevision, basePublishedRevision, actorId);
+}
+
+export async function discardThemeDraft(
+  db: Database,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+): Promise<ThemeWorkspaceDocument> {
+  return replaceThemeDraft(db, null, expectedDraftRevision, basePublishedRevision, actorId);
+}
+
+/** Compatibility command: old rollback callers now restore to draft and must explicitly publish. */
 export async function rollbackThemeSettings(
   db: Database,
   sourceRevision: number,
@@ -633,29 +763,51 @@ export async function rollbackThemeSettings(
   expectedDraftRevision: number,
   actorId: string | null = null,
 ): Promise<ThemeWorkspaceDocument> {
-  if (!Number.isInteger(sourceRevision) || sourceRevision < 1) {
-    throw new ValidationError("Choose a positive published theme revision to restore.");
+  return restoreThemeVersion(db, sourceRevision, expectedDraftRevision, expectedPublishedRevision, actorId);
+}
+
+/** One-page agent edits use the same document validation and revision authority as the editor. */
+export async function saveThemePageDraft(
+  db: Database,
+  page: "home" | "landing" | "product" | "collection" | "search",
+  value: unknown,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+  slug?: string,
+): Promise<ThemeDraftDocument> {
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.draft.revision !== expectedDraftRevision || workspace.draft.basePublishedRevision !== basePublishedRevision) {
+    throw themeConflict("The storefront style draft changed in another session. Reload before changing a page.");
   }
-  const source = await db
-    .select({ theme: themeSettingsVersions.theme })
-    .from(themeSettingsVersions)
-    .where(eq(themeSettingsVersions.publishedRevision, sourceRevision))
-    .get();
-  if (!source) throw new ValidationError("That storefront style revision is unavailable.");
-  return runThemePublishBatch(db, {
-    theme: parseAuthoritativeThemeSettings(source.theme),
-    expectedPublishedRevision,
-    expectedDraftRevision,
-    actorId,
-    source: "rollback",
-    sourceRevision,
-  });
+  const theme = structuredClone(workspace.draft.theme);
+  if (page === "landing") {
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new ValidationError("Choose a valid landing-page slug.");
+    const pages = theme.pages as unknown as { landing: Record<string, unknown> };
+    if (value === null) delete pages.landing[slug];
+    else pages.landing[slug] = value;
+  } else {
+    (theme.pages as unknown as Record<string, unknown>)[page] = value;
+  }
+  return saveThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, actorId);
 }
 
 const THEME_PREVIEW_CONTINUATION_TTL_MS = 5 * 60 * 1000;
 const THEME_PREVIEW_SESSION_TTL_MS = 30 * 60 * 1000;
 const THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL =
   "THEME_PREVIEW_CONTINUATION_CONSUME_CONFLICT";
+
+/** Version selectors stay in the existing hashed bearer, never a URL or overloaded database column. */
+function previewVersion(token: string): number | null {
+  const match = /^tp[cv]_V([0-9a-z]{10})_[A-Za-z0-9_-]{36}$/.exec(token);
+  if (!match) return null;
+  const revision = Number.parseInt(match[1]!, 36);
+  return Number.isSafeInteger(revision) && revision > 0 ? revision : null;
+}
+
+function mintThemePreviewBearer(kind: "tpc" | "tpv", sourceRevision: number | null): string {
+  return sourceRevision === null ? `${kind}_${nanoid(48)}` : `${kind}_V${sourceRevision.toString(36).padStart(10, "0")}_${nanoid(36)}`;
+}
 
 /** Every place that reads or mints a preview row also clears the expired ones. */
 function deleteExpiredThemePreviewSessions(db: Database) {
@@ -673,31 +825,28 @@ export async function createThemePreviewSession(
   db: Database,
   expectedDraftRevision: number,
   actorId: string | null = null,
+  sourceRevision: number | null = null,
 ): Promise<ThemePreviewContinuationDocument> {
-  if (!Number.isInteger(expectedDraftRevision) || expectedDraftRevision < 1) {
-    throw new ValidationError("Save the storefront style draft before previewing it.");
-  }
-  const draft = await db
-    .select({
-      revision: themeSettingsDrafts.revision,
-      basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
-    })
-    .from(themeSettingsDrafts)
-    .where(and(
-      eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
-      eq(themeSettingsDrafts.revision, expectedDraftRevision),
-    ))
-    .get();
-  if (!draft) {
-    throw themeConflict(
-      "The storefront style draft changed before preview opened. Reload the latest draft.",
-    );
+  assertNonnegativeRevision(expectedDraftRevision, "draft");
+  let draft: { revision: number; basePublishedRevision: number };
+  if (sourceRevision !== null) {
+    if (!Number.isInteger(sourceRevision) || sourceRevision < 1 || sourceRevision > 2_147_483_647) throw new ValidationError("Choose a valid published theme revision to preview.");
+    const version = await db.select({ theme: themeSettingsVersions.theme }).from(themeSettingsVersions).where(eq(themeSettingsVersions.publishedRevision, sourceRevision)).get();
+    if (!version) throw new ValidationError("That storefront style revision is unavailable.");
+    parseThemeVersionSnapshot(version.theme);
+    draft = { revision: sourceRevision, basePublishedRevision: sourceRevision };
+  } else {
+    if (expectedDraftRevision < 1) throw new ValidationError("Save the storefront style draft before previewing it.");
+    const saved = await db.select({ revision: themeSettingsDrafts.revision, basePublishedRevision: themeSettingsDrafts.basePublishedRevision })
+      .from(themeSettingsDrafts).where(and(eq(themeSettingsDrafts.id, THEME_SETTINGS_ID), eq(themeSettingsDrafts.revision, expectedDraftRevision))).get();
+    if (!saved) throw themeConflict("The storefront style draft changed before preview opened. Reload the latest draft.");
+    draft = saved;
   }
 
   // This is a one-time browser continuation bearer, carried only in a bounded
   // same-origin POST body. Only the service-authenticated exchange accepts it,
   // and the raw value is never persisted or placed in a URL.
-  const continuationId = `tpc_${nanoid(48)}`;
+  const continuationId = mintThemePreviewBearer("tpc", sourceRevision);
   const tokenHash = await hashThemePreviewToken(continuationId);
   const expiresAt = new Date(Date.now() + THEME_PREVIEW_CONTINUATION_TTL_MS);
   await safeBatch(db, [
@@ -743,7 +892,7 @@ export async function exchangeThemePreviewContinuation(
     throw new ConflictError("Theme preview continuation is unavailable or expired.");
   }
 
-  const token = `tpv_${nanoid(48)}`;
+  const token = mintThemePreviewBearer("tpv", previewVersion(normalizedId));
   const tokenHash = await hashThemePreviewToken(token);
   const expiresAt = new Date(Date.now() + THEME_PREVIEW_SESSION_TTL_MS);
   const consumeGuard = buildBatchGuard(db, sql`EXISTS (
@@ -782,32 +931,20 @@ export async function resolveThemePreviewSession(
   const normalizedToken = token.trim();
   if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
   const tokenHash = await hashThemePreviewToken(normalizedToken);
+  const sourceRevision = previewVersion(normalizedToken);
+  const authorized = and(eq(themePreviewSessions.tokenHash, tokenHash), gt(themePreviewSessions.expiresAt, sql`unixepoch()`));
   const results = await safeBatch(db, [
     deleteExpiredThemePreviewSessions(db),
-    db
-      .select({
-        theme: themeSettingsDrafts.theme,
-        draftRevision: themeSettingsDrafts.revision,
-        basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
-        expiresAt: themePreviewSessions.expiresAt,
-      })
-      .from(themePreviewSessions)
-      .innerJoin(themeSettingsDrafts, eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))
-      .where(and(
-        eq(themePreviewSessions.tokenHash, tokenHash),
-        gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
-      ))
-      .limit(1),
+    sourceRevision === null
+      ? db.select({ theme: themeSettingsDrafts.theme, draftRevision: themeSettingsDrafts.revision, basePublishedRevision: themeSettingsDrafts.basePublishedRevision, expiresAt: themePreviewSessions.expiresAt })
+        .from(themePreviewSessions).innerJoin(themeSettingsDrafts, eq(themeSettingsDrafts.id, THEME_SETTINGS_ID)).where(authorized).limit(1)
+      : db.select({ theme: themeSettingsVersions.theme, draftRevision: themeSettingsVersions.publishedRevision, basePublishedRevision: themeSettingsVersions.publishedRevision, expiresAt: themePreviewSessions.expiresAt })
+        .from(themePreviewSessions).innerJoin(themeSettingsVersions, eq(themeSettingsVersions.publishedRevision, sourceRevision)).where(authorized).limit(1),
   ]);
-  const row = (results[1] as Array<{
-    theme: string;
-    draftRevision: number;
-    basePublishedRevision: number;
-    expiresAt: Date;
-  }>)[0];
+  const row = (results[1] as Array<{ theme: string; draftRevision: number; basePublishedRevision: number; expiresAt: Date }>)[0];
   if (!row) return null;
   return {
-    theme: parseAuthoritativeThemeSettings(row.theme),
+    theme: sourceRevision === null ? parseAuthoritativeThemeSettings(row.theme) : parseThemeVersionSnapshot(row.theme).theme,
     draftRevision: row.draftRevision,
     basePublishedRevision: row.basePublishedRevision,
     expiresAt: row.expiresAt,

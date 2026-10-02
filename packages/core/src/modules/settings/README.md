@@ -59,6 +59,34 @@ same table, not settings.
 Phone collection is not a setting: checkout and customer identity always
 require it.
 
+## Theme history and page drafts
+
+The shared theme draft is the revision authority for home, landing, product,
+collection and search templates. Page edits use the same CAS as whole-document
+edits. Restore (including the compatibility `rollback` command) only replaces
+the draft; explicit publish is the only route to live. Discard rebases the draft
+to live and advances its revision, preventing stale editors from recreating
+discarded work.
+
+Every publish atomically writes live, synchronizes the draft, records author,
+time, change descriptors and an optional 500-character note, and prunes history
+to the latest **20 versions** in that same guarded provider batch. History JSON
+uses `{theme, publication:{summary, changes, note, publishedByName}}`; legacy
+bare-document snapshots remain readable. Live, draft and history reads upgrade
+older documents in memory; live/draft writes contain only the current document.
+
+Draft previews follow saved edits. Version previews remain immutable: the
+existing 52-character bearer encodes `V<10-character base36 revision>_<36 random
+characters>` after its `tpc_`/`tpv_` prefix, and only its SHA-256 hash is stored.
+The selector survives one-time continuation exchange; modified bearers fail
+hash authorization, and pruned versions make their previews unavailable. Tokens
+stay in POST bodies and an HttpOnly cookie, never URLs.
+
+Agent operations expose draft save, one-page edits, version list/restore and
+discard under Settings view/edit RBAC. The curated `theme.draft-landing-page.v1`
+workflow reads the revision, saves only approved campaign content, and verifies
+the saved draft without publishing.
+
 ## Platform origins
 
 `env.STOREFRONT_URL` and the other public origins are resolved at Worker entry

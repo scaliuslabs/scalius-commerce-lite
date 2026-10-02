@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   publishThemeDraft: vi.fn(),
   listThemeVersions: vi.fn(),
   rollbackThemeSettings: vi.fn(),
+  restoreThemeVersion: vi.fn(),
+  discardThemeDraft: vi.fn(),
+  saveThemePageDraft: vi.fn(),
   createThemePreviewSession: vi.fn(),
   getMediaOptimizationSettings: vi.fn(),
   isValidMediaHostInput: vi.fn(),
@@ -54,6 +57,9 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   publishThemeDraft: mocks.publishThemeDraft,
   listThemeVersions: mocks.listThemeVersions,
   rollbackThemeSettings: mocks.rollbackThemeSettings,
+  restoreThemeVersion: mocks.restoreThemeVersion,
+  discardThemeDraft: mocks.discardThemeDraft,
+  saveThemePageDraft: mocks.saveThemePageDraft,
   createThemePreviewSession: mocks.createThemePreviewSession,
   getMediaOptimizationSettings: mocks.getMediaOptimizationSettings,
   isValidMediaHostInput: mocks.isValidMediaHostInput,
@@ -880,7 +886,7 @@ describe("site settings write behavior", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null);
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, null, null);
   });
 
   it("saves theme drafts, and publishing goes only through the draft", async () => {
@@ -979,6 +985,37 @@ describe("site settings write behavior", () => {
       }],
       productBlocks: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", placement: "buy-box", settings: [] }],
     }]);
+  });
+
+  it("passes notes and the exact draft revision through publication", async () => {
+    const { app, env } = createTestApp();
+    const response = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "Eid release" });
+    expect(response.status).toBe(200);
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, "Eid release", null);
+    const invalid = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "x".repeat(501) });
+    expect(invalid.status).toBe(400);
+  });
+
+  it("restores versions and discards only through explicit draft CAS commands", async () => {
+    const { app, env } = createTestApp();
+    mocks.restoreThemeVersion.mockResolvedValue({});
+    mocks.discardThemeDraft.mockResolvedValue({});
+    expect((await requestJson(app, env, "POST", "/theme/restore", { sourceRevision: 4, expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
+    expect(mocks.restoreThemeVersion).toHaveBeenCalledWith({ id: "db" }, 4, 8, 6, null);
+    expect((await requestJson(app, env, "POST", "/theme/discard", { expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
+    expect(mocks.discardThemeDraft).toHaveBeenCalledWith({ id: "db" }, 8, 6, null);
+    expect(mocks.publishThemeDraft).not.toHaveBeenCalled();
+  });
+
+  it("validates individual page edits and exposes version preview selection", async () => {
+    const { app, env } = createTestApp();
+    mocks.saveThemePageDraft.mockResolvedValue({ theme: DEFAULT_STOREFRONT_THEME, revision: 3, basePublishedRevision: 1, updatedAt: new Date(1_000) });
+    const value = { title: "Eid", sections: DEFAULT_STOREFRONT_THEME.pages.home, overrideCms: false };
+    expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "landing", slug: "eid", value, expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(200);
+    expect(mocks.saveThemePageDraft).toHaveBeenCalledWith({ id: "db" }, "landing", value, 2, 1, null, "eid");
+    expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "product", value: { blocks: [] }, expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(400);
+    expect((await requestJson(app, env, "POST", "/theme/preview-session", { expectedDraftRevision: 0, sourceRevision: 1 })).status).toBe(200);
+    expect(mocks.createThemePreviewSession).toHaveBeenCalledWith({ id: "db" }, 0, null, 1);
   });
 
   it("bounds the history list to the versions publishing keeps", async () => {

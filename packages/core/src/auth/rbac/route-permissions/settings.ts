@@ -56,6 +56,15 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/theme/draft": {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/settings/theme/restore": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/discard": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/page-draft": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/theme/publish": {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
