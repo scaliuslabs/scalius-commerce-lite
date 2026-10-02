@@ -241,7 +241,7 @@ export default definePlugin({
             body: {
               page: {
                 title: "Your wishlist",
-                html: '<div class="mx-auto max-w-3xl px-4 py-10 text-center"><h2 class="text-xl font-semibold">Sign in to see your wishlist</h2><p class="mt-2 text-muted-foreground">Products you save stay here for next time.</p><p class="mt-4"><a class="underline" href="/account">Sign in</a></p></div>',
+                html: '<div class="max-w-3xl py-6"><p class="text-lg font-semibold">Sign in to see your wishlist</p><p class="mt-2 text-muted-foreground">Products you save stay here for next time.</p><p class="mt-4"><a class="underline" href="/account">Sign in</a></p></div>',
               },
             },
           };
@@ -275,7 +275,7 @@ export default definePlugin({
         const body = rows
           ? `<ul class="mt-4">${rows}</ul>${more}`
           : '<p class="mt-4 text-muted-foreground">Nothing saved yet. Tap the heart on a product to keep it here.</p><p class="mt-4"><a class="underline" href="/">Continue shopping</a></p>';
-        return { body: { page: { title: "Your wishlist", html: `<div class="mx-auto max-w-3xl px-4 py-8"><h2 class="text-2xl font-semibold">Your wishlist</h2>${body}</div>` } } };
+        return { body: { page: { title: "Your wishlist", html: `<div class="max-w-3xl">${body}</div>` } } };
       },
     },
 
