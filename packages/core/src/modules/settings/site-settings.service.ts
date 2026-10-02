@@ -839,7 +839,8 @@ function previewVersion(token: string): number | null {
 }
 
 function mintThemePreviewBearer(kind: "tpc" | "tpv", sourceRevision: number | null): string {
-  return sourceRevision === null ? `${kind}_${nanoid(48)}` : `${kind}_V${sourceRevision.toString(36).padStart(10, "0")}_${nanoid(36)}`;
+  // Reserve D so random draft tokens never resemble an immutable V selector.
+  return sourceRevision === null ? `${kind}_D${nanoid(47)}` : `${kind}_V${sourceRevision.toString(36).padStart(10, "0")}_${nanoid(36)}`;
 }
 
 /** Every place that reads or mints a preview row also clears the expired ones. */

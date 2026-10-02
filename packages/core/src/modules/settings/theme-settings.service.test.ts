@@ -6,7 +6,13 @@ import {
   createSqliteD1Database,
   createSqliteTursoDatabase,
 } from "@scalius/database/testing/sqlite-d1";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as ids from "nanoid";
+
+vi.mock("nanoid", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("nanoid")>();
+  return { ...actual, nanoid: vi.fn(actual.nanoid) };
+});
 
 import {
   createThemePreviewSession,
@@ -384,6 +390,19 @@ describe("versioned storefront theme settings", () => {
     expect(await resolveThemePreviewSession(db, forged)).toBeNull();
     sqlite.exec("DELETE FROM theme_settings_versions");
     expect(await resolveThemePreviewSession(db, token)).toBeNull();
+  });
+
+  it("keeps draft previews distinct even when random bytes resemble a historical version selector", async () => {
+    seedPublishedWorkspace();
+    const draft = storefrontTemplateTheme("marketplace");
+    await saveThemeDraft(db, draft, 1, 1);
+    const random = vi.mocked(ids.nanoid).mockImplementation((size = 21) => `V0000000001_${"a".repeat(36)}`.slice(0, size));
+    try {
+      const preview = await createThemePreviewSession(db, 2);
+      const { token } = await exchangeThemePreviewContinuation(db, preview.continuationId);
+      expect(token).toHaveLength(52);
+      expect((await resolveThemePreviewSession(db, token))?.theme).toEqual(draft);
+    } finally { random.mockRestore(); }
   });
 
   it("stores only token hashes and no theme, exchanges a continuation once, and follows the latest saved draft", async () => {
