@@ -639,6 +639,12 @@ const CACHE_DEP_TABLE_RULES = {
       keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
     })),
   },
+  promotion_customer_segments: {
+    kinds: ["promo"],
+    noise: ["created_at"],
+    note: "A promotion limited to customer segments is never shown on public offer reads (it depends on who is signed in), so linking or unlinking a segment changes which promotions public reads list. Segment definitions and membership are private and evaluated live at checkout.",
+    rules: everyChange([{ prefix: "promo:", columns: ["promotion_id"] }, { dep: "promo:*" }]),
+  },
   // --- Custom fields (COMMERCE-HOOKS H4) ----------------------------------------
   custom_field_definitions: {
     kinds: ["cf"],
@@ -791,6 +797,13 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   customer_sessions: PRIVATE,
   customer_auth_otp_rate_limits: PRIVATE,
   auth_otp_delivery_receipts: PRIVATE,
+  // Customers & marketing (0108): consent, tags, segments and order facts are
+  // dashboard/checkout data evaluated live; no public cached read uses them.
+  customer_marketing_consents: PRIVATE,
+  customer_marketing_consent_events: PRIVATE,
+  customer_tag_links: PRIVATE,
+  customer_segments: PRIVATE,
+  customer_order_stats: PRIVATE,
   conversations: PRIVATE,
   conversation_messages: PRIVATE,
   conversation_attachments: PRIVATE,

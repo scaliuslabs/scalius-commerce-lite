@@ -757,6 +757,13 @@
       "when": 1790947366519,
       "tag": "0107_plugin_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1790953279918,
+      "tag": "0108_customer_marketing",
+      "breakpoints": true
     }
   ]
 }

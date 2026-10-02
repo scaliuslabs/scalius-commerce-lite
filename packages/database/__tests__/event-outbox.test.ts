@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EVENT_TOPICS, EVENT_TOPIC_RESOURCE, parseEventFacts, type EventTopic } from "../../shared/src/events";
 import { ORDER_CHANNELS } from "../../shared/src/order-channel";
 import {
+  EVENT_TRIGGER_MIGRATIONS,
   EVENT_TRIGGER_SPECS,
   eventOutboxPostgresStatements,
   eventOutboxPostgresTrigger,
@@ -67,17 +68,22 @@ function insertProduct(sqlite: DatabaseSync, id: string): void {
 
 describe(`${MIGRATION} files`, () => {
   const sqliteFile = readFileSync(join(migrationsDirectory, `${MIGRATION}.sql`), "utf8");
-  const postgresFile = readFileSync(join(migrationsDirectory, "postgres", `${MIGRATION}.sql`), "utf8");
 
-  it("carries every generated trigger verbatim, for D1/Turso and PostgreSQL", () => {
-    const sqliteStatements = sqliteFile.split(BREAKPOINT).map((statement) => statement.trim());
-    const postgresStatements = postgresFile.split(BREAKPOINT).map((statement) => statement.trim());
-    for (const statement of eventOutboxSqliteStatements()) {
+  it.each([MIGRATION, ...new Set(Object.values(EVENT_TRIGGER_MIGRATIONS))])("%s carries its generated triggers verbatim, for D1/Turso and PostgreSQL", (migration) => {
+    const read = (dir: string) => readFileSync(join(migrationsDirectory, dir, `${migration}.sql`), "utf8")
+      .split(BREAKPOINT).map((statement) => statement.trim());
+    const sqliteStatements = read("");
+    const postgresStatements = read("postgres");
+    expect(eventOutboxSqliteStatements(migration).length).toBeGreaterThan(0);
+    for (const statement of eventOutboxSqliteStatements(migration)) {
       expect(sqliteStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
     }
-    for (const statement of eventOutboxPostgresStatements()) {
+    for (const statement of eventOutboxPostgresStatements(migration)) {
       expect(postgresStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
     }
+  });
+
+  it("marks the 0103 trigger block", () => {
     expect(sqliteFile).toContain("-- >>> H2H3 order channel and event outbox: triggers and backfill");
     expect(sqliteFile).toContain("-- <<< H2H3");
   });
