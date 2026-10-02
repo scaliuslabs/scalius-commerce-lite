@@ -62,9 +62,12 @@ describe("analytics periods on the merchant calendar", () => {
     expect(analyticsBuckets(range, "day")).toHaveLength(12);
   });
 
-  it("keeps day buckets to a year and picks a sensible default", () => {
+  it("keeps day buckets to three months and picks a sensible default", () => {
     const twoYears = { from: "2024-01-01", to: "2025-12-31" };
     expect(analyticsGranularities(twoYears)).toEqual(["week", "month"]);
+    expect(analyticsGranularities({ from: "2026-01-01", to: "2026-04-02" })).toEqual(["day", "week", "month"]);
+    expect(analyticsGranularities({ from: "2026-01-01", to: "2026-04-03" })).toEqual(["week", "month"]);
+    expect(analyticsBuckets(twoYears, "week").length).toBeLessThanOrEqual(106);
     expect(resolveAnalyticsGranularity(twoYears, "day")).toBe("month");
     expect(defaultAnalyticsGranularity({ from: "2026-01-01", to: "2026-03-31" })).toBe("day");
     expect(defaultAnalyticsGranularity({ from: "2026-01-01", to: "2026-06-30" })).toBe("week");

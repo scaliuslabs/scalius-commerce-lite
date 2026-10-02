@@ -216,7 +216,7 @@ export const permissionGroupMessages = defineMessages({
 export const permissionMessages = defineMessages<PermissionName>({
   en: {
     "dashboard.view": "View the home page",
-    "dashboard.analytics": "View sales numbers on home",
+    "dashboard.analytics": "View analytics, reports and sales numbers on home",
 
     "orders.view": "View orders",
     "orders.create": "Create orders",
@@ -318,7 +318,7 @@ export const permissionMessages = defineMessages<PermissionName>({
   },
   bn: {
     "dashboard.view": "হোম পেজ দেখা",
-    "dashboard.analytics": "হোমে বিক্রির হিসাব দেখা",
+    "dashboard.analytics": "অ্যানালিটিক্স, রিপোর্ট ও হোমে বিক্রির হিসাব দেখা",
 
     "orders.view": "অর্ডার দেখা",
     "orders.create": "অর্ডার তৈরি করা",

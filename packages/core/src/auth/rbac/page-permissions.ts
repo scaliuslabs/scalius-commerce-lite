@@ -53,6 +53,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Dashboard
   "/admin": { permission: PERMISSIONS.DASHBOARD_VIEW },
 
+  // Analytics: the overview and reports (sales numbers)
+  "/admin/analytics": { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
+  "/admin/analytics/reports": { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
+
   // Inventory
   "/admin/inventory": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/inventory/labels": { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -166,6 +170,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/settings\/agent-access\/authorize\/[^/]+$/,
     config: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+
+  // One analytics report (customer reports also need customers.view, checked by the API)
+  {
+    pattern: /^\/admin\/analytics\/reports\/[^/]+$/,
+    config: { permission: PERMISSIONS.DASHBOARD_ANALYTICS },
   },
 
   // Online store menu editor

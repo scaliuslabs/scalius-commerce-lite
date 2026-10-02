@@ -87,6 +87,7 @@ import {
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminCatalogProjectionRoutes } from "./routes/admin/catalog-projections";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
+import { adminReportRoutes } from "./routes/admin/reports";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
 import { adminAgentAccessRoutes } from "./routes/admin/agent-access";
@@ -249,6 +250,7 @@ app.route("/admin/search", adminSearchRoutes);
 app.route("/admin/shipments", adminShipmentRoutes);
 app.route("/admin/analytics", adminAnalyticsRoutes);
 app.route("/admin/dashboard", adminDashboardRoutes);
+app.route("/admin/reports", adminReportRoutes);
 app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
 app.route("/admin/rbac", adminRbacRoutes);
 app.route("/admin/settings", adminSettingsRoutes);

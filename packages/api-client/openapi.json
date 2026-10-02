@@ -149462,6 +149462,2741 @@
         }
       }
     },
+    "/api/v1/admin/reports/overview": {
+      "get": {
+        "operationId": "dashboard.reports.overview",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "Get the analytics overview",
+        "description": "Sales KPIs for a store-calendar date range and a comparison period: gross sales, discounts, returns, net sales, shipping, taxes, total sales, orders, average order value, units, new vs returning customers, repeat purchase rate, COD share, return-to-sender rate, cancellation rate and refunds, plus sales over time and breakdowns by channel, payment method, city, delivery zone and stock location. Orders placed in the range count (not incomplete hosted payments, not cancelled); returns and refunds count against the order's placement date. Money is decimal store currency.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+            },
+            "required": false,
+            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`."
+            },
+            "required": false,
+            "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length."
+            },
+            "required": false,
+            "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.",
+            "name": "granularity",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "previous_period",
+                "previous_year",
+                "none"
+              ],
+              "description": "Compare with the previous period of equal length (default), the same days last year, or nothing."
+            },
+            "required": false,
+            "description": "Compare with the previous period of equal length (default), the same days last year, or nothing.",
+            "name": "comparison",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics overview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "currency": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3
+                            },
+                            "decimalPlaces": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "decimalPlaces"
+                          ]
+                        },
+                        "granularity": {
+                          "type": "string",
+                          "enum": [
+                            "day",
+                            "week",
+                            "month"
+                          ]
+                        },
+                        "comparison": {
+                          "type": "string",
+                          "enum": [
+                            "previous_period",
+                            "previous_year",
+                            "none"
+                          ]
+                        },
+                        "current": {
+                          "type": "object",
+                          "properties": {
+                            "range": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to"
+                              ]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "integer"
+                                },
+                                "grossSales": {
+                                  "type": "number"
+                                },
+                                "discounts": {
+                                  "type": "number"
+                                },
+                                "returns": {
+                                  "type": "number"
+                                },
+                                "netSales": {
+                                  "type": "number"
+                                },
+                                "shipping": {
+                                  "type": "number"
+                                },
+                                "taxes": {
+                                  "type": "number"
+                                },
+                                "totalSales": {
+                                  "type": "number"
+                                },
+                                "netItemsSold": {
+                                  "type": "integer"
+                                },
+                                "averageOrderValue": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "grossSales",
+                                "discounts",
+                                "returns",
+                                "netSales",
+                                "shipping",
+                                "taxes",
+                                "totalSales",
+                                "netItemsSold",
+                                "averageOrderValue"
+                              ]
+                            },
+                            "customers": {
+                              "type": "object",
+                              "properties": {
+                                "customers": {
+                                  "type": "integer"
+                                },
+                                "newCustomers": {
+                                  "type": "integer"
+                                },
+                                "returningCustomers": {
+                                  "type": "integer"
+                                },
+                                "repeatPurchaseRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "customers",
+                                "newCustomers",
+                                "returningCustomers",
+                                "repeatPurchaseRate"
+                              ]
+                            },
+                            "payments": {
+                              "type": "object",
+                              "properties": {
+                                "codOrders": {
+                                  "type": "integer"
+                                },
+                                "prepaidOrders": {
+                                  "type": "integer"
+                                },
+                                "codShare": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "returnedToSender": {
+                                  "type": "integer"
+                                },
+                                "codDelivered": {
+                                  "type": "integer"
+                                },
+                                "rtsRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "refunded": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "codOrders",
+                                "prepaidOrders",
+                                "codShare",
+                                "returnedToSender",
+                                "codDelivered",
+                                "rtsRate",
+                                "refunded"
+                              ]
+                            },
+                            "cancellations": {
+                              "type": "object",
+                              "properties": {
+                                "placed": {
+                                  "type": "integer"
+                                },
+                                "cancelled": {
+                                  "type": "integer"
+                                },
+                                "cancellationRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "placed",
+                                "cancelled",
+                                "cancellationRate"
+                              ]
+                            },
+                            "otherCurrencyOrders": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "range",
+                            "totals",
+                            "customers",
+                            "payments",
+                            "cancellations",
+                            "otherCurrencyOrders"
+                          ]
+                        },
+                        "previous": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "range": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to"
+                              ]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "integer"
+                                },
+                                "grossSales": {
+                                  "type": "number"
+                                },
+                                "discounts": {
+                                  "type": "number"
+                                },
+                                "returns": {
+                                  "type": "number"
+                                },
+                                "netSales": {
+                                  "type": "number"
+                                },
+                                "shipping": {
+                                  "type": "number"
+                                },
+                                "taxes": {
+                                  "type": "number"
+                                },
+                                "totalSales": {
+                                  "type": "number"
+                                },
+                                "netItemsSold": {
+                                  "type": "integer"
+                                },
+                                "averageOrderValue": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "grossSales",
+                                "discounts",
+                                "returns",
+                                "netSales",
+                                "shipping",
+                                "taxes",
+                                "totalSales",
+                                "netItemsSold",
+                                "averageOrderValue"
+                              ]
+                            },
+                            "customers": {
+                              "type": "object",
+                              "properties": {
+                                "customers": {
+                                  "type": "integer"
+                                },
+                                "newCustomers": {
+                                  "type": "integer"
+                                },
+                                "returningCustomers": {
+                                  "type": "integer"
+                                },
+                                "repeatPurchaseRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "customers",
+                                "newCustomers",
+                                "returningCustomers",
+                                "repeatPurchaseRate"
+                              ]
+                            },
+                            "payments": {
+                              "type": "object",
+                              "properties": {
+                                "codOrders": {
+                                  "type": "integer"
+                                },
+                                "prepaidOrders": {
+                                  "type": "integer"
+                                },
+                                "codShare": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "returnedToSender": {
+                                  "type": "integer"
+                                },
+                                "codDelivered": {
+                                  "type": "integer"
+                                },
+                                "rtsRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "refunded": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "codOrders",
+                                "prepaidOrders",
+                                "codShare",
+                                "returnedToSender",
+                                "codDelivered",
+                                "rtsRate",
+                                "refunded"
+                              ]
+                            },
+                            "cancellations": {
+                              "type": "object",
+                              "properties": {
+                                "placed": {
+                                  "type": "integer"
+                                },
+                                "cancelled": {
+                                  "type": "integer"
+                                },
+                                "cancellationRate": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "placed",
+                                "cancelled",
+                                "cancellationRate"
+                              ]
+                            },
+                            "otherCurrencyOrders": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "range",
+                            "totals",
+                            "customers",
+                            "payments",
+                            "cancellations",
+                            "otherCurrencyOrders"
+                          ]
+                        },
+                        "breakdowns": {
+                          "type": "object",
+                          "properties": {
+                            "channel": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "shipping": {
+                                    "type": "number"
+                                  },
+                                  "taxes": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  },
+                                  "netItemsSold": {
+                                    "type": "integer"
+                                  },
+                                  "averageOrderValue": {
+                                    "type": "number"
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "shipping",
+                                  "taxes",
+                                  "totalSales",
+                                  "netItemsSold",
+                                  "averageOrderValue",
+                                  "key",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 9
+                            },
+                            "paymentMethod": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "shipping": {
+                                    "type": "number"
+                                  },
+                                  "taxes": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  },
+                                  "netItemsSold": {
+                                    "type": "integer"
+                                  },
+                                  "averageOrderValue": {
+                                    "type": "number"
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "shipping",
+                                  "taxes",
+                                  "totalSales",
+                                  "netItemsSold",
+                                  "averageOrderValue",
+                                  "key",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 9
+                            },
+                            "city": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "shipping": {
+                                    "type": "number"
+                                  },
+                                  "taxes": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  },
+                                  "netItemsSold": {
+                                    "type": "integer"
+                                  },
+                                  "averageOrderValue": {
+                                    "type": "number"
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "shipping",
+                                  "taxes",
+                                  "totalSales",
+                                  "netItemsSold",
+                                  "averageOrderValue",
+                                  "key",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 9
+                            },
+                            "deliveryZone": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "shipping": {
+                                    "type": "number"
+                                  },
+                                  "taxes": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  },
+                                  "netItemsSold": {
+                                    "type": "integer"
+                                  },
+                                  "averageOrderValue": {
+                                    "type": "number"
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "shipping",
+                                  "taxes",
+                                  "totalSales",
+                                  "netItemsSold",
+                                  "averageOrderValue",
+                                  "key",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 9
+                            },
+                            "location": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "shipping": {
+                                    "type": "number"
+                                  },
+                                  "taxes": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  },
+                                  "netItemsSold": {
+                                    "type": "integer"
+                                  },
+                                  "averageOrderValue": {
+                                    "type": "number"
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "shipping",
+                                  "taxes",
+                                  "totalSales",
+                                  "netItemsSold",
+                                  "averageOrderValue",
+                                  "key",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 9
+                            }
+                          },
+                          "required": [
+                            "channel",
+                            "paymentMethod",
+                            "city",
+                            "deliveryZone",
+                            "location"
+                          ]
+                        },
+                        "series": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                              },
+                              "current": {
+                                "type": "object",
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "totalSales"
+                                ]
+                              },
+                              "previousKey": {
+                                "type": "string",
+                                "nullable": true,
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                              },
+                              "previous": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer"
+                                  },
+                                  "grossSales": {
+                                    "type": "number"
+                                  },
+                                  "discounts": {
+                                    "type": "number"
+                                  },
+                                  "returns": {
+                                    "type": "number"
+                                  },
+                                  "netSales": {
+                                    "type": "number"
+                                  },
+                                  "totalSales": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "grossSales",
+                                  "discounts",
+                                  "returns",
+                                  "netSales",
+                                  "totalSales"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "current",
+                              "previousKey",
+                              "previous"
+                            ]
+                          },
+                          "maxItems": 106
+                        }
+                      },
+                      "required": [
+                        "currency",
+                        "granularity",
+                        "comparison",
+                        "current",
+                        "previous",
+                        "breakdowns",
+                        "series"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.analytics"
+        }
+      }
+    },
+    "/api/v1/admin/reports": {
+      "get": {
+        "operationId": "dashboard.reports.list",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "List analytics reports",
+        "description": "Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need unit costs recorded on order lines).",
+        "responses": {
+          "200": {
+            "description": "Report catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reports": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "sales_over_time",
+                                  "sales_by_product",
+                                  "sales_by_variant",
+                                  "sales_by_category",
+                                  "sales_by_brand",
+                                  "sales_by_collection",
+                                  "sales_by_discount",
+                                  "sales_by_channel",
+                                  "sales_by_payment_method",
+                                  "sales_by_city",
+                                  "sales_by_delivery_zone",
+                                  "sales_by_location",
+                                  "customers_top",
+                                  "customers_over_time",
+                                  "inventory_by_location",
+                                  "inventory_on_hand",
+                                  "inventory_low_stock",
+                                  "inventory_sell_through",
+                                  "finance_payments",
+                                  "finance_refunds",
+                                  "finance_cod",
+                                  "finance_gift_cards",
+                                  "taxes",
+                                  "delivery_performance",
+                                  "abandoned_checkouts",
+                                  "profit_by_product"
+                                ]
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "sales",
+                                  "customers",
+                                  "inventory",
+                                  "finance",
+                                  "operations",
+                                  "profit"
+                                ]
+                              },
+                              "period": {
+                                "type": "string",
+                                "enum": [
+                                  "range",
+                                  "snapshot"
+                                ]
+                              },
+                              "granularity": {
+                                "type": "boolean"
+                              },
+                              "columns": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "enum",
+                                        "money",
+                                        "count",
+                                        "number",
+                                        "percent",
+                                        "date",
+                                        "days"
+                                      ]
+                                    },
+                                    "summable": {
+                                      "type": "boolean"
+                                    },
+                                    "enum": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type"
+                                  ]
+                                },
+                                "maxItems": 20
+                              },
+                              "defaultSort": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "asc",
+                                      "desc"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "direction"
+                                ]
+                              },
+                              "requiresCustomerAccess": {
+                                "type": "boolean"
+                              },
+                              "requiresUnitCost": {
+                                "type": "boolean"
+                              },
+                              "rowLink": {
+                                "type": "string",
+                                "enum": [
+                                  "product",
+                                  "variant"
+                                ]
+                              },
+                              "available": {
+                                "type": "boolean"
+                              },
+                              "unavailableReason": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "customer_access",
+                                  "unit_cost",
+                                  null
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "category",
+                              "period",
+                              "columns",
+                              "defaultSort",
+                              "available",
+                              "unavailableReason"
+                            ]
+                          },
+                          "maxItems": 64
+                        }
+                      },
+                      "required": [
+                        "reports"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.analytics"
+        }
+      }
+    },
+    "/api/v1/admin/reports/{reportId}": {
+      "get": {
+        "operationId": "dashboard.reports.get",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "Run an analytics report",
+        "description": "One sorted page (at most 100 rows, 10000 rows deep) of a catalogued report for a store-calendar date range, with totals over all rows. Money is decimal store currency; percent values are 0–100.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sales_over_time",
+                "sales_by_product",
+                "sales_by_variant",
+                "sales_by_category",
+                "sales_by_brand",
+                "sales_by_collection",
+                "sales_by_discount",
+                "sales_by_channel",
+                "sales_by_payment_method",
+                "sales_by_city",
+                "sales_by_delivery_zone",
+                "sales_by_location",
+                "customers_top",
+                "customers_over_time",
+                "inventory_by_location",
+                "inventory_on_hand",
+                "inventory_low_stock",
+                "inventory_sell_through",
+                "finance_payments",
+                "finance_refunds",
+                "finance_cod",
+                "finance_gift_cards",
+                "taxes",
+                "delivery_performance",
+                "abandoned_checkouts",
+                "profit_by_product"
+              ],
+              "description": "Report id from the catalog"
+            },
+            "required": true,
+            "description": "Report id from the catalog",
+            "name": "reportId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+            },
+            "required": false,
+            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`."
+            },
+            "required": false,
+            "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length."
+            },
+            "required": false,
+            "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.",
+            "name": "granularity",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Column key to sort by; unknown keys use the report's default"
+            },
+            "required": false,
+            "description": "Column key to sort by; unknown keys use the report's default",
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "required": false,
+            "name": "direction",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "report": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "enum": [
+                                "sales_over_time",
+                                "sales_by_product",
+                                "sales_by_variant",
+                                "sales_by_category",
+                                "sales_by_brand",
+                                "sales_by_collection",
+                                "sales_by_discount",
+                                "sales_by_channel",
+                                "sales_by_payment_method",
+                                "sales_by_city",
+                                "sales_by_delivery_zone",
+                                "sales_by_location",
+                                "customers_top",
+                                "customers_over_time",
+                                "inventory_by_location",
+                                "inventory_on_hand",
+                                "inventory_low_stock",
+                                "inventory_sell_through",
+                                "finance_payments",
+                                "finance_refunds",
+                                "finance_cod",
+                                "finance_gift_cards",
+                                "taxes",
+                                "delivery_performance",
+                                "abandoned_checkouts",
+                                "profit_by_product"
+                              ]
+                            },
+                            "category": {
+                              "type": "string",
+                              "enum": [
+                                "sales",
+                                "customers",
+                                "inventory",
+                                "finance",
+                                "operations",
+                                "profit"
+                              ]
+                            },
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "range",
+                                "snapshot"
+                              ]
+                            },
+                            "granularity": {
+                              "type": "boolean"
+                            },
+                            "columns": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text",
+                                      "enum",
+                                      "money",
+                                      "count",
+                                      "number",
+                                      "percent",
+                                      "date",
+                                      "days"
+                                    ]
+                                  },
+                                  "summable": {
+                                    "type": "boolean"
+                                  },
+                                  "enum": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "type"
+                                ]
+                              },
+                              "maxItems": 20
+                            },
+                            "defaultSort": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "asc",
+                                    "desc"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "direction"
+                              ]
+                            },
+                            "requiresCustomerAccess": {
+                              "type": "boolean"
+                            },
+                            "requiresUnitCost": {
+                              "type": "boolean"
+                            },
+                            "rowLink": {
+                              "type": "string",
+                              "enum": [
+                                "product",
+                                "variant"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "category",
+                            "period",
+                            "columns",
+                            "defaultSort"
+                          ]
+                        },
+                        "currency": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3
+                            },
+                            "decimalPlaces": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "decimalPlaces"
+                          ]
+                        },
+                        "range": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "from": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "to": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ]
+                        },
+                        "granularity": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "day",
+                            "week",
+                            "month",
+                            null
+                          ]
+                        },
+                        "sort": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "direction": {
+                              "type": "string",
+                              "enum": [
+                                "asc",
+                                "desc"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "direction"
+                          ]
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "totalRows": {
+                          "type": "integer"
+                        },
+                        "totalPages": {
+                          "type": "integer"
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "productId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 300
+                              },
+                              "values": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "maxLength": 300
+                                    },
+                                    {}
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "values"
+                            ]
+                          },
+                          "maxItems": 100
+                        },
+                        "totals": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              {}
+                            ]
+                          }
+                        },
+                        "notes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "report",
+                        "currency",
+                        "range",
+                        "granularity",
+                        "sort",
+                        "page",
+                        "pageSize",
+                        "totalRows",
+                        "totalPages",
+                        "rows",
+                        "totals",
+                        "notes"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.analytics"
+        }
+      }
+    },
+    "/api/v1/admin/reports/{reportId}/export": {
+      "get": {
+        "operationId": "dashboard.reports.export",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "Export an analytics report as CSV",
+        "description": "The whole report in the requested order (at most 10000 rows and 16 MB) with a totals row, as a private spreadsheet-safe CSV. X-Export-Limited says when the file stopped early.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sales_over_time",
+                "sales_by_product",
+                "sales_by_variant",
+                "sales_by_category",
+                "sales_by_brand",
+                "sales_by_collection",
+                "sales_by_discount",
+                "sales_by_channel",
+                "sales_by_payment_method",
+                "sales_by_city",
+                "sales_by_delivery_zone",
+                "sales_by_location",
+                "customers_top",
+                "customers_over_time",
+                "inventory_by_location",
+                "inventory_on_hand",
+                "inventory_low_stock",
+                "inventory_sell_through",
+                "finance_payments",
+                "finance_refunds",
+                "finance_cod",
+                "finance_gift_cards",
+                "taxes",
+                "delivery_performance",
+                "abandoned_checkouts",
+                "profit_by_product"
+              ],
+              "description": "Report id from the catalog"
+            },
+            "required": true,
+            "description": "Report id from the catalog",
+            "name": "reportId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+            },
+            "required": false,
+            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`."
+            },
+            "required": false,
+            "description": "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length."
+            },
+            "required": false,
+            "description": "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.",
+            "name": "granularity",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "required": false,
+            "name": "direction",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "artifactOutput": {
+            "mediaTypes": [
+              "text/csv"
+            ],
+            "disposition": "attachment",
+            "filenamePolicy": "content-disposition",
+            "maxArtifactBytes": 16777216,
+            "delivery": "authenticated-handle"
+          }
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.analytics"
+        }
+      }
+    },
     "/api/v1/admin/fraud-checker": {
       "get": {
         "operationId": "dashboard.fraud_providers.list",
@@ -303810,6 +306545,71 @@
         ]
       },
       {
+        "id": "dashboard.report-export",
+        "surface": "dashboard",
+        "kind": "read",
+        "title": "Export an analytics report",
+        "summary": "Export one catalogued report for an exact date range as the bounded CSV artifact.",
+        "examples": [
+          "Export sales by product for last month as CSV."
+        ],
+        "tags": [
+          "analytics",
+          "reports",
+          "export",
+          "artifact"
+        ],
+        "operationIds": [
+          "dashboard.reports.export"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Require the report id and an exact date range (snapshot inventory reports need none).",
+          "Return the artifact handle rather than embedding export bytes."
+        ]
+      },
+      {
+        "id": "dashboard.sales-analytics",
+        "surface": "dashboard",
+        "kind": "read",
+        "title": "Sales analytics and reports",
+        "summary": "Read the analytics overview (sales KPIs with a comparison period) and catalogued reports: sales by product, variant, category, brand, collection, discount, channel, payment method, city, delivery zone and location; customers; inventory; finance; taxes; delivery; abandoned checkouts; profit when unit costs exist.",
+        "examples": [
+          "How did last month compare with the month before: net sales, orders, average order value, return-to-sender rate?",
+          "What were my top 10 products by net sales in the last 30 days?",
+          "How much cash on delivery is still outstanding for orders placed this month?"
+        ],
+        "tags": [
+          "analytics",
+          "reports",
+          "sales",
+          "net-sales",
+          "products",
+          "customers",
+          "inventory",
+          "finance",
+          "cod",
+          "rts"
+        ],
+        "operationIds": [
+          "dashboard.reports.overview",
+          "dashboard.reports.list",
+          "dashboard.reports.get"
+        ],
+        "requiresFacts": false,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Dates are inclusive Asia/Dhaka calendar days (from/to YYYY-MM-DD, at most 731 days); state the range and comparison you used.",
+          "Gross sales exclude shipping, taxes and gift cards; net sales = gross − discounts − returns; total sales = net + shipping + taxes. Never call gross sales profit or collected cash.",
+          "Orders count by placement date; cancelled and incomplete orders are excluded (cancellations only in the cancellation rate); returns and refunds count against the order's own date.",
+          "Read dashboard.reports.list first; a report with available=false is unavailable (customer_access or unit_cost): say so, never approximate it.",
+          "Customer reports name people only with customers.view; never repeat customer phones beyond what the merchant asked for."
+        ]
+      },
+      {
         "id": "dashboard.sales-today",
         "surface": "dashboard",
         "kind": "read",
@@ -309642,6 +312442,38 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.product-section-update"
+          ]
+        },
+        {
+          "operationId": "dashboard.reports.export",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.report-export"
+          ]
+        },
+        {
+          "operationId": "dashboard.reports.get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.sales-analytics"
+          ]
+        },
+        {
+          "operationId": "dashboard.reports.list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.sales-analytics"
+          ]
+        },
+        {
+          "operationId": "dashboard.reports.overview",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.sales-analytics"
           ]
         },
         {

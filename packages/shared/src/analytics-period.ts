@@ -13,8 +13,12 @@ const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** The longest range a report reads: two years and a day (a leap year pair). */
 export const ANALYTICS_MAX_RANGE_DAYS = 731;
-/** Day buckets stop at a year; longer ranges bucket by week or month. */
-export const ANALYTICS_MAX_DAY_BUCKETS = 366;
+/**
+ * Day buckets stop at about three months; longer ranges bucket by week (at
+ * most 105 for two years) or month. This keeps a whole overview, both periods
+ * and every bucket, inside one 64 KB agent response.
+ */
+export const ANALYTICS_MAX_DAY_BUCKETS = 92;
 
 export const ANALYTICS_COMPARISONS = ["previous_period", "previous_year", "none"] as const;
 export type AnalyticsComparison = (typeof ANALYTICS_COMPARISONS)[number];
@@ -179,7 +183,7 @@ export function analyticsPresetFor(range: AnalyticsRange, today: string): Analyt
   return null;
 }
 
-/** Granularities a range can be bucketed by (day buckets stop at a year). */
+/** Granularities a range can be bucketed by (day buckets stop at three months). */
 export function analyticsGranularities(range: AnalyticsRange): AnalyticsGranularity[] {
   return analyticsRangeDays(range) <= ANALYTICS_MAX_DAY_BUCKETS
     ? ["day", "week", "month"]
@@ -189,8 +193,8 @@ export function analyticsGranularities(range: AnalyticsRange): AnalyticsGranular
 /** Days up to three months, weeks up to a year, then months. */
 export function defaultAnalyticsGranularity(range: AnalyticsRange): AnalyticsGranularity {
   const days = analyticsRangeDays(range);
-  if (days <= 92) return "day";
-  if (days <= ANALYTICS_MAX_DAY_BUCKETS) return "week";
+  if (days <= ANALYTICS_MAX_DAY_BUCKETS) return "day";
+  if (days <= 366) return "week";
   return "month";
 }
 
