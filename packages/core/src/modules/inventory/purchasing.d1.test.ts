@@ -316,6 +316,63 @@ describe("transfers", () => {
   });
 });
 
+describe("batch shape and races", () => {
+  it("receives a 100-line purchase order in one batch, every statement within D1's parameter limit", async () => {
+    const ids = Array.from({ length: 100 }, (_, index) => `var_bulk_${String(index).padStart(3, "0")}`);
+    for (const id of ids) seedSku(id, 1, 1000);
+    const order = await createPurchaseOrder(db, { lines: ids.map((variantId) => ({ variantId, quantity: 2, unitCost: 12.5 })) });
+    const ordered = await markPurchaseOrderOrdered(db, order.id, 1);
+    const batches: number[] = [];
+    const observed = createSqliteD1Database({ sqlite, beforeBatch: (_sqlite, statements) => { batches.push(statements.length); } }).db;
+    const result = await receivePurchaseOrder(observed, order.id, {
+      operationKey: key("bulk"),
+      updateCost: true,
+      lines: ordered.lines.map((line) => ({ lineId: line.id, quantity: 2 })),
+    });
+    expect(result.status).toBe("received");
+    // The harness throws above 100 bound values a statement; the one stock batch:
+    // 100 × (claim + CAS) + guards + command + 1 progress update + 8 receipt inserts + header + buyer state.
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toBeLessThanOrEqual(230);
+    // (1 × 10.00 + 2 × 12.50) / 3 = 11.666… → 11.67 (half up, in paisa).
+    expect(cost("var_bulk_000")).toBe(1167);
+    expectInvariants();
+  });
+
+  it("re-plans after a lost compare-and-set and never commits part of a receipt", async () => {
+    const order = await createPurchaseOrder(db, { lines: [{ variantId: "var_a", quantity: 3, unitCost: 450 }, { variantId: "var_b", quantity: 2, unitCost: 300 }] });
+    const ordered = await markPurchaseOrderOrdered(db, order.id, 1);
+    let raced = false;
+    const racing = createSqliteD1Database({
+      sqlite,
+      beforeBatch: (target) => {
+        if (raced) return;
+        raced = true;
+        // Another writer sells var_a's counters forward (a valid ledger edge) after the receipt read them.
+        const sku = target.prepare("SELECT stock, stock_version FROM product_variants WHERE id = 'var_a'").get() as { stock: number; stock_version: number };
+        target.prepare(`INSERT INTO inventory_movements (id, variant_id, type, quantity, previous_stock, new_stock, ledger_version, pool,
+          stock_version_before, stock_version_after, stock_delta, previous_reserved_stock, new_reserved_stock, reserved_stock_delta,
+          previous_preorder_stock, new_preorder_stock, preorder_stock_delta, location_id)
+          VALUES ('mv_race', 'var_a', 'adjusted', -1, ?, ?, 2, 'regular', ?, ?, -1, 0, 0, 0, 0, 0, 0, 'loc_default')`)
+          .run(sku.stock, sku.stock - 1, sku.stock_version, sku.stock_version + 1);
+        target.prepare("UPDATE product_variants SET stock = stock - 1, stock_version = stock_version + 1 WHERE id = 'var_a'").run();
+      },
+    }).db;
+    const result = await receivePurchaseOrder(racing, order.id, {
+      operationKey: key("race"),
+      updateCost: true,
+      lines: ordered.lines.map((line) => ({ lineId: line.id, quantity: line.quantity })),
+    });
+    expect(raced).toBe(true);
+    expect(result.status).toBe("received");
+    // 10 − 1 sold + 3 received; the average saw the fresh on-hand (9 × 400 + 3 × 450) / 12 = 412.5.
+    expect([stock("var_a"), stock("var_b"), cost("var_a")]).toEqual([12, 2, 41250]);
+    expect(one<{ n: number }>("SELECT count(*) AS n FROM purchase_order_receipt_lines").n).toBe(2);
+    expect(one<{ n: number }>("SELECT count(*) AS n FROM inventory_commands").n).toBe(1);
+    expectInvariants();
+  });
+});
+
 describe("random command sequences", () => {
   it("keep every ledger invariant through receipts, transfers, cancels and replays", async () => {
     seedLocation("loc_c", "Chittagong");

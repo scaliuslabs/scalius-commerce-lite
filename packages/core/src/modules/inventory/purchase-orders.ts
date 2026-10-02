@@ -39,7 +39,7 @@ import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
-import { executeStockCommand, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
 
 export const PURCHASE_ORDER_MAX_LINES = 100;
@@ -853,31 +853,34 @@ export async function receivePurchaseOrder(
         )`,
         subjectRevisionAfter: header.revision + 1,
         documentStatements: (edges: readonly StockCommandEdge[]) => [
-          ...edges.flatMap((edge) => {
+          // One statement for every line's progress and multi-row receipt
+          // inserts: a 100-line receipt stays near two statements per SKU.
+          db.update(purchaseOrderLines).set({
+            receivedQuantity: sql`${purchaseOrderLines.receivedQuantity} + ${addedQuantitySql(
+              planned.map((entry) => ({ id: entry.line.id, quantity: entry.quantity })),
+              "purchase_order_lines",
+            )}`,
+            updatedAt: sql`unixepoch()`,
+          }).where(sql`${purchaseOrderLines.id} IN (${idsFromJsonSql(planned.map((entry) => entry.line.id))})`) as unknown as BatchItem<"sqlite">,
+          ...chunkRowsForD1(edges.map((edge) => {
             const entry = lineByVariant.get(edge.before.id)!;
-            return [
-              db.update(purchaseOrderLines).set({
-                receivedQuantity: sql`${purchaseOrderLines.receivedQuantity} + ${entry.quantity}`,
-                updatedAt: sql`unixepoch()`,
-              }).where(eq(purchaseOrderLines.id, entry.line.id)) as unknown as BatchItem<"sqlite">,
-              db.insert(purchaseOrderReceiptLines).values({
-                id: `porl_${edge.movementId.slice(5, 37)}`,
-                operationKey: data.operationKey.trim(),
-                purchaseOrderId: id,
-                purchaseOrderLineId: entry.line.id,
-                variantId: edge.before.id,
-                locationId: location.id,
-                movementId: edge.movementId,
-                quantity: entry.quantity,
-                unitCostMinor: entry.line.unitCostMinor,
-                costBeforeMinor: edge.before.costMinor,
-                costAfterMinor: edge.costAfterMinor,
-                costUpdated: data.updateCost,
-                createdBy: actorId ?? null,
-                createdAt: sql`unixepoch()`,
-              }) as unknown as BatchItem<"sqlite">,
-            ];
-          }),
+            return {
+              id: `porl_${edge.movementId.slice(5, 37)}`,
+              operationKey: data.operationKey.trim(),
+              purchaseOrderId: id,
+              purchaseOrderLineId: entry.line.id,
+              variantId: edge.before.id,
+              locationId: location.id,
+              movementId: edge.movementId,
+              quantity: entry.quantity,
+              unitCostMinor: entry.line.unitCostMinor,
+              costBeforeMinor: edge.before.costMinor,
+              costAfterMinor: edge.costAfterMinor,
+              costUpdated: data.updateCost,
+              createdBy: actorId ?? null,
+              createdAt: sql`unixepoch()`,
+            };
+          }), 14).map((rows) => db.insert(purchaseOrderReceiptLines).values(rows) as unknown as BatchItem<"sqlite">),
           db.update(purchaseOrders).set({
             status,
             ...(fullyReceived ? { receivedAt: sql`unixepoch()` } : {}),

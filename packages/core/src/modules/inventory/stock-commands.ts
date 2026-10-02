@@ -113,6 +113,25 @@ export interface StockCommandInput<R> {
   plan: () => Promise<StockCommandPlan<R>>;
 }
 
+/**
+ * The quantity a document line gains in this command, as a correlated
+ * subquery over one JSON parameter (`[{id, quantity}]`): every line's
+ * progress in a single UPDATE. `table` qualifies the outer row explicitly
+ * (json_each has an `id` column of its own).
+ */
+export function addedQuantitySql(entries: ReadonlyArray<{ id: string; quantity: number }>, table: string): SQL<number> {
+  const json = JSON.stringify(entries.map((entry) => ({ id: entry.id, q: entry.quantity })));
+  return sql<number>`COALESCE((
+    SELECT CAST(json_extract(added.value, '$.q') AS INTEGER) FROM json_each(${json}) AS added
+    WHERE CAST(json_extract(added.value, '$.id') AS TEXT) = ${sql.raw(`"${table}"."id"`)}
+  ), 0)`;
+}
+
+/** The ids in one JSON parameter, for `id IN (...)`. */
+export function idsFromJsonSql(ids: readonly string[]): SQL {
+  return sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`;
+}
+
 export async function hashStockCommandRequest(commandType: InventoryCommandType, subjectId: string, request: unknown): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",

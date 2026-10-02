@@ -34,7 +34,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { variantOptionLabelSql } from "../products/option-model";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
-import { executeStockCommand, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
@@ -625,11 +625,12 @@ async function readLines(db: Database, id: string): Promise<TransferLineRow[]> {
     .all();
 }
 
-function linkInsert(
+/** The movement each step wrote, per line: multi-row inserts below D1's parameter ceiling. */
+function linkInserts(
   db: Database,
-  input: { operationKey: string; transferId: string; lineId: string; edge: StockCommandEdge; kind: InventoryTransferMovementKind; quantity: number; createdBy: string | null },
-): BatchItem<"sqlite"> {
-  return db.insert(inventoryTransferMovements).values({
+  inputs: ReadonlyArray<{ operationKey: string; transferId: string; lineId: string; edge: StockCommandEdge; kind: InventoryTransferMovementKind; quantity: number; createdBy: string | null }>,
+): BatchItem<"sqlite">[] {
+  const rows = inputs.map((input) => ({
     id: `trm_${input.edge.movementId.slice(5, 37)}`,
     operationKey: input.operationKey,
     transferId: input.transferId,
@@ -641,7 +642,8 @@ function linkInsert(
     quantity: input.quantity,
     createdBy: input.createdBy,
     createdAt: sql`unixepoch()`,
-  }) as unknown as BatchItem<"sqlite">;
+  }));
+  return chunkRowsForD1(rows, 11).map((chunk) => db.insert(inventoryTransferMovements).values(chunk) as unknown as BatchItem<"sqlite">);
 }
 
 function commandResult(
@@ -711,10 +713,10 @@ export async function shipTransfer(db: Database, id: string, input: ShipTransfer
             shippedQuantity: sql`${inventoryTransferLines.quantity}`,
             updatedAt: sql`unixepoch()`,
           }).where(eq(inventoryTransferLines.transferId, id)) as unknown as BatchItem<"sqlite">,
-          ...edges.map((edge) => linkInsert(db, {
+          ...linkInserts(db, edges.map((edge) => ({
             operationKey, transferId: id, lineId: lineByVariant.get(edge.before.id)!.line.id, edge,
             kind: "ship", quantity: lineByVariant.get(edge.before.id)!.quantity, createdBy: actorId ?? null,
-          })),
+          }))),
           db.update(inventoryTransfers).set({
             status: "in_transit",
             shippedAt: sql`unixepoch()`,
@@ -775,16 +777,17 @@ export async function receiveTransfer(db: Database, id: string, input: ReceiveTr
         subjectGuard: subjectCondition(id, header.revision, INVENTORY_TRANSFER_OPEN_STATUSES),
         subjectRevisionAfter: header.revision + 1,
         documentStatements: (edges) => [
-          ...edges.flatMap((edge) => {
+          db.update(inventoryTransferLines).set({
+            receivedQuantity: sql`${inventoryTransferLines.receivedQuantity} + ${addedQuantitySql(
+              planned.map((entry) => ({ id: entry.line.id, quantity: entry.quantity })),
+              "inventory_transfer_lines",
+            )}`,
+            updatedAt: sql`unixepoch()`,
+          }).where(sql`${inventoryTransferLines.id} IN (${idsFromJsonSql(planned.map((entry) => entry.line.id))})`) as unknown as BatchItem<"sqlite">,
+          ...linkInserts(db, edges.map((edge) => {
             const entry = lineByVariant.get(edge.before.id)!;
-            return [
-              db.update(inventoryTransferLines).set({
-                receivedQuantity: sql`${inventoryTransferLines.receivedQuantity} + ${entry.quantity}`,
-                updatedAt: sql`unixepoch()`,
-              }).where(eq(inventoryTransferLines.id, entry.line.id)) as unknown as BatchItem<"sqlite">,
-              linkInsert(db, { operationKey, transferId: id, lineId: entry.line.id, edge, kind: "receive", quantity: entry.quantity, createdBy: actorId ?? null }),
-            ];
-          }),
+            return { operationKey, transferId: id, lineId: entry.line.id, edge, kind: "receive" as const, quantity: entry.quantity, createdBy: actorId ?? null };
+          })),
           db.update(inventoryTransfers).set({
             status,
             ...(done ? { receivedAt: sql`unixepoch()` } : {}),
@@ -856,16 +859,17 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
         subjectGuard: subjectCondition(id, current.revision, INVENTORY_TRANSFER_OPEN_STATUSES),
         subjectRevisionAfter: current.revision + 1,
         documentStatements: (edges) => [
-          ...edges.flatMap((edge) => {
+          db.update(inventoryTransferLines).set({
+            returnedQuantity: sql`${inventoryTransferLines.returnedQuantity} + ${addedQuantitySql(
+              lines.map((entry) => ({ id: entry.line.id, quantity: entry.quantity })),
+              "inventory_transfer_lines",
+            )}`,
+            updatedAt: sql`unixepoch()`,
+          }).where(sql`${inventoryTransferLines.id} IN (${idsFromJsonSql(lines.map((entry) => entry.line.id))})`) as unknown as BatchItem<"sqlite">,
+          ...linkInserts(db, edges.map((edge) => {
             const entry = lineByVariant.get(edge.before.id)!;
-            return [
-              db.update(inventoryTransferLines).set({
-                returnedQuantity: sql`${inventoryTransferLines.returnedQuantity} + ${entry.quantity}`,
-                updatedAt: sql`unixepoch()`,
-              }).where(eq(inventoryTransferLines.id, entry.line.id)) as unknown as BatchItem<"sqlite">,
-              linkInsert(db, { operationKey, transferId: id, lineId: entry.line.id, edge, kind: "return", quantity: entry.quantity, createdBy: actorId ?? null }),
-            ];
-          }),
+            return { operationKey, transferId: id, lineId: entry.line.id, edge, kind: "return" as const, quantity: entry.quantity, createdBy: actorId ?? null };
+          })),
           db.update(inventoryTransfers).set({
             status: "cancelled",
             cancelledAt: sql`unixepoch()`,
