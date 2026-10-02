@@ -14,6 +14,7 @@ import { isBrandId } from "@scalius/shared/catalog-brand";
 import { catalogMoneySchema, expectedStockVersionSchema, skuStockSchema, skuWeightSchema } from "./types";
 import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
 import { createProductOptionMatrixSchema, productOptionMatrixBodySchema } from "./option-matrix";
+import { unitCostAmountSchema } from "../inventory/unit-costs";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 import { addGiftCardInputIssues } from "./gift-card-rules";
 
@@ -207,6 +208,8 @@ const defaultSkuInputSchema = z.object({
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable().optional(),
     weight: skuWeightSchema.nullable().optional(),
     fulfillmentKind: editableFulfillmentKindSchema.optional(),
+    cost: unitCostAmountSchema.nullable().optional()
+        .describe("Cost per item in major units of the store currency. Omit or null for none."),
 }).refine((value) => value.trackInventory || value.stock === 0, {
     message: "Turn on quantity tracking before setting a quantity.",
     path: ["stock"],

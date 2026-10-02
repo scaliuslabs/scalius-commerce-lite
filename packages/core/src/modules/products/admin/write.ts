@@ -49,6 +49,7 @@ import {
     reconcileVariantLowStockAlerts,
 } from "../variants";
 import { STOCK_CHANGED_MESSAGE } from "../types";
+import { unitCostToMinor } from "../../inventory/unit-costs";
 import {
     inventoryLocationErrorFrom,
     isInventoryLevelShortfallError,
@@ -414,6 +415,11 @@ function hasInvalidSkuTopology(variants: Array<{ isDefault: boolean; optionCombi
  * from the name and suffixed until it is free.
  * Returns the new product ID on success.
  */
+/** A new SKU's cost per item in minor units (a cost may keep paisa), or null for none. */
+function costMinorOf(cost: number | null | undefined, currency: { decimalPlaces: number }): number | null {
+    return cost === null || cost === undefined ? null : unitCostToMinor(cost, currency);
+}
+
 function isProductSlugConstraintError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return /products(?:_slug_idx|\.slug)/i.test(message);
@@ -456,6 +462,7 @@ export async function createProduct(
         // A gift card's SKUs are digital and untracked (validation refused anything else).
         trackInventory: isGiftCard ? false : data.defaultSku?.trackInventory ?? false,
         weight: data.defaultSku?.weight ?? null,
+        costMinor: costMinorOf(data.defaultSku?.cost, currency),
         fulfillmentKind: isGiftCard ? "digital" as const : data.defaultSku?.fulfillmentKind ?? data.fulfillmentKind ?? "physical",
         ...(data.defaultSku?.barcode
             ? resolveNewVariantBarcode(baseDefaultVariant.id, data.defaultSku.barcode, data.defaultSku.barcodeType)
@@ -588,6 +595,7 @@ export async function createProduct(
                 discountAmountMinor: matrixVariant.discountType === "flat"
                     ? toStoreMinor(matrixVariant.discountAmount ?? 0, currency)
                     : 0,
+                costMinor: costMinorOf(matrixVariant.cost, currency),
                 version: 1,
                 stockVersion: 1,
                 allowPreorder: false,

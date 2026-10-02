@@ -234999,6 +234999,13 @@
                                 "service"
                               ],
                               "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                            },
+                            "cost": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 9000000000,
+                              "description": "Cost per item in major units of the store currency. Omit or null for none."
                             }
                           },
                           "required": [
@@ -235077,6 +235084,13 @@
                           "service"
                         ],
                         "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                      },
+                      "cost": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 9000000000,
+                        "description": "Cost per item in major units of the store currency. Omit or null for none."
                       }
                     },
                     "required": [

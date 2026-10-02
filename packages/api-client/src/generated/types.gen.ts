@@ -63939,6 +63939,10 @@ export type PostApiV1AdminProductsData = {
                  * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
+                /**
+                 * Cost per item in major units of the store currency. Omit or null for none.
+                 */
+                cost?: number | null;
             }>;
         };
         /**
@@ -63967,6 +63971,10 @@ export type PostApiV1AdminProductsData = {
              * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
             fulfillmentKind?: 'physical' | 'digital' | 'service';
+            /**
+             * Cost per item in major units of the store currency. Omit or null for none.
+             */
+            cost?: number | null;
         };
     };
     path?: never;

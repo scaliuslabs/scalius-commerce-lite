@@ -50,6 +50,7 @@ import {
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
 import { editableFulfillmentKindSchema } from "./customization-schema";
+import { unitCostAmountSchema } from "../inventory/unit-costs";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -269,7 +270,14 @@ function validateOptionMatrix(
     });
 }
 
+/** A new product's SKUs may start with a cost per item (later edits use PUT /inventory/costs). */
+const createMatrixVariantInputSchema = matrixVariantInputSchema.extend({
+    cost: unitCostAmountSchema.nullable().optional()
+        .describe("Cost per item in major units of the store currency. Omit or null for none."),
+});
+
 export const createProductOptionMatrixSchema = productOptionMatrixBaseSchema
+    .extend({ variants: z.array(createMatrixVariantInputSchema).min(1).max(MAX_PRODUCT_OPTION_COMBINATIONS) })
     .superRefine(validateOptionMatrix);
 
 /** The matrix a product save carries with its details (no expected revision of its own). */
