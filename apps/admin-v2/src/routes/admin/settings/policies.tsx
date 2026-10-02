@@ -17,7 +17,6 @@ import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { apiData } from "~/lib/api";
-import { policiesQuery, storePagesQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
@@ -35,12 +34,15 @@ const returnPolicyQuery = {
 };
 
 export const Route = createFileRoute("/admin/settings/policies")({
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return Promise.allSettled([
       queryClient.ensureQueryData(returnPolicyQuery),
-      queryClient.ensureQueryData(policiesQuery),
-      queryClient.ensureQueryData(storePagesQuery),
-    ]),
+      queryClient.ensureQueryData(screens.policiesQuery),
+      queryClient.ensureQueryData(screens.storePagesQuery),
+    ]);
+  },
   head: () => settingsHead("policies"),
   errorComponent: RouteErrorComponent,
   component: PoliciesPage,

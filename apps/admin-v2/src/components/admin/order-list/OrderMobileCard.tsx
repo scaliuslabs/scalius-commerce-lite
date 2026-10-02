@@ -10,6 +10,7 @@ import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/ord
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
+import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import { resourceMessages } from "~/i18n/resource";
 import { AttentionMarker, FulfilmentCell, orderName, PaymentCell } from "./order-columns";
 import { codToCollect, deliveryMethod, deliveryStatus, orderAttention, TONE_TEXT } from "./order-row-facts";
@@ -42,7 +43,8 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const to = useMessages(orderMessages);
   const closed = !orderBadgeVisibility(order).payment;
   const collect = codToCollect(order);
-  const delivery = deliveryStatus(order, t);
+  const sh = useMessages(shipmentStatusMessages);
+  const delivery = deliveryStatus(order, t, sh);
   const attention = orderAttention(order, t, to)[0] ?? null;
   return (
     <div className="flex items-start gap-1 py-1 pr-3" data-part="order-card">

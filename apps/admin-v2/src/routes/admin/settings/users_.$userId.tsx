@@ -58,8 +58,11 @@ const removeStaff = (id: string) =>
 // One staff member, Shopify style: their roles and permissions, then the
 // account actions at the bottom (restore, suspend, cancel invite, remove).
 export const Route = createFileRoute("/admin/settings/users_/$userId")({
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([queryClient.ensureQueryData(staffQuery), queryClient.ensureQueryData(rolesQuery)]),
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return Promise.allSettled([queryClient.ensureQueryData(screens.staffQuery), queryClient.ensureQueryData(screens.rolesQuery)]);
+  },
   head: () => settingsHead("users"),
   errorComponent: RouteErrorComponent,
   component: StaffMemberPage,

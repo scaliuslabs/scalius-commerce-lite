@@ -48,7 +48,11 @@ const NEW_ROLE = "new";
 export const Route = createFileRoute("/admin/settings/users_/roles/$roleId")({
   validateSearch: (search: Record<string, unknown>): { from?: string } =>
     typeof search.from === "string" ? { from: search.from } : {},
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(rolesQuery).catch(() => undefined),
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return queryClient.ensureQueryData(screens.rolesQuery).catch(() => undefined);
+  },
   head: () => pageHead("roles"),
   errorComponent: RouteErrorComponent,
   component: RolePage,

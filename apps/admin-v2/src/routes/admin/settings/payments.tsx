@@ -9,26 +9,22 @@ import { emiSettingsQuery } from "~/lib/api-query-options/emi";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import {
-  checkoutFlowQuery,
-  currencyQuery,
-  gatewayQuery,
-  paymentMethodsQuery,
-  platformQuery,
-} from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/payments")({
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([
-      queryClient.ensureQueryData(paymentMethodsQuery),
-      queryClient.ensureQueryData(checkoutFlowQuery),
-      queryClient.ensureQueryData(currencyQuery),
-      queryClient.ensureQueryData(platformQuery),
-      queryClient.ensureQueryData(gatewayQuery("sslcommerz")),
-      queryClient.ensureQueryData(gatewayQuery("stripe")),
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return Promise.allSettled([
+      queryClient.ensureQueryData(screens.paymentMethodsQuery),
+      queryClient.ensureQueryData(screens.checkoutFlowQuery),
+      queryClient.ensureQueryData(screens.currencyQuery),
+      queryClient.ensureQueryData(screens.platformQuery),
+      queryClient.ensureQueryData(screens.gatewayQuery("sslcommerz")),
+      queryClient.ensureQueryData(screens.gatewayQuery("stripe")),
       queryClient.ensureQueryData(emiSettingsQuery),
-    ]),
+    ]);
+  },
   head: () => settingsHead("payments"),
   errorComponent: RouteErrorComponent,
   component: PaymentsPage,

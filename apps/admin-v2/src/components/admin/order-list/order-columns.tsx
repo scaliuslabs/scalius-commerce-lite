@@ -21,6 +21,7 @@ import {
 } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
+import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canRefreshShipment } from "~/lib/shipment-action-policy";
 import { orderSkipReason } from "./order-bulk-actions";
@@ -192,7 +193,8 @@ export function FulfilmentCell({ order }: { order: Pick<OrderListItem, "status" 
 /** The courier's word for the parcel (or what holds it up), with its refresh in a slot every row keeps. */
 function DeliveryStatusCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
   const t = useMessages(orderListMessages);
-  const status = deliveryStatus(order, t);
+  const s = useMessages(shipmentStatusMessages);
+  const status = deliveryStatus(order, t, s);
   const shipment = order.latestShipment;
   const locked = order.shipmentRecovery?.activeLock === true;
   const refreshable = Boolean(shipment) && handlers.orderActions.canManageOrderShipments && canRefreshShipment(shipment!);

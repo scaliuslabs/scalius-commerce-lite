@@ -4,11 +4,11 @@ import { useRouter } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
-import { orderListMessages, shipmentStatusLabel } from "~/i18n/order-list";
+import { shipmentStatusLabel, shipmentStatusMessages } from "~/i18n/shipment-status";
 
 /** Asks the courier for the latest delivery status of one shipment. */
 export function useShipmentStatus() {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(shipmentStatusMessages);
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState<Record<string, boolean>>({});
 

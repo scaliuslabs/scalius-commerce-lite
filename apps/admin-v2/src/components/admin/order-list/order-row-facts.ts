@@ -2,12 +2,14 @@
 // card. Every row has the same cells; these say what goes in them.
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { orderBadgeVisibility } from "~/components/admin/orderview/status-badges";
-import { shipmentStatusLabel, type OrderListMessageKey } from "~/i18n/order-list";
+import type { OrderListMessageKey } from "~/i18n/order-list";
+import { shipmentStatusLabel, type ShipmentStatusMessageKey } from "~/i18n/shipment-status";
 import { deliveryMethodLabel, type OrderMessageKey } from "~/i18n/orders";
 
 type Vars = Record<string, string | number>;
 type ListT = (key: OrderListMessageKey, vars?: Vars) => string;
 type OrderT = (key: OrderMessageKey, vars?: Vars) => string;
+type ShipmentT = (key: ShipmentStatusMessageKey, vars?: Vars) => string;
 
 export type RowTone = "critical" | "warning" | "neutral";
 
@@ -57,18 +59,19 @@ const CRITICAL_SHIPMENT = new Set(["failed", "delivery_failed", "cancelled"]);
 export function deliveryStatus(
   order: Pick<OrderListItem, "status" | "cod" | "latestShipment" | "shipmentRecovery">,
   t: ListT,
+  s: ShipmentT,
 ): { text: string; tone: RowTone } | null {
   const recovery = order.shipmentRecovery;
   if (recovery && (recovery.state ?? "none") !== "none") {
     return { text: t("courierCheck"), tone: recovery.severity === "danger" ? "critical" : "warning" };
   }
-  if (order.status.toLowerCase() === "returned") return { text: t("shipment.returned"), tone: "warning" };
+  if (order.status.toLowerCase() === "returned") return { text: s("shipment.returned"), tone: "warning" };
   if (order.cod?.status === "failed") return { text: t("deliveryFailed", { count: order.cod.deliveryAttempts }), tone: "critical" };
   const shipment = order.latestShipment;
   if (!shipment) return null;
   const status = shipment.status.toLowerCase();
   return {
-    text: shipmentStatusLabel(t, status),
+    text: shipmentStatusLabel(s, status),
     tone: CRITICAL_SHIPMENT.has(status) ? "critical" : status === "returned" ? "warning" : "neutral",
   };
 }

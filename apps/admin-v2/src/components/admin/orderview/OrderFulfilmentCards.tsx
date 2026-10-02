@@ -44,7 +44,6 @@ import {
 } from "~/lib/order-tax-presentation";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { LineProperties } from "./LineProperties";
-import { ManualFulfillmentDialog, type ManualFulfillmentKind } from "./ManualFulfillmentDialog";
 import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
@@ -60,10 +59,14 @@ import {
   unfulfilledGroups,
   type FulfilledGroup,
   type GroupLine,
+  type ManualFulfillmentKind,
   type UnfulfilledGroup,
 } from "./fulfilment-groups";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order, OrderFulfillment } from "./types";
+
+// The hand-over dialog loads the first time a card opens it.
+const ManualFulfillmentDialog = lazy(() => import("./ManualFulfillmentDialog").then((module) => ({ default: module.ManualFulfillmentDialog })));
 
 // Loaded only for orders with warranty records to show.
 const WarrantyLinesCard = lazy(() => import("./WarrantyLinesCard").then((module) => ({ default: module.WarrantyLinesCard })));
@@ -230,7 +233,13 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const t = useMessages(orderDetailMessages);
   const permissions = useOrderActionPermissions();
   const cardRef = useRef<HTMLDivElement>(null);
-  const [dialog, setDialog] = useState<ManualFulfillmentKind | null>(null);
+  const [dialog, setDialogState] = useState<ManualFulfillmentKind | null>(null);
+  // Mounted from the first opening on, so it can animate closed.
+  const [dialogLoaded, setDialogLoaded] = useState(false);
+  const setDialog = (next: ManualFulfillmentKind | null) => {
+    if (next) setDialogLoaded(true);
+    setDialogState(next);
+  };
   const cancelRequest = useCancelRequestGuard(order);
   const pickupReady = usePickupReadyAction(order.id);
   const status = order.status.toLowerCase();
@@ -315,14 +324,16 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
         </ul>
       </CardContent>
       {footer ? <CardFooter>{footer}</CardFooter> : null}
-      {isManualGroup(group.type) ? (
-        <ManualFulfillmentDialog
-          order={order}
-          kind={group.type}
-          open={dialog === group.type}
-          onOpenChange={(open) => setDialog(open ? group.type as ManualFulfillmentKind : null)}
-          onAwaitingPayment={onAwaitingPayment}
-        />
+      {isManualGroup(group.type) && dialogLoaded ? (
+        <Suspense fallback={null}>
+          <ManualFulfillmentDialog
+            order={order}
+            kind={group.type}
+            open={dialog === group.type}
+            onOpenChange={(open) => setDialog(open ? group.type as ManualFulfillmentKind : null)}
+            onAwaitingPayment={onAwaitingPayment}
+          />
+        </Suspense>
       ) : null}
       {cancelRequest.dialog}
     </Card>

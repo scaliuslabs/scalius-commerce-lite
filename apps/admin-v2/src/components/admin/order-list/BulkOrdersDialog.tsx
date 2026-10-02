@@ -20,7 +20,7 @@ import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/li
 import {
   getProviderReadinessMessage,
   resolveProviderReadiness,
-} from "~/components/admin/delivery-providers/ProviderIcon";
+} from "~/components/admin/delivery-providers/provider-readiness";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";

@@ -98,21 +98,6 @@ export const orderListMessages = defineMessages({
     "statusBlock.cashFirst": "Mark the cash as collected first.",
     "statusBlock.moneyDue": "This order still has money due.",
     restoreToChange: "Unarchive the order to change its status.",
-    refreshShipment: "Refresh delivery status",
-    lastChecked: "Checked {time}",
-    neverChecked: "Not checked yet",
-    shipmentUpdated: "Delivery status: {status}",
-    shipmentUpToDate: "Already up to date",
-    shipmentRefreshFailed: "Refresh failed",
-    "shipment.pending": "Booked",
-    "shipment.in_review": "In review",
-    "shipment.picked_up": "Picked up",
-    "shipment.in_transit": "In transit",
-    "shipment.delivered": "Delivered",
-    "shipment.cancelled": "Cancelled",
-    "shipment.failed": "Failed",
-    "shipment.delivery_failed": "Delivery failed",
-    "shipment.returned": "Returned",
     deliveryFailed: "Delivery failed · attempt {count}",
     checkHistoryFor: "Check delivery history for {name}",
     deliveryHistory: "Delivery history",
@@ -339,21 +324,6 @@ export const orderListMessages = defineMessages({
     "statusBlock.cashFirst": "আগে ক্যাশ পাওয়া গেছে হিসেবে চিহ্নিত করুন।",
     "statusBlock.moneyDue": "এই অর্ডারে এখনো টাকা বাকি আছে।",
     restoreToChange: "স্ট্যাটাস বদলাতে আগে অর্ডারটি আনআর্কাইভ করুন।",
-    refreshShipment: "ডেলিভারি স্ট্যাটাস রিফ্রেশ করুন",
-    lastChecked: "{time}-এ দেখা হয়েছে",
-    neverChecked: "এখনো দেখা হয়নি",
-    shipmentUpdated: "ডেলিভারি স্ট্যাটাস: {status}",
-    shipmentUpToDate: "সব আপডেটেড আছে",
-    shipmentRefreshFailed: "রিফ্রেশ হয়নি",
-    "shipment.pending": "বুক হয়েছে",
-    "shipment.in_review": "রিভিউতে আছে",
-    "shipment.picked_up": "পিকআপ হয়েছে",
-    "shipment.in_transit": "পথে আছে",
-    "shipment.delivered": "ডেলিভারি হয়েছে",
-    "shipment.cancelled": "বাতিল",
-    "shipment.failed": "ব্যর্থ",
-    "shipment.delivery_failed": "ডেলিভারি ব্যর্থ",
-    "shipment.returned": "ফেরত এসেছে",
     deliveryFailed: "ডেলিভারি ব্যর্থ · {count} নম্বর চেষ্টা",
     checkHistoryFor: "{name}-এর ডেলিভারির ইতিহাস দেখুন",
     deliveryHistory: "ডেলিভারির ইতিহাস",
@@ -501,8 +471,3 @@ export function itemCountLabel(t: Translate, count: number): string {
   return count === 1 ? t("itemsOne") : t("itemsOther", { count });
 }
 
-/** Courier delivery status label, falling back to the raw status for new courier states. */
-export function shipmentStatusLabel(t: Translate, status: string): string {
-  const key = `shipment.${status.toLowerCase()}`;
-  return key in orderListMessages.en ? t(key as OrderListMessageKey) : status.replace(/_/g, " ");
-}

@@ -3,7 +3,7 @@ import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useShipmentStatus } from "~/hooks/use-shipment-status";
 import { useMessages } from "~/i18n";
-import { orderListMessages } from "~/i18n/order-list";
+import { shipmentStatusMessages } from "~/i18n/shipment-status";
 
 /**
  * The Delivery status cell's refresh: asks the courier for the parcel's latest
@@ -15,7 +15,7 @@ export function ShipmentRefreshButton({ orderId, shipmentId, disabledReason, onU
   disabledReason?: string;
   onUpdated: () => void;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(shipmentStatusMessages);
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
   const refreshing = isRefreshing[shipmentId] === true;
   const label = disabledReason ?? t("refreshShipment");

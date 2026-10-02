@@ -22,7 +22,7 @@ import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,
   resolveProviderReadiness,
-} from "~/components/admin/delivery-providers/ProviderIcon";
+} from "~/components/admin/delivery-providers/provider-readiness";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { formatNumber, useMessages } from "~/i18n";

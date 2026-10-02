@@ -3,10 +3,12 @@ import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { translate } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 import { orderMessages } from "~/i18n/orders";
+import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import { codToCollect, deliveryMethod, deliveryStatus, fulfilmentShown, orderAttention, paymentShown } from "./order-row-facts";
 
 const t = (key: string, vars?: Record<string, string | number>) => translate(orderListMessages, key as never, vars);
 const o = (key: string, vars?: Record<string, string | number>) => translate(orderMessages, key as never, vars);
+const s = (key: string, vars?: Record<string, string | number>) => translate(shipmentStatusMessages, key as never, vars);
 const order = (overrides: Partial<OrderListItem>) => ({
   status: "confirmed", paymentStatus: "unpaid", paymentMethod: "cod", fulfillmentStatus: "pending", totalAmount: 680, paidAmount: 0,
   latestShipment: null, shipmentRecovery: { state: "none", severity: "info", activeLock: false },
@@ -32,12 +34,12 @@ describe("orders list row facts", () => {
 
   it("says where the parcel is, never a stale In transit for a returned order or a failed cash attempt", () => {
     const parcel = { id: "s1", status: "in_transit", providerName: "Pathao" } as OrderListItem["latestShipment"];
-    expect(deliveryStatus(order({}), t)).toBeNull();
-    expect(deliveryStatus(order({ latestShipment: parcel }), t)).toEqual({ text: t("shipment.in_transit"), tone: "neutral" });
-    expect(deliveryStatus(order({ latestShipment: parcel, status: "returned" }), t)?.text).toBe(t("shipment.returned"));
-    expect(deliveryStatus(order({ latestShipment: parcel, cod: { status: "failed", deliveryAttempts: 2 } }), t))
+    expect(deliveryStatus(order({}), t, s)).toBeNull();
+    expect(deliveryStatus(order({ latestShipment: parcel }), t, s)).toEqual({ text: s("shipment.in_transit"), tone: "neutral" });
+    expect(deliveryStatus(order({ latestShipment: parcel, status: "returned" }), t, s)?.text).toBe(s("shipment.returned"));
+    expect(deliveryStatus(order({ latestShipment: parcel, cod: { status: "failed", deliveryAttempts: 2 } }), t, s))
       .toEqual({ text: t("deliveryFailed", { count: 2 }), tone: "critical" });
-    expect(deliveryStatus(order({ shipmentRecovery: { state: "creating", severity: "info", activeLock: true } as OrderListItem["shipmentRecovery"] }), t))
+    expect(deliveryStatus(order({ shipmentRecovery: { state: "creating", severity: "info", activeLock: true } as OrderListItem["shipmentRecovery"] }), t, s))
       .toEqual({ text: t("courierCheck"), tone: "warning" });
   });
 

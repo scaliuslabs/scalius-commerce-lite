@@ -4,12 +4,14 @@ import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { RolesCard, StaffCard } from "~/components/admin/settings/UsersSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/users")({
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([queryClient.ensureQueryData(staffQuery), queryClient.ensureQueryData(rolesQuery)]),
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return Promise.allSettled([queryClient.ensureQueryData(screens.staffQuery), queryClient.ensureQueryData(screens.rolesQuery)]);
+  },
   head: () => settingsHead("users"),
   errorComponent: RouteErrorComponent,
   component: UsersPage,

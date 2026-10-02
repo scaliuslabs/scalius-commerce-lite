@@ -149,3 +149,15 @@ export function counterCashDue(order: Pick<Order, "paymentMethod" | "balanceDue"
   const due = Number(order.balanceDue ?? 0);
   return order.paymentMethod === "cod" && order.requiresShipping === false && due > 0 ? due : null;
 }
+
+/** What staff hand over by hand: own rider, counter pickup, a performed service. */
+export type ManualFulfillmentKind = "ship" | "pickup" | "service";
+
+/** Units of a line not handed to a courier yet (ship lines only). */
+export function remainingToSend(item: OrderItem): number {
+  return lineFulfillmentType(item) === "ship" ? unfulfilledUnits(item) : 0;
+}
+
+export function canSendWithOwnCourier(order: Order): boolean {
+  return canHandOver(order) && order.items.some((item) => remainingToSend(item) > 0);
+}

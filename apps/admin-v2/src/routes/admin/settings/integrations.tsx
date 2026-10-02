@@ -11,18 +11,20 @@ import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";
-import { aiAccessQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/integrations")({
   // Cards hide themselves for roles that can't view them; a refused read is fine here.
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([
-      queryClient.ensureQueryData(trackingQuery),
-      queryClient.ensureQueryData(metaQuery),
+  // The screen's query module comes with its own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient } }) => {
+    const screens = await import("~/lib/api-query-options/settings-screens");
+    return Promise.allSettled([
+      queryClient.ensureQueryData(screens.trackingQuery),
+      queryClient.ensureQueryData(screens.metaQuery),
       queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
-      queryClient.ensureQueryData(aiAccessQuery),
-    ]),
+      queryClient.ensureQueryData(screens.aiAccessQuery),
+    ]);
+  },
   head: () => settingsHead("integrations"),
   errorComponent: RouteErrorComponent,
   component: IntegrationsPage,

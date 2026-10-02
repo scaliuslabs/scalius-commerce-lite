@@ -3,7 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useShipmentStatus } from "@/hooks/use-shipment-status";
 import { useMessages } from "~/i18n";
-import { orderListMessages, shipmentStatusLabel } from "~/i18n/order-list";
+import { shipmentStatusLabel, shipmentStatusMessages } from "~/i18n/shipment-status";
 import { Button } from "../ui/button";
 import { formatOrderTimestamp } from "./orderview/formatters";
 
@@ -31,7 +31,7 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   refreshDisabledReason,
   showLastChecked = true,
 }) => {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(shipmentStatusMessages);
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
   const refreshing = isRefreshing[shipment.id] === true;
   const showRefresh = canRefresh || Boolean(refreshDisabledReason);

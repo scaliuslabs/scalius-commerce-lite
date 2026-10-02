@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -17,11 +17,13 @@ import {
 } from "~/lib/order-return-workflow";
 import type { Order } from "./types";
 import { hasReturnsCard } from "./card-rules";
-import { ApproveReturnDialog } from "./order-returns/ApproveReturnDialog";
-import { CancelReturnDialog } from "./order-returns/CancelReturnDialog";
-import { CreateReturnDialog } from "./order-returns/CreateReturnDialog";
 import { OrderReturnRow, type ReturnDialogAction } from "./order-returns/OrderReturnRow";
-import { ReceiveReturnDialog } from "./order-returns/ReceiveReturnDialog";
+
+// The return dialogs load the first time one is opened.
+const ApproveReturnDialog = lazy(() => import("./order-returns/ApproveReturnDialog").then((module) => ({ default: module.ApproveReturnDialog })));
+const CancelReturnDialog = lazy(() => import("./order-returns/CancelReturnDialog").then((module) => ({ default: module.CancelReturnDialog })));
+const CreateReturnDialog = lazy(() => import("./order-returns/CreateReturnDialog").then((module) => ({ default: module.CreateReturnDialog })));
+const ReceiveReturnDialog = lazy(() => import("./order-returns/ReceiveReturnDialog").then((module) => ({ default: module.ReceiveReturnDialog })));
 
 type DialogType = "create" | ReturnDialogAction["type"];
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
@@ -35,7 +37,13 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const hydrated = useHydrated();
   const actions = useOrderActionPermissions();
   const canManage = actions.canChangeOrderStatus;
-  const [dialog, setDialog] = useState<DialogType | null>(null);
+  const [dialog, setDialogState] = useState<DialogType | null>(null);
+  // Mounted from the first opening on, so they can animate closed.
+  const [dialogsLoaded, setDialogsLoaded] = useState(false);
+  const setDialog = (next: DialogType | null) => {
+    if (next) setDialogsLoaded(true);
+    setDialogState(next);
+  };
   // The return a dialog acts on; kept after closing so the dialog can animate out.
   const [target, setTarget] = useState<OrderReturnDto | null>(null);
   const targetKey = target ? `${target.id}:${target.version}` : "none";
@@ -103,10 +111,14 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
         ) : null}
       </CardContent>
 
-      <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />
-      <ApproveReturnDialog key={`approve:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "approve"} onOpenChange={close} />
-      <ReceiveReturnDialog key={`receive:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "receive"} onOpenChange={close} />
-      <CancelReturnDialog key={`cancel:${targetKey}`} orderReturn={target} open={dialog === "cancel"} onOpenChange={close} />
+      {dialogsLoaded ? (
+        <Suspense fallback={null}>
+          <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />
+          <ApproveReturnDialog key={`approve:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "approve"} onOpenChange={close} />
+          <ReceiveReturnDialog key={`receive:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "receive"} onOpenChange={close} />
+          <CancelReturnDialog key={`cancel:${targetKey}`} orderReturn={target} open={dialog === "cancel"} onOpenChange={close} />
+        </Suspense>
+      ) : null}
     </Card>
   );
 }
