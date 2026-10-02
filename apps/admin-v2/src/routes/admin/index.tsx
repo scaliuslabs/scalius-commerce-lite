@@ -12,7 +12,6 @@ import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { AppHomeWidgets } from "~/components/admin/apps/ui/AppResourceCards";
-import { homeOverviewQuery } from "~/components/admin/analytics/home-overview-query";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
@@ -38,7 +37,13 @@ export const Route = createFileRoute("/admin/")({
     void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
     void queryClient.prefetchQuery(dashboardActivityQueryOptions());
     void queryClient.prefetchQuery(currencySettingsQueryOptions());
-    if (canOpen("/admin/analytics")) void queryClient.prefetchQuery(homeOverviewQuery("last_30_days"));
+    // The sales strip's code downloads with the navigation, then starts its
+    // read (a failed download shows in the strip itself).
+    if (canOpen("/admin/analytics")) {
+      import("~/components/admin/analytics/HomeAnalytics")
+        .then(({ homeOverviewQuery }) => queryClient.prefetchQuery(homeOverviewQuery("last_30_days")))
+        .catch(() => undefined);
+    }
     if (canOpen("/admin/orders")) void queryClient.prefetchQuery(homeOpenOrdersQueryOptions());
     if (canOpen("/admin/inventory")) void queryClient.prefetchQuery(homeLowStockQueryOptions());
     if (canOpen("/admin/online-store/preferences")) void queryClient.prefetchQuery({ ...feedDiagnosticsQueryOptions(), staleTime: HOME_FEED_STALE_TIME_MS });
