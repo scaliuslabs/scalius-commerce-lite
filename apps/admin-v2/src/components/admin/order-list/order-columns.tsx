@@ -1,19 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import { Archive, Undo } from "lucide-react";
+import { Archive, CircleAlert, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
-import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/orderview/status-badges";
-import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
+import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import {
-  deliveryMethodLabel,
   fulfillmentStatusLabel,
+  orderChannelText,
   orderMessages,
   paymentMethodLabel,
   paymentStatusLabel,
@@ -26,8 +27,16 @@ import { orderSkipReason } from "./order-bulk-actions";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
 import { ListDate } from "./ListDate";
-import { OrderLockBadges } from "./OrderLockBadges";
 import { OrderStatusSelector } from "./OrderStatusSelector";
+import { ShipmentRefreshButton } from "./ShipmentRefreshButton";
+import {
+  deliveryMethod,
+  deliveryStatus,
+  fulfilmentShown,
+  orderAttention,
+  paymentShown,
+  TONE_TEXT,
+} from "./order-row-facts";
 
 export interface OrderRowHandlers {
   showArchived: boolean;
@@ -53,124 +62,155 @@ function Title({ k }: { k: OrderListMessageKey }) {
   return <>{t(k)}</>;
 }
 
+/** A cell's text: one line, cut with an ellipsis, the whole value on hover. */
+function Line({ text, className }: { text: string; className?: string }) {
+  return <span data-part="value" className={cn("block truncate", className)} title={text}>{text}</span>;
+}
+
+/** An empty cell says so the same way on every row. */
+function Empty() {
+  return <span data-part="value" className="block whitespace-nowrap text-muted-foreground" aria-hidden="true">—</span>;
+}
+
 export function OrderNumberLink({ order }: { order: OrderName }) {
   return (
     <Link
       to="/admin/orders/$orderId"
       params={{ orderId: order.id }}
-      className="rounded-sm font-mono text-body font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-part="number"
+      className="whitespace-nowrap rounded-sm font-mono text-body font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {orderName(order)}
     </Link>
   );
 }
 
-/** Payment badge; hidden (null) on closed orders, whose status badge already tells the story. */
-export function PaymentBadge({ order }: { order: Pick<OrderListItem, "status" | "paymentStatus"> }) {
-  const t = useMessages(orderMessages);
-  if (!orderBadgeVisibility(order).payment) return null;
-  return (
-    <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>
-      {paymentStatusLabel(t, order.paymentStatus)}
-    </Badge>
-  );
-}
-
-type FulfillmentBadgeOrder = Pick<OrderListItem, "status" | "fulfillmentStatus">
-  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping" | "pickupReadyAt">>;
-
 /**
- * Fulfilment status, plus how the order reaches the buyer when it isn't
- * shipped: "Pickup" (or "Ready for pickup" once staff said so) and "No
- * delivery" for services, so a counter or visit order is never mistaken for
- * one to pack.
+ * One marker for everything that holds the order up (a failed online payment,
+ * a stuck refund or courier booking, a customer request, money owed back, a
+ * failed delivery), with the words in its label. The slot is there on every
+ * row, so a row with something to do is never wider or taller.
  */
-export function FulfillmentBadge({ order }: { order: FulfillmentBadgeOrder }) {
-  const t = useMessages(orderMessages);
-  if (!orderBadgeVisibility(order).fulfillment) return null;
-  const done = order.fulfillmentStatus === "complete";
-  const pickup = order.shippingMethodKind === "pickup";
-  const readyForPickup = pickup && !done && Boolean(order.pickupReadyAt);
-  const noDelivery = order.requiresShipping === false && !order.shippingMethodKind;
+export function AttentionMarker({ order, plain = false }: {
+  order: OrderListItem;
+  /** Inside a link (the phone card): the icon only, its words are on the card's last line. */
+  plain?: boolean;
+}) {
+  const t = useMessages(orderListMessages);
+  const o = useMessages(orderMessages);
+  const items = orderAttention(order, t, o);
+  if (items.length === 0) return <span data-part="attention" className="size-4 shrink-0" aria-hidden="true" />;
+  const text = items.map((item) => item.text).join(" · ");
+  const tone = items[0]!.tone === "critical" ? "text-destructive" : "text-warning";
+  if (plain) {
+    return (
+      <span data-part="attention" className={cn("flex size-4 shrink-0 items-center", tone)} aria-hidden="true">
+        <CircleAlert className="size-4" />
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex flex-wrap gap-1">
-      {readyForPickup ? (
-        <Badge variant="info">{t("delivery.readyForPickup")}</Badge>
-      ) : (
-        <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>
-          {fulfillmentStatusLabel(t, order.fulfillmentStatus)}
-        </Badge>
-      )}
-      {pickup && !readyForPickup ? <Badge variant="secondary">{deliveryMethodLabel(t, "pickup")}</Badge> : null}
-      {noDelivery ? <Badge variant="secondary">{deliveryMethodLabel(t, "none")}</Badge> : null}
-    </span>
-  );
-}
-
-/** What needs the merchant's attention: an open customer request or money owed back. */
-export function OrderAttentionBadges({ order }: { order: Pick<OrderListItem, "openRequestType" | "refundDue"> }) {
-  const t = useMessages(orderMessages);
-  return (
-    <>
-      {order.openRequestType ? <Badge variant="attention">{t(`request.${order.openRequestType}`)}</Badge> : null}
-      {order.refundDue > 0 ? <Badge variant="warning">{t("refundOwed")}</Badge> : null}
-    </>
-  );
-}
-
-/** Amount over its payment badge; the payment method is the badge's hover text, so rows stay two lines. */
-function TotalCell({ order }: { order: OrderListItem }) {
-  const { fmt } = useCurrency();
-  const t = useMessages(orderMessages);
-  return (
-    <div className="space-y-1 text-right">
-      <p className="font-medium tabular-nums">{fmt(order.totalAmount)}</p>
-      {orderBadgeVisibility(order).payment ? (
-        <span title={paymentMethodLabel(t, order.paymentMethod)} className="inline-flex">
-          <PaymentBadge order={order} />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-part="attention"
+          tabIndex={0}
+          role="img"
+          aria-label={text}
+          className={cn(
+            "flex size-4 shrink-0 items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            tone,
+          )}
+        >
+          <CircleAlert aria-hidden="true" className="size-4" />
         </span>
-      ) : null}
+      </TooltipTrigger>
+      <TooltipContent>
+        <ul>
+          {items.map((item) => <li key={item.text}>{item.text}</li>)}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function OrderCell({ order }: { order: OrderListItem }) {
+  return (
+    <div data-part="order" className="flex items-center gap-1.5">
+      <OrderNumberLink order={order} />
+      <AttentionMarker order={order} />
     </div>
   );
 }
 
-/**
- * What the order page says about delivery when the courier status is out of
- * date: a returned order reads "Returned" and a recorded failed cash-on-delivery
- * attempt "Delivery failed · attempt 1", never "In transit".
- */
-export function useDeliveryOverride(order: Pick<OrderListItem, "status" | "cod">): string | undefined {
-  const t = useMessages(orderListMessages);
-  if (order.status.toLowerCase() === "returned") return t("shipment.returned");
-  if (order.cod?.status === "failed") return t("deliveryFailed", { count: order.cod.deliveryAttempts });
-  return undefined;
+function CustomerCell({ order }: { order: OrderListItem }) {
+  return (
+    <div data-part="customer" className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">
+        <Line text={order.customerName} className="font-medium" />
+        <Line text={formatPhoneForDisplay(order.customerPhone)} className="font-mono text-muted-foreground" />
+      </div>
+      <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} compact />
+    </div>
+  );
 }
 
-function FulfillmentCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
+function TotalCell({ order }: { order: OrderListItem }) {
+  const { fmt } = useCurrency();
+  return (
+    <div data-part="total">
+      <span data-part="value" className="block whitespace-nowrap font-medium tabular-nums">{fmt(order.totalAmount)}</span>
+    </div>
+  );
+}
+
+/** The payment badge (its method on hover), or an empty cell on a closed order. */
+export function PaymentCell({ order }: { order: Pick<OrderListItem, "status" | "paymentStatus" | "paymentMethod"> }) {
+  const t = useMessages(orderMessages);
+  const status = paymentShown(order);
+  if (!status) return <Empty />;
+  return (
+    <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, order.paymentMethod)}>
+      {paymentStatusLabel(t, status)}
+    </Badge>
+  );
+}
+
+/** Fulfilment ("Ready for pickup" once staff said so), or an empty cell on a closed order. */
+export function FulfilmentCell({ order }: { order: Pick<OrderListItem, "status" | "fulfillmentStatus" | "shippingMethodKind" | "pickupReadyAt"> }) {
+  const t = useMessages(orderMessages);
+  const shown = fulfilmentShown(order);
+  if (!shown) return <Empty />;
+  if (shown === "readyForPickup") return <Badge data-part="value" variant="info">{t("delivery.readyForPickup")}</Badge>;
+  return (
+    <Badge data-part="value" variant={statusBadgeVariant(shown, "fulfillment")}>
+      {fulfillmentStatusLabel(t, shown)}
+    </Badge>
+  );
+}
+
+/** The courier's word for the parcel (or what holds it up), with its refresh in a slot every row keeps. */
+function DeliveryStatusCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
   const t = useMessages(orderListMessages);
-  const deliveryOverride = useDeliveryOverride(order);
+  const status = deliveryStatus(order, t);
   const shipment = order.latestShipment;
   const locked = order.shipmentRecovery?.activeLock === true;
+  const refreshable = Boolean(shipment) && handlers.orderActions.canManageOrderShipments && canRefreshShipment(shipment!);
   return (
-    <div className="space-y-1">
-      <FulfillmentBadge order={order} />
-      {!shipment && !orderBadgeVisibility(order).fulfillment ? (
-        <span className="text-muted-foreground">—</span>
-      ) : null}
-      {shipment ? (
-        <ShipmentStatusIndicator
-          shipment={{ id: shipment.id, status: shipment.status, orderId: order.id }}
-          label={deliveryOverride}
-          showLastChecked={false}
-          canRefresh={
-            handlers.orderActions.canManageOrderShipments
-            && canRefreshShipment(shipment)
-            && !locked
-          }
-          refreshDisabledReason={locked ? t("block.shipment") : undefined}
-          onStatusUpdated={handlers.onShipmentRefreshed}
-        />
-      ) : null}
+    <div data-part="delivery" className="flex items-center gap-1">
+      {status
+        ? <Line text={status.text} className={cn("min-w-0 flex-1", TONE_TEXT[status.tone])} />
+        : <span data-part="value" className="block min-w-0 flex-1 whitespace-nowrap text-muted-foreground" aria-hidden="true">—</span>}
+      <span data-part="refresh" className="flex size-7 shrink-0 items-center justify-center">
+        {refreshable ? (
+          <ShipmentRefreshButton
+            orderId={order.id}
+            shipmentId={shipment!.id}
+            disabledReason={locked ? t("block.shipment") : undefined}
+            onUpdated={handlers.onShipmentRefreshed}
+          />
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -189,7 +229,7 @@ function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers)
 function StatusCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
   const lockedReason = useStatusLockedReason(order, handlers);
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div data-part="status" className="flex items-center">
       <OrderStatusSelector
         status={order.status}
         facts={order}
@@ -197,8 +237,6 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
         lockedReason={lockedReason}
         onStatusUpdate={(status) => handlers.onStatusUpdate(order, status)}
       />
-      <OrderAttentionBadges order={order} />
-      <OrderLockBadges order={order} />
     </div>
   );
 }
@@ -214,15 +252,23 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
       ? { label: t("unarchive"), icon: Undo, onClick: () => handlers.onRestore(order) }
       : null,
   ].filter((action) => action !== null);
-  if (actions.length === 0) return null;
-  return <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />;
+  // A row without actions keeps the menu's place, so every row is the same width.
+  if (actions.length === 0) return <span data-part="actions" className="block size-9" aria-hidden="true" />;
+  return (
+    <span data-part="actions" className="block">
+      <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />
+    </span>
+  );
 }
 
+/**
+ * Shopify's orders columns, one line per cell on every row whatever the
+ * order's state: Order, Date, Customer (name over phone, the only two-line
+ * cell, on every row), Channel, Total, Payment, Fulfillment, Items, Delivery
+ * status, Delivery method and Status. Badges are the same size everywhere;
+ * an empty cell reads "—". Narrow screens drop the lowest priority first.
+ */
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
-  // Column menu names, and what gives way first on a narrow screen: Items, then
-  // Fulfillment, then Total, Status and Customer; the order number never does.
-  // Minimums are what the cells really need (date line, status pill, amount
-  // over its payment badge), so columns step aside by priority, not by overflow.
   const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; numeric?: boolean; primary?: boolean }) => ({
     label: handlers.label?.(key),
     ...layout,
@@ -230,54 +276,77 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
   const columns: ColumnDef<OrderListItem, unknown>[] = [
     {
       id: "order",
-      meta: meta("order", { primary: true, minWidth: 130 }),
+      meta: meta("order", { primary: true, minWidth: 110 }),
       header: () => <Title k="order" />,
+      cell: ({ row }) => <OrderCell order={row.original} />,
+    },
+    {
+      id: "date",
+      meta: meta("date", { priority: 80, minWidth: 120 }),
+      header: () => <Title k="date" />,
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="whitespace-nowrap"><OrderNumberLink order={row.original} /></span>
-          <ListDate value={row.original[handlers.dateField]} className="whitespace-nowrap text-body text-muted-foreground" />
+        <div data-part="date">
+          <span data-part="value" className="block truncate text-muted-foreground">
+            <ListDate value={row.original[handlers.dateField]} />
+          </span>
         </div>
       ),
     },
     {
       id: "customer",
-      meta: meta("customer", { priority: 96, minWidth: 160 }),
+      meta: meta("customer", { priority: 96, minWidth: 180 }),
       header: () => <Title k="customer" />,
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <p className="line-clamp-2 break-words font-medium">{row.original.customerName}</p>
-          <div className="flex items-center gap-1 text-body text-muted-foreground">
-            <span className="whitespace-nowrap font-mono">{formatPhoneForDisplay(row.original.customerPhone)}</span>
-            <LazyFraudCheckIndicator phone={row.original.customerPhone} customerName={row.original.customerName} />
-          </div>
-        </div>
-      ),
+      cell: ({ row }) => <CustomerCell order={row.original} />,
+    },
+    {
+      id: "channel",
+      meta: meta("channel", { priority: 40, minWidth: 130 }),
+      header: () => <Title k="channel" />,
+      cell: ({ row }) => <ChannelCell order={row.original} />,
     },
     {
       id: "total",
-      meta: meta("total", { priority: 94, minWidth: 110, numeric: true }),
+      meta: meta("total", { priority: 94, minWidth: 120, numeric: true }),
       header: () => <Title k="total" />,
       cell: ({ row }) => <TotalCell order={row.original} />,
     },
     {
+      id: "payment",
+      meta: meta("payment", { priority: 92, minWidth: 170 }),
+      header: () => <Title k="payment" />,
+      cell: ({ row }) => <div data-part="payment"><PaymentCell order={row.original} /></div>,
+    },
+    {
       id: "fulfillment",
-      meta: meta("fulfillment", { priority: 60, minWidth: 150 }),
+      meta: meta("fulfillment", { priority: 90, minWidth: 170 }),
       header: () => <Title k="fulfillment" />,
-      cell: ({ row }) => <FulfillmentCell order={row.original} handlers={handlers} />,
+      cell: ({ row }) => <div data-part="fulfillment"><FulfilmentCell order={row.original} /></div>,
     },
     {
       id: "items",
       meta: meta("items", { priority: 30, minWidth: 100, numeric: true }),
       header: () => <Title k="items" />,
       cell: ({ row }) => (
-        <div className="flex justify-end tabular-nums">
+        <div data-part="items" className="flex justify-end tabular-nums">
           <LazyOrderItemsPopover orderId={row.original.id} itemCount={row.original.itemCount} />
         </div>
       ),
     },
     {
+      id: "deliveryStatus",
+      meta: meta("deliveryStatus", { priority: 70, minWidth: 170 }),
+      header: () => <Title k="deliveryStatus" />,
+      cell: ({ row }) => <DeliveryStatusCell order={row.original} handlers={handlers} />,
+    },
+    {
+      id: "deliveryMethod",
+      meta: meta("deliveryMethod", { priority: 20, minWidth: 130 }),
+      header: () => <Title k="deliveryMethod" />,
+      cell: ({ row }) => <DeliveryMethodCell order={row.original} />,
+    },
+    {
       id: "status",
-      meta: meta("status", { priority: 95, minWidth: 150 }),
+      meta: meta("status", { priority: 95, minWidth: 170 }),
       header: () => <Title k="status" />,
       cell: ({ row }) => <StatusCell order={row.original} handlers={handlers} />,
     },
@@ -292,4 +361,14 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     columns.unshift(createSelectColumn<OrderListItem>({ getLabel: (row) => orderName(row as OrderListItem) }));
   }
   return columns;
+}
+
+function ChannelCell({ order }: { order: OrderListItem }) {
+  const o = useMessages(orderMessages);
+  return <div data-part="channel"><Line text={orderChannelText(o, order.channel, order.channelSource)} /></div>;
+}
+
+function DeliveryMethodCell({ order }: { order: OrderListItem }) {
+  const o = useMessages(orderMessages);
+  return <div data-part="method"><Line text={deliveryMethod(order, o)} /></div>;
 }
