@@ -68,12 +68,80 @@ VALUES ('loc_default', 'Main location', 'MAIN', 'warehouse', 1, 'active', 0, 1);
 INSERT INTO `inventory_levels` (`variant_id`, `location_id`, `on_hand`, `updated_at`)
 SELECT `id`, 'loc_default', `stock`, unixepoch() FROM `product_variants` WHERE `stock` > 0;
 --> statement-breakpoint
+-- Ledger v2 semantics are checked when a movement's operation changes, not on
+-- every update: rows written before the 0065 rules must still take the
+-- location backfill below (and nothing else may change them: the level
+-- immutability trigger later in this file freezes location and stock delta).
+DROP TRIGGER `inventory_movements_ledger_v2_update_semantics`;
+--> statement-breakpoint
+CREATE TRIGGER `inventory_movements_ledger_v2_update_semantics`
+BEFORE UPDATE ON `inventory_movements`
+FOR EACH ROW
+WHEN NEW.`ledger_version` = 2 AND (OLD.`ledger_version` IS NOT NEW.`ledger_version` OR OLD.`type` IS NOT NEW.`type` OR OLD.`pool` IS NOT NEW.`pool` OR OLD.`quantity` IS NOT NEW.`quantity` OR OLD.`stock_delta` IS NOT NEW.`stock_delta` OR OLD.`reserved_stock_delta` IS NOT NEW.`reserved_stock_delta` OR OLD.`preorder_stock_delta` IS NOT NEW.`preorder_stock_delta`) AND NOT (
+    (NEW.`type` = 'reserved'
+        AND NEW.`pool` IN ('regular', 'backorder')
+        AND NEW.`quantity` > 0
+        AND NEW.`stock_delta` = 0
+        AND NEW.`reserved_stock_delta` = NEW.`quantity`
+        AND NEW.`preorder_stock_delta` = 0)
+    OR (NEW.`type` = 'preorder_reserved'
+        AND NEW.`pool` = 'preorder'
+        AND NEW.`quantity` > 0
+        AND NEW.`stock_delta` = 0
+        AND NEW.`reserved_stock_delta` = NEW.`quantity`
+        AND NEW.`preorder_stock_delta` = -NEW.`quantity`)
+    OR (NEW.`type` = 'released'
+        AND NEW.`quantity` < 0
+        AND NEW.`stock_delta` = 0
+        AND NEW.`reserved_stock_delta` = NEW.`quantity`
+        AND (
+            (NEW.`pool` = 'preorder' AND NEW.`preorder_stock_delta` = -NEW.`quantity`)
+            OR (NEW.`pool` IN ('regular', 'backorder') AND NEW.`preorder_stock_delta` = 0)
+        ))
+    OR (NEW.`type` = 'deducted'
+        AND NEW.`pool` IN ('regular', 'backorder')
+        AND NEW.`quantity` > 0
+        AND NEW.`stock_delta` = CASE WHEN NEW.`pool` = 'regular' THEN -NEW.`quantity` ELSE 0 END
+        AND NEW.`reserved_stock_delta` = -NEW.`quantity`
+        AND NEW.`preorder_stock_delta` = 0)
+    OR (NEW.`type` = 'preorder_deducted'
+        AND NEW.`pool` = 'preorder'
+        AND NEW.`quantity` > 0
+        AND NEW.`stock_delta` = 0
+        AND NEW.`reserved_stock_delta` = -NEW.`quantity`
+        AND NEW.`preorder_stock_delta` = 0)
+    OR (NEW.`type` = 'restored'
+        AND NEW.`quantity` > 0
+        AND NEW.`reserved_stock_delta` = 0
+        AND NEW.`stock_delta` = CASE WHEN NEW.`pool` = 'regular' THEN NEW.`quantity` ELSE 0 END
+        AND NEW.`preorder_stock_delta` = CASE WHEN NEW.`pool` = 'preorder' THEN NEW.`quantity` ELSE 0 END)
+    OR (NEW.`type` = 'adjusted'
+        AND NEW.`reserved_stock_delta` = 0
+        AND (
+            (NEW.`pool` = 'regular' AND NEW.`stock_delta` = NEW.`quantity` AND NEW.`preorder_stock_delta` = 0)
+            OR (NEW.`pool` = 'preorder' AND NEW.`stock_delta` = 0 AND NEW.`preorder_stock_delta` = NEW.`quantity`)
+        ))
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid inventory ledger v2 operation semantics');
+END;
+--> statement-breakpoint
 -- Past physical movements happened at the only location there was; deducts
 -- carry it so a later restore returns units there.
 UPDATE `inventory_movements` SET `location_id` = 'loc_default'
 WHERE (`ledger_version` = 2 AND `stock_delta` <> 0) OR `type` IN ('deducted', 'preorder_deducted', 'restored');
 --> statement-breakpoint
+-- Receipt dispositions stay immutable; the guard steps aside only for this
+-- one backfill of the new column and comes back unchanged.
+DROP TRIGGER `order_return_receipt_lines_update_blocked`;
+--> statement-breakpoint
 UPDATE `order_return_receipt_lines` SET `restock_location_id` = 'loc_default' WHERE `restock_quantity` > 0;
+--> statement-breakpoint
+CREATE TRIGGER `order_return_receipt_lines_update_blocked`
+BEFORE UPDATE ON `order_return_receipt_lines`
+BEGIN
+    SELECT RAISE(ABORT, 'return receipt dispositions are immutable');
+END;
 --> statement-breakpoint
 -- Fulfilments stay immutable except active -> voided; the guard now also
 -- covers location_id. Past ship/pickup fulfilments left from the default.
@@ -190,4 +258,4 @@ BEGIN
 END;
 -- <<< H1
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (102, '0102_inventory_locations', '1f73c0787bbccbb214b024e342655975a60ee81f75321d8d21bdd33eca52e22f');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (102, '0102_inventory_locations', '42507a4db0dbaa14d05e60a2bc85a6cbd17f988e2edc6635a848ff5e9193626e');

@@ -290,7 +290,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 102,
     name: "0102_inventory_locations",
-    sourceSha256: "1f73c0787bbccbb214b024e342655975a60ee81f75321d8d21bdd33eca52e22f",
+    sourceSha256: "42507a4db0dbaa14d05e60a2bc85a6cbd17f988e2edc6635a848ff5e9193626e",
   },
   {
     version: 103,

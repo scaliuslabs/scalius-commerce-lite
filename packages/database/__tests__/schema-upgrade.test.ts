@@ -416,8 +416,8 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 102,
         name: "0102_inventory_locations",
-        sqliteStatements: 26,
-        postgresStatements: 34,
+        sqliteStatements: 30,
+        postgresStatements: 37,
       },
       {
         version: 103,
