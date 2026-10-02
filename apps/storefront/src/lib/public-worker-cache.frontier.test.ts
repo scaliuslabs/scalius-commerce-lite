@@ -264,6 +264,139 @@ describe("frontier-validated storefront pages", () => {
   });
 });
 
+describe("one frontier refresh and one slow check per isolate", () => {
+  const REQUESTS = 20;
+
+  /** Holds the next delta (or check) answer until `release()`, so concurrent requests overlap. */
+  function gated<T extends (...args: never[]) => Promise<unknown>>(mock: ReturnType<typeof vi.fn<T>>) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const original = mock.getMockImplementation()!;
+    mock.mockImplementation((async (...args: Parameters<T>) => {
+      const answer = await original(...args);
+      await gate;
+      return answer;
+    }) as T);
+    return release;
+  }
+
+  const overlap = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+  it("answers requests that find the frontier older than Δ with one API read", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    await t.serve();
+    t.tick(1_500);
+    vi.mocked(t.api.client.delta).mockClear();
+    const release = gated(vi.mocked(t.api.client.delta));
+    const served = Promise.all(Array.from({ length: REQUESTS }, () => t.serve()));
+    await overlap();
+    release();
+    const responses = await served;
+    expect(t.api.client.delta).toHaveBeenCalledTimes(1);
+    expect(responses.map((response) => response.headers.get("X-Cache-Status"))).toEqual(Array(REQUESTS).fill("HIT"));
+    expect(t.render).toHaveBeenCalledTimes(1);
+    // The refreshed frontier was stored once, by the request that ran it.
+    expect(vi.mocked(t.context.cache.put).mock.calls.filter(([key]) => key === FRONTIER)).toHaveLength(2);
+  });
+
+  it("starts one background refresh, not one per request, once the frontier is older than Δ/2", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    await t.serve();
+    t.tick(600);
+    vi.mocked(t.api.client.delta).mockClear();
+    const release = gated(vi.mocked(t.api.client.delta));
+    const served = Promise.all(Array.from({ length: REQUESTS }, () => t.serve()));
+    await overlap();
+    release();
+    await served;
+    expect(t.api.client.delta).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a request with a newer _sv rely on a refresh that started before its write", async () => {
+    const t = setup(() => [part(t.api.clock, [P1])]);
+    await t.serve();
+    await t.serve();
+    t.tick(1_500);
+    vi.mocked(t.api.client.delta).mockClear();
+    // The first refresh reads the clock now, but answers only after the merchant's write.
+    const original = vi.mocked(t.api.client.delta).getMockImplementation()!;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(t.api.client.delta).mockImplementationOnce(async (since) => {
+      const snapshot = await original(since);
+      await gate;
+      return snapshot;
+    });
+    const anonymous = t.serve();
+    await overlap();
+    t.api.write(P1);
+    const merchant = t.serve(`${PAGE}?_sv=${t.api.clock}`);
+    await overlap();
+    release();
+    // The anonymous visitor may see the page as of before the write; the merchant must not.
+    expect((await anonymous).headers.get("X-Cache-Status")).toBe("HIT");
+    expect((await merchant).headers.get("X-Cache-Status")).toBe("MISS");
+    expect(t.api.client.delta).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets every waiter fall back to a live render when the one refresh fails, then recovers", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    await t.serve();
+    t.tick(1_500);
+    vi.mocked(t.api.client.delta).mockClear();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(t.api.client.delta).mockImplementationOnce(async () => {
+      await gate;
+      throw new Error("down");
+    });
+    const served = Promise.all(Array.from({ length: 5 }, () => t.serve()));
+    await overlap();
+    release();
+    const responses = await served;
+    expect(responses.map((response) => response.headers.get("X-Cache-Status"))).toEqual(Array(5).fill("MISS"));
+    expect(t.api.client.delta).toHaveBeenCalledTimes(1);
+    // The failed flight left nothing behind: the next request refreshes normally.
+    t.tick(1_500);
+    expect((await t.serve()).headers.get("X-Cache-Status")).toBe("HIT");
+    expect(t.api.client.delta).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares one slow check between concurrent hits of a stored entry and rebases it once", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    t.store.set(FRONTIER, new Response(JSON.stringify({ apiVersion: "api-1", horizon: 50, S: 60, floor: 0, sentAt: 1_000, changes: [] })));
+    const release = gated(vi.mocked(t.api.client.check));
+    const served = Promise.all(Array.from({ length: REQUESTS }, () => t.serve()));
+    await overlap();
+    release();
+    const responses = await served;
+    expect(t.api.client.check).toHaveBeenCalledTimes(1);
+    expect(responses.map((response) => response.headers.get("X-Cache-Status"))).toEqual(Array(REQUESTS).fill("HIT"));
+    expect(vi.mocked(t.context.cache.put).mock.calls.filter(([key]) => key === KEY)).toHaveLength(2);
+    expect(t.store.get(KEY)!.headers.get(PAGE_DEPENDENCY_HEADERS.s0)).toBe(String(t.api.clock));
+    expect(t.render).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts a joined slow check from its own start, so a late proof still renders", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    t.store.set(FRONTIER, new Response(JSON.stringify({ apiVersion: "api-1", horizon: 50, S: 60, floor: 0, sentAt: 1_000, changes: [] })));
+    const original = vi.mocked(t.api.client.check).getMockImplementation()!;
+    vi.mocked(t.api.client.check).mockImplementationOnce(async (...args) => {
+      const answer = await original(...args);
+      t.tick(1_001);
+      return answer;
+    });
+    const responses = await Promise.all([t.serve(), t.serve(), t.serve()]);
+    expect(t.api.client.check).toHaveBeenCalledTimes(1);
+    expect(responses.map((response) => response.headers.get("X-Cache-Status"))).toEqual(Array(3).fill("MISS"));
+  });
+});
+
 describe("refreshCacheFrontier", () => {
   it("fails closed after four rounds when it cannot catch up with the clock", async () => {
     const client: CacheFrontierClient = {

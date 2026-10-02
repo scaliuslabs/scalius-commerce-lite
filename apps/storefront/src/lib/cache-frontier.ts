@@ -120,6 +120,44 @@ export async function refreshCacheFrontier(
   return null;
 }
 
+/**
+ * Work in flight in this isolate, by key: one frontier refresh per frontier
+ * and one slow-path check per stored entry. Only promises live here, and a
+ * promise leaves the map the moment it settles, so nothing outlives the work.
+ *
+ * Without it every request that finds the frontier older than Δ/2 starts its
+ * own background refresh, and every request that finds it older than Δ waits
+ * on its own: N concurrent requests are N API calls and N D1 reads for one
+ * answer. Callers that start the work (`created`) keep it alive with
+ * `waitUntil`; a request that joins only awaits it.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
+export interface Flight<T> {
+  readonly promise: Promise<T>;
+  /** False when the caller joined work another request started. */
+  readonly created: boolean;
+  /** When the work started (a joiner's proof is only as fresh as that). */
+  readonly startedAt: number;
+}
+
+const flightStartedAt = new Map<string, number>();
+
+export function singleFlight<T>(key: string, start: () => Promise<T>, now: () => number = Date.now): Flight<T> {
+  const running = inFlight.get(key) as Promise<T> | undefined;
+  if (running) return { promise: running, created: false, startedAt: flightStartedAt.get(key) ?? now() };
+  const startedAt = now();
+  const promise = (async () => start())().finally(() => {
+    if (inFlight.get(key) === promise) {
+      inFlight.delete(key);
+      flightStartedAt.delete(key);
+    }
+  });
+  inFlight.set(key, promise);
+  flightStartedAt.set(key, startedAt);
+  return { promise, created: true, startedAt };
+}
+
 /** Whether a stored frontier may validate a hit at `now` for a request that saw `seenSeq`. */
 export function isCacheFrontierFresh(
   frontier: CacheFrontier | null,
