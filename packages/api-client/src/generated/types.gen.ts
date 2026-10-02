@@ -1542,6 +1542,16 @@ export type AppSummary = {
     installedAt: string;
     activatedAt: string | null;
     updatedAt: string;
+    /**
+     * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
+     */
+    functions: Array<{
+        point: 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk';
+        /**
+         * Lower runs first among apps at the same point.
+         */
+        priority: number;
+    }>;
 };
 
 export type AppDetail = AppSummary & {
@@ -4615,7 +4625,14 @@ export type PostApiV1DiscountsValidateResponses = {
                 label: string | null;
             }>;
             discounts: Array<{
-                promotionId: string;
+                /**
+                 * Null for a discount an installed app gave (then `appId` is set).
+                 */
+                promotionId: string | null;
+                /**
+                 * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                 */
+                appId: string | null;
                 title: string;
                 code: string | null;
                 /**
@@ -11856,7 +11873,14 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 details?: string | null;
             }>;
             discounts: Array<{
-                promotionId: string;
+                /**
+                 * Null for a discount an installed app gave (then `appId` is set).
+                 */
+                promotionId: string | null;
+                /**
+                 * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                 */
+                appId: string | null;
                 title: string;
                 code: string | null;
                 /**
@@ -18966,7 +18990,14 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
                 discounts: Array<{
-                    promotionId: string;
+                    /**
+                     * Null for a discount an installed app gave (then `appId` is set).
+                     */
+                    promotionId: string | null;
+                    /**
+                     * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                     */
+                    appId: string | null;
                     title: string;
                     code: string | null;
                     /**
@@ -19443,6 +19474,21 @@ export type PostApiV1OrdersCartValidationResponses = {
                 currentPrice?: number;
                 propertyKey?: string | null;
             }>;
+            /**
+             * Rules installed apps set for this cart ("at most 10 per order"), checked only when `issues` is empty. Checkout is blocked while any remain; the checkout quote and the order check them again.
+             */
+            ruleErrors: Array<{
+                code: string;
+                /**
+                 * Written by the app for the buyer; show it as text.
+                 */
+                message: string;
+                /**
+                 * The cart line it is about (request index); null for the whole cart.
+                 */
+                index: number | null;
+                cartKey: string | null;
+            }>;
             items: Array<{
                 index: number;
                 cartKey?: string | null;
@@ -19658,7 +19704,14 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              * One line per applied discount (automatic and code), with its own amount.
              */
             discounts: Array<{
-                promotionId: string;
+                /**
+                 * Null for a discount an installed app gave (then `appId` is set).
+                 */
+                promotionId: string | null;
+                /**
+                 * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                 */
+                appId: string | null;
                 title: string;
                 code: string | null;
                 /**
@@ -19754,6 +19807,26 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 discountType: 'percentage' | 'fixed_price';
                 label: string | null;
             }>;
+            /**
+             * Null when no installed app changed the delivery options (show them as listed). Otherwise exactly the options to show, in this order, with these names and what the buyer pays for each (free-delivery rules applied); options not listed are hidden.
+             */
+            shippingRates: Array<{
+                id: string;
+                name: string;
+                /**
+                 * `delivery` ships to the buyer's address; `pickup` is collected at the store.
+                 */
+                kind: 'delivery' | 'pickup';
+                amount: number;
+                amountMinor: number;
+            }> | null;
+            /**
+             * Null when no installed app changed the payment methods. Otherwise the methods to show, in this order, with these names; `allowedPaymentMethods` is narrowed the same way. Apps never add or enable a method.
+             */
+            paymentMethods: Array<{
+                id: string;
+                name: string;
+            }> | null;
             items: Array<{
                 cartKey?: string | null;
                 productId: string;
@@ -54047,13 +54120,23 @@ export type GetApiV1AdminOrdersByIdResponses = {
             taxLabel: string | null;
             pricesIncludeTax: boolean;
             discounts: Array<{
-                promotionId: string;
+                source: 'promotion' | 'app';
+                promotionId: string | null;
+                appId: string | null;
+                appName: string | null;
                 name: string;
                 code: string | null;
                 method: 'automatic' | 'code';
                 kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 amount: number;
                 shippingAmount: number;
+            }>;
+            appRiskChecks: Array<{
+                appId: string;
+                appName: string;
+                level: 'low' | 'medium' | 'high';
+                reasons: Array<string>;
+                checkedAt: string | number;
             }>;
             status: string;
             paymentStatus: string | null;
