@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BUNDLE_BUDGETS,
-  componentChunksByRoute,
   measureRoutes,
   parseAdminPerfCheckArgs,
   parseRouteTree,
+  renderChunksByRoute,
   routeAncestry,
   staticClosure,
   validateBundleReport,
@@ -52,6 +52,8 @@ function fixtureChunks() {
     chunk("admin.js", { imports: ["ui.js"], moduleIds: [`${ROUTES}/admin.tsx?tsr-split=component`] }),
     chunk("ui.js"),
     chunk("list.js", { imports: ["table.js"], moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx?tsr-split=component`] }),
+    chunk("list-loader.js", { imports: ["reads.js"], moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx?tsr-split=loader`] }),
+    chunk("reads.js"),
     chunk("list-error.js", { moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx?tsr-split=errorComponent`] }),
     chunk("table.js", { moduleIds: ["/repo/node_modules/@tanstack/table-core/index.js"] }),
     chunk("scanner.js", { imports: ["qr.js"], moduleIds: [`${ROUTES}/scanner.tsx?tsr-split=component`] }),
@@ -59,7 +61,7 @@ function fixtureChunks() {
   ];
 }
 
-const sizes = { "index.js": 100, "runtime.js": 1, "admin.js": 10, "ui.js": 5, "list.js": 20, "list-error.js": 1, "table.js": 30, "scanner.js": 4, "qr.js": 80 };
+const sizes = { "index.js": 100, "runtime.js": 1, "admin.js": 10, "ui.js": 5, "list.js": 20, "list-loader.js": 1, "reads.js": 2, "list-error.js": 1, "table.js": 30, "scanner.js": 4, "qr.js": 80 };
 const brotliBytes = (file) => sizes[file] * 1024;
 
 describe("admin perf check: route bundles", () => {
@@ -75,9 +77,9 @@ describe("admin perf check: route bundles", () => {
     ]);
   });
 
-  it("maps page components, not error components, to their route", () => {
-    const byRoute = componentChunksByRoute(fixtureChunks(), ROUTES);
-    expect(byRoute.get("admin/orders/_list/index.tsx")).toEqual(["list.js"]);
+  it("maps page components and loaders, not error components, to their route", () => {
+    const byRoute = renderChunksByRoute(fixtureChunks(), ROUTES);
+    expect(byRoute.get("admin/orders/_list/index.tsx")).toEqual(["list.js", "list-loader.js"]);
     expect(byRoute.get("admin.tsx")).toEqual(["admin.js"]);
   });
 
@@ -90,9 +92,9 @@ describe("admin perf check: route bundles", () => {
     const report = measureRoutes({ chunks: fixtureChunks(), parentByFile: parseRouteTree(ROUTE_TREE), routesDir: ROUTES, brotliBytes });
     const list = report.routes.find((route) => route.route === "admin/orders/_list/index.tsx");
     expect(report.entry.brotliBytes).toBe(101 * 1024);
-    // index + runtime + admin + ui + list + table; the error chunk loads only on error.
-    expect(list.brotliBytes).toBe(166 * 1024);
-    expect(list.files).toBe(6);
+    // index + runtime + admin + ui + list + table + its loader and reads; the error chunk loads only on error.
+    expect(list.brotliBytes).toBe(169 * 1024);
+    expect(list.files).toBe(8);
     expect(list.lazyOnly).toEqual([]);
     expect(report.routes.find((route) => route.route === "scanner.tsx").lazyOnly).toEqual([]);
   });
@@ -108,7 +110,7 @@ describe("admin perf check: route bundles", () => {
     });
     expect(failures).toEqual(expect.arrayContaining([
       expect.stringContaining("entry chunk is 101.0 KiB"),
-      expect.stringContaining("admin/orders/_list/index.tsx needs 246.0 KiB"),
+      expect.stringContaining("admin/orders/_list/index.tsx needs 249.0 KiB"),
       expect.stringContaining("admin/orders/_list/index.tsx loads html5-qrcode"),
       "budgeted route admin/gone.tsx no longer exists",
     ]));

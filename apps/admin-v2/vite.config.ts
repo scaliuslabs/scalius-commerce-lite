@@ -84,8 +84,16 @@ export default defineConfig({
     },
   },
   plugins: [
-    // The router plugin must run before the React plugin.
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    // The router plugin must run before the React plugin. A route's loader is
+    // split like its page: the first download keeps only what matches URLs
+    // (paths, search validation, guards), so no screen pays for every other
+    // screen's reads and SDK calls. The router fetches a route's loader and
+    // page code together when it is opened or preloaded.
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      codeSplittingOptions: { defaultBehavior: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]] },
+    }),
     viteReact(),
     tailwindcss(),
   ],

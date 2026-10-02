@@ -2,7 +2,9 @@
 // URL; the search never does (it can be a customer's phone or email), and a
 // pasted code is cut to its last 4 before it is kept or sent anywhere.
 
-import { GIFT_CARD_PAGE_SIZE, type GiftCardListQuery } from "~/lib/api-query-options/gift-cards";
+import type { GiftCardListQuery } from "~/lib/api-query-options/gift-cards";
+
+const GIFT_CARD_PAGE_SIZE = 25;
 
 export const GIFT_CARD_TABS = ["all", "active", "disabled", "expired", "empty"] as const;
 export type GiftCardTab = (typeof GIFT_CARD_TABS)[number];

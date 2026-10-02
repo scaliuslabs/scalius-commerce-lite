@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { getApiV1Setup } from "@scalius/api-client/sdk";
 import { SetupForm } from "~/components/auth/SetupForm";
 import { apiData } from "~/lib/api";
 import { readDashboardSession } from "~/lib/auth-guards";
@@ -13,7 +12,8 @@ export const Route = createFileRoute("/auth/setup")({
     // The API decides whether setup is token-gated (Platform setting). A
     // failed read must not block the form: the API rejects an unaccompanied
     // request anyway, so the gate is never weakened by guessing here.
-    const setupTokenRequired = await apiData(getApiV1Setup())
+    const setupTokenRequired = await import("@scalius/api-client/sdk")
+      .then(({ getApiV1Setup }) => apiData(getApiV1Setup()))
       .then((status) => status.setupTokenRequired === true)
       .catch(() => false);
     return { setupTokenRequired };
