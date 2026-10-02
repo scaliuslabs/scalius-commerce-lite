@@ -48,6 +48,7 @@ import {
     loadVariantSelectedOptions,
     resolveSelectedOptionValueIds,
 } from "./option-model";
+import { digitalStockError, isDigitalKind, planDigitalSkuWrites } from "./digital-stock-rules";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -501,6 +502,8 @@ export async function createVariant(
     data: z.infer<typeof createVariantSchema>,
 ): Promise<VariantView & ProductAggregateRevisionResult> {
     assertNormalVariantHasCustomerOption(data);
+    // A new digital SKU starts without a quantity: its stock is its licence keys.
+    if (isDigitalKind(data.fulfillmentKind) && data.stock !== 0) throw digitalStockError({ field: "stock", sku: data.sku.trim() });
     const currency = await readStoreCurrency(db);
     const decimalPlaces = currency.decimalPlaces;
     const selection = await resolveSelectedOptionValueIds(
@@ -645,6 +648,8 @@ export async function updateVariant(
             preorderStock: productVariants.preorderStock,
             stockVersion: productVariants.stockVersion,
             trackInventory: productVariants.trackInventory,
+            fulfillmentKind: productVariants.fulfillmentKind,
+            sku: productVariants.sku,
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
         })
@@ -748,6 +753,22 @@ export async function updateVariant(
         throw new ConflictError(STOCK_CHANGED_MESSAGE);
     }
     const stock = data.stock ?? existingVariant.stock;
+    // A digital SKU's stock is its licence keys: no quantity edit, no physical
+    // units carried into digital, no tracking off while it has a key pool.
+    const digitalGuards = await planDigitalSkuWrites(db, [{
+        variantId,
+        sku: existingVariant.sku,
+        before: {
+            kind: existingVariant.fulfillmentKind,
+            stock: existingVariant.stock,
+            trackInventory: existingVariant.trackInventory,
+        },
+        after: {
+            kind: data.fulfillmentKind ?? existingVariant.fulfillmentKind,
+            stock,
+            trackInventory: updateValues.trackInventory,
+        },
+    }]);
     if (
         existingVariant.reservedStock > 0
         && (
@@ -812,7 +833,7 @@ export async function updateVariant(
                 db,
                 productId,
                 data.expectedAggregateRevision,
-                [stockGuard, ...assignmentStatements, movementInsert, variantUpdate],
+                [stockGuard, ...assignmentStatements, movementInsert, variantUpdate, ...digitalGuards],
             );
         } catch (error) {
             if (isAtomicVariantConflict(error)) {
@@ -848,7 +869,7 @@ export async function updateVariant(
         db,
         productId,
         data.expectedAggregateRevision,
-        [...assignmentStatements, variantUpdate],
+        [...assignmentStatements, variantUpdate, ...digitalGuards],
     );
     const variant = (result.mutationResults[assignmentStatements.length] as PersistedVariant[] | undefined)?.[0];
     if (!variant) throw new NotFoundError("Variant not found");
