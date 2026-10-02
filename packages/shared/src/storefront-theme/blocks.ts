@@ -23,6 +23,7 @@ import {
   has,
   type FitCondition,
 } from "./fit";
+import { storefrontProductAppBlocksSchema } from "./apps";
 import { storefrontLinkSchema } from "./links";
 import type { StorefrontImageFit, StorefrontThemeSurface } from "./tokens";
 
@@ -1296,6 +1297,12 @@ export const storefrontThemeBlocksSchema = z.object({
     gallery: blockSchema(STOREFRONT_GALLERY_VARIANTS),
     buyBox: blockSchema(STOREFRONT_BUY_BOX_VARIANTS),
     below: uniqueList(moduleIds, moduleIds.length, "module"),
+    /**
+     * Installed apps' product blocks (apps.ts), in the merchant's order;
+     * each renders in the buy box or after the modules, as its app declares.
+     * Absent means none.
+     */
+    apps: storefrontProductAppBlocksSchema.optional(),
     sticky: z.object({
       phoneTop: z.enum(STOREFRONT_PRODUCT_STICKY.phoneTop),
       phoneBottom: z.enum(STOREFRONT_PRODUCT_STICKY.phoneBottom),

@@ -64,6 +64,12 @@ export interface PluginHostOptions {
   db?: Database;
   /** Test seam: replaces the loader choice. */
   loaderFor?: (installation: PluginInstallation) => PluginLoader;
+  /**
+   * The store facts handlers see (`ctx.store`), when the caller reads them
+   * itself: storefront renders read exactly the rows whose cache keys they
+   * declare (storefront-render.ts).
+   */
+  store?: () => Promise<PluginStoreInfo>;
 }
 
 /** The authority the bridge enforces for one installation: its approved grant, within the manifest. */
@@ -134,12 +140,14 @@ export class PluginHost {
   private readonly db: Database;
   private readonly loaderFor: (installation: PluginInstallation) => PluginLoader;
   private storeInfo: Promise<PluginStoreInfo> | null = null;
+  private readonly storeSource: (() => Promise<PluginStoreInfo>) | undefined;
   private readonly settings = new Map<string, Promise<Awaited<ReturnType<typeof readPluginRuntimeSettings>>>>();
 
   constructor(options: PluginHostOptions) {
     this.env = options.env;
     this.ctx = options.ctx;
     this.db = options.db ?? getDb(options.env);
+    this.storeSource = options.store;
     const bridgeEnvironment: PluginBridgeEnvironment = {
       env: this.env,
       ctx: this.ctx,
@@ -180,9 +188,20 @@ export class PluginHost {
     surface: "admin" | "public" | "webhooks",
     name: string,
     request: PluginRouteRequest,
+    options: {
+      /** Storefront output: read-only bridge over these collections, and a wall time capped like functions. */
+      render?: { collections: string[]; wallMs: number };
+    } = {},
   ): Promise<PluginInvocationOutcome<{ status: number; headers: Record<string, string>; body: unknown }>> {
     const source = `route:${surface}/${name}`;
-    const outcome = await this.run(installation, { kind: "route", surface, name, request }, source, installation.manifest.limits.wallMs);
+    const wallMs = options.render ? Math.min(installation.manifest.limits.wallMs, options.render.wallMs) : installation.manifest.limits.wallMs;
+    const outcome = await this.run(
+      installation,
+      { kind: "route", surface, name, request },
+      source,
+      wallMs,
+      options.render ? { collections: [...options.render.collections] } : undefined,
+    );
     if (!outcome.ok) return failed(outcome);
     const response = validatePluginRouteResponse(outcome.value);
     if (typeof response === "string") {
@@ -219,6 +238,10 @@ export class PluginHost {
   }
 
   private store(): Promise<PluginStoreInfo> {
+    if (this.storeSource) {
+      this.storeInfo ??= this.storeSource();
+      return this.storeInfo;
+    }
     this.storeInfo ??= Promise.all([readStoreIdentity(this.db), readStoreCurrency(this.db)]).then(([identity, currency]) => ({
       name: identity.name ?? "",
       url: this.env.STOREFRONT_URL?.trim() || null,
@@ -252,8 +275,18 @@ export class PluginHost {
     };
   }
 
-  private bridgeProps(installation: PluginInstallation): PluginBridgeProps {
-    return { pluginId: installation.pluginId, version: installation.version, authority: pluginBridgeAuthority(installation) };
+  private bridgeProps(installation: PluginInstallation, render?: PluginBridgeProps["render"]): PluginBridgeProps {
+    return {
+      pluginId: installation.pluginId,
+      version: installation.version,
+      authority: pluginBridgeAuthority(installation),
+      ...(render ? { render } : {}),
+    };
+  }
+
+  /** Incidents found after a run (an invalid answer): written to the plugin's log like the run's own. */
+  async reportIncident(installation: PluginInstallation, source: string, message: string): Promise<void> {
+    await this.incident(installation, source, message);
   }
 
   private async run(
@@ -261,6 +294,7 @@ export class PluginHost {
     invocation: PluginInvocation,
     source: string,
     wallMs: number,
+    render?: PluginBridgeProps["render"],
   ): Promise<RunOutcome> {
     if (installation.status !== "active") {
       return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
@@ -279,7 +313,7 @@ export class PluginHost {
     let failure: PluginInvocationFailure = "error";
     try {
       result = await Promise.race([
-        this.loaderFor(installation).invoke({ installation, invocation, seed, bridgeProps: this.bridgeProps(installation) }),
+        this.loaderFor(installation).invoke({ installation, invocation, seed, bridgeProps: this.bridgeProps(installation, render) }),
         timeout,
       ]);
     } catch (thrown) {

@@ -32,7 +32,17 @@ export interface PluginBridgeProps {
   pluginId: string;
   version: string;
   authority: PluginBridgeAuthority;
+  /**
+   * Set while the plugin draws storefront output that will be cached under
+   * dependency validation (storefront-render.ts): the bridge is read-only and
+   * reaches only these storage collections, the ones whose keys the cached
+   * entry carries. Every other method is refused.
+   */
+  render?: { collections: string[] };
 }
+
+/** Bridge methods a storefront render may call (reads of declared collections). */
+const RENDER_METHODS = new Set(["storageGet", "storageQuery", "storageCount"]);
 
 /** An `http.fetch` result as it crosses the bridge (the wrapper adds text()/json()). */
 export interface PluginHttpResult {
@@ -125,6 +135,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   private async guard<T>(method: string, work: () => Promise<T>): Promise<T> {
     try {
+      if (this.props.render && !RENDER_METHODS.has(method)) {
+        fail("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
+      }
       return await work();
     } catch (error) {
       throw toBridgeError(error, this.pluginId, method);
@@ -136,6 +149,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
       ? this.props.authority.collections[name]
       : undefined;
     if (!declaration) fail("storage.undeclared_collection", `Collection "${String(name)}" is not declared in the manifest.`);
+    if (this.props.render && !this.props.render.collections.includes(name)) {
+      fail("render.not_allowed", `Collection "${name}" is not in this section's reads.`);
+    }
     return declaration;
   }
 

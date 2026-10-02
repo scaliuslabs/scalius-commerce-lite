@@ -184,6 +184,8 @@ describe("plugin routes", { timeout: 30_000 }, () => {
       body: null,
       rawBody: null,
       staffId: null,
+      render: null,
+      customer: null,
     });
     // Its own cache wish beyond 300 s is refused; it can never redirect.
     expect(seen.headers.get("cache-control")).toBe("no-store");
@@ -228,12 +230,12 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect((await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "clerk" })).status).toBe(403);
     const page = await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "viewer" });
     expect(page.status).toBe(200);
-    expect(page.json).toMatchObject({ type: "page", title: "Hello" });
+    expect(page.json).toMatchObject({ version: 1, root: { type: "page", title: "Hello" } });
     expect(page.headers.get("cache-control")).toBe("private, no-store");
 
     expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "viewer" })).status).toBe(403);
     const reset = await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "operator", headers: { Origin: "https://admin.shop.test" } });
-    expect(reset).toMatchObject({ status: 200, json: { reset: true } });
+    expect(reset).toMatchObject({ status: 200, json: { toast: { message: "Counters reset.", tone: "success" }, refresh: true } });
     expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "owner", headers: { Origin: "https://evil.example" } })).status).toBe(403);
 
     const seen = await call("/api/v1/plugins/acme.echo/admin/look?tab=1", { as: "owner", headers: { "X-Custom": "no" } });

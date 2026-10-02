@@ -6,6 +6,8 @@
 // batch part and for a preview's stored draft on the token-verified preview
 // route; callers never name reads. The storefront looks each section's data
 // up by the same keys, so the two cannot drift apart.
+import type { PluginSettingValue } from "../plugins/settings-schema";
+import { PLUGIN_HOME_SECTIONS_MAX, parsePluginSurfaceKey } from "../plugins/storefront";
 import type { StorefrontHomeMode } from "./document";
 import type { StorefrontProductSource, StorefrontSection } from "./sections";
 
@@ -50,6 +52,16 @@ export interface HomeSectionRequests {
   promotionIds: string[];
   /** The product a product homepage opens on (null: the sections). */
   homeProductId: string | null;
+  /** App sections in document order (`PLUGIN_HOME_SECTIONS_MAX` at most); the API asks each app to draw its own. */
+  apps?: HomeAppSectionRequest[];
+}
+
+/** One app section the homepage shows: which app and type, and the merchant's values. */
+export interface HomeAppSectionRequest {
+  sectionId: string;
+  pluginId: string;
+  type: string;
+  values: Record<string, PluginSettingValue>;
 }
 
 /** One key per source: `newest`, `on-sale`, `popular`, `collection:<id>`, `category:<id>`. */
@@ -134,8 +146,16 @@ export function homeSectionRequests(
   const categoryIds = new Set<string>();
   const collectionIds = new Set<string>();
   const promotionIds = new Set<string>();
+  const apps: HomeAppSectionRequest[] = [];
   let brandLimit = 0;
   for (const section of sections) {
+    if (section.type === "app") {
+      const key = parsePluginSurfaceKey(section.settings.app);
+      if (key && apps.length < PLUGIN_HOME_SECTIONS_MAX) {
+        apps.push({ sectionId: section.id, pluginId: key.pluginId, type: key.type, values: section.settings.values });
+      }
+      continue;
+    }
     for (const list of homeSectionProductLists(section)) {
       const key = storefrontProductSourceKey(list.source);
       const limit = Math.min(list.limit, HOME_PRODUCT_LIST_LIMIT);
@@ -165,6 +185,7 @@ export function homeSectionRequests(
     brandLimit,
     promotionIds: [...promotionIds],
     homeProductId: homeMode.kind === "product" ? homeMode.productId : null,
+    apps,
   };
 }
 
@@ -173,5 +194,5 @@ export function homeSectionRequestsEmpty(requests: HomeSectionRequests): boolean
   return requests.lists.length === 0 && requests.mediaIds.length === 0
     && requests.categoryIds.length === 0 && requests.collectionIds.length === 0
     && requests.brandLimit === 0 && requests.promotionIds.length === 0
-    && requests.homeProductId === null;
+    && requests.homeProductId === null && (requests.apps ?? []).length === 0;
 }

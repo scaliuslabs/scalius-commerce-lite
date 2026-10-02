@@ -44,6 +44,8 @@ export type PluginErrorCode =
   | "messaging.not_allowed"
   | "messaging.invalid"
   | "messaging.unavailable"
+  /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
+  | "render.not_allowed"
   | "rate_limited"
   | "internal";
 
@@ -66,6 +68,7 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "http.failed": 502,
   "messaging.not_allowed": 403,
   "messaging.unavailable": 503,
+  "render.not_allowed": 403,
   rate_limited: 429,
   internal: 500,
 };

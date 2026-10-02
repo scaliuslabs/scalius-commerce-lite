@@ -200,6 +200,25 @@ export function pluginResponseCacheControl(surface: PluginRouteSurface, requeste
   return "no-store";
 }
 
+/**
+ * The signed-in buyer of a request the storefront proxied, from the store's
+ * own session cookie, which the storefront forwards for this purpose alone
+ * (lib/app-proxy.ts). The app gets the customer id; it never sees the cookie
+ * (every route's headers drop it). Null for guests and expired sessions.
+ */
+async function proxiedCustomer(c: Context<{ Bindings: Env }>, db: Database): Promise<{ id: string } | null> {
+  const { getCustomerBySession, getSessionCookie } = await import("@scalius/core/modules/customers");
+  const token = getSessionCookie(c.req.header("cookie") ?? null);
+  if (!token) return null;
+  try {
+    const { getCustomerSessionHashKey } = await import("../utils/encryption-key");
+    const session = await getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>));
+    return session?.customerId ? { id: session.customerId } : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PluginRouteDependencies {
   /** Test seam (the host's loader choice). */
   loaderFor?: PluginHostOptions["loaderFor"];
@@ -242,6 +261,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
   const parsed = parseBody(raw, c.req.header("content-type") ?? "");
   if (!parsed.ok) return jsonError(400, "INVALID_JSON", "The request body is not valid JSON.");
   const user = target.surface === "admin" ? (c.get("user") as { id?: string } | undefined) : undefined;
+  const proxied = target.surface === "public" && Boolean(c.req.header(PLUGIN_APP_PROXY_HEADER)) && installation.manifest.storefront.proxy;
   const request: PluginRouteRequest = {
     method,
     subpath: target.subpath,
@@ -250,6 +270,8 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     body: parsed.body,
     rawBody: target.surface === "webhooks" ? raw ?? "" : null,
     staffId: user?.id ?? null,
+    render: null,
+    customer: proxied ? await proxiedCustomer(c, db) : null,
   };
 
   const { PluginHost } = await import("./host");

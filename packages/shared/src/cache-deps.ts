@@ -84,6 +84,15 @@ export const CACHE_DEP_KINDS = [
   "an",
   /** `cf:<ownerType>`: the storefront-visible custom field definitions of an owner type. */
   "cf",
+  /**
+   * `plg:<pluginId>`: one app installation (status, version, grant,
+   * manifest, settings); `plg:*`: any installation (which apps are active).
+   * Advanced by the plugin module's own writes (core plugins/cache-deps.ts),
+   * in the same batch as the write: storefront app output is cached on it.
+   */
+  "plg",
+  /** `plgs:<pluginId>:<collection>`: one storage collection of an app, advanced with every write to it. */
+  "plgs",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -149,6 +158,12 @@ export const cacheDep = {
   analytics: () => "an",
   /** Storefront-visible custom field definitions of one owner type (`product`, `variant`, …). */
   customFieldDefinitions: (ownerType: string) => `cf:${ownerType}`,
+  /** One app installation: its status, version, grant, manifest and settings. */
+  plugin: (pluginId: string) => `plg:${pluginId}`,
+  /** Any app installation: the set of active apps and what they put on the storefront. */
+  anyPlugin: () => `plg:${CACHE_DEP_ANY}`,
+  /** One storage collection of an app. */
+  pluginCollection: (pluginId: string, collection: string) => `plgs:${pluginId}:${collection}`,
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -801,11 +816,13 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   event_outbox: PRIVATE,
   webhook_subscriptions: PRIVATE,
   webhook_event_deliveries: PRIVATE,
-  // Plugin runtime (P1). Storefront plugin surfaces declare their own keys when they ship.
-  plugin_installations: PRIVATE,
+  // Plugin runtime. Storefront app output (sections, product blocks, scripts)
+  // reads installations and declared collections and declares their keys
+  // itself; the plugin module advances those keys in the batch of each write.
+  plugin_installations: "App installations: storefront app output declares plg:<id> and plg:*, which every installation write advances in its own batch.",
   plugin_registrations: PRIVATE,
-  plugin_records: PRIVATE,
-  plugin_kv: PRIVATE,
+  plugin_records: "App storage: a storefront render reads only the collections its section declares, keyed plgs:<id>:<collection>, which every record write advances in its own batch.",
+  plugin_kv: "App key/value store: never readable while rendering storefront output (the bridge refuses it), so no public entry depends on it.",
   plugin_log_entries: PRIVATE,
   // Plugin event deliveries and cron claims (0107): platform bookkeeping.
   plugin_event_deliveries: PRIVATE,
