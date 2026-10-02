@@ -7,6 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { connect } from "@tursodatabase/database";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { parseEventFacts, type EventTopic } from "../../shared/src/events";
@@ -222,4 +223,40 @@ describe(`${NAME} over a populated 0108 store`, () => {
       { transferId: "trf_e", previousStatus: "draft", status: "in_transit", revision: 2 },
     ]);
   });
+});
+
+describe(`${NAME} on the Turso engine`, () => {
+  it("applies every 0109 statement and enforces its movement, cost and line rules", async () => {
+    const database = await connect(":memory:");
+    const own = new Set(compiledMigrationSql("turso", undefined, `${NAME}.sql`).split(BREAKPOINT).map((statement) => statement.trim()));
+    for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
+      if (!statement.trim()) continue;
+      try {
+        await database.exec(statement);
+      } catch (error) {
+        // A few pre-0100 backfills use SQL the local engine does not parse yet.
+        if (own.has(statement.trim())) throw error;
+      }
+    }
+    await database.exec(`
+      INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_t', 'Kurta', 'kurta', 80000, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, cost_minor)
+        VALUES ('var_t', 'prod_t', 'KURTA-T', 80000, 0, 0, 1, 1, 1, 30000);
+    `);
+    await database.exec(`INSERT INTO inventory_movements (${MOVEMENT_COLUMNS})
+      VALUES ('mv_t', 'var_t', 'received', 4, 0, 4, 2, 'regular', 1, 2, 4, 0, 0, 0, 0, 0, 0, 'loc_default')`);
+    expect(await database.prepare("SELECT on_hand FROM inventory_levels WHERE variant_id = 'var_t'").get()).toEqual({ on_hand: 4 });
+    await expect(database.exec(`INSERT INTO inventory_movements (${MOVEMENT_COLUMNS})
+      VALUES ('mv_bad', 'var_t', 'transfer_out', 4, 4, 0, 2, 'regular', 2, 3, -4, 0, 0, 0, 0, 0, 0, 'loc_default')`)).rejects.toThrow(/semantics/);
+    await expect(database.exec("UPDATE product_variants SET cost_minor = -2 WHERE id = 'var_t'")).rejects.toThrow(/PRODUCT_VARIANT_COST_INVALID/);
+    await database.exec(`
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status) VALUES ('ord_t', 'A', '+8801711111111', 'House', 'c', 'z', 'pending');
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, unit_price_minor) VALUES ('item_t', 'ord_t', 'prod_t', 'var_t', 1, 'Kurta', 80000);
+      INSERT INTO purchase_orders (id, number, destination_location_id, currency_code, status) VALUES ('po_t', 1001, 'loc_default', 'BDT', 'ordered');
+    `);
+    expect(await database.prepare("SELECT unit_cost_minor FROM order_items WHERE id = 'item_t'").get()).toEqual({ unit_cost_minor: 30000 });
+    await expect(database.exec(`INSERT INTO purchase_order_lines (id, purchase_order_id, variant_id, quantity, unit_cost_minor)
+      VALUES ('pol_t', 'po_t', 'var_t', 1, 1)`)).rejects.toThrow(/PURCHASE_ORDER_LINES_LOCKED/);
+    await database.close();
+  }, 120_000);
 });
