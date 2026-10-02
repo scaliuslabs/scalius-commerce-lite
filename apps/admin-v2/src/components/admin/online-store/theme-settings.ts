@@ -17,6 +17,7 @@ import {
   type ResolvedStorefrontTheme,
   type StoreShape,
   type StorefrontBlockSlot,
+  type StorefrontProductAppBlock,
   type StorefrontProductModule,
   type StorefrontTemplateId,
   type StorefrontThemeColorKey,
@@ -25,6 +26,9 @@ import {
   type StorefrontThemeTokens,
   type StorefrontTypePairing,
 } from "@scalius/shared/storefront-theme";
+import { PLUGIN_PRODUCT_BLOCKS_MAX } from "@scalius/shared/plugins/storefront";
+import type { ThemeApp, ThemeAppBlock } from "~/lib/api-query-options/online-store";
+import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-settings";
 
 /**
  * The colours a merchant picks; each writes every token that shares its
@@ -372,6 +376,87 @@ export function typePairingPreview(pairing: StorefrontTypePairing): TypePairingP
     body: { family: STOREFRONT_FONTS[spec.body].family, stack: stack(spec.body) },
     bangla: bangla.family,
   };
+}
+
+/** The first free id among `taken`: the base, then base-2, base-3… */
+export function nextFreeId(base: string, taken: Iterable<{ id: string }>): string {
+  const used = new Set([...taken].map((each) => each.id));
+  if (!used.has(base)) return base;
+  for (let number = 2; ; number += 1) {
+    if (!used.has(`${base}-${number}`)) return `${base}-${number}`;
+  }
+}
+
+// ─── Product page app blocks ──────────────────────────────────────────────
+
+/** An app's product-page block as the workspace offers it, with its app. */
+export interface AppBlockEntry {
+  app: ThemeApp;
+  block: ThemeAppBlock;
+}
+
+/** The active apps' product-page blocks by key (`<plugin id>/<type>`). */
+export function appBlocksByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppBlockEntry> {
+  return new Map(apps.flatMap((app) => app.productBlocks.map((block) => [block.key, { app, block }] as const)));
+}
+
+/** The product page's app blocks in the merchant's order (none when the theme names none). */
+export function productAppBlocks(theme: StorefrontThemeDocument): StorefrontProductAppBlock[] {
+  return theme.blocks.product.apps ?? [];
+}
+
+function withProductAppBlocks(theme: StorefrontThemeDocument, blocks: StorefrontProductAppBlock[]): StorefrontThemeDocument {
+  const { apps: _apps, ...rest } = theme.blocks.product;
+  // No blocks is the theme without the list, as before any was added.
+  return { ...theme, blocks: { ...theme.blocks, product: blocks.length > 0 ? { ...rest, apps: blocks } : rest } };
+}
+
+/** The theme with a new app block last (the app's starting values), or null at the limit. */
+export function addProductAppBlock(
+  theme: StorefrontThemeDocument,
+  app: string,
+  values: AppSettingValues,
+): { theme: StorefrontThemeDocument; id: string } | null {
+  const blocks = productAppBlocks(theme);
+  if (blocks.length >= PLUGIN_PRODUCT_BLOCKS_MAX) return null;
+  const id = nextFreeId("app", blocks);
+  return { theme: withProductAppBlocks(theme, [...blocks, { id, app, values: { ...values } }]), id };
+}
+
+export function removeProductAppBlock(theme: StorefrontThemeDocument, id: string): StorefrontThemeDocument {
+  return withProductAppBlocks(theme, productAppBlocks(theme).filter((block) => block.id !== id));
+}
+
+/** The theme with one app block moved one place up (-1) or down (1). */
+export function moveProductAppBlock(theme: StorefrontThemeDocument, id: string, delta: -1 | 1): StorefrontThemeDocument {
+  const blocks = [...productAppBlocks(theme)];
+  const from = blocks.findIndex((block) => block.id === id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= blocks.length) return theme;
+  [blocks[from], blocks[to]] = [blocks[to]!, blocks[from]!];
+  return withProductAppBlocks(theme, blocks);
+}
+
+export function setProductAppBlockValues(theme: StorefrontThemeDocument, id: string, values: AppSettingValues): StorefrontThemeDocument {
+  return withProductAppBlocks(theme, productAppBlocks(theme).map((block) => (block.id === id ? { ...block, values } : block)));
+}
+
+/** True while an app block's values break what its app declares (blocks of inactive apps are not judged). */
+export function productAppBlocksInvalid(theme: StorefrontThemeDocument, byKey: ReadonlyMap<string, AppBlockEntry>): boolean {
+  return productAppBlocks(theme).some((block) => {
+    const entry = byKey.get(block.app);
+    return entry !== undefined && appValuesInvalid(entry.block.settings, block.values);
+  });
+}
+
+/** The field ids of an app block's settings start with this (`theme-product-app-app-2`). */
+export const productAppBlockFieldPrefix = (id: string) => `theme-product-app-${id}`;
+
+/** The control that shows an API issue on an app block's setting (`blocks.product.apps.1.values.title`). */
+export function productAppBlockFieldForPath(path: string, theme: StorefrontThemeDocument): string | undefined {
+  const match = /^(?:theme\.)?blocks\.product\.apps\.(\d+)\.values\.([^.]+)/.exec(path);
+  const block = match ? productAppBlocks(theme)[Number(match[1])] : undefined;
+  return block ? `${productAppBlockFieldPrefix(block.id)}-${match![2]}` : undefined;
 }
 
 /** Product page modules a merchant turns on or off on the Theme page (the rest follow the template). */

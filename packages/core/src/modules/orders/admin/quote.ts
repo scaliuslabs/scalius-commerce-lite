@@ -27,6 +27,9 @@ import { type TaxQuote } from "../../tax/browser";
 import { variantOptionLabelSql } from "../../products/option-model";
 import { loadProductMediaProjections, resolveSkuImageRepresentation } from "../../products/media";
 import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
+import type { FunctionCart } from "@scalius/shared/plugins";
+import type { AppliedAppDiscount, CheckoutAppFunctions } from "../../checkout/app-functions";
+import { applyManualOrderAppFunctions, manualOrderAppLines } from "./app-functions";
 
 type AdminOrderSkuItem = { productId: string; variantId: string | null };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
@@ -155,6 +158,18 @@ export interface ManualOrderQuote {
         unitPrice: number;
         lineSubtotal: number;
     }>;
+    /**
+     * Installed apps' discounts (checkout functions), after the staff
+     * discount; `discountAmount` includes them. `amount` is off the items,
+     * `shippingAmount` off delivery.
+     */
+    appDiscounts: Array<{
+        appId: string;
+        appName: string;
+        title: string;
+        amount: number;
+        shippingAmount: number;
+    }>;
 }
 
 interface PreparedManualOrderLine extends AdminOrderItemWithInventory<ManualOrderMoneyItem> {
@@ -180,7 +195,14 @@ interface PreparedManualOrderQuote {
     quote: ManualOrderQuote;
     requiresShipping: boolean;
     deliveryMethodKind: DeliveryMethodKind | null;
+    /** The chosen method as the order keeps it (an app may have renamed or priced it). */
     deliveryMethod: ManualOrderDeliveryMethod | null;
+    /** The staff discount in minor units (before the apps'). */
+    manualDiscountMinor: number;
+    /** App discounts the order carries (after the staff discount). */
+    appDiscounts: AppliedAppDiscount[];
+    /** The cart apps saw; null when no app implements a cart point. */
+    appCart: FunctionCart | null;
 }
 
 export interface ManualOrderQuoteOptions {
@@ -189,6 +211,11 @@ export interface ManualOrderQuoteOptions {
      * type of new physical lines. `undefined` means "use shippingMethodId".
      */
     fixedDeliveryMethodKind?: DeliveryMethodKind | null;
+    /**
+     * The apps' checkout functions, channel "admin" (app-functions.ts).
+     * Amendments pass none: an order an app discounted is not amendable.
+     */
+    apps?: CheckoutAppFunctions;
 }
 
 async function loadManualOrderDeliveryMethod(
@@ -261,6 +288,7 @@ function resolveManualOrderLineProperties(
 function projectManualOrderQuote(
     taxQuote: TaxQuote,
     trackedItems: PreparedManualOrderQuote["trackedItems"],
+    appDiscounts: readonly AppliedAppDiscount[] = [],
 ): ManualOrderQuote {
     const amount = (value: number) => fromMinor(value, taxQuote.decimalPlaces);
     return {
@@ -282,6 +310,13 @@ function projectManualOrderQuote(
             quantity: item.quantity,
             unitPrice: amount(item.unitPriceMinor),
             lineSubtotal: amount(taxQuote.lines[index]?.grossAmountMinor ?? 0),
+        })),
+        appDiscounts: appDiscounts.map((discount) => ({
+            appId: discount.pluginId,
+            appName: discount.appName,
+            title: discount.title,
+            amount: amount(discount.amountMinor),
+            shippingAmount: amount(discount.shippingAmountMinor),
         })),
     };
 }
@@ -369,6 +404,19 @@ export async function prepareManualOrderQuote(
     const allocationLineIds = trackedItems.map((item, index) =>
         buildStorefrontTaxAllocationLineId(index, item.variantId),
     );
+    // The staff discount, then the apps (app-functions.ts), then tax. No app: no read, no call.
+    const appPricing = await applyManualOrderAppFunctions(db, {
+        apps: options.apps,
+        currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+        lines: manualOrderAppLines(trackedItems, allocationLineIds),
+        manualDiscountMinor: money.discountAmountMinor,
+        shippingMinor: money.shippingAmountMinor,
+        // A method picked for an order with nothing physical is not used.
+        deliveryMethod: deliveryMethod && plan.deliveryMethodKind ? deliveryMethod : null,
+        requiresShipping: plan.requiresShipping,
+        address,
+        locationNames,
+    });
     const taxQuote = await calculateStorefrontTaxQuote(db, {
         // No address (pickup, service): only store-wide rates apply.
         destination: {
@@ -378,8 +426,11 @@ export async function prepareManualOrderQuote(
             ...locationNames,
         },
         lines: manualOrderTaxLines(trackedItems, allocationLineIds),
-        shippingMinor: money.shippingAmountMinor,
-        discountMinor: money.discountAmountMinor,
+        shippingMinor: appPricing.shippingMinor,
+        // Tax follows every discount: the staff discount and the apps'.
+        ...(appPricing.discountAllocation
+            ? { promotionDiscountAllocation: appPricing.discountAllocation }
+            : { discountMinor: money.discountAmountMinor }),
         currency: {
             code: currency.code,
             decimalPlaces: currency.decimalPlaces,
@@ -393,18 +444,24 @@ export async function prepareManualOrderQuote(
         trackedItems,
         allocationLineIds,
         taxQuote,
-        quote: projectManualOrderQuote(taxQuote, trackedItems),
+        quote: projectManualOrderQuote(taxQuote, trackedItems, appPricing.appDiscounts),
         requiresShipping: plan.requiresShipping,
         deliveryMethodKind: plan.deliveryMethodKind,
-        deliveryMethod,
+        deliveryMethod: deliveryMethod && appPricing.deliveryMethod?.id === deliveryMethod.id
+            ? { ...deliveryMethod, name: appPricing.deliveryMethod.name, feeMinor: appPricing.deliveryMethod.feeMinor }
+            : deliveryMethod,
+        manualDiscountMinor: money.discountAmountMinor,
+        appDiscounts: appPricing.appDiscounts,
+        appCart: appPricing.appCart,
     };
 }
 
 export async function quoteManualOrder(
     db: Database,
     data: QuoteManualOrderInput,
+    options: Pick<ManualOrderQuoteOptions, "apps"> = {},
 ): Promise<ManualOrderQuote> {
-    return (await prepareManualOrderQuote(db, data)).quote;
+    return (await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps })).quote;
 }
 
 interface AdminOrderSkuIssue {

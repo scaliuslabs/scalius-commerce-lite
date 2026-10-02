@@ -26,7 +26,16 @@ export type * from "./context";
 // The root entry stays free of schema code (zod), so a packed plugin carries
 // only its own logic; `@scalius/plugin-sdk/manifest` has the manifest parser.
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
-export type { PluginManifest, PluginManifestInput } from "@scalius/shared/plugins";
+export type {
+  PluginManifest,
+  PluginManifestInput,
+  PluginRenderContext,
+  PluginUiActionResult,
+  PluginUiDocument,
+  PluginUiNode,
+  PluginUiTarget,
+} from "@scalius/shared/plugins";
+export { adminContext, ui, wantsPage, type PluginAdminContext } from "./ui";
 
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
 

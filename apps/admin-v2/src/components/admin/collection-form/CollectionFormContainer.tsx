@@ -35,6 +35,8 @@ import {
   type Product,
 } from "./types";
 import { CustomFieldsCard } from "../custom-fields/CustomFieldsCard";
+import { AppActionsMenu } from "../apps/ui/AppActions";
+import { AppResourceCards } from "../apps/ui/AppResourceCards";
 
 type CollectionFormApi = UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 
@@ -241,6 +243,7 @@ export function CollectionForm({
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
+      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="collection" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/collections"
       canSave={canSave}
@@ -277,6 +280,7 @@ export function CollectionForm({
           {isEdit && defaultValues?.id ? (
             <CustomFieldsCard ownerType="collection" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}
+          {isEdit && defaultValues?.id ? <AppResourceCards target="collection" id={defaultValues.id} /> : null}
         </div>
         <LayoutSettingsSection
           form={form}

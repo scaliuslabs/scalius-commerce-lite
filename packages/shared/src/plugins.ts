@@ -7,3 +7,6 @@ export * from "./plugins/manifest";
 export * from "./plugins/functions";
 export * from "./plugins/handlers";
 export * from "./plugins/cron";
+export * from "./plugins/ui";
+export * from "./plugins/storefront";
+// The HTML sanitizer (htmlparser2) is imported from `@scalius/shared/plugins/html` only where it runs.

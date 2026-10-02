@@ -13,6 +13,7 @@ import {
 } from "@scalius/database/schema";
 import {
   assertGuestStorefrontCheckoutPolicy,
+  assertStorefrontAppPaymentMethod,
   assertStorefrontCheckoutPolicy,
   buildCheckoutAttemptIdentity,
   commitStorefrontOrderPayload,
@@ -20,9 +21,13 @@ import {
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
+  NO_CHECKOUT_APP_FUNCTIONS,
+  resolveCartPaymentMethods,
   resolveExistingCheckoutAttempt,
+  type CheckoutAppFunctions,
 } from "@scalius/core/modules/checkout";
 import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
+import type { CreateStorefrontOrderResult } from "../orders/types";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,
@@ -108,6 +113,16 @@ export interface AgentStorefrontCheckoutSubmitResult {
   response: AgentStorefrontCheckoutSubmitView;
   postCommitPayload: StorefrontOrderCommitPayload | null;
   availabilityVariantIds: string[];
+  /**
+   * What the apps' advisory `order.risk` needs, set only when this submit
+   * committed the order (never on a replay): the API runs it in waitUntil.
+   */
+  orderRisk?: {
+    prepared: Pick<CreateStorefrontOrderResult, "orderId" | "paymentMethod" | "appCart" | "appDiscounts" | "commitPayload">;
+    discountCodes: string[];
+    customerId: string | null;
+    accountOwnerCustomerId: string | null;
+  } | null;
 }
 
 function toEpochSeconds(date: Date): number {
@@ -311,9 +326,15 @@ export async function submitAgentStorefrontCheckout(
     requestUrl: string;
     credentialEncryptionKey?: string;
     now?: Date;
+    /**
+     * The apps' checkout functions, channel "agent": run again here, as the
+     * online store's order placement does (the fingerprint fences the quote).
+     */
+    apps?: CheckoutAppFunctions;
   },
 ): Promise<AgentStorefrontCheckoutSubmitResult> {
   const now = options.now ?? new Date();
+  const apps = options.apps ?? NO_CHECKOUT_APP_FUNCTIONS;
   const requestId = checkoutRequestId(contextId, input.idempotencyKey);
   const requestKey = await requestKeyForCheckout(requestId);
   const requestHash = await buildAgentStorefrontCheckoutRequestHash(contextId, input);
@@ -441,6 +462,8 @@ export async function submitAgentStorefrontCheckout(
       contactFields: authority.contactFields,
     }),
     authority.taxAuthority,
+    {},
+    { apps, channel: "agent" },
   ));
 
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
@@ -453,6 +476,14 @@ export async function submitAgentStorefrontCheckout(
     input.expectedQuoteFingerprint,
     currentQuoteFingerprint,
   );
+  // An app may have hidden the chosen method for this cart; readiness and
+  // the merchant's payment policy were already checked above.
+  if (apps.points.has("checkout.payment_methods")) {
+    await assertStorefrontAppPaymentMethod(apps, prepared.appCart, prepared.paymentMethod, resolveCartPaymentMethods(
+      authority.activePaymentMethods.enabledMethods,
+      delivery.fulfilment,
+    ));
+  }
 
   const gatewayAmountIssue = getCheckoutGatewayPrecommitIssue({
     paymentMethod: input.paymentMethod,
@@ -510,6 +541,14 @@ export async function submitAgentStorefrontCheckout(
     response,
     postCommitPayload: prepared.commitPayload,
     availabilityVariantIds: committed.availabilityTransitionVariantIds,
+    orderRisk: committed.alreadyCommitted
+      ? null
+      : {
+        prepared,
+        discountCodes: data.discountCodes,
+        customerId: committed.customerId,
+        accountOwnerCustomerId: committed.accountOwnerCustomerId,
+      },
   };
 }
 

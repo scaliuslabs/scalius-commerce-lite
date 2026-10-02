@@ -9,6 +9,7 @@ import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
   storefrontTemplateTheme,
+  storefrontThemeDocumentSchema,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
@@ -122,9 +123,10 @@ function render(
     draft: { theme, revision: 1, basePublishedRevision: 1 },
   },
   media: WorkspaceMedia = [],
+  apps: ThemeWorkspaceDocument["apps"] = [],
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, { ...workspace, storeShape, media } as unknown as ThemeWorkspaceDocument);
+  queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, { ...workspace, storeShape, media, apps } as unknown as ThemeWorkspaceDocument);
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
@@ -809,4 +811,113 @@ describe("theme page", () => {
     });
   });
 
+});
+
+describe("product page app blocks", () => {
+  type App = ThemeWorkspaceDocument["apps"][number];
+  type Field = App["productBlocks"][number]["settings"][number];
+  const setting = (key: string, label: string, extra: Partial<Field> = {}): Field => ({
+    key, label, help: null, type: "text", required: false, options: null, default: null,
+    min: null, max: null, integer: false, maxLength: null, ...extra,
+  });
+  const APPS: App[] = [{
+    id: "acme.reviews",
+    name: "Acme Reviews",
+    sections: [],
+    productBlocks: [
+      {
+        key: "acme.reviews/stars",
+        type: "stars",
+        name: "Star rating",
+        placement: "buy-box",
+        settings: [
+          setting("label", "Label", { maxLength: 40, default: "Rated by buyers" }),
+          setting("size", "Size", { type: "select", options: [{ value: "small", label: "Small" }, { value: "large", label: "Large" }], default: "small" }),
+        ],
+      },
+      {
+        key: "acme.reviews/list",
+        type: "list",
+        name: "Review list",
+        placement: "below",
+        settings: [
+          setting("count", "Reviews shown", { type: "number", min: 1, max: 20, integer: true, default: 5 }),
+          setting("title", "Title", { required: true, maxLength: 60 }),
+        ],
+      },
+    ],
+  }];
+  const card = () => container.querySelector<HTMLElement>("[data-product-app-blocks]");
+  const items = () => [...container.querySelectorAll<HTMLElement>("[data-app-block]")].map((item) => item.dataset.appBlock);
+  const addBlock = async (label: string) => {
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    const option = [...document.querySelectorAll<HTMLButtonElement>("[role=option]")].find((each) => each.textContent?.startsWith(label))!;
+    act(() => option.click());
+  };
+  const buttonNamed = (name: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;
+  const withBlocks = (apps: NonNullable<StorefrontThemeDocument["blocks"]["product"]["apps"]>): StorefrontThemeDocument => ({
+    ...DEFAULT_STOREFRONT_THEME,
+    blocks: { ...DEFAULT_STOREFRONT_THEME.blocks, product: { ...DEFAULT_STOREFRONT_THEME.blocks.product, apps } },
+  });
+
+  it("adds, edits, orders and removes app blocks, saving them in the theme draft", async () => {
+    render(DEFAULT_STOREFRONT_THEME, SHAPE, undefined, [], APPS);
+    expect(headings()).toContain("App blocks");
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    expect([...document.querySelectorAll("[role=option]")].map((each) => each.textContent)).toEqual([
+      "Star rating · Acme Reviews · In the buy box",
+      "Review list · Acme Reviews · Below the product",
+    ]);
+    act(() => document.querySelector<HTMLButtonElement>("[role=option]")!.click());
+    expect(items()).toEqual(["app"]);
+    expect(container.querySelector("[data-app-block='app']")?.textContent).toContain("Acme Reviews · In the buy box");
+    expect(field("theme-product-app-app-label").value).toBe("Rated by buyers");
+
+    await addBlock("Review list");
+    expect(items()).toEqual(["app", "app-2"]);
+    // The list's required title has no default: the theme does not save until it is written.
+    expect(document.querySelector("#theme-product-app-app-2-title-note")?.textContent).toBe("Fill this in.");
+    await pressSave();
+    expect(api.draft).not.toHaveBeenCalled();
+    type(field("theme-product-app-app-2-title"), "What buyers say");
+    type(field("theme-product-app-app-label"), "Loved by buyers");
+
+    act(() => buttonNamed("Move Review list up").click());
+    expect(items()).toEqual(["app-2", "app"]);
+    expect(buttonNamed("Move Review list up").disabled).toBe(true);
+    act(() => buttonNamed("Remove Star rating").click());
+    await addBlock("Star rating");
+    expect(items()).toEqual(["app-2", "app"]);
+    expect(field("theme-product-app-app-label").value).toBe("Rated by buyers");
+
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.product.apps).toEqual([
+      { id: "app-2", app: "acme.reviews/list", values: { count: 5, title: "What buyers say" } },
+      { id: "app", app: "acme.reviews/stars", values: { label: "Rated by buyers", size: "small" } },
+    ]);
+    expect(storefrontThemeDocumentSchema.safeParse(saved).success).toBe(true);
+  });
+
+  it("keeps a block whose app is not active until it is removed, then saves no block list", async () => {
+    render(withBlocks([{ id: "badge", app: "acme.gone/badge", values: { text: "Bestseller" } }]));
+    const badge = container.querySelector("[data-app-block='badge']")!;
+    expect(badge.textContent).toContain("acme.gone/badge");
+    expect(badge.textContent).toContain("App not active. Hidden on your store.");
+    // No active app offers a block: there is nothing to add.
+    expect(card()!.querySelector("button[aria-label='Add app block']")).toBeNull();
+    act(() => buttonNamed("Remove acme.gone/badge").click());
+    expect(headings()).not.toContain("App blocks");
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect("apps" in saved.blocks.product).toBe(false);
+    expect(storefrontThemeDocumentSchema.safeParse(saved).success).toBe(true);
+  });
+
+  it("stops adding at the product page's block limit", async () => {
+    const ten = Array.from({ length: 10 }, (_, index) => ({ id: `stars-${index}`, app: "acme.reviews/stars", values: {} }));
+    render(withBlocks(ten), SHAPE, undefined, [], APPS);
+    expect(card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.disabled).toBe(true);
+    expect(card()!.textContent).toContain("A product page shows up to 10 app blocks.");
+  });
 });

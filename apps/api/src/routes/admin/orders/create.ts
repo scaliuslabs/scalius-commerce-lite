@@ -2,7 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     confirmManualOrderAmendment,
-    createOrder,
+    createManualOrder,
     previewManualOrderAmendment,
     quoteManualOrder,
     createOrderSchema,
@@ -18,10 +18,23 @@ import {
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 
+import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import type { Database } from "@scalius/database/client";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
+import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
+import { runAppOrderRiskChecks } from "../../../plugins/order-risk";
+import { getOptionalExecutionContext } from "../../../utils/execution-context";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/**
+ * The apps' checkout functions for a staff order (channel "admin"): one
+ * indexed registration read; none active means no app work.
+ */
+async function manualOrderApps(env: Env, ctx: ExecutionContext | undefined, db: Database) {
+    return createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveFunctionRegistrations(db) });
+}
 
 const manualOrderRequestKeySchema = z.uuid("A valid manual-order request key is required");
 const manualOrderIdempotencyHeadersSchema = z.object({
@@ -55,6 +68,17 @@ const manualOrderQuoteSchema = z.object({
         unitPrice: z.number().nonnegative(),
         lineSubtotal: z.number().nonnegative(),
     })),
+    appDiscounts: z.array(z.object({
+        appId: z.string(),
+        appName: z.string(),
+        title: z.string(),
+        /** Off the items. */
+        amount: z.number().nonnegative(),
+        /** Off delivery. */
+        shippingAmount: z.number().nonnegative(),
+    })).optional().openapi({
+        description: "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.",
+    }),
 });
 
 const manualOrderAmendmentPreviewSchema = manualOrderQuoteSchema.extend({
@@ -92,7 +116,9 @@ const quoteManualOrderRoute = createRoute({
 });
 
 app.openapi(quoteManualOrderRoute, async (c) => {
-    const quote = await quoteManualOrder(c.get("db"), c.req.valid("json"));
+    const db = c.get("db");
+    const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db);
+    const quote = await quoteManualOrder(db, c.req.valid("json"), { apps });
     return ok(c, quote);
 });
 
@@ -199,8 +225,25 @@ app.openapi(createOrderRoute, async (c) => {
     );
     const data = { ...payload, requestKey };
     const user = c.get("user") as { id?: string } | undefined;
-    const result = await createOrder(db, data, user?.id ?? null);
-    return created(c, result);
+    const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
+    const apps = await manualOrderApps(c.env, ctx, db);
+    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, { apps });
+    // Apps' advisory risk checks: after this request's commit (never on a replay), off the response path.
+    if (committed && apps.points.has("order.risk")) {
+        const risk = runAppOrderRiskChecks({
+            db,
+            apps,
+            orderId: committed.orderId,
+            paymentMethod: committed.paymentMethod,
+            totalMinor: committed.totalAmountMinor,
+            cart: committed.appCart,
+            customerId: committed.customerId,
+            accountOwnerCustomerId: null,
+        });
+        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(risk);
+        else await risk;
+    }
+    return created(c, response);
 });
 
 export { app as adminOrderCreateRoutes };

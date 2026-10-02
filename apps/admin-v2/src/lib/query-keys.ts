@@ -303,5 +303,17 @@ export const queryKeys = {
       status !== undefined
         ? (["apps", "deliveries", id, status] as const)
         : (["apps", "deliveries", id] as const),
+    /** Every active app's pages, cards, actions and widgets (the dashboard's app surfaces). */
+    surfaces: () => ["apps", "surfaces"] as const,
+    /**
+     * One app UI request (a page, card or widget document). Without `route`:
+     * every document of one app; without `pluginId`: every app document.
+     */
+    document: (pluginId?: string, route?: string, query?: Readonly<Record<string, string>>) =>
+      pluginId === undefined
+        ? (["apps", "document"] as const)
+        : route === undefined
+          ? (["apps", "document", pluginId] as const)
+          : (["apps", "document", pluginId, route, query ?? {}] as const),
   },
 } as const;

@@ -123,6 +123,7 @@ function CollectionsPage() {
       defaultSortLabel={tableCopy("manualOrder")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
+      appActions="collection"
       list="collections"
       countLabel={(count) => t("collectionCount", { count })}
       query={listQuery(search, term)}

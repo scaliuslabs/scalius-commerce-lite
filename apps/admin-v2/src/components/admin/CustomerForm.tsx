@@ -23,6 +23,8 @@ import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { AppActionsMenu } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
 
@@ -211,6 +213,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
         </>
       ) : null}
+      {isEdit && defaultValues?.id && !trashed ? <AppResourceCards target="customer" id={defaultValues.id} /> : null}
     </>
   );
 
@@ -219,6 +222,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       heading={isEdit ? (record ? customerTitle(record, t).title : t("customer")) : t("newCustomer")}
       unsavedLabel={isEdit ? undefined : t("unsavedCustomer")}
       savedMessage={t(isEdit ? "customerSaved" : "customerCreated")}
+      actions={isEdit && defaultValues?.id && !trashed ? <AppActionsMenu target="customer" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       canSave={canSave}

@@ -125,6 +125,12 @@ const storefrontSchema = z.object({
     settings: pluginSettingsSchemaSchema.default([]),
     /** The public route that renders the section (sanitized HTML), cached under dependency validation. */
     route: name,
+    /**
+     * Storage collections the render reads. Rendering may read only these
+     * (and the app's settings); a write to one invalidates the cached
+     * section. Nothing declared: the output depends on settings alone.
+     */
+    reads: z.array(name).max(20).default([]),
   }).strict()).max(20).default([]),
   /** Blocks inside the product page's purchase area or below it. */
   productBlocks: z.array(z.object({
@@ -133,6 +139,8 @@ const storefrontSchema = z.object({
     placement: z.enum(["buy-box", "below"]),
     settings: pluginSettingsSchemaSchema.default([]),
     route: name,
+    /** As for sections. */
+    reads: z.array(name).max(20).default([]),
   }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
   head: z.boolean().default(false),
@@ -217,8 +225,24 @@ export const pluginManifestSchema = z.object({
   const needPublicRoute = (path: (string | number)[], route: string) => {
     if (!publicRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Public route ${route} is not declared.` });
   };
-  manifest.storefront.sections.forEach((section, index) => needPublicRoute(["storefront", "sections", index, "route"], section.route));
-  manifest.storefront.productBlocks.forEach((block, index) => needPublicRoute(["storefront", "productBlocks", index, "route"], block.route));
+  const collections = new Set(Object.keys(manifest.storage));
+  const surfaces = [
+    ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[] })),
+    ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),
+  ];
+  for (const { surface, path } of surfaces) {
+    needPublicRoute([...path, "route"], surface.route);
+    surface.reads.forEach((collection, readIndex) => {
+      if (!collections.has(collection)) {
+        context.addIssue({ code: "custom", path: [...path, "reads", readIndex], message: `Storage collection ${collection} is not declared.` });
+      }
+    });
+    surface.settings.forEach((field, fieldIndex) => {
+      if (field.type === "secret") {
+        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
+      }
+    });
+  }
   if (manifest.storefront.proxy && publicRoutes.size === 0) {
     context.addIssue({ code: "custom", path: ["storefront", "proxy"], message: "The storefront proxy needs at least one public route." });
   }
@@ -230,6 +254,7 @@ export const pluginManifestSchema = z.object({
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
+  unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 

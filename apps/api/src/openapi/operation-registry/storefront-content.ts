@@ -16,6 +16,11 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
     reason: "Storefront render transport; every part is its own public read operation, which agents call directly.",
   },
   "storefront.homepage.get": { limits: { request: 16_384 } },
+  "storefront.product_apps.get": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data.",
+  },
   "storefront.layout.get": { limits: { request: 16_384 } },
   "storefront.meta_events.events": {
     exposure: "excluded",

@@ -25,7 +25,9 @@ import {
   getApiV1ProductsSearch,
   getApiV1ProductsSitemap,
   getApiV1ProductsRecommendations,
+  getApiV1StorefrontProductAppsBySlug,
 } from "@scalius/api-client/sdk";
+import { readProductAppBlocks, type ProductAppBlock } from "@/lib/app-surfaces";
 import { buildCanonicalQueryString } from "@/lib/canonical-query";
 import { normalizeSearchQuery } from "@/lib/search-query";
 import { isProductRecommendations, recommendationSourceIds } from "@/lib/recommendations";
@@ -152,6 +154,40 @@ export async function getProductBySlugResult(
   );
 
   return result ?? { state: "unavailable" };
+}
+
+/**
+ * A product page's app blocks. `failed` only when the read genuinely failed
+ * (a server error or no answer): the page then renders without them and
+ * stays out of shared caches. A product that is not public (404) or a theme
+ * without app blocks is simply none.
+ */
+export interface ProductAppBlocksResult {
+  blocks: ProductAppBlock[];
+  failed: boolean;
+}
+
+/**
+ * The product page's app blocks (`/storefront/product-apps/<slug>`), drawn
+ * by their apps and sanitized by the API. A public batch part with its own
+ * dependency proof, read together with the product so the page stays one
+ * batch; cheap when the theme has no app blocks.
+ */
+export async function getProductAppBlocks(slug: string): Promise<ProductAppBlocksResult> {
+  if (!slug) return { blocks: [], failed: false };
+  const result = await withEdgeCache<ProductAppBlocksResult>(
+    `product_apps_${slug}`,
+    async () => {
+      const { data, response } = await getApiV1StorefrontProductAppsBySlug({
+        client: getConfiguredSdkClient(),
+        path: { slug },
+      });
+      if (!response || response.status >= 500) return { blocks: [], failed: true };
+      if (!response.ok) return { blocks: [], failed: false };
+      return { blocks: readProductAppBlocks(unwrapData<{ blocks?: unknown }>(data)?.blocks), failed: false };
+    },
+  );
+  return result ?? { blocks: [], failed: true };
 }
 
 /**

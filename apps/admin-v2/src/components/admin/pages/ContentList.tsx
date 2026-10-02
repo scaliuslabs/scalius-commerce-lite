@@ -92,6 +92,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       ) : null}
       search={search}
       list={contentListName(type)}
+      appActions={isBlog ? undefined : "page"}
       query={contentListQuery(type, search, term)}
       pageQuery={(page, limit) => contentListQuery(type, { ...search, page, limit }, term)}
       dataKey="pages"

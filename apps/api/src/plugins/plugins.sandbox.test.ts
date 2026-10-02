@@ -192,7 +192,10 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(await send({ action: "route", pluginId: "scalius.hello", surface: "public", name: "greet", request }))
       .toEqual({ ok: true, value: { status: 200, headers: {}, body: { message: "Salam, Karim!", visits: 1 } }, error: null });
     expect((await send({ action: "route", pluginId: "scalius.hello", surface: "admin", name: "dashboard", request: { ...request, query: {} } })).value.body)
-      .toMatchObject({ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, { label: "New orders", value: 0 }, expect.anything()] });
+      .toMatchObject({
+        version: 1,
+        root: { children: [{ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, { label: "New orders", value: 0 }] }, expect.anything(), expect.anything()] },
+      });
     expect(await send({ action: "cron", pluginId: "scalius.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
       .toEqual({ ok: true, value: null, error: null });
     expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toBeNull();

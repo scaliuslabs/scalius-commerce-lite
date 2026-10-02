@@ -47,6 +47,9 @@ function useAppMutationResult(app: AppDetail) {
     applied(next: AppDetail | null, hookError: string | null, message: string) {
       if (next) queryClient.setQueryData(queryKeys.apps.detail(app.id), next);
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.list() });
+      // Activation, deactivation and removal change which pages, cards, actions and widgets show.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apps.surfaces() });
+      queryClient.removeQueries({ queryKey: queryKeys.apps.document(app.id) });
       toast.success(message);
       if (hookError) toast.warning(t("hookFailed", { name: app.name }), { description: hookError, duration: 10000 });
     },

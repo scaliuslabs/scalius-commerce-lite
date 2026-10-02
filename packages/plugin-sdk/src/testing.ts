@@ -6,7 +6,15 @@
 // value is copied across the bridge. ctx.api and ctx.http answer from the
 // callbacks you pass; messages are recorded, not sent.
 
-import { parsePluginManifest, pluginHandlerInventory, pluginSettingDefaults, type PluginManifest, type PluginSettingValue } from "@scalius/shared/plugins";
+import {
+  parsePluginManifest,
+  pluginHandlerInventory,
+  pluginSettingDefaults,
+  resolvePluginSettingValues,
+  type PluginManifest,
+  type PluginRenderContext,
+  type PluginSettingValue,
+} from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -16,6 +24,19 @@ import {
   type PluginLogRecord,
   type PluginRuntimeBridge,
 } from "./runtime";
+
+/**
+ * The dashboard's own checks, for tests: whether an admin route's answer is
+ * a valid UI document (and which routes its buttons and forms call), and how
+ * an action's answer is read.
+ */
+export {
+  parsePluginUiActionResult,
+  parsePluginUiDocument,
+  pluginUiRouteActions,
+  sanitizePluginHead,
+} from "@scalius/shared/plugins";
+export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
@@ -157,10 +178,27 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     inventory: pluginHandlerInventory(manifest),
   };
 
-  const run = async (invocation: Parameters<typeof invokePluginDefinition>[1]): Promise<PluginInvocationResult> => {
-    const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : bridge);
+  const run = async (
+    invocation: Parameters<typeof invokePluginDefinition>[1],
+    runBridge: PluginRuntimeBridge = bridge,
+  ): Promise<PluginInvocationResult> => {
+    const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : runBridge);
     logs.push(...result.logs);
     return copy(result);
+  };
+
+  /** The bridge as the platform narrows it while drawing storefront output: reads of the declared collections only. */
+  const renderBridge = (reads: readonly string[]): PluginRuntimeBridge => {
+    const denied = () => refuse("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
+    const readable = (name: string) => {
+      if (!reads.includes(name)) refuse("render.not_allowed", `Collection "${name}" is not in this section's reads.`);
+    };
+    return {
+      ...Object.fromEntries(Object.keys(bridge).map((method) => [method, async () => denied()])) as unknown as PluginRuntimeBridge,
+      storageGet: async (name, id) => (readable(name), bridge.storageGet(name, id)),
+      storageQuery: async (name, query) => (readable(name), bridge.storageQuery(name, query)),
+      storageCount: async (name, where) => (readable(name), bridge.storageCount(name, where)),
+    };
   };
 
   return {
@@ -194,6 +232,35 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       name,
       request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
     }),
+    /**
+     * Draws a theme section or product block the way the platform does:
+     * `request.render` with the merchant's settings resolved against the
+     * manifest, and a bridge that refuses everything but reads of the
+     * collections the section declares in `reads`.
+     */
+    render: (
+      kind: "section" | "product-block",
+      type: string,
+      input: { settings?: Record<string, unknown>; product?: PluginRenderContext["product"]; instanceId?: string } = {},
+    ) => {
+      const surface = kind === "section"
+        ? manifest.storefront.sections.find((entry) => entry.type === type)
+        : manifest.storefront.productBlocks.find((entry) => entry.type === type);
+      if (!surface) throw new Error(`The manifest declares no ${kind} of type ${type}.`);
+      const render: PluginRenderContext = {
+        kind,
+        type,
+        instanceId: input.instanceId ?? `${type}-1`,
+        settings: resolvePluginSettingValues(surface.settings, input.settings ?? {}),
+        product: input.product ?? null,
+      };
+      return run({
+        kind: "route",
+        surface: "public",
+        name: surface.route,
+        request: { method: "GET", subpath: "", query: {}, headers: { accept: "text/html" }, body: null, rawBody: null, staffId: null, render, customer: null },
+      }, renderBridge(surface.reads));
+    },
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),
   };

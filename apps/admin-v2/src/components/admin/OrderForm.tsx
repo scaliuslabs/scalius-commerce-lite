@@ -69,6 +69,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
 import {
   isAdminApiRetryableReadError,
+  readCheckoutRuleErrors,
   readManualOrderDiscountLimitError,
 } from "@/lib/admin-api-error";
 import { useCurrency } from "@/hooks/use-currency";
@@ -357,6 +358,8 @@ function OrderEditor({
   const authoritativeDiscountLimit = currentQuoteError
     ? readManualOrderDiscountLimitError(currentQuoteError)
     : null;
+  // An installed app's rule refused the quote: the summary lists the app's messages.
+  const ruleErrors = currentQuoteError ? readCheckoutRuleErrors(currentQuoteError) : null;
   const manualQuote = {
     data: quoteQuery.data ?? null,
     isCurrent: canRequestQuote && quoteQuery.isSuccess,
@@ -371,7 +374,8 @@ function OrderEditor({
       localCurrencyCode: currencyCode,
       localDecimalPlaces: currencyDecimalPlaces,
     }),
-    errorMessage: currentQuoteError && !authoritativeDiscountLimit
+    ruleErrors,
+    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors
       ? getServerFnError(currentQuoteError, t("totalFailed"))
       : null,
     canRetry: currentQuoteError ? isAdminApiRetryableReadError(currentQuoteError) : false,
@@ -430,7 +434,7 @@ function OrderEditor({
       }
       throw new SaveNotCompleted(manualQuote.isLoading
         ? t("waitForTotal")
-        : manualQuote.errorMessage ?? t("totalFailed"));
+        : manualQuote.ruleErrors ? t("appRulesTitle") : manualQuote.errorMessage ?? t("totalFailed"));
     }
     if (submitLock.current) throw new SaveNotCompleted(undefined, []);
     // The server stores the names of the places it validates; these only label the review.

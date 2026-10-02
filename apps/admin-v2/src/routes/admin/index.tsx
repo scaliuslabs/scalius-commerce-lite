@@ -11,6 +11,7 @@ import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { DashboardSalesChart } from "~/components/admin/DashboardSalesChart";
+import { AppHomeWidgets } from "~/components/admin/apps/ui/AppResourceCards";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
@@ -204,6 +205,9 @@ function HomePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Active apps' widgets, each isolated and loaded once in view. */}
+      <AppHomeWidgets />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -38,6 +38,7 @@ import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-option
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
+import { ProductAppBlocksCard } from "./ProductAppBlocks";
 import { Field, OnlineStorePage, SectionCard, actionErrorText, useDocumentDraft } from "./shared";
 import { ThemePreviewAction } from "./ThemePreviewAction";
 import {
@@ -56,9 +57,12 @@ import { TypographyCard } from "./TypographyCard";
 import {
   OPTIONAL_PRODUCT_MODULES,
   TEMPLATE_THEMES,
+  appBlocksByKey,
   applyTemplate,
   blockFallback,
   blockVariant,
+  productAppBlockFieldForPath,
+  productAppBlocksInvalid,
   resolveThemeForStore,
   selectedTemplate,
   setBlockVariant,
@@ -313,11 +317,12 @@ function ThemeCards({ workspace, refetch }: {
   const [publishing, setPublishing] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
   const { draft: theme, dirty, setDraft } = useDocumentDraft<Theme>({
     label: t("themeTitle"),
     saved: workspace.draft.theme as Theme,
-    fields: (path) => themeFieldForPath(path),
-    invalid: themeDraftInvalid,
+    fields: (path, draft) => themeFieldForPath(path) ?? productAppBlockFieldForPath(path, draft),
+    invalid: (draft) => themeDraftInvalid(draft) || productAppBlocksInvalid(draft, appBlocks),
     reload: refetch,
     save: async (next) => {
       try {
@@ -765,6 +770,8 @@ function ThemeCards({ workspace, refetch }: {
           </div>
         </div>
       </SectionCard>
+
+      <ProductAppBlocksCard theme={theme} apps={workspace.apps} setDraft={setDraft} />
 
       <HomeModeCard theme={theme} setDraft={setDraft} />
 

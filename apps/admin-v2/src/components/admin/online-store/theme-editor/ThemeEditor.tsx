@@ -1,14 +1,15 @@
 /**
  * The theme editor (Online store → Theme → Customize), Shopify's shape: a
- * sidebar with the homepage sections (drag to reorder, add, duplicate,
- * remove with undo) or the selected section's generated settings, and the
+ * sidebar with the homepage sections, the store's own and its active apps'
+ * (drag to reorder, add, duplicate, remove with undo), or the selected
+ * section's generated settings (an app section's from its app's fields), and the
  * theme settings; the real storefront in the middle, rendering the draft;
  * a top bar with the preview width, undo and redo, Save, Preview and
  * Publish. Edits save to the shared draft by themselves (debounced, against
  * the draft revision they started from); a settings change re-renders only
  * its section in the preview, any other change reloads the page.
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Laptop, Monitor, Redo2, Smartphone, Undo2 } from "lucide-react";
@@ -17,15 +18,19 @@ import {
   postApiV1AdminSettingsThemeDraft,
   postApiV1AdminSettingsThemePublish,
 } from "@scalius/api-client/sdk";
+import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import {
   STOREFRONT_MAX_SECTIONS,
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_RENDERERS,
   failedFitConditions,
+  isStorefrontAppSection,
   storefrontSectionNeedsContent,
   storefrontSectionRenderer,
   storefrontThemeDocumentSchema,
   type StoreShape,
+  type StorefrontAppSection,
+  type StorefrontPlatformSection,
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontThemeDocument,
@@ -45,13 +50,18 @@ import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { SectionSettingsForm, useSectionErrors } from "../SectionSettings";
+import { appSettingDefaults, appValuesInvalid } from "../schema-form/app-settings";
 import { useMediaPreviews } from "../schema-form/resource-fields";
 import { actionErrorText } from "../shared";
 import { useFitReason, type SetTheme } from "../theme-fields";
 import { resolveThemeForStore, themeDraftInvalid } from "../theme-settings";
 import { useOpenThemePreview } from "../ThemePreviewAction";
+import { AppSectionSettings } from "./AppSectionSettings";
 import {
+  addAppSection,
   addSection,
+  appSectionsByKey,
+  appSectionsInvalid,
   canAddSectionType,
   duplicateSection,
   editorHistory,
@@ -60,8 +70,10 @@ import {
   previewChange,
   removeSection,
   restoreSection,
+  setAppSectionValues,
   startHistory,
   withSections,
+  type AppSectionEntry,
 } from "./editor-state";
 import { PreviewFrame, type PreviewController, type PreviewDevice } from "./PreviewFrame";
 import { SectionList, type SectionRowInfo } from "./SectionList";
@@ -110,43 +122,59 @@ const DEVICES: ReadonlyArray<{ value: PreviewDevice; icon: typeof Monitor }> = [
   { value: "phone", icon: Smartphone },
 ];
 
-function useSectionName() {
+/** Add-section menu values naming an app's section: `app:<plugin id>/<type>`. */
+const APP_OPTION = "app:";
+
+/** An app section's name: its app's name for it, or its key while the app is not active. */
+function appSectionName(section: StorefrontAppSection, apps: ReadonlyMap<string, AppSectionEntry>): string {
+  return apps.get(section.settings.app)?.section.name ?? section.settings.app;
+}
+
+function useSectionName(apps: ReadonlyMap<string, AppSectionEntry>) {
   const t = useMessages(onlineStoreMessages);
   // The merchant's own heading names a section; its type otherwise.
   return (section: Section) => {
+    if (isStorefrontAppSection(section)) return appSectionName(section, apps);
     const settings = section.settings as { title?: unknown; heading?: unknown };
     const own = [settings.title, settings.heading].find((value): value is string => typeof value === "string" && value.trim() !== "");
     return own?.trim() || t(`section_${section.type}` as MessageKey);
   };
 }
 
-/** The selected section's settings, with its errors (the form's own and a rejected save's). */
-function SectionPanel({ section, note, issues, media, onBack, onChange }: {
-  section: Section;
+/** The selected section: its kind as the title, a note on why buyers may not see it, then its settings. */
+function SectionPanel({ title, note, onBack, children }: {
+  title: string;
   note?: string;
-  issues?: ReadonlyMap<string, string>;
-  media: ReturnType<typeof useMediaPreviews>;
   onBack: () => void;
-  onChange: (settings: Section["settings"]) => void;
+  children: ReactNode;
 }) {
   const t = useMessages(themeEditorMessages);
-  const store = useMessages(onlineStoreMessages);
-  const own = useSectionErrors(section);
-  const errors = useMemo(() => new Map([...own, ...(issues ?? [])]), [own, issues]);
   return (
     <div>
       <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-border bg-card px-2 py-2">
         <Button type="button" variant="ghost" size="icon" aria-label={t("allSections")} onClick={onBack}>
           <ArrowLeft aria-hidden="true" />
         </Button>
-        <h2 className="min-w-0 flex-1 truncate text-heading-sm">{store(`section_${section.type}` as MessageKey)}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-heading-sm">{title}</h2>
       </div>
       <div className="space-y-4 px-4 py-4">
         {note ? <p role="status" className="text-body text-muted-foreground">{note}</p> : null}
-        <SectionSettingsForm key={section.id} section={section} media={media} errors={errors} onChange={onChange} />
+        {children}
       </div>
     </div>
   );
+}
+
+/** A platform section's generated settings, with its errors (the form's own and a rejected save's). */
+function PlatformSectionSettings({ section, issues, media, onChange }: {
+  section: StorefrontPlatformSection;
+  issues?: ReadonlyMap<string, string>;
+  media: ReturnType<typeof useMediaPreviews>;
+  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
+}) {
+  const own = useSectionErrors(section);
+  const errors = useMemo(() => new Map([...own, ...(issues ?? [])]), [own, issues]);
+  return <SectionSettingsForm section={section} media={media} errors={errors} onChange={onChange} />;
 }
 
 export function ThemeEditor({ workspace, refetch }: {
@@ -178,12 +206,15 @@ export function ThemeEditor({ workspace, refetch }: {
   const [tab, setTab] = useState<"sections" | "theme">("sections");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const preview = useRef<PreviewController>(null);
-  const sectionName = useSectionName();
+  const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
+  const sectionName = useSectionName(appSections);
   const resolved = resolveThemeForStore(theme, storeShape);
   const fitReason = useFitReason(resolved.facts);
   const openPreview = useOpenThemePreview();
 
-  const invalid = themeDraftInvalid(theme) || !storefrontThemeDocumentSchema.safeParse(theme).success;
+  const invalid = themeDraftInvalid(theme)
+    || !storefrontThemeDocumentSchema.safeParse(theme).success
+    || appSectionsInvalid(theme.pages.home, appSections);
   const dirty = !same(theme, lastSent);
   const failedHere = failure !== null && same(failure.for, theme);
 
@@ -299,18 +330,27 @@ export function ThemeEditor({ workspace, refetch }: {
     if (id) setTab("sections");
   }, []);
 
+  /** Why buyers don't see a platform section (an app section's panel says it about its app). */
   const note = (section: Section): string | undefined => {
+    if (isStorefrontAppSection(section)) return undefined;
     if (storefrontSectionRenderer(section) === null) return store("sectionNotYet");
     const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
     if (fallback) return store("sectionHidden", { reason: fitReason(fallback) });
     if (storefrontSectionNeedsContent(section)) return store("sectionNeedsContent");
     return undefined;
   };
+  /** An app section's row: which app draws it, that its app is not active, or that its values need fixing. */
+  const appRowInfo = (section: StorefrontAppSection, name: string): SectionRowInfo => {
+    const entry = appSections.get(section.settings.app);
+    if (!entry) return { name, note: t("appInactive") };
+    if (appValuesInvalid(entry.section.settings, section.settings.values)) return { name, note: t("appSettingsInvalid"), invalid: true };
+    return { name, note: t("appFrom", { app: entry.app.name }) };
+  };
   const rowInfo = (section: Section): SectionRowInfo => {
+    const name = sectionName(section);
     const issues = failedHere ? failure?.sections.get(section.id) : undefined;
-    return issues?.size
-      ? { name: sectionName(section), note: [...issues.values()][0], invalid: true }
-      : { name: sectionName(section), note: note(section) };
+    if (issues?.size) return { name, note: [...issues.values()][0], invalid: true };
+    return isStorefrontAppSection(section) ? appRowInfo(section, name) : { name, note: note(section) };
   };
 
   const remove = (id: string) => {
@@ -327,7 +367,7 @@ export function ThemeEditor({ workspace, refetch }: {
     });
   };
 
-  const addOptions = STOREFRONT_SECTION_RENDERERS.map((type: StorefrontSectionType) => {
+  const platformOptions = STOREFRONT_SECTION_RENDERERS.map((type: StorefrontSectionType) => {
     const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[type].requires, {
       facts: resolved.facts,
       blocks: {},
@@ -342,6 +382,28 @@ export function ThemeEditor({ workspace, refetch }: {
       disabled: !allowed,
     };
   });
+  // The active apps' sections, under their own heading (with the app's name beside each).
+  const appAllowed = canAddSectionType(sections, "app");
+  const appOptions = workspace.apps.flatMap((app) => app.sections.map((section) => ({
+    value: `${APP_OPTION}${section.key}`,
+    label: section.name,
+    description: !appAllowed && sections.length < STOREFRONT_MAX_SECTIONS
+      ? t("appSectionLimit", { count: PLUGIN_HOME_SECTIONS_MAX })
+      : app.name,
+    group: t("addGroupApps"),
+    disabled: !appAllowed,
+  })));
+  const addOptions = appOptions.length > 0
+    ? [...platformOptions.map((option) => ({ ...option, group: t("addGroupSections") })), ...appOptions]
+    : platformOptions;
+  const add = (value: string) => {
+    if (value.startsWith(APP_OPTION)) {
+      const key = value.slice(APP_OPTION.length);
+      const entry = appSections.get(key);
+      return entry ? addAppSection(sections, key, appSettingDefaults(entry.section.settings)) : null;
+    }
+    return addSection(sections, value as StorefrontSectionType);
+  };
 
   const names = useMemo(() => Object.fromEntries(sections.map((section) => [section.id, sectionName(section)])), [sections, sectionName]);
 
@@ -432,14 +494,29 @@ export function ThemeEditor({ workspace, refetch }: {
         >
           {selected ? (
             <SectionPanel
-              section={selected}
+              title={isStorefrontAppSection(selected) ? appSectionName(selected, appSections) : store(`section_${selected.type}` as MessageKey)}
               note={note(selected)}
-              issues={failedHere ? failure?.sections.get(selected.id) : undefined}
-              media={media}
               onBack={() => setSelectedId(null)}
-              onChange={(settings) => setSections((current) => current.map((each) =>
-                each.id === selected.id ? { ...each, settings } as Section : each))}
-            />
+            >
+              {isStorefrontAppSection(selected) ? (
+                <AppSectionSettings
+                  key={selected.id}
+                  section={selected}
+                  entry={appSections.get(selected.settings.app)}
+                  issues={failedHere ? failure?.sections.get(selected.id) : undefined}
+                  onChange={(values) => setSections((current) => setAppSectionValues(current, selected.id, values))}
+                />
+              ) : (
+                <PlatformSectionSettings
+                  key={selected.id}
+                  section={selected}
+                  issues={failedHere ? failure?.sections.get(selected.id) : undefined}
+                  media={media}
+                  onChange={(settings) => setSections((current) => current.map((each) =>
+                    each.id === selected.id ? { ...each, settings } as Section : each))}
+                />
+              )}
+            </SectionPanel>
           ) : (
             <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")}>
               <div className="sticky top-0 z-10 border-b border-border bg-card px-2 py-1.5">
@@ -473,9 +550,9 @@ export function ThemeEditor({ workspace, refetch }: {
                     ariaLabel={store("addSection")}
                     disabled={sections.length >= STOREFRONT_MAX_SECTIONS}
                     options={addOptions}
-                    onValueChange={(type) => {
-                      if (!type) return;
-                      const result = addSection(sections, type as StorefrontSectionType);
+                    onValueChange={(value) => {
+                      const result = value ? add(value) : null;
+                      if (!result) return;
                       setSections(() => result.sections);
                       setSelectedId(result.id);
                     }}

@@ -42,6 +42,8 @@ function withBlockContent<Block extends { variant: string; settings: Record<stri
 }
 
 function withSectionContent(target: StorefrontSection, source: StorefrontSection | null): StorefrontSection {
+  // An app section's values are the app's, never template content.
+  if (target.type === "app") return target;
   const keys = STOREFRONT_SECTION_CONTENT_KEYS[target.type];
   if (!keys) return target;
   const defaults = STOREFRONT_SECTION_REGISTRY[target.type].defaults as Record<string, unknown>;
@@ -67,7 +69,7 @@ export function storefrontThemeWithContent(
   target: StorefrontThemeDocument,
   source: StorefrontThemeDocument | null,
 ): StorefrontThemeDocument {
-  const seen = new Map<StorefrontSectionType, number>();
+  const seen = new Map<StorefrontSection["type"], number>();
   const home = target.pages.home.map((section) => {
     const index = seen.get(section.type) ?? 0;
     seen.set(section.type, index + 1);

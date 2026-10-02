@@ -3,9 +3,13 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import {
   getCheckoutConfig,
   getLayoutData,
+  getProductAppBlocks,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
+import AppHeadTags from "@/components/apps/AppHeadTags.astro";
+import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
+import { markRenderUncacheable } from "@/lib/cache-policy";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
 import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
 import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
@@ -107,13 +111,16 @@ const layoutPromise = getLayoutData();
 const productPromise = getProductBySlugResult(slug);
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
+const productAppsPromise = getProductAppBlocks(slug);
 
-// Parallel fetch: layout, product, shipping and payment data in the first cold-cache wave.
-const [layoutData, productResult, shippingMethods, checkoutConfig] = await Promise.all([
+// Parallel fetch, one batch: layout, product, shipping and payment data, and
+// the app blocks the published theme places on product pages.
+const [layoutData, productResult, shippingMethods, checkoutConfig, productApps] = await Promise.all([
   layoutPromise,
   productPromise,
   shippingMethodsPromise,
   checkoutConfigPromise,
+  productAppsPromise,
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
 if (productResult.state === "not_found") {
@@ -129,6 +136,13 @@ if (productResult.state === "unavailable" || !layoutData) {
 
 const productData = productResult.data;
 const { product, category, media, variants, recommendations } = productData;
+
+// Installed apps' blocks (in the buy box and after the modules) and their
+// head tags. A failed read renders the page without them, for this request
+// only (its part carries no proof, and the render is marked uncacheable).
+const appBlocks = productApps.blocks;
+if (productApps.failed) markRenderUncacheable(Astro.response.headers);
+const appHeads = appBlocks.map((block) => block.head);
 
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the
 // modules below the fold, in the template's order.
@@ -660,7 +674,11 @@ const productCategoryAnalytics = productCategory
   ogCurrency={currencyCode}
   noindex={product.noIndex === true}
 >
-  <RichTextStyles slot="head" />
+  <Fragment slot="head">
+    <RichTextStyles />
+    {appHeads.length > 0 && <AppHeadTags heads={appHeads} jsonLd={false} />}
+  </Fragment>
+
   <Fragment slot="preload">
     {
       initialGalleryPreload && (
@@ -775,6 +793,7 @@ const productCategoryAnalytics = productCategory
               ))}
             </nav>
           )}
+          <ProductAppBlocks slot="after-actions" blocks={appBlocks} placement="buy-box" />
           <DigitalPromise slot="after-actions" product={product} fulfilment={pageFulfilment} />
           <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
           <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
@@ -873,6 +892,9 @@ const productCategoryAnalytics = productCategory
           );
       }
     })}
+
+    {/* Installed apps' blocks after the template's modules. */}
+    <ProductAppBlocks blocks={appBlocks} placement="below" />
   </div>
 
   <RecentlyViewedRecord
@@ -897,6 +919,9 @@ const productCategoryAnalytics = productCategory
       />
     )
   }
+  {/* Apps' JSON-LD beside the product's own (never instead of it), and like
+      it only on an indexed product page. */}
+  {!product.noIndex && appHeads.length > 0 && <AppHeadTags heads={appHeads} meta={false} />}
 </Layout>
 
 <script>

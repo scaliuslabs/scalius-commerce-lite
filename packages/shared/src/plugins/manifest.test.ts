@@ -126,6 +126,42 @@ describe("plugin settings", () => {
   });
 });
 
+describe("storefront surfaces in the manifest", () => {
+  const base = {
+    ...FULL,
+    routes: { admin: [], public: [{ name: "draw", methods: ["GET"] }], webhooks: [] },
+    storage: { reviews: { indexes: ["productId"] } },
+    customFields: [],
+    admin: { pages: [], cards: [], actions: [], widgets: [] },
+  } satisfies PluginManifestInput;
+  const section = (extra: Record<string, unknown> = {}) => ({ type: "latest", name: "Latest", route: "draw", ...extra });
+  const issues = (input: unknown) => {
+    const parsed = parsePluginManifest(input);
+    return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
+  };
+
+  it("declares what a section reads, from declared collections only", () => {
+    const parsed = parsePluginManifest({ ...base, storefront: { sections: [section({ reads: ["reviews"] })] } });
+    expect(parsed.ok && parsed.manifest.storefront.sections[0]!.reads).toEqual(["reviews"]);
+    // Nothing declared: the output depends on settings alone.
+    const none = parsePluginManifest({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }] } });
+    expect(none.ok && none.manifest.storefront.productBlocks[0]!.reads).toEqual([]);
+    expect(issues({ ...base, storefront: { sections: [section({ reads: ["ledger"] })] } }))
+      .toEqual(["storefront.sections.0.reads.0 Storage collection ledger is not declared."]);
+  });
+
+  it("keeps storefront settings public: no secrets", () => {
+    expect(issues({ ...base, storefront: { sections: [section({ settings: [{ key: "token", label: "Token", type: "secret" }] })] } }))
+      .toEqual(["storefront.sections.0.settings.0.type Storefront settings are public: keep secrets in the app's settings."]);
+  });
+
+  it("needs unique product block types and a declared public route", () => {
+    const block = { type: "stars", name: "Stars", placement: "below", route: "draw" } as const;
+    expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
+    expect(issues({ ...base, storefront: { productBlocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.productBlocks.0.route Public route missing is not declared."]);
+  });
+});
+
 describe("plugin functions", () => {
   it("declares an input and output schema for every function point", () => {
     expect(Object.keys(PLUGIN_FUNCTION_SCHEMAS).sort()).toEqual([...PLUGIN_FUNCTION_POINTS].sort());

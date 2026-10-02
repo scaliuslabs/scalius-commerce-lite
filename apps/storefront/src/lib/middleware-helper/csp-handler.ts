@@ -7,9 +7,10 @@ import {
 /**
  * Builds the page Content-Security-Policy.
  *
- * Platform origins and merchant-managed additional sources (Settings ->
- * Security) both arrive in the request's layout payload, so building the
- * header costs no extra read. There is no environment-variable source.
+ * Platform origins, merchant-managed additional sources (Settings ->
+ * Security) and the hosts of approved app scripts all arrive in the
+ * request's layout payload, so building the header costs no extra read.
+ * There is no environment-variable source.
  */
 
 /** Platform origins that are always allowed, resolved per request. */
@@ -158,6 +159,19 @@ function getPlatformDomains(origins: CspPlatformOrigins): string[] {
 }
 
 /**
+ * The origins of the app scripts this page loads (lib/app-scripts.ts): https
+ * only, exact origins, never a wildcard. Anything else is dropped.
+ */
+function getAppScriptDomains(appScriptOrigins: readonly string[]): string[] {
+  return [...new Set(appScriptOrigins.flatMap((value) => {
+    const candidate = value.trim();
+    if (!candidate.toLowerCase().startsWith("https://")) return [];
+    const origin = normalizePlatformOrigin(candidate);
+    return origin ? [origin] : [];
+  }))];
+}
+
+/**
  * Applies Content Security Policy (CSP) headers to a given Response object.
  * Platform origins and merchant sources come from the per-request context.
  */
@@ -167,12 +181,18 @@ export function setPageCspHeader(
   merchantSources = "",
   /** Origins besides the storefront that may frame the page (the dashboard, under a theme preview only). */
   frameAncestors: readonly string[] = [],
+  /**
+   * Origins of the active apps' scripts this page loads (the layout payload's
+   * `appScripts` for this page kind): allowed to load and to connect.
+   */
+  appScriptOrigins: readonly string[] = [],
 ): Response {
   const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
   const additionalDomains = merchantSources
     ? parseMerchantCspSources(merchantSources)
     : [];
   const platformDomains = getPlatformDomains(origins);
+  const appScriptDomains = getAppScriptDomains(appScriptOrigins);
 
   // Dev mode detection — allow http://localhost in dev, never in production
   const isDev = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
@@ -184,8 +204,8 @@ export function setPageCspHeader(
   const directive = (name: string, sources: string[]) =>
     `${name} ${[...new Set(sources)].join(" ")}`;
   const cspDirectives = [
-    directive("script-src", getScriptSrcDirectives(additionalDomains)),
-    directive("connect-src", getConnectSrcDirectives(additionalDomains, apiBaseUrl)),
+    directive("script-src", [...getScriptSrcDirectives(additionalDomains), ...appScriptDomains]),
+    directive("connect-src", [...getConnectSrcDirectives(additionalDomains, apiBaseUrl), ...appScriptDomains]),
     directive("frame-src", getFrameSrcDirectives(additionalDomains)),
     directive("img-src", getImgSrcDirectives(additionalDomains, platformDomains, localDevSources)),
     "object-src 'none'",

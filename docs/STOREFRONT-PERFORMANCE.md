@@ -20,6 +20,13 @@ check it. The release-wide evidence lives in
    (`lib/api/transport.ts`, `joinReadBatch`) sends them as **one** request:
    `GET /api/v1/storefront/batch?r=<part>&r=<part>`. That is one service-binding
    hop and one API invocation per page, with no sequential layout-then-page hop.
+   - Installed apps draw inside these parts, never as extra calls: app
+     sections inside `/storefront/homepage`, a product page's app blocks in
+     its own `/storefront/product-apps/<slug>` part (always in the product
+     page's batch: theme, product, active apps and store facts in one read,
+     so a store without app blocks pays one cheap part). Drawn output is
+     sanitized and cached under the `plg`/`plgs` dependency keys, so a hit
+     runs no app code (`apps/api/src/plugins/storefront-render.ts`).
    - The middleware no longer awaits the layout before storefront pages
      (`isLayoutBatchedPagePath`). Those pages await it together with their own
      reads, and the layout promise applies the platform origins when it

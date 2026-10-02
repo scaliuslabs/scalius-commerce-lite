@@ -34,6 +34,7 @@ import {
   type PluginSettingValues,
 } from "@scalius/shared/plugins";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { pluginCacheDepStatements, pluginCollectionCacheDeps, pluginInstallationCacheDeps } from "./cache-deps";
 import { PluginError } from "./errors";
 import { isKnownPermission, isPluginGrantablePermission } from "./grants";
 import {
@@ -269,6 +270,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
         updatedAt: sql`unixepoch()`,
       }),
       ...registrationInserts(db, manifest.id, manifest),
+      ...pluginCacheDepStatements(db, pluginInstallationCacheDeps(manifest.id)),
     ] as never);
   } catch (error) {
     if (isPrimaryKeyConflict(error)) throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
@@ -317,7 +319,7 @@ export async function activatePlugin(
       currentRevision: installation.revision,
     });
   }
-  const updated = await db.update(pluginInstallations).set({
+  const updated = await updateWithCacheDeps(db, pluginId, db.update(pluginInstallations).set({
     status: "active",
     grantJson: JSON.stringify(grant),
     grantKey: pluginGrantKey(grant),
@@ -329,9 +331,22 @@ export async function activatePlugin(
   }).where(and(
     eq(pluginInstallations.pluginId, pluginId),
     eq(pluginInstallations.revision, options.expectedRevision),
-  )).returning({ revision: pluginInstallations.revision });
+  )).returning({ revision: pluginInstallations.revision }));
   await requireRevision(db, pluginId, options.expectedRevision, updated);
   return requirePluginInstallation(db, pluginId);
+}
+
+/**
+ * One installation update with the storefront keys it advances
+ * (cache-deps.ts), in one batch. A guarded update that matched nothing still
+ * advances them: a harmless extra render, never a stale one.
+ */
+async function updateWithCacheDeps(db: Database, pluginId: string, update: PromiseLike<Array<{ revision: number }>>): Promise<Array<{ revision: number }>> {
+  const [rows] = await safeBatch(db, [
+    update as never,
+    ...pluginCacheDepStatements(db, pluginInstallationCacheDeps(pluginId)),
+  ]);
+  return (rows ?? []) as Array<{ revision: number }>;
 }
 
 export async function deactivatePlugin(
@@ -339,14 +354,14 @@ export async function deactivatePlugin(
   pluginId: string,
   options: { expectedRevision: number },
 ): Promise<PluginInstallation> {
-  const updated = await db.update(pluginInstallations).set({
+  const updated = await updateWithCacheDeps(db, pluginId, db.update(pluginInstallations).set({
     status: "disabled",
     revision: sql`${pluginInstallations.revision} + 1`,
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(pluginInstallations.pluginId, pluginId),
     eq(pluginInstallations.revision, options.expectedRevision),
-  )).returning({ revision: pluginInstallations.revision });
+  )).returning({ revision: pluginInstallations.revision }));
   await requireRevision(db, pluginId, options.expectedRevision, updated);
   return requirePluginInstallation(db, pluginId);
 }
@@ -358,12 +373,15 @@ export async function deactivatePlugin(
  */
 export async function markPluginFailed(db: Database, pluginId: string, reason: string): Promise<void> {
   const trimmed = reason.trim().slice(0, MAX_FAILURE_REASON) || "The plugin could not be loaded.";
-  await db.update(pluginInstallations).set({
-    status: "failed",
-    failureReason: trimmed,
-    revision: sql`${pluginInstallations.revision} + 1`,
-    updatedAt: sql`unixepoch()`,
-  }).where(eq(pluginInstallations.pluginId, pluginId));
+  await safeBatch(db, [
+    db.update(pluginInstallations).set({
+      status: "failed",
+      failureReason: trimmed,
+      revision: sql`${pluginInstallations.revision} + 1`,
+      updatedAt: sql`unixepoch()`,
+    }).where(eq(pluginInstallations.pluginId, pluginId)),
+    ...pluginCacheDepStatements(db, pluginInstallationCacheDeps(pluginId)),
+  ]);
 }
 
 /** Stored values that are still valid under a new settings schema; new fields take their defaults. */
@@ -432,6 +450,7 @@ export async function updatePluginInstallation(
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, manifest),
+      ...pluginCacheDepStatements(db, pluginInstallationCacheDeps(pluginId)),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -459,10 +478,18 @@ export async function uninstallPlugin(
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
   const waiting = ["pending", "enqueueing", "queued", "processing", "failed"] as const;
+  // Deleting the data empties every collection the manifest declared.
+  const removedCollections = options.keepData
+    ? []
+    : Object.keys((await getPluginInstallation(db, pluginId))?.manifest.storage ?? {});
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
+      ...pluginCacheDepStatements(db, [
+        ...pluginInstallationCacheDeps(pluginId),
+        ...pluginCollectionCacheDeps(pluginId, removedCollections),
+      ]),
       ...(options.keepData
         ? [
           db.update(pluginEventDeliveries).set({
@@ -536,14 +563,14 @@ export async function writePluginSettings(
     }
     if (value !== undefined && value !== null) next[field.key] = value;
   }
-  const updated = await db.update(pluginInstallations).set({
+  const updated = await updateWithCacheDeps(db, pluginId, db.update(pluginInstallations).set({
     settingsJson: JSON.stringify(next),
     revision: sql`${pluginInstallations.revision} + 1`,
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(pluginInstallations.pluginId, pluginId),
     eq(pluginInstallations.revision, options.expectedRevision),
-  )).returning({ revision: pluginInstallations.revision });
+  )).returning({ revision: pluginInstallations.revision }));
   await requireRevision(db, pluginId, options.expectedRevision, updated);
   return requirePluginInstallation(db, pluginId);
 }

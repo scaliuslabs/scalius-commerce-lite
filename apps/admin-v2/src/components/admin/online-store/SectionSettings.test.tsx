@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { storefrontSectionDefault, type StorefrontSection } from "@scalius/shared/storefront-theme";
+import { storefrontSectionDefault, type StorefrontPlatformSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
 import { SectionSettingsForm, newSectionId, useSectionErrors } from "./SectionSettings";
 import { useMediaPreviews } from "./schema-form/resource-fields";
 
@@ -40,7 +40,7 @@ vi.mock("sonner", () => ({ toast: { warning: vi.fn() } }));
 
 let root: Root;
 let container: HTMLDivElement;
-const seen: { section: StorefrontSection | null } = { section: null };
+const seen: { section: StorefrontPlatformSection | null } = { section: null };
 
 beforeEach(() => {
   container = document.createElement("div");
@@ -53,10 +53,10 @@ afterEach(() => {
   container.remove();
 });
 
-const section = (type: StorefrontSection["type"], id: string, settings: Record<string, unknown> = {}) =>
-  ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
+const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
+  ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontPlatformSection;
 
-function render(initial: StorefrontSection) {
+function render(initial: StorefrontPlatformSection) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Form() {
     const [current, setCurrent] = useState(initial);
@@ -68,7 +68,7 @@ function render(initial: StorefrontSection) {
         section={current}
         media={media}
         errors={errors}
-        onChange={(settings) => setCurrent((each) => ({ ...each, settings }) as StorefrontSection)}
+        onChange={(settings) => setCurrent((each) => ({ ...each, settings }) as StorefrontPlatformSection)}
       />
     );
   }

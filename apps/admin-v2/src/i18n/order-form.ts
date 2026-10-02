@@ -104,6 +104,9 @@ export const orderFormMessages = defineMessages({
     calculating: "Calculating the total…",
     totalFailed: "Couldn't calculate the total.",
     waitForTotal: "Wait for the total to finish calculating, then save.",
+    appDiscount: "{title} · from {app}",
+    appRulesTitle: "An installed app doesn't allow this order",
+    appRuleOnLine: "{name}: {message}",
     unsavedOrder: "Unsaved order",
 
     reviewChanges: "Review changes",
@@ -260,6 +263,9 @@ export const orderFormMessages = defineMessages({
     calculating: "মোট হিসাব করা হচ্ছে…",
     totalFailed: "মোট হিসাব করা যায়নি।",
     waitForTotal: "মোট হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন, তারপর সেভ করুন।",
+    appDiscount: "{title} · {app} থেকে",
+    appRulesTitle: "ইনস্টল করা একটি অ্যাপ এই অর্ডারের অনুমতি দিচ্ছে না",
+    appRuleOnLine: "{name}: {message}",
     unsavedOrder: "সেভ না করা অর্ডার",
 
     reviewChanges: "পরিবর্তন দেখুন",

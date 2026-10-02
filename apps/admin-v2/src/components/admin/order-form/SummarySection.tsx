@@ -19,6 +19,7 @@ import {
 } from "~/components/ui/form";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
@@ -128,6 +129,14 @@ export function SummarySection() {
   const subtotal = quote?.subtotalAmount ?? localTotals.subtotal;
   const shipping = quote?.shippingAmount ?? localTotals.shipping;
   const discount = quote?.discountAmount ?? localTotals.discount;
+  // Installed apps' discounts come after the staff discount; the quote's discount includes both.
+  const appDiscounts = quote?.appDiscounts ?? [];
+  const toMinor = (amount: number) => Math.round(amount * 10 ** (quote?.decimalPlaces ?? 2));
+  const staffDiscount = appDiscounts.length === 0
+    ? discount
+    : Math.max(0, toMinor(discount) - appDiscounts.reduce((sum, entry) => sum + toMinor(entry.amount) + toMinor(entry.shippingAmount), 0))
+      / 10 ** (quote?.decimalPlaces ?? 2);
+  const ruleErrors = manualQuote.ruleErrors ?? null;
   const discountLimit = manualQuote.discountLimit;
   const discountNeedsCorrection = discountLimit?.exceeded === true;
   const shippingInvalid = shipping < 0;
@@ -258,6 +267,24 @@ export function SummarySection() {
           />
         </div>
 
+        {ruleErrors ? (
+          <Alert variant="destructive">
+            <AlertTitle>{t("appRulesTitle")}</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc space-y-1 pl-4">
+                {ruleErrors.map((error, position) => {
+                  const name = error.index === null ? null : items?.[error.index]?.name;
+                  return (
+                    <li key={`${error.index ?? "order"}:${error.code}:${position}`}>
+                      {name ? t("appRuleOnLine", { name, message: error.message }) : error.message}
+                    </li>
+                  );
+                })}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {manualQuote.errorMessage ? (
           <div className="flex flex-wrap items-start justify-between gap-2" role="alert">
             <p className="text-body text-destructive">{manualQuote.errorMessage}</p>
@@ -282,12 +309,18 @@ export function SummarySection() {
               <dd>{shippingInvalid ? "—" : fmt(shipping)}</dd>
             </div>
           ) : null}
-          {discount > 0 ? (
+          {staffDiscount > 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("discount")}</dt>
-              <dd>−{fmt(discount)}</dd>
+              <dd>−{fmt(staffDiscount)}</dd>
             </div>
           ) : null}
+          {appDiscounts.map((entry, position) => (
+            <div key={`${entry.appId}:${position}`} className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">{t("appDiscount", { title: entry.title, app: entry.appName })}</dt>
+              <dd>−{fmt(entry.amount + entry.shippingAmount)}</dd>
+            </div>
+          ))}
           {quote && (quote.taxEnabled || quote.taxAmount > 0) ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">

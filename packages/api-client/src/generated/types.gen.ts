@@ -69,6 +69,24 @@ export type ProductCardFacts = {
 
 export type NullableTimestamp = string | number | null;
 
+export type StorefrontAppSurface = {
+    /**
+     * Sanitized HTML: content, tables, lists, images (https or store paths), links and forms posting to the app's own /apps/<id>/ proxy only.
+     */
+    html: string;
+    head: {
+        meta: Array<{
+            attribute: 'name' | 'property';
+            key: string;
+            content: string;
+        }>;
+        /**
+         * schema.org JSON-LD, already serialized for a <script type="application/ld+json">.
+         */
+        jsonLd: Array<string>;
+    };
+};
+
 export type StorefrontThemeDocument = {
     version: 6;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
@@ -455,6 +473,13 @@ export type StorefrontThemeDocument = {
                 };
             };
             below: Array<'frequently-bought-together' | 'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
+            apps?: Array<{
+                id: string;
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
+            }>;
             sticky: {
                 phoneTop: 'none' | 'anchor-bar';
                 phoneBottom: 'none' | 'buy-bar';
@@ -809,6 +834,16 @@ export type StorefrontThemeDocument = {
                 email?: 'optional' | 'required' | 'hidden';
                 whatsapp?: boolean;
                 buttonLabel?: string;
+            };
+        } | {
+            id: string;
+            type: 'app';
+            version: 1;
+            settings: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
             };
         }>;
         homeMode: {
@@ -1371,6 +1406,42 @@ export type BuyerWarrantyClaim = {
     closedAt: string | null;
 };
 
+export type ThemeAppSurfaces = {
+    id: string;
+    name: string;
+    sections: Array<{
+        key: string;
+        type: string;
+        name: string;
+        description: string | null;
+        settings: Array<AppSettingField>;
+    }>;
+    productBlocks: Array<{
+        key: string;
+        type: string;
+        name: string;
+        placement: 'buy-box' | 'below';
+        settings: Array<AppSettingField>;
+    }>;
+};
+
+export type AppSettingField = {
+    key: string;
+    label: string;
+    help: string | null;
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color';
+    required: boolean;
+    options: Array<{
+        value: string;
+        label: string;
+    }> | null;
+    default: string | number | boolean | Array<string> | unknown;
+    min: number | null;
+    max: number | null;
+    integer: boolean;
+    maxLength: number | null;
+};
+
 export type WarrantyClaim = {
     id: string;
     status: 'open' | 'in_progress' | 'resolved' | 'rejected';
@@ -1557,6 +1628,40 @@ export type AppSummary = {
     }>;
 };
 
+export type AppAdminSurfaces = {
+    id: string;
+    name: string;
+    pages: Array<{
+        id: string;
+        title: string;
+        placement: 'apps' | 'orders' | 'products' | 'customers' | 'marketing' | 'content' | 'analytics' | 'settings';
+        route: string;
+    }>;
+    cards: Array<{
+        id: string;
+        target: 'product' | 'variant' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page' | 'return';
+        title: string;
+        route: string;
+    }>;
+    actions: Array<{
+        id: string;
+        target: 'product' | 'variant' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page' | 'return';
+        label: string;
+        route: string;
+        bulk: boolean;
+        destructive: boolean;
+    }>;
+    widgets: Array<{
+        id: string;
+        title: string;
+        route: string;
+    }>;
+    routes: Array<{
+        name: string;
+        methods: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
+    }>;
+};
+
 export type AppDetail = AppSummary & {
     /**
      * Send back on activation: approving a request nobody was shown is refused.
@@ -1662,23 +1767,6 @@ export type AppGrant = {
     storefrontScripts: Array<string>;
     storefrontSurfaces: boolean;
     customFieldOwners: Array<string>;
-};
-
-export type AppSettingField = {
-    key: string;
-    label: string;
-    help: string | null;
-    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color';
-    required: boolean;
-    options: Array<{
-        value: string;
-        label: string;
-    }> | null;
-    default: string | number | boolean | Array<string> | unknown;
-    min: number | null;
-    max: number | null;
-    integer: boolean;
-    maxLength: number | null;
 };
 
 export type AppLogLine = {
@@ -5056,12 +5144,83 @@ export type GetApiV1StorefrontHomepageResponses = {
                     id: string;
                     slug: string;
                 } | null;
+                /**
+                 * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+                 */
+                apps: Array<StorefrontAppSurface & {
+                    sectionId: string;
+                }>;
             };
         };
     };
 };
 
 export type GetApiV1StorefrontHomepageResponse = GetApiV1StorefrontHomepageResponses[keyof GetApiV1StorefrontHomepageResponses];
+
+export type GetApiV1StorefrontProductAppsBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/product-apps/{slug}';
+};
+
+export type GetApiV1StorefrontProductAppsBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontProductAppsBySlugError = GetApiV1StorefrontProductAppsBySlugErrors[keyof GetApiV1StorefrontProductAppsBySlugErrors];
+
+export type GetApiV1StorefrontProductAppsBySlugResponses = {
+    /**
+     * The drawn app blocks
+     */
+    200: {
+        success: true;
+        data: {
+            blocks: Array<StorefrontAppSurface & {
+                id: string;
+                app: string;
+                placement: 'buy-box' | 'below';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1StorefrontProductAppsBySlugResponse = GetApiV1StorefrontProductAppsBySlugResponses[keyof GetApiV1StorefrontProductAppsBySlugResponses];
 
 export type GetApiV1StorefrontPagesSlugBySlugData = {
     body?: never;
@@ -5370,6 +5529,12 @@ export type GetApiV1StorefrontLayoutResponses = {
                 productBundleTierText: string;
                 productBundleSetPriceText: string;
             };
+            appScripts: Array<{
+                pluginId: string;
+                src: string;
+                placement: 'head' | 'body-end';
+                pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart' | 'checkout' | 'order-success'>;
+            }>;
         };
     };
 };
@@ -5720,6 +5885,12 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                 id: string;
                 slug: string;
             } | null;
+            /**
+             * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+             */
+            apps: Array<StorefrontAppSurface & {
+                sectionId: string;
+            }>;
         };
     };
 };
@@ -7712,6 +7883,35 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses = 
                 productName: string;
                 variantLabel: string | null;
             }>;
+            /**
+             * Installed apps' discounts included in discountMinor, after the store's own discount. amount is off the items, shippingAmount off delivery.
+             */
+            appDiscounts: Array<{
+                appId: string;
+                title: string;
+                code: string | null;
+                amount: number;
+                amountMinor: number;
+                shippingAmount: number;
+                shippingAmountMinor: number;
+            }>;
+            /**
+             * The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit.
+             */
+            shippingRates: Array<{
+                id: string;
+                name: string;
+                kind: 'delivery' | 'pickup';
+                amount: number;
+                amountMinor: number;
+            }> | null;
+            /**
+             * The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit.
+             */
+            paymentMethods: Array<{
+                id: string;
+                name: string;
+            }> | null;
         };
     };
 };
@@ -42891,6 +43091,7 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                 width: number | null;
                 height: number | null;
             }>;
+            apps: Array<ThemeAppSurfaces>;
         };
     };
 };
@@ -56056,6 +56257,16 @@ export type PostApiV1AdminOrdersQuoteResponses = {
                 unitPrice: number;
                 lineSubtotal: number;
             }>;
+            /**
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             */
+            appDiscounts?: Array<{
+                appId: string;
+                appName: string;
+                title: string;
+                amount: number;
+                shippingAmount: number;
+            }>;
         };
     };
 };
@@ -56192,6 +56403,16 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
                 quantity: number;
                 unitPrice: number;
                 lineSubtotal: number;
+            }>;
+            /**
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             */
+            appDiscounts?: Array<{
+                appId: string;
+                appName: string;
+                title: string;
+                amount: number;
+                shippingAmount: number;
             }>;
             orderId: string;
             expectedVersion: number;
@@ -72623,6 +72844,54 @@ export type GetApiV1AdminAppsResponses = {
 };
 
 export type GetApiV1AdminAppsResponse = GetApiV1AdminAppsResponses[keyof GetApiV1AdminAppsResponses];
+
+export type GetApiV1AdminAppsSurfacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/surfaces';
+};
+
+export type GetApiV1AdminAppsSurfacesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsSurfacesError = GetApiV1AdminAppsSurfacesErrors[keyof GetApiV1AdminAppsSurfacesErrors];
+
+export type GetApiV1AdminAppsSurfacesResponses = {
+    /**
+     * Dashboard surfaces of active apps
+     */
+    200: {
+        success: true;
+        data: {
+            apps: Array<AppAdminSurfaces>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsSurfacesResponse = GetApiV1AdminAppsSurfacesResponses[keyof GetApiV1AdminAppsSurfacesResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

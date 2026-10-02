@@ -36,6 +36,8 @@ import { readAdminApiErrorCode, readCategoryRevisionConflict } from "@/lib/admin
 import { useMessages } from "~/i18n";
 import { categoryFormMessages } from "~/i18n/category-form";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { AppActionsMenu } from "./apps/ui/AppActions";
+import { AppResourceCards } from "./apps/ui/AppResourceCards";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -160,6 +162,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("category") : t("addCategory")}
+      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="category" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/categories"
       canSave={canSave}
@@ -285,6 +288,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
           {isEdit && defaultValues?.id ? (
             <CustomFieldsCard ownerType="category" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}
+          {isEdit && defaultValues?.id ? <AppResourceCards target="category" id={defaultValues.id} /> : null}
 
           <SearchListingCard
             resource="category"

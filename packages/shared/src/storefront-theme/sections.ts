@@ -3,6 +3,7 @@
 // optional, repeatable and reorderable; a section whose data does not fit
 // the store (`requires`) or that has nothing to show renders nothing.
 import { z } from "zod";
+import { storefrontAppKeySchema, storefrontAppValuesSchema } from "./apps";
 import { atLeast, type FitCondition } from "./fit";
 import { storefrontLinkSchema } from "./links";
 
@@ -380,17 +381,38 @@ export type StorefrontSectionType = keyof typeof STOREFRONT_SECTION_REGISTRY;
 export const STOREFRONT_SECTION_TYPES = Object.keys(STOREFRONT_SECTION_REGISTRY) as StorefrontSectionType[];
 export const STOREFRONT_MAX_SECTIONS = 24;
 
+/**
+ * A section an installed app draws (apps.ts): `settings.app` names it
+ * `<plugin id>/<type>`, `settings.values` are the merchant's values for the
+ * app's section settings.
+ */
+export const storefrontAppSectionSchema = z.object({
+  id: sectionIdSchema,
+  type: z.literal("app"),
+  version: z.literal(1),
+  settings: z.object({ app: storefrontAppKeySchema, values: storefrontAppValuesSchema }).strict(),
+}).strict();
+export type StorefrontAppSection = z.infer<typeof storefrontAppSectionSchema>;
+
 const sectionSchemas = STOREFRONT_SECTION_TYPES.map((type) => STOREFRONT_SECTION_REGISTRY[type].schema);
 
 type Registry = typeof STOREFRONT_SECTION_REGISTRY;
-export type StorefrontSection = {
+/** A platform section (a registry type with its own settings). */
+export type StorefrontPlatformSection = {
   [Type in StorefrontSectionType]: z.infer<Registry[Type]["schema"]>;
 }[StorefrontSectionType];
-export type StorefrontSectionOf<Type extends StorefrontSectionType> = Extract<StorefrontSection, { type: Type }>;
+export type StorefrontSection = StorefrontPlatformSection | StorefrontAppSection;
+/** The platform section of one registry type (an app section is never one: its type is not in the registry). */
+export type StorefrontSectionOf<Type extends StorefrontSectionType> = Extract<StorefrontPlatformSection, { type: Type }>;
+
+/** Whether a section is an app's (rendered by the app, not by a platform renderer). */
+export function isStorefrontAppSection(section: StorefrontSection): section is StorefrontAppSection {
+  return section.type === "app";
+}
 
 export const storefrontSectionSchema = z.discriminatedUnion(
   "type",
-  sectionSchemas as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
+  [...sectionSchemas, storefrontAppSectionSchema] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
 ) as unknown as z.ZodType<StorefrontSection>;
 
 /** A list of sections: unique ids, at most 24. */

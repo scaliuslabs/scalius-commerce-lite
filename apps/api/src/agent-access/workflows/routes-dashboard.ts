@@ -1190,6 +1190,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     tags: ["apps", "plugins", "integrations", "security"],
     operationIds: [
       "dashboard.apps.list",
+      "dashboard.apps.surfaces",
       "dashboard.apps.get",
       "dashboard.apps.logs_list",
       "dashboard.apps.deliveries_list",

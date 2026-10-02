@@ -24,8 +24,12 @@ import {
 } from "@scalius/core/modules/agent-storefront";
 import { ForbiddenError, ValidationError } from "@scalius/core/errors";
 import { getOrderSupportRequestStatusLabel } from "@scalius/core/modules/orders";
-import { runStorefrontOrderPostCommitSideEffects } from "@scalius/core/modules/checkout";
+import { runStorefrontOrderPostCommitSideEffects, type CheckoutAppFunctions } from "@scalius/core/modules/checkout";
+import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import type { Database } from "@scalius/database/client";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
+import { runOrderRiskChecks } from "../plugins/order-risk";
 import type { AgentPrincipal } from "../agent-access/types";
 import { created, ok } from "../utils/api-response";
 import {
@@ -175,6 +179,29 @@ const checkoutQuoteSchema = z.object({
     productName: z.string(),
     variantLabel: z.string().nullable(),
   })).max(99),
+  appDiscounts: z.array(z.object({
+    appId: z.string(),
+    title: z.string(),
+    code: z.string().nullable(),
+    amount: z.number().nonnegative(),
+    amountMinor: z.number().int().nonnegative(),
+    shippingAmount: z.number().nonnegative(),
+    shippingAmountMinor: z.number().int().nonnegative(),
+  })).openapi({
+    description: "Installed apps' discounts included in discountMinor, after the store's own discount. amount is off the items, shippingAmount off delivery.",
+  }),
+  shippingRates: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    kind: z.enum(["delivery", "pickup"]),
+    amount: z.number().nonnegative(),
+    amountMinor: z.number().int().nonnegative(),
+  })).nullable().openapi({
+    description: "The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit.",
+  }),
+  paymentMethods: z.array(z.object({ id: z.string(), name: z.string() })).nullable().openapi({
+    description: "The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit.",
+  }),
 });
 
 const continuationViewSchema = z.object({
@@ -303,6 +330,23 @@ function requireStorefrontPrincipal(c: { get(key: "agentPrincipal"): AgentPrinci
 
 function noStore(c: { header(name: string, value: string): void }): void {
   c.header("Cache-Control", "private, no-store");
+}
+
+/**
+ * The apps' checkout functions for a buyer agent's checkout (channel
+ * "agent"), the same merge rules as the online store: one indexed
+ * registration read; none active means no app work.
+ */
+async function agentCheckoutApps(
+  c: Parameters<typeof getOptionalExecutionContext>[0] & { env: Env; get(key: "db"): Database },
+): Promise<CheckoutAppFunctions> {
+  const db = c.get("db");
+  return createCheckoutAppFunctions({
+    env: c.env,
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations: await listActiveFunctionRegistrations(db),
+  });
 }
 
 function continuationBootstrap(env: Env, continuationCode: string) {
@@ -518,7 +562,8 @@ app.openapi(applyDiscountRoute, async (c) => {
   const input = c.req.valid("json");
   return ok(c, await setAgentStorefrontDiscount(
     c.get("db"), principal.grantId, c.req.valid("param").contextId, input.revision, input.code,
-    { customerPhone: input.customerPhone },
+    // A code only an app answers to is a valid code here too.
+    { customerPhone: input.customerPhone, apps: await agentCheckoutApps(c) },
   ));
 });
 
@@ -582,7 +627,7 @@ app.openapi(validateCheckoutRoute, async (c) => {
     c.get("db"),
     principal.grantId,
     c.req.valid("param").contextId,
-    { customerPhone: c.req.valid("json").customerPhone },
+    { customerPhone: c.req.valid("json").customerPhone, apps: await agentCheckoutApps(c) },
   ));
 });
 
@@ -609,7 +654,11 @@ app.openapi(quoteCheckoutRoute, async (c) => {
     c.get("db"),
     principal.grantId,
     c.req.valid("param").contextId,
-    { customerPhone: c.req.valid("json").customerPhone },
+    {
+      customerPhone: c.req.valid("json").customerPhone,
+      apps: await agentCheckoutApps(c),
+      credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    },
   ));
 });
 
@@ -645,6 +694,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
     c.req.valid("header")["idempotency-key"],
     bodyIdempotencyKey,
   );
+  const apps = await agentCheckoutApps(c);
   const submitted = await submitAgentStorefrontCheckout(
     c.get("db"),
     principal.grantId,
@@ -656,15 +706,21 @@ app.openapi(submitCheckoutRoute, async (c) => {
         c.env.PUBLIC_API_BASE_URL,
       ).toString(),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      apps,
     },
   );
   const executionCtx = getOptionalExecutionContext(c);
-  if (submitted.postCommitPayload) {
-    const postCommit = runStorefrontOrderPostCommitSideEffects(
-      c.get("db"),
-      c.env,
-      submitted.postCommitPayload,
-    );
+  const risk = submitted.orderRisk;
+  if (submitted.postCommitPayload || risk) {
+    const postCommit = Promise.all([
+      submitted.postCommitPayload
+        ? runStorefrontOrderPostCommitSideEffects(c.get("db"), c.env, submitted.postCommitPayload)
+        : null,
+      // Apps' advisory risk checks: after this submit's commit, never on a replay.
+      risk && apps.points.has("order.risk")
+        ? runOrderRiskChecks({ db: c.get("db"), apps, channel: "agent", ...risk })
+        : null,
+    ]);
     if (executionCtx) executionCtx.waitUntil(postCommit);
     else await postCommit;
   }

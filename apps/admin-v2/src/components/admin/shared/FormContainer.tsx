@@ -18,6 +18,8 @@ interface FormContainerProps<
   heading: React.ReactNode;
   /** Status badge next to the title. */
   badge?: React.ReactNode;
+  /** Header actions on the right (apps' "More actions"); they never submit the form. */
+  actions?: React.ReactNode;
   /** The list this record belongs to, for the back arrow. */
   backUrl: string;
   isSubmitting: boolean;
@@ -113,6 +115,7 @@ export function FormContainer<
 >({
   heading,
   badge,
+  actions,
   backUrl,
   isSubmitting,
   canSave,
@@ -138,7 +141,7 @@ export function FormContainer<
             savedValues={savedValues}
             reload={reload}
             className={formClassName}
-            header={<PageHeader backTo={backUrl} badge={badge} title={heading} />}
+            header={<PageHeader backTo={backUrl} badge={badge} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
           >
             {children}
