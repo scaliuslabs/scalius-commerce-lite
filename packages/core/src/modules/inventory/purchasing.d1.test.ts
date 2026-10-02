@@ -39,6 +39,8 @@ import { getInventoryValuation, readIncomingStock } from "./inventory-insights";
 import { setSkuCosts } from "./unit-costs";
 import { archiveInventoryLocation, getProductInventoryLevels } from "./locations";
 import { reserveStockBatch } from "./reserve";
+import { executeInventoryOperation } from "./inventory-operations";
+import { foldInventoryLedgerV2 } from "./ledger-v2";
 import { InventoryLocationShortfallError } from "./locations";
 
 let sqlite: DatabaseSync;
@@ -387,11 +389,35 @@ describe("batch shape and races", () => {
 });
 
 describe("random command sequences", () => {
-  it("keep every ledger invariant through receipts, transfers, cancels and replays", async () => {
+  /** Every SKU's v2 ledger folds from its seeded counters to its current counters without a gap. */
+  function expectLedgerFolds(initial: Record<string, number>) {
+    for (const variant of all<{ id: string; stock: number; reserved_stock: number; preorder_stock: number; stock_version: number }>(
+      "SELECT id, stock, reserved_stock, preorder_stock, stock_version FROM product_variants",
+    )) {
+      const events = all<Record<string, number | string | null>>(`
+        SELECT id, variant_id, order_id, type, pool, reservation_generation, stock_version_before, stock_version_after,
+          previous_stock, new_stock, stock_delta, previous_reserved_stock, new_reserved_stock, reserved_stock_delta,
+          previous_preorder_stock, new_preorder_stock, preorder_stock_delta
+        FROM inventory_movements WHERE variant_id = ? AND ledger_version = 2 ORDER BY stock_version_after`, variant.id)
+        .map((row) => ({
+          id: String(row.id), variantId: String(row.variant_id), orderId: row.order_id as string | null, type: String(row.type),
+          pool: row.pool as "regular", reservationGeneration: row.reservation_generation as number | null,
+          stockVersionBefore: Number(row.stock_version_before), stockVersionAfter: Number(row.stock_version_after),
+          previousStock: Number(row.previous_stock), newStock: Number(row.new_stock), stockDelta: Number(row.stock_delta),
+          previousReservedStock: Number(row.previous_reserved_stock), newReservedStock: Number(row.new_reserved_stock),
+          reservedStockDelta: Number(row.reserved_stock_delta), previousPreorderStock: Number(row.previous_preorder_stock),
+          newPreorderStock: Number(row.new_preorder_stock), preorderStockDelta: Number(row.preorder_stock_delta),
+        }));
+      expect(foldInventoryLedgerV2({ stock: initial[variant.id] ?? 0, reservedStock: 0, preorderStock: 0, stockVersion: 1 }, events))
+        .toEqual({ stock: variant.stock, reservedStock: variant.reserved_stock, preorderStock: variant.preorder_stock, stockVersion: variant.stock_version });
+    }
+  }
+
+  it.each([20261003, 7, 424242])("keep every ledger invariant through receipts, transfers, adjustments, holds and replays (seed %i)", async (initialSeed) => {
     seedLocation("loc_c", "Chittagong");
     const locations = ["loc_default", "loc_shop", "loc_c"];
     const skus = ["var_a", "var_b"];
-    let seed = 20261003;
+    let seed = initialSeed;
     const random = (n: number) => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
       return seed % n;
@@ -400,17 +426,32 @@ describe("random command sequences", () => {
       try {
         await run();
       } catch (error) {
-        // Refusals (shortfall, nothing in transit, stale) are expected; they must write nothing partial.
-        if (!(error instanceof Error) || !/(has|have|holds|enough|Only|nothing|in transit|changed|received|cancelled|committed|can't)/i.test(error.message)) throw error;
+        // Refusals (shortfall, committed units, nothing in transit, stale) are expected; they must write nothing partial.
+        if (!(error instanceof Error) || !/(has|have|holds|enough|Only|nothing|in transit|changed|received|cancelled|committed|can't|reserved|at most)/i.test(error.message)) throw error;
       }
     };
-    for (let step = 0; step < 40; step += 1) {
+    let manualDelta = 0;
+    for (let step = 0; step < 45; step += 1) {
       const variantId = skus[random(skus.length)]!;
-      const action = random(5);
-      if (action === 0) {
+      const action = random(7);
+      if (action === 0 || action === 1) {
         const order = await createPurchaseOrder(db, { destinationLocationId: locations[random(3)], lines: [{ variantId, quantity: 1 + random(5), unitCost: 100 + random(50) }] });
         const ordered = await markPurchaseOrderOrdered(db, order.id, 1);
-        await attempt(() => receivePurchaseOrder(db, order.id, { operationKey: key("rand-po"), updateCost: random(2) === 1, lines: [{ lineId: ordered.lines[0]!.id, quantity: 1 + random(ordered.lines[0]!.quantity) }] }));
+        const receiptKey = key("rand-po");
+        const updateCost = random(2) === 1;
+        const receive = () => receivePurchaseOrder(db, order.id, { operationKey: receiptKey, updateCost, lines: [{ lineId: ordered.lines[0]!.id, quantity: 1 }] });
+        await attempt(receive);
+        // An exact retry of the same receipt replays; nothing moves twice.
+        if (random(2) === 0) await attempt(receive);
+      } else if (action === 2) {
+        const delta = random(2) === 0 ? 1 + random(3) : -(1 + random(3));
+        const applied = await executeInventoryOperation(db, {
+          operationKey: key("rand-adjust"), operationType: "manual_adjustment", variantId, pool: "stock",
+          mode: "relative", delta, reason: delta > 0 ? "received" : "correction", locationId: locations[random(3)],
+        }).then((result) => result.delta, () => 0);
+        manualDelta += applied;
+      } else if (action === 3) {
+        await reserveStockBatch(db, [{ variantId, quantity: 1, orderId: `ord_rand_${step}` }], "regular");
       } else {
         const origin = locations[random(3)]!;
         const destination = locations.filter((location) => location !== origin)[random(2)]!;
@@ -429,11 +470,14 @@ describe("random command sequences", () => {
         }
       }
       expectInvariants();
+      // Committed units never ship: stock stays at or above what orders hold.
+      expect(one<{ n: number }>("SELECT count(*) AS n FROM product_variants WHERE stock < reserved_stock").n).toBe(0);
     }
-    // In-transit units are exactly the stock that left the levels.
+    expectLedgerFolds({ var_a: 10, var_b: 0 });
+    // Conservation: on hand + in transit = seeded + received + manual changes.
     const inTransit = one<{ n: number }>("SELECT COALESCE(SUM(shipped_quantity - received_quantity - returned_quantity), 0) AS n FROM inventory_transfer_lines").n;
     const received = one<{ n: number }>("SELECT COALESCE(SUM(quantity), 0) AS n FROM purchase_order_receipt_lines").n;
     const total = one<{ n: number }>("SELECT SUM(stock) AS n FROM product_variants").n;
-    expect(total + inTransit).toBe(10 + received);
+    expect(total + inTransit).toBe(10 + received + manualDelta);
   });
 });
