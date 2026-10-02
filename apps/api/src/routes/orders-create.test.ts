@@ -37,7 +37,14 @@ const mocks = vi.hoisted(() => ({
   getCurrencySettings: vi.fn(),
   calculateStorefrontTaxQuote: vi.fn(),
   quoteStorefrontDiscount: vi.fn(),
+  // No app implements a checkout function unless a test says so.
+  listActiveFunctionRegistrations: vi.fn(async () => [] as unknown[]),
 
+}));
+
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
+  listActiveFunctionRegistrations: mocks.listActiveFunctionRegistrations,
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -66,10 +73,19 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     // Prepared orders without gift cards: the whole total is due (Wave B §4.3).
     createStorefrontOrder: async (...args: unknown[]) => {
       const result = await mocks.createStorefrontOrder(...args);
-      if (!result || typeof result !== "object" || "giftCardTender" in result) return result;
+      if (!result || typeof result !== "object") return result;
+      // No app adjusted anything: the reviewed rate is the preflight's.
+      const withApps = {
+        shippingMethod: (args[5] as { shippingMethod?: unknown } | undefined)?.shippingMethod ?? null,
+        appDiscounts: [],
+        shippingRates: null,
+        appCart: null,
+        ...result,
+      };
+      if ("giftCardTender" in result) return withApps;
       const totalMinor = (result as { taxQuote?: { totalMinor?: number } }).taxQuote?.totalMinor ?? 0;
       return {
-        ...result,
+        ...withApps,
         giftCardTender: {
           handles: [], giftCardLineTotalMinor: 0, applied: [], appliedTotalMinor: 0,
           amountDueMinor: totalMinor, unusableHandles: [], issues: [],
@@ -91,6 +107,7 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
       return {
         existingAttempt,
         commitReads: PREFETCHED_COMMIT_READS,
+        functionRegistrations: [],
         authority: () => {
           if (!snapshot) throw new Error("replay");
           if ("error" in snapshot) throw snapshot.error;
@@ -1580,6 +1597,7 @@ describe("create order commit/KV ordering", () => {
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
         { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
+        { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
     );
     } finally {
       consoleError.mockRestore();
@@ -2228,6 +2246,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2318,6 +2337,7 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2363,6 +2383,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });

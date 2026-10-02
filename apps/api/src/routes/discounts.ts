@@ -4,15 +4,19 @@ import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
+  previewStorefrontAppDiscounts,
   previewStorefrontBundleSavings,
   resolveBundlePromotionInterplay,
   selectStorefrontCartProductRows,
 } from "@scalius/core/modules/checkout";
+import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
 import type { Database } from "@scalius/database/client";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
 import { ok } from "../utils/api-response";
+import { getOptionalExecutionContext } from "../utils/execution-context";
+import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   quotedDiscountLineSchema,
@@ -58,7 +62,7 @@ const validateDiscountRoute = createRoute({
   path: "/validate",
   tags: ["Discounts"],
   summary: "Preview the cart's discounts before delivery is chosen",
-  description: "Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.",
+  description: "Evaluates the applied codes together with active automatic discounts, then installed apps' discounts on top (as checkout stacks them). Codes that do not apply are listed with the reason and add nothing.",
   request: {
     body: {
       required: true,
@@ -94,9 +98,11 @@ app.openapi(validateDiscountRoute, async (c) => {
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
   }
-  const [currency, giftCardProductIds] = await Promise.all([
+  // The apps' checkout functions ride the first read wave: none, no app work.
+  const [currency, giftCardProductIds, registrations] = await Promise.all([
     getCurrencyConfig(db),
     selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
+    listActiveFunctionRegistrations(db),
   ]);
   const cartLines = lines.map(({ item, index, variantId }) => ({
     id: `cart:${index}:${variantId}`,
@@ -135,10 +141,40 @@ app.openapi(validateDiscountRoute, async (c) => {
     })),
     discount,
   );
-  const quote = interplay.discount;
+  // Apps' discounts stack after the platform's, exactly as at checkout.
+  const apps = previewStorefrontAppDiscounts(db, {
+    apps: createCheckoutAppFunctions({
+      env: c.env,
+      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+      db,
+      registrations,
+    }),
+    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+    lines: lines.map(({ item, index, variantId }) => ({
+      lineId: `cart:${index}:${variantId}`,
+      productId: item.id,
+      variantId,
+      unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
+      quantity: item.quantity,
+      ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
+    })),
+    platformAllocation: interplay.allocation,
+    shippingMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
+    discountCodes: codes,
+  });
+  const appResolution = await apps;
+  const claimed = new Set(appResolution?.claimedCodes ?? []);
+  const quote = claimed.size > 0
+    ? {
+      ...interplay.discount,
+      rejectedCodes: interplay.discount.rejectedCodes.filter((rejection) =>
+        !(rejection.reason === "not_found" && claimed.has(rejection.code.trim().toUpperCase()))),
+    }
+    : interplay.discount;
+  const appDiscountMinor = (appResolution?.merchandiseMinor ?? 0) + (appResolution?.shippingMinor ?? 0);
   return ok(c, {
     totalDiscount: fromMinor(
-      (quote.applied?.totalDiscountMinor ?? 0) + interplay.bundleDiscountMinor,
+      (quote.applied?.totalDiscountMinor ?? 0) + interplay.bundleDiscountMinor + appDiscountMinor,
       currency.decimalPlaces,
     ),
     bundleDiscountAmount: fromMinor(interplay.bundleDiscountMinor, currency.decimalPlaces),
@@ -148,7 +184,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       discountType: bundle.discountType,
       label: bundle.label,
     })),
-    ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces),
+    ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces, appResolution?.applied ?? []),
   });
 });
 

@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { orderDiscountAllocations, promotionEffects } from "@scalius/database/schema";
 import { asc, eq, sql } from "drizzle-orm";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../orders/app-facts";
 
 /** What an applied discount did, for how an order summary shows it. */
 export type OrderDiscountKind = "buy_x_get_y" | "product" | "order" | "shipping";
@@ -14,9 +15,15 @@ const KIND_BY_RANK: readonly OrderDiscountKind[] = ["buy_x_get_y", "product", "o
  * delivery line: "Free" with the fee struck through, never a discount line.
  * `kind` is the discount's main effect (a product discount that also gives
  * free delivery is "product", with its delivery part in `shippingAmountMinor`).
+ * An app's discount (`app_discount` order facts) has no promotion: `appId`
+ * and `appName` name the app, and it follows the store's discounts.
  */
 export interface OrderDiscountLine {
-    promotionId: string;
+    /** Null for an app's discount. */
+    promotionId: string | null;
+    /** The app that gave the discount; null for the store's own. */
+    appId: string | null;
+    appName: string | null;
     title: string;
     code: string | null;
     method: "automatic" | "code";
@@ -34,7 +41,7 @@ export async function listOrderDiscountLines(db: Database, orderId: string): Pro
         WHEN json_extract(${promotionEffects.config}, '$.buy') IS NOT NULL THEN 0
         WHEN ${target} = 'order' THEN 2
         ELSE 1 END)`;
-    const rows = await db
+    const promotionQuery = db
         .select({
             promotionId: orderDiscountAllocations.promotionId,
             title: orderDiscountAllocations.promotionName,
@@ -54,10 +61,29 @@ export async function listOrderDiscountLines(db: Database, orderId: string): Pro
             orderDiscountAllocations.method,
         )
         .orderBy(asc(kindRank), asc(orderDiscountAllocations.promotionName));
-    return rows.map(({ kindRank: rank, ...row }) => ({
+    // One round trip: the promotion allocations and the app discount facts.
+    const [rows, appRows] = await db.batch([
+        promotionQuery,
+        selectOrderAppFactRows(db, [orderId], ["app_discount"]),
+    ]);
+    const promotionLines: OrderDiscountLine[] = rows.map(({ kindRank: rank, ...row }) => ({
         ...row,
+        appId: null,
+        appName: null,
         kind: KIND_BY_RANK[Number(rank)] ?? "product",
         amountMinor: Number(row.amountMinor),
         shippingAmountMinor: Number(row.shippingAmountMinor),
     }));
+    const appLines: OrderDiscountLine[] = resolveOrderAppFacts(appRows as OrderAppFactRow[]).discounts.map((fact) => ({
+        promotionId: null,
+        appId: fact.pluginId,
+        appName: fact.appName,
+        title: fact.title,
+        code: fact.code,
+        method: fact.code ? "code" : "automatic",
+        kind: fact.target === "shipping" ? "shipping" : fact.target === "order" ? "order" : "product",
+        amountMinor: fact.amountMinor,
+        shippingAmountMinor: fact.shippingAmountMinor,
+    }));
+    return [...promotionLines, ...appLines];
 }

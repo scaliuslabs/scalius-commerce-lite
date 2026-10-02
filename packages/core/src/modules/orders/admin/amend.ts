@@ -17,6 +17,7 @@ import {
     refundAttempts,
     paymentPlans,
     orderDiscountAllocations,
+    orderEvents,
     OrderStatus,
     PaymentMethod,
     PaymentStatus,
@@ -241,6 +242,10 @@ function amendmentCommitGuard(orderId: string, expectedVersion: number) {
           AND NOT EXISTS (SELECT 1 FROM ${orderReturns} WHERE ${orderReturns.orderId} = ${orderId})
           AND NOT EXISTS (SELECT 1 FROM ${orderInvoices} WHERE ${orderInvoices.orderId} = ${orderId})
           AND NOT EXISTS (SELECT 1 FROM ${orderDiscountAllocations} WHERE ${orderDiscountAllocations.orderId} = ${orderId})
+          AND NOT EXISTS (
+            SELECT 1 FROM ${orderEvents}
+            WHERE ${orderEvents.orderId} = ${orderId} AND ${orderEvents.kind} = 'app_discount'
+          )
           AND NOT EXISTS (
             SELECT 1 FROM ${orderItems}
             WHERE ${orderItems.orderId} = ${orderId}

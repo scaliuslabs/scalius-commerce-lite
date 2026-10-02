@@ -1,0 +1,569 @@
+// The storefront checkout price: platform discounts (promotions or bundles),
+// then the apps' checkout functions, then tax. One function for the tax
+// quote the buyer reviews and the order checkout prepares, so the reviewed
+// total is the committed total (the quote fingerprint fences the two).
+//
+// With no active app implementing a point, this is exactly the platform
+// pricing: no extra read and no app call.
+import type { Database } from "@scalius/database/client";
+import type { FunctionCart } from "@scalius/shared/plugins";
+import { fromMinor } from "@scalius/shared/money";
+import { ValidationError } from "@scalius/core/errors";
+import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "../promotions";
+import {
+  buildStorefrontTaxAllocationLineId,
+  calculateStorefrontTaxQuote,
+  type StorefrontTaxAuthoritySnapshot,
+} from "../tax";
+import type { TaxDiscountAllocationInput, TaxQuote } from "../tax/types";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery/zones";
+import { COD_LABEL, getPaymentGateway } from "../payments/gateways/registry";
+import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards/ledger";
+import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders/types";
+import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
+import type { StorefrontCartValidationResult } from "./cart-validation";
+import {
+  applyAppPaymentMethodOperations,
+  applyAppShippingRateOperations,
+  buildAppFunctionCart,
+  CHECKOUT_RULES_FAILED_REASON,
+  collectCheckoutRuleErrors,
+  combineDiscountAllocations,
+  loadAppFunctionCartFacts,
+  resolveAppDiscounts,
+  wantsAppCart,
+  type AppDiscountResolution,
+  type AppliedAppDiscount,
+  type CheckoutAppFunctions,
+  type CheckoutPaymentMethodOption,
+  type CheckoutRateOption,
+  type CheckoutRuleError,
+  PAYMENT_METHOD_UNAVAILABLE_REASON,
+} from "./app-functions";
+
+/** The delivery facts pricing needs (a delivery preflight result has them). */
+export interface CheckoutPricingDelivery {
+  kind: "delivery" | "pickup" | null;
+  shippingMinor: number;
+  shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  address: { city: string; zone: string; area: string | null } | null;
+  fulfilment: { requiresShipping: boolean };
+}
+
+export interface StorefrontCheckoutPricingInput {
+  cartValidation: Pick<StorefrontCartValidationResult, "items" | "subtotalMinor" | "hasFreeDeliveryProduct">;
+  delivery: CheckoutPricingDelivery;
+  discountCodes: readonly string[];
+  customerId?: string | null;
+  customerPhone?: string | null;
+  currency: { code: string; decimalPlaces: number };
+  taxAuthority?: StorefrontTaxAuthoritySnapshot;
+  apps?: CheckoutAppFunctions;
+  channel: FunctionCart["channel"];
+  /** The buyer's location ids, to list the options a shipping-rates app may adjust. */
+  location?: { city?: string | null; zone?: string | null; area?: string | null } | null;
+}
+
+export interface StorefrontCheckoutPricing {
+  /** Tax allocation line id per validated item, in cart order. */
+  lineIds: string[];
+  /** The platform discount (promotions; none when bundles won), codes an app answers to removed from `rejectedCodes`. */
+  discount: StorefrontDiscountQuote;
+  /**
+   * The typed codes' verdict before the bundle interplay: what an order
+   * asserts (`assertDiscountCodesApplied`), so a code the bundle saving beat
+   * is still a valid code.
+   */
+  typedCodes: StorefrontDiscountQuote;
+  bundleDiscountMinor: number;
+  bundleLines: BundlePromotionInterplay["bundleLines"];
+  appDiscounts: AppliedAppDiscount[];
+  /** The delivery charge before discounts (an app may have priced the chosen rate). */
+  shippingMinor: number;
+  /** The chosen rate as the buyer sees it (an app may have renamed or priced it). */
+  shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
+  taxQuote: TaxQuote;
+  /** App rules the cart breaks: checkout is blocked while any remain. */
+  ruleErrors: CheckoutRuleError[];
+  /** The delivery options to show when an app changed them; null when none did. */
+  shippingRates: CheckoutRateOption[] | null;
+  /** The cart apps saw; null when no app implements a cart point. */
+  appCart: FunctionCart | null;
+}
+
+/** Delivery options in the decimal HTTP contract (refusal details and the quote). */
+export function presentCheckoutRateOptions(rates: readonly CheckoutRateOption[], decimalPlaces: number) {
+  return rates.map((rate) => ({
+    id: rate.rateId,
+    name: rate.name,
+    kind: rate.kind,
+    amount: fromMinor(rate.amountMinor, decimalPlaces),
+    amountMinor: rate.amountMinor,
+  }));
+}
+
+async function listRateOptions(
+  db: Database,
+  input: StorefrontCheckoutPricingInput,
+): Promise<CheckoutRateOption[]> {
+  const delivery = input.delivery;
+  const city = delivery.address?.city ?? input.location?.city?.trim() ?? null;
+  const rows = await listDeliveryRatesForAddress(db, city
+    ? {
+      city,
+      zone: delivery.address?.zone ?? input.location?.zone?.trim() ?? null,
+      area: delivery.address?.area ?? input.location?.area?.trim() ?? null,
+    }
+    : null);
+  return rows
+    // Without an address only pickup is offered; apps adjust what the buyer can choose.
+    .filter((row) => city || row.kind === "pickup")
+    .map((row) => {
+      const freeOver = row.freeOverMinor ?? null;
+      const waived = input.cartValidation.hasFreeDeliveryProduct
+        || (freeOver !== null && input.cartValidation.subtotalMinor >= freeOver);
+      return {
+        rateId: row.id,
+        name: row.name.trim(),
+        kind: row.kind === "pickup" ? "pickup" as const : "delivery" as const,
+        amountMinor: waived ? 0 : row.feeMinor,
+        baseAmountMinor: row.feeMinor,
+        waived,
+      };
+    });
+}
+
+/** A cart that fails its own schema is a platform fault: no app runs (fail-open), checkout goes on. */
+function safeAppCart(build: () => FunctionCart): FunctionCart | null {
+  try {
+    return build();
+  } catch (error) {
+    console.error(`[checkout] app cart could not be built: ${error instanceof Error ? error.name : "error"}`);
+    return null;
+  }
+}
+
+export async function priceStorefrontCheckout(
+  db: Database,
+  input: StorefrontCheckoutPricingInput,
+): Promise<StorefrontCheckoutPricing> {
+  const { cartValidation, delivery, currency } = input;
+  const apps = input.apps;
+  const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+
+  const platformPricing = async (shippingMinor: number) => {
+    const discount = await quoteStorefrontDiscount(db, {
+      codes: [...input.discountCodes],
+      customerId: input.customerId,
+      customerPhone: input.customerPhone,
+      cart: {
+        currencyCode: currency.code,
+        lines: cartValidation.items.map((item, position) => ({
+          id: lineIds[position]!,
+          productId: item.productId,
+          variantId: item.variantId,
+          unitPriceMinor: item.unitPriceMinor,
+          quantity: item.quantity,
+          // Gift-card lines are outside every promotion (§4.2).
+          ...(item.isGiftCard ? { giftCard: true } : {}),
+        })),
+        shippingAmountMinor: shippingMinor,
+      },
+    });
+    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
+    return {
+      typed: discount,
+      ...resolveBundlePromotionInterplay(
+        cartValidation.items.map((item, position) => ({
+          lineId: lineIds[position]!,
+          unitPriceMinor: item.unitPriceMinor,
+          quantity: item.quantity,
+          bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+        })),
+        discount,
+      ),
+    };
+  };
+
+  let shippingMinor = delivery.shippingMinor;
+  let shippingMethod = delivery.shippingMethod;
+  let platform = await platformPricing(shippingMinor);
+  let appDiscounts: AppliedAppDiscount[] = [];
+  let claimedCodes: string[] = [];
+  let ruleErrors: CheckoutRuleError[] = [];
+  let shippingRates: CheckoutRateOption[] | null = null;
+  let appCart: FunctionCart | null = null;
+
+  if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods"])) {
+    const wantsRates = apps.points.has("checkout.shipping_rates") && delivery.kind !== null && shippingMethod !== null;
+    const [facts, rateOptions] = await Promise.all([
+      loadAppFunctionCartFacts(db, {
+        productIds: cartValidation.items.map((item) => item.productId),
+        variantIds: cartValidation.items.map((item) => item.variantId),
+        customerId: input.customerId,
+      }),
+      wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
+    ]);
+    const platformLine = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
+    appCart = safeAppCart(() => buildAppFunctionCart({
+      currency,
+      channel: input.channel,
+      lines: cartValidation.items.map((item, position) => ({
+        lineId: lineIds[position]!,
+        productId: item.productId,
+        variantId: item.variantId,
+        title: item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName,
+        quantity: item.quantity,
+        unitPriceMinor: item.unitPriceMinor,
+        discountMinor: platformLine.get(lineIds[position]!) ?? 0,
+        properties: item.properties,
+      })),
+      facts,
+      destination: delivery.fulfilment.requiresShipping ? { city: delivery.cityName, zone: delivery.zoneName } : null,
+      discountCodes: input.discountCodes,
+    }));
+    const cart = appCart;
+    // One wave of app calls: every point sees the same cart.
+    const [validations, discounts, rates] = !cart ? [[], [], []] as const : await Promise.all([
+      apps.points.has("cart.validate") ? apps.run("cart.validate", { cart }) : Promise.resolve([]),
+      apps.points.has("checkout.discounts") ? apps.run("checkout.discounts", { cart }) : Promise.resolve([]),
+      wantsRates && rateOptions.length > 0
+        ? apps.run("checkout.shipping_rates", {
+          cart,
+          rates: rateOptions.slice(0, 50).map((rate) => ({ rateId: rate.rateId, name: rate.name.slice(0, 80), amountMinor: rate.amountMinor, kind: rate.kind })),
+        })
+        : Promise.resolve([]),
+    ]);
+    ruleErrors = collectCheckoutRuleErrors(
+      validations,
+      new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),
+      apps,
+    );
+
+    if (rates.length > 0 && shippingMethod) {
+      const adjusted = applyAppShippingRateOperations(rateOptions, rates, currency.code, apps);
+      if (adjusted.changed) {
+        shippingRates = adjusted.rates;
+        const chosen = adjusted.rates.find((rate) => rate.rateId === shippingMethod!.id);
+        if (!chosen && rateOptions.some((rate) => rate.rateId === shippingMethod!.id)) {
+          throw new ValidationError(
+            "This delivery option isn't available for this order. Choose another delivery option.",
+            { reason: DELIVERY_RATE_UNAVAILABLE_REASON, shippingRates: presentCheckoutRateOptions(adjusted.rates, currency.decimalPlaces) },
+          );
+        }
+        if (chosen) {
+          shippingMethod = {
+            ...shippingMethod,
+            name: chosen.name,
+            baseAmountMinor: chosen.baseAmountMinor,
+            feeWaived: chosen.waived,
+          };
+          if (chosen.amountMinor !== shippingMinor) {
+            shippingMinor = chosen.amountMinor;
+            // Delivery discounts follow the charge the buyer now pays.
+            platform = await platformPricing(shippingMinor);
+          }
+        }
+      }
+    }
+
+    if (discounts.length > 0) {
+      const platformLines = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
+      const resolution = resolveAppDiscounts({
+        currencyCode: currency.code,
+        lines: cartValidation.items.map((item, position) => ({
+          lineId: lineIds[position]!,
+          grossMinor: item.unitPriceMinor * item.quantity,
+          platformDiscountMinor: platformLines.get(lineIds[position]!) ?? 0,
+          giftCard: item.isGiftCard,
+        })),
+        shippingMinor,
+        platformShippingDiscountMinor: platform.allocation?.shippingMinor ?? 0,
+        submittedCodes: input.discountCodes,
+        results: discounts,
+        apps,
+      });
+      appDiscounts = resolution.applied;
+      claimedCodes = resolution.claimedCodes;
+    }
+  }
+
+  // A code only an app answers to is not "not found" any more.
+  const withoutClaimed = (quote: StorefrontDiscountQuote): StorefrontDiscountQuote => claimedCodes.length > 0
+    ? {
+      ...quote,
+      rejectedCodes: quote.rejectedCodes.filter((rejection) =>
+        !(rejection.reason === "not_found" && claimedCodes.includes(rejection.code.trim().toUpperCase()))),
+    }
+    : quote;
+  const discount = withoutClaimed(platform.discount);
+
+  const taxQuoteInput = {
+    // No address (pickup, service, digital): only store-wide rates apply.
+    destination: {
+      city: delivery.fulfilment.requiresShipping ? delivery.address?.city ?? null : null,
+      zone: delivery.fulfilment.requiresShipping ? delivery.address?.zone ?? null : null,
+      area: delivery.fulfilment.requiresShipping ? delivery.address?.area ?? null : null,
+      cityName: delivery.cityName,
+      zoneName: delivery.zoneName,
+      areaName: delivery.areaName,
+    },
+    lines: cartValidation.items.map((item, position) => ({
+      lineId: lineIds[position]!,
+      productId: item.productId,
+      variantId: item.variantId,
+      unitPriceMinor: item.unitPriceMinor,
+      quantity: item.quantity,
+      taxClassId: item.taxClassId,
+      // A gift card is money, not a taxable sale (§4.2).
+      ...(item.isGiftCard ? { taxExempt: true } : {}),
+    })),
+    shippingMinor,
+    // Tax follows every discount: the platform's and the apps'.
+    promotionDiscountAllocation: combineDiscountAllocations(platform.allocation, appDiscounts),
+    currency,
+  };
+  const taxQuote = input.taxAuthority
+    ? await calculateStorefrontTaxQuote(db, taxQuoteInput, input.taxAuthority)
+    : await calculateStorefrontTaxQuote(db, taxQuoteInput);
+
+  return {
+    lineIds,
+    discount,
+    typedCodes: withoutClaimed(platform.typed),
+    bundleDiscountMinor: platform.bundleDiscountMinor,
+    bundleLines: platform.bundleLines,
+    appDiscounts,
+    shippingMinor,
+    shippingMethod,
+    taxQuote,
+    ruleErrors,
+    shippingRates,
+    appCart,
+  };
+}
+
+/** The refusal when app rules block checkout (quote and order alike). */
+export function assertNoCheckoutRuleErrors(ruleErrors: readonly CheckoutRuleError[]): void {
+  if (ruleErrors.length === 0) return;
+  throw new ValidationError(
+    ruleErrors.length === 1 && ruleErrors[0]!.index === null
+      ? ruleErrors[0]!.message
+      : "Some items in your cart need attention.",
+    { reason: CHECKOUT_RULES_FAILED_REASON, ruleErrors },
+  );
+}
+
+/**
+ * The cart page's `cart.validate` check: the same app cart at catalog
+ * totals (discounts are priced by the checkout quote, which runs the rules
+ * again with them, as does the order). No app implementing the point: no read.
+ */
+export async function checkStorefrontCartRules(
+  db: Database,
+  input: {
+    cartValidation: Pick<StorefrontCartValidationResult, "items">;
+    /** The chosen delivery, when the cart has one: apps see its region. */
+    delivery: Pick<CheckoutPricingDelivery, "cityName" | "zoneName" | "fulfilment"> | null;
+    apps: CheckoutAppFunctions | undefined;
+    currency: { code: string; decimalPlaces: number };
+    customerId?: string | null;
+    channel: FunctionCart["channel"];
+  },
+): Promise<CheckoutRuleError[]> {
+  const { apps, cartValidation } = input;
+  if (!apps?.points.has("cart.validate") || cartValidation.items.length === 0) return [];
+  const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+  const facts = await loadAppFunctionCartFacts(db, {
+    productIds: cartValidation.items.map((item) => item.productId),
+    variantIds: cartValidation.items.map((item) => item.variantId),
+    customerId: input.customerId,
+  });
+  const cart = safeAppCart(() => buildAppFunctionCart({
+    currency: input.currency,
+    channel: input.channel,
+    lines: cartValidation.items.map((item, position) => ({
+      lineId: lineIds[position]!,
+      productId: item.productId,
+      variantId: item.variantId,
+      title: item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName,
+      quantity: item.quantity,
+      unitPriceMinor: item.unitPriceMinor,
+      discountMinor: 0,
+      properties: item.properties,
+    })),
+    facts,
+    destination: input.delivery?.fulfilment.requiresShipping
+      ? { city: input.delivery.cityName, zone: input.delivery.zoneName }
+      : null,
+    discountCodes: [],
+  }));
+  if (!cart) return [];
+  return collectCheckoutRuleErrors(
+    await apps.run("cart.validate", { cart }),
+    new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),
+    apps,
+  );
+}
+
+/**
+ * The cart's discount preview (`POST /discounts/validate`) with the apps'
+ * discounts stacked the way checkout stacks them. Prices are the cart's own
+ * (a preview); the checkout quote is authoritative. Null when no app
+ * implements `checkout.discounts` (no read, no call).
+ */
+export async function previewStorefrontAppDiscounts(
+  db: Database,
+  input: {
+    apps: CheckoutAppFunctions | undefined;
+    currency: { code: string; decimalPlaces: number };
+    lines: ReadonlyArray<{ lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean }>;
+    platformAllocation: TaxDiscountAllocationInput | undefined;
+    shippingMinor: number;
+    discountCodes: readonly string[];
+  },
+): Promise<AppDiscountResolution | null> {
+  const { apps } = input;
+  if (!apps?.points.has("checkout.discounts") || input.lines.length === 0) return null;
+  const facts = await loadAppFunctionCartFacts(db, {
+    productIds: input.lines.map((line) => line.productId),
+    variantIds: input.lines.map((line) => line.variantId),
+  });
+  const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
+  const cart = safeAppCart(() => buildAppFunctionCart({
+    currency: input.currency,
+    channel: "online_store",
+    lines: input.lines.map((line) => ({
+      lineId: line.lineId,
+      productId: line.productId,
+      variantId: line.variantId,
+      title: "",
+      quantity: line.quantity,
+      unitPriceMinor: line.unitPriceMinor,
+      discountMinor: platformLines.get(line.lineId) ?? 0,
+      properties: [],
+    })),
+    facts,
+    destination: null,
+    discountCodes: input.discountCodes,
+  }));
+  if (!cart) return null;
+  return resolveAppDiscounts({
+    currencyCode: input.currency.code,
+    lines: input.lines.map((line) => ({
+      lineId: line.lineId,
+      grossMinor: line.unitPriceMinor * line.quantity,
+      platformDiscountMinor: platformLines.get(line.lineId) ?? 0,
+      giftCard: line.giftCard,
+    })),
+    shippingMinor: input.shippingMinor,
+    platformShippingDiscountMinor: input.platformAllocation?.shippingMinor ?? 0,
+    submittedCodes: input.discountCodes,
+    results: await apps.run("checkout.discounts", { cart }),
+    apps,
+  });
+}
+
+/** A payment method's buyer-facing name (the gateway's checkout name; cash on delivery). */
+export function checkoutPaymentMethodName(methodId: string): string {
+  if (methodId === "cod") return COD_LABEL;
+  return getPaymentGateway(methodId)?.checkoutName?.trim() || methodId;
+}
+
+/**
+ * The payment methods to offer after the apps (`checkout.payment_methods`):
+ * the methods checkout already allows, narrowed, renamed and reordered.
+ * `changed` is false when no app changed anything (then show the list as is).
+ */
+export async function resolveAppPaymentMethods(
+  apps: CheckoutAppFunctions | undefined,
+  cart: FunctionCart | null,
+  methodIds: readonly string[],
+): Promise<{ methods: CheckoutPaymentMethodOption[]; changed: boolean }> {
+  const methods = [...new Set(methodIds)].map((methodId) => ({ methodId, name: checkoutPaymentMethodName(methodId) }));
+  if (!apps?.points.has("checkout.payment_methods") || !cart || methods.length === 0) return { methods, changed: false };
+  const results = await apps.run("checkout.payment_methods", {
+    cart,
+    methods: methods.slice(0, 20).map((method) => ({ methodId: method.methodId.slice(0, 128), name: method.name.slice(0, 80) })),
+  });
+  return applyAppPaymentMethodOperations(methods, results, apps);
+}
+
+/** Order placement: an app may have hidden the chosen method for this cart. Gift cards are tender, never hidden. */
+export async function assertStorefrontAppPaymentMethod(
+  apps: CheckoutAppFunctions | undefined,
+  cart: FunctionCart | null,
+  chosen: string,
+  methodIds: readonly string[],
+): Promise<void> {
+  if (chosen === GIFT_CARD_PAYMENT_METHOD || !methodIds.includes(chosen)) return;
+  const { methods, changed } = await resolveAppPaymentMethods(apps, cart, methodIds);
+  if (changed && !methods.some((method) => method.methodId === chosen)) {
+    throw new ValidationError(
+      "This payment method isn't available for this order. Choose another.",
+      { reason: PAYMENT_METHOD_UNAVAILABLE_REASON },
+    );
+  }
+}
+
+function parseLineInputs(serialized: string | null | undefined): Array<{ key: string; value: string }> {
+  if (!serialized) return [];
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry: unknown) => {
+      if (!entry || typeof entry !== "object") return [];
+      const { key, value } = entry as { key?: unknown; value?: unknown };
+      return typeof key === "string" && typeof value === "string" ? [{ key, value }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The app cart of a prepared order, for apps that only look at placed orders
+ * (`order.risk`), built after the order committed so the buyer never waits
+ * for it. Line totals are after the platform's discounts, before the apps'.
+ */
+export async function buildAppCartFromOrderPayload(
+  db: Database,
+  input: {
+    payload: Pick<StorefrontOrderCommitPayload, "items" | "orderData">;
+    appDiscounts: readonly AppliedAppDiscount[];
+    discountCodes: readonly string[];
+    customerId: string | null;
+    channel: FunctionCart["channel"];
+  },
+): Promise<FunctionCart> {
+  const appPart = new Map<string, number>();
+  for (const discount of input.appDiscounts) {
+    for (const line of discount.lines) appPart.set(line.lineId, (appPart.get(line.lineId) ?? 0) + line.amountMinor);
+  }
+  const { items, orderData } = input.payload;
+  const facts = await loadAppFunctionCartFacts(db, {
+    productIds: items.map((item) => item.productId),
+    variantIds: items.map((item) => item.variantId),
+    customerId: input.customerId,
+  });
+  return buildAppFunctionCart({
+    currency: { code: orderData.currencyCode, decimalPlaces: orderData.currencyDecimalPlaces },
+    channel: input.channel,
+    lines: items.map((item) => ({
+      lineId: item.taxAllocationLineId,
+      productId: item.productId,
+      variantId: item.variantId,
+      title: item.variantLabel ? `${item.productName ?? ""} (${item.variantLabel})` : item.productName ?? "",
+      quantity: item.quantity,
+      unitPriceMinor: item.unitPriceMinor,
+      discountMinor: Math.max(0, item.discountAmountMinor - (appPart.get(item.taxAllocationLineId) ?? 0)),
+      properties: parseLineInputs(item.properties),
+    })),
+    facts,
+    destination: orderData.requiresShipping === false ? null : { city: orderData.cityName, zone: orderData.zoneName },
+    discountCodes: input.discountCodes,
+  });
+}

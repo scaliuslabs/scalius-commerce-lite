@@ -5,6 +5,8 @@ import type { OrderNotificationType } from "../notifications/notification-types"
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/refund-attempt-views";
 import type { TaxQuote } from "../tax/types";
 import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
+import type { AppliedAppDiscount, CheckoutRateOption } from "../checkout/app-functions";
+import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { OrderChannel } from "@scalius/shared/order-channel";
@@ -242,13 +244,26 @@ export interface OrderDetails extends OrderListItem {
     totalAmountMinor: number | null;
     taxLabel: string | null;
     pricesIncludeTax: boolean;
-    /** Every discount applied at checkout, one entry per promotion (major units). */
+    /** Every discount applied at checkout: one entry per promotion, then one per app discount (major units). */
     discounts: Array<{
-        promotionId: string;
+        source: "promotion" | "app";
+        /** Null for an app's discount. */
+        promotionId: string | null;
+        /** The app that gave it; null for the store's own discounts. */
+        appId: string | null;
+        appName: string | null;
         name: string;
         code: string | null;
         method: "automatic" | "code";
         amount: number;
+    }>;
+    /** Apps' advisory risk checks of the order, newest first; never acted on automatically. */
+    appRiskChecks: Array<{
+        appId: string;
+        appName: string;
+        level: "low" | "medium" | "high";
+        reasons: string[];
+        checkedAt: Date;
     }>;
     items: (OrderLineFulfilmentFacts & {
         id: string;
@@ -375,6 +390,14 @@ export interface CreateStorefrontOrderResult {
     linePropertiesHashes: string[];
     /** The gift-card tender; no handles means none (amount due = total). */
     giftCardTender: StorefrontGiftCardTenderSummary;
+    /** The chosen delivery rate as reviewed (an app may have renamed or priced it); fingerprinted. */
+    shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
+    /** App discounts the order carries (after the platform's). */
+    appDiscounts: AppliedAppDiscount[];
+    /** Delivery options an app changed; null when none did. */
+    shippingRates: CheckoutRateOption[] | null;
+    /** The cart apps saw; null when no app implements a cart point. */
+    appCart: FunctionCart | null;
 }
 
 /** Immutable buyer-reviewed delivery method facts captured for a storefront order. */
@@ -485,6 +508,12 @@ export interface StorefrontOrderCommitPayload {
     }[];
     /** The applied discount (code or automatic); re-verified during the order commit. */
     promotion?: PromotionCheckoutSnapshot | null;
+    /**
+     * App discounts on top of the platform's (checkout/app-functions.ts),
+     * lines by `taxAllocationLineId`. Recorded with the order as immutable
+     * `app_discount` facts in the commit batch. Absent means none.
+     */
+    appDiscounts?: AppliedAppDiscount[];
     /**
      * Gift-card debits (the hold), written in the commit batch after the
      * order; the ledger guards refuse a card that changed since the quote.

@@ -8,6 +8,13 @@ const mocks = vi.hoisted(() => ({
   quoteStorefrontDiscount: vi.fn(),
   previewStorefrontBundleSavings: vi.fn(),
   selectStorefrontCartProductRows: vi.fn(),
+  // No app implements a checkout function unless a test says so.
+  listActiveFunctionRegistrations: vi.fn(async () => [] as unknown[]),
+}));
+
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
+  listActiveFunctionRegistrations: mocks.listActiveFunctionRegistrations,
 }));
 
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
@@ -104,8 +111,8 @@ describe("public discount validation", () => {
         bundleDiscountAmount: 0,
         bundles: [],
         discounts: [
-          { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amount: 300, shippingAmount: 0 },
-          { promotionId: "promo_auto", title: "Free delivery", code: null, amount: 0, shippingAmount: 60 },
+          { promotionId: "promo_code", appId: null, title: "Eid 10%", code: "SAVE10", amount: 300, shippingAmount: 0 },
+          { promotionId: "promo_auto", appId: null, title: "Free delivery", code: null, amount: 0, shippingAmount: 60 },
         ],
         offers: [],
         rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallAmount: 200 }],

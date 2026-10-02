@@ -17,6 +17,7 @@ import {
     paymentPlans,
     webhookEvents,
     orderDiscountAllocations,
+    orderEvents,
     OrderStatus,
     PaymentMethod,
     PaymentRecordStatus,
@@ -78,7 +79,9 @@ export function orderEditEvidenceSelection() {
         hasReturnHistory: exists(sql`${orderReturns}`, sql`${orderReturns.orderId}`),
         hasInvoiceHistory: exists(sql`${orderInvoices}`, sql`${orderInvoices.orderId}`),
         hasPaymentPlan: exists(sql`${paymentPlans}`, sql`${paymentPlans.orderId}`),
-        hasPromotionAllocation: exists(sql`${orderDiscountAllocations}`, sql`${orderDiscountAllocations.orderId}`),
+        // A store promotion or an app discount: either is repriced only by checkout.
+        hasPromotionAllocation: sql<number>`(${exists(sql`${orderDiscountAllocations}`, sql`${orderDiscountAllocations.orderId}`)}
+            OR ${exists(sql`${orderEvents}`, sql`${orderEvents.orderId}`, sql`${orderEvents.kind} = 'app_discount'`)})`,
         hasHandedOverItem: exists(
             sql`${orderItems}`,
             sql`${orderItems.orderId}`,

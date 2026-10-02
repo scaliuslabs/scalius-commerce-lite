@@ -7,7 +7,6 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import {
     buildStorefrontTaxAllocationLineId,
-    calculateStorefrontTaxQuote,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
 import type { TaxQuote } from "../tax/types";
@@ -20,8 +19,9 @@ import {
 } from "../gift-cards";
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
 import { getPaymentGateway } from "../payments/gateways/registry";
-import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
-import { resolveBundlePromotionInterplay } from "./bundle-discounts";
+import { assertDiscountCodesApplied } from "../promotions";
+import type { CheckoutAppFunctions } from "./app-functions";
+import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import {
     PaymentMethod,
     PaymentStatus,
@@ -440,6 +440,8 @@ export async function createStorefrontOrder(
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
     /** SCALIUS_SECRET, which opens gift-card apply handles (null: every handle is unusable). */
     giftCardAuthority: { masterSecret?: string | null } = {},
+    /** The apps' checkout functions (none: platform pricing only) and the order channel they see. */
+    appOptions: { apps?: CheckoutAppFunctions; channel?: "online_store" | "agent" } = {},
 ): Promise<CreateStorefrontOrderResult> {
     if (data.items.length > MAX_ORDER_LINE_ITEMS) {
         throw new ValidationError(
@@ -534,7 +536,6 @@ export async function createStorefrontOrder(
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
-    const verifiedShippingMinor = deliveryPreflight.shippingMinor;
 
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
@@ -559,70 +560,31 @@ export async function createStorefrontOrder(
             inventoryTracked: validatedItem.inventoryTracked,
             taxClassId: validatedItem.taxClassId,
             productImageMediaId: validatedItem.productImageMediaId,
-            bundleDiscountMinor: validatedItem.bundleDiscountMinor ?? 0,
         };
     });
 
     // ------------------------------------------------------------------
-    // DISCOUNT: the typed codes (each fails closed) against active automatic ones
+    // PRICE: promotions or bundles, then the apps' functions, then tax
+    // (pricing.ts: the same rule as the tax quote the buyer reviewed).
+    // Typed codes fail closed; an app rule the cart breaks blocks the order.
     // ------------------------------------------------------------------
-    const discount = await quoteStorefrontDiscount(storefrontDb, {
-        codes: data.discountCodes,
+    const pricing = await priceStorefrontCheckout(storefrontDb, {
+        cartValidation,
+        delivery: deliveryPreflight,
+        discountCodes: data.discountCodes,
         customerId: accountOwnerCustomer?.id,
         customerPhone: data.customerPhone,
-        cart: {
-            currencyCode: requestCurrency.code,
-            lines: preparedItems.map((item) => ({
-                id: item.taxAllocationLineId,
-                productId: item.productId,
-                variantId: item.variantId,
-                unitPriceMinor: item.unitPriceMinor,
-                quantity: item.quantity,
-                // Gift-card lines are outside every promotion (§4.2).
-                ...(item.isGiftCard ? { giftCard: true } : {}),
-            })),
-            shippingAmountMinor: verifiedShippingMinor,
-        },
-    });
-    assertDiscountCodesApplied(discount);
-    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
-    const bundleDiscount = resolveBundlePromotionInterplay(
-        preparedItems.map((item) => ({
-            lineId: item.taxAllocationLineId,
-            unitPriceMinor: item.unitPriceMinor,
-            quantity: item.quantity,
-            bundleDiscountMinor: item.bundleDiscountMinor,
-        })),
-        discount,
-    );
-    const bundleDiscountByLine = new Map(bundleDiscount.bundleLines.map((line) => [line.lineId, line.amountMinor]));
-    const taxQuoteInput = {
-        // No address (pickup, service, digital): only store-wide rates apply.
-        destination: {
-            city: shippingDestination?.city ?? null,
-            zone: shippingDestination?.zone ?? null,
-            area: shippingDestination?.area ?? null,
-            cityName: deliveryPreflight.cityName,
-            zoneName: deliveryPreflight.zoneName,
-            areaName: deliveryPreflight.areaName,
-        },
-        lines: preparedItems.map((item) => ({
-            lineId: item.taxAllocationLineId,
-            productId: item.productId,
-            variantId: item.variantId,
-            unitPriceMinor: item.unitPriceMinor,
-            quantity: item.quantity,
-            taxClassId: item.taxClassId,
-            // A gift card is money, not a taxable sale (§4.2).
-            ...(item.isGiftCard ? { taxExempt: true } : {}),
-        })),
-        shippingMinor: verifiedShippingMinor,
-        promotionDiscountAllocation: bundleDiscount.allocation,
         currency: requestCurrency,
-    };
-    const taxQuote = taxAuthoritySnapshot
-        ? await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput, taxAuthoritySnapshot)
-        : await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput);
+        taxAuthority: taxAuthoritySnapshot,
+        apps: appOptions.apps,
+        channel: appOptions.channel ?? "online_store",
+        location: { city: data.city, zone: data.zone, area: data.area },
+    });
+    assertNoCheckoutRuleErrors(pricing.ruleErrors);
+    assertDiscountCodesApplied(pricing.typedCodes);
+    const bundleDiscountByLine = new Map(pricing.bundleLines.map((line) => [line.lineId, line.amountMinor]));
+    const taxQuote = pricing.taxQuote;
+    const shippingMethod = pricing.shippingMethod;
 
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
@@ -698,11 +660,11 @@ export async function createStorefrontOrder(
             zoneName: deliveryPreflight.zoneName,
             areaName: deliveryPreflight.areaName,
             notes: data.notes,
-            shippingMethodId: deliveryPreflight.shippingMethod?.id ?? null,
-            shippingMethodName: deliveryPreflight.shippingMethod?.name ?? null,
-            shippingMethodDescription: deliveryPreflight.shippingMethod?.description ?? null,
-            shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod?.baseAmountMinor ?? null,
-            shippingFeeWaived: deliveryPreflight.shippingMethod?.feeWaived ?? null,
+            shippingMethodId: shippingMethod?.id ?? null,
+            shippingMethodName: shippingMethod?.name ?? null,
+            shippingMethodDescription: shippingMethod?.description ?? null,
+            shippingMethodBaseAmountMinor: shippingMethod?.baseAmountMinor ?? null,
+            shippingFeeWaived: shippingMethod?.feeWaived ?? null,
             requiresShipping,
             shippingMethodKind: deliveryPreflight.kind,
             pickupAddress: deliveryPreflight.pickup?.address ?? null,
@@ -761,7 +723,8 @@ export async function createStorefrontOrder(
                 taxAmountMinor: lineTax.taxMinor,
             };
         }),
-        promotion: bundleDiscount.discount.snapshot,
+        promotion: pricing.discount.snapshot,
+        ...(pricing.appDiscounts.length > 0 ? { appDiscounts: pricing.appDiscounts } : {}),
         ...(giftCardsApplied
             ? {
                 giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor }) => ({
@@ -783,6 +746,10 @@ export async function createStorefrontOrder(
         requiresShipping,
         linePropertiesHashes: await storefrontLinePropertiesHashes(cartValidation),
         giftCardTender,
+        shippingMethod,
+        appDiscounts: pricing.appDiscounts,
+        shippingRates: pricing.shippingRates,
+        appCart: pricing.appCart,
     };
 }
 

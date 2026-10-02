@@ -21,6 +21,7 @@ import {
     buildStorefrontCheckoutQuoteFingerprint,
 } from "@scalius/core/modules/checkout/browser";
 import {
+    assertStorefrontAppPaymentMethod,
     assertStorefrontGiftCardTenderReviewed,
     buildCheckoutAttemptIdentity,
     commitStorefrontOrderPayload,
@@ -31,9 +32,12 @@ import {
     runStorefrontOrderPostCommitSideEffects,
     assertStorefrontCheckoutPolicy,
     loadStorefrontCheckoutReads,
+    resolveCartPaymentMethods,
     type StorefrontCheckoutAuthoritySnapshot,
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
+import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
 import { AppError, ValidationError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
@@ -445,6 +449,15 @@ app.openapi(createOrderRoute, async (c) => {
 
     const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
+    // The apps' checkout functions, from the registrations the read batch
+    // carried: none means no app work. Placement runs them again (it never
+    // trusts the quote's app outcome; the fingerprint compares the totals).
+    const apps = createCheckoutAppFunctions({
+      env: c.env,
+      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+      db,
+      registrations: checkoutReads.functionRegistrations,
+    });
     diagnostics?.mark("authority");
 
     const {
@@ -489,16 +502,25 @@ app.openapi(createOrderRoute, async (c) => {
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },
+      { apps, channel: "online_store" },
     );
 
     assertStorefrontCheckoutQuoteFingerprint(
       data.expectedQuoteFingerprint,
       await buildStorefrontCheckoutQuoteFingerprint(
         result.taxQuote,
-        deliveryPreflight.shippingMethod,
+        result.shippingMethod,
         result.linePropertiesHashes,
       ),
     );
+    // An app may have hidden the chosen method for this cart; readiness and
+    // the merchant's payment policy were already checked above.
+    if (apps.points.has("checkout.payment_methods")) {
+      await assertStorefrontAppPaymentMethod(apps, result.appCart, result.paymentMethod, resolveCartPaymentMethods(
+        checkoutAuthority.activePaymentMethods.enabledMethods,
+        deliveryPreflight.fulfilment,
+      ));
+    }
     // Then the gift cards: still usable, and the amount due the buyer reviewed.
     assertStorefrontGiftCardTenderReviewed(result.giftCardTender, data.expectedAmountDueMinor);
 
@@ -545,8 +567,9 @@ app.openapi(createOrderRoute, async (c) => {
       message: "Order created",
     };
 
+    let committed: Awaited<ReturnType<typeof commitStorefrontOrderPayload>>;
     try {
-      await commitStorefrontOrderPayload(
+      committed = await commitStorefrontOrderPayload(
         db,
         result.commitPayload,
         { attempt: checkoutAttempt, response: responsePayload },
@@ -608,6 +631,18 @@ app.openapi(createOrderRoute, async (c) => {
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
         ? enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, result.orderId, "checkout-commit")
         : null,
+      // Apps' advisory risk checks: after the commit, never on the buyer's path.
+      !apps.points.has("order.risk") || committed.alreadyCommitted
+        ? null
+        : runOrderRiskChecks({
+          db,
+          apps,
+          prepared: result,
+          discountCodes: data.discountCodes,
+          customerId: committed.customerId,
+          accountOwnerCustomerId: committed.accountOwnerCustomerId,
+          channel: "online_store",
+        }),
     ]);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(postCommit);

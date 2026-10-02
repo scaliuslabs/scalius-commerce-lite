@@ -58,6 +58,7 @@ import {
     type AtomicCheckoutAttempt,
 } from "./attempts";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
+import { buildAppDiscountFactInserts } from "../orders/app-facts";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
     GiftCardChangedError,
@@ -556,15 +557,55 @@ function buildOrderWriteBatch(
     // to its promotion allocations, which refunds and receipts reconcile. The
     // checkout authority revision fences the tiers bundles were priced from.
     let bundleDiscountTotal = 0;
+    const bundleByLine = new Map<string, number>();
     for (const item of payload.items) {
         const amount = item.bundleDiscountMinor ?? 0;
         if (!Number.isSafeInteger(amount) || amount < 0 || amount > item.discountAmountMinor) {
             throw new ValidationError("Committed bundle discount is invalid.");
         }
         bundleDiscountTotal += amount;
+        bundleByLine.set(item.taxAllocationLineId, amount);
     }
     if (appliedPromotion && bundleDiscountTotal > 0) {
         throw new ValidationError("Committed discounts combine a promotion with bundle pricing.");
+    }
+
+    // App discounts sit on top of either (checkout/app-functions.ts): line
+    // discount = platform part + app part, recorded as `app_discount` facts.
+    const appDiscounts = payload.appDiscounts ?? [];
+    const itemIdByLineId = new Map(payload.items.map((item) => [item.taxAllocationLineId, item.id]));
+    const appLineDiscounts = new Map<string, number>();
+    let appShippingDiscountMinor = 0;
+    for (const discount of appDiscounts) {
+        const lineTotal = discount.lines.reduce((total, line) => {
+            if (!itemIdByLineId.has(line.lineId) || !Number.isSafeInteger(line.amountMinor) || line.amountMinor <= 0) {
+                throw new ValidationError("Committed app discount is invalid.");
+            }
+            appLineDiscounts.set(line.lineId, (appLineDiscounts.get(line.lineId) ?? 0) + line.amountMinor);
+            return total + line.amountMinor;
+        }, 0);
+        if (
+            lineTotal !== discount.amountMinor
+            || !Number.isSafeInteger(discount.shippingAmountMinor)
+            || discount.shippingAmountMinor < 0
+            || (discount.target === "shipping") !== (discount.lines.length === 0)
+            || discount.amountMinor + discount.shippingAmountMinor <= 0
+        ) {
+            throw new ValidationError("Committed app discount is invalid.");
+        }
+        appShippingDiscountMinor += discount.shippingAmountMinor;
+    }
+    const appDiscountTotal = [...appLineDiscounts.values()].reduce((total, amount) => total + amount, appShippingDiscountMinor);
+    if (!appliedPromotion && appDiscountTotal > 0) {
+        if (
+            bundleDiscountTotal + appDiscountTotal !== od.discountAmountMinor
+            || od.discountAmountMinor !== payload.taxQuote.discountMinor
+            || appShippingDiscountMinor !== payload.taxQuote.shipping.discountMinor
+            || payload.taxQuote.lines.some((line) =>
+                (bundleByLine.get(line.lineId) ?? 0) + (appLineDiscounts.get(line.lineId) ?? 0) !== line.discountMinor)
+        ) {
+            throw new ValidationError("Committed app discounts do not match the order total.");
+        }
     }
 
     if (appliedPromotion) {
@@ -577,8 +618,8 @@ function buildOrderWriteBatch(
         );
         if (
             allocationTotal !== appliedPromotion.totalDiscountMinor
-            || allocationTotal !== od.discountAmountMinor
-            || allocationTotal !== payload.taxQuote.discountMinor
+            || allocationTotal + appDiscountTotal !== od.discountAmountMinor
+            || allocationTotal + appDiscountTotal !== payload.taxQuote.discountMinor
         ) {
             throw new ValidationError("Committed promotion allocation does not match the order total.");
         }
@@ -602,11 +643,11 @@ function buildOrderWriteBatch(
             );
         }
         for (const line of payload.taxQuote.lines) {
-            if ((lineDiscounts.get(line.lineId) ?? 0) !== line.discountMinor) {
+            if ((lineDiscounts.get(line.lineId) ?? 0) + (appLineDiscounts.get(line.lineId) ?? 0) !== line.discountMinor) {
                 throw new ValidationError("Promotion and tax line allocations do not match.");
             }
         }
-        if (shippingDiscountMinor !== payload.taxQuote.shipping.discountMinor) {
+        if (shippingDiscountMinor + appShippingDiscountMinor !== payload.taxQuote.shipping.discountMinor) {
             throw new ValidationError("Promotion and shipping tax allocations do not match.");
         }
 
@@ -658,6 +699,15 @@ function buildOrderWriteBatch(
                 createdAt: sql`unixepoch()`,
             }));
         }
+    }
+
+    if (appDiscounts.length > 0) {
+        writes.push(...buildAppDiscountFactInserts(db, {
+            orderId: od.id,
+            currencyCode: od.currencyCode,
+            discounts: appDiscounts,
+            orderItemIdByLineId: itemIdByLineId,
+        }) as SQLiteBatchItem[]);
     }
 
     // The gift-card hold (§4.3): after the order row, which it references.

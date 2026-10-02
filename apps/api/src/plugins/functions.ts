@@ -1,19 +1,20 @@
 // Function points (docs/platform/PLUGINS.md, "Extension points" 2): checkout
 // asks every active plugin that implements a point, in priority order, and
-// merges what comes back. Wiring into checkout is a later phase; this is the
-// runner it will call. With no active implementation the cost is one indexed
-// read that returns nothing.
+// merges what comes back (core checkout/app-functions.ts). This is the runner
+// it calls. With no active implementation the cost is one indexed read that
+// returns nothing (or none: checkout passes the registrations it already
+// read in its own batch).
 
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
-import { listActiveFunctionPlugins } from "@scalius/core/modules/plugins";
+import { listActiveFunctionPlugins, type RegisteredPlugin } from "@scalius/core/modules/plugins";
 import {
   PLUGIN_FUNCTION_SCHEMAS,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
 } from "@scalius/shared/plugins";
-import type { PluginHostOptions } from "./host";
+import type { PluginHost, PluginHostOptions } from "./host";
 
 export interface PluginFunctionResult<P extends PluginFunctionPoint> {
   pluginId: string;
@@ -29,25 +30,36 @@ const CONCURRENCY = 4;
  * outputs, ordered by priority then plugin id. A plugin that throws, times
  * out or returns an invalid output is skipped (fail-open) and logged for the
  * merchant. The input is the platform's own and must match the point's
- * schema; a mismatch is a platform bug and throws.
+ * schema; a mismatch is a platform bug and throws. A plugin whose approved
+ * grant does not include the point never runs.
  */
 export async function runPluginFunctions<P extends PluginFunctionPoint>(
   point: P,
   input: PluginFunctionInput<P>,
   env: Env,
   ctx: ExecutionContext,
-  options: { db?: Database; loaderFor?: PluginHostOptions["loaderFor"] } = {},
+  options: {
+    db?: Database;
+    loaderFor?: PluginHostOptions["loaderFor"];
+    /** The point's registrations, already read (checkout reads every point in its own batch). */
+    registered?: readonly RegisteredPlugin[];
+    /** A host shared by the request's calls (one settings read per plugin). */
+    host?: PluginHost;
+  } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
-  const registered = await listActiveFunctionPlugins(db, point);
+  const registered = (options.registered ?? await listActiveFunctionPlugins(db, point))
+    .filter((registration) => registration.name === point && registration.installation.grant?.functions.includes(point));
   if (registered.length === 0) return [];
 
   const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(input);
   if (!checked.success) {
     throw new TypeError(`runPluginFunctions(${point}) received an input that does not match the point's schema.`);
   }
-  const { PluginHost } = await import("./host");
-  const host = new PluginHost({ env, ctx, db, ...(options.loaderFor ? { loaderFor: options.loaderFor } : {}) });
+  const host = options.host ?? await (async () => {
+    const { PluginHost } = await import("./host");
+    return new PluginHost({ env, ctx, db, ...(options.loaderFor ? { loaderFor: options.loaderFor } : {}) });
+  })();
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   let next = 0;
   const worker = async () => {
