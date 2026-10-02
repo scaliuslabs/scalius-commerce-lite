@@ -317,7 +317,7 @@ describe("storefront homepage data", () => {
     publishTheme(sqlite, [section({ id: "text", type: "editorial", settings: { layout: "rich-text", heading: "Hi", body: "" } })]);
     const homepage = await getHomepageData(db);
     expect(batches).toBe(1);
-    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null });
+    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null, apps: [] });
   });
 
   it("reads hero slide images by media id, at their published rendition, phone images too", async () => {

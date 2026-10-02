@@ -111,7 +111,7 @@ describe("storefront private cache policy", () => {
     vi.mocked(getHomepageData).mockResolvedValue({ sections: { lists: [], media: [] } } as never);
     const plain = await createTestApp().request("/api/v1/storefront/homepage");
     expect(plain.status).toBe(200);
-    expect(getHomepageData).toHaveBeenCalledWith({});
+    expect(getHomepageData).toHaveBeenCalledWith({}, { renderApps: expect.any(Function) });
 
     // Named reads (or any other query) never reach the database or the cache.
     vi.mocked(getHomepageData).mockClear();
