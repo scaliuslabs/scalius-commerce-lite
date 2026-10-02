@@ -28,7 +28,15 @@ export interface AppFormAnswer {
 }
 
 const MAX_MESSAGE = 300;
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
+
+/** A C0 control character or DEL anywhere in the value. */
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
 
 /**
  * A path on this store (`/x`, never `//x`, `/\x` or another origin), as
@@ -37,7 +45,7 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 export function sameOriginPath(value: unknown, origin: string): string | null {
   if (typeof value !== "string" || value.length > 2048) return null;
   if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
-  if (value.includes("\\") || CONTROL_CHARACTERS.test(value)) return null;
+  if (value.includes("\\") || hasControlCharacter(value)) return null;
   try {
     const url = new URL(value, origin);
     return url.origin === origin ? `${url.pathname}${url.search}${url.hash}` : null;

@@ -24,6 +24,7 @@
 
 import { resolveBackendTarget, type BackendTarget } from "@/lib/api/transport";
 import { parsePluginPageOutput, type PluginPageOutput } from "@scalius/shared/plugins/storefront";
+import { hasControlCharacter } from "@scalius/shared/plugins/html";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -189,7 +190,7 @@ export function isAppPageNavigation(request: Request): boolean {
 
 /** A path on this store for a redirect (never `//x`, `/\x` or another origin), or null. */
 export function sameStoreRedirectPath(value: string, storeOrigin: string): string | null {
-  if (!SAME_STORE_PATH.test(value) || /[\u0000-\u001F\u007F]/.test(value)) return null;
+  if (!SAME_STORE_PATH.test(value) || hasControlCharacter(value)) return null;
   try {
     const url = new URL(value, storeOrigin);
     return url.origin === storeOrigin ? `${url.pathname}${url.search}${url.hash}` : null;

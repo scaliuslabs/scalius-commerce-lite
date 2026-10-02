@@ -435,7 +435,7 @@ export type PluginUiParseResult =
  * guess); anything else invalid lists its first issues.
  */
 export function parsePluginUiDocument(value: unknown): PluginUiParseResult {
-  let bytes = 0;
+  let bytes: number;
   try {
     bytes = new TextEncoder().encode(JSON.stringify(value) ?? "").byteLength;
   } catch {

@@ -94,7 +94,12 @@ export function serializeJsonLd(value: unknown): string {
 }
 
 function plainContent(value: string): string {
-  return value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  let text = "";
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    text += code < 0x20 || code === 0x7f ? " " : character;
+  }
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /**

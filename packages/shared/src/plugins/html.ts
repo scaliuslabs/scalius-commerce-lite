@@ -91,11 +91,20 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
+/** A C0 control character or DEL anywhere in the value. */
+export function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /** A same-store path (`/x`, never `//x` or `/\x`), a fragment, or one of the schemes allowed for this attribute. */
 export function sanitizePluginUrl(value: string, kind: "link" | "image"): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > MAX_ATTRIBUTE_VALUE) return null;
-  if (/[\u0000-\u001F\u007F\\]/.test(trimmed)) return null;
+  if (trimmed.includes("\\") || hasControlCharacter(trimmed)) return null;
   if (trimmed.startsWith("/")) return trimmed.startsWith("//") ? null : trimmed;
   if (kind === "link" && trimmed.startsWith("#")) return /^#[A-Za-z0-9_-]{0,80}$/.test(trimmed) ? trimmed : null;
   let url: URL;
@@ -285,7 +294,7 @@ function sanitizeNodes(nodes: ChildNode[], depth: number, options: PluginHtmlOpt
 export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): PluginHtmlResult {
   if (typeof html !== "string") return { ok: false, reason: "too_complex" };
   if (byteLength(html) > PLUGIN_HTML_MAX_INPUT_BYTES) return { ok: false, reason: "too_large" };
-  const normalized = html.replace(/[\x00\u200B-\u200D\uFEFF]/g, "");
+  const normalized = html.replaceAll("\0", "").replace(/[\u200B-\u200D\uFEFF]/g, "");
   const document = parseDocument(normalized, { decodeEntities: true, lowerCaseAttributeNames: true, lowerCaseTags: true });
   const budget = new Budget();
   const nodes = sanitizeNodes(document.children, 1, options, budget, false);
