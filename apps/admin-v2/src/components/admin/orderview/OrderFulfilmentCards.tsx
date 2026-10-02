@@ -29,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
@@ -233,13 +234,8 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const t = useMessages(orderDetailMessages);
   const permissions = useOrderActionPermissions();
   const cardRef = useRef<HTMLDivElement>(null);
-  const [dialog, setDialogState] = useState<ManualFulfillmentKind | null>(null);
-  // Mounted from the first opening on, so it can animate closed.
-  const [dialogLoaded, setDialogLoaded] = useState(false);
-  const setDialog = (next: ManualFulfillmentKind | null) => {
-    if (next) setDialogLoaded(true);
-    setDialogState(next);
-  };
+  const [dialog, setDialog] = useState<ManualFulfillmentKind | null>(null);
+  const dialogLoaded = useOpenedOnce(dialog !== null);
   const cancelRequest = useCancelRequestGuard(order);
   const pickupReady = usePickupReadyAction(order.id);
   const status = order.status.toLowerCase();

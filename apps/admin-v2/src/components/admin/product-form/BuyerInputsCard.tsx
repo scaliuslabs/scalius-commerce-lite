@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/hooks/use-currency";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import {
@@ -50,7 +51,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
   const drafts = React.useMemo(() => watched ?? [], [watched]);
   const [editing, setEditing] = React.useState<{ index: number | null; draft: BuyerInputDraft } | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [dialogLoaded, setDialogLoaded] = React.useState(false);
+  const dialogLoaded = useOpenedOnce(dialogOpen);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const listRef = React.useRef<HTMLUListElement>(null);
   const minorFactor = 10 ** getDecimalPlaces(code);
@@ -61,7 +62,6 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
     form.setValue("customizationSchema", next, { shouldDirty: true, shouldValidate: true });
   const open = (index: number | null) => {
     setEditing({ index, draft: index === null ? emptyBuyerInput() : drafts[index]! });
-    setDialogLoaded(true);
     setDialogOpen(true);
   };
   const move = (index: number, direction: -1 | 1) => {

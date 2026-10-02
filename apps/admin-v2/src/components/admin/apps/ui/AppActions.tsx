@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { appActionMessages } from "~/i18n/app-actions";
 import { resourceMessages } from "~/i18n/resource";
@@ -62,7 +63,7 @@ export function useAppActionRunner(target: AppTarget, bulk: boolean): Runner {
   const [answer, setAnswer] = useState<AppActionAnswer | null>(null);
   const [answerOpen, setAnswerOpen] = useState(false);
   // Loaded the first time an action asks first or answers with a tree.
-  const [dialogsLoaded, setDialogsLoaded] = useState(false);
+  const dialogsLoaded = useOpenedOnce(asking !== null || answerOpen);
   const refresh = () => void queryClient.invalidateQueries({ refetchType: "active" });
 
   const run = async ({ entry, ids, onDone }: AppActionRequest) => {
@@ -85,7 +86,6 @@ export function useAppActionRunner(target: AppTarget, bulk: boolean): Runner {
         refresh,
         navigate: navigate as Navigate,
         showAnswer: (document) => {
-          setDialogsLoaded(true);
           setAnswer({ entry, ids, document });
           setAnswerOpen(true);
         },
@@ -101,7 +101,6 @@ export function useAppActionRunner(target: AppTarget, bulk: boolean): Runner {
       void run({ entry, ids, onDone });
       return;
     }
-    setDialogsLoaded(true);
     setAsking({ entry, ids, onDone });
   };
 

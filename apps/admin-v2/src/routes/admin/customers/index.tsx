@@ -18,6 +18,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { customersQueryOptions, type CustomersListPayload } from "~/lib/api-query-options/customers";
 import { useCurrency } from "~/hooks/use-currency";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
@@ -89,13 +90,8 @@ function CustomersPage() {
   const [importing, setImporting] = useState(false);
   const openTo = (row: Customer) => `/admin/customers/${row.id}/edit`;
   // The export dialog: from the header (the filters) or the bulk bar (the selection).
-  const [exporting, setExportingState] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
-  // Once opened, the export dialog stays mounted (it closes with its own animation).
-  const [exportLoaded, setExportLoaded] = useState(false);
-  const setExporting: typeof setExportingState = (next) => {
-    setExportLoaded(true);
-    setExportingState(next);
-  };
+  const [exporting, setExporting] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
+  const exportLoaded = useOpenedOnce(exporting.open);
   // Same query as the table (shared cache): the export dialog names how many match.
   const { data: listed } = useQuery(listQuery(search, term));
 
@@ -187,7 +183,7 @@ function CustomersPage() {
         }}
       />
       <LazyImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
-      {exporting.open || exportLoaded ? (
+      {exportLoaded ? (
         <Suspense fallback={null}>
           <ExportCustomersDialog
             open={exporting.open}

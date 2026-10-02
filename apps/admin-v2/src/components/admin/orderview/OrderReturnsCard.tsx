@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useCurrency } from "~/hooks/use-currency";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
@@ -37,13 +38,8 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const hydrated = useHydrated();
   const actions = useOrderActionPermissions();
   const canManage = actions.canChangeOrderStatus;
-  const [dialog, setDialogState] = useState<DialogType | null>(null);
-  // Mounted from the first opening on, so they can animate closed.
-  const [dialogsLoaded, setDialogsLoaded] = useState(false);
-  const setDialog = (next: DialogType | null) => {
-    if (next) setDialogsLoaded(true);
-    setDialogState(next);
-  };
+  const [dialog, setDialog] = useState<DialogType | null>(null);
+  const dialogsLoaded = useOpenedOnce(dialog !== null);
   // The return a dialog acts on; kept after closing so the dialog can animate out.
   const [target, setTarget] = useState<OrderReturnDto | null>(null);
   const targetKey = target ? `${target.id}:${target.version}` : "none";
