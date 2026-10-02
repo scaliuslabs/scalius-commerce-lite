@@ -73,12 +73,13 @@ describe("GET /api/v1/products cursor contract", () => {
     const list = await createApp(12);
     const first = await list({ limit: "5", sort: "price-asc" });
     const cursor = first.body.data.pageInfo.endCursor!;
-    for (const query of [
+    const queries: Array<Record<string, string>> = [
       { cursor: "nope!" },
       { cursor, sort: "price-desc" },
       { cursor, sort: "name-asc" },
       { cursor, sort: "price-asc", page: "2" },
-    ]) {
+    ];
+    for (const query of queries) {
       const result = await list({ limit: "5", ...query });
       expect(result.status, JSON.stringify(query)).toBe(400);
       expect(result.body.error?.code).toBe("INVALID_CURSOR");
