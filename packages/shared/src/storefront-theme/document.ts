@@ -1,4 +1,4 @@
-// The storefront theme document (version 6): the template it is based on
+// The storefront theme document (version 7): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
 // the shared navigation source, the listing's filter style and page chrome)
 // and the page sections. The dashboard
@@ -25,9 +25,11 @@ import {
 } from "./blocks";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
+import { storefrontLandingPagesSchema, storefrontListingPageTemplateSchema, storefrontProductPageTemplateSchema } from "./pages";
+import { upgradeThemeDocumentSteps } from "./upgrade";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 6 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 7 as const;
 
 /** Templates are named by archetype, never by the site they were measured on. */
 export const STOREFRONT_TEMPLATE_IDS = [
@@ -116,15 +118,15 @@ export const storefrontThemeDocumentSchema = z.object({
   /** The logo, its width, the footer logo and the tab icon (media ids). */
   brand: storefrontThemeBrandSchema,
   blocks: storefrontThemeBlocksSchema,
-  /**
-   * Page sections. Only the homepage has sections today; a landing page
-   * joins when a route renders it (each page inlines the whole section
-   * registry into the API contract, so pages are added only with a renderer).
-   */
+  /** Section pages and fixed commerce page blocks share one draft and publish. */
   pages: z.object({
     home: storefrontSectionListSchema,
     /** What `/` shows: the sections, or one product's page. */
     homeMode: storefrontHomeModeSchema,
+    landing: storefrontLandingPagesSchema,
+    product: storefrontProductPageTemplateSchema,
+    collection: storefrontListingPageTemplateSchema,
+    search: storefrontListingPageTemplateSchema,
   }).strict(),
 }).strict().superRefine((document, context) => {
   for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(document)) {
@@ -147,9 +149,14 @@ export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
 }
 
+/** Pure, step-wise read upgrade. Writes continue to require the current strict schema. */
+export function upgradeThemeDocument(document: unknown): StorefrontThemeDocument {
+  return storefrontThemeDocumentSchema.parse(upgradeThemeDocumentSteps(document, STOREFRONT_THEME_DOCUMENT_VERSION));
+}
+
 /**
- * Parses a stored document strictly. Returns null for anything that is not a
- * valid current-version document; callers decide what that means (the
+ * Upgrades a stored document in memory, then parses it strictly. Returns null
+ * for invalid or unsupported documents; callers decide what that means (the
  * dashboard fails closed, the storefront renders the default theme).
  */
 export function parseStoredStorefrontThemeDocument(value: string | null | undefined): StorefrontThemeDocument | null {
@@ -160,8 +167,11 @@ export function parseStoredStorefrontThemeDocument(value: string | null | undefi
   } catch {
     return null;
   }
-  const result = storefrontThemeDocumentSchema.safeParse(parsed);
-  return result.success ? result.data : null;
+  try {
+    return upgradeThemeDocument(parsed);
+  } catch {
+    return null;
+  }
 }
 
 /** CSS custom properties for a document: only constants and validated hex colours. */

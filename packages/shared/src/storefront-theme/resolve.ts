@@ -31,7 +31,7 @@ import {
   type StorefrontThemeBlocks,
 } from "./blocks";
 import type { StorefrontThemeBrand } from "./brand";
-import type { StorefrontHomeMode, StorefrontTemplateId, StorefrontThemeDocument } from "./document";
+import type { StorefrontTemplateId, StorefrontThemeDocument, StorefrontThemePages } from "./document";
 import {
   atLeast,
   failedFitConditions,
@@ -172,7 +172,7 @@ export interface ResolvedStorefrontTheme {
   /** The logo, footer logo and tab icon (media ids) and the logo width, as the document states them. */
   brand: StorefrontThemeBrand;
   /** The sections that fit the store, and what `/` shows. */
-  pages: { home: StorefrontSection[]; homeMode: StorefrontHomeMode };
+  pages: StorefrontThemePages;
   fallbacks: StorefrontThemeFallback[];
   layout: ResolvedStorefrontThemeLayout;
 }
@@ -272,6 +272,7 @@ function fittingSections(
   fallbacks: StorefrontThemeFallback[],
 ): StorefrontSection[] {
   return sections.filter((each) => {
+    if (each.hidden) return false;
     // An app section fits whenever its app renders it (the API decides).
     if (each.type === "app") return true;
     const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[each.type].requires, context);
@@ -356,7 +357,13 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       footer: resolved.footer,
     },
     brand: document.brand,
-    pages: { home, homeMode: document.pages.homeMode },
+    pages: {
+      ...document.pages,
+      home,
+      landing: Object.fromEntries(Object.entries(document.pages.landing).map(([slug, page]) => [
+        slug, { ...page, sections: fittingSections(page.sections, context, fallbacks) },
+      ])),
+    },
     fallbacks,
     layout: {
       topBar: renders<boolean>("topBar", resolved.topBar),

@@ -77,14 +77,14 @@ const V3_CLASSIC = {
   sections: ["hero", "collections", "category-tiles", "usp-strip"],
 } as const;
 
-describe("storefront theme document v6", () => {
+describe("storefront theme document v7", () => {
   it("parses every template as a complete document in its own palette", () => {
     expect(STOREFRONT_TEMPLATES.map((template) => template.id)).toEqual([...STOREFRONT_TEMPLATE_IDS]);
     expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(10);
     for (const template of STOREFRONT_TEMPLATES) {
       const theme = storefrontTemplateTheme(template.id);
       expect(issues(theme), template.id).toEqual([]);
-      expect(theme).toMatchObject({ version: 6, template: template.id });
+      expect(theme).toMatchObject({ version: 7, template: template.id });
       expect(theme.tokens.colors).toEqual(STOREFRONT_THEME_PALETTES[template.palette]);
       expect(Object.isFrozen(template.blocks.product.below)).toBe(true);
     }
@@ -245,7 +245,7 @@ describe("storefront theme document v6", () => {
     const tooMany = clone();
     tooMany.pages.home = Array.from({ length: 25 }, (_, index) => storefrontSectionDefault("collections", `c${index}`));
     expect(issues(tooMany)).not.toEqual([]);
-    const pages = (home: unknown[]) => ({ ...clone(), pages: { home, homeMode: { kind: "sections" } } });
+    const pages = (home: unknown[]) => ({ ...clone(), pages: { ...clone().pages, home, homeMode: { kind: "sections" } } });
     expect(issues(pages([{ id: "x", type: "video", version: 1, settings: {} }]))).not.toEqual([]);
     expect(issues(pages([{ id: "x", type: "hero", version: 2, settings: { layout: "split", slides: [] } }]))).not.toEqual([]);
     expect(issues(pages([{ id: "x", type: "hero", version: 1, settings: { layout: "split", slides: [], extra: 1 } }]))).not.toEqual([]);
@@ -254,12 +254,13 @@ describe("storefront theme document v6", () => {
     expect(issues(pages([{ id: "x", type: "product-rail", version: 1, settings: { title: "", source: { kind: "collection" }, limit: 12 } }]))).not.toEqual([]);
     // Rich text is plain text with the same limits as before.
     expect(issues(pages([{ id: "story", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Our story", body: "Hand-made in Rajshahi." } }]))).toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [], homeMode: { kind: "sections" } } })).toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [] } })).not.toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [], homeMode: { kind: "sections" }, landing: [] } })).not.toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [], homeMode: { kind: "product", productId: "prod_1" } } })).toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [], homeMode: { kind: "product" } } })).not.toEqual([]);
-    expect(issues({ ...clone(), pages: { home: [], homeMode: { kind: "landing", productId: "prod_1" } } })).not.toEqual([]);
+    expect(issues({ ...clone(), pages: { ...clone().pages, home: [], homeMode: { kind: "sections" } } })).toEqual([]);
+    const { homeMode: _homeMode, ...withoutHomeMode } = clone().pages;
+    expect(issues({ ...clone(), pages: withoutHomeMode })).not.toEqual([]);
+    expect(issues({ ...clone(), pages: { ...clone().pages, landing: [] } })).not.toEqual([]);
+    expect(issues({ ...clone(), pages: { ...clone().pages, homeMode: { kind: "product", productId: "prod_1" } } })).toEqual([]);
+    expect(issues({ ...clone(), pages: { ...clone().pages, homeMode: { kind: "product" } } })).not.toEqual([]);
+    expect(issues({ ...clone(), pages: { ...clone().pages, homeMode: { kind: "landing", productId: "prod_1" } } })).not.toEqual([]);
   });
 
   it("keeps the registries consistent: defaults parse, fallbacks exist and end in a variant that always fits", () => {
@@ -284,7 +285,7 @@ describe("storefront theme document v6", () => {
     expect(parseStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual(DEFAULT_STOREFRONT_THEME);
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
-    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 5 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 8 }))).toBeNull();
   });
 
   it("builds CSS tokens from constants and validated colours only", () => {

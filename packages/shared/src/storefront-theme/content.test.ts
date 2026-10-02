@@ -56,11 +56,14 @@ describe("theme content", () => {
   });
 
   it("carries the merchant's content into another template", () => {
-    const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), withContent());
+    const source = withContent();
+    source.pages.landing.offer = { title: "ঈদ অফার", sections: [source.pages.home[0]!], overrideCms: true };
+    const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), source);
     expect(storefrontThemeDocumentSchema.safeParse(next).success).toBe(true);
     expect(next.template).toBe("heritage-editorial");
     expect(next.brand.logo).toBe("media_logo");
     expect(next.pages.homeMode).toEqual({ kind: "product", productId: "prod_1" });
+    expect(next.pages.landing).toEqual(source.pages.landing);
     expect(next.blocks.footer.settings).toMatchObject({ tagline: "Since 1998", copyright: "Acme Ltd." });
     // Heritage has no top bar: the template's choice stands.
     expect(next.blocks.topBar).toEqual({ variant: "none", settings: {} });
@@ -95,5 +98,13 @@ describe("theme media references", () => {
       { path: `pages.home.${heroIndex}.settings.slides.0.phoneImage`, mediaId: "media_hero_phone" },
     ]);
     expect(storefrontThemeMediaIds(theme)).toEqual(["media_logo", "media_footer_logo", "media_icon", "media_hero", "media_hero_phone"]);
+  });
+
+  it("validates hidden landing images while public section reads omit them", async () => {
+    const { storefrontThemeMediaReferences } = await import("./content");
+    const theme = withContent();
+    const hero = { ...theme.pages.home[0]!, hidden: true };
+    theme.pages.landing.offer = { title: "Offer", sections: [hero], overrideCms: false };
+    expect(storefrontThemeMediaReferences(theme)).toContainEqual({ path: "pages.landing.offer.sections.0.settings.slides.0.image", mediaId: "media_hero" });
   });
 });

@@ -126,8 +126,8 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
  */
 export function homeSectionsShowDeliveryFacts(sections: readonly StorefrontSection[]): boolean {
   return sections.some((section) =>
-    (section.type === "usp-strip" && section.settings.source.kind === "delivery-facts")
-    || (section.type === "hero" && section.settings.layout === "app-panel"));
+    !section.hidden && ((section.type === "usp-strip" && section.settings.source.kind === "delivery-facts")
+    || (section.type === "hero" && section.settings.layout === "app-panel")));
 }
 
 /**
@@ -149,6 +149,7 @@ export function homeSectionRequests(
   const apps: HomeAppSectionRequest[] = [];
   let brandLimit = 0;
   for (const section of sections) {
+    if (section.hidden) continue;
     if (section.type === "app") {
       const key = parsePluginSurfaceKey(section.settings.app);
       if (key && apps.length < PLUGIN_HOME_SECTIONS_MAX) {

@@ -1,4 +1,4 @@
-# Storefront theme document (version 6)
+# Storefront theme document (version 7)
 
 One JSON document describes how the storefront looks: the template it is
 based on (a label), the tokens every block reads, the brand (logo, footer
@@ -31,14 +31,16 @@ numbers come from the storefront study
 | `blocks.ts` | the block-variant registry, card looks, listing filter styles and page chrome, product modules and sticky bars, the navigation schema and the blocks schema |
 | `sections.ts` | the section registry (20 types, strict settings) and the types the storefront renders |
 | `home-data.ts` | what homepage sections read (product lists by source, images), shared by the API and the storefront |
-| `document.ts` | the document schema, the document's contrast pairs, strict parsing, token CSS |
+| `document.ts` | the current document schema, contrast pairs, stored-read upgrades and token CSS |
+| `pages.ts` | bounded landing pages and fixed reorderable/hideable commerce page blocks |
+| `upgrade.ts` | one pure step per historical version; golden inputs and provenance in `upgrade.md` |
 | `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
 | `resolve.ts` | `resolveStorefrontTheme(document, storeShape)` |
 | `fidelity-contract.test.ts` | the slice 0 contract matrix: template x card x filter style x navigation source on empty, tiny, live-small, 30k-seed and huge stores |
 
 ```jsonc
 {
-  "version": 6,                        // literal; a new shape means a new version
+  "version": 7,                        // literal; a new shape means a new version
   "template": "department-mall",       // the template it is based on: a label, never read for behaviour
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
@@ -62,8 +64,12 @@ numbers come from the storefront study
     "footer"                           // every variant: { tagline, about, copyright } (+ directory's style)
   },
   "pages": {
-    "home": [{ "id", "type", "version", "settings" }],
-    "homeMode": { "kind": "sections" } // or { "kind": "product", "productId" }
+    "home": [{ "id", "type", "version", "settings", "hidden"? }],
+    "homeMode": { "kind": "sections" }, // or { "kind": "product", "productId" }
+    "landing": { "<slug>": { "title", "sections": [], "overrideCms": false } },
+    "product": { "blocks": [{ "id", "hidden": false }] },
+    "collection": { "blocks": [{ "id", "hidden": false }] },
+    "search": { "blocks": [{ "id", "hidden": false }] }
   }
 }
 ```
@@ -151,11 +157,12 @@ numbers come from the storefront study
   module and section setting has a consumer (a renderer, or the variant's
   `renders` mapping), tested by the same file. An option with nothing to
   render it is removed, not shipped (questions wait for a question model).
-- **Strict.** Unknown keys, values outside the enums, settings that belong to
-  another variant, and other versions are rejected. Writes (API) and reads
-  (core, storefront) use the same schema. There is no tolerant or legacy
-  reader: a stored document that fails the schema fails closed in the
-  dashboard, and the storefront renders `DEFAULT_STOREFRONT_THEME` whole.
+- **Strict writes, upgraded reads.** Writes accept only the current version,
+  known keys and valid registry settings. Stored reads use the pure step-wise
+  `upgradeThemeDocument` before the same validation; older merchant documents
+  are upgraded in memory without writes or resets. Invalid or unknown future
+  documents fail closed. Golden fixtures and historical mappings are documented
+  in [upgrade.md](storefront-theme/upgrade.md).
 - **Tokens are global; blocks choose structure.** A variant never carries
   its own colour, so any mix of variants stays coherent (mix rule 1). One
   card per store (rule 2). **Cards are the exception for shape and type:**
@@ -388,8 +395,15 @@ Where the data departs from SYNTHESIS.md, and why:
   `dense` shares compact's type scale (the 14px phone floor) and uses a 12px
   desktop gap so columns never drop when the page gutter grows at 1024px.
 - **Containers** add `1440` (the v3 width, Mass retail's) to the measured 1200/1290/1360/full.
-- **`pages.landing`** is left out until a route renders it (a page is added
-  only with its renderer). A single-product store uses `pages.homeMode`. The document schema is one named OpenAPI
+- **Page templates.** `pages.landing` holds at most 20 pages with the same
+  section registry and 24-section cap as home; `/pages/<slug>` renders one,
+  and `overrideCms` opts a same-slug CMS page body into sections. Product
+  templates retain gallery, title/price, options, buy buttons, description,
+  specs, reviews, related products and app blocks exactly once. Collection
+  and search retain breadcrumbs, banner, filters and grid exactly once.
+  Fixed blocks can be reordered or hidden; grid density uses `tokens.density`.
+  Hidden sections stay saved and media-validated but make no public data reads.
+  A single-product store uses `pages.homeMode`. The document schema is one named OpenAPI
   component (`StorefrontThemeDocument`) that every theme operation
   references, so a page adds its sections once to the generated contract.
 
@@ -406,22 +420,14 @@ Where the data departs from SYNTHESIS.md, and why:
 2. To change a section's settings incompatibly, bump that entry's
    `version`; an optional field (the hero's `sideBanners`) keeps stored
    sections valid without one.
-3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
-   add a migration that resets stored theme rows to the defaults (0082 was
-   the version 4 reset, 0093 the version 5 reset, 0106 the version 6
-   reset; 0106 also dropped the hero sliders and the homepage, header and
-   footer settings documents the theme replaced). There is no backward
-   compatibility.
-4. Deploy order: a storefront that reads an older or newer document version
-   renders its own default whole and logs a warning, and a store shape with
-   keys it does not know reads as an empty store (every block falls back to
-   its always-fitting variant). Between `deploy:api` and
-   `deploy:storefront` an older storefront therefore renders its own
-   Department mall default, which is what the reset migration puts every
-   store on anyway. Version 6 also changes the store shape's keys (no
-   `hasQuestions`), so a version 5 storefront reads it as an empty store
-   until the new storefront is live: its homepage category tiles and the
-   fit-dependent variants hide for that window.
+3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION`,
+   add one upgrade step from the previous version in `upgrade.ts`, and
+   capture that previous version's golden fixture. Never reset older stored
+   themes. Historical reset migrations remain immutable; this upgrade path
+   applies to documents that still exist.
+4. Coordinate API/storefront release versions: an older storefront cannot
+   read a future document. Current readers upgrade older stored documents,
+   while unknown store-shape keys continue to fail closed to fit fallbacks.
 
 ## Palettes: references and rationale
 

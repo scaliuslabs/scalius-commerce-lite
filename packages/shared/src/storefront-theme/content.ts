@@ -85,8 +85,10 @@ export function storefrontThemeWithContent(
       footer: withBlockContent("footer", target.blocks.footer, source?.blocks.footer ?? null),
     } as StorefrontThemeDocument["blocks"],
     pages: {
+      ...target.pages,
       home,
       homeMode: source ? structuredClone(source.pages.homeMode) : { kind: "sections" },
+      landing: source ? structuredClone(source.pages.landing) : {},
     },
   };
 }
@@ -135,7 +137,12 @@ function sectionMediaReferences(section: StorefrontSection, at: string): Storefr
 export function storefrontThemeMediaReferences(theme: StorefrontThemeDocument): StorefrontThemeMediaReference[] {
   const brand = (["logo", "footerLogo", "favicon"] as const).flatMap((key) =>
     theme.brand[key] ? [{ path: `brand.${key}`, mediaId: theme.brand[key]! }] : []);
-  return [...brand, ...theme.pages.home.flatMap((section, index) => sectionMediaReferences(section, `pages.home.${index}`))];
+  return [
+    ...brand,
+    ...theme.pages.home.flatMap((section, index) => sectionMediaReferences(section, `pages.home.${index}`)),
+    ...Object.entries(theme.pages.landing).flatMap(([slug, page]) => page.sections.flatMap((section, index) =>
+      sectionMediaReferences(section, `pages.landing.${slug}.sections.${index}`))),
+  ];
 }
 
 /** Every media id the document names, each once, in document order. */
