@@ -10,6 +10,8 @@ import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventT
 import { SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { pluginSettingsSchemaSchema } from "./settings-schema";
+import { pluginProvidersSchema } from "./providers/descriptors";
+import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
 export { PLUGIN_API_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
@@ -45,8 +47,8 @@ export const PLUGIN_FUNCTION_POINTS = [
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 
-/** Provider ports a plugin can fill; each maps to an existing core provider interface. */
-export const PLUGIN_PROVIDER_KINDS = ["payment", "shipping", "messaging", "email", "fraud", "tax"] as const;
+/** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
+export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
 export type PluginProviderKind = (typeof PLUGIN_PROVIDER_KINDS)[number];
 
 /** Resources a dashboard card or action can attach to. */
@@ -178,12 +180,12 @@ export const pluginManifestSchema = z.object({
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
-  providers: z.array(z.object({
-    kind: z.enum(PLUGIN_PROVIDER_KINDS),
-    /** Unique within the plugin; the merchant picks providers by `<plugin id>/<id>`. */
-    id: name,
-    name: title,
-  }).strict()).max(10).default([]),
+  /**
+   * Providers the app implements, grouped by port (providers/descriptors.ts).
+   * Ids are unique within the app; merchants and orders name a provider
+   * `<plugin id>:<id>`.
+   */
+  providers: pluginProvidersSchema,
 
   routes: z.object({
     /** Dashboard-authenticated (`/api/v1/plugins/<id>/admin/<name>`). */

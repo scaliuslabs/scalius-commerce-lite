@@ -1,0 +1,191 @@
+import { describe, expect, it } from "vitest";
+import {
+  PROVIDER_KINDS,
+  PROVIDER_OPERATIONS,
+  PROVIDER_PORTS,
+  ProviderError,
+  encodeProviderAmount,
+  isQualifiedProviderId,
+  parseQualifiedProviderId,
+  providerErrorOf,
+  providerOperationSchemas,
+  qualifiedProviderId,
+} from "../providers";
+import { PLUGIN_API_VERSION } from "../api-version";
+import { checkPluginHandlers, pluginHandlerInventory } from "../handlers";
+import { parsePluginManifest, pluginGrantRequest } from "../manifest";
+
+const manifest = {
+  id: "acme.wallet",
+  name: "Acme wallet",
+  version: "1.0.0",
+  apiVersion: PLUGIN_API_VERSION,
+  description: "Port contract fixtures.",
+  author: { name: "Acme" },
+};
+
+const HOSTED_REFUNDS = ["verifyReturn", "queryPayment", "refund", "refundStatus"];
+const wire = (minor: number, decimal: string) => ({ minor, decimal });
+const request = { method: "POST", rawBody: "{}", headers: { "x-signature": "abc" }, query: {} };
+const recipient = {
+  name: "Buyer", phone: "+8801700000000", address: "House 1, Road 2",
+  cityId: "c1", zoneId: "z1", areaId: null, cityName: "Dhaka", zoneName: "Gulshan", areaName: null, postalCode: null, country: "BD",
+};
+
+/** One valid input and output per operation that has meaningful money or identity rules. */
+const SAMPLES: Array<[string, string, unknown, unknown]> = [
+  ["payment", "createSession", {
+    attemptKey: "attempt-1", correlationId: "ORD1_full_ABCDEF12", orderId: "ORD1", paymentType: "full",
+    amountMinor: 12_550, currency: "BDT", wireAmount: wire(12_550, "125.50"),
+    buyer: { name: "Buyer", phone: "+8801700000000" },
+    urls: { success: "https://api.test/s", fail: "https://api.test/f", cancel: "https://api.test/c", webhook: "https://api.test/w" },
+    requestTimeoutMs: 10_000,
+  }, { providerRef: "TR001", redirectUrl: "https://wallet.test/pay/TR001" }],
+  ["payment", "verifyWebhook", request, {
+    status: "event",
+    event: { kind: "confirmed", eventType: "payment", eventId: "TR001", orderId: "ORD1", providerRef: "TR001", amountMinor: 12_550, currency: "BDT" },
+  }],
+  ["payment", "refund", {
+    providerRef: "TR001", secondaryRef: null, amountMinor: 500, currency: "BDT", wireAmount: wire(500, "5.00"),
+    reason: "requested_by_customer", idempotencyKey: "refund-1", reference: "RF1", metadata: {},
+  }, { refundId: "RF-PROVIDER-1" }],
+  ["courier", "createShipment", {
+    idempotencyKey: "shp_1", orderId: "ORD1", recipient, codAmountMinor: 12_550, currency: "BDT", decimalPlaces: 2,
+    note: null, itemCount: 1, itemDescription: null, options: { deliveryType: null, itemType: null, itemWeightKg: 0.5 },
+  }, { externalId: "CN1", trackingId: null, status: "pending", rawStatus: "Pending", chargeMinor: 6000, label: null }],
+  ["courier", "trackShipment", { externalId: "CN1" }, { status: "delivered", rawStatus: "Delivered", updatedAt: "2026-10-03T10:00:00+06:00" }],
+  ["sms", "send", { to: "+8801700000000", message: "Your order shipped" }, { success: true, providerRef: "m1" }],
+  ["email", "send", { to: "buyer@example.test", subject: "Shipped", html: "<p>Shipped</p>" }, { success: false, retryable: true }],
+  ["fraud", "check", { phone: "+8801700000000" }, { riskLevel: "low", phone: "01700000000", totalParcels: 10, delivered: 9, cancelled: 1, successRate: 90 }],
+  ["tax", "calculate", {
+    idempotencyKey: "tax-1", currency: "BDT", pricesIncludeTax: false,
+    destination: { country: "BD", adminArea: null, city: "Dhaka", postalCode: null }, origin: null,
+    lines: [{ lineId: "l1", taxCode: null, quantity: 1, amountMinor: 10_000 }], shippingMinor: 6000, customer: null,
+  }, { calculationId: "calc-1", lines: [{ lineId: "l1", taxes: [{ taxMinor: 500, rateBps: 500, jurisdiction: "BD" }] }], shipping: [] }],
+];
+
+describe("provider port contracts", () => {
+  it("lists exactly the operations each port defines", () => {
+    for (const kind of PROVIDER_KINDS) {
+      const listed = [...PROVIDER_OPERATIONS[kind].required, ...PROVIDER_OPERATIONS[kind].optional].sort();
+      expect(Object.keys(PROVIDER_PORTS[kind]).sort()).toEqual(listed);
+    }
+  });
+
+  it.each(SAMPLES)("validates %s.%s on both sides and refuses extra fields", (kind, operation, input, output) => {
+    const schemas = providerOperationSchemas(kind as never, operation)!;
+    expect(schemas.input.safeParse(input).success).toBe(true);
+    expect(schemas.output.safeParse(output).success).toBe(true);
+    expect(schemas.input.safeParse({ ...(input as object), unexpected: true }).success).toBe(false);
+    if (!("status" in (output as object) && (output as { status: unknown }).status === "event")) {
+      expect(schemas.output.safeParse({ ...(output as object), rawProviderBody: "{}" }).success).toBe(false);
+    }
+  });
+
+  it.each([-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY])("refuses %s as minor units", (amount) => {
+    const session = SAMPLES[0]![2] as Record<string, unknown>;
+    expect(PROVIDER_PORTS.payment.createSession.input.safeParse({ ...session, amountMinor: amount }).success).toBe(false);
+  });
+
+  it("only accepts a confirmed payment with its authenticated amount and currency", () => {
+    const event = { kind: "confirmed", eventType: "payment", eventId: "e1", orderId: "o1", providerRef: "p1" };
+    const output = PROVIDER_PORTS.payment.verifyReturn.output;
+    expect(output.safeParse({ status: "event", event }).success).toBe(false);
+    expect(output.safeParse({ status: "event", event: { ...event, amountMinor: 100, currency: "BDT" } }).success).toBe(true);
+    expect(output.safeParse({ status: "event", event: { ...event, kind: "cancelled", correlationId: "o1_full_ABCDEF12" } }).success).toBe(true);
+    expect(output.safeParse({ status: "invalid", reason: "Bad signature" }).success).toBe(true);
+    expect(output.safeParse({ status: "approved" }).success).toBe(false);
+  });
+
+  it("names app providers plugin:provider and keeps built-in ids distinct", () => {
+    expect(qualifiedProviderId("scalius.bkash", "bkash")).toBe("scalius.bkash:bkash");
+    expect(parseQualifiedProviderId("scalius.bkash:bkash")).toEqual({ pluginId: "scalius.bkash", providerId: "bkash" });
+    for (const id of ["stripe", "cod", "pathao", "scalius.bkash", "scalius.bkash:", ":bkash", "Scalius.bkash:bkash", "scalius.bkash:bk/ash", 7]) {
+      expect(isQualifiedProviderId(id)).toBe(false);
+    }
+  });
+
+  it("carries the error category across a loader boundary", () => {
+    const thrown = new ProviderError("retryable", "Timed out", { uncertain: true, code: "bkash.timeout" });
+    expect(providerErrorOf(structuredClone({ ...thrown, message: thrown.message }))).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
+    expect(providerErrorOf(new Error("plain"))).toBeNull();
+    expect(new ProviderError("declined", "No", { code: "Not A Code" }).code).toBe("provider.declined");
+  });
+});
+
+describe("payment amount codec", () => {
+  it("sends ISO minor units unchanged by default", () => {
+    expect(encodeProviderAmount(12_550, "BDT")).toEqual({ currency: "BDT", chargedMinor: 12_550, roundingMinor: 0, wire: wire(12_550, "125.50") });
+    expect(encodeProviderAmount(5, "usd").wire).toEqual(wire(5, "0.05"));
+    expect(encodeProviderAmount(1_000, "JPY").wire).toEqual(wire(1_000, "1000"));
+  });
+
+  it("widens to a larger wire exponent (two-decimal ISK)", () => {
+    expect(encodeProviderAmount(1_500, "ISK", { ISK: { wireExponent: 2 } })).toMatchObject({ roundingMinor: 0, wire: wire(150_000, "1500.00") });
+  });
+
+  it("rounds down to the provider increment and reports the difference instead of charging it", () => {
+    expect(encodeProviderAmount(12_345, "KWD", { KWD: { minorIncrement: 10 } })).toEqual({
+      currency: "KWD", chargedMinor: 12_340, roundingMinor: 5, wire: wire(12_340, "12.340"),
+    });
+    // A wire without decimals for a two-decimal currency charges whole units only.
+    expect(encodeProviderAmount(10_050, "IDR", { IDR: { wireExponent: 0 } })).toMatchObject({ chargedMinor: 10_000, roundingMinor: 50, wire: wire(100, "100") });
+  });
+});
+
+describe("provider declarations", () => {
+  it("parses providers grouped by port into one flat list", () => {
+    const parsed = parsePluginManifest({
+      ...manifest,
+      providers: {
+        payment: [{ id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS }],
+        courier: [{ id: "parcel", name: "Parcel", trackingUrl: "https://parcel.test/t/{trackingId}" }],
+      },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.manifest.providers).toEqual([
+      { kind: "payment", id: "wallet", name: "Wallet", flow: "hosted", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS },
+      { kind: "courier", id: "parcel", name: "Parcel", operations: [], trackingUrl: "https://parcel.test/t/{trackingId}" },
+    ]);
+    expect(pluginGrantRequest(parsed.manifest).providers).toEqual(["courier", "payment"]);
+  });
+
+  it("still parses the first flat shape and maps its old kind names", () => {
+    const parsed = parsePluginManifest({ ...manifest, providers: [{ kind: "messaging", id: "sms", name: "SMS" }, { kind: "shipping", id: "parcel", name: "Parcel" }] });
+    expect(parsed.ok && parsed.manifest.providers.map((provider) => provider.kind)).toEqual(["sms", "courier"]);
+  });
+
+  it("requires what checkout and reconciliation rely on", () => {
+    const wallet = { id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"] };
+    const parses = (payment: unknown) => parsePluginManifest({ ...manifest, providers: { payment: [payment] } }).ok;
+    expect(parses({ ...wallet, operations: HOSTED_REFUNDS })).toBe(true);
+    expect(parses({ id: "wallet", name: "Wallet", operations: HOSTED_REFUNDS })).toBe(false);
+    expect(parses({ ...wallet, flow: "card", operations: HOSTED_REFUNDS })).toBe(false);
+    expect(parses({ ...wallet, operations: ["queryPayment"] })).toBe(false);
+    expect(parses({ ...wallet, operations: ["verifyReturn", "queryPayment", "refund"] })).toBe(false);
+    expect(parses({ ...wallet, flow: "instructions" })).toBe(true);
+    expect(parses({ ...wallet, flow: "instructions", operations: ["capture"] })).toBe(false);
+    expect(parsePluginManifest({ ...manifest, providers: { sms: [{ id: "a", name: "A" }], email: [{ id: "a", name: "B" }] } }).ok).toBe(false);
+  });
+
+  it("checks an implementation against its port when the plugin loads", () => {
+    const parsed = parsePluginManifest({ ...manifest, providers: { payment: [{ id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS }] } });
+    if (!parsed.ok) throw new Error("fixture");
+    const inventory = pluginHandlerInventory(parsed.manifest);
+    const complete = {
+      kind: "payment", createSession() {}, verifyWebhook() {}, verifyReturn() {}, queryPayment() {}, refund() {}, refundStatus() {},
+    };
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: complete } })).toEqual([]);
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, refund: undefined } } }))
+      .toContain('Provider "wallet" must implement refund.');
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, listRefunds() {} } } }))
+      .toContain('Provider "wallet" implements listRefunds; declare it in the provider\'s operations.');
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, kind: "courier" } } }))
+      .toContain('Provider "wallet" is declared as a payment provider but defined for another port.');
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, capture() {} } } }))
+      .toContain('Provider "wallet" has "capture", which the payment port does not define.');
+    expect(checkPluginHandlers(inventory, { manifest, providers: {} }))
+      .toContain('Provider "wallet" is declared in the manifest but has no handler.');
+  });
+});
