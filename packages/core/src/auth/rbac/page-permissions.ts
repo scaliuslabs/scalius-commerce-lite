@@ -91,6 +91,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
 
   // Online store
   "/admin/online-store/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/online-store/theme/editor": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/online-store/navigation": {
     permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
   },

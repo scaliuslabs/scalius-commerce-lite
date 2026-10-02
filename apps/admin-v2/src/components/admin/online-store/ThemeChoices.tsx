@@ -1,6 +1,6 @@
-import { useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
-import { ArrowDown, ArrowUp, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import type {
   ResolvedStorefrontThemeLayout,
   StorefrontDensity,
@@ -11,15 +11,10 @@ import type {
   StorefrontMobileNavigationRenderer,
   StorefrontNavigationRenderer,
   StorefrontHeadingCase,
-  StorefrontSectionType,
   StorefrontThemeTokens,
   StorefrontTypeScale,
 } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
-import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
-import { moveSection } from "./theme-settings";
 
 /**
  * Visual radio options: a schematic of each choice with its name under it.
@@ -79,88 +74,6 @@ export function VisualChoice<Value extends string>({
         ))}
       </RadioGroupPrimitive.Root>
     </div>
-  );
-}
-
-/**
- * Homepage sections in order, each with Move up / Move down (no drag). A
- * section the store does not show says why under its name. `actions` adds a
- * row's own buttons (edit, remove) before the move buttons.
- */
-export function HomepageOrder<Section extends { id: string; type: StorefrontSectionType }>({
-  sections,
-  notes = {},
-  names = {},
-  actions,
-  onChange,
-}: {
-  sections: readonly Section[];
-  /** Why a section does not show on the store, by section id (text, or a node that draws itself). */
-  notes?: Readonly<Record<string, ReactNode>>;
-  /** A specific label when several sections share one type. */
-  names?: Readonly<Record<string, string>>;
-  actions?: (section: Section, name: string) => ReactNode;
-  onChange: (sections: Section[]) => void;
-}) {
-  const t = useMessages(onlineStoreMessages);
-  const buttons = useRef(new Map<string, HTMLButtonElement>());
-  const focusNext = useRef<string | null>(null);
-  // The moved row keeps keyboard focus, on the button that can still move it.
-  useLayoutEffect(() => {
-    if (!focusNext.current) return;
-    buttons.current.get(focusNext.current)?.focus();
-    focusNext.current = null;
-  });
-  const move = (id: string, delta: -1 | 1) => {
-    const next = moveSection(sections, id, delta);
-    const index = next.findIndex((section) => section.id === id);
-    const atEnd = delta < 0 ? index === 0 : index === next.length - 1;
-    focusNext.current = `${id}:${atEnd ? -delta : delta}`;
-    onChange(next);
-  };
-  const buttonRef = (key: string) => (node: HTMLButtonElement | null) => {
-    if (node) buttons.current.set(key, node);
-    else buttons.current.delete(key);
-  };
-
-  return (
-    <ol>
-      {sections.map((section, index) => {
-        const name = names[section.id] ?? t(`section_${section.type}`);
-        const note = notes[section.id];
-        return (
-          <li key={section.id} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
-            <span className="min-w-0 flex-1 text-body">
-              {name}
-              {typeof note === "string" ? <span className="block text-muted-foreground">{note}</span> : note}
-            </span>
-            {actions?.(section, name)}
-            <Button
-              ref={buttonRef(`${section.id}:-1`)}
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("moveSectionUp", { name })}
-              disabled={index === 0}
-              onClick={() => move(section.id, -1)}
-            >
-              <ArrowUp aria-hidden="true" />
-            </Button>
-            <Button
-              ref={buttonRef(`${section.id}:1`)}
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("moveSectionDown", { name })}
-              disabled={index === sections.length - 1}
-              onClick={() => move(section.id, 1)}
-            >
-              <ArrowDown aria-hidden="true" />
-            </Button>
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 

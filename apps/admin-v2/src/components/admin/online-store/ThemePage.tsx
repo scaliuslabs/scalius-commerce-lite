@@ -8,43 +8,25 @@ import {
   postApiV1AdminSettingsThemePublish,
 } from "@scalius/api-client/sdk";
 import {
-  HEADER_LOGO_WIDTH_MAX,
-  HEADER_LOGO_WIDTH_MIN,
-  HEADER_LOGO_WIDTH_STEP,
-} from "@scalius/shared/brand-presentation";
-import {
-  STOREFRONT_ANNOUNCEMENT_MAX_LENGTH,
   STOREFRONT_DENSITIES,
-  STOREFRONT_FOOTER_TEXT_LIMITS,
   STOREFRONT_LISTING_FILTER_STYLES,
   storefrontListingFilterDefaultOrder,
-  STOREFRONT_NAVIGATION_SOURCES,
   STOREFRONT_PRODUCT_STICKY,
-  STOREFRONT_THEME_MIN_CONTRAST,
-  isStorefrontThemeHexColor,
   storefrontBlockSwitch,
   storefrontBlockVariants,
-  storefrontSectionRenderer,
-  storefrontVariantSpec,
-  type FitCondition,
   type ResolvedStorefrontThemeLayout,
   type StoreShape,
-  type StorefrontFitFacts,
   type StorefrontTemplateId,
   type StorefrontThemeDocument,
-  type StorefrontThemeFallback,
   type StorefrontListingFilterStyle,
   type StorefrontListingFilterGroup,
-  type StorefrontNavigationSource,
 } from "@scalius/shared/storefront-theme";
-import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Switch } from "~/components/ui/switch";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
-import { Textarea } from "~/components/ui/textarea";
-import { SaveBarProvider, SaveConflict, useServerFieldError } from "~/components/admin/shared/SaveBar";
+import { SaveBarProvider, SaveConflict } from "~/components/admin/shared/SaveBar";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
@@ -53,29 +35,25 @@ import {
   type ThemeWorkspaceDocument,
 } from "~/lib/api-query-options/online-store";
 import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-options/products";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { themeEditorMessages } from "~/i18n/theme-editor";
 import { Field, OnlineStorePage, SectionCard, actionErrorText, useDocumentDraft } from "./shared";
 import { ThemePreviewAction } from "./ThemePreviewAction";
 import {
   CardStyleSketch,
   DensitySketch,
-  FooterSketch,
   HeaderRows,
-  HeaderSketch,
   BuyBoxSketch,
-  MobileNavigationSketch,
-  NavigationSketch,
   ProductPageSketch,
   ProductTile,
   Sketch,
   VisualChoice,
 } from "./ThemeChoices";
-import { LinkField, MediaField, SectionEditor, useMediaPreviews, type SectionMediaPreview } from "./SectionEditor";
+import { useMediaPreviews } from "./schema-form/resource-fields";
+import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme } from "./theme-fields";
 import { TypographyCard } from "./TypographyCard";
 import {
-  COLOR_FIELD_IDS,
-  COLOR_ROLE_TOKEN,
   OPTIONAL_PRODUCT_MODULES,
   TEMPLATE_THEMES,
   applyTemplate,
@@ -84,26 +62,15 @@ import {
   resolveThemeForStore,
   selectedTemplate,
   setBlockVariant,
-  setThemeColor,
   THEME_FIELD_IDS,
-  themeContrastProblems,
   themeDraftInvalid,
   themeFieldForPath,
   toggleProductModule,
-  type ColorRole,
-  type ContrastProblem,
   type ThemeBlockSlot,
 } from "./theme-settings";
 
 type Theme = StorefrontThemeDocument;
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
-type SetTheme = (next: Theme | ((theme: Theme) => Theme)) => void;
-
-/** What a block variant renders today, for its picker sketch. */
-function variantRenders<Render>(slot: ThemeBlockSlot, variant: string): Render {
-  const spec = storefrontVariantSpec(slot, variant);
-  return (spec.renders as (settings: unknown) => Render)(spec.defaults);
-}
 
 /** A template's whole look in its own colours: header shape and product cards, as this store renders them. */
 function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStorefrontThemeLayout }) {
@@ -240,78 +207,6 @@ function ListingFilterSketch({ filterStyle, theme }: { filterStyle: StorefrontLi
   );
 }
 
-/** Ratios round down, so "4.4:1" never reads as the 4.5:1 it misses. */
-const formatRatio = (ratio: number) =>
-  formatNumber(Math.floor(ratio * 10) / 10, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-function ColorField({
-  role,
-  label,
-  value,
-  problems,
-  onChange,
-}: {
-  role: ColorRole;
-  label: string;
-  value: string;
-  /** Text this colour leaves below AA, in plain words. */
-  problems: readonly ContrastProblem[];
-  onChange: (value: string) => void;
-}) {
-  const t = useMessages(onlineStoreMessages);
-  const id = COLOR_FIELD_IDS[role];
-  const valid = isStorefrontThemeHexColor(value);
-  const [left, setLeft] = useState(false);
-  const server = useServerFieldError(id);
-  const errors = [
-    server.error ?? (!valid && (left || server.revealed) ? t("colorInvalid") : undefined),
-    ...problems.map((problem) => t(problem.message, {
-      ratio: formatRatio(problem.ratio),
-      min: formatRatio(STOREFRONT_THEME_MIN_CONTRAST),
-    })),
-  ].filter((error): error is string => Boolean(error));
-  const change = (next: string) => {
-    server.clear();
-    // The document stores lowercase #rrggbb.
-    onChange(next.trim().toLowerCase());
-  };
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="flex items-center gap-2">
-        <label
-          style={{ "--swatch": valid ? value : "transparent" } as CSSProperties}
-          className="relative size-11 shrink-0 cursor-pointer rounded-lg border bg-(--swatch) sm:size-9"
-        >
-          <span className="sr-only">{t("pickColor", { name: label })}</span>
-          <input
-            type="color"
-            value={valid ? value : "#000000"}
-            onChange={(event) => change(event.target.value)}
-            className="absolute inset-0 size-full cursor-pointer opacity-0"
-          />
-        </label>
-        <Input
-          id={id}
-          value={value}
-          maxLength={7}
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={errors.length > 0 ? true : undefined}
-          aria-describedby={errors.length > 0 ? `${id}-note` : undefined}
-          onBlur={() => setLeft(true)}
-          onChange={(event) => change(event.target.value)}
-        />
-      </div>
-      {errors.length > 0 ? (
-        <div id={`${id}-note`} role="alert" className="space-y-1">
-          {errors.map((error) => <p key={error} className="text-body text-destructive">{error}</p>)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function SwitchField({
   id,
   label,
@@ -335,156 +230,6 @@ function SwitchField({
         <Switch id={id} checked={checked} aria-describedby={`${id}-note`} onCheckedChange={onCheckedChange} />
       </span>
     </div>
-  );
-}
-
-/**
- * The brand: header logo (and its width), footer logo and browser tab icon,
- * picked from Files and kept as media ids in the theme draft, so they
- * preview, publish and roll back with the rest of the theme.
- */
-function BrandCard({ theme, media, setDraft }: {
-  theme: Theme;
-  media: readonly SectionMediaPreview[];
-  setDraft: SetTheme;
-}) {
-  const t = useMessages(onlineStoreMessages);
-  const { previews, remember } = useMediaPreviews(media);
-  const { brand } = theme;
-  const setBrand = (next: Partial<Theme["brand"]>) =>
-    setDraft((current) => ({ ...current, brand: { ...current.brand, ...next } }));
-  const image = (key: "logo" | "footerLogo" | "favicon") => ({
-    mediaId: brand[key],
-    previews,
-    fit: "contain" as const,
-    onPick: (picked: SectionMediaPreview) => {
-      remember(picked);
-      setBrand({ [key]: picked.id } as Partial<Theme["brand"]>);
-    },
-    onRemove: () => setBrand({ [key]: null } as Partial<Theme["brand"]>),
-  });
-
-  return (
-    <SectionCard title={t("logo")}>
-      <MediaField id={THEME_FIELD_IDS.logo} label={t("headerLogo")} help={t("headerLogoHelp")} {...image("logo")} />
-      {brand.logo ? (
-        <div className="space-y-1.5">
-          <Label htmlFor={THEME_FIELD_IDS.logoWidth}>{t("logoWidth", { width: brand.logoWidth })}</Label>
-          <input
-            id={THEME_FIELD_IDS.logoWidth}
-            type="range"
-            min={HEADER_LOGO_WIDTH_MIN}
-            max={HEADER_LOGO_WIDTH_MAX}
-            step={HEADER_LOGO_WIDTH_STEP}
-            value={brand.logoWidth}
-            onChange={(event) => setBrand({ logoWidth: Number(event.target.value) })}
-            className="h-11 w-full accent-primary sm:h-6"
-            aria-valuetext={`${brand.logoWidth}px`}
-          />
-        </div>
-      ) : null}
-      <MediaField id={THEME_FIELD_IDS.footerLogo} label={t("footerLogo")} help={t("footerLogoHelp")} {...image("footerLogo")} />
-      <MediaField id={THEME_FIELD_IDS.favicon} label={t("favicon")} {...image("favicon")} />
-    </SectionCard>
-  );
-}
-
-/** The bar above the header (none is the only off switch) and, for any bar, its message and link. */
-function TopBarFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
-  const t = useMessages(onlineStoreMessages);
-  const option = (key: string) => t(key as MessageKey);
-  const topBar = theme.blocks.topBar;
-  const setWords = (next: { text?: string; link?: string | null }) => setDraft((current) => {
-    const bar = current.blocks.topBar;
-    if (bar.variant === "none") return current;
-    return {
-      ...current,
-      blocks: { ...current.blocks, topBar: { ...bar, settings: { ...bar.settings, ...next } } as Theme["blocks"]["topBar"] },
-    };
-  });
-  return (
-    <>
-      <div className="space-y-1.5">
-        <Label htmlFor="theme-top-bar">{t("topBar")}</Label>
-        <SearchableSelect
-          id="theme-top-bar"
-          value={topBar.variant}
-          options={storefrontBlockVariants("topBar").map((variant) => ({
-            value: variant,
-            label: option(`topBar_${variant}`),
-            description: option(`topBar_${variant}Help`),
-          }))}
-          onValueChange={(variant) => setDraft((current) => setBlockVariant(current, "topBar", variant))}
-          triggerClassName="w-full"
-        />
-      </div>
-      {topBar.variant !== "none" ? (
-        <>
-          <Field id={THEME_FIELD_IDS.announcementText} label={t("announcementText")} help={t("announcementTextHelp")}>
-            <Input
-              id={THEME_FIELD_IDS.announcementText}
-              value={topBar.settings.text}
-              maxLength={STOREFRONT_ANNOUNCEMENT_MAX_LENGTH}
-              placeholder={t("announcementPlaceholder")}
-              aria-describedby={`${THEME_FIELD_IDS.announcementText}-note`}
-              onChange={(event) => setWords({ text: event.target.value })}
-            />
-          </Field>
-          <LinkField
-            id={THEME_FIELD_IDS.announcementLink}
-            label={t("announcementLink")}
-            help={t("announcementLinkHelp")}
-            value={topBar.settings.link}
-            onChange={(link) => setWords({ link })}
-          />
-        </>
-      ) : null}
-    </>
-  );
-}
-
-/** The footer's words, whichever footer draws them. */
-function FooterWords({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
-  const t = useMessages(onlineStoreMessages);
-  const { settings } = theme.blocks.footer;
-  const setWords = (next: Partial<Record<"tagline" | "about" | "copyright", string>>) => setDraft((current) => ({
-    ...current,
-    blocks: {
-      ...current.blocks,
-      footer: { ...current.blocks.footer, settings: { ...current.blocks.footer.settings, ...next } } as Theme["blocks"]["footer"],
-    },
-  }));
-  return (
-    <>
-      <Field id={THEME_FIELD_IDS.footerTagline} label={t("tagline")} help={t("taglineHelp")}>
-        <Input
-          id={THEME_FIELD_IDS.footerTagline}
-          value={settings.tagline}
-          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.tagline}
-          aria-describedby={`${THEME_FIELD_IDS.footerTagline}-note`}
-          onChange={(event) => setWords({ tagline: event.target.value })}
-        />
-      </Field>
-      <Field id={THEME_FIELD_IDS.footerAbout} label={t("aboutText")} help={t("aboutTextHelp")}>
-        <Textarea
-          id={THEME_FIELD_IDS.footerAbout}
-          rows={5}
-          value={settings.about}
-          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.about}
-          aria-describedby={`${THEME_FIELD_IDS.footerAbout}-note`}
-          onChange={(event) => setWords({ about: event.target.value })}
-        />
-      </Field>
-      <Field id={THEME_FIELD_IDS.footerCopyright} label={t("copyright")} help={t("copyrightHelp")}>
-        <Input
-          id={THEME_FIELD_IDS.footerCopyright}
-          value={settings.copyright}
-          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.copyright}
-          aria-describedby={`${THEME_FIELD_IDS.footerCopyright}-note`}
-          onChange={(event) => setWords({ copyright: event.target.value })}
-        />
-      </Field>
-    </>
   );
 }
 
@@ -551,53 +296,6 @@ function HomeModeCard({ theme, setDraft }: { theme: Theme; setDraft: SetTheme })
   );
 }
 
-const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
-  { role: "background", label: "colorBackground" },
-  { role: "text", label: "colorText" },
-  { role: "buttons", label: "colorButtons" },
-  { role: "buttonText", label: "colorButtonText" },
-  { role: "highlight", label: "colorHighlight" },
-  { role: "highlightText", label: "colorHighlightText" },
-];
-
-/**
- * A fit condition in plain words: what the store needs for a choice to show
- * as chosen, with the value the resolver judged it on (the store shape plus
- * the navigation the header renders).
- */
-function useFitReason(facts: StorefrontFitFacts) {
-  const t = useMessages(onlineStoreMessages);
-  const option = (key: string) => t(key as MessageKey);
-  const reason = (condition: FitCondition): string => {
-    if ("anyOf" in condition) return condition.anyOf.map(reason).join(" ");
-    if ("block" in condition) return t("fitNeedsCard", { name: option(`cardStyle_${condition.variants[0]}`) });
-    const what = option(`fact_${condition.fact}`);
-    if ("equals" in condition) return t("fitNeeds", { what });
-    const value = formatNumber(facts[condition.fact]);
-    if (condition.min !== undefined && condition.max !== undefined) {
-      return t("fitBetween", { what, min: formatNumber(condition.min), max: formatNumber(condition.max), value });
-    }
-    if (condition.max !== undefined) return t("fitAtMost", { what, max: formatNumber(condition.max), value });
-    return t("fitAtLeast", { what, min: formatNumber(condition.min ?? 0), value });
-  };
-  return (fallback: Pick<StorefrontThemeFallback, "failed">) => fallback.failed.map(reason).join(" ");
-}
-
-/** Under a picker: the choice does not fit this store, what shows instead and why. */
-function FitNote({ fallback, name, reason }: {
-  fallback: StorefrontThemeFallback | null;
-  name: (variant: string) => string;
-  reason: (fallback: StorefrontThemeFallback) => string;
-}) {
-  const t = useMessages(onlineStoreMessages);
-  if (!fallback?.resolved) return null;
-  return (
-    <p role="status" className="text-body text-muted-foreground">
-      {t("fitShowsInstead", { name: name(fallback.resolved), reason: reason(fallback) })}
-    </p>
-  );
-}
-
 /**
  * The theme, card by card. Choices are resolved against the store's shape
  * with the storefront's own resolver, so a choice that does not fit the
@@ -608,17 +306,17 @@ function ThemeCards({ workspace, refetch }: {
   refetch: () => Promise<unknown>;
 }) {
   const t = useMessages(onlineStoreMessages);
+  const editor = useMessages(themeEditorMessages);
   const queryClient = useQueryClient();
   const storeShape = workspace.storeShape as StoreShape;
-  /** Every image the saved draft names (brand and sections). */
-  const media: readonly SectionMediaPreview[] = workspace.media;
+  const media = useMediaPreviews(workspace.media);
   const [publishing, setPublishing] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { draft: theme, dirty, setDraft } = useDocumentDraft<Theme>({
     label: t("themeTitle"),
     saved: workspace.draft.theme as Theme,
-    fields: (path, draft) => themeFieldForPath(path, draft),
+    fields: (path) => themeFieldForPath(path),
     invalid: themeDraftInvalid,
     reload: refetch,
     save: async (next) => {
@@ -683,7 +381,6 @@ function ThemeCards({ workspace, refetch }: {
   });
   const resolved = resolveThemeForStore(theme, storeShape);
   const fitReason = useFitReason(resolved.facts);
-  const problems = themeContrastProblems(theme);
   // A changed look matches no template: say which one it is based on, and
   // confirm before another template replaces the merchant's layout choices.
   // Content (logo, words, slides, chosen categories) stays either way.
@@ -709,12 +406,6 @@ function ThemeCards({ workspace, refetch }: {
       reason={fitReason}
     />
   );
-  const sectionNotes = Object.fromEntries(theme.pages.home.flatMap((section) => {
-    if (storefrontSectionRenderer(section) === null) return [[section.id, t("sectionNotYet")]];
-    const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
-    if (fallback) return [[section.id, t("sectionHidden", { reason: fitReason(fallback) })]];
-    return [];
-  }));
 
   return (
     <>
@@ -727,6 +418,15 @@ function ThemeCards({ workspace, refetch }: {
         </Button>
       </div>
       {actionError ? <p role="alert" className="text-body text-destructive">{actionError}</p> : null}
+      <SectionCard
+        title={editor("title")}
+        description={editor("customizeHelp")}
+        action={
+          <Button asChild>
+            <Link to="/admin/online-store/theme/editor">{editor("customize")}</Link>
+          </Button>
+        }
+      />
       <ThemePreviewAction draftRevision={workspace.draft.revision} disabled={actionDisabled} />
       <ConfirmDialog
         open={confirmPublish}
@@ -770,117 +470,11 @@ function ThemeCards({ workspace, refetch }: {
         />
       </SectionCard>
 
-      <BrandCard theme={theme} media={media} setDraft={setDraft} />
-
       <SectionCard title={t("colors")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {COLOR_FIELDS.map(({ role, label }) => (
-            <ColorField
-              key={role}
-              role={role}
-              label={t(label)}
-              value={theme.tokens.colors[COLOR_ROLE_TOKEN[role]]}
-              problems={problems.filter((problem) => problem.role === role)}
-              onChange={(value) => setDraft((current) => setThemeColor(current, role, value))}
-            />
-          ))}
-        </div>
+        <ColorFields theme={theme} setDraft={setDraft} />
       </SectionCard>
 
       <TypographyCard theme={theme} setDraft={setDraft} />
-
-      <SectionCard title={t("header")}>
-        <VisualChoice
-          label={t("header")}
-          value={blockVariant(theme, "header")}
-          className="grid-cols-2 sm:grid-cols-4"
-          options={blockOptions<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind, variant) => <HeaderSketch kind={kind} variant={variant} />)}
-          onChange={setBlock("header")}
-        />
-        {fitNote("header", "header")}
-        <TopBarFields theme={theme} setDraft={setDraft} />
-      </SectionCard>
-
-      <SectionCard
-        title={t("menuStyle")}
-        description={
-          <>
-            {t("menuStyleHelp")}{" "}
-            <Link to="/admin/online-store/navigation" className="text-link hover:underline">
-              {t("editMenus")}
-            </Link>
-          </>
-        }
-      >
-        <div className="space-y-1">
-          <Label htmlFor="theme-navigation-source">{t("menuSource")}</Label>
-          <SearchableSelect
-            id="theme-navigation-source"
-            value={theme.blocks.navigation.source}
-            options={STOREFRONT_NAVIGATION_SOURCES.map((source) => ({
-              value: source,
-              label: option(`menuSource_${source}`),
-              description: option(`menuSource_${source}Help`),
-            }))}
-            onValueChange={(source) => setDraft((current) => ({
-              ...current,
-              blocks: { ...current.blocks, navigation: { ...current.blocks.navigation, source: source as StorefrontNavigationSource } },
-            }))}
-            triggerClassName="w-full"
-          />
-          <FitNote
-            fallback={resolved.fallbacks.find((fallback) => fallback.kind === "navigation" && fallback.key === "source") ?? null}
-            name={(source) => option(`menuSource_${source}`)}
-            reason={fitReason}
-          />
-        </div>
-        <VisualChoice
-          label={t("menuStyleDesktop")}
-          showLabel
-          value={blockVariant(theme, "desktopNav")}
-          className="grid-cols-2 sm:grid-cols-3"
-          options={blockOptions<ResolvedStorefrontThemeLayout["navigation"]>("desktopNav", "navigation", (kind) => <NavigationSketch kind={kind} />, true)}
-          onChange={setBlock("desktopNav")}
-        />
-        {fitNote("desktopNav", "navigation")}
-        <VisualChoice
-          label={t("menuStylePhone")}
-          showLabel
-          value={blockVariant(theme, "mobileNav")}
-          className="grid-cols-2 sm:grid-cols-3"
-          options={blockOptions<ResolvedStorefrontThemeLayout["mobileNavigation"]>("mobileNav", "mobileNavigation", (kind) => <MobileNavigationSketch kind={kind} />, true)}
-          onChange={setBlock("mobileNav")}
-        />
-      </SectionCard>
-
-      <SectionCard title={t("footer")} description={t("footerLayoutHelp")}>
-        <VisualChoice
-          label={t("footer")}
-          value={blockVariant(theme, "footer")}
-          options={blockOptions<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
-          onChange={setBlock("footer")}
-        />
-        {fitNote("footer", "footer")}
-        {theme.blocks.footer.variant === "directory" && (
-          <div className="space-y-1">
-            <Label htmlFor="theme-footer-directory-style">{t("footerDirectoryStyle")}</Label>
-            <SearchableSelect
-              id="theme-footer-directory-style"
-              value={theme.blocks.footer.settings.style}
-              options={(["columns", "bands"] as const).map((value) => ({ value, label: t(`footerDirectoryStyle_${value}`) }))}
-              onValueChange={(style) => setDraft((current) => current.blocks.footer.variant !== "directory" ? current : {
-                ...current,
-                blocks: {
-                  ...current.blocks,
-                  footer: { variant: "directory", settings: { ...current.blocks.footer.settings, style: style as "columns" | "bands" } },
-                },
-              })}
-              triggerClassName="w-full"
-            />
-          </div>
-        )}
-        <FooterWords theme={theme} setDraft={setDraft} />
-      </SectionCard>
 
       <SectionCard title={t("productCards")}>
         <VisualChoice
@@ -892,70 +486,7 @@ function ThemeCards({ workspace, refetch }: {
           ), true)}
           onChange={setBlock("card")}
         />
-        {theme.blocks.card.variant === "boutique" && <SwitchField
-          id="theme-boutique-quick-action"
-          label={t("boutiqueQuickAction")}
-          help={t("boutiqueQuickActionHelp")}
-          checked={Boolean(theme.blocks.card.settings.quickAction)}
-          onCheckedChange={(checked) => setDraft((current) => {
-            if (current.blocks.card.variant !== "boutique") return current;
-            return {
-              ...current,
-              blocks: {
-                ...current.blocks,
-                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, quickAction: checked } },
-              },
-            };
-          })}
-        />}
-        {theme.blocks.card.variant === "retail" && <SwitchField
-          id="theme-retail-quick-action"
-          label={t("retailQuickAction")}
-          help={t("retailQuickActionHelp")}
-          checked={Boolean(theme.blocks.card.settings.quickAction)}
-          onCheckedChange={(checked) => setDraft((current) => {
-            if (current.blocks.card.variant !== "retail") return current;
-            return {
-              ...current,
-              blocks: {
-                ...current.blocks,
-                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, quickAction: checked } },
-              },
-            };
-          })}
-        />}
-        {theme.blocks.card.variant === "quick-add" && <SwitchField
-          id="theme-essentials-full-action"
-          label={t("essentialsFullAction")}
-          help={t("essentialsFullActionHelp")}
-          checked={Boolean(theme.blocks.card.settings.fullAction)}
-          onCheckedChange={(checked) => setDraft((current) => {
-            if (current.blocks.card.variant !== "quick-add") return current;
-            return {
-              ...current,
-              blocks: {
-                ...current.blocks,
-                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, fullAction: checked } },
-              },
-            };
-          })}
-        />}
-        {theme.blocks.card.variant === "quick-add" && <SwitchField
-          id="theme-essentials-buy-now"
-          label={t("essentialsBuyNow")}
-          help={t("essentialsBuyNowHelp")}
-          checked={Boolean(theme.blocks.card.settings.showBuyNow)}
-          onCheckedChange={(checked) => setDraft((current) => {
-            if (current.blocks.card.variant !== "quick-add") return current;
-            return {
-              ...current,
-              blocks: {
-                ...current.blocks,
-                card: { ...current.blocks.card, settings: { ...current.blocks.card.settings, showBuyNow: checked } },
-              },
-            };
-          })}
-        />}
+        <BlockSettingsFields slot="card" theme={theme} setDraft={setDraft} media={media} />
       </SectionCard>
 
       <SectionCard title={t("listingDefault")} description={t("listingDefaultHelp")}>
@@ -981,6 +512,7 @@ function ThemeCards({ workspace, refetch }: {
                 },
               }))}
             />
+            <BlockSettingsFields slot="listing" theme={theme} setDraft={setDraft} media={media} />
             <SwitchField
               id="theme-listing-view-toggle"
               label={t("listingViewSwitch")}
@@ -1167,25 +699,7 @@ function ThemeCards({ workspace, refetch }: {
           options={blockOptions<ResolvedStorefrontThemeLayout["productPage"]>("gallery", "productPage", (layout) => <ProductPageSketch layout={layout} />)}
           onChange={setBlock("gallery")}
         />
-        {theme.blocks.product.gallery.variant === "thumbs-left" && <SwitchField
-          id="theme-gallery-phone-side"
-          label={t("galleryPhoneSide")}
-          help={t("galleryPhoneSideHelp")}
-          checked={Boolean(theme.blocks.product.gallery.settings.phoneSideThumbnails)}
-          onCheckedChange={(checked) => setDraft((current) => {
-            if (current.blocks.product.gallery.variant !== "thumbs-left") return current;
-            return {
-              ...current,
-              blocks: {
-                ...current.blocks,
-                product: {
-                  ...current.blocks.product,
-                  gallery: { ...current.blocks.product.gallery, settings: { ...current.blocks.product.gallery.settings, phoneSideThumbnails: checked } },
-                },
-              },
-            };
-          })}
-        />}
+        <BlockSettingsFields slot="gallery" theme={theme} setDraft={setDraft} media={media} />
       </SectionCard>
 
       <SectionCard title={t("purchasePanel")}>
@@ -1197,28 +711,7 @@ function ThemeCards({ workspace, refetch }: {
           onChange={setBlock("buyBox")}
         />
         {fitNote("buyBox", "buyBox")}
-        {(theme.blocks.product.buyBox.variant === "fashion" || theme.blocks.product.buyBox.variant === "heritage") && (
-          <SwitchField
-            id="theme-product-buy-now"
-            label={t("productBuyNow")}
-            help={t("productBuyNowHelp")}
-            checked={theme.blocks.product.buyBox.settings.showBuyNow === true}
-            onCheckedChange={(showBuyNow) => setDraft((current) => {
-              const buyBox = current.blocks.product.buyBox;
-              if (buyBox.variant !== "fashion" && buyBox.variant !== "heritage") return current;
-              return {
-                ...current,
-                blocks: {
-                  ...current.blocks,
-                  product: {
-                    ...current.blocks.product,
-                    buyBox: { ...buyBox, settings: { ...buyBox.settings, showBuyNow } },
-                  },
-                },
-              };
-            })}
-          />
-        )}
+        <BlockSettingsFields slot="buyBox" theme={theme} setDraft={setDraft} media={media} />
       </SectionCard>
 
       <SectionCard title={t("productPageExtras")} description={t("productPageExtrasHelp")}>
@@ -1275,18 +768,6 @@ function ThemeCards({ workspace, refetch }: {
 
       <HomeModeCard theme={theme} setDraft={setDraft} />
 
-      <SectionCard
-        title={t("homepageSections")}
-        description={t("homepageSectionsHelp")}
-        rows={
-          <SectionEditor
-            sections={theme.pages.home}
-            notes={sectionNotes}
-            media={media}
-            onChange={(home) => setDraft((current) => ({ ...current, pages: { ...current.pages, home } }))}
-          />
-        }
-      />
     </>
   );
 }
@@ -1297,9 +778,11 @@ function ThemeSettings() {
 }
 
 /**
- * The Theme page: everything that shapes how the storefront looks, one draft.
- * Save stores the private draft (logo, words, homepage and layout together);
- * Preview shows it; Publish makes it live.
+ * The Theme page, the theme's overview: what it is based on, its colours,
+ * fonts and store-wide page layouts (cards, listings, product pages), with
+ * Customize opening the editor for homepage sections, the logo, header and
+ * footer. One draft: Save stores it privately, Preview shows it, Publish
+ * makes it live.
  */
 export function ThemePage() {
   const t = useMessages(onlineStoreMessages);

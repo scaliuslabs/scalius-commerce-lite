@@ -83,6 +83,60 @@ export function isSafeThemePreviewContinuation(
   }
 }
 
+/**
+ * Opens the saved draft in a new tab: a popup at the storefront's
+ * continuation relay, which receives the one-time code by postMessage (never
+ * in a URL) and lands on the preview canvas. Resolves to "opened", or why it
+ * could not.
+ */
+export function useOpenThemePreview() {
+  return async (draftRevision: number, path: string, device: Device = "full"): Promise<"opened" | "path" | "failed"> => {
+    if (!isSafeThemePreviewPath(path)) return "path";
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) return "failed";
+    try {
+      const { storefrontUrl } = await apiData(getApiV1Platform());
+      const trustedOrigin = normalizeStorefrontOrigin(storefrontUrl);
+      if (!trustedOrigin) throw new Error("Storefront origin is unavailable");
+      const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
+        body: { expectedDraftRevision: draftRevision, path, device },
+      }));
+      if (
+        result.draftRevision !== draftRevision ||
+        !isSafeThemePreviewContinuation(result.continuation, trustedOrigin, path, device) ||
+        popup.closed
+      ) throw new Error("Theme preview handoff is invalid");
+
+      const destination = new URL(result.continuation.url);
+      return await new Promise((resolve) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", receive);
+          popup.close();
+          resolve("failed");
+        }, 20_000);
+        const receive = (event: MessageEvent) => {
+          if (event.source !== popup || event.origin !== trustedOrigin || !event.data) return;
+          if (event.data.type === "scalius-continuation-ready-v1") {
+            popup.postMessage(
+              { type: "scalius-continuation-fields-v1", fields: result.continuation.fields },
+              trustedOrigin,
+            );
+          } else if (event.data.type === "scalius-continuation-accepted-v1") {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", receive);
+            resolve("opened");
+          }
+        };
+        window.addEventListener("message", receive);
+        popup.location.replace(destination.toString());
+      });
+    } catch {
+      popup.close();
+      return "failed";
+    }
+  };
+}
+
 export function ThemePreviewAction({ draftRevision, disabled }: {
   draftRevision: number;
   disabled: boolean;
@@ -92,60 +146,14 @@ export function ThemePreviewAction({ draftRevision, disabled }: {
   const [device, setDevice] = useState<Device>("full");
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<"path" | "open" | null>(null);
+  const open = useOpenThemePreview();
 
   const openPreview = async () => {
-    const selectedPath = path.trim();
-    if (!isSafeThemePreviewPath(selectedPath)) {
-      setError("path");
-      return;
-    }
-    const popup = window.open("about:blank", "_blank");
-    if (!popup) {
-      setError("open");
-      return;
-    }
     setOpening(true);
     setError(null);
-    try {
-      const { storefrontUrl } = await apiData(getApiV1Platform());
-      const trustedOrigin = normalizeStorefrontOrigin(storefrontUrl);
-      if (!trustedOrigin) throw new Error("Storefront origin is unavailable");
-      const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
-        body: { expectedDraftRevision: draftRevision, path: selectedPath, device },
-      }));
-      if (
-        result.draftRevision !== draftRevision ||
-        !isSafeThemePreviewContinuation(result.continuation, trustedOrigin, selectedPath, device) ||
-        popup.closed
-      ) throw new Error("Theme preview handoff is invalid");
-
-      const destination = new URL(result.continuation.url);
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", receive);
-        popup.close();
-        setOpening(false);
-        setError("open");
-      }, 20_000);
-      const receive = (event: MessageEvent) => {
-        if (event.source !== popup || event.origin !== trustedOrigin || !event.data) return;
-        if (event.data.type === "scalius-continuation-ready-v1") {
-          popup.postMessage(
-            { type: "scalius-continuation-fields-v1", fields: result.continuation.fields },
-            trustedOrigin,
-          );
-        } else if (event.data.type === "scalius-continuation-accepted-v1") {
-          window.clearTimeout(timeout);
-          window.removeEventListener("message", receive);
-          setOpening(false);
-        }
-      };
-      window.addEventListener("message", receive);
-      popup.location.replace(destination.toString());
-    } catch {
-      popup.close();
-      setOpening(false);
-      setError("open");
-    }
+    const result = await open(draftRevision, path.trim(), device);
+    setOpening(false);
+    if (result !== "opened") setError(result === "path" ? "path" : "open");
   };
 
   return (

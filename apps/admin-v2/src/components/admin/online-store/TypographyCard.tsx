@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import {
   STOREFRONT_HEADING_CASES,
   STOREFRONT_TYPE_PAIRINGS,
@@ -84,9 +84,11 @@ function PairingSample({ pairing }: { pairing: StorefrontTypePairing }) {
  * size and case. The template's own choices are marked, and one action puts
  * them back.
  */
-export function TypographyCard({ theme, setDraft }: {
+export function TypographyCard({ theme, setDraft, frame: Frame = SectionCard }: {
   theme: Theme;
   setDraft: (update: (current: Theme) => Theme) => void;
+  /** What frames the fields: a card on the Theme page, a sidebar group in the editor. */
+  frame?: ComponentType<{ title: ReactNode; description?: ReactNode; action?: ReactNode; children?: ReactNode }>;
 }) {
   const t = useMessages(onlineStoreMessages);
   const option = (key: string) => t(key as MessageKey);
@@ -110,7 +112,7 @@ export function TypographyCard({ theme, setDraft }: {
   };
 
   return (
-    <SectionCard
+    <Frame
       title={t("typography")}
       description={t("typographyHelp")}
       action={typeTokensAreTemplateDefault(theme) ? null : (
@@ -191,6 +193,6 @@ export function TypographyCard({ theme, setDraft }: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </SectionCard>
+    </Frame>
   );
 }
