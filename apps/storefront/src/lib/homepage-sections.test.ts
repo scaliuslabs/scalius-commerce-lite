@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { storefrontSectionDefault, type StorefrontSection } from "@scalius/shared/storefront-theme";
+import { storefrontSectionDefault, type StorefrontSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
   homepageCategoryTiles,
@@ -17,7 +17,7 @@ import {
 } from "./homepage-sections";
 
 const product = (id: string) => ({ id, name: id, slug: id }) as never;
-const section = (type: StorefrontSection["type"], id: string, settings: Record<string, unknown> = {}) =>
+const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 const category = (id: string, imageUrl: string | null = null) =>

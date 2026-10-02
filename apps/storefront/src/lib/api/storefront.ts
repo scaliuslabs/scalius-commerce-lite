@@ -15,6 +15,7 @@ import type {
   AnalyticsConfig,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import type { ProductPageCopy } from "@scalius/shared/checkout-language";
 import type {
   StorefrontBusinessInfo,
@@ -108,6 +109,12 @@ export interface HomepageSectionData {
   categories: HomepageCategory[];
   collections: CollectionWithProducts[];
   homeProduct: HomepageProduct | null;
+  /**
+   * The app sections that drew something (sanitized HTML and head tags), by
+   * section id; read through `readHomepageAppSurfaces` (lib/app-surfaces).
+   * An app section missing here renders nothing. Absent from an older API.
+   */
+  apps?: HomepageAppSurface[];
 }
 
 // =============================================
@@ -191,6 +198,12 @@ export interface LayoutData {
   }>;
   /** Product-page copy from the active checkout language (buttons, offers, buyer inputs, fulfilment facts). */
   storefrontCopy?: ProductPageCopy;
+  /**
+   * Scripts of active apps whose hosts a Super Admin approved. Untrusted
+   * until `appScriptsForPage` (lib/app-scripts) checks it; absent from an
+   * older API.
+   */
+  appScripts?: unknown;
 }
 
 export interface ThemePreviewData {

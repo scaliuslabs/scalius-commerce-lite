@@ -1,0 +1,25 @@
+---
+// Head tags apps add (sanitized by the API, or by the proxy page with
+// `sanitizePluginHead`): meta tags whose names the page does not own, and
+// schema.org JSON-LD already serialized for a script element. Astro escapes
+// the meta attributes; JSON-LD strings never contain `<` (lib/app-surfaces).
+// Each meta name once (the first app wins).
+import type { PluginHead } from "@scalius/shared/plugins/storefront";
+import { mergeAppHeads } from "@/lib/app-surfaces";
+
+interface Props {
+  heads: readonly PluginHead[];
+  /** Render the meta tags (default true). */
+  meta?: boolean;
+  /** Render the JSON-LD (default true); off for pages that are not indexed. */
+  jsonLd?: boolean;
+}
+
+const { heads, meta = true, jsonLd = true } = Astro.props;
+const merged = mergeAppHeads(heads);
+---
+
+{meta && merged.meta.map((tag) => tag.attribute === "name"
+  ? <meta name={tag.key} content={tag.content} data-app-head />
+  : <meta property={tag.key} content={tag.content} data-app-head />)}
+{jsonLd && merged.jsonLd.map((json) => <script is:inline type="application/ld+json" data-app-head set:html={json} />)}

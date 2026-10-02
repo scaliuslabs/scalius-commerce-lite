@@ -1,0 +1,21 @@
+---
+// A homepage section an installed app draws (`type: "app"`): the HTML its
+// app drew into the homepage read, sanitized by the API. HomepageSections
+// renders it only when the app drew something, so there is never an empty box.
+import AppSurface from "@/components/apps/AppSurface.astro";
+import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
+import type { HomepageAppSurface } from "@/lib/app-surfaces";
+
+interface Props {
+  section: StorefrontAppSection;
+  surface: HomepageAppSurface;
+}
+
+const { section, surface } = Astro.props;
+---
+
+<section class="home-section w-full" data-app-section={section.settings.app}>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
+  </div>
+</section>

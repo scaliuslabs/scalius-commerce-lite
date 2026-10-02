@@ -1,0 +1,104 @@
+/**
+ * What installed apps draw on the storefront (docs/platform: "Storefront
+ * surfaces"): homepage sections (inside the homepage batch part), product
+ * blocks (the `product-apps` batch part) and their head tags.
+ *
+ * The API asks each app to draw, sanitizes the HTML (`sanitizePluginHtml`)
+ * and the head tags (`sanitizePluginHead`) and caches the result under
+ * dependency validation. The storefront does not sanitize that HTML again; it
+ * only checks the payload's shape, so nothing that did not come from those
+ * fields is ever injected, and a surface without HTML renders nothing.
+ */
+import { PLUGIN_SURFACE_KEY_PATTERN, type PluginHead } from "@scalius/shared/plugins/storefront";
+
+/** One drawn homepage section, keyed by its theme section id. */
+export interface HomepageAppSurface {
+  sectionId: string;
+  html: string;
+  head: PluginHead;
+}
+
+/** One drawn product block, in the merchant's order; its app decides where it goes. */
+export interface ProductAppBlock {
+  id: string;
+  /** `<plugin id>/<type>`. */
+  app: string;
+  placement: "buy-box" | "below";
+  html: string;
+  head: PluginHead;
+}
+
+const META_KEY = /^[a-z][a-z0-9:._-]{0,63}$/;
+/** Theme section and product block ids. */
+const SURFACE_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Head tags as the API serialized them. A JSON-LD string can never close its
+ * script element: the API escapes `<`, so a string that still has one is
+ * dropped rather than trusted.
+ */
+export function readAppHead(value: unknown): PluginHead {
+  if (!isRecord(value)) return { meta: [], jsonLd: [] };
+  const meta = (Array.isArray(value.meta) ? value.meta : []).flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const { attribute, key, content } = entry;
+    if ((attribute !== "name" && attribute !== "property") || typeof key !== "string" || !META_KEY.test(key)) return [];
+    if (typeof content !== "string" || !content.trim() || content.length > 500) return [];
+    return [{ attribute, key, content } as PluginHead["meta"][number]];
+  });
+  const jsonLd = (Array.isArray(value.jsonLd) ? value.jsonLd : []).filter(
+    (entry): entry is string => typeof entry === "string" && entry.startsWith("{") && !entry.includes("<"),
+  );
+  return { meta, jsonLd };
+}
+
+function drawnHtml(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** The homepage's drawn app sections (`sections.apps`) by section id; ones without HTML are left out. */
+export function readHomepageAppSurfaces(value: unknown): Map<string, HomepageAppSurface> {
+  const surfaces = new Map<string, HomepageAppSurface>();
+  for (const entry of Array.isArray(value) ? value : []) {
+    if (!isRecord(entry) || typeof entry.sectionId !== "string" || !SURFACE_ID.test(entry.sectionId)) continue;
+    const html = drawnHtml(entry.html);
+    if (!html || surfaces.has(entry.sectionId)) continue;
+    surfaces.set(entry.sectionId, { sectionId: entry.sectionId, html, head: readAppHead(entry.head) });
+  }
+  return surfaces;
+}
+
+/** A product page's drawn app blocks (`blocks`), in order; ones without HTML are left out. */
+export function readProductAppBlocks(value: unknown): ProductAppBlock[] {
+  const seen = new Set<string>();
+  return (Array.isArray(value) ? value : []).flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !SURFACE_ID.test(entry.id) || seen.has(entry.id)) return [];
+    if (typeof entry.app !== "string" || !PLUGIN_SURFACE_KEY_PATTERN.test(entry.app)) return [];
+    if (entry.placement !== "buy-box" && entry.placement !== "below") return [];
+    const html = drawnHtml(entry.html);
+    if (!html) return [];
+    seen.add(entry.id);
+    return [{ id: entry.id, app: entry.app, placement: entry.placement, html, head: readAppHead(entry.head) }];
+  });
+}
+
+/** The head tags of several surfaces, in order: each meta name or property once (the first wins), each JSON-LD once. */
+export function mergeAppHeads(heads: Iterable<PluginHead>): PluginHead {
+  const meta: PluginHead["meta"] = [];
+  const keys = new Set<string>();
+  const jsonLd = new Set<string>();
+  for (const head of heads) {
+    for (const tag of head.meta) {
+      const key = `${tag.attribute}:${tag.key}`;
+      if (keys.has(key)) continue;
+      keys.add(key);
+      meta.push(tag);
+    }
+    for (const entry of head.jsonLd) jsonLd.add(entry);
+  }
+  return { meta, jsonLd: [...jsonLd] };
+}

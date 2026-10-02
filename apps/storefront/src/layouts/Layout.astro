@@ -45,6 +45,7 @@ import {
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
+import { appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import {
   buildPartytownBootstrap,
   partytownForwardFor,
@@ -265,6 +266,15 @@ const bodyStartScripts = analyticsScripts.filter(
 const bodyEndScripts = analyticsScripts.filter(
   (script) => script.location === "body_end",
 );
+// Approved scripts of active apps that name this kind of page (or "all"):
+// async from their https URLs, never inline or in Partytown. The middleware
+// adds their origins to this page's CSP from the same two inputs. A theme
+// preview, like analytics, loads none.
+const appScripts = isThemePreview
+  ? []
+  : appScriptsForPage(layoutData?.appScripts, storefrontAppPage(Astro.url.pathname));
+const appHeadScripts = appScripts.filter((script) => script.placement === "head");
+const appBodyScripts = appScripts.filter((script) => script.placement === "body-end");
 
 // Public API and media origins come from the per-request context seeded by
 // the middleware from the layout payload. No Worker vars, no build-time values.
@@ -403,6 +413,7 @@ if (!window.$RefreshReg$) {
     }
 
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
+    {appHeadScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
     {themeStyleBlock && <style set:html={themeStyleBlock} />}
 
@@ -578,6 +589,7 @@ if (!window.$RefreshReg$) {
     </script>
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+    {appBodyScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
     {themeEditorBridge && <script is:inline set:html={themeEditorBridge} />}
 

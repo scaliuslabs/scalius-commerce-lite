@@ -4,6 +4,8 @@
  * `homeSectionRequests` names), whether it has anything to show, which
  * section leads the page, and how consecutive banners share a row. A
  * section without data renders nothing: no placeholders, no zero states.
+ * An app section (`type: "app"`) shows what its app drew into the same
+ * read, and nothing when the app drew nothing.
  */
 import {
   HOME_COLLECTIONS_FALLBACK_LIMIT,
@@ -29,6 +31,8 @@ import type {
 } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
+import { readHomepageAppSurfaces, type HomepageAppSurface } from "@/lib/app-surfaces";
+import type { PluginHead } from "@scalius/shared/plugins/storefront";
 
 /**
  * Everything the homepage sections draw from, looked up by source key,
@@ -47,6 +51,8 @@ export interface HomepageContent {
   promotionEnds: ReadonlyMap<string, string>;
   /** The product a product homepage opens on, while it is public. */
   homeProduct: HomepageProduct | null;
+  /** What app sections drew (sanitized by the API), by section id; absent or missing: nothing. */
+  apps?: ReadonlyMap<string, HomepageAppSurface>;
 }
 
 export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = {
@@ -73,7 +79,27 @@ export function homepageContent(
     brands: data?.brands ?? [],
     promotionEnds: new Map((data?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
     homeProduct: data?.homeProduct ?? null,
+    apps: readHomepageAppSurfaces(data?.apps),
   };
+}
+
+/** What an app section drew, or null when its app drew nothing (the section then renders nothing). */
+export function homepageAppSurface(
+  section: StorefrontSection,
+  content: Pick<HomepageContent, "apps">,
+): HomepageAppSurface | null {
+  return section.type === "app" ? content.apps?.get(section.id) ?? null : null;
+}
+
+/** The head tags of the app sections that render, in page order (the homepage head carries them). */
+export function homepageAppHeads(
+  sections: readonly StorefrontSection[],
+  content: HomepageContent,
+): PluginHead[] {
+  return sections.flatMap((section) => {
+    const surface = homepageAppSurface(section, content);
+    return surface ? [surface.head] : [];
+  });
 }
 
 /** A hero section's slides per viewport (slides whose image did not resolve are left out). */
@@ -281,6 +307,8 @@ export function homepageMosaicTiles(section: StorefrontSectionOf<"banner-mosaic"
 
 /** Whether a section has anything to show on this store (sections without data render nothing). */
 export function homepageSectionRenders(section: StorefrontSection, content: HomepageContent): boolean {
+  // An app section has no platform renderer: it shows what its app drew.
+  if (section.type === "app") return homepageAppSurface(section, content) !== null;
   if (storefrontSectionRenderer(section) === null || storefrontSectionNeedsContent(section)) return false;
   switch (section.type) {
     case "product-tabs":

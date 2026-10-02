@@ -383,7 +383,8 @@ export type StorefrontPlatformSection = {
   [Type in StorefrontSectionType]: z.infer<Registry[Type]["schema"]>;
 }[StorefrontSectionType];
 export type StorefrontSection = StorefrontPlatformSection | StorefrontAppSection;
-export type StorefrontSectionOf<Type extends StorefrontSectionType> = Extract<StorefrontSection, { type: Type }>;
+/** The platform section of one registry type (an app section is never one: its type is not in the registry). */
+export type StorefrontSectionOf<Type extends StorefrontSectionType> = Extract<StorefrontPlatformSection, { type: Type }>;
 
 /** Whether a section is an app's (rendered by the app, not by a platform renderer). */
 export function isStorefrontAppSection(section: StorefrontSection): section is StorefrontAppSection {

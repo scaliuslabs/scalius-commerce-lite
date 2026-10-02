@@ -137,6 +137,7 @@ interface Window {
       }
   >;
   __scaliusLazyGlobalUiInstalled?: boolean;
+  __scaliusAppFormsInstalled?: boolean;
   __scaliusCartPageAbortController?: AbortController;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
