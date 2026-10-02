@@ -256,8 +256,10 @@ export function previewChange(before: Theme, after: Theme): PreviewChange {
   const { pages: beforePages, ...beforeRest } = before;
   const { pages: afterPages, ...afterRest } = after;
   if (JSON.stringify(beforeRest) !== JSON.stringify(afterRest)) return { kind: "reload" };
-  if (JSON.stringify(beforePages.homeMode) !== JSON.stringify(afterPages.homeMode)) return { kind: "reload" };
-  const shape = (pages: Theme["pages"]) => pages.home.map((section) => `${section.id}:${section.type}:${section.version}`).join(",");
+  const { home: _beforeHome, ...beforeOther } = beforePages;
+  const { home: _afterHome, ...afterOther } = afterPages;
+  if (JSON.stringify(beforeOther) !== JSON.stringify(afterOther)) return { kind: "reload" };
+  const shape = (pages: Theme["pages"]) => pages.home.map((section) => `${section.id}:${section.type}:${section.version}:${section.hidden ?? false}`).join(",");
   if (shape(beforePages) !== shape(afterPages)) return { kind: "reload" };
   const ids = afterPages.home
     .filter((section, index) => JSON.stringify(section.settings) !== JSON.stringify(beforePages.home[index]!.settings))

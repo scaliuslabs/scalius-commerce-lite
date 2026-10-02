@@ -239,3 +239,16 @@ describe("app sections", () => {
       .toEqual({ app: "acme.reviews/carousel", values: { heading: "Mine", count: 8 } });
   });
 });
+
+
+describe("template preview changes", () => {
+  it("reloads for section visibility, landing edits and product block order", () => {
+    const before = theme();
+    const hidden = withSections(before, before.pages.home.map((section) => section.id === "rail" ? { ...section, hidden: true } : section));
+    expect(previewChange(before, hidden)).toEqual({ kind: "reload" });
+    const landing = { ...before, pages: { ...before.pages, landing: { sale: { title: "Sale", sections: [section("faq", "faq")], overrideCms: false } } } };
+    expect(previewChange(before, landing)).toEqual({ kind: "reload" });
+    const reordered = { ...before, pages: { ...before.pages, product: { blocks: [...before.pages.product.blocks].reverse() } } };
+    expect(previewChange(before, reordered)).toEqual({ kind: "reload" });
+  });
+});

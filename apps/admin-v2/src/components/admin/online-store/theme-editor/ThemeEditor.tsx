@@ -1,6 +1,6 @@
 /**
  * The theme editor (Online store → Theme → Customize), Shopify's shape: a
- * sidebar with the homepage sections, the store's own and its active apps'
+ * sidebar with page sections and fixed template blocks, the store's own and its active apps'
  * (drag to reorder, add, duplicate, remove with undo), or the selected
  * section's generated settings (an app section's from its app's fields), and the
  * theme settings; the real storefront in the middle, rendering the draft;
@@ -16,6 +16,8 @@ import { ArrowLeft, Laptop, Monitor, Redo2, Smartphone, Undo2 } from "lucide-rea
 import { toast } from "sonner";
 import {
   postApiV1AdminSettingsThemeDraft,
+  postApiV1AdminSettingsThemeRestore,
+  postApiV1AdminSettingsThemeDiscard,
   postApiV1AdminSettingsThemePublish,
 } from "@scalius/api-client/sdk";
 import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
@@ -38,15 +40,20 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { SearchableSelect } from "~/components/ui/searchable-select";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { Alert, AlertDescription } from "~/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { matchesShortcut, typingIn } from "~/components/admin/layout/shortcuts";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
-import { useMessages } from "~/i18n";
+import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { SectionSettingsForm, useSectionErrors } from "../SectionSettings";
@@ -65,18 +72,19 @@ import {
   canAddSectionType,
   duplicateSection,
   editorHistory,
-  mergeDrafts,
   moveSectionTo,
   previewChange,
   removeSection,
   restoreSection,
   setAppSectionValues,
   startHistory,
-  withSections,
   type AppSectionEntry,
 } from "./editor-state";
 import { PreviewFrame, type PreviewController, type PreviewDevice } from "./PreviewFrame";
 import { SectionList, type SectionRowInfo } from "./SectionList";
+import { SectionPicker } from "./SectionPicker";
+import { PageSelector, LandingSettings, TemplateBlocks, type EditorPage, type FixedEditorPage } from "./PageTemplates";
+import { ThemeHistory, themeVersionsKey } from "./ThemeHistory";
 import { SettingsGroup, ThemeSettingsPanel } from "./ThemeSettingsPanel";
 
 type Theme = StorefrontThemeDocument;
@@ -87,6 +95,7 @@ type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 export const AUTOSAVE_DELAY_MS = 800;
 
 const same = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
+const validTemplatePath = (page: FixedEditorPage, path: string) => (page === "product" ? /^\/products\/[A-Za-z0-9_-]+$/ : /^\/(collections|categories)\/[A-Za-z0-9_-]+$/).test(path);
 
 interface SavedDraft {
   theme: Theme;
@@ -102,11 +111,12 @@ function sectionIssues(error: unknown, theme: Theme): { sections: SectionIssues;
   const sections = new Map<string, Map<string, string>>();
   let other: string | null = null;
   for (const issue of issues) {
-    const match = /^(?:theme\.)?pages\.home\.(\d+)\.settings\.?(.*)$/.exec(issue.path);
-    const id = match ? theme.pages.home[Number(match[1])]?.id : undefined;
+    const match = /^(?:theme\.)?pages\.(home|landing\.([^.]+)\.sections)\.(\d+)\.settings\.?(.*)$/.exec(issue.path);
+    const list = match?.[2] ? theme.pages.landing[match[2]]?.sections : theme.pages.home;
+    const id = match ? list?.[Number(match[3])]?.id : undefined;
     if (id) {
       const map = sections.get(id) ?? new Map<string, string>();
-      map.set(match![2] ?? "", issue.message);
+      map.set(match![4] ?? "", issue.message);
       sections.set(id, map);
     } else {
       other ??= issue.message;
@@ -201,9 +211,18 @@ export function ThemeEditor({ workspace, refetch }: {
   const [failure, setFailure] = useState<{ for: Theme; message: string | null; sections: SectionIssues } | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [publishNote, setPublishNote] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<number | null>(null);
+  const [draftAction, setDraftAction] = useState(false);
+  const [lastPublished, setLastPublished] = useState(workspace.lastPublished);
+  const [previewRevision, setPreviewRevision] = useState<number | null>(null);
+  const [page, setPage] = useState<EditorPage>("home");
+  const [templatePreviewPaths, setTemplatePreviewPaths] = useState<Partial<Record<FixedEditorPage, string>>>({});
+  const [templatePreviewInputs, setTemplatePreviewInputs] = useState<Partial<Record<FixedEditorPage, string>>>({});
   const [device, setDevice] = useState<PreviewDevice>("desktop");
   const [pane, setPane] = useState<"settings" | "preview">("settings");
-  const [tab, setTab] = useState<"sections" | "theme">("sections");
+  const [tab, setTab] = useState<"sections" | "theme" | "history">("sections");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const preview = useRef<PreviewController>(null);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
@@ -214,7 +233,7 @@ export function ThemeEditor({ workspace, refetch }: {
 
   const invalid = themeDraftInvalid(theme)
     || !storefrontThemeDocumentSchema.safeParse(theme).success
-    || appSectionsInvalid(theme.pages.home, appSections);
+    || appSectionsInvalid([...theme.pages.home, ...Object.values(theme.pages.landing).flatMap((each) => each.sections)], appSections);
   const dirty = !same(theme, lastSent);
   const failedHere = failure !== null && same(failure.for, theme);
 
@@ -223,12 +242,12 @@ export function ThemeEditor({ workspace, refetch }: {
   }, []);
 
   // ── Saving ───────────────────────────────────────────────────────────────
-  const latest = useRef({ theme, saved, saving, conflict });
-  latest.current = { theme, saved, saving, conflict };
+  const latest = useRef({ theme, saved, saving, conflict, draftAction });
+  latest.current = { theme, saved, saving, conflict, draftAction };
 
   const save = useCallback(async () => {
     const { theme: sending, saved: base, saving: busy, conflict: blocked } = latest.current;
-    if (busy || blocked) return;
+    if (busy || blocked || latest.current.draftAction) return;
     setSaving(true);
     try {
       const result = await apiData(postApiV1AdminSettingsThemeDraft({
@@ -253,45 +272,71 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // Edits save themselves a moment after the last one.
   useEffect(() => {
-    if (!dirty || invalid || saving || conflict || failedHere) return;
+    if (!dirty || invalid || saving || conflict || failedHere || draftAction) return;
     const timer = window.setTimeout(() => void save(), AUTOSAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [theme, dirty, invalid, saving, conflict, failedHere, save]);
+  }, [theme, dirty, invalid, saving, conflict, failedHere, draftAction, save]);
 
   // A store without a draft gets one, so the preview has a draft to render.
   useEffect(() => {
     if (saved.revision === 0 && !saving && !conflict && !failure) void save();
   }, [saved.revision, saving, conflict, failure, save]);
 
-  const loadChanges = async () => {
-    const { data } = await refetch();
-    if (!data) return;
-    const newer: SavedDraft = {
-      theme: data.draft.theme as Theme,
-      revision: data.draft.revision,
-      basePublishedRevision: data.draft.basePublishedRevision,
-    };
-    // The merchant's edits stay on top of the newer draft, field by field.
-    const merged = mergeDrafts(latest.current.theme, latest.current.saved.theme, newer.theme);
-    setSaved(newer);
-    setLastSent(newer.theme);
-    setPublished({ theme: data.published.theme as Theme, revision: data.published.revision });
-    dispatch({ type: "replace", theme: merged });
-    setConflict(false);
-    setFailure(null);
-    preview.current?.send({ type: "reload" });
+  const loadChanges = async (overwrite = false) => {
+    setDraftAction(true);
+    try {
+      const { data } = await refetch();
+      if (!data) return;
+      const newer: SavedDraft = { theme: data.draft.theme as Theme, revision: data.draft.revision, basePublishedRevision: data.draft.basePublishedRevision };
+      setSaved(newer);
+      setLastSent(newer.theme);
+      setPublished({ theme: data.published.theme as Theme, revision: data.published.revision });
+      setLastPublished(data.lastPublished);
+      if (!overwrite) dispatch({ type: "replace", theme: newer.theme });
+      setConflict(false);
+      setFailure(null);
+      setPreviewRevision(null);
+      preview.current?.send({ type: "reload" });
+    } catch (error) { toast.error(actionErrorText(error)); }
+    finally { setDraftAction(false); }
+  };
+
+  const resetDraft = async (sourceRevision?: number) => {
+    setDraftAction(true);
+    try {
+      const body = { expectedDraftRevision: saved.revision, basePublishedRevision: saved.basePublishedRevision };
+      const result = sourceRevision === undefined
+        ? await apiData(postApiV1AdminSettingsThemeDiscard({ body }))
+        : await apiData(postApiV1AdminSettingsThemeRestore({ body: { ...body, sourceRevision } }));
+      const next = { theme: result.draft.theme as Theme, revision: result.draft.revision, basePublishedRevision: result.draft.basePublishedRevision };
+      setSaved(next); setLastSent(next.theme);
+      dispatch({ type: "replace", theme: next.theme });
+      setPublished({ theme: result.published.theme as Theme, revision: result.published.revision });
+      setLastPublished(result.lastPublished);
+      setFailure(null); setConflict(false); setPreviewRevision(null); setSelectedId(null);
+      if (page.startsWith("landing:") && !next.theme.pages.landing[page.slice(8)]) setPage("home");
+      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && { ...previous, ...result });
+      preview.current?.send({ type: "reload" });
+      toast.success(t(sourceRevision === undefined ? "discarded" : "restored"));
+    } catch (error) {
+      if (isAdminApiConflictError(error)) setConflict(true);
+      else toast.error(actionErrorText(error));
+    } finally { setDraftAction(false); }
   };
 
   const publish = async () => {
     setPublishing(true);
     try {
       const result = await apiData(postApiV1AdminSettingsThemePublish({
-        body: { expectedPublishedRevision: published.revision, expectedDraftRevision: saved.revision },
+        body: { expectedPublishedRevision: published.revision, expectedDraftRevision: saved.revision, ...(publishNote.trim() ? { note: publishNote.trim() } : {}) },
       }));
       queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && { ...previous, ...result });
       setPublished({ theme: result.published.theme as Theme, revision: result.published.revision });
       // Publishing moves the draft onto the new live revision: later saves start from it.
       setSaved({ theme: result.draft.theme as Theme, revision: result.draft.revision, basePublishedRevision: result.draft.basePublishedRevision });
+      setLastPublished(result.lastPublished);
+      setPublishNote("");
+      void queryClient.invalidateQueries({ queryKey: themeVersionsKey });
       toast.success(store("themePublished"));
     } catch (error) {
       if (isAdminApiConflictError(error)) setConflict(true);
@@ -321,10 +366,19 @@ export function ThemeEditor({ workspace, refetch }: {
   }, [dirty, invalid, save]);
 
   // ── Sections ─────────────────────────────────────────────────────────────
-  const sections = theme.pages.home;
+  const landingSlug = page.startsWith("landing:") ? page.slice(8) : null;
+  const sections = useMemo(() => landingSlug ? theme.pages.landing[landingSlug]?.sections ?? [] : theme.pages.home, [landingSlug, theme.pages]);
+  const fixedPage = page !== "home" && !landingSlug ? page as FixedEditorPage : null;
+  const previewPath = landingSlug ? `/pages/${landingSlug}` : page === "search" ? "/search" : fixedPage ? templatePreviewPaths[fixedPage] ?? "/" : "/";
+  const previewReady = !fixedPage || fixedPage === "search" || Boolean(templatePreviewPaths[fixedPage]);
+  useEffect(() => {
+    if (landingSlug && !theme.pages.landing[landingSlug]) { setPage("home"); setSelectedId(null); }
+  }, [landingSlug, theme.pages.landing]);
   const selected = sections.find((section) => section.id === selectedId) ?? null;
   const setSections = (update: (sections: Section[]) => Section[]) =>
-    setDraft((current) => withSections(current, update(current.pages.home)));
+    setDraft((current) => ({ ...current, pages: landingSlug
+      ? { ...current.pages, landing: { ...current.pages.landing, [landingSlug]: { ...current.pages.landing[landingSlug]!, sections: update(current.pages.landing[landingSlug]!.sections) } } }
+      : { ...current.pages, home: update(current.pages.home) } }));
   const select = useCallback((id: string | null) => {
     setSelectedId(id);
     if (id) setTab("sections");
@@ -332,16 +386,20 @@ export function ThemeEditor({ workspace, refetch }: {
 
   /** Why buyers don't see a platform section (an app section's panel says it about its app). */
   const note = (section: Section): string | undefined => {
+    if (section.hidden) return t("hidden");
     if (isStorefrontAppSection(section)) return undefined;
     if (storefrontSectionRenderer(section) === null) return store("sectionNotYet");
     const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
     if (fallback) return store("sectionHidden", { reason: fitReason(fallback) });
+    const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[section.type].requires, { facts: resolved.facts, blocks: {} });
+    if (failed.length > 0) return store("sectionHidden", { reason: fitReason({ failed }) });
     if (storefrontSectionNeedsContent(section)) return store("sectionNeedsContent");
     return undefined;
   };
   /** An app section's row: which app draws it, that its app is not active, or that its values need fixing. */
   const appRowInfo = (section: StorefrontAppSection, name: string): SectionRowInfo => {
     const entry = appSections.get(section.settings.app);
+    if (section.hidden) return { name, note: t("hidden") };
     if (!entry) return { name, note: t("appInactive") };
     if (appValuesInvalid(entry.section.settings, section.settings.values)) return { name, note: t("appSettingsInvalid"), invalid: true };
     return { name, note: t("appFrom", { app: entry.app.name }) };
@@ -367,7 +425,7 @@ export function ThemeEditor({ workspace, refetch }: {
     });
   };
 
-  const platformOptions = STOREFRONT_SECTION_RENDERERS.map((type: StorefrontSectionType) => {
+  const platformOptions = STOREFRONT_SECTION_RENDERERS.map((type) => {
     const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[type].requires, {
       facts: resolved.facts,
       blocks: {},
@@ -378,7 +436,7 @@ export function ThemeEditor({ workspace, refetch }: {
       label: store(`section_${type}` as MessageKey),
       description: !allowed && sections.length < STOREFRONT_MAX_SECTIONS
         ? t("onePerPage")
-        : failed.length > 0 ? fitReason({ failed }) : undefined,
+        : failed.length > 0 ? `${t(`sectionDescription_${type}`)} ${fitReason({ failed })}` : t(`sectionDescription_${type}`),
       disabled: !allowed,
     };
   });
@@ -389,7 +447,7 @@ export function ThemeEditor({ workspace, refetch }: {
     label: section.name,
     description: !appAllowed && sections.length < STOREFRONT_MAX_SECTIONS
       ? t("appSectionLimit", { count: PLUGIN_HOME_SECTIONS_MAX })
-      : app.name,
+      : section.description ? `${section.description} ${t("appFrom", { app: app.name })}` : app.name,
     group: t("addGroupApps"),
     disabled: !appAllowed,
   })));
@@ -408,7 +466,7 @@ export function ThemeEditor({ workspace, refetch }: {
   const names = useMemo(() => Object.fromEntries(sections.map((section) => [section.id, sectionName(section)])), [sections, sectionName]);
 
   // ── Status ───────────────────────────────────────────────────────────────
-  const hasUnpublishedDraft = saved.revision > 0 && !same(saved.theme, published.theme);
+  const hasUnpublishedDraft = dirty || (saved.revision > 0 && !same(saved.theme, published.theme));
   const status = conflict ? t("statusConflict")
     : saving ? t("statusSaving")
       : failedHere ? (failure?.message ?? t("statusFailed"))
@@ -433,11 +491,9 @@ export function ThemeEditor({ workspace, refetch }: {
             <Badge variant={hasUnpublishedDraft ? "attention" : "success"}>{hasUnpublishedDraft ? t("notPublished") : t("live")}</Badge>
           </h1>
           <p role="status" aria-live="polite" className={cn("truncate text-body", statusTone)}>{status}</p>
+          {lastPublished?.createdAt ? <p className="text-body text-muted-foreground">{t("lastPublished", { name: lastPublished.publishedByName ?? t("unknownAuthor"), time: formatDateTime(new Date(lastPublished.createdAt), { dateStyle: "medium", timeStyle: "short" }) })}</p> : null}
         </div>
-        {conflict ? (
-          <Button type="button" variant="outline" onClick={() => void loadChanges()}>{t("loadChanges")}</Button>
-        ) : null}
-        <div role="group" aria-label={t("device")} className="hidden items-center gap-0.5 rounded-lg bg-muted p-0.5 md:flex">
+        <div role="group" aria-label={t("device")} className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {DEVICES.map(({ value, icon: Icon }) => (
             <Button
               key={value}
@@ -460,23 +516,24 @@ export function ThemeEditor({ workspace, refetch }: {
             <Redo2 aria-hidden="true" />
           </Button>
         </div>
-        <Button type="button" variant="outline" disabled={!dirty || invalid || conflict} loading={saving} onClick={() => void save()}>
+        <Button type="button" variant="outline" disabled={!dirty || invalid || conflict || draftAction} loading={saving} onClick={() => void save()}>
           {t("save")}
         </Button>
         <Button
           type="button"
           variant="outline"
           title={t("previewHelp")}
-          disabled={dirty || saved.revision < 1}
-          onClick={() => void openPreview(saved.revision, "/")}
+          disabled={dirty || saved.revision < 1 || !previewReady}
+          onClick={() => void openPreview(saved.revision, previewPath, "full", previewRevision ?? undefined)}
         >
           {t("preview")}
         </Button>
-        <Button type="button" disabled={dirty || saving || !hasUnpublishedDraft || conflict} loading={publishing} onClick={() => setConfirmPublish(true)}>
+        <Button type="button" disabled={dirty || saving || !hasUnpublishedDraft || conflict || draftAction || invalid} loading={publishing} onClick={() => setConfirmPublish(true)}>
           {t("publish")}
         </Button>
       </header>
 
+      {conflict ? <div className="border-b border-border bg-card p-3"><Alert variant="warning"><AlertDescription>{t("statusConflict")}</AlertDescription><div className="mt-2 flex flex-wrap gap-2"><Button type="button" variant="outline" loading={draftAction} onClick={() => void loadChanges()}>{t("reloadDraft")}</Button><Button type="button" variant="outline" disabled={invalid || draftAction} onClick={() => void loadChanges(true)}>{t("overwriteDraft")}</Button></div></Alert></div> : null}
       <div className="flex border-b border-border bg-card px-2 py-1.5 lg:hidden" role="group" aria-label={t("panePreview")}>
         {(["settings", "preview"] as const).map((value) => (
           <Button key={value} type="button" variant="ghost" size="sm" aria-pressed={pane === value} className="flex-1" onClick={() => setPane(value)}>
@@ -491,7 +548,9 @@ export function ThemeEditor({ workspace, refetch }: {
             "@container min-h-0 w-full shrink-0 overflow-y-auto border-r border-border bg-card lg:block lg:w-80 xl:w-96",
             pane === "settings" ? "block" : "hidden",
           )}
+          inert={draftAction}
         >
+          <PageSelector theme={theme} page={page} setDraft={setDraft} onPage={(next) => { setPage(next); setSelectedId(null); setPreviewRevision(null); }} />
           {selected ? (
             <SectionPanel
               title={isStorefrontAppSection(selected) ? appSectionName(selected, appSections) : store(`section_${selected.type}` as MessageKey)}
@@ -518,16 +577,19 @@ export function ThemeEditor({ workspace, refetch }: {
               )}
             </SectionPanel>
           ) : (
-            <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")}>
+            <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme" | "history")}>
               <div className="sticky top-0 z-10 border-b border-border bg-card px-2 py-1.5">
                 <TabsList className="w-full">
                   <TabsTrigger value="sections" className="flex-1">{t("tabSections")}</TabsTrigger>
                   <TabsTrigger value="theme" className="flex-1">{t("tabTheme")}</TabsTrigger>
+                  <TabsTrigger value="history" className="flex-1">{t("history")}</TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="sections" className="mt-0">
-                <SettingsGroup title={t("homepage")}>
-                  {theme.pages.homeMode.kind === "product" ? (
+                <SettingsGroup title={landingSlug ? theme.pages.landing[landingSlug]?.title : t(`page_${page as "home" | "product" | "collection" | "search"}`)}>
+                  {landingSlug ? <LandingSettings slug={landingSlug} theme={theme} setDraft={setDraft} /> : null}
+                  {fixedPage ? <><TemplateBlocks page={fixedPage} theme={theme} setDraft={setDraft} />{fixedPage !== "search" ? <div className="space-y-1"><Label htmlFor="template-preview-path">{t("previewPath")}</Label><Input id="template-preview-path" value={templatePreviewInputs[fixedPage] ?? ""} onChange={(event) => setTemplatePreviewInputs((current) => ({ ...current, [fixedPage]: event.target.value }))} aria-invalid={Boolean(templatePreviewInputs[fixedPage]) && !validTemplatePath(fixedPage, templatePreviewInputs[fixedPage] ?? "")} placeholder={fixedPage === "product" ? "/products/product-handle" : "/categories/category-handle"} onBlur={() => { const path = templatePreviewInputs[fixedPage] ?? ""; setTemplatePreviewPaths((current) => ({ ...current, [fixedPage]: validTemplatePath(fixedPage, path) ? path : undefined })); }} aria-describedby="template-preview-path-help" /><p id="template-preview-path-help" className="text-body text-muted-foreground">{t("previewPathHelp")}</p></div> : null}</> : <>
+                  {page === "home" && theme.pages.homeMode.kind === "product" ? (
                     <p role="status" className="text-body text-muted-foreground">{t("homeIsProduct")}</p>
                   ) : null}
                   {sections.length === 0 ? <p className="text-body text-muted-foreground">{t("noSections")}</p> : null}
@@ -543,36 +605,33 @@ export function ThemeEditor({ workspace, refetch }: {
                       if (result) setSections(() => result.sections);
                     }}
                     onRemove={remove}
+                    onToggle={(id) => setSections((current) => current.map((section) => section.id === id ? { ...section, hidden: !section.hidden } : section))}
                   />
-                  <SearchableSelect
-                    value=""
-                    placeholder={store("addSection")}
-                    ariaLabel={store("addSection")}
-                    disabled={sections.length >= STOREFRONT_MAX_SECTIONS}
-                    options={addOptions}
-                    onValueChange={(value) => {
-                      const result = value ? add(value) : null;
-                      if (!result) return;
-                      setSections(() => result.sections);
-                      setSelectedId(result.id);
-                    }}
-                    triggerClassName="w-full"
-                  />
+                  <SectionPicker options={addOptions} disabled={sections.length >= STOREFRONT_MAX_SECTIONS} onAdd={(value) => {
+                    const result = add(value);
+                    if (!result) return;
+                    setSections(() => result.sections); setSelectedId(result.id);
+                  }} />
                   {sections.length >= STOREFRONT_MAX_SECTIONS ? (
                     <p className="text-body text-muted-foreground">{store("sectionLimit", { count: STOREFRONT_MAX_SECTIONS })}</p>
                   ) : null}
+                  </>}
                 </SettingsGroup>
               </TabsContent>
+              <TabsContent value="history" className="mt-0"><ThemeHistory theme={theme} busy={saving || draftAction || conflict} previewRevision={previewRevision} onPreview={setPreviewRevision} onRestore={setPendingRestore} /><div className="p-4"><Button type="button" variant="outline" disabled={saving || draftAction || conflict || !hasUnpublishedDraft} onClick={() => setConfirmDiscard(true)}>{t("discard")}</Button></div></TabsContent>
               <TabsContent value="theme" className="mt-0">
                 <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
               </TabsContent>
             </Tabs>
           )}
         </aside>
-        <main className={cn("min-h-0 min-w-0 flex-1 bg-muted p-2 sm:p-3 lg:block", pane === "preview" ? "block" : "hidden")}>
-          {saved.revision > 0 ? (
+        <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-muted p-2 sm:p-3 lg:flex", pane === "preview" ? "flex" : "hidden")}>
+          {previewRevision !== null ? <div className="flex items-center justify-between gap-2 rounded-lg bg-card px-3 py-2"><p className="text-body">{t("version", { revision: previewRevision })}</p><Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button></div> : null}
+          {saved.revision > 0 && previewReady ? (
             <PreviewFrame
               draftRevision={saved.revision}
+              sourceRevision={previewRevision ?? undefined}
+              previewPath={previewPath}
               device={device}
               names={names}
               selectedId={selectedId}
@@ -583,23 +642,21 @@ export function ThemeEditor({ workspace, refetch }: {
               controller={preview}
             />
           ) : (
-            <p role="status" className="p-6 text-center text-body text-muted-foreground">{t("previewLoading")}</p>
+            <p role="status" className="p-6 text-center text-body text-muted-foreground">{t(previewReady ? "previewLoading" : "previewPathHelp")}</p>
           )}
         </main>
       </div>
 
-      <ConfirmDialog
-        open={confirmPublish}
-        onOpenChange={setConfirmPublish}
-        title={store("themePublishConfirmTitle")}
-        description={store("themePublishConfirmBody")}
-        confirmLabel={store("themePublish")}
-        variant="default"
-        onConfirm={() => {
-          setConfirmPublish(false);
-          void publish();
-        }}
-      />
+      <UnsavedChangesGuard isDirty={dirty} isSubmitting={false} />
+      <AlertDialog open={confirmPublish} onOpenChange={setConfirmPublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>{store("themePublishConfirmTitle")}</AlertDialogTitle><AlertDialogDescription>{store("themePublishConfirmBody")}</AlertDialogDescription></AlertDialogHeader>
+          <div className="space-y-1"><Label htmlFor="theme-publish-note">{t("publishNote")}</Label><Textarea id="theme-publish-note" maxLength={500} value={publishNote} onChange={(event) => setPublishNote(event.target.value)} aria-describedby="theme-publish-note-help" /><p id="theme-publish-note-help" className="text-body text-muted-foreground">{t("publishNoteHelp")}</p></div>
+          <AlertDialogFooter><AlertDialogCancel>{store("cancel")}</AlertDialogCancel><AlertDialogAction onClick={() => { setConfirmPublish(false); void publish(); }}>{store("themePublish")}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <ConfirmDialog open={confirmDiscard} onOpenChange={setConfirmDiscard} title={t("discardTitle")} description={t("discardBody")} confirmLabel={t("discard")} onConfirm={() => { setConfirmDiscard(false); void resetDraft(); }} />
+      <ConfirmDialog open={pendingRestore !== null} onOpenChange={(open) => { if (!open) setPendingRestore(null); }} title={t("restoreTitle", { revision: pendingRestore ?? "" })} description={t("restoreBody")} confirmLabel={t("restore")} variant="default" onConfirm={() => { const revision = pendingRestore; setPendingRestore(null); if (revision !== null) void resetDraft(revision); }} />
     </div>
   );
 }

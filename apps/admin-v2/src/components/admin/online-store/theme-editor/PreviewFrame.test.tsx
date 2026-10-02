@@ -45,12 +45,13 @@ afterEach(() => {
   container.remove();
 });
 
-async function open() {
+async function open(options: { sourceRevision?: number; previewPath?: string } = {}) {
   const controller = createRef<PreviewController>();
   await act(async () => {
     root.render(
       <PreviewFrame
         draftRevision={3}
+        {...options}
         device="desktop"
         names={{ hero: "Banners", faq: "Questions" }}
         selectedId={null}
@@ -147,4 +148,25 @@ describe("the editor's storefront frame", () => {
     expect(api.session).not.toHaveBeenCalled();
     expect(container.querySelector("iframe")).toBeNull();
   });
+  it("starts an immutable version session at a landing page, without sending its bearer in a URL", async () => {
+    api.session.mockResolvedValue({ continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: CODE, path: "/pages/eid-offers", device: "full" } }, draftRevision: 3, basePublishedRevision: 1 });
+    await open({ sourceRevision: 8, previewPath: "/pages/eid-offers" });
+    expect(api.session).toHaveBeenCalledWith({ body: { expectedDraftRevision: 3, sourceRevision: 8, path: "/pages/eid-offers", device: "full" } });
+    deliver({ type: "scalius-continuation-ready-v1" });
+    expect(posted().at(-1)?.[0]).toMatchObject({ fields: { path: "/pages/eid-offers", continuationCode: CODE } });
+    expect(container.querySelector("iframe")?.getAttribute("src")).not.toContain(CODE);
+  });
+
+  it("opens a new session when the merchant changes template or historical version", async () => {
+    const { controller } = await open();
+    api.session.mockResolvedValue({ continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: CODE, path: "/search", device: "full" } }, draftRevision: 3, basePublishedRevision: 1 });
+    await act(async () => root.render(<PreviewFrame draftRevision={3} sourceRevision={8} previewPath="/search" device="tablet" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />));
+    expect(api.session).toHaveBeenCalledTimes(2);
+    expect(api.session.mock.calls.at(-1)![0].body).toMatchObject({ sourceRevision: 8, path: "/search" });
+    expect(container.querySelector("[data-device]")?.getAttribute("style")).toContain("768px");
+    await act(async () => root.render(<PreviewFrame draftRevision={3} sourceRevision={8} previewPath="/search" device="phone" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />));
+    expect(api.session).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[data-device]")?.getAttribute("style")).toContain("390px");
+  });
+
 });

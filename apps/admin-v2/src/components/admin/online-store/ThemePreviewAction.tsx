@@ -41,7 +41,7 @@ export function isSafeThemePreviewPath(value: string): boolean {
     if (`${parsed.pathname}${parsed.search}` !== value) return false;
     const segments = parsed.pathname.split("/").filter(Boolean);
     if (segments.length === 0 || parsed.pathname === "/search") return true;
-    if (segments.length === 2 && ["products", "categories", "collections"].includes(segments[0]!)) {
+    if (segments.length === 2 && ["products", "categories", "collections", "pages"].includes(segments[0]!)) {
       return /^[A-Za-z0-9_-]+$/.test(segments[1]!);
     }
     return segments.length === 1 && /^[A-Za-z0-9_-]+$/.test(segments[0]!) &&
@@ -90,7 +90,7 @@ export function isSafeThemePreviewContinuation(
  * could not.
  */
 export function useOpenThemePreview() {
-  return async (draftRevision: number, path: string, device: Device = "full"): Promise<"opened" | "path" | "failed"> => {
+  return async (draftRevision: number, path: string, device: Device = "full", sourceRevision?: number): Promise<"opened" | "path" | "failed"> => {
     if (!isSafeThemePreviewPath(path)) return "path";
     const popup = window.open("about:blank", "_blank");
     if (!popup) return "failed";
@@ -99,7 +99,7 @@ export function useOpenThemePreview() {
       const trustedOrigin = normalizeStorefrontOrigin(storefrontUrl);
       if (!trustedOrigin) throw new Error("Storefront origin is unavailable");
       const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
-        body: { expectedDraftRevision: draftRevision, path, device },
+        body: { expectedDraftRevision: draftRevision, ...(sourceRevision === undefined ? {} : { sourceRevision }), path, device },
       }));
       if (
         result.draftRevision !== draftRevision ||

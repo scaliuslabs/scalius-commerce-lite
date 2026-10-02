@@ -14,21 +14,26 @@ import {
   type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { setLocale } from "~/i18n";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { ThemeEditor } from "./ThemeEditor";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn() }));
-const preview = vi.hoisted(() => ({ send: vi.fn(), open: vi.fn(), select: null as null | ((id: string) => void) }));
+const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn(), restore: vi.fn(), discard: vi.fn(), versions: vi.fn() }));
+const preview = vi.hoisted(() => ({ send: vi.fn(), open: vi.fn(), select: null as null | ((id: string) => void), props: {} as { sourceRevision?: number; previewPath?: string; device?: string } }));
 const files = vi.hoisted(() => ({ next: [] as Array<{ id: string; url: string; altText?: string }> }));
+const blocker = vi.hoisted(() => vi.fn(() => ({ status: "idle" })));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminSettingsThemeDraft: api.draft,
   postApiV1AdminSettingsThemePublish: api.publish,
+  postApiV1AdminSettingsThemeRestore: api.restore,
+  postApiV1AdminSettingsThemeDiscard: api.discard,
+  getApiV1AdminSettingsThemeVersions: api.versions,
   getApiV1AdminCategoriesFormOptions: vi.fn(async () => ({
     categories: [{ id: "cat_honey", name: "Honey", status: "published" }, { id: "cat_ghee", name: "Ghee", status: "published" }],
   })),
@@ -49,14 +54,16 @@ vi.mock("~/components/admin/media-manager", () => ({
   ),
 }));
 vi.mock("@tanstack/react-router", () => ({
+  useBlocker: blocker,
   Link: ({ to, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; children: ReactNode }) => (
     <a href={to} {...props}>{children}</a>
   ),
 }));
 // The frame is its own unit (PreviewFrame.test.tsx): here it records what the editor tells it.
 vi.mock("./PreviewFrame", () => ({
-  PreviewFrame: function FakeFrame(props: { onSelect: (id: string) => void; controller: unknown }) {
+  PreviewFrame: function FakeFrame(props: { sourceRevision?: number; previewPath?: string; device?: string; onSelect: (id: string) => void; controller: unknown }) {
     preview.select = props.onSelect;
+    preview.props = props;
     useImperativeHandle(props.controller as never, () => ({ send: preview.send }));
     return <div data-fake-preview />;
   },
@@ -67,6 +74,8 @@ let container: HTMLDivElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  act(() => setLocale("en"));
+  api.versions.mockResolvedValue({ versions: [] });
   let revision = 1;
   api.draft.mockImplementation(async ({ body }: { body: { theme: StorefrontThemeDocument } }) => ({
     theme: body.theme,
@@ -81,6 +90,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  setLocale("en");
   container.remove();
 });
 
@@ -98,7 +108,7 @@ const section = (type: StorefrontSectionType, id: string, settings: Record<strin
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 function themeWith(home: StorefrontSection[], base: StorefrontThemeDocument = DEFAULT_STOREFRONT_THEME): StorefrontThemeDocument {
-  return { ...base, pages: { home, homeMode: { kind: "sections" } } };
+  return { ...base, pages: { ...base.pages, home, homeMode: { kind: "sections" } } };
 }
 
 const HOME = [
@@ -113,10 +123,12 @@ function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
   apps?: ThemeWorkspaceDocument["apps"];
   refetch?: () => Promise<{ data?: ThemeWorkspaceDocument }>;
   published?: StorefrontThemeDocument;
+  lastPublished?: ThemeWorkspaceDocument["lastPublished"];
 } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const workspace = {
     published: { theme: options.published ?? theme, revision: 1 },
+    lastPublished: options.lastPublished ?? null,
     draft: { theme, revision: 1, basePublishedRevision: 1, updatedAt: null },
     storeShape: options.shape ?? SHAPE,
     media: options.media ?? [],
@@ -258,7 +270,7 @@ describe("theme editor: sections", () => {
     const tiles = options.find((option) => option.textContent?.startsWith("Featured categories"))!;
     expect(tiles.textContent).toContain("Needs 2 or more categories (you have 1).");
     const hero = options.find((option) => option.textContent?.startsWith("Banners"))!;
-    expect(hero.textContent).toContain("A homepage has one.");
+    expect(hero.textContent).toContain("A page has one.");
     expect((hero as HTMLButtonElement).disabled).toBe(true);
     act(() => options.find((option) => option.textContent?.startsWith("Questions and answers"))!.click());
     // The new section opens for editing.
@@ -322,7 +334,7 @@ describe("theme editor: settings and saving", () => {
     expect(field("theme-section-rail-title").value).toBe("New honey");
   });
 
-  it("keeps the edits when another session saved first, then merges and saves again", async () => {
+  it("keeps the edits on conflict, then explicitly overwrites using the latest revision", async () => {
     const newer = themeWith(HOME.map((each) => each.id === "faq" ? { ...each, settings: { ...each.settings, heading: "Their questions" } } as StorefrontSection : each));
     const refetch = vi.fn(async () => ({
       data: {
@@ -340,13 +352,13 @@ describe("theme editor: settings and saving", () => {
     await autosaved();
     await vi.waitFor(() => expect(container.textContent).toContain("Someone else changed this theme."));
     expect(field("theme-section-rail-title").value).toBe("Mine");
-    await act(async () => button("Load changes").click());
+    await act(async () => button("Overwrite with my edits").click());
     expect(refetch).toHaveBeenCalledTimes(1);
     await autosaved(2);
     const saved = lastSaved();
     expect(saved.expectedDraftRevision).toBe(5);
     expect(saved.theme.pages.home.find((each) => each.id === "rail")!.settings).toMatchObject({ title: "Mine" });
-    expect(saved.theme.pages.home.find((each) => each.id === "faq")!.settings).toMatchObject({ heading: "Their questions" });
+    expect(saved.theme.pages.home.find((each) => each.id === "faq")!.settings).toMatchObject({ heading: "Questions" });
   });
 
   it("marks a rejected image on its section row and in its settings", async () => {
@@ -385,7 +397,7 @@ describe("theme editor: settings and saving", () => {
   it("opens the saved draft in a new tab", () => {
     render();
     act(() => button("Preview").click());
-    expect(preview.open).toHaveBeenCalledWith(1, "/");
+    expect(preview.open).toHaveBeenCalledWith(1, "/", "full", undefined);
   });
 });
 
@@ -428,7 +440,7 @@ describe("theme editor: app sections", () => {
     render(themeWith(HOME), { apps: APPS });
     openAdd();
     expect(groupHeadings()).toEqual(["Sections", "Apps"]);
-    expect(option("Reviews carousel")?.textContent).toBe("Reviews carousel · Acme Reviews");
+    expect(option("Reviews carousel")?.textContent).toBe("Reviews carouselYour best reviews in a row. From Acme Reviews");
     act(() => option("Reviews carousel")!.click());
     // The new section opens with the app's own words.
     expect(container.querySelector("h2")?.textContent).toBe("Reviews carousel");
@@ -501,7 +513,7 @@ describe("theme editor: app sections", () => {
     openAdd();
     const carousel = option("Reviews carousel")!;
     expect(carousel.disabled).toBe(true);
-    expect(carousel.textContent).toBe("Reviews carousel · A homepage shows up to 8 app sections.");
+    expect(carousel.textContent).toBe("Reviews carouselA page shows up to 8 app sections.");
     act(() => container.querySelector<HTMLButtonElement>('[data-section-row="app-0"] button:nth-of-type(2)')!.click());
     expect(document.querySelector("#theme-section-app-0-values-count-note")?.textContent).toBe("Use 12 or less.");
   });
@@ -550,5 +562,224 @@ describe("theme editor: theme settings", () => {
     act(() => field<HTMLButtonElement>("theme-blocks-desktopNav-settings-promoImages").click());
     await autosaved();
     expect(lastSaved().theme.blocks.desktopNav).toEqual({ variant: "mega-panel", settings: { promoImages: true } });
+  });
+});
+
+const openTab = (name: string) => act(() => [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find((tab) => tab.textContent === name)!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+const confirm = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")].find((each) => each.textContent === name)!;
+const workspaceResult = (draft: StorefrontThemeDocument, live: StorefrontThemeDocument = themeWith(HOME)) => ({
+  published: { theme: live, revision: 1 },
+  draft: { theme: draft, revision: 2, basePublishedRevision: 1, updatedAt: null },
+  lastPublished: null,
+});
+
+describe("theme editor: history and safeguards", () => {
+  it("previews immutable history, compares it with the draft and restores only after confirmation", async () => {
+    const old = themeWith(HOME.map((each) => each.id === "rail" ? { ...each, settings: { ...each.settings, title: "Old honey" } } as StorefrontSection : each));
+    api.versions.mockResolvedValue({ versions: [{ revision: 8, theme: old, changes: [{ kind: "settings", page: "home", sectionId: "rail" }], summary: [], note: "Eid campaign", publishedByName: "Rahima", createdAt: "2026-10-03T10:30:00Z" }] });
+    api.restore.mockResolvedValue(workspaceResult(old));
+    render();
+    expect(api.versions).not.toHaveBeenCalled();
+    openTab("History");
+    await vi.waitFor(() => expect(container.textContent).toContain("Eid campaign"));
+    expect(container.textContent).toContain("Published by Rahima at");
+    act(() => button("Preview version").click());
+    expect(preview.props.sourceRevision).toBe(8);
+    act(() => button("Compare with draft").click());
+    expect(container.querySelector('ul[aria-label="Compare with draft"]')?.textContent).toContain("Homepage: changed rail");
+    act(() => button("Restore to draft").click());
+    expect(api.restore).not.toHaveBeenCalled();
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Your live store changes only when you publish.");
+    await act(async () => confirm("Restore to draft").click());
+    expect(api.restore).toHaveBeenCalledWith({ body: { sourceRevision: 8, expectedDraftRevision: 1, basePublishedRevision: 1 } });
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(preview.props.sourceRevision).toBeUndefined();
+    expect(container.textContent).toContain("Not published");
+    openTab("Sections");
+    expect(rowText("rail")).toBe("Old honey");
+  });
+
+  it("discards the shared draft with confirmation and keeps the live revision", async () => {
+    const live = storefrontTemplateTheme("boutique");
+    api.discard.mockResolvedValue(workspaceResult(live, live));
+    render(themeWith(HOME), { published: live });
+    openTab("History");
+    act(() => button("Discard draft").click());
+    expect(api.discard).not.toHaveBeenCalled();
+    await act(async () => confirm("Discard draft").click());
+    expect(api.discard).toHaveBeenCalledWith({ body: { expectedDraftRevision: 1, basePublishedRevision: 1 } });
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Live");
+    expect(button("Undo").disabled).toBe(true);
+  });
+
+  it("reloads a conflict explicitly without silently retaining an overlapping local value", async () => {
+    const newer = themeWith(HOME.map((each) => each.id === "rail" ? { ...each, settings: { ...each.settings, title: "Their honey" } } as StorefrontSection : each));
+    const refetch = vi.fn(async () => ({ data: workspaceResult(newer) as unknown as ThemeWorkspaceDocument }));
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "CONFLICT"));
+    render(themeWith(HOME), { refetch });
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="rail"] button:nth-of-type(2)')!.click());
+    type(field("theme-section-rail-title"), "Mine");
+    await autosaved();
+    await vi.waitFor(() => expect(button("Reload draft")).toBeDefined());
+    await act(async () => button("Reload draft").click());
+    expect(field("theme-section-rail-title").value).toBe("Their honey");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(api.draft).toHaveBeenCalledTimes(1);
+  });
+
+  it("guards unsaved edits, sends a merchant publish note and shows the last author", async () => {
+    render(themeWith(HOME), { published: storefrontTemplateTheme("boutique"), lastPublished: { revision: 1, publishedBy: "staff_1", publishedByName: "Rahima", createdAt: "2026-10-03T10:30:00Z" } });
+    expect(container.textContent).toContain("Last published by Rahima at");
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="rail"] button:nth-of-type(2)')!.click());
+    type(field("theme-section-rail-title"), "Fresh");
+    expect((blocker.mock.calls.at(-1) as unknown as [{ enableBeforeUnload: boolean }])[0].enableBeforeUnload).toBe(true);
+    await autosaved();
+    await vi.waitFor(() => expect((blocker.mock.calls.at(-1) as unknown as [{ enableBeforeUnload: boolean }])[0].enableBeforeUnload).toBe(false));
+    api.publish.mockResolvedValue(workspaceResult(lastSaved().theme));
+    act(() => button("Publish").click());
+    type(field<HTMLTextAreaElement>("theme-publish-note"), "Eid launch");
+    await act(async () => confirm("Publish theme").click());
+    expect(api.publish.mock.calls[0]![0].body.note).toBe("Eid launch");
+  });
+
+  it("lets the add picker move focus with arrow keys and search without matches", () => {
+    render();
+    act(() => button("Add section").click());
+    const options = [...document.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)")];
+    act(() => options[0]!.focus());
+    act(() => options[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(document.activeElement).toBe(options[1]);
+    const search = document.querySelector<HTMLInputElement>('input[aria-label="Search…"]')!;
+    type(search, "no-such-section");
+    expect(document.querySelector('[role=listbox]')?.textContent).toBe("No matches.");
+  });
+
+  it("hides and shows sections with undo and includes local layout thumbnails in the add picker", async () => {
+    render();
+    openMenu("Actions for New honey");
+    act(() => button("Hide").click());
+    expect(rowText("rail")).toBe("New honeyHidden on your store");
+    await autosaved();
+    expect(lastSaved().theme.pages.home[1]!.hidden).toBe(true);
+    expect(preview.send).toHaveBeenCalledWith({ type: "reload" });
+    act(() => button("Undo").click());
+    expect(rowText("rail")).toBe("New honey");
+    act(() => button("Redo").click());
+    openMenu("Actions for New honey");
+    act(() => button("Show").click());
+    expect(rowText("rail")).toBe("New honey");
+    act(() => button("Add section").click());
+    expect(document.querySelectorAll("[data-section-thumbnail]").length).toBeGreaterThan(10);
+    expect(document.querySelector('[role=option]')?.textContent).toContain("A page has one.");
+    expect([...document.querySelectorAll('[role=option]')].find((option) => option.textContent?.startsWith("Questions and answers"))?.textContent).toContain("Answer common questions.");
+  });
+});
+
+describe("theme editor: page templates", () => {
+  it("creates a landing page, edits it with the same section form and previews its path", async () => {
+    render();
+    act(() => button("Add landing page").click());
+    type(field("new-landing-title"), "Eid offers");
+    type(field("new-landing-slug"), "eid-offers");
+    act(() => button("Create page").click());
+    expect(preview.props.previewPath).toBe("/pages/eid-offers");
+    act(() => button("Add section").click());
+    act(() => [...document.querySelectorAll<HTMLButtonElement>("[role=option]")].find((option) => option.textContent?.startsWith("Questions and answers"))!.click());
+    type(field("theme-section-faq-heading"), "Eid delivery");
+    await autosaved();
+    const page = lastSaved().theme.pages.landing["eid-offers"]!;
+    expect(page.title).toBe("Eid offers");
+    expect(page.sections[0]).toMatchObject({ id: "faq", type: "faq", settings: { heading: "Eid delivery" } });
+    expect(storefrontThemeDocumentSchema.safeParse(lastSaved().theme).success).toBe(true);
+    act(() => button("All sections").click());
+    act(() => field<HTMLButtonElement>("landing-override").click());
+    await autosaved(2);
+    expect(lastSaved().theme.pages.landing["eid-offers"]!.overrideCms).toBe(true);
+  });
+
+  it("returns to the homepage when undo removes a newly created landing page", () => {
+    render();
+    act(() => button("Add landing page").click());
+    type(field("new-landing-title"), "Sale"); type(field("new-landing-slug"), "sale");
+    act(() => button("Create page").click());
+    expect(preview.props.previewPath).toBe("/pages/sale");
+    act(() => button("Undo").click());
+    expect(preview.props.previewPath).toBe("/");
+    expect(rows()).toEqual(["hero", "rail", "faq"]);
+  });
+
+  it("rejects reserved or duplicate landing handles before creating a page", () => {
+    const theme = themeWith(HOME);
+    theme.pages.landing = { sale: { title: "Sale", sections: [], overrideCms: false } };
+    render(theme);
+    act(() => button("Add landing page").click());
+    type(field("new-landing-title"), "Another sale");
+    for (const slug of ["sale", "checkout", "Sale now", "pages"]) {
+      type(field("new-landing-slug"), slug);
+      expect(button("Create page").disabled).toBe(true);
+    }
+  });
+
+  it("previews only a valid URL for the selected fixed template, and waits until blur", () => {
+    render();
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Product");
+    expect(button("Preview").disabled).toBe(true);
+    type(field("template-preview-path"), "/products/honey");
+    expect(button("Preview").disabled).toBe(true);
+    act(() => { field("template-preview-path").focus(); field("template-preview-path").blur(); });
+    expect(preview.props.previewPath).toBe("/products/honey");
+    expect(button("Preview").disabled).toBe(false);
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Collection and category");
+    expect(button("Preview").disabled).toBe(true);
+    type(field("template-preview-path"), "//attacker.example/");
+    act(() => { field("template-preview-path").focus(); field("template-preview-path").blur(); });
+    expect(button("Preview").disabled).toBe(true);
+    expect(field("template-preview-path").getAttribute("aria-invalid")).toBe("true");
+    type(field("template-preview-path"), "/categories/honey");
+    act(() => { field("template-preview-path").focus(); field("template-preview-path").blur(); });
+    expect(preview.props.previewPath).toBe("/categories/honey");
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Product");
+    expect(preview.props.previewPath).toBe("/products/honey");
+  });
+
+  it("reorders and hides fixed product blocks with undo, and saves collection grid density", async () => {
+    render();
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Product");
+    const blocks = () => [...container.querySelectorAll<HTMLElement>("[data-template-block]")].map((each) => each.dataset.templateBlock);
+    act(() => button("Move down: Gallery").click());
+    expect(blocks().slice(0, 2)).toEqual(["title-price", "gallery"]);
+    act(() => button("Hide: Gallery").click());
+    await autosaved();
+    expect(lastSaved().theme.pages.product.blocks[1]).toEqual({ id: "gallery", hidden: true });
+    act(() => button("Undo").click());
+    expect(button("Hide: Gallery")).toBeDefined();
+    act(() => button("Undo").click());
+    expect(blocks()[0]).toBe("gallery");
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Collection and category");
+    choose(field<HTMLButtonElement>("template-grid-density"), "Dense");
+    await autosaved(2);
+    expect(lastSaved().theme.tokens.density).toBe("dense");
+    choose(field<HTMLButtonElement>("theme-editor-page"), "Search");
+    expect(preview.props.previewPath).toBe("/search");
+    act(() => button("Phone").click());
+    expect(preview.props.device).toBe("phone");
+  });
+});
+
+
+describe("theme editor: Bangla", () => {
+  it("uses Bangla for history changes, landing controls and template block actions", async () => {
+    act(() => setLocale("bn"));
+    api.versions.mockResolvedValue({ versions: [{ revision: 8, theme: themeWith(HOME), changes: [{ kind: "reordered", page: "home" }], summary: ["home: sections reordered"], note: null, publishedByName: "রহিমা", createdAt: "2026-10-03T10:30:00Z" }] });
+    render();
+    expect(container.textContent).toContain("ল্যান্ডিং পেজ যোগ করুন");
+    openTab("ইতিহাস");
+    await vi.waitFor(() => expect(container.textContent).toContain("হোমপেজ: সেকশন বা ব্লকের ক্রম বদলেছে"));
+    expect(container.textContent).not.toContain("home: sections reordered");
+    openTab("সেকশন");
+    choose(field<HTMLButtonElement>("theme-editor-page"), "পণ্য");
+    expect(button("লুকান: গ্যালারি")).toBeDefined();
+    expect(container.textContent).toContain("কেনার বোতাম");
   });
 });

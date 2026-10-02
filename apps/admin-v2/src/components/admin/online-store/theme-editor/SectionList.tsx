@@ -46,7 +46,7 @@ export interface SectionRowInfo {
   invalid?: boolean;
 }
 
-function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove }: {
+function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove, onToggle }: {
   section: Section;
   info: SectionRowInfo;
   index: number;
@@ -57,6 +57,7 @@ function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHov
   onMove: (to: number) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onToggle: () => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const store = useMessages(onlineStoreMessages);
@@ -111,6 +112,7 @@ function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHov
         <DropdownMenuContent align="end">
           <DropdownMenuItem disabled={index === 0} onSelect={() => onMove(index - 1)}>{t("moveUp")}</DropdownMenuItem>
           <DropdownMenuItem disabled={index === count - 1} onSelect={() => onMove(index + 1)}>{t("moveDown")}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onToggle}>{t(section.hidden ? "show" : "hide")}</DropdownMenuItem>
           <DropdownMenuItem disabled={!canDuplicate} onSelect={onDuplicate}>{t("duplicate")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={onRemove}>{t("remove")}</DropdownMenuItem>
@@ -120,7 +122,7 @@ function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHov
   );
 }
 
-export function SectionList({ sections, info, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove }: {
+export function SectionList({ sections, info, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove, onToggle }: {
   sections: readonly Section[];
   info: (section: Section) => SectionRowInfo;
   canDuplicate: (section: Section) => boolean;
@@ -130,6 +132,7 @@ export function SectionList({ sections, info, canDuplicate, onSelect, onHover, o
   onMove: (id: string, to: number) => void;
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
+  onToggle: (id: string) => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const sensors = useSensors(
@@ -162,7 +165,7 @@ export function SectionList({ sections, info, canDuplicate, onSelect, onHover, o
       accessibility={{ announcements, screenReaderInstructions: { draggable: t("dragInstructions") } }}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <ol className="space-y-0.5" aria-label={t("homepage")}>
+        <ol className="space-y-0.5" aria-label={t("tabSections")}>
           {sections.map((section, index) => (
             <SectionRow
               key={section.id}
@@ -176,6 +179,7 @@ export function SectionList({ sections, info, canDuplicate, onSelect, onHover, o
               onMove={(to) => onMove(section.id, to)}
               onDuplicate={() => onDuplicate(section.id)}
               onRemove={() => onRemove(section.id)}
+              onToggle={() => onToggle(section.id)}
             />
           ))}
         </ol>

@@ -49,9 +49,11 @@ interface Session {
   attempt: number;
 }
 
-export function PreviewFrame({ draftRevision, device, names, selectedId, onSelect, controller }: {
+export function PreviewFrame({ draftRevision, sourceRevision, previewPath = "/", device, names, selectedId, onSelect, controller }: {
   /** The saved draft revision the session opens on (it then follows every save). */
   draftRevision: number;
+  sourceRevision?: number;
+  previewPath?: string;
   device: PreviewDevice;
   /** Section names by id, for the outlines' labels. */
   names: Readonly<Record<string, string>>;
@@ -68,8 +70,8 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
   const helloTimer = useRef(0);
   /** The session's one-time code until the relay accepts it. */
   const pendingFields = useRef<{ continuationCode: string; path: string; device: string } | null>(null);
-  const latest = useRef({ names, selectedId, onSelect, draftRevision });
-  latest.current = { names, selectedId, onSelect, draftRevision };
+  const latest = useRef({ names, selectedId, onSelect, draftRevision, sourceRevision, previewPath });
+  latest.current = { names, selectedId, onSelect, draftRevision, sourceRevision, previewPath };
 
   // A session: the storefront origin from Platform settings, then a
   // one-time continuation the frame's embed relay redeems.
@@ -85,9 +87,9 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
         return;
       }
       const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
-        body: { expectedDraftRevision: latest.current.draftRevision, path: "/", device: "full" },
+        body: { expectedDraftRevision: latest.current.draftRevision, ...(latest.current.sourceRevision === undefined ? {} : { sourceRevision: latest.current.sourceRevision }), path: latest.current.previewPath, device: "full" },
       }));
-      if (!isSafeThemePreviewContinuation(result.continuation, origin, "/", "full")) throw new Error("Unsafe continuation");
+      if (!isSafeThemePreviewContinuation(result.continuation, origin, latest.current.previewPath, "full")) throw new Error("Unsafe continuation");
       pendingFields.current = result.continuation.fields;
       setSession((current) => ({
         origin,
@@ -120,12 +122,7 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
 
   useImperativeHandle(controller, () => ({ send }), [send]);
 
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    void open();
-  }, [open]);
+  useEffect(() => { void open(); }, [open, sourceRevision, previewPath]);
 
   // Messages from the frame: the relay's handshake, then the bridge's.
   useEffect(() => {
@@ -192,7 +189,7 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
   }, [selectedId, send, phase]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       {path !== "/" && phase === "ready" ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-1.5 shadow-card">
           <p className="min-w-0 truncate text-body text-muted-foreground">{t("viewingPath", { path })}</p>
