@@ -4,10 +4,22 @@ import { describe, expect, it } from "vitest";
 
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { MEDIA_VARIANT_WIDTHS, mediaImageUrl } from "@scalius/shared/media-variants";
 import { STOREFRONT_DENSITY_SPECS } from "@scalius/shared/storefront-theme";
+import { cardPhotoSizes } from "@/components/cards/card-model";
 import { productCardImageSizes } from "./product-card-layout";
-import { DENSITY_CAP_SCALE, capImageSrcSet, capSizesDensity, responsiveImageSources, scaleSizes } from "./responsive-image";
+import {
+  CARD_SIZES_COLLAPSE_FROM_PX,
+  DENSITY_CAP_SCALE,
+  PHONE_DENSITY_CAP_MAX_VIEWPORT_PX,
+  capImageSrcSet,
+  capPhoneSizesDensity,
+  capSizesDensity,
+  collapseWideSizes,
+  hoverImageSources,
+  responsiveImageSources,
+  scaleSizes,
+} from "./responsive-image";
 
 describe("capSizesDensity", () => {
   it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
@@ -33,9 +45,11 @@ describe("capSizesDensity", () => {
     ].join(", "));
   });
 
-  it("keeps the marketplace card's selected rendition at every viewport and DPR", () => {
+  it("keeps the marketplace card's rendition on phones and stays within a step above them", () => {
     const base = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 262);
-    const compact = capSizesDensity(scaleSizes(base, 0.9));
+    const card = cardPhotoSizes("marketplace", base);
+    // The repeated string stays short: every desktop step used to appear twice.
+    expect(card.length).toBeLessThan(capSizesDensity(scaleSizes(base, 0.8)).length / 2);
     const widthAt = (sizes: string, viewport: number, dpr: number) => {
       for (const entry of sizes.split(", ")) {
         if (entry.includes("min-resolution: 2.5dppx") && dpr < 2.5) continue;
@@ -47,15 +61,62 @@ describe("capSizesDensity", () => {
       }
       throw new Error("Missing card image size");
     };
-    const source = (width: number) => [144, 172, 206, 247, 296, 355, 426, 511, 613].find((candidate) => candidate >= width) ?? 613;
+    const ladder = [144, 172, 206, 247, 296, 355, 426, 511, 613];
+    const step = (width: number) => {
+      const index = ladder.findIndex((candidate) => candidate >= width - 1e-6);
+      return index < 0 ? ladder.length - 1 : index;
+    };
     for (let viewport = 320; viewport <= 2560; viewport++) {
       for (const dpr of [1, 1.25, 1.5, 2, 2.5, 3]) {
-        const expected = widthAt(base, viewport, dpr) * 0.9 * (dpr >= 2.5 ? Number(DENSITY_CAP_SCALE) : 1);
-        const actual = widthAt(compact, viewport, dpr);
-        expect(actual, `${viewport}px at ${dpr} DPR`).toBeCloseTo(expected, 5);
-        expect(source(actual * dpr), `${viewport}px at ${dpr} DPR`).toBe(source(expected * dpr));
+        // Phones (to 639px) at DPR 2.5+ ask for about 2x; everything else at its density.
+        const capped = dpr >= 2.5 && viewport <= PHONE_DENSITY_CAP_MAX_VIEWPORT_PX;
+        const exact = widthAt(base, viewport, dpr) * 0.8 * (capped ? Number(DENSITY_CAP_SCALE) : 1);
+        const actual = widthAt(card, viewport, dpr);
+        // Never narrower than drawn.
+        expect(actual, `${viewport}px at ${dpr} DPR`).toBeGreaterThanOrEqual(exact - 1e-6);
+        if (viewport < CARD_SIZES_COLLAPSE_FROM_PX) {
+          expect(actual, `${viewport}px at ${dpr} DPR`).toBeCloseTo(exact, 5);
+          expect(step(actual * dpr), `${viewport}px at ${dpr} DPR`).toBe(step(exact * dpr));
+        } else {
+          // Tablets and computers: merged steps fetch at most one rendition step more.
+          expect(step(actual * dpr) - step(exact * dpr), `${viewport}px at ${dpr} DPR`).toBeLessThanOrEqual(1);
+        }
       }
     }
+  });
+});
+
+describe("collapseWideSizes", () => {
+  it("merges desktop steps into the widest card without fetching two steps more", () => {
+    // A 2560px marketplace container changes columns every ~200px.
+    const sizes = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 190);
+    const merged = collapseWideSizes(sizes, MEDIA_VARIANT_WIDTHS, 1024);
+    const below = sizes.split(", ").filter((entry) => Number(/max-width: (\d+)px/.exec(entry)?.[1] ?? Infinity) < 1024);
+    expect(merged.startsWith(below.join(", "))).toBe(true);
+    expect(merged.split(", ").length).toBeLessThanOrEqual(below.length + 3);
+    expect(sizes.split(", ").length).toBeGreaterThan(below.length + 6);
+    // Unparseable sizes (other conditions, min()) stay as they were.
+    expect(collapseWideSizes("(min-width: 64rem) 30vw, 100vw", MEDIA_VARIANT_WIDTHS)).toBe("(min-width: 64rem) 30vw, 100vw");
+    expect(collapseWideSizes("(max-width: 639px) 72vw, min(20vw, 256px)", MEDIA_VARIANT_WIDTHS)).toBe("(max-width: 639px) 72vw, min(20vw, 256px)");
+  });
+
+  it("caps phone density only below the tablet step", () => {
+    expect(capPhoneSizesDensity("(max-width: 335px) calc(100vw - 32px), (max-width: 1023px) calc(25vw - 30px), 230px")).toBe([
+      "(min-resolution: 2.5dppx) and (max-width: 335px) calc(66.6vw - 21.312px)",
+      "(min-resolution: 2.5dppx) and (max-width: 639px) calc(16.65vw - 19.98px)",
+      "(max-width: 335px) calc(100vw - 32px)",
+      "(max-width: 1023px) calc(25vw - 30px)",
+      "230px",
+    ].join(", "));
+    expect(capPhoneSizesDensity("170px")).toBe("(min-resolution: 2.5dppx) and (max-width: 639px) 113.22px, 170px");
+  });
+
+  it("derives a hover photo's sources from its URL and the card's cap", () => {
+    const url = "https://cdn.example.test/media/back.jpg/1600.webp";
+    const hover = hoverImageSources(url, 400);
+    expect(hover.src).toBe("https://cdn.example.test/media/back.jpg/511.webp");
+    expect(hover.srcset!.endsWith("https://cdn.example.test/media/back.jpg/426.webp 426w")).toBe(true);
+    expect(hoverImageSources("https://images.example.test/back.jpg")).toEqual({ src: "https://images.example.test/back.jpg", srcset: undefined });
   });
 });
 

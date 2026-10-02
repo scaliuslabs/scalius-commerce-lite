@@ -14,6 +14,162 @@
  * below per `data-card-variant`, after its reference site.
  */
 
+/* ─── Every card but standard: the utilities each card used to repeat ─────
+   One copy here instead of the same Tailwind class strings on every card of
+   a listing. Zero specificity (:where), so every rule below and every
+   unlayered sheet still wins exactly where it won over the utilities; the
+   values are Tailwind's own (spacing, text and weight tokens). */
+:where(.product-card) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+:where(.product-card-media.product-card-well) {
+  position: relative;
+  overflow: hidden;
+}
+
+:where(.product-card-well > .product-card-photo) {
+  width: 100%;
+  height: 100%;
+  object-position: center;
+}
+
+:where(.product-card-badges) {
+  position: absolute;
+  top: calc(var(--spacing) * 3);
+  left: calc(var(--spacing) * 3);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1.5);
+  pointer-events: none;
+}
+
+:where(.product-card-badges > .product-card-badge) {
+  padding-inline: calc(var(--spacing) * 2.5);
+  padding-block: var(--spacing);
+  font-size: var(--text-xs);
+  line-height: var(--tw-leading, var(--text-xs--line-height));
+  --tw-font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-bold);
+  border-radius: 2147483647px;
+  --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+}
+
+:where(.product-card-badges > [data-card-discount]) {
+  color: var(--destructive-foreground);
+  background-color: var(--destructive);
+}
+
+:where(.product-card-badges > [data-card-sold-out]) {
+  color: var(--foreground);
+  background-color: var(--background);
+  background-color: color-mix(in oklab, var(--background) 90%, transparent);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  border-color: var(--border);
+}
+
+:where(.product-card .product-card-round-action) {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2147483647px;
+}
+
+:where(.product-card a.product-card-round-action) {
+  z-index: 10;
+}
+
+:where(.product-card span.product-card-round-action) {
+  pointer-events: none;
+}
+
+:where(.product-card .product-card-stack) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+:where(.product-card .product-card-name) {
+  color: var(--foreground);
+  font-family: var(--theme-font-body);
+}
+
+:where(.product-card .product-card-link)::after {
+  --tw-content: "";
+  content: var(--tw-content);
+  position: absolute;
+  inset: 0;
+}
+
+:where(.product-card .product-card-price-row) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+:where(.product-card) :where(.pc-condition, .pc-price-regular, .pc-specs, .pc-sold, .pc-pack, .pc-emi) {
+  color: var(--muted-foreground);
+}
+
+:where(.product-card) :where(.pc-price-super, .pc-brand, .pc-rating, .pc-options) {
+  color: var(--foreground);
+}
+
+:where(.product-card) :where(.pc-discount, .pc-savings-chip) {
+  --tw-font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-semibold);
+}
+
+:where(.product-card .pc-brand) {
+  --tw-font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-bold);
+}
+
+:where(.product-card .pc-act) {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 2);
+  padding-inline: calc(var(--spacing) * 3);
+  font-size: var(--text-sm);
+  line-height: var(--tw-leading, var(--text-sm--line-height));
+  --tw-font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-semibold);
+}
+
+:where(.product-card a.pc-act) {
+  position: relative;
+  z-index: 10;
+  transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+  transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+  transition-duration: var(--tw-duration, var(--default-transition-duration));
+}
+
+:where(.product-card span.pc-act) {
+  pointer-events: none;
+}
+
+:where(.product-card .pc-compare) {
+  position: relative;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 1.5);
+}
+
+/* A spec card with fewer than three key specs sits at its own height (it was an inline style). */
+.product-card.product-card-compact {
+  min-height: 0 !important;
+}
+
 /* Product cards: the surface language per Style. Card corners follow the
    radius token; soft corners stop at 20px (Apple Gadgets' soft cards). */
 .site-root [data-theme-component="product-card"] {
@@ -199,7 +355,7 @@
   padding: 0;
 }
 
-.site-root .product-card[data-card-fit="contain"] .product-card-photo {
+.site-root[data-card-fit="contain"] .product-card .product-card-photo {
   padding: var(--pc-inset);
 }
 
@@ -857,11 +1013,11 @@
 }
 
 /* Quick retail keeps the buy decision beside the image, before the price. */
-.site-root .product-card[data-card-quick-retail] .product-card-well {
+.site-root[data-card-quick-retail] .product-card .product-card-well {
   background: var(--card);
 }
 
-.site-root .product-card[data-card-quick-retail] .product-card-action {
+.site-root[data-card-quick-retail] .product-card .product-card-action {
   order: -1;
   width: auto;
   align-self: flex-start;
@@ -870,28 +1026,28 @@
   border-radius: 999px;
 }
 
-.site-root .product-card[data-card-quick-retail] .pc-action-hint {
+.site-root[data-card-quick-retail] .product-card .pc-action-hint {
   border-color: var(--primary);
   color: var(--primary);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .site-root .product-card[data-card-quick-retail] .product-card-action {
+  .site-root[data-card-quick-retail] .product-card .product-card-action {
     min-height: 2.5rem;
   }
 }
 
-.site-root .product-card[data-card-quick-retail] .product-card-price-row {
+.site-root[data-card-quick-retail] .product-card .product-card-price-row {
   margin-top: 0;
 }
 
 @media (max-width: 39.999rem) {
-  .site-root .product-grid[data-phone-layout="list-row"] .product-card[data-card-quick-retail] .product-card-action {
+  .site-root[data-card-quick-retail] .product-grid[data-phone-layout="list-row"] .product-card .product-card-action {
     order: initial;
   }
 }
 
-.site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-quick-retail] .product-card-action {
+.site-root[data-card-quick-retail] .product-grid-frame[data-catalog-results="list"] .product-card .product-card-action {
   order: initial;
 }
 
@@ -1040,24 +1196,24 @@
 }
 
 /* Pantry merchants can use a full purchase action and a roomier two-column card. */
-.site-root .product-card[data-card-full-essentials] .product-card-stack {
+.site-root[data-card-full-essentials] .product-card .product-card-stack {
   flex-direction: column;
   flex-wrap: nowrap;
 }
 
-.site-root .product-card[data-card-full-essentials] .product-card-stack > * {
+.site-root[data-card-full-essentials] .product-card .product-card-stack > * {
   flex: initial;
 }
 
-.site-root .product-card[data-card-full-essentials] .product-card-well {
+.site-root[data-card-full-essentials] .product-card .product-card-well {
   background: var(--card);
 }
 
-.site-root .product-card[data-card-full-essentials] .pc-price {
+.site-root[data-card-full-essentials] .product-card .pc-price {
   margin-top: auto;
 }
 
-.site-root .product-card[data-card-full-essentials] .product-card-action {
+.site-root[data-card-full-essentials] .product-card .product-card-action {
   margin-top: 0.625rem;
   font-weight: 600;
 }

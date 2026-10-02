@@ -45,44 +45,22 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
 ---
 
 <Wrapper {...wrapperProps}>
-{parent && (
-  <div class="drill-level-ghost" aria-hidden="true">
-    <span class="drill-ghost-icon"></span>
-    <span>{parent.title}</span>
-  </div>
-)}
 <ul class="drill-list" data-menu-list data-depth={depth}>
   {parent?.href && (
-    <li class="drill-row">
-      <a class="drill-link drill-link--all" {...link(parent)}>
-        All {parent.title}
-      </a>
-    </li>
+    <li><a class="drill-link drill-link--all" {...link(parent)}>All {parent.title}</a></li>
   )}
-  {visible.map((item, index) => {
+  {visible.map((item) => {
     const children = navigationChildren(item);
     if (children.length === 0) {
       return (
-        <li class="drill-row">
-          {item.href ? (
-            <a class="drill-link" {...link(item)}>
-              {item.title}
-            </a>
-          ) : (
-            <span class="drill-link">{item.title}</span>
-          )}
-        </li>
+        <li>{item.href ? <a class="drill-link" {...link(item)}>{item.title}</a> : <span class="drill-link">{item.title}</span>}</li>
       );
     }
     return (
-      <li class="drill-row">
-        <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={`--drill-depth: ${depth + 1}`}>
-          <summary class="drill-link drill-next" data-drill-index={index}>
-            <i class="nav-chevron nav-chevron--left drill-back-icon" aria-hidden="true"></i>
-            <span>{item.title}</span>
-            <i class="nav-chevron nav-chevron--right drill-next-icon" aria-hidden="true"></i>
-          </summary>
-          <div class="drill-level" data-menu-panel>
+      <li>
+        <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={`--drill-depth:${depth + 1}`}>
+          <summary class="drill-link drill-next"><span>{item.title}</span></summary>
+          <div class="drill-level" data-menu-panel data-ghost={item.title}>
             <Astro.self items={children} idPrefix={idPrefix} depth={depth + 1} parent={item} />
           </div>
         </details>
@@ -121,7 +99,9 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     padding: 0.5rem 0.75rem 1rem;
   }
 
-  .drill-row {
+  /* Rows are plain <li>s and parents carry no icon elements or ghost copy:
+     the drawer repeats per page, so its markup stays lean. */
+  .drill-list > li {
     display: block;
   }
 
@@ -142,8 +122,8 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
   }
 
   /* Amazon and Target list departments in regular weight (the "All" rows and the back bar stand out). */
-  .drill-list[data-depth="0"] > .drill-row > .drill-link:not(.drill-link--all),
-  .drill-list[data-depth="0"] > .drill-row > .drill-node:not([open]) > .drill-next {
+  .drill-list[data-depth="0"] > li > .drill-link:not(.drill-link--all),
+  .drill-list[data-depth="0"] > li > .drill-node:not([open]) > .drill-next {
     font-weight: 400;
   }
 
@@ -171,8 +151,25 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     stroke-linejoin: round;
   }
 
-  .drill-link .drill-back-icon {
+  /* A parent row's chevrons (the header's .nav-chevron masks, 1rem): "next"
+     after the name, "back" before it once the row is the open level's bar. */
+  .drill-next::before,
+  .drill-next::after {
+    content: "";
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    background: currentColor;
+    -webkit-mask: var(--nav-chevron-right) center / contain no-repeat;
+    mask: var(--nav-chevron-right) center / contain no-repeat;
+    transition: transform 200ms ease;
+  }
+
+  .drill-next::before {
     display: none;
+    -webkit-mask-image: var(--nav-chevron-left);
+    mask-image: var(--nav-chevron-left);
   }
 
   a.drill-link:hover,
@@ -194,7 +191,7 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
 
   /* An open row becomes the level's "back" bar on top; its level fills the rest. */
   .drill-node[open] > .drill-next,
-  .drill-level-ghost {
+  .drill-level::before {
     min-height: 3rem;
     padding: 0.625rem 1.25rem;
     font-size: 0.9375rem;
@@ -215,27 +212,24 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     font-weight: 700;
   }
 
-  .drill-node[open] > .drill-next .drill-back-icon {
+  .drill-node[open] > .drill-next::before {
     display: block;
   }
 
-  .drill-node[open] > .drill-next .drill-next-icon {
+  .drill-node[open] > .drill-next::after {
     display: none;
   }
 
-  /* The bar's twin: same text, same box, so the level starts under it at any length. */
-  .drill-level-ghost {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  /* The bar's twin (the level's ::before, its text from data-ghost): same
+     text in the same box, so the level starts under the bar at any length.
+     The start padding stands for the bar's back chevron and its gap. */
+  .drill-level::before {
+    content: attr(data-ghost);
+    display: block;
+    padding-inline-start: calc(1.25rem + 1rem + 0.5rem);
     visibility: hidden;
     border-bottom: 1px solid transparent;
     overflow-wrap: anywhere;
-  }
-
-  .drill-ghost-icon {
-    flex-shrink: 0;
-    width: 1rem;
   }
 
   .drill-row--all {
@@ -267,7 +261,7 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
   }
 
   /* Covered rows leave the tab order (the open row's summary is the back bar). */
-  .drill-list:has(> .drill-row > .drill-node[open]) > .drill-row:not(:has(> .drill-node[open])),
+  .drill-list:has(> li > .drill-node[open]) > li:not(:has(> .drill-node[open])),
   .drill-node[open]:has(.drill-node[open]) > .drill-next {
     visibility: hidden;
   }

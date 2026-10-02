@@ -277,7 +277,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                     <span aria-hidden="true">&amp; up</span>
                     <span class="sr-only">{min} stars and up</span>
                   </span>
-                  <span class="catalog-facet-count" data-catalog-facet-count={!mobileFacetRail ? "" : undefined}>{count}</span>
+                  <span class="catalog-facet-count">{count}</span>
                 </label>
               ))}
               {ratingSelected && (
@@ -361,14 +361,14 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                 {catalogCategoryFacetLinks({ values: group.rows }, currentFilters).map((link) => (
                   <li>
                     {link.href ? (
-                      <a href={link.href} class="catalog-facet-row catalog-facet-link" data-catalog-facet-row={!mobileFacetRail ? "" : undefined}>
-                        <span class="catalog-facet-label" data-catalog-facet-label={!mobileFacetRail ? "" : undefined}>{link.label}</span>
-                        <span class="catalog-facet-count" data-catalog-facet-count={!mobileFacetRail ? "" : undefined}>{link.count}</span>
+                      <a href={link.href} class="catalog-facet-row catalog-facet-link">
+                        <span class="catalog-facet-label">{link.label}</span>
+                        <span class="catalog-facet-count">{link.count}</span>
                       </a>
                     ) : (
-                      <span class="catalog-facet-row catalog-facet-link opacity-50" data-catalog-facet-row={!mobileFacetRail ? "" : undefined}>
-                        <span class="catalog-facet-label" data-catalog-facet-label={!mobileFacetRail ? "" : undefined}>{link.label}</span>
-                        <span class="catalog-facet-count" data-catalog-facet-count={!mobileFacetRail ? "" : undefined}>0</span>
+                      <span class="catalog-facet-row catalog-facet-link opacity-50">
+                        <span class="catalog-facet-label">{link.label}</span>
+                        <span class="catalog-facet-count">0</span>
                       </span>
                     )}
                   </li>
@@ -414,7 +414,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
               )}
               <div class:list={["catalog-facet-values", display.display === "swatch" && "catalog-facet-values--swatch"]}>
                 {group.rows.map(({ slug, value, label, count, selected }) => (
-                  <label class:list={["catalog-facet-row", display.display === "swatch" && "catalog-swatch"]} data-catalog-facet-row={!mobileFacetRail ? "" : undefined}>
+                  <label class:list={["catalog-facet-row", display.display === "swatch" && "catalog-swatch"]}>
                     <input
                       type="checkbox"
                       name={slug}
@@ -433,8 +433,8 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                         aria-hidden="true"
                       ></span>
                     )}
-                    <span class="catalog-facet-label" data-catalog-facet-label={!mobileFacetRail ? "" : undefined}>{label}</span>
-                    <span class="catalog-facet-count" data-catalog-facet-count={!mobileFacetRail ? "" : undefined}>{count}</span>
+                    <span class="catalog-facet-label">{label}</span>
+                    <span class="catalog-facet-count">{count}</span>
                   </label>
                 ))}
               </div>

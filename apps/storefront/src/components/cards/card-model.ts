@@ -9,12 +9,19 @@
 import type { Product, ProductCardFacts } from "@/lib/api";
 import { formatMoney, getDecimalPlaces } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getProductImageSrcSet, getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
-import { capImageSrcSet, capSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
+import { isUnrenderedMediaOriginal, MEDIA_VARIANT_WIDTHS } from "@scalius/shared/media-variants";
+import {
+  CARD_SIZES_COLLAPSE_FROM_PX,
+  capImageSrcSet,
+  capPhoneSizesDensity,
+  collapseWideSizes,
+  scaleSizes,
+} from "@/lib/responsive-image";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
 import type {
+  ResolvedStorefrontCard,
   StorefrontCardRenderer,
   StorefrontCardSlot,
   StorefrontImageRatio,
@@ -69,13 +76,94 @@ export const CARD_PHOTO_MAX_PX: Readonly<Record<string, number>> = {
 /**
  * The image `sizes` of a card's photo in a slot of `slotSizes`: the standard
  * card keeps the slot as it was; every other card names its fixed photo
- * width, or the slot shrunk by its photo margin, and caps DPR-3 phones at
- * about 2x the drawn width.
+ * width, or the slot shrunk by its photo margin with its desktop steps
+ * merged (at most one rendition step over, never under), and caps DPR-3
+ * phones at about 2x the drawn width. The string repeats on every card of
+ * a listing, so it stays short.
  */
 export function cardPhotoSizes(variant: string, slotSizes: string): string {
   if (variant === "standard") return slotSizes;
   const maxPx = CARD_PHOTO_MAX_PX[variant];
-  return capSizesDensity(maxPx ? `${maxPx}px` : scaleSizes(slotSizes, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)));
+  return capPhoneSizesDensity(maxPx
+    ? `${maxPx}px`
+    : collapseWideSizes(scaleSizes(slotSizes, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)), MEDIA_VARIANT_WIDTHS, CARD_SIZES_COLLAPSE_FROM_PX));
+}
+
+const finite = (value: number) => (Number.isFinite(value) ? String(Number(value)) : "0");
+
+/**
+ * Every card but standard: its own look as custom properties (photo ratio,
+ * fit, radius and margin, the fixed photo width, title and price type),
+ * which theme-cards.css draws with. One store renders one card variant, so
+ * the Layout writes them once into the page's token block instead of every
+ * card repeating them in a `style` attribute. Built from the registry's
+ * numbers and enums only.
+ */
+export function cardLookTokens(variant: string, anatomy: ResolvedStorefrontCard): Array<[string, string]> {
+  if (variant === "standard") return [];
+  const { look } = anatomy;
+  const photoMaxPx = CARD_PHOTO_MAX_PX[variant];
+  const tokens: Array<[string, string]> = [
+    ["pc-ratio", finite(look.image.ratio)],
+    ["pc-fit", /^[a-z-]+$/.test(look.image.fit) ? look.image.fit : "cover"],
+    ["pc-radius", `${finite(look.radius)}px`],
+    ["pc-inset", `${Number(((CARD_PHOTO_INSET[variant] ?? 0) * 100).toFixed(2))}%`],
+  ];
+  if (photoMaxPx !== undefined) tokens.push(["pc-photo-max", `${finite(photoMaxPx)}px`]);
+  if (look.title) {
+    tokens.push(["pc-title-d", `${finite(look.title.size.desktop)}px`], ["pc-title-m", `${finite(look.title.size.phone)}px`], ["pc-title-w", finite(look.title.weight)]);
+  }
+  if (look.price) {
+    tokens.push(["pc-price-d", `${finite(look.price.size.desktop)}px`], ["pc-price-m", `${finite(look.price.size.phone)}px`], ["pc-price-w", finite(look.price.weight)]);
+  }
+  return tokens;
+}
+
+/**
+ * The cards' line icons (24px grid, stroked in the text colour). A card
+ * draws one with `<svg><use href="#pci-…"/></svg>`; the Layout writes the
+ * symbols its store's card uses once per page (CardIconSprite.astro), so a
+ * listing does not repeat the same paths on every card. The stroke of each
+ * is its own (the spec card's 2px, the round buttons' 2.25px).
+ */
+export const CARD_ICONS = {
+  "pci-cart": { d: "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2M9.5 20.5h.01M17.5 20.5h.01", width: 2, join: true },
+  "pci-compare": { d: "M4 6h10M4 12h16M4 18h10M18 4v4M16 6h4", width: 2, join: true },
+  "pci-cart-round": { d: "M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6.2M9.5 20.5h.01M17.5 20.5h.01", width: 2.25, join: false },
+  "pci-plus": { d: "M12 5v14M5 12h14", width: 2.25, join: false },
+  "pci-arrow": { d: "M5 12h14m-6-6 6 6-6 6", width: 2.25, join: false },
+  "pci-tag": { d: "M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4zM7.5 7.5h.01", width: 2.25, join: true },
+} as const;
+export type CardIconId = keyof typeof CARD_ICONS;
+
+/** The icons a store's card can draw (empty for the standard card). */
+export function cardIconIds(variant: string, anatomy: ResolvedStorefrontCard): CardIconId[] {
+  if (variant === "standard") return [];
+  const ids = new Set<CardIconId>();
+  if (anatomy.quickBuy && anatomy.action === "round") {
+    // Fashion Value's round button is a cart (its hint is words); the others
+    // add (+) or open the product page (an arrow).
+    if (variant === "fashion-value") ids.add("pci-cart-round");
+    else ids.add("pci-plus").add("pci-arrow");
+  }
+  if (variant === "fashion-value") ids.add("pci-tag");
+  if (variant === "spec") ids.add("pci-cart");
+  if (anatomy.compare) ids.add("pci-compare");
+  return [...ids];
+}
+
+/**
+ * Store-wide card flags theme-cards.css selects on, as attributes of the
+ * page's `.site-root` (the body): the photo's fit, Target's quick-retail
+ * card and Chaldal's full-width essentials action.
+ */
+export function cardPageAttributes(variant: string, anatomy: ResolvedStorefrontCard): Record<string, string> {
+  if (variant === "standard") return {};
+  return {
+    "data-card-fit": anatomy.look.image.fit,
+    ...(variant === "retail" && anatomy.action === "outline" ? { "data-card-quick-retail": "" } : {}),
+    ...(variant === "quick-add" && anatomy.action === "outline" ? { "data-card-full-essentials": "" } : {}),
+  };
 }
 
 export interface ProductCardFactValues {
@@ -105,7 +193,13 @@ export interface ProductCardModel {
   image: { src: string; srcset: string | undefined; alt: string } | null;
   /** The placeholder's letter: the name's first character. */
   monogram: string;
-  hoverImage: { src: string; srcset: string | undefined } | null;
+  /**
+   * The hover photo's CDN URL and the card's `srcset` cap: the card names it
+   * once and its intent script derives the same `src` (480px) and capped
+   * `srcset` the photo has (hoverImageSources), instead of every card
+   * carrying a second rendition list in the HTML.
+   */
+  hoverImage: { url: string; maxWidth: number | undefined } | null;
   price: {
     current: string;
     /** The current price split for superscript layouts: symbol, whole units, fraction (may be ""). */
@@ -274,12 +368,7 @@ export function productCardModel(
       : null,
     monogram: firstCharacter(product.name),
     hoverImage: options.hoverImage && hoverPhoto
-      ? {
-          src: getProductImageUrl(hoverPhoto, 480),
-          srcset: options.imageMaxWidth
-            ? capImageSrcSet(getProductImageSrcSet(hoverPhoto), options.imageMaxWidth)
-            : getProductImageSrcSet(hoverPhoto),
-        }
+      ? { url: resolveProductImageUrl(hoverPhoto), maxWidth: options.imageMaxWidth }
       : null,
     price: {
       current,

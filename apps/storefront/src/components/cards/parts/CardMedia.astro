@@ -5,8 +5,9 @@
 // without a photo shows its initial on the muted surface in the same box,
 // never a collapsed tile.
 //
-// The hover photo is not in the HTML: the box names it (`data-hover-src`),
-// and a small script fetches it at the card's own width when the pointer
+// The hover photo is not in the HTML: the box names its CDN URL
+// (`data-hover-src`, with the card's srcset cap in `data-hover-max`), and a
+// small script derives its renditions and fetches it at the card's own width when the pointer
 // reaches the card (or on idle for cards already on screen), decodes it and
 // only then fades it in. No hover bytes before intent below the fold, and
 // never a fade over an empty image.
@@ -35,10 +36,9 @@ const own = className !== undefined;
 ---
 
 <div
-  class:list={["product-card-media relative overflow-hidden", className ?? "bg-muted"]}
-  data-hover-src={hover?.src}
-  data-hover-srcset={hover?.srcset}
-  data-hover-sizes={hover ? sizes : undefined}
+  class:list={own ? ["product-card-media", className] : "product-card-media relative overflow-hidden bg-muted"}
+  data-hover-src={hover?.url}
+  data-hover-max={hover?.maxWidth}
 >
   {
     model.image ? (
@@ -52,7 +52,7 @@ const own = className !== undefined;
         loading={loading.loading}
         fetchpriority={loading.fetchpriority}
         decoding={loading.decoding}
-        class="product-card-photo w-full h-full object-center"
+        class={own ? "product-card-photo" : "product-card-photo w-full h-full object-center"}
       />
     ) : (
       <div class="product-card-placeholder" aria-hidden="true" data-card-placeholder>
@@ -61,17 +61,17 @@ const own = className !== undefined;
     )
   }
 
-  {(badge || model.soldOut) && <div class:list={[own && "product-card-badges", "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"]}>
+  {(badge || model.soldOut) && <div class={own ? "product-card-badges" : "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"}>
     {
       badge && (
-        <span data-card-discount class:list={[own && "product-card-badge", own && badgeStyle && `pc-badge-${badgeStyle}`, "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"]}>
+        <span data-card-discount class:list={own ? ["product-card-badge", badgeStyle && `pc-badge-${badgeStyle}`] : "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"}>
           {badge}
         </span>
       )
     }
     {
       model.soldOut && (
-        <span data-card-sold-out={own ? "" : undefined} class:list={[own && "product-card-badge", "px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border"]}>
+        <span data-card-sold-out={own ? "" : undefined} class={own ? "product-card-badge" : "px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border"}>
           Sold out
         </span>
       )
@@ -81,6 +81,8 @@ const own = className !== undefined;
 </div>
 
 <script>
+  import { hoverImageSources } from "@/lib/responsive-image";
+
   // One listener for every card on the page (Astro bundles this once).
   const BOX = "[data-hover-src]";
   const started = new WeakSet<HTMLElement>();
@@ -88,8 +90,10 @@ const own = className !== undefined;
   function reveal(box: HTMLElement) {
     if (started.has(box)) return;
     started.add(box);
-    const src = box.dataset.hoverSrc;
-    if (!src) return;
+    const url = box.dataset.hoverSrc;
+    if (!url) return;
+    // The same 480px `src` and capped `srcset` the card photo was given.
+    const { src, srcset } = hoverImageSources(url, Number(box.dataset.hoverMax) || undefined);
     const photo = box.querySelector<HTMLImageElement>("img.product-card-photo");
     const image = document.createElement("img");
     image.className = "product-card-photo product-card-hover-image";
@@ -100,9 +104,10 @@ const own = className !== undefined;
       image.width = photo.width;
       image.height = photo.height;
     }
-    if (box.dataset.hoverSrcset) {
-      image.sizes = box.dataset.hoverSizes ?? "";
-      image.srcset = box.dataset.hoverSrcset;
+    // The hover photo fills the same box: it takes the card photo's `sizes`.
+    if (srcset) {
+      image.sizes = photo?.sizes ?? "";
+      image.srcset = srcset;
     }
     image.src = src;
     image.decode().then(

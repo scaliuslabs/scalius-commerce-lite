@@ -8,6 +8,8 @@ import ThemeFonts from "../components/ThemeFonts.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { productGridFluidCss, productGridSpec } from "@/lib/product-card-layout";
+import { cardIconIds, cardLookTokens, cardPageAttributes } from "@/components/cards/card-model";
+import CardIconSprite from "../components/cards/CardIconSprite.astro";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -96,6 +98,7 @@ setRuntimeImageCdnPolicy(layoutData?.media);
 
 const {
   theme: storefrontTheme,
+  resolved: resolvedTheme,
   layout: themeLayout,
   brand: themeBrand,
   previewToken: themePreviewToken,
@@ -227,13 +230,19 @@ const currencyDecimalPlaces =
 const themeTokens = storefrontTheme.tokens;
 const productGrid = productGridSpec(themeLayout.grid, themeTokens.imageRatio);
 const fluidGrid = productGridFluidCss(productGrid);
+// Every card of the store shares one look and its flags: written once here
+// (theme-cards.css draws with them), never repeated per card.
+const cardVariant = resolvedTheme.blocks.card.variant;
 const themeTokenEntries = Object.entries({
   ...buildStorefrontThemeTokens(storefrontTheme),
   "theme-card-min-tablet": productGrid.cardMin.tablet,
   "theme-card-min-desktop": productGrid.cardMin.desktop,
   "grid-card-min-fluid": fluidGrid.cardMin,
   "grid-gap-fluid": fluidGrid.gap,
+  ...Object.fromEntries(cardLookTokens(cardVariant, themeLayout.productCard)),
 });
+const cardAttributes = cardPageAttributes(cardVariant, themeLayout.productCard);
+const cardIcons = cardIconIds(cardVariant, themeLayout.productCard);
 const themeStyleBlock = `:root, .site-root { ${themeTokenEntries
   .map(([key, value]) => `--${key}: ${value}`)
   .join("; ")}; }`;
@@ -411,8 +420,10 @@ if (!window.$RefreshReg$) {
     data-theme-image-fit={themeTokens.imageFit}
     data-theme-radius={themeTokens.radius}
     data-storefront-route={storefrontRouteKind}
+    {...cardAttributes}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
+    <CardIconSprite icons={cardIcons} />
 
     <a
       href="#main-content"
