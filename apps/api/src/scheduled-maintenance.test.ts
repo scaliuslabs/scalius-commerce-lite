@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     backfillMissingMediaVariants: vi.fn(),
     enqueueMediaVariantsBacklog: vi.fn(),
     runScheduledEventMaintenance: vi.fn(),
+    runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
     runScheduledPluginMaintenance: vi.fn(),
   };
 });
@@ -103,6 +104,7 @@ vi.mock("./utils/order-notification-queue", () => ({
 
 vi.mock("./events/dispatch", () => ({
   runScheduledEventMaintenance: mocks.runScheduledEventMaintenance,
+  runScheduledEventRetention: mocks.runScheduledEventRetention,
 }));
 
 vi.mock("./plugins/scheduled", () => ({
@@ -671,6 +673,14 @@ describe("runScheduledMaintenance", () => {
     // Refund reconciliation writes refunds whose events this run should hand over.
     expect(mocks.reconcileExternalRefundWebhooks.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0]!);
+  });
+
+  it("prunes settled events after dispatching the due ones, in the last slice of the rotation", async () => {
+    await runScheduledMaintenance(createEnv(), createExecutionContext());
+    expect(mocks.runScheduledEventRetention).toHaveBeenCalledWith(mocks.db);
+    expect(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.runScheduledEventRetention.mock.invocationCallOrder[0]!);
+    expect(MAINTENANCE_SWEEPS.find((sweep) => sweep.name === "event_outbox_retention")?.slice).toBe(3);
   });
 
   it("runs the plugin tick (bundled sync, due cron slots) at the scheduled time, after the event sweep", async () => {

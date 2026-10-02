@@ -32,7 +32,12 @@ export interface PlanLimits {
   /** What a new password hash costs: it must fit the plan's CPU limit with the rest of a sign-in. */
   readonly password: PasswordHashSpec;
   readonly queue: {
-    /** `max_batch_size` of the `jobs` consumer (generated config): one invocation handles at most this many messages. */
+    /**
+     * `max_batch_size` of the `jobs` consumer (generated config): one invocation handles at most this
+     * many messages. Bounded by the D1 queries an invocation may make (Free 50, Paid 1,000) over the
+     * most a single message uses (a 20-product recommendation refresh: ~50 measured): Paid 15 keeps
+     * the worst batch under 800, Free handles one message per invocation.
+     */
     readonly consumerBatchSize: number;
     /** `max_batch_size` of the dead-letter consumer. */
     readonly dlqBatchSize: number;
@@ -101,7 +106,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     cpuMs: 30_000,
     password: Object.freeze({ algorithm: "scrypt", N: 16_384, r: 16, p: 1 }),
     queue: Object.freeze({
-      consumerBatchSize: 25,
+      consumerBatchSize: 15,
       dlqBatchSize: 10,
       bulkBacklogLimit: 1_000,
       bulkPageSize: 1_000,

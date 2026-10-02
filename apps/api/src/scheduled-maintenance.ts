@@ -615,17 +615,27 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         events.events.scanned > 0
         || events.deliveries.scanned > 0
         || events.pluginDeliveries.scanned > 0
-        || events.pruned.events > 0
-        || events.pruned.deliveries > 0
-        || events.pruned.pluginDeliveries > 0
       ) {
         console.log(
           `[scheduled] Event outbox: scanned=${events.events.scanned}, enqueued=${events.events.enqueued}, ` +
             `settledWithoutSubscribers=${events.events.settledWithoutSubscribers}, failed=${events.events.failed}, ` +
             `deliveriesScanned=${events.deliveries.scanned}, deliveriesEnqueued=${events.deliveries.enqueued}, ` +
-            `pluginDeliveriesScanned=${events.pluginDeliveries.scanned}, pluginDeliveriesEnqueued=${events.pluginDeliveries.enqueued}, ` +
-            `prunedEvents=${events.pruned.events}, prunedDeliveries=${events.pruned.deliveries}, ` +
-            `prunedPluginDeliveries=${events.pruned.pluginDeliveries}`,
+            `pluginDeliveriesScanned=${events.pluginDeliveries.scanned}, pluginDeliveriesEnqueued=${events.pluginDeliveries.enqueued}`,
+        );
+      }
+    },
+  },
+  {
+    // Retention of settled events and deliveries, after the dispatch sweep.
+    name: "event_outbox_retention",
+    slice: 3,
+    async run({ db, timed }) {
+      const { runScheduledEventRetention } = await import("./events/dispatch");
+      const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
+      if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
+        console.log(
+          `[scheduled] Event outbox retention: prunedEvents=${pruned.events}, prunedDeliveries=${pruned.deliveries}, ` +
+            `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
         );
       }
     },
