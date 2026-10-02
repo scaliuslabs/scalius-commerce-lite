@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { translate } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
-import type { BuyerPriceRange } from "~/lib/format-utils";
+import type { BuyerPriceRange } from "~/hooks/use-currency";
 
 /** Messages resolve when validation runs, so they follow the current language. */
 const message = (key: keyof typeof collectionFormMessages.en) => ({

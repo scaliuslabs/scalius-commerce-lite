@@ -2,7 +2,7 @@ import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
-import type { BuyerPriceRange } from "~/lib/format-utils";
+import type { BuyerPriceRange } from "~/hooks/use-currency";
 import type { FulfillmentKind } from "@scalius/shared/fulfilment";
 import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } from "@scalius/shared/line-properties";
 import {
