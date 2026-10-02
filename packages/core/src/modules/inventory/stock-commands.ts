@@ -127,6 +127,14 @@ export function addedQuantitySql(entries: ReadonlyArray<{ id: string; quantity: 
   ), 0)`;
 }
 
+/**
+ * The admin behind a command: its `created_by`, or the admin a scanner
+ * session acts for (`scanner:<adminId>`), so receipts made by scan show who.
+ */
+export function commandActorUserIdSql(): SQL<string | null> {
+  return sql<string | null>`(CASE WHEN ${inventoryCommands.createdBy} LIKE 'scanner:%' THEN substr(${inventoryCommands.createdBy}, 9) ELSE ${inventoryCommands.createdBy} END)`;
+}
+
 /** The ids in one JSON parameter, for `id IN (...)`. */
 export function idsFromJsonSql(ids: readonly string[]): SQL {
   return sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`;

@@ -39,7 +39,7 @@ import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
-import { addedQuantitySql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
 
 export const PURCHASE_ORDER_MAX_LINES = 100;
@@ -384,7 +384,7 @@ export async function getPurchaseOrder(db: Database, id: string): Promise<Purcha
       .innerJoin(inventoryCommands, eq(inventoryCommands.operationKey, purchaseOrderReceiptLines.operationKey))
       .innerJoin(productVariants, eq(productVariants.id, purchaseOrderReceiptLines.variantId))
       .innerJoin(purchaseOrderLines, eq(purchaseOrderLines.id, purchaseOrderReceiptLines.purchaseOrderLineId))
-      .leftJoin(adminUsers, eq(adminUsers.id, inventoryCommands.createdBy))
+      .leftJoin(adminUsers, eq(adminUsers.id, commandActorUserIdSql()))
       .where(eq(purchaseOrderReceiptLines.purchaseOrderId, id))
       .orderBy(asc(inventoryCommands.subjectRevision), asc(purchaseOrderLines.position), asc(purchaseOrderReceiptLines.id)),
   ]);

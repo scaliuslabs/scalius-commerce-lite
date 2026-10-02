@@ -34,7 +34,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { variantOptionLabelSql } from "../products/option-model";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
-import { addedQuantitySql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
@@ -352,7 +352,7 @@ export async function getTransfer(db: Database, id: string): Promise<TransferDet
       .innerJoin(inventoryCommands, eq(inventoryCommands.operationKey, inventoryTransferMovements.operationKey))
       .innerJoin(productVariants, eq(productVariants.id, inventoryTransferMovements.variantId))
       .innerJoin(inventoryTransferLines, eq(inventoryTransferLines.id, inventoryTransferMovements.transferLineId))
-      .leftJoin(adminUsers, eq(adminUsers.id, inventoryCommands.createdBy))
+      .leftJoin(adminUsers, eq(adminUsers.id, commandActorUserIdSql()))
       .where(eq(inventoryTransferMovements.transferId, id))
       .orderBy(asc(inventoryCommands.subjectRevision), asc(inventoryTransferLines.position), asc(inventoryTransferMovements.id)),
   ]);

@@ -225,6 +225,19 @@ describe("purchase orders", () => {
     expect(one("SELECT count(*) AS n FROM purchase_order_lines WHERE purchase_order_id = ?", draft.id)).toEqual({ n: 0 });
   });
 
+  it("names the admin behind a receipt, including one made from a scanner session", async () => {
+    sqlite.exec("INSERT INTO user (id, name, email, email_verified, role) VALUES ('usr_karim', 'Karim', 'karim@shop.test', 1, 'admin')");
+    const order = await createPurchaseOrder(db, { lines: [{ variantId: "var_a", quantity: 4, unitCost: 400 }] });
+    const ordered = await markPurchaseOrderOrdered(db, order.id, 1);
+    const lineId = ordered.lines[0]!.id;
+    await receivePurchaseOrder(db, order.id, { operationKey: key("desk"), lines: [{ lineId, quantity: 1 }] }, "usr_karim");
+    await receivePurchaseOrder(db, order.id, { operationKey: key("scan"), lines: [{ lineId, quantity: 1 }] }, "scanner:usr_karim");
+    await receivePurchaseOrder(db, order.id, { operationKey: key("gone"), lines: [{ lineId, quantity: 1 }] }, "usr_removed");
+    await receivePurchaseOrder(db, order.id, { operationKey: key("system"), lines: [{ lineId, quantity: 1 }] });
+    expect((await getPurchaseOrder(db, order.id)).receipts.map((receipt) => receipt.actorName))
+      .toEqual(["Karim", "Karim", "Former admin", "System"]);
+  });
+
   it("refuses non-physical SKUs and archiving a destination with open orders", async () => {
     seedSku("var_key", 3, null, "digital");
     await expect(createPurchaseOrder(db, { lines: [{ variantId: "var_key", quantity: 1, unitCost: 1 }] })).rejects.toThrow(/not a physical item/);
