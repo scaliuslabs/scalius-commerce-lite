@@ -807,6 +807,7 @@ const updateProductRoute = createRoute({
     operationId: "dashboard.products.update",
     tags: ["Admin - Products"],
     summary: "Update a product",
+    description: "Replaces the product's details under expectedAggregateRevision. Send optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options) to save them in the same write: a refused save changes nothing.",
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateProductSchema } } }
@@ -825,7 +826,7 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await updateProduct(db, id, data);
+        const result = await updateProduct(db, id, data, c.get("user")?.id);
 
         scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);

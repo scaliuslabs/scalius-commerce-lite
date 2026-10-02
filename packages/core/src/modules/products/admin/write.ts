@@ -31,18 +31,29 @@ import { percentToBps } from "@scalius/shared/money";
 import {
     buildProductAggregateRevisionGuard,
     executeProductAggregateMutationBatch,
+    isProductAggregateRevisionConflict,
     productPriceMinorSql,
     readProductAggregateRevisionResult,
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
 } from "../aggregate-revision";
 import { normalizeOptionIdentity } from "../option-model";
+import { optionMatrixBatchConflict, planProductOptionMatrix } from "../option-matrix";
 import {
     resolveNewVariantBarcode,
     rethrowProductVariantIdentityConstraint,
     assertSkusFree,
+    isVariantEditBatchConflict,
+    planVariantUpdate,
     readableDefaultSku,
+    reconcileVariantLowStockAlerts,
 } from "../variants";
+import { STOCK_CHANGED_MESSAGE } from "../types";
+import {
+    inventoryLocationErrorFrom,
+    isInventoryLevelShortfallError,
+    isInventoryLocationRequiredError,
+} from "../../inventory/locations";
 import { buildStockMovementClaim } from "../../inventory/stock-movement-claims";
 import { catalogProjectionRefreshStatements } from "../catalog-projections";
 import {
@@ -838,14 +849,82 @@ function assertGiftCardUpdateAllowed(
     }
 }
 
+type ProductSaveComposition = {
+    statements: SQLiteBatchItem[];
+    changedStockVariantIds: string[];
+};
+
+/**
+ * The options and SKUs an editor Save sends with the product (`optionMatrix`
+ * for a product with options, `defaultSku` for the hidden SKU of one
+ * without), checked and turned into writes for the product's own batch, or
+ * null when the Save leaves them alone. Nothing is written here, so a refusal
+ * leaves the whole product as it was.
+ */
+async function planProductSaveComposition(
+    db: Database,
+    id: string,
+    data: UpdateProductInput,
+    context: {
+        priceMinor: number;
+        activeVariants: ReadonlyArray<{ id: string; isDefault: boolean; optionCombinationKey: string | null; imageId: string | null }>;
+        mediaPlan: ProductMediaPlan;
+        adminUserId?: string;
+    },
+): Promise<ProductSaveComposition | null> {
+    if (data.optionMatrix) {
+        return planProductOptionMatrix(db, id, data.optionMatrix, {
+            isActive: data.isActive,
+            adminUserId: context.adminUserId,
+            fieldPrefix: "optionMatrix.",
+            // The SKUs may show photos this same Save attaches (or no longer those it removes).
+            attachedImages: new Map(context.mediaPlan.rows
+                .filter((row) => row.kind === "image")
+                .map((row) => [row.id, { status: row.status }])),
+        });
+    }
+    if (!data.defaultSku) return null;
+    const defaultSku = isSimpleDefaultSkuSet([...context.activeVariants]) ? context.activeVariants[0]! : null;
+    if (!defaultSku) {
+        throw new ConflictError("This product has options now. Reload the latest product and try again.");
+    }
+    const { stock, expectedStockVersion, ...sku } = data.defaultSku;
+    const plan = await planVariantUpdate(db, id, defaultSku.id, {
+        ...sku,
+        ...(stock !== undefined ? { stock, expectedStockVersion } : {}),
+        selectedOptionValueIds: [],
+        imageId: defaultSku.imageId,
+        price: data.price,
+    }, { adminUserId: context.adminUserId, simplePriceMinor: context.priceMinor, fieldPrefix: "defaultSku." });
+    return {
+        statements: plan.statements,
+        changedStockVariantIds: plan.movementIndex === null ? [] : [defaultSku.id],
+    };
+}
+
+/** A refusal raised inside the batch by the options and SKUs it saved. */
+function rethrowProductSaveCompositionError(error: unknown): void {
+    const matrixConflict = optionMatrixBatchConflict(error);
+    if (matrixConflict) throw matrixConflict;
+    if (isVariantEditBatchConflict(error)) throw new ConflictError(STOCK_CHANGED_MESSAGE);
+    // Editor quantities apply at the default location, which may hold fewer units than an edit removes.
+    if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
+        throw inventoryLocationErrorFrom(error, "The default location");
+    }
+    if (!isProductAggregateRevisionConflict(error)) rethrowProductVariantIdentityConstraint(error);
+}
+
 /**
  * Updates an existing product, replacing ordered media, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
+ * The editor's options and SKUs (`optionMatrix` / `defaultSku`) save in the same
+ * guarded batch, so one Save is all-or-nothing.
  */
 export async function updateProduct(
     db: Database,
     id: string,
     data: UpdateProductInput,
+    adminUserId?: string,
 ): Promise<ProductAggregateRevisionResult> {
     const existingProduct = await db
         .select({ id: products.id, isGiftCard: products.isGiftCard, storeCurrencyCode: storeCurrencyCodeSql() })
@@ -907,6 +986,7 @@ export async function updateProduct(
             fulfillmentKind: productVariants.fulfillmentKind,
             trackInventory: productVariants.trackInventory,
             reservedStock: productVariants.reservedStock,
+            imageId: productVariants.imageId,
         })
         .from(productVariants)
         .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
@@ -930,9 +1010,12 @@ export async function updateProduct(
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
 
+    // Every check of the options and SKUs runs before anything is written.
+    const composition = await planProductSaveComposition(db, id, data, { priceMinor, activeVariants, mediaPlan, adminUserId });
+
     // A save that changes nothing writes nothing: no revision bump, no
     // updated_at, no row rewritten (so no cache dependency advances).
-    const unchangedRevision = await unchangedProductSaveRevision(db, id, data, {
+    const unchangedRevision = composition ? null : await unchangedProductSaveRevision(db, id, data, {
         priceMinor,
         productPrice,
         customizationSchema,
@@ -993,10 +1076,13 @@ export async function updateProduct(
     }
 
     if (data.isActive && activeVariants.length === 0) {
-        batchOps.push(db.insert(productVariants).values({
-            ...defaultVariantValues(id, priceMinor),
-            fulfillmentKind: isGiftCard ? "digital" : data.fulfillmentKind ?? "physical",
-        }));
+        // Options sent with this save are the product's SKUs; otherwise it sells one hidden SKU.
+        if (!data.optionMatrix) {
+            batchOps.push(db.insert(productVariants).values({
+                ...defaultVariantValues(id, priceMinor),
+                fulfillmentKind: isGiftCard ? "digital" : data.fulfillmentKind ?? "physical",
+            }));
+        }
     } else if (hasInvalidSkuTopology(activeVariants)) {
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
@@ -1014,6 +1100,16 @@ export async function updateProduct(
                 })
                 .where(eq(productVariants.id, activeVariants[0]!.id)),
         );
+    }
+
+    if (composition) {
+        batchOps.push(...composition.statements);
+        // An optioned product's price is its cheapest SKU's, as the SKUs this batch saved leave it.
+        if (data.optionMatrix) {
+            batchOps.push(db.update(products)
+                .set({ priceMinor: productPriceMinorSql(id, sql`${products.priceMinor}`) })
+                .where(eq(products.id, id)));
+        }
     }
 
     // The Shipping card's kind applies to every live SKU. Checkout refuses a
@@ -1042,11 +1138,13 @@ export async function updateProduct(
     // The catalogue projections read this batch's own writes.
     batchOps.push(...catalogProjectionRefreshStatements(db, [id]));
 
+    let saved: ProductAggregateRevisionResult;
     try {
         const results = await safeBatch(db, batchOps as never) as unknown[];
-        return readProductAggregateRevisionResult(results[1]);
+        saved = readProductAggregateRevisionResult(results[1]);
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
+        if (composition) rethrowProductSaveCompositionError(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,
@@ -1054,6 +1152,8 @@ export async function updateProduct(
             error,
         );
     }
+    if (composition) await reconcileVariantLowStockAlerts(db, composition.changedStockVariantIds);
+    return saved;
 }
 
 /**

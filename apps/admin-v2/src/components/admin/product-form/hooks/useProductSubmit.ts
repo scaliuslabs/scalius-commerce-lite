@@ -21,7 +21,7 @@ import {
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
-import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
+import type { ProductCreateComposition, ProductUpdateComposition } from "../variants/option-matrix-editor-model";
 import { useSkuCosts } from "../sku-costs";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
@@ -54,6 +54,8 @@ interface UseProductSubmitOptions {
   createComposition?: ProductCreateComposition | null;
   /** Marks a rejected variant/SKU field in the variant editor; returns its banner line. */
   onVariantIssue?: (path: string, message: string) => string | null;
+  /** After a save that carried the variant draft: the editor settles it and sends typed costs. */
+  onCompositionSaved?: (aggregateRevision: number) => Promise<void> | void;
 }
 
 interface ProductMutationVariables {
@@ -61,6 +63,8 @@ interface ProductMutationVariables {
   acknowledgedSkuImageRemovalIds?: string[];
   /** The revision to save against when sections saved first in this save; the page's otherwise. */
   expectedAggregateRevision?: number;
+  /** The variant draft this Save changed: it goes in the same write, so all of it saves or none. */
+  composition?: ProductUpdateComposition | null;
 }
 
 /** SKU conflicts name the product that owns the SKU (`SKU_TAKEN`, 409). */
@@ -88,6 +92,7 @@ export function useProductSubmit({
   onProductSaved,
   createComposition,
   onVariantIssue,
+  onCompositionSaved,
 }: UseProductSubmitOptions) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -95,6 +100,8 @@ export function useProductSubmit({
   const costs = useSkuCosts();
   const [mediaRemovalConflict, setMediaRemovalConflict] = useState<ProductMediaSkuReferenceConflict | null>(null);
   const [pendingValues, setPendingValues] = useState<ProductFormValues | null>(null);
+  // The variant draft of the save that the photo-removal question paused, sent again with it.
+  const pendingComposition = useRef<ProductUpdateComposition | null>(null);
   // The form as the save sent it: it becomes the saved values, and edits typed meanwhile stay unsaved.
   const sent = useRef<ProductFormValues | null>(null);
   const markSaved = () => {
@@ -102,7 +109,7 @@ export function useProductSubmit({
   };
 
   const mutation = useMutation({
-    mutationFn: async ({ values, acknowledgedSkuImageRemovalIds, expectedAggregateRevision }: ProductMutationVariables) => {
+    mutationFn: async ({ values, acknowledgedSkuImageRemovalIds, expectedAggregateRevision, composition }: ProductMutationVariables) => {
       const dirty = form.formState.dirtyFields;
       const formattedValues = formatFormValuesForSubmission(values, isEdit ? productSubmitChanges(dirty) : undefined);
       if (isEdit) {
@@ -116,6 +123,7 @@ export function useProductSubmit({
             id: entityId,
             expectedAggregateRevision: expected,
             ...(acknowledgedSkuImageRemovalIds ? { acknowledgedSkuImageRemovalIds } : {}),
+            ...composition,
           },
         }));
       }
@@ -197,24 +205,34 @@ export function useProductSubmit({
     throw new SaveNotCompleted(getServerFnError(error, t("saveFailed")));
   };
 
-  const submit = async (values: ProductFormValues, expectedAggregateRevision?: number): Promise<number> => {
+  const submit = async (
+    values: ProductFormValues,
+    expectedAggregateRevision?: number,
+    composition: ProductUpdateComposition | null = null,
+  ): Promise<number> => {
+    let revision: number;
     try {
       sent.current = copyValues(form.getValues());
-      const result = await mutation.mutateAsync({ values, expectedAggregateRevision });
-      return result.aggregateRevision;
+      pendingComposition.current = composition;
+      revision = (await mutation.mutateAsync({ values, expectedAggregateRevision, composition })).aggregateRevision;
     } catch (error) {
       return explain(error, values);
     }
+    if (composition) await onCompositionSaved?.(revision);
+    return revision;
   };
 
   const confirmMediaRemoval = async () => {
     if (!pendingValues || !mediaRemovalConflict) return;
     try {
       sent.current = copyValues(form.getValues());
-      await mutation.mutateAsync({
+      const composition = pendingComposition.current;
+      const result = await mutation.mutateAsync({
         values: pendingValues,
         acknowledgedSkuImageRemovalIds: mediaRemovalConflict.affectedAssociationIds,
+        composition,
       });
+      if (composition) await onCompositionSaved?.(result.aggregateRevision);
       toast.success(t("productSaved"));
     } catch (error) {
       try {

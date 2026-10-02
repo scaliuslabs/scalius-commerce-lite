@@ -9000,6 +9000,8 @@ export const getApiV1AdminProductsById = <ThrowOnError extends boolean = false>(
 
 /**
  * Update a product
+ *
+ * Replaces the product's details under expectedAggregateRevision. Send optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options) to save them in the same write: a refused save changes nothing.
  */
 export const putApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError>({
     security: [{

@@ -13,6 +13,7 @@ import {
     media,
 } from "@scalius/database/schema";
 import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -107,7 +108,7 @@ export async function assertSkusFree(
 }
 
 /** One SKU write: fails with SkuTakenError when any other SKU row has this identity. */
-async function assertSkuKeyFree(db: Database, sku: string, skuKey: string, ownVariantId?: string): Promise<void> {
+async function assertSkuKeyFree(db: Database, sku: string, skuKey: string, ownVariantId?: string, field = "sku"): Promise<void> {
     const taken = await db
         .select({ productId: products.id, productName: products.name })
         .from(productVariants)
@@ -117,7 +118,7 @@ async function assertSkuKeyFree(db: Database, sku: string, skuKey: string, ownVa
             ownVariantId ? ne(productVariants.id, ownVariantId) : undefined,
         ))
         .get();
-    if (taken) throw new SkuTakenError({ field: "sku", sku, ...taken });
+    if (taken) throw new SkuTakenError({ field, sku, ...taken });
 }
 
 /**
@@ -196,7 +197,8 @@ export function assertSimpleSkuTransitionStockAllocation(
             "This product has reserved stock. Finish or release those orders before adding customer options.",
         );
     }
-    if (defaultSku.trackInventory === false) return;
+    // Nothing on hand is nothing to allocate: new options start with the quantities typed.
+    if (defaultSku.trackInventory === false || defaultSku.stock === 0) return;
 
     const allocatedStock = creates.reduce(
         (total, variant) => total + (variant.trackInventory === false ? 0 : variant.stock),
@@ -625,6 +627,19 @@ export async function createVariant(
     return { ...presentCatalogPrice(updatedRows[0]!, decimalPlaces), aggregateRevision: result.aggregateRevision };
 }
 
+/** One SKU edit, without the revision it saves against. */
+export type VariantUpdateFacts = Omit<z.infer<typeof updateVariantSchema>, "expectedAggregateRevision">;
+
+export type VariantUpdatePlan = {
+    /** The edit's writes, for one guarded product aggregate batch. */
+    statements: BatchItem<"sqlite">[];
+    /** Where the SKU's UPDATE … RETURNING sits among `statements`. */
+    variantIndex: number;
+    /** Where the stock movement sits, when the edit changes the quantity (else null). */
+    movementIndex: number | null;
+    decimalPlaces: number;
+};
+
 export async function updateVariant(
     db: Database,
     productId: string,
@@ -632,6 +647,54 @@ export async function updateVariant(
     data: z.infer<typeof updateVariantSchema>,
     adminUserId?: string,
 ): Promise<VariantView & ProductAggregateRevisionResult> {
+    const { expectedAggregateRevision, ...facts } = data;
+    const plan = await planVariantUpdate(db, productId, variantId, facts, { adminUserId });
+    let result;
+    try {
+        result = await executeProductAggregateMutationBatch(db, productId, expectedAggregateRevision, plan.statements);
+    } catch (error) {
+        if (plan.movementIndex !== null && isAtomicVariantConflict(error)) {
+            throw new ConflictError(STOCK_CHANGED_MESSAGE);
+        }
+        throw error;
+    }
+    const variantRows = result.mutationResults[plan.variantIndex] as PersistedVariant[] | undefined;
+    if (plan.movementIndex !== null) {
+        const movementRows = result.mutationResults[plan.movementIndex] as Array<{ id: string }> | undefined;
+        if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
+            throw new ConflictError(STOCK_CHANGED_MESSAGE);
+        }
+        await checkAndAlertLowStock(db, variantId);
+    }
+    const variant = variantRows?.[0];
+    if (!variant) throw new NotFoundError("Variant not found");
+    return { ...presentCatalogPrice(variant, plan.decimalPlaces), aggregateRevision: result.aggregateRevision };
+}
+
+/** A stock-changing SKU edit's batch guard (the SKU moved on since the plan read it). */
+export function isVariantEditBatchConflict(error: unknown): boolean {
+    return isBatchGuardError(error, "VARIANT_EDIT_CONFLICT");
+}
+
+/**
+ * Checks one SKU edit against the stored SKU and returns its writes without
+ * writing anything, so a product Save can put them in the same guarded batch
+ * as its other writes and stay all-or-nothing.
+ */
+export async function planVariantUpdate(
+    db: Database,
+    productId: string,
+    variantId: string,
+    data: VariantUpdateFacts,
+    options: {
+        adminUserId?: string;
+        /** The product price this Save writes: a simple product's hidden SKU mirrors it. */
+        simplePriceMinor?: number;
+        /** Where the SKU sits in the request body (`defaultSku.`), for the field a refusal names. */
+        fieldPrefix?: string;
+    } = {},
+): Promise<VariantUpdatePlan> {
+    const { adminUserId, fieldPrefix = "" } = options;
     const currency = await readStoreCurrency(db);
     const decimalPlaces = currency.decimalPlaces;
     const existingVariant = await db
@@ -683,7 +746,7 @@ export async function updateVariant(
 
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
-    await assertSkuKeyFree(db, sku, skuKey, variantId);
+    await assertSkuKeyFree(db, sku, skuKey, variantId, `${fieldPrefix}sku`);
 
     const barcodeIdentity = normalizeVariantBarcode(
         data.barcode === undefined ? existingVariant.barcode : data.barcode,
@@ -694,7 +757,9 @@ export async function updateVariant(
         ...barcodeIdentity,
     }]);
 
-    const simpleProductPricing = existingIsSimpleSku
+    const simpleProductPricing = existingIsSimpleSku && options.simplePriceMinor !== undefined
+        ? { priceMinor: options.simplePriceMinor }
+        : existingIsSimpleSku
         ? await db
             .select({
                 priceMinor: products.priceMinor,
@@ -806,30 +871,12 @@ export async function updateVariant(
                   AND ${productVariants.deletedAt} IS NULL
             )`, "VARIANT_EDIT_CONFLICT");
 
-        let result;
-        try {
-            result = await executeProductAggregateMutationBatch(
-                db,
-                productId,
-                data.expectedAggregateRevision,
-                [stockGuard, ...assignmentStatements, movementInsert, variantUpdate],
-            );
-        } catch (error) {
-            if (isAtomicVariantConflict(error)) {
-                throw new ConflictError(STOCK_CHANGED_MESSAGE);
-            }
-            throw error;
-        }
-        const movementRows = result.mutationResults[1 + assignmentStatements.length] as Array<{ id: string }>;
-        const variantRows = result.mutationResults[2 + assignmentStatements.length] as PersistedVariant[];
-
-        if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
-            throw new ConflictError(STOCK_CHANGED_MESSAGE);
-        }
-
-        await checkAndAlertLowStock(db, variantId);
-
-        return { ...presentCatalogPrice(variantRows[0]!, decimalPlaces), aggregateRevision: result.aggregateRevision };
+        return {
+            statements: [stockGuard, ...assignmentStatements, movementInsert, variantUpdate],
+            movementIndex: 1 + assignmentStatements.length,
+            variantIndex: 2 + assignmentStatements.length,
+            decimalPlaces,
+        };
     }
 
     const variantUpdate = db
@@ -844,15 +891,12 @@ export async function updateVariant(
             isNull(productVariants.deletedAt),
         ))
         .returning();
-    const result = await executeProductAggregateMutationBatch(
-        db,
-        productId,
-        data.expectedAggregateRevision,
-        [...assignmentStatements, variantUpdate],
-    );
-    const variant = (result.mutationResults[assignmentStatements.length] as PersistedVariant[] | undefined)?.[0];
-    if (!variant) throw new NotFoundError("Variant not found");
-    return { ...presentCatalogPrice(variant, decimalPlaces), aggregateRevision: result.aggregateRevision };
+    return {
+        statements: [...assignmentStatements, variantUpdate],
+        movementIndex: null,
+        variantIndex: assignmentStatements.length,
+        decimalPlaces,
+    };
 }
 
 export async function deleteVariant(

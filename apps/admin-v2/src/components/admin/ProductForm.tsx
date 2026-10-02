@@ -252,6 +252,7 @@ function ProductEditor({
     onProductSaved,
     createComposition,
     onVariantIssue: (path, message) => matrixRef.current?.showServerIssue(path, message) ?? null,
+    onCompositionSaved: (revision) => matrixRef.current?.compositionSaved(revision),
   });
   const productFormDirty = form.formState.isDirty;
   // Read while rendering so react-hook-form keeps tracking which fields changed.
@@ -315,6 +316,9 @@ function ProductEditor({
     } else if (sectionProblems.length > 0) {
       throw new SaveNotCompleted(sectionProblems[0], sectionProblems);
     }
+    // Changed variants go in the product's own write, so details, options and SKUs save
+    // together or not at all; checked here, before any section is written.
+    const composition = isEdit && values && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
     let revision = aggregateRevision;
     for (const handle of pending) {
       if (!revision) break;
@@ -330,13 +334,14 @@ function ProductEditor({
       values = { ...(values ?? form.getValues()), additionalInfo: [] };
     }
     if (values) {
-      revision = await submit(values, revision);
+      revision = await submit(values, revision, composition);
       if (tabsMoved.current) {
         tabsMoved.current = false;
         void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
       }
     }
-    if (isEdit && optionMatrixDirty) await matrixRef.current?.save(revision);
+    // Variants alone (or typed costs) save on their own.
+    if (isEdit && optionMatrixDirty && !composition) await matrixRef.current?.save(revision);
   };
 
   /** A section's rejected save, in the banner (a newer version opens the conflict dialog). */

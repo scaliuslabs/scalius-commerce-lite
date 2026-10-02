@@ -10,6 +10,7 @@ import { toHandle } from "@scalius/shared/handle";
 import type {
   CreateProductInput,
   ProductOptionMatrixInput,
+  UpdateProductInput,
 } from "../../../../lib/api-query-options/products";
 import type {
   ProductSkuImageChoice,
@@ -42,6 +43,9 @@ export type VariantPriceRange = { min: number; max: number };
 
 /** What a new product's composition adds to the create request. */
 export type ProductCreateComposition = Pick<CreateProductInput, "optionMatrix" | "defaultSku">;
+
+/** The variant draft a product Save sends with the product's details, in the same write. */
+export type ProductUpdateComposition = Pick<UpdateProductInput, "optionMatrix" | "defaultSku">;
 
 /** Inventory and scan facts of the hidden SKU that a product without options sells. */
 export type SimpleSkuDraft = Pick<DraftVariant, "sku" | "trackInventory" | "stock" | "barcode" | "barcodeType" | "weight">;
@@ -103,6 +107,13 @@ export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuR
 export interface OptionMatrixEditorHandle {
   /** Saves the variant draft; rejects (after marking the field) when it can't. */
   save: (expectedAggregateRevision?: number) => Promise<void>;
+  /**
+   * The changed draft for the product's own save to carry (one write, all or nothing),
+   * or null when it is unchanged. Rejects (after marking the field) when it can't be saved.
+   */
+  composition: () => ProductUpdateComposition | null;
+  /** After the product save that carried `composition()`: settles the draft and sends typed costs. */
+  compositionSaved: (aggregateRevision: number) => Promise<void>;
   /** Shows the draft's problem at its field (row expanded, page turned) for a Save that was refused. */
   reveal: () => void;
   /** Marks a field the server rejected, by request path (`variants.2.sku`, `defaultSku.sku`, `sku`); returns its banner line. */

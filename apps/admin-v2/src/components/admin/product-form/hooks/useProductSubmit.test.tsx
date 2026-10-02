@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   onAggregateRevisionChange: vi.fn(),
   onRevisionConflict: vi.fn(),
   onVariantIssue: vi.fn(),
+  onCompositionSaved: vi.fn(),
   formatted: vi.fn(),
 }));
 /** The fields the merchant changed in the form under test. */
@@ -170,6 +171,42 @@ describe("useProductSubmit", () => {
     expect(mocks.onAggregateRevisionChange).toHaveBeenCalledWith(5);
   });
 
+  it("saves the changed variants in the product's own write, then lets the variant editor settle", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    const composition = {
+      optionMatrix: {
+        options: [{ id: "draft_option", name: "Colour", standardMapping: "color" as const, values: [{ id: "draft_red", value: "Red" }] }],
+        variants: [{
+          id: "draft_row", selectedOptionValueIds: ["draft_red"], imageId: null, sku: "EID-RED", price: 900, stock: 1,
+          trackInventory: true, weight: null, barcode: null, barcodeType: null, discountType: "percentage" as const,
+          discountPercentage: 0, discountAmount: null,
+        }],
+      },
+    };
+    mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
+
+    await expect(requireResult(result).submit(productValues(), 4, composition)).resolves.toBe(5);
+    // One request: the details and the variants, under one revision.
+    expect(mocks.serverMutation).toHaveBeenCalledTimes(1);
+    expect(mocks.serverMutation).toHaveBeenCalledWith({
+      path: { id: "prod_one" },
+      body: expect.objectContaining({ expectedAggregateRevision: 4, optionMatrix: composition.optionMatrix }),
+    });
+    expect(mocks.onCompositionSaved).toHaveBeenCalledWith(5);
+  });
+
+  it("leaves the variant draft unsaved when the save that carried it is refused", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
+      "Allocate exactly 5 on-hand units across the new combinations. Currently allocated: 3.", 400, "VALIDATION_ERROR",
+    ));
+
+    await expect(requireResult(result).submit(productValues(), 4, { defaultSku: { sku: "EID-1", trackInventory: true, weight: null, barcode: null, barcodeType: null } }))
+      .rejects.toMatchObject({ name: "SaveNotCompleted" });
+    expect(mocks.onCompositionSaved).not.toHaveBeenCalled();
+    expect(mocks.formReset).not.toHaveBeenCalled();
+  });
+
   it("keeps the draft on a revision conflict and explains it for the save banner", async () => {
     const conflict = { expectedRevision: 6, currentRevision: 7 };
     renderHarness({ isEdit: true, aggregateRevision: 6 });
@@ -284,6 +321,7 @@ function HookHarness({ isEdit, aggregateRevision, onResult }: {
     onAggregateRevisionChange: mocks.onAggregateRevisionChange,
     onRevisionConflict: mocks.onRevisionConflict,
     onVariantIssue: mocks.onVariantIssue,
+    onCompositionSaved: mocks.onCompositionSaved,
     form,
   }));
   return null;

@@ -241277,6 +241277,7 @@
           "Admin - Products"
         ],
         "summary": "Update a product",
+        "description": "Replaces the product's details under expectedAggregateRevision. Send optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options) to save them in the same write: a refused save changes nothing.",
         "parameters": [
           {
             "schema": {
@@ -241594,6 +241595,252 @@
                       "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                     },
                     "maxItems": 250
+                  },
+                  "optionMatrix": {
+                    "type": "object",
+                    "properties": {
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "standardMapping": {
+                              "type": "string",
+                              "enum": [
+                                "size",
+                                "color",
+                                "material",
+                                "pattern",
+                                "none"
+                              ]
+                            },
+                            "values": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "value"
+                                ]
+                              },
+                              "minItems": 1,
+                              "maxItems": 150
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "standardMapping",
+                            "values"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                      },
+                      "variants": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "selectedOptionValueIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "minItems": 1,
+                              "maxItems": 5
+                            },
+                            "imageId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 10,
+                              "maxLength": 80,
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                            },
+                            "sku": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 100
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 99999999
+                            },
+                            "stock": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000,
+                              "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
+                            },
+                            "expectedStockVersion": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "The SKU stockVersion the new quantity was based on. Required with stock."
+                            },
+                            "trackInventory": {
+                              "type": "boolean"
+                            },
+                            "weight": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 1000000,
+                              "description": "Weight in grams."
+                            },
+                            "barcode": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 50
+                            },
+                            "barcodeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "ean13",
+                                "upc",
+                                "isbn",
+                                "gtin",
+                                "code128",
+                                "custom",
+                                null
+                              ]
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage",
+                                "flat"
+                              ]
+                            },
+                            "discountPercentage": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 99999999
+                            },
+                            "fulfillmentKind": {
+                              "type": "string",
+                              "enum": [
+                                "physical",
+                                "digital",
+                                "service"
+                              ],
+                              "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "selectedOptionValueIds",
+                            "imageId",
+                            "sku",
+                            "price",
+                            "trackInventory",
+                            "weight",
+                            "barcode",
+                            "barcodeType",
+                            "discountType",
+                            "discountPercentage",
+                            "discountAmount"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 150
+                      }
+                    },
+                    "required": [
+                      "options",
+                      "variants"
+                    ],
+                    "description": "The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs."
+                  },
+                  "defaultSku": {
+                    "type": "object",
+                    "properties": {
+                      "sku": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 100
+                      },
+                      "trackInventory": {
+                        "type": "boolean"
+                      },
+                      "stock": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000,
+                        "description": "New on-hand quantity. Omit to keep the current quantity."
+                      },
+                      "expectedStockVersion": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The SKU stockVersion the new quantity was based on. Required with stock."
+                      },
+                      "barcode": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 50
+                      },
+                      "barcodeType": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                          "ean13",
+                          "upc",
+                          "isbn",
+                          "gtin",
+                          "code128",
+                          "custom",
+                          null
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 1000000,
+                        "description": "Weight in grams."
+                      }
+                    },
+                    "required": [
+                      "sku",
+                      "trackInventory",
+                      "barcode",
+                      "barcodeType",
+                      "weight"
+                    ],
+                    "description": "Edits to the hidden SKU of a product without options, saved in the same write. Not allowed with optionMatrix."
                   }
                 },
                 "required": [

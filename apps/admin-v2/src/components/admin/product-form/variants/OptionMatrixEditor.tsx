@@ -61,6 +61,7 @@ import {
   type OptionMatrixEditorHandle,
   type ProductCreateComposition,
   type ProductFulfilmentMode,
+  type ProductUpdateComposition,
   type SimpleSkuDraft,
   type VariantPriceRange,
   withFulfilmentMode,
@@ -506,65 +507,87 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     });
   }, [stockElsewhere, updateVariants]);
 
+  /** What the draft saves, without a revision: the hidden SKU's edits, or the whole matrix. */
+  const compositionBody = (): ProductUpdateComposition => simpleMode && defaultSku
+    ? {
+        defaultSku: {
+          sku: simpleSku.sku.trim(),
+          weight: simpleSku.weight,
+          trackInventory: shownSimpleSku.trackInventory,
+          barcode: simpleSku.barcode,
+          barcodeType: simpleSku.barcodeType,
+          // Unedited quantity is omitted so a concurrent sale is never overwritten.
+          ...(simpleStockEdited && shownSimpleSku.trackInventory
+            ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
+            : {}),
+        },
+      }
+    : { optionMatrix: { options, variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode) } };
+
   const mutation = useMutation({
-    mutationFn: (revisionOverride?: number) => simpleMode && defaultSku
-      ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
-          path: { id: productId!, variantId: defaultSku.id },
-          body: {
-            selectedOptionValueIds: [],
-            imageId: defaultSku.imageId,
-            weight: simpleSku.weight,
-            sku: simpleSku.sku.trim(),
-            price: productPrice,
-            trackInventory: shownSimpleSku.trackInventory,
-            barcode: simpleSku.barcode,
-            barcodeType: simpleSku.barcodeType,
-            // Unedited quantity is omitted so a concurrent sale is never overwritten.
-            ...(simpleStockEdited && shownSimpleSku.trackInventory
-              ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
-              : {}),
-            discountType: "percentage",
-            discountPercentage: null,
-            discountAmount: null,
-            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
-          },
-        }))
-      : apiData(putApiV1AdminProductsByIdOptionsMatrix({
-          path: { id: productId! },
-          body: {
-            options,
-            variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode),
-            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
-          },
-        })),
-    onSuccess: async (result) => {
-      onAggregateRevisionChange?.(result.aggregateRevision);
-      // Edits made while the save was on its way stay unsaved.
-      setSavedDraft(sentDraft.current);
-      setRevealed(false);
-      setCombinationsPending(false);
-      setTopologyChanged(false);
-      setOmittedVariantsByKey(new Map());
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.collectionOptions(),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
-        queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.productLevels(productId!) }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.detail(productId!),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.variants(productId!),
-        }),
-      ]);
-      // `onSaved` (the page reloads the variants) runs once the costs are sent too: see `save`.
+    mutationFn: (revisionOverride?: number) => {
+      const body = compositionBody();
+      const expectedAggregateRevision = revisionOverride ?? aggregateRevision!;
+      return body.defaultSku && defaultSku
+        ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
+            path: { id: productId!, variantId: defaultSku.id },
+            body: {
+              ...body.defaultSku,
+              selectedOptionValueIds: [],
+              imageId: defaultSku.imageId,
+              price: productPrice,
+              discountType: "percentage",
+              discountPercentage: null,
+              discountAmount: null,
+              expectedAggregateRevision,
+            },
+          }))
+        : apiData(putApiV1AdminProductsByIdOptionsMatrix({
+            path: { id: productId! },
+            body: { ...body.optionMatrix!, expectedAggregateRevision },
+          }));
     },
+    onSuccess: (result) => settle(result.aggregateRevision),
   });
+
+  /** After a save that carried the draft (this editor's own, or the product's): the draft is the saved one. */
+  const settle = async (revision: number) => {
+    onAggregateRevisionChange?.(revision);
+    // Edits made while the save was on its way stay unsaved.
+    setSavedDraft(sentDraft.current);
+    setRevealed(false);
+    setCombinationsPending(false);
+    setTopologyChanged(false);
+    setOmittedVariantsByKey(new Map());
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.collectionOptions(),
+      }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
+      queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.productLevels(productId!) }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(productId!),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(productId!),
+      }),
+    ]);
+    // `onSaved` (the page reloads the variants) runs once the costs are sent too: see `save`.
+  };
+
+  /** Costs go after the variants, so new variants have their ids; a refused cost keeps its edit. */
+  const finishSave = async (variantsSaved: boolean, sendCosts: boolean) => {
+    try {
+      if (costs && sendCosts && productId) await costs.save(productId);
+    } finally {
+      // The page reloads the variants after the costs, so it never shows a cost from before them.
+      if (variantsSaved) onSaved?.();
+    }
+  };
 
   /** Puts a server rejection on its field; returns the banner line, or null when it names no field. */
   const showServerIssue = React.useCallback((path: string, message: string): string | null => {
@@ -594,30 +617,36 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         reveal();
         throw new SaveNotCompleted(lineFor(draftIssue));
       }
-      let variantsSaved = false;
-      try {
-        if (dirty) {
-          try {
-            sentDraft.current = draft;
-            await mutation.mutateAsync(revisionOverride);
-            variantsSaved = true;
-          } catch (error) {
-            const conflict = readProductRevisionConflict(error);
-            if (conflict) {
-              onRevisionConflict?.(conflict);
-              throw new SaveNotCompleted(t("changedElsewhere"));
-            }
-            const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
-            const line = issue ? showServerIssue(issue.path, issue.message) : null;
-            throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+      if (dirty) {
+        try {
+          sentDraft.current = draft;
+          await mutation.mutateAsync(revisionOverride);
+        } catch (error) {
+          const conflict = readProductRevisionConflict(error);
+          if (conflict) {
+            onRevisionConflict?.(conflict);
+            throw new SaveNotCompleted(t("changedElsewhere"));
           }
+          const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
+          const line = issue ? showServerIssue(issue.path, issue.message) : null;
+          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
         }
-        // Costs go after the variants, so new variants have their ids; a refused cost keeps its edit.
-        if (costs && sendCosts) await costs.save(productId);
-      } finally {
-        // The page reloads the variants after the costs, so it never shows a cost from before them.
-        if (variantsSaved) onSaved?.();
       }
+      await finishSave(dirty, sendCosts);
+    },
+    composition: () => {
+      if (!productId || !dirty || mutation.isPending) return null;
+      if (draftIssue) {
+        reveal();
+        throw new SaveNotCompleted(lineFor(draftIssue));
+      }
+      sentDraft.current = draft;
+      return compositionBody();
+    },
+    compositionSaved: async (revision) => {
+      const sendCosts = costs !== null && costsDirty;
+      await settle(revision);
+      await finishSave(true, sendCosts);
     },
     reveal,
     showServerIssue,

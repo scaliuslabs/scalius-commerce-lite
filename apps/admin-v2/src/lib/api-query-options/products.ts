@@ -5,6 +5,7 @@ import {
   getApiV1AdminProductsByIds,
   getApiV1AdminProductsByIdVariants,
   type postApiV1AdminProducts,
+  type putApiV1AdminProductsById,
   type putApiV1AdminProductsByIdOptionsMatrix,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiQuery, type ApiResult } from "../api";
@@ -37,6 +38,7 @@ export type ProductSkuImageChoice = Pick<
 >;
 export type CreateProductInput = ApiBody<typeof postApiV1AdminProducts>;
 export type ProductOptionMatrixInput = ApiBody<typeof putApiV1AdminProductsByIdOptionsMatrix>;
+export type UpdateProductInput = ApiBody<typeof putApiV1AdminProductsById>;
 export type ProductAggregateRevisionClaim = { id: string; expectedAggregateRevision: number };
 
 const EMPTY_PRODUCTS_BY_IDS: ProductsByIdsPayload = { products: [] };

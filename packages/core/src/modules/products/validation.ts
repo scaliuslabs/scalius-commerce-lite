@@ -11,9 +11,9 @@ import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
 import { isBrandId } from "@scalius/shared/catalog-brand";
-import { catalogMoneySchema, skuStockSchema, skuWeightSchema } from "./types";
+import { catalogMoneySchema, expectedStockVersionSchema, skuStockSchema, skuWeightSchema } from "./types";
 import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
-import { createProductOptionMatrixSchema } from "./option-matrix";
+import { createProductOptionMatrixSchema, productOptionMatrixBodySchema } from "./option-matrix";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 import { addGiftCardInputIssues } from "./gift-card-rules";
 
@@ -242,6 +242,21 @@ export const createProductSchema = productBaseSchema
         path: ["defaultSku"],
     });
 
+/** Edits to the hidden SKU of a product without options, saved with the product. */
+const defaultSkuUpdateSchema = z.object({
+    sku: z.string().trim().min(3).max(100),
+    trackInventory: z.boolean(),
+    stock: skuStockSchema.optional()
+        .describe("New on-hand quantity. Omit to keep the current quantity."),
+    expectedStockVersion: expectedStockVersionSchema.optional(),
+    barcode: z.string().trim().max(50).nullable(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable(),
+    weight: skuWeightSchema.nullable(),
+}).refine((value) => value.stock === undefined || value.expectedStockVersion !== undefined, {
+    message: "Send expectedStockVersion with stock.",
+    path: ["expectedStockVersion"],
+});
+
 /** Schema for updating an existing product (PUT /api/products/[id]) */
 export const updateProductSchema = productBaseSchema
     .extend({
@@ -253,10 +268,18 @@ export const updateProductSchema = productBaseSchema
                 message: "Each acknowledged product media association must be unique.",
             })
             .optional(),
+        optionMatrix: productOptionMatrixBodySchema.optional()
+            .describe("The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs."),
+        defaultSku: defaultSkuUpdateSchema.optional()
+            .describe("Edits to the hidden SKU of a product without options, saved in the same write. Not allowed with optionMatrix."),
     })
     .superRefine(requireCanonicalProductHandle)
     .superRefine(requireSellablePrice)
-    .superRefine(addGiftCardInputIssues);
+    .superRefine(addGiftCardInputIssues)
+    .refine((value) => !(value.optionMatrix && value.defaultSku), {
+        message: "Send either optionMatrix or defaultSku, not both.",
+        path: ["defaultSku"],
+    });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
