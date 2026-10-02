@@ -26,7 +26,7 @@ import { NotFoundError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
 
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 import { customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -45,8 +45,9 @@ const listRoute = createRoute({
     description: "Find recent or new customers and search bounded customer summaries.",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            page: z.coerce.number().default(1).openapi({ description: "Page number; reaches the first 1,000 rows only (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
             limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
+            ...keysetQuerySchema,
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
@@ -55,7 +56,7 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Customer list with pagination", content: { "application/json": { schema: paginatedEnvelope("customers", customerSummarySchema) } } },
+        200: { description: "Cursor-paginated customer list with a capped total", content: { "application/json": { schema: keysetPaginatedEnvelope("customers", customerSummarySchema) } } },
         ...errorResponses,
     }
 });
@@ -143,6 +144,8 @@ app.openapi(listRoute, async (c) => {
     const result = await listCustomers(db, {
         page: q.page,
         limit: q.limit,
+        after: q.after,
+        before: q.before,
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: q.sort as "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt" | undefined,

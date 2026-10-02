@@ -13,7 +13,7 @@ import { FulfillmentStatus, PaymentStatus, productVariants, products } from "@sc
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
-import { paginatedEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, errorResponses } from "../../../schemas/responses";
+import { keysetPaginatedEnvelope, keysetQuerySchema, errorResponses } from "../../../schemas/responses";
 import { orderSummarySchema, productSummarySchema } from "../../../schemas/entities";
 import { parseBangladeshDateOnlyBoundary } from "../order-date-filter";
 import {
@@ -128,7 +128,7 @@ const catalogProductsRoute = createRoute({
             description: "Paginated active product catalog",
             content: {
                 "application/json": {
-                    schema: paginatedEnvelope("products", productSummarySchema.extend({
+                    schema: keysetPaginatedEnvelope("products", productSummarySchema.extend({
                         availableStock: z.number().int().nullable().openapi({
                             description: "Units buyers can still order across active SKUs; null when a SKU has no stock limit.",
                         }),

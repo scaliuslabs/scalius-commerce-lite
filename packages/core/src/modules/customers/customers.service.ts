@@ -23,7 +23,7 @@ import {
     media,
     products,
 } from "@scalius/database/schema";
-import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { sql, isNull, isNotNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
@@ -45,6 +45,13 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { listCustomerTags } from "./customer-tags";
 import { ftsMatch } from "../../search/fts5";
+import type { CursorValueKind } from "@scalius/shared/pagination";
+import {
+    COUNT_PROBE_COLUMN,
+    cappedCountQuery,
+    cappedPagination,
+    planKeysetPage,
+} from "../../utils/keyset";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
@@ -544,6 +551,10 @@ export async function listCustomers(
     options: {
         page?: number;
         limit?: number;
+        /** Rows after this cursor (`pageInfo.endCursor`); excludes `before` and `page` beyond 1. */
+        after?: string;
+        /** Rows before this cursor (`pageInfo.startCursor`). */
+        before?: string;
         search?: string;
         showTrashed?: boolean;
         sort?: "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt";
@@ -554,6 +565,8 @@ export async function listCustomers(
     const {
         page = 1,
         limit: rawLimit = 10,
+        after,
+        before,
         search = "",
         showTrashed = false,
         sort = "updatedAt",
@@ -589,26 +602,34 @@ export async function listCustomers(
             ? sql`${sql.join(whereConditions, sql` AND `)}`
             : undefined;
 
-    const offset = (page - 1) * limit;
-
     const totalOrders = sql<number>`COALESCE(${customerOrderStats.ordersCount}, 0)`;
     const totalSpentMinor = sql<number>`COALESCE(${customerOrderStats.totalSpentMinor}, 0)`;
-    const sortField = (() => {
-        switch (sort) {
-            case "name": return customers.name;
-            case "totalOrders": return totalOrders;
-            case "totalSpent": return totalSpentMinor;
-            case "lastOrderAt": return customerOrderStats.lastOrderAt;
-            case "createdAt": return customers.createdAt;
-            default: return customers.updatedAt;
-        }
-    })();
+    // Every sort walks by keyset (sort value + id). Only `lastOrderAt` can be NULL
+    // (a customer with no orders): first ascending, last descending.
+    const keysetSorts = {
+        name: { column: customers.name, kind: "text", nullable: false },
+        totalOrders: { column: totalOrders, kind: "number", nullable: false },
+        totalSpent: { column: totalSpentMinor, kind: "number", nullable: false },
+        lastOrderAt: { column: customerOrderStats.lastOrderAt, kind: "number", nullable: true },
+        createdAt: { column: customers.createdAt, kind: "number", nullable: false },
+        updatedAt: { column: customers.updatedAt, kind: "number", nullable: false },
+    } as const satisfies Record<string, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean }>;
+    const sortKey = (sort in keysetSorts ? sort : "updatedAt") as keyof typeof keysetSorts;
+    const keysetSpec = keysetSorts[sortKey];
+    const plan = planKeysetPage({ page, limit, after, before }, {
+        sort: sortKey,
+        order: { column: keysetSpec.column, id: customers.id, direction: order, nullable: keysetSpec.nullable },
+        kind: keysetSpec.kind,
+    });
 
-    const countQuery = db
-        .select({ count: sql<number>`count(*)` })
-        .from(customers)
-        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
-        .where(whereClause);
+    // Filters read `customer_order_stats`, so every count joins it too.
+    const countProbe = (where: SQL | undefined) => cappedCountQuery(
+        db,
+        db.select(COUNT_PROBE_COLUMN).from(customers)
+            .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+            .where(where)
+            .$dynamic(),
+    );
 
     const resultsQuery = db
         .select({
@@ -633,6 +654,8 @@ export async function listCustomers(
             lastOrderAt: sql<number | null>`${customerOrderStats.lastOrderAt}`,
             createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
+            // The sort column as stored: a cursor compares what the ORDER BY compared.
+            keysetValue: sql<number | string | null>`${keysetSpec.column}`.as("keyset_value"),
         })
         .from(customers)
         .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
@@ -648,21 +671,24 @@ export async function listCustomers(
             eq(customerAreaLocation.id, customers.area),
             isNull(customerAreaLocation.deletedAt),
         ))
-        .where(whereClause)
-        .limit(limit)
-        .offset(offset)
-        .orderBy(order === "asc" ? asc(sortField) : desc(sortField), order === "asc" ? asc(customers.id) : desc(customers.id));
+        .where(plan.pageWhere(whereClause))
+        .limit(plan.fetchLimit)
+        .offset(plan.offset)
+        .orderBy(...plan.orderBy);
 
-    const [countArr, results] = await db.batch([
-        countQuery,
-        resultsQuery,
-    ] as Parameters<Database["batch"]>[0]) as [
+    // The total reads at most LIST_COUNT_CAP + 1 rows; a cursor page also
+    // counts the rows leading up to it (same cap) for its "51-100 of 1,000+".
+    const positionWhere = plan.positionWhere(whereClause);
+    const statements: unknown[] = [countProbe(whereClause), resultsQuery];
+    if (positionWhere) statements.push(countProbe(positionWhere));
+    const batchResult = await db.batch(statements as Parameters<Database["batch"]>[0]) as unknown as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
+        { count: number }[]?,
     ];
-    const count = countArr[0]?.count ?? 0;
+    const { rows: results, pageInfo, pageStart } = plan.finish(batchResult[1], batchResult[2]?.[0]?.count);
 
-    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, origin, ...c }) => ({
+    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, origin, keysetValue: _keysetValue, ...c }) => ({
         ...c,
         kind: customerKind({ accountClaimedAt: c.accountClaimedAt, origin }),
         totalOrders: Number(c.totalOrders),
@@ -675,7 +701,8 @@ export async function listCustomers(
 
     return {
         customers: formattedCustomers,
-        pagination: { total: count, page, limit, totalPages: Math.ceil(count / limit) },
+        pagination: cappedPagination(batchResult[0][0]?.count ?? 0, pageStart, limit),
+        pageInfo,
     };
 }
 

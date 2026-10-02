@@ -9,7 +9,14 @@ import {
     productAttributeValues,
     inventoryMovements,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
+import { and, sql, eq, asc, inArray, isNull, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import type { CursorValueKind } from "@scalius/shared/pagination";
+import {
+    COUNT_PROBE_COLUMN,
+    cappedCountQuery,
+    cappedPagination,
+    planKeysetPage,
+} from "../../../utils/keyset";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
 import { ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "../types";
@@ -50,6 +57,21 @@ function requireProductTimestamp(
 // Admin read queries
 // ─────────────────────────────────────────
 
+type ProductListSort = "name" | "price" | "category" | "createdAt" | "updatedAt";
+
+/**
+ * The sorts the list walks by keyset: the sort column as the ORDER BY
+ * compares it, and its cursor value type. A product with no category sorts
+ * as NULL (first ascending, last descending).
+ */
+const PRODUCT_KEYSET_SORTS = {
+    name: { column: products.name, kind: "text", nullable: false },
+    price: { column: products.priceMinor, kind: "number", nullable: false },
+    category: { column: categories.name, kind: "text", nullable: true },
+    createdAt: { column: products.createdAt, kind: "number", nullable: false },
+    updatedAt: { column: products.updatedAt, kind: "number", nullable: false },
+} as const satisfies Record<ProductListSort, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean }>;
+
 /**
  * Returns a paginated, searchable list of products for the admin dashboard.
  * Includes variant counts, image counts, and primary image URLs.
@@ -59,10 +81,14 @@ export async function listProducts(db: Database, options: {
     categoryId?: string;
     page?: number;
     limit?: number;
+    /** Rows after this cursor (`pageInfo.endCursor`); excludes `before` and `page` beyond 1. */
+    after?: string;
+    /** Rows before this cursor (`pageInfo.startCursor`). */
+    before?: string;
     showTrashed?: boolean;
     /** "active" = sold on the storefront, "draft" = hidden. */
     status?: "active" | "draft";
-    sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
+    sort?: ProductListSort;
     order?: "asc" | "desc";
     /** Agent summaries omit large text/media projections before they leave SQL. */
     agentSummary?: boolean;
@@ -74,6 +100,8 @@ export async function listProducts(db: Database, options: {
         categoryId,
         page = 1,
         limit = 10,
+        after,
+        before,
         showTrashed = false,
         status,
         sort = "updatedAt",
@@ -81,7 +109,6 @@ export async function listProducts(db: Database, options: {
         agentSummary = false,
         includeDescription = true,
     } = options;
-    const offset = (page - 1) * limit;
 
     const whereConditions = [];
 
@@ -145,11 +172,15 @@ export async function listProducts(db: Database, options: {
     const whereClause =
         whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-    const countQuery = db
-        .select({ count: sql<number>`count(distinct ${products.id})` })
-        .from(products)
-        .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(whereClause);
+    // A text search is ordered by relevance (computed per row), so it pages by
+    // position inside the first matches; every other sort walks by keyset.
+    const keysetSpec = PRODUCT_KEYSET_SORTS[sort] ?? PRODUCT_KEYSET_SORTS.updatedAt;
+    const plan = planKeysetPage({ page, limit, after, before }, {
+        sort: rankExpression ? "relevance" : sort,
+        order: { column: keysetSpec.column, id: products.id, direction: order, nullable: keysetSpec.nullable },
+        kind: keysetSpec.kind,
+        ranked: rankExpression ? [rankExpression, sql`${products.id} asc`] : undefined,
+    });
 
     const productResultsQuery = db
         .select({
@@ -170,52 +201,41 @@ export async function listProducts(db: Database, options: {
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${products.deletedAt} AS INTEGER)`,
             categoryName: sql<string>`${categories.name}`.as("categoryName"),
+            // The sort column as stored: a cursor compares what the ORDER BY compared.
+            keysetValue: sql<number | string | null>`${keysetSpec.column}`.as("keyset_value"),
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(whereClause)
-        .limit(limit)
-        .offset(offset)
-        .orderBy(
-            (() => {
-                if (rankExpression) {
-                    return rankExpression;
-                }
-                const sortField = (() => {
-                    switch (sort) {
-                        case "name":
-                            return products.name;
-                        case "price":
-                            return products.priceMinor;
-                        case "category":
-                            return categories.name;
-                        case "createdAt":
-                            return products.createdAt;
-                        case "updatedAt":
-                        default:
-                            return products.updatedAt;
-                    }
-                })();
-                return order === "asc" ? asc(sortField) : desc(sortField);
-            })(),
-        );
+        .where(plan.pageWhere(whereClause))
+        .limit(plan.fetchLimit)
+        .offset(plan.offset)
+        .orderBy(...plan.orderBy);
 
-    const [[countArr, productResults], decimalPlaces] = await Promise.all([db.batch([
-        countQuery,
+    // The total reads at most LIST_COUNT_CAP + 1 rows; a cursor page also
+    // counts the rows leading up to it (same cap) for its "51-100 of 1,000+".
+    const positionWhere = plan.positionWhere(whereClause);
+    const statements: unknown[] = [
+        cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(products).where(whereClause).$dynamic()),
         productResultsQuery,
-    ]), readStoreDecimalPlaces(db)]);
-    const count = countArr[0]?.count ?? 0;
+    ];
+    if (positionWhere) {
+        // A `category` position compares the joined category name.
+        statements.push(cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(products)
+            .leftJoin(categories, eq(categories.id, products.categoryId)).where(positionWhere).$dynamic()));
+    }
+    const [batchResult, decimalPlaces] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        db.batch(statements as any) as Promise<any>,
+        readStoreDecimalPlaces(db),
+    ]);
+    const { rows: productResults, pageInfo, pageStart } = plan.finish(
+        batchResult[1] as Awaited<typeof productResultsQuery>,
+        batchResult[2]?.[0]?.count,
+    );
+    const pagination = cappedPagination((batchResult[0] as { count: number }[])[0]?.count ?? 0, pageStart, limit);
 
     if (productResults.length === 0) {
-        return {
-            products: [],
-            pagination: {
-                total: count,
-                page,
-                limit,
-                totalPages: Math.ceil(count / limit),
-            },
-        };
+        return { products: [], pagination, pageInfo };
     }
 
     const productIds: string[] = productResults.map((p) => p.id);
@@ -346,12 +366,8 @@ export async function listProducts(db: Database, options: {
 
     return {
         products: combinedProducts,
-        pagination: {
-            total: count,
-            page,
-            limit,
-            totalPages: Math.ceil(count / limit),
-        },
+        pagination,
+        pageInfo,
     };
 }
 
@@ -365,8 +381,10 @@ export async function listProductAgentSummaries(db: Database, options: {
     categoryId?: string;
     page?: number;
     limit?: number;
+    after?: string;
+    before?: string;
     showTrashed?: boolean;
-    sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
+    sort?: ProductListSort;
     order?: "asc" | "desc";
 }) {
     const result = await listProducts(db, { ...options, agentSummary: true });
@@ -383,6 +401,7 @@ export async function listProductAgentSummaries(db: Database, options: {
             sku: product.sku?.slice(0, 100),
         })),
         pagination: result.pagination,
+        pageInfo: result.pageInfo,
     };
 }
 

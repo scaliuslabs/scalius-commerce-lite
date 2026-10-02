@@ -159,7 +159,7 @@ export function resolveListPaging(
         if (input.page > 1) throw invalidCursor("Use either page or a cursor, not both.");
         return { mode: after ? "after" : "before", cursor: readListCursor(token, shape) };
     }
-    const offset = (input.page - 1) * input.limit;
+    const offset = Math.max(0, (input.page - 1) * input.limit);
     if (offset >= LIST_MAX_OFFSET) throw tooDeepPage(offset);
     return { mode: "offset", offset };
 }
@@ -184,7 +184,7 @@ export function resolvePositionalPaging(
     const before = input.before?.trim() || undefined;
     if (after && before) throw invalidCursor("Use either after or before, not both.");
     const token = after ?? before;
-    let offset = (input.page - 1) * input.limit;
+    let offset = Math.max(0, (input.page - 1) * input.limit);
     let take = input.limit;
     if (token) {
         if (input.page > 1) throw invalidCursor("Use either page or a cursor, not both.");

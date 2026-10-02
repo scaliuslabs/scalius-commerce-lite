@@ -35,7 +35,8 @@ import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-e
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
-    paginatedEnvelope,
+    keysetPaginatedEnvelope,
+    keysetQuerySchema,
     errorResponses,
     noContentResponse,
 } from "../../schemas/responses";
@@ -383,8 +384,9 @@ const listRoute = createRoute({
     summary: "List all products",
     request: {
         query: z.object({
-            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number; reaches the first 1,000 rows only (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
             limit: z.coerce.number().int().min(1).max(100).default(10).openapi({ description: "Items per page" }),
+            ...keysetQuerySchema,
             search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
             category: z.string().optional().openapi({ description: "Category ID filter" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
@@ -396,8 +398,8 @@ const listRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Product list with pagination",
-            content: { "application/json": { schema: paginatedEnvelope("products", productSummarySchema) } },
+            description: "Cursor-paginated product list with a capped total",
+            content: { "application/json": { schema: keysetPaginatedEnvelope("products", productSummarySchema) } },
         },
         ...errorResponses,
     }
@@ -409,6 +411,8 @@ app.openapi(listRoute, async (c) => {
     const result = await listProducts(db, {
         page: query.page,
         limit: query.limit,
+        after: query.after,
+        before: query.before,
         search: query.search || undefined,
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
@@ -432,6 +436,7 @@ const listAgentSummariesRoute = createRoute({
         query: z.object({
             page: z.coerce.number().int().min(1).default(1),
             limit: z.coerce.number().int().min(1).max(50).default(20),
+            ...keysetQuerySchema,
             search: z.string().trim().max(120).optional(),
             category: z.string().max(180).optional(),
             trashed: z.enum(["true", "false"]).optional(),
@@ -441,8 +446,8 @@ const listAgentSummariesRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Bounded product summaries with pagination",
-            content: { "application/json": { schema: paginatedEnvelope("products", productAgentSummarySchema) } },
+            description: "Bounded product summaries, cursor-paginated with a capped total",
+            content: { "application/json": { schema: keysetPaginatedEnvelope("products", productAgentSummarySchema) } },
         },
         ...errorResponses,
     },
@@ -454,6 +459,8 @@ app.openapi(listAgentSummariesRoute, async (c) => {
     const result = await listProductAgentSummaries(db, {
         page: query.page,
         limit: query.limit,
+        after: query.after,
+        before: query.before,
         search: query.search || undefined,
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
