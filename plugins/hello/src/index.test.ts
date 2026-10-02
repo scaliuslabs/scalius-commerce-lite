@@ -1,7 +1,12 @@
 // Unit tests for the reference plugin with the SDK's test harness: the same
 // runtime as the platform over an in-memory bridge.
 import { describe, expect, it } from "vitest";
-import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
+import {
+  createPluginTestHarness,
+  parsePluginUiActionResult,
+  parsePluginUiDocument,
+  pluginUiRouteActions,
+} from "@scalius/plugin-sdk/testing";
 import hello from "./index";
 
 const cart = (subtotalMinor: number) => ({
@@ -56,6 +61,45 @@ describe("scalius.hello", () => {
     expect(harness.kv.get("created_count")).toBe(1);
     expect((await harness.event("order.created", { type: "order", id: "o2" }, {}, { id: "evt_2" })).ok).toBe(true);
     expect(harness.kv.get("created_count")).toBe(2);
+  });
+
+  it("answers its page, order card and home widget with valid UI documents", async () => {
+    const harness = createPluginTestHarness(hello, {
+      api: async () => ({ ok: true, status: 200, data: { status: "paid" }, error: null }),
+    });
+    await harness.event("order.paid", { type: "order", id: "o1" }, {}, { occurredAt: "2026-10-01T10:00:00.000Z" });
+    const page = parsePluginUiDocument(((await harness.route("admin", "dashboard")).value as { body: unknown }).body);
+    expect(page).toMatchObject({ ok: true, document: { root: { type: "page", title: "Hello" } } });
+    if (!page.ok) throw new Error("invalid page");
+    expect(pluginUiRouteActions(page.document.root).map((action) => action.route)).toEqual(["reset"]);
+    expect(JSON.stringify(page.document)).toContain('"resource":"order","id":"o1"');
+
+    const card = parsePluginUiDocument(((await harness.route("admin", "order-card", { query: { resource: "order", id: "o1" } })).value as { body: unknown }).body);
+    expect(card).toMatchObject({ ok: true });
+    expect(JSON.stringify(card)).toContain("Greeted");
+    const unknownCard = parsePluginUiDocument(((await harness.route("admin", "order-card", { query: { resource: "order", id: "o9" } })).value as { body: unknown }).body);
+    expect(JSON.stringify(unknownCard)).toContain("Not greeted yet");
+
+    expect(parsePluginUiDocument(((await harness.route("admin", "widget")).value as { body: unknown }).body)).toMatchObject({ ok: true });
+  });
+
+  it("waves at the products a bulk action selects and answers with a toast", async () => {
+    const harness = createPluginTestHarness(hello);
+    const result = (await harness.route("admin", "wave", { method: "POST", body: { resource: "product", ids: ["p1", "p2"], action: "wave" } })).value as { body: unknown };
+    expect(parsePluginUiActionResult(result.body)).toEqual({ toast: { message: "Hello to 2 products!", tone: "success" } });
+    expect(harness.kv.get("waves")).toBe(2);
+    expect((await harness.route("admin", "wave", { method: "POST", body: { resource: "product", ids: [] } })).value).toMatchObject({ status: 422 });
+  });
+
+  it("draws its section and product block from settings alone, escaped", async () => {
+    const harness = createPluginTestHarness(hello);
+    const section = (await harness.render("section", "greeting", { settings: { heading: "Eid <sale>", text: "" } })).value as { body: { html: string; head: unknown } };
+    expect(section.body.html).toContain("Eid &#60;sale&#62;");
+    expect(section.body.head).toEqual({ meta: [{ name: "hello-greeting", content: "Eid <sale>" }] });
+    const block = (await harness.render("product-block", "note", { product: { id: "p1", slug: "linen", categoryId: null, brandId: null } })).value as { body: { html: string } };
+    expect(block.body.html).toContain("Packed with care.");
+    expect((await harness.render("product-block", "note", { settings: { note: "" }, product: { id: "p1", slug: "linen", categoryId: null, brandId: null } })).value)
+      .toEqual({ body: { html: "" } });
   });
 
   it("accepts a ping only with a valid HMAC of the raw body", async () => {
