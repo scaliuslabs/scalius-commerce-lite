@@ -65,7 +65,7 @@ interface Props {
   products: Product[];
   /** Extra bounded child samples for a category shelf landing. */
   shelfProducts?: Product[];
-  pagination: { page: number; totalPages: number; total: number };
+  pagination: { page: number; totalPages: number; total: number; totalIsCapped?: boolean };
   facets: ProductFacet[];
   /** "N★ & up" rows of the listing's scope (the API's `ratingFacet`). */
   ratingFacet?: RatingFacetValue[];
@@ -469,6 +469,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           sortBy={sortBy}
           defaultSort={defaultSort}
           total={pagination.total}
+          totalIsCapped={pagination.totalIsCapped}
           pathname={pathname}
           resetPath={resetPath}
           searchLabel={searchLabel}
@@ -530,7 +531,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           <CatalogShelves shelves={shelves} heritage={presentation.shelfSpacing === "airy"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
         </div>
         {showViewToggle && <script is:inline set:html={shelfRestoreScript} />}
-        <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} shown={products.length} limit={limit} getPageUrl={pageUrl} />
+        <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} totalIsCapped={pagination.totalIsCapped} shown={products.length} limit={limit} getPageUrl={pageUrl} />
       </Fragment>
     ) : (
       <Fragment>
@@ -559,6 +560,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           page={pagination.page}
           totalPages={pagination.totalPages}
           total={pagination.total}
+          totalIsCapped={pagination.totalIsCapped}
           shown={products.length}
           limit={limit}
           getPageUrl={pageUrl}

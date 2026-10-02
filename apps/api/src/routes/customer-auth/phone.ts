@@ -1,4 +1,5 @@
 // Adding and verifying a phone number on the customer account.
+import { enqueueAuthOtp } from "../../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   deleteCustomerAuthOtpChallenge,
@@ -55,7 +56,7 @@ app.openapi(sendAccountPhoneCodeRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
   try {
-    await c.env.JOBS_QUEUE.send(result.queuePayload);
+    await enqueueAuthOtp(c, result.queuePayload);
   } catch (error) {
     await deleteCustomerAuthOtpChallenge(db, { otpKey: result.otpStorageKey, deliveryKey: result.deliveryKey }).catch(() => undefined);
     console.error("[CustomerAuth] Failed to enqueue phone code:", error instanceof Error ? error.name : typeof error);

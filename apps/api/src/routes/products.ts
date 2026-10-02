@@ -25,7 +25,14 @@ import {
 } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError, ValidationError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
+import {
+  successEnvelope,
+  paginationSchema,
+  listingPaginationSchema,
+  listingPageInfoSchema,
+  listingCursorQuerySchema,
+  errorResponses,
+} from "../schemas/responses";
 import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
 
 import { ok } from "../utils/api-response";
@@ -76,8 +83,9 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 const productFilterSchema = z.object({
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
-  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
+  ...listingCursorQuerySchema,
   sort: z
     .enum(["relevance", "newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"])
     .optional()
@@ -571,7 +579,8 @@ const listProductsRoute = createRoute({
       description: "Product list with pagination",
       content: { "application/json": { schema: successEnvelope(z.object({
         products: z.array(storefrontProductSchema),
-        pagination: paginationSchema,
+        pagination: listingPaginationSchema,
+        pageInfo: listingPageInfoSchema,
         priceRange: buyerPriceRangeSchema,
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,

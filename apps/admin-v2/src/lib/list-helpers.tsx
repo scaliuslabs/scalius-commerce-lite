@@ -18,6 +18,18 @@ export interface PaginationInfo {
   page: number;
   limit: number;
   totalPages: number;
+  /** `total` is a lower bound: more rows match than the API counts ("1,000+"). */
+  totalIsCapped?: boolean;
+  /** Zero-based index of this page's first row; null when deeper than the API counts. */
+  offset?: number | null;
+}
+
+/** Where a cursor-paged list continues (the API's `pageInfo`). */
+export interface PageInfo {
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startCursor: string | null;
+  endCursor: string | null;
 }
 
 export const DEFAULT_LIST_MAX_LIMIT = 100;
@@ -30,6 +42,38 @@ export interface ListSearchParams<TSort extends string = string> {
   trashed: boolean;
   /** One-time `?q=` deep link; the list moves it into its session term (list-search.ts). */
   q?: string;
+  /** Show the rows after this opaque cursor (`pageInfo.endCursor` of the page before). */
+  after?: string;
+  /** Show the rows before this opaque cursor (`pageInfo.startCursor` of the page after). */
+  before?: string;
+}
+
+/**
+ * A cursor-paged list drops its cursor whenever anything but the cursor
+ * changes (filters, sort, page size, search): a cursor is a position in one
+ * ordered list, so a new list starts at its first page.
+ */
+export const NO_CURSOR = { after: undefined, before: undefined } as const;
+
+export function resetCursorUnlessPaging<T extends Record<string, unknown>>(
+  updates: T,
+): T & Partial<typeof NO_CURSOR> {
+  return "after" in updates || "before" in updates ? updates : { ...updates, ...NO_CURSOR };
+}
+
+const CURSOR_MAX_LENGTH = 1024;
+
+/** An opaque cursor from the URL: the API decides if it is valid; the URL only keeps it small and URL-safe. */
+export function normalizeCursorSearchParam(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= CURSOR_MAX_LENGTH && /^[A-Za-z0-9_-]+$/.test(value)
+    ? value
+    : undefined;
+}
+
+/** True for an API paging refusal (`INVALID_CURSOR`, `PAGE_TOO_DEEP`): the list starts again from its first page. */
+export function isPagingRefusal(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return code === "INVALID_CURSOR" || code === "PAGE_TOO_DEEP";
 }
 
 export type SearchValidatorInput<T extends object = object> = {
@@ -157,7 +201,16 @@ export function createListSearchValidator<T extends readonly [string, ...string[
     order: normalizeEnumSearchParam(search.order, ["asc", "desc"] as const, defaultOrder),
     trashed: normalizeBooleanSearchParam(search.trashed),
     q: normalizeOptionalSearchString(search.q),
+    ...normalizeCursorPair(search.after, search.before),
   });
+}
+
+/** `after` wins when a hand-edited URL carries both. */
+function normalizeCursorPair(after: unknown, before: unknown): { after?: string; before?: string } {
+  const cursorAfter = normalizeCursorSearchParam(after);
+  if (cursorAfter) return { after: cursorAfter };
+  const cursorBefore = normalizeCursorSearchParam(before);
+  return cursorBefore ? { before: cursorBefore } : {};
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -190,6 +243,7 @@ export function createDataSelector<T>(key: string) {
     return {
       data: (data[key] ?? []) as T[],
       pagination: (data.pagination ?? DEFAULT_PAGINATION) as PaginationInfo,
+      pageInfo: data.pageInfo as PageInfo | undefined,
     };
   };
 }

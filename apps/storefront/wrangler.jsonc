@@ -7,9 +7,8 @@
 		"global_fetch_strictly_public",
 		"disable_nodejs_process_v2"
 	],
-	"limits": {
-		"cpu_ms": 30000
-	},
+	// No `limits`: the Free config. A Paid deploy (`pnpm run deploy --plan paid`)
+	// adds limits.cpu_ms 30000 to the generated build config (scripts/plan.mjs).
 	// workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
 	"workers_dev": false,
 	"preview_urls": false,

@@ -81,14 +81,13 @@ function detachedExecutionContext(): ExecutionContext {
   return { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {} } as unknown as ExecutionContext;
 }
 
-/** Scheduled sweep: due events, due webhook and plugin delivery retries, then retention. */
+/** Scheduled sweep: due events and due webhook and plugin delivery retries. Retention is `runScheduledEventRetention`. */
 export async function runScheduledEventMaintenance(db: Database, env: Env): Promise<{
   events: EventFlushResult;
   deliveries: Awaited<ReturnType<typeof flushDueWebhookDeliveries>>;
   pluginDeliveries: { scanned: number; enqueued: number; failed: number; skipped: number };
-  pruned: Awaited<ReturnType<typeof pruneEventsAndDeliveries>> & { pluginDeliveries: number };
 }> {
-  const { flushDuePluginEventDeliveries, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT, prunePluginEventDeliveries } = await import("@scalius/core/modules/plugins");
+  const { flushDuePluginEventDeliveries, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT } = await import("@scalius/core/modules/plugins");
   const events = await flushPendingEventOutbox({
     db,
     queue: eventsQueue(env),
@@ -97,8 +96,14 @@ export async function runScheduledEventMaintenance(db: Database, env: Env): Prom
   });
   const deliveries = await flushDueWebhookDeliveries({ db, queue: eventsQueue(env), limit: MAX_DELIVERY_FLUSH_LIMIT });
   const pluginDeliveries = await flushDuePluginEventDeliveries({ db, queue: eventsQueue(env), limit: MAX_PLUGIN_DELIVERY_FLUSH_LIMIT });
+  return { events, deliveries, pluginDeliveries };
+}
+
+/** Scheduled sweep: retention of settled events and deliveries (no one is waiting on it, so it rides a slice). */
+export async function runScheduledEventRetention(db: Database): Promise<Awaited<ReturnType<typeof pruneEventsAndDeliveries>> & { pluginDeliveries: number }> {
+  const { prunePluginEventDeliveries } = await import("@scalius/core/modules/plugins");
   // Plugin deliveries first: they reference events by id (set null on prune).
   const prunedPluginDeliveries = await prunePluginEventDeliveries(db);
   const pruned = await pruneEventsAndDeliveries(db);
-  return { events, deliveries, pluginDeliveries, pruned: { ...pruned, pluginDeliveries: prunedPluginDeliveries } };
+  return { ...pruned, pluginDeliveries: prunedPluginDeliveries };
 }

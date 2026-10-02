@@ -169,7 +169,10 @@ function HomePage() {
           <CardContent className="space-y-1">
             {openCount > 0 ? (
               <TodoLink to="/admin/orders" search={{ view: "unfulfilled" }} icon={<Inbox className="h-4 w-4" />}>
-                {openCount === 1 ? t("orderToFulfil") : t("ordersToFulfil", { count: openCount })}
+                {openCount === 1 && !openOrders.data?.pagination.totalIsCapped
+                  ? t("orderToFulfil")
+                  // The count stops at the API's cap: "1,000+ orders to fulfil".
+                  : t("ordersToFulfil", { count: openOrders.data?.pagination.totalIsCapped ? `${formatNumber(openCount)}+` : openCount })}
               </TodoLink>
             ) : null}
             {lowCount > 0 ? (

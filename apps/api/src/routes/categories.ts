@@ -14,7 +14,7 @@ import {
 import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 import {
@@ -56,8 +56,9 @@ const listingSortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc
 
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
-  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
+  ...listingCursorQuerySchema,
   sort: listingSortSchema
     .optional()
     .default("newest")
@@ -172,6 +173,7 @@ const agentCategoryProductFilterSchema = z.object({
   includeSubcategories: includeSubcategoriesSchema,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(20).optional().default(20),
+  ...listingCursorQuerySchema,
   sort: listingSortSchema.optional().default("newest"),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional(),
@@ -487,7 +489,8 @@ const getCategoryProductsRoute = createRoute({
         category: storefrontCategoryDetailSchema.omit({ updatedAt: true }),
         products: z.array(storefrontCategoryProductSchema),
         shelfProducts: z.array(storefrontCategoryProductSchema).max(52),
-        pagination: paginationSchema,
+        pagination: listingPaginationSchema,
+        pageInfo: listingPageInfoSchema,
         priceRange: z.object({
           min: z.number().min(0),
           max: z.number().min(0),
@@ -569,6 +572,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     products: result.products,
     shelfProducts: result.shelfProducts,
     pagination: result.pagination,
+    pageInfo: result.pageInfo,
     priceRange: result.priceRange,
     facets: result.facets,
     ratingFacet: result.ratingFacet,
@@ -602,7 +606,8 @@ const getCategoryProductSummariesRoute = createRoute({
           contentCharacters: z.number().int().min(0),
         }),
         products: z.array(storefrontCategoryProductSchema).max(20),
-        pagination: paginationSchema,
+        pagination: listingPaginationSchema,
+        pageInfo: listingPageInfoSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,

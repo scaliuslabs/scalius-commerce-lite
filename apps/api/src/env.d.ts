@@ -147,6 +147,8 @@ interface ExecutionContext<Props = unknown> {
 interface Queue<T = unknown> {
   send(message: T, options?: { delaySeconds?: number }): Promise<void>;
   sendBatch(messages: Array<{ body: T; delaySeconds?: number }>): Promise<void>;
+  /** The queue's backlog; the bulk lane reads it before fanning work out (utils/queue-lanes.ts). */
+  metrics?(): Promise<{ backlogCount: number; backlogBytes: number; oldestMessageTimestamp: number }>;
 }
 
 interface MessageBatch<T = unknown> {

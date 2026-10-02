@@ -22,7 +22,7 @@ import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
-import { createDataSelector, getCanonicalPageForPagination } from "~/lib/list-helpers";
+import { NO_CURSOR, createDataSelector, getCanonicalPageForPagination, isPagingRefusal } from "~/lib/list-helpers";
 import { useListSearch } from "~/lib/list-search";
 import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
@@ -108,16 +108,17 @@ export function OrderList({
     [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus, locale],
   );
 
+  const cursored = Boolean(search.after || search.before);
   const {
-    table, rawData, error, isError, isFetching, isLoading, refetch, pagination,
+    table, rawData, error, isError, isFetching, isLoading, refetch, pagination, pageInfo,
     selectedRows, selectedIds, clearSelection, deselectIds,
   } = useServerTable({
     columns,
     queryOptions: ordersQueryOptions(orderListQuery(search, term)),
     dataSelector: selectOrders,
-    currentPage: search.page,
+    currentPage: cursored ? 1 : search.page,
     currentLimit: search.limit,
-    onPaginationChange: (page, limit) => onChange({ page, limit }),
+    onPaginationChange: (_page, limit) => onChange({ page: 1, limit }),
     onSortingChange: () => undefined,
     enableSorting: false,
     defaultPageSize: 10,
@@ -126,7 +127,10 @@ export function OrderList({
   const pageRows = table.getRowModel().rows;
   const pageFullySelected = pageRows.length > 0 && selectedRows.length === pageRows.length;
   const allSelected = pageFullySelected && allMatchingKey === filtersKey && pagination.total > pageRows.length;
-  const selectedCount = allSelected ? pagination.total : selectedRows.length;
+  // The count stops at the API's cap: "all matching" then means the first ALL_MATCHING_LIMIT.
+  const totalIsCapped = pagination.totalIsCapped === true;
+  const allMatchingCount = totalIsCapped ? Math.min(pagination.total, ALL_MATCHING_LIMIT) : pagination.total;
+  const selectedCount = allSelected ? allMatchingCount : selectedRows.length;
   const clearAll = useCallback(() => {
     setAllMatchingKey(null);
     clearSelection();
@@ -138,10 +142,17 @@ export function OrderList({
   });
 
   useEffect(() => {
-    if (!rawData) return;
+    // A cursor page has no page number to correct.
+    if (!rawData || cursored) return;
     const canonicalPage = getCanonicalPageForPagination(search.page, pagination);
     if (canonicalPage !== search.page) onChange({ page: canonicalPage }, { replace: true });
-  }, [onChange, pagination, rawData, search.page]);
+  }, [cursored, onChange, pagination, rawData, search.page]);
+
+  // A cursor or page the API refuses (an old bookmark, a changed sort) starts the list again.
+  const refused = isPagingRefusal(error);
+  useEffect(() => {
+    if (refused) onChange({ page: 1, ...NO_CURSOR }, { replace: true });
+  }, [onChange, refused]);
 
   const refreshPause = getOrderRefreshPause({
     selectedCount: selectedRows.length,
@@ -221,7 +232,9 @@ export function OrderList({
     <>
       {pageFullySelected && !allSelected && pagination.total > pageRows.length ? (
         <Button variant="link" onClick={() => setAllMatchingKey(filtersKey)}>
-          {t("selectAllMatching", { count: pagination.total })}
+          {totalIsCapped
+          ? t("selectFirstMatching", { count: allMatchingCount })
+          : t("selectAllMatching", { count: pagination.total })}
         </Button>
       ) : null}
       {!showArchived && !allSelected && orderActions.canChangeOrderStatus ? (
@@ -285,6 +298,14 @@ export function OrderList({
         itemLabel={t("itemLabel")}
         pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
+        cursorPaging={{
+          total: pagination.total,
+          totalIsCapped,
+          offset: pagination.offset,
+          pageInfo,
+          onNext: (endCursor) => onChange({ after: endCursor, before: undefined, page: 1 }),
+          onPrevious: (startCursor) => onChange({ before: startCursor, after: undefined, page: 1 }),
+        }}
         layoutKey="orders"
         toolbar={<div className="px-2 pt-2"><OrderListToolbar
             search={search}
@@ -300,7 +321,9 @@ export function OrderList({
             bulkActions={
               <div className="hidden flex-wrap items-center gap-2 md:flex">
                 <span className="text-body font-medium">
-                  {allSelected ? t("allSelected", { count: selectedCount }) : tr("selected", { count: selectedCount })}
+                  {allSelected
+                    ? t(totalIsCapped ? "firstSelected" : "allSelected", { count: selectedCount })
+                    : tr("selected", { count: selectedCount })}
                 </span>
                 {bulkButtons}
               </div>
@@ -344,7 +367,7 @@ export function OrderList({
         action={actions.dialog?.action ?? null}
         orders={actions.dialog?.orders ?? null}
         selectedCount={actions.dialog?.orders && !allSelected ? actions.dialog.orders.length : selectedCount}
-        note={allSelected && pagination.total > ALL_MATCHING_LIMIT
+        note={allSelected && (totalIsCapped || pagination.total > ALL_MATCHING_LIMIT)
           ? t("allMatchingCapped", { count: ALL_MATCHING_LIMIT })
           : undefined}
         running={actions.running}
@@ -363,6 +386,7 @@ export function OrderList({
         selectedIds={selectedIds}
         allSelected={allSelected}
         total={pagination.total}
+        totalIsCapped={totalIsCapped}
       />
     </>
   );

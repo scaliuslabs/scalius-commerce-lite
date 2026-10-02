@@ -210,6 +210,10 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       cron: controller.cron,
       scheduledTime: controller.scheduledTime,
     });
+    // Agent-access housekeeping rides the last slice (every tick where the
+    // plan runs one slice): it is cleanup, never on a buyer's path.
+    const { maintenanceSliceDue } = await import("./scheduled/slices");
+    if (!maintenanceSliceDue(controller.scheduledTime, 3)) return;
     try {
       const { purgeExpiredOAuthData } = await import("./agent-access/oauth");
       await purgeExpiredOAuthData(env);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, FREE_PLAN_COMPRESSED_LIMIT_BYTES } from "./check-api-bundle.mjs";
+import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, WORKER_SIZE_LIMIT_BYTES } from "./check-api-bundle.mjs";
 import { isPathSource, renderBundledGen, renderLockfile } from "./plugin-build.mjs";
 import { pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -52,8 +52,9 @@ describe("pnpm plugin", () => {
 });
 
 describe("API bundle size gate", () => {
-  it("measures uploaded modules only and keeps a 10% margin under the Free limit", () => {
-    expect(API_BUNDLE_BUDGET_BYTES).toBe(Math.floor(FREE_PLAN_COMPRESSED_LIMIT_BYTES * 0.9));
+  it("measures uploaded modules only and keeps a 10% margin under the documented limit (64 MiB uncompressed, both plans)", () => {
+    expect(WORKER_SIZE_LIMIT_BYTES).toBe(64 * 1024 * 1024);
+    expect(API_BUNDLE_BUDGET_BYTES).toBe(Math.floor(WORKER_SIZE_LIMIT_BYTES * 0.9));
     expect(judgeApiBundle(API_BUNDLE_BUDGET_BYTES)).toEqual({ ok: true, headroom: 0 });
     expect(judgeApiBundle(API_BUNDLE_BUDGET_BYTES + 1).ok).toBe(false);
     const directory = mkdtempSync(join(tmpdir(), "scalius-bundle-gate-"));

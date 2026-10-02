@@ -9,6 +9,7 @@
 // 3. recommendation refreshes for products sold in the last day and the
 //    longest-unrefreshed public products, 20 per queue message.
 import type { Database } from "@scalius/database/client";
+import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import {
   nightlyRecommendationRefreshCandidates,
   refreshProductSalesStats,
@@ -40,8 +41,16 @@ export async function queuePostDeployProjectionRebuild(env: Env): Promise<boolea
   const version = env.CF_VERSION_METADATA?.id;
   if (!version || !env.CACHE || !env.JOBS_QUEUE) return false;
   if (await env.CACHE.get(PROJECTIONS_REBUILT_FOR_VERSION_KEY) === version) return false;
-  await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null);
-  await env.CACHE.put(PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
+  // Claim the version first. A claim that cannot be written (KV refusing
+  // writes) queues nothing: every 15-minute tick would otherwise start another
+  // chain of rebuild messages, and the nightly pass heals the same drift.
+  if (!(await putKvHint(env.CACHE, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
+  const queued = await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null).catch(() => false);
+  if (!queued) {
+    // Not queued: release the claim so the next tick tries again.
+    await deleteKvHint(env.CACHE, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
+    return false;
+  }
   return true;
 }
 

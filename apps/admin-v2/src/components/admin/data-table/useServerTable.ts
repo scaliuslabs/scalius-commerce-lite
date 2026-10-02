@@ -18,12 +18,17 @@ import {
   useQuery,
   type UseQueryOptions,
 } from "@tanstack/react-query";
+import type { PageInfo } from "~/lib/list-helpers";
 
 export interface ServerTablePagination {
   total: number;
   page: number;
   limit: number;
   totalPages: number;
+  /** `total` is a lower bound ("1,000+"). */
+  totalIsCapped?: boolean;
+  /** Zero-based index of the page's first row; null deeper than the API counts. */
+  offset?: number | null;
 }
 
 const defaultPagination: ServerTablePagination = {
@@ -60,6 +65,8 @@ export interface UseServerTableOptions<TData extends TableRowData> {
   dataSelector: (raw: unknown) => {
     data: TData[];
     pagination: ServerTablePagination;
+    /** Cursor-paged lists: where the list continues. */
+    pageInfo?: PageInfo;
   };
   // URL state — read from Route.useSearch(), writes via callbacks
   currentPage: number;
@@ -85,6 +92,8 @@ export interface UseServerTableReturn<TData extends TableRowData> {
   isLoading: boolean;
   refetch: () => Promise<unknown>;
   pagination: ServerTablePagination;
+  /** Cursor-paged lists: where the list continues. */
+  pageInfo: PageInfo | undefined;
   selectedRows: TData[];
   selectedIds: string[];
   clearSelection: () => void;
@@ -123,8 +132,8 @@ export function useServerTable<TData extends TableRowData>({
   });
 
   // Extract typed data from API response
-  const { data, pagination } = useMemo(() => {
-    if (!rawData) return { data: [] as TData[], pagination: defaultPagination };
+  const { data, pagination, pageInfo } = useMemo(() => {
+    if (!rawData) return { data: [] as TData[], pagination: defaultPagination, pageInfo: undefined };
     return dataSelector(rawData);
   }, [rawData, dataSelector]);
 
@@ -219,6 +228,7 @@ export function useServerTable<TData extends TableRowData>({
     isLoading,
     refetch,
     pagination,
+    pageInfo,
     selectedRows,
     selectedIds,
     clearSelection,

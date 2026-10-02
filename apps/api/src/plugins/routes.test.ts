@@ -118,6 +118,8 @@ describe("plugin routes", { timeout: 30_000 }, () => {
   }
 
   beforeEach(async () => {
+    // The staff below are the KV permission snapshot (kv.permissionCache), the Paid profile's resolver.
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     let binding: D1Database;
     ({ sqlite, db, binding } = createSqliteD1Database());
     limited = false;
@@ -152,7 +154,10 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     app = createRuntimeApiApp();
     app.route("/", createPluginRoutes({ loaderFor: () => loader }));
   });
-  afterEach(() => sqlite.close());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    sqlite.close();
+  });
 
   it("serves a public route of an active plugin as JSON, private by default and never storing cookies", async () => {
     const greet = await call("/api/v1/plugins/scalius.hello/public/greet?name=Karim");

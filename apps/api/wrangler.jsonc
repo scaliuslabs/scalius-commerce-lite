@@ -8,9 +8,12 @@
     "global_fetch_strictly_public",
     "disable_nodejs_process_v2"
   ],
-  "limits": {
-    "cpu_ms": 30000
-  },
+  // No `limits`: this is the Free config (Workers Free has a fixed 10 ms CPU
+  // limit and rejects limits.cpu_ms). A Paid deploy (`pnpm run deploy --plan
+  // paid`, scripts/plan.mjs) generates a config beside this one that adds
+  // limits.cpu_ms 30000, the larger queue batch sizes and the plan constant
+  // from packages/shared/src/plan-limits.ts. `pnpm check:env` keeps this file
+  // at the Free profile.
   // Run the API's fetch handler next to its D1 primary instead of next to the
   // visitor. Every storefront page render is one service-binding call here,
   // and a render's D1 queries come in several dependent waves: from a far
@@ -129,9 +132,12 @@
   "images": {
     "binding": "IMAGES"
   },
-  // One jobs queue; the consumer routes each message by payload.type. The
-  // 2 s batch timeout bounds OTP latency; `jobs-dlq` archives exhausted
-  // messages into their durable D1 rows.
+  // One jobs queue; the consumer routes each message by payload.type. Free
+  // allows 50 D1 queries per invocation and a job can use 35, so Free handles
+  // one message per invocation (max_batch_size 1, which also dispatches an OTP
+  // at once instead of after the batch timeout); a Paid deploy raises the batch
+  // sizes from the plan profile. `jobs-dlq` archives exhausted messages into
+  // their durable D1 rows.
   "queues": {
     "producers": [
       {
@@ -142,14 +148,14 @@
     "consumers": [
       {
         "queue": "jobs",
-        "max_batch_size": 10,
+        "max_batch_size": 1,
         "max_batch_timeout": 2,
         "max_retries": 5,
         "dead_letter_queue": "jobs-dlq"
       },
       {
         "queue": "jobs-dlq",
-        "max_batch_size": 10,
+        "max_batch_size": 1,
         "max_batch_timeout": 5,
         "max_retries": 5
       }

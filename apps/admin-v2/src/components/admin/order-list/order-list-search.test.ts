@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countOrderFilters,
+  orderFilterQuery,
   orderListQuery,
   orderSearchSortUpdates,
   orderViewUpdates,
@@ -92,6 +93,27 @@ describe("order list search", () => {
     expect(orderSearchSortUpdates("rahim", "", "createdAt")).toEqual({ page: 1, sort: "relevance", order: "desc" });
     expect(orderSearchSortUpdates("", "rahim", "relevance")).toEqual({ page: 1, sort: "createdAt", order: "desc" });
     expect(orderSearchSortUpdates("rahima", "rahim", "totalAmount")).toEqual({ page: 1 });
+  });
+
+  it("asks for a numbered page, or for the rows after/before a cursor, never both", () => {
+    expect(orderListQuery(base, "")).toMatchObject({ page: 1, limit: 10 });
+    expect(orderListQuery(base, "")).not.toHaveProperty("after");
+    const next = orderListQuery(validateOrderSearch({ after: "end-cursor", page: "3" }), "");
+    expect(next).toMatchObject({ after: "end-cursor", limit: 10 });
+    expect(next).not.toHaveProperty("page");
+    const previous = orderListQuery(validateOrderSearch({ before: "start-cursor" }), "");
+    expect(previous).toMatchObject({ before: "start-cursor" });
+    expect(previous).not.toHaveProperty("page");
+    // Filters and sort ride along with the cursor.
+    expect(orderListQuery(validateOrderSearch({ after: "c", sort: "totalAmount", order: "asc", status: "pending" }), "rahim"))
+      .toMatchObject({ after: "c", sort: "totalAmount", order: "asc", status: "pending", search: "rahim" });
+  });
+
+  it("keeps the cursor out of the filters the export and 'select all' reuse", () => {
+    const filters = orderFilterQuery(validateOrderSearch({ after: "c", status: "pending" }), "");
+    expect(filters).not.toHaveProperty("after");
+    expect(filters).not.toHaveProperty("before");
+    expect(filters).not.toHaveProperty("page");
   });
 
   it("counts active filters for the Filters button", () => {

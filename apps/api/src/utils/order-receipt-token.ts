@@ -1,5 +1,7 @@
 import { NotFoundError } from "./api-error";
 import type { Database } from "@scalius/database/client";
+import { putKvHint } from "@scalius/shared/kv-hints";
+import { planLimits } from "@scalius/shared/plan-limits";
 import {
   ORDER_RECEIPT_TOKEN_PREFIX,
   ORDER_RECEIPT_TOKEN_TTL_SECONDS,
@@ -66,17 +68,14 @@ async function repairReceiptKv(
   orderId: string,
   tokenHash: string,
 ): Promise<void> {
-  if (!kv) return;
+  // A read must not become a KV write where the plan profile turns the
+  // checkout recovery hints off (D1 answered it; nothing reads the hint).
+  if (!kv || !planLimits().kv.checkoutRecoveryHints) return;
 
-  await kv.put(
+  await putKvHint(
+    kv,
     getReceiptTokenKvKeyFromHash(tokenHash),
     JSON.stringify({ orderId }),
     { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-  ).catch((error: unknown) => {
-    console.error("[Orders] Failed to repair receipt token KV from D1:", {
-      orderId,
-      tokenHash: tokenHash.slice(0, 12),
-      error,
-    });
-  });
+  );
 }

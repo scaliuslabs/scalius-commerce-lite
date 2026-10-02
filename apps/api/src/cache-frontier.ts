@@ -152,8 +152,16 @@ export async function readFrontierDelta(
   return { S: cutSeq - 1, horizon: base, floor, clock, changes: hashed(complete) };
 }
 
-/** Rows one slow-path check may scan; an entry older than this many changes is re-rendered. */
-export const FRONTIER_CHECK_MAX_ROWS = 20_000;
+/**
+ * Rows one slow-path check may scan: one frontier window. An entry older than
+ * that many changes is re-rendered instead. The scan is a D1 read of every
+ * change since the entry's s0, whatever the entry depends on (the storefront
+ * holds only key hashes, so the rows cannot be looked up by key); a render
+ * reads a few hundred rows once and gives the page a fresh proof, while a
+ * 20,000-row scan per stale page after a bulk write would burn Workers Free's
+ * 5M-rows-read day on a handful of pages.
+ */
+export const FRONTIER_CHECK_MAX_ROWS = CACHE_FRONTIER_MAX_CHANGES;
 
 /**
  * The slow path of a page hit whose s0 is below its frontier's horizon: did
