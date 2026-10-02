@@ -61,6 +61,8 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "categories", to: "/admin/categories" },
       { key: "brands", to: "/admin/brands" },
       { key: "inventory", to: "/admin/inventory" },
+      { key: "purchaseOrders", to: "/admin/inventory/purchase-orders" },
+      { key: "transfers", to: "/admin/inventory/transfers" },
       { key: "attributes", to: "/admin/attributes" },
       ...when(REVIEWS_NAV_ENABLED, { key: "reviews", to: "/admin/reviews", badge: "reviews" }),
       ...when(GIFT_CARDS_NAV_ENABLED, { key: "giftCards", to: "/admin/gift-cards" }),
@@ -123,4 +125,14 @@ export function matchesPath(path: string, to: string): boolean {
 
 export function isSectionActive(path: string, item: VisibleNavItem): boolean {
   return matchesPath(path, item.to) || item.children.some((child) => matchesPath(path, child.to));
+}
+
+/**
+ * The sub-page the path is on: the most specific match, so Purchase orders
+ * (`/admin/inventory/purchase-orders/…`) is current rather than Inventory.
+ */
+export function activeNavChild(path: string, children: readonly NavLink[]): NavLink | undefined {
+  return children
+    .filter((child) => matchesPath(path, child.to))
+    .reduce<NavLink | undefined>((best, child) => (!best || child.to.length > best.to.length ? child : best), undefined);
 }
