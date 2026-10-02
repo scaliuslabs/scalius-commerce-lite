@@ -58,7 +58,8 @@ export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProp
           <div className="divide-y">
             {items.map((item, index) => {
               const isError = item.action === "error";
-              const canUndo = index < UNDOABLE_COUNT && !isError && item.product != null;
+              // A receipt is booked on its purchase order or transfer: never undone by a stock change.
+              const canUndo = index < UNDOABLE_COUNT && !isError && item.product != null && !item.receipt;
               const Icon = isError ? XCircle : CheckCircle;
 
               return (
@@ -72,7 +73,9 @@ export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProp
                       <span className="truncate text-body">{item.product?.name ?? item.barcode}</span>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 text-body text-muted-foreground">
-                      {isError ? null : (
+                      {item.receipt ? (
+                        item.receipt.title ? <span>{item.receipt.title}</span> : null
+                      ) : isError ? null : (
                         <span className="flex items-center gap-1">
                           {formatNumber(item.oldStock)}
                           <ArrowRight className="size-3" />

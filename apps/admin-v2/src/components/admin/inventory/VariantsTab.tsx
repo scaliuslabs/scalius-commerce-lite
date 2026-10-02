@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useIsMobile } from "~/hooks/use-mobile";
+import { useCurrency } from "~/hooks/use-currency";
 import { cn } from "@scalius/shared/utils";
 import { inventoryQueryOptions, type InventoryVariant } from "~/lib/api-query-options/inventory";
 import {
@@ -31,6 +32,7 @@ import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { AdjustStockDialog } from "./AdjustStockDialog";
+import { BulkCostDialog } from "./BulkCostDialog";
 import {
   STOCK_FILTERS,
   variantsQuery,
@@ -123,6 +125,26 @@ function StockBadge({ variant, storeLevel }: { variant: InventoryVariant; storeL
   );
 }
 
+/** Units on their way (open purchase orders, transfers in transit): not on hand, not for sale. */
+function IncomingCell({ units }: { units: number }) {
+  return <span className={cn("tabular-nums", units === 0 && "text-muted-foreground")}>{formatNumber(units)}</span>;
+}
+
+/** The SKU's unit cost, or a dash (named for screen readers) without one. */
+function CostCell({ cost }: { cost: number | null }) {
+  const t = useMessages(inventoryMessages);
+  const { fmt } = useCurrency();
+  if (cost === null) {
+    return (
+      <span className="text-muted-foreground">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">{t("noCost")}</span>
+      </span>
+    );
+  }
+  return <span className="tabular-nums">{fmt(cost)}</span>;
+}
+
 export function VariantName({ productId, productName, optionLabel }: {
   productId: string;
   productName: string | null;
@@ -155,6 +177,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const { inventory: permissions } = useCatalogActionPermissions();
+  const { fmt } = useCurrency();
   const isMobile = useIsMobile();
   const { q: search, stock: status } = filters;
   // Locations show only once a store has more than one.
@@ -174,6 +197,9 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSession, setAdjustSession] = useState(0);
+  // Bulk cost edit of the selected SKUs (cost writes need products.edit, like stock).
+  const [costOpen, setCostOpen] = useState(false);
+  const [costSession, setCostSession] = useState(0);
   const listQuery = inventoryQueryOptions(variantsQuery({ ...filters, location: locationId }, page, limit, sort));
   // The variant's per-location on-hand, for the dialog's location select.
   const levels = useQuery({
@@ -239,6 +265,21 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       ),
     },
     {
+      // Open purchase orders and transfers on their way (to the location filter, if any).
+      accessorKey: "incoming",
+      header: t("incoming"),
+      meta: { numeric: true, priority: 80, minWidth: 100 },
+      cell: ({ row }) => <IncomingCell units={row.original.incoming ?? 0} />,
+      enableSorting: false,
+    },
+    {
+      accessorKey: "cost",
+      header: t("cost"),
+      meta: { numeric: true, priority: 75, minWidth: 110 },
+      cell: ({ row }) => <CostCell cost={row.original.cost ?? null} />,
+      enableSorting: false,
+    },
+    {
       id: "status",
       header: r("status"),
       meta: { priority: 90, minWidth: 120 },
@@ -252,7 +293,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
     },
   ], [adjustButton, filterLocation, r, storeLevel, t]);
 
-  const { table, isFetching, isLoading, error, refetch, selectedIds, clearSelection } = useServerTable<InventoryVariant>({
+  const { table, isFetching, isLoading, error, refetch, selectedIds, selectedRows, clearSelection } = useServerTable<InventoryVariant>({
     columns,
     queryOptions: listQuery,
     dataSelector: selectVariants,
@@ -280,6 +321,11 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const clearFilters = () => onFiltersChange({ q: "", stock: "all" });
   // Phones keep bulk selection through a bottom action bar (desktop uses the page header button).
   const showSelectionBar = isMobile && selectedIds.length > 0;
+  const canEditCosts = permissions.canAdjustStock;
+  const openCostEdit = () => {
+    setCostSession((session) => session + 1);
+    setCostOpen(true);
+  };
 
   const mobileCard = (row: Row<InventoryVariant>) => {
     const variant = row.original;
@@ -304,6 +350,12 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
               {t("onHandAtCount", { count: variant.locationOnHand ?? 0, location: filterLocation.name })}
             </p>
           ) : null}
+          <p className="text-body text-muted-foreground tabular-nums">
+            {[
+              (variant.incoming ?? 0) > 0 ? t("incomingCount", { count: variant.incoming }) : null,
+              variant.cost == null ? t("noCost") : t("costValue", { amount: fmt(variant.cost) }),
+            ].filter(Boolean).join(" · ")}
+          </p>
         </div>
         <div className="self-center">{adjustButton(variant)}</div>
       </div>
@@ -326,6 +378,14 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         layoutKey="inventory-variants"
         defaultSortLabel={false}
         toolbar={<div className="px-2 pt-2"><DataTableToolbar
+            selectedCount={canEditCosts ? selectedIds.length : 0}
+            bulkActions={(
+              <div className="hidden flex-wrap items-center gap-2 md:flex">
+                <span className="text-body font-medium">{r("selected", { count: selectedIds.length })}</span>
+                <Button type="button" variant="link" size="sm" onClick={clearSelection}>{t("clearSelection")}</Button>
+                <Button type="button" variant="outline" size="sm" onClick={openCostEdit}>{t("editCost")}</Button>
+              </div>
+            )}
             searchValue={search}
             onSearchChange={(value) => onFiltersChange({ q: value })}
             searchPlaceholder={t("searchVariants")}
@@ -383,7 +443,16 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
           queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
         ])}
       />
+      <BulkCostDialog
+        key={costSession}
+        variants={selectedRows}
+        open={costOpen && canEditCosts}
+        onClose={() => setCostOpen(false)}
+        onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
+        onReload={async () => (await queryClient.fetchQuery({ ...listQuery, staleTime: 0 })).variants ?? []}
+      />
       <SelectionSheet count={showSelectionBar ? selectedIds.length : 0} clearLabel={t("clearSelection")} onClear={clearSelection}>
+        {canEditCosts ? <Button type="button" variant="outline" onClick={openCostEdit}>{t("editCost")}</Button> : null}
         <Button asChild>
           <Link to="/admin/inventory/labels" search={{ variants: selectedIds.join(",") }}>{t("printLabels")}</Link>
         </Button>

@@ -5,6 +5,7 @@ import { ProductForm, type ProductDraftReader } from "~/components/admin/Product
 import { productFieldLabel } from "~/components/admin/product-form/utils";
 import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/variants/option-matrix-editor-model";
 import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
+import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
@@ -103,9 +104,12 @@ function toFormValues(product: ProductDetail): ProductFormValues {
   } as ProductFormValues;
 }
 
-/** Options and SKUs as saved, to tell whether someone else changed them. */
+/**
+ * Options and SKUs as saved, to tell whether someone else changed them. Costs
+ * are left out: they are saved on their own and check their own conflicts.
+ */
 function variantsSignature(product: ProductDetail): string {
-  return JSON.stringify([product.options, product.variants]);
+  return JSON.stringify([product.options, product.variants.map(({ cost: _cost, ...variant }) => variant)]);
 }
 
 function ProductEditor({ productId, initialProduct, categories }: {
@@ -131,6 +135,10 @@ function ProductEditor({ productId, initialProduct, categories }: {
   currentMatrix.current = { dirty: matrixDirty, snapshot: matrixSnapshot };
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
   const draftRef = useRef<ProductDraftReader | null>(null);
+  // Cost per item: typed costs outlive the variant editor's remounts; saved with its Save.
+  const costs = useSkuCostDraft(initialProduct.variants);
+  const costsRef = useRef(costs);
+  costsRef.current = costs;
   // Fields both people changed: the merchant's edits can't be applied automatically.
   const [overlap, setOverlap] = useState<string[] | null>(null);
 
@@ -152,6 +160,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
       setAggregateRevision(latest.aggregateRevision);
       setFormGeneration((value) => value + 1);
       setMatrixGeneration((value) => value + 1);
+      costsRef.current.reset(latest.variants);
       setMatrixDirty(false);
       setMatrixIssue(null);
       setRevisionConflict(null);
@@ -169,6 +178,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
     setMatrixSnapshot(latest);
     setAggregateRevision(latest.aggregateRevision);
     setMatrixGeneration((value) => value + 1);
+    // Costs without a typed change follow the latest (a receipt may have averaged them).
+    costsRef.current.sync(latest.variants);
   }, [productId, queryClient]);
 
   const handleProductSaved = useCallback((values: ProductFormValues, revision: number) => {
@@ -232,6 +243,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
       setAggregateRevision(latest.aggregateRevision);
       sections.apply();
       draft.rebase(after);
+      // Typed costs keep the cost they were typed over, so one changed meanwhile is caught on save.
+      costsRef.current.sync(latest.variants);
       if (!matrix.dirty) {
         setMatrixSnapshot(latest);
         setMatrixGeneration((value) => value + 1);
@@ -246,7 +259,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
   }, [formSnapshot, navigate, productId, queryClient]);
 
   return (
-    <>
+    <SkuCostProvider store={costs}>
       <ProductForm
         key={formGeneration}
         categories={categories}
@@ -277,6 +290,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
           }
           setFormGeneration((value) => value + 1);
           setMatrixGeneration((value) => value + 1);
+          costs.reset();
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
@@ -325,6 +339,6 @@ function ProductEditor({ productId, initialProduct, categories }: {
         onReloadLatest={reloadLatest}
         onProductUnavailable={() => void navigate({ to: "/admin/products" })}
       />
-    </>
+    </SkuCostProvider>
   );
 }

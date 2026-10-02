@@ -85,6 +85,40 @@ describe("inventory history search", () => {
     expect(host.textContent).toContain("Cotton panjabi");
   });
 
+  it("names purchase order receipts and transfers and filters by them", async () => {
+    mocks.list.mockImplementation(async () => ({
+      movements: [
+        { ...movement("m4", "Cotton panjabi", "PANJABI-M"), type: "received", notes: "Received on purchase order PO1001" },
+        { ...movement("m5", "Cotton panjabi", "PANJABI-M"), type: "transfer_out", notes: "Shipped on transfer T1001" },
+        { ...movement("m6", "Cotton panjabi", "PANJABI-M"), type: "transfer_in", notes: "Returned to origin: transfer T1002 cancelled" },
+      ],
+      pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+    }));
+    function ReceivedPage() {
+      const [filters, setFilters] = useState<InventoryFilters>({ ...INVENTORY_SEARCH_DEFAULTS, section: "movements", q: "", type: "received" });
+      return <HistoryTab filters={filters} onFiltersChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />;
+    }
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <ReceivedPage />
+        </QueryClientProvider>,
+      );
+    });
+    await settle();
+
+    expect(mocks.list).toHaveBeenLastCalledWith({ query: expect.objectContaining({ movementType: "received" }) });
+    const text = host.textContent ?? "";
+    expect(text).toContain(translate(inventoryMessages, "type_received"));
+    expect(text).toContain(translate(inventoryMessages, "type_transfer_out"));
+    expect(text).toContain(translate(inventoryMessages, "type_transfer_in"));
+    expect(text).toContain(translate(inventoryMessages, "notePurchaseOrder", { number: "PO1001" }));
+    expect(text).toContain(translate(inventoryMessages, "noteTransfer", { number: "T1001" }));
+    expect(text).toContain(translate(inventoryMessages, "sourceTransferCancelled"));
+    // Server sentences never show as if a person typed them.
+    expect(text).not.toContain("Received on purchase order");
+  });
+
   it("filters by location and names where stock moved once a store has several", async () => {
     const location = (id: string, name: string, isDefault: boolean, status = "active") => ({ id, name, isDefault, status });
     mocks.locations.mockResolvedValue({

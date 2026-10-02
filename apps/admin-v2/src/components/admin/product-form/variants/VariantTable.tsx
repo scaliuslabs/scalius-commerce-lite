@@ -43,7 +43,17 @@ import {
   type VariantGroup,
 } from "./option-matrix-editor-model";
 import { useProductKindRules } from "../product-kind-rules";
-import { AdvancedSkuFields, InventoryQuantityInput, VariantImagePicker, type IssueFor, type StockElsewhere } from "./variant-fields";
+import { CostInput, formatMargin } from "~/components/admin/inventory/cost-fields";
+import { costMargin, costProblem } from "~/lib/api-query-options/inventory-costs";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+  AdvancedSkuFields,
+  InventoryQuantityInput,
+  VariantImagePicker,
+  type IncomingUnits,
+  type IssueFor,
+  type StockElsewhere,
+} from "./variant-fields";
 
 /** Phone: select, photo, name, menu (price and quantity below). Wider: one line with every column. */
 const ROW_GRID = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_2.25rem]";
@@ -71,7 +81,13 @@ type Money = ReturnType<typeof useCurrency> & {
   /** "৳12,692": a customer-facing amount without paisa when the currency is paid in whole units. */
   whole: (amount: number) => string;
 };
-type BulkPanel = "price" | "stock" | "sku" | "photo" | null;
+type BulkPanel = "price" | "stock" | "sku" | "photo" | "cost" | null;
+
+/** The variants' costs per item, kept by the page (a cost is not part of the variant draft). */
+export interface VariantCosts {
+  of: (id: string) => number | null;
+  change: (ids: ReadonlySet<string>, cost: number | null) => void;
+}
 
 /**
  * Past this many variants the groups open closed, as in Shopify: a product
@@ -107,6 +123,10 @@ export type VariantTableProps = {
   quantityLabel?: string;
   /** Stores with several locations: each SKU's units held elsewhere (the rows' quantities exclude them). */
   stockElsewhere?: ReadonlyMap<string, StockElsewhere>;
+  /** Cost per item for each variant, where the page edits costs. */
+  costs?: VariantCosts | null;
+  /** Units on their way to each SKU (open purchase orders, transfers in transit). */
+  incoming?: ReadonlyMap<string, IncomingUnits>;
 };
 
 /** The latest function behind a stable identity, so memoised rows never re-render for it. */
@@ -146,8 +166,9 @@ export function VariantTable(props: VariantTableProps) {
     whole: (amount: number) => (requiresWholeCashAmounts(code) ? `${symbol}${formatNumber(Math.round(amount))}` : fmt(amount)),
   }) as Money, [code, symbol, fmt, salePrice]);
 
-  // The product kind decides the columns: a gift card tracks no quantity.
-  const { showInventory } = useProductKindRules();
+  // The product kind decides the columns: a gift card tracks no quantity (and has no cost per item).
+  const { showInventory, giftCard } = useProductKindRules();
+  const costs = giftCard ? null : props.costs ?? null;
   const layout = rowLayout(Boolean(props.fulfilmentColumn), showInventory);
   const kindColumn = layout.kind;
   const grid = layout.grid;
@@ -230,6 +251,7 @@ export function VariantTable(props: VariantTableProps) {
   }));
   const onPrint = useStableCallback((ids: readonly string[]) =>
     void navigate({ to: "/admin/inventory/labels", search: { variants: ids.join(",") } }));
+  const onCostChange = useStableCallback((id: string, cost: number | null) => costs?.change(new Set([id]), cost));
   // A saved SKU's custom data, edited in its own dialog (the detail panel unmounts when closed).
   const canEditProducts = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_EDIT);
   const [customDataFor, setCustomDataFor] = React.useState<{ id: string; sku: string } | null>(null);
@@ -257,6 +279,8 @@ export function VariantTable(props: VariantTableProps) {
       committed={props.committedByVariantId.get(variant.id) ?? 0}
       quantityLabel={props.quantityLabel}
       elsewhere={props.stockElsewhere?.get(variant.id)}
+      incoming={props.incoming?.get(variant.id)}
+      cost={costs ? costs.of(variant.id) : undefined}
       images={props.images}
       money={money}
       canRemove={canRemoveAny}
@@ -264,6 +288,7 @@ export function VariantTable(props: VariantTableProps) {
       customData={variant.id.startsWith("var_")}
       layout={layout}
       onChange={onChange}
+      onCostChange={onCostChange}
       onSelect={onSelect}
       onToggleExpand={onToggleExpand}
       onRemove={onRemove}
@@ -340,6 +365,7 @@ export function VariantTable(props: VariantTableProps) {
                 allSelected={selectedCount >= variants.length}
                 printableIds={props.printingDisabled ? [] : [...selected].filter((id) => id.startsWith("var_"))}
                 printingDisabled={props.printingDisabled}
+                canEditCosts={costs !== null}
                 layout={layout}
                 panel={panel}
                 onPanel={setPanel}
@@ -372,6 +398,10 @@ export function VariantTable(props: VariantTableProps) {
               selectedVariants={variants.filter((variant) => selected.has(variant.id))}
               onApply={(patch) => {
                 props.onChangeMany(selected, patch);
+                setPanel(null);
+              }}
+              onCostApply={(cost) => {
+                costs?.change(selected, cost);
                 setPanel(null);
               }}
               onCancel={() => setPanel(null)}
@@ -427,12 +457,16 @@ type VariantRowProps = {
   committed: number;
   quantityLabel?: string;
   elsewhere?: StockElsewhere;
+  incoming?: IncomingUnits;
+  /** The variant's cost per item (null: none); undefined where costs aren't edited. */
+  cost: number | null | undefined;
   images: ProductSkuImageChoice[];
   money: Money;
   canRemove: boolean;
   printable: boolean;
   layout: RowLayout;
   onChange: (id: string, patch: Partial<DraftVariant>) => void;
+  onCostChange: (id: string, cost: number | null) => void;
   onSelect: (ids: readonly string[], checked: boolean) => void;
   onToggleExpand: (id: string) => void;
   onRemove: (id: string) => void;
@@ -443,8 +477,8 @@ type VariantRowProps = {
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, images, money, canRemove,
-  printable, customData, layout, onChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData,
+  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, cost, images, money, canRemove,
+  printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
@@ -457,6 +491,9 @@ const VariantRow = React.memo(function VariantRow({
   const photoError = errorOf("photo");
   const sale = Number.isFinite(variant.price) && !errorOf("discount") ? money.salePrice(variant.price, variant) : null;
   const change = (patch: Partial<DraftVariant>) => onChange(variant.id, patch);
+  // Profit and margin of what the customer pays (after the variant's discount).
+  const customerPays = Number.isFinite(variant.price) ? sale ?? variant.price : null;
+  const margin = cost === undefined ? null : costMargin(customerPays, cost, getDecimalPlaces(money.code));
   const actions = React.useMemo<ExtraAction[]>(() => [
     { label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) },
     ...(printable ? [{ label: t("printLabels"), icon: Printer, onClick: () => onPrint([variant.id]) }] : []),
@@ -514,7 +551,14 @@ const VariantRow = React.memo(function VariantRow({
             aria-label={t("priceFor", { name })}
             onValueChange={(price) => change({ price: price ?? Number.NaN })}
           />
-          {priceError ? <p className="text-body text-destructive">{priceError}</p> : null}
+          {priceError ? <p className="text-body text-destructive">{priceError}</p> : margin ? (
+            <p
+              className={cn("text-right text-body tabular-nums", margin.margin !== null && margin.margin < 0 ? "text-destructive" : "text-muted-foreground")}
+              title={t("profitAndMargin", { profit: money.fmt(margin.profit), margin: formatMargin(margin.margin) })}
+            >
+              {t("marginShort", { margin: formatMargin(margin.margin) })}
+            </p>
+          ) : null}
         </div>
         {layout.quantity ? (
           <div className="min-w-0">
@@ -527,6 +571,7 @@ const VariantRow = React.memo(function VariantRow({
                 value={variant.stock}
                 committed={committed}
                 elsewhere={elsewhere}
+                incoming={incoming}
                 onChange={(stock) => change({ stock })}
               />
             ) : (
@@ -551,7 +596,13 @@ const VariantRow = React.memo(function VariantRow({
       </div>
       {expanded ? (
         <div className="col-span-full mt-2 rounded-md border bg-muted/30 p-3">
-          <AdvancedSkuFields variant={variant} name={name} issueFor={issueFor} onChange={change} />
+          <AdvancedSkuFields
+            variant={variant}
+            name={name}
+            issueFor={issueFor}
+            onChange={change}
+            cost={cost === undefined ? null : { value: cost, customerPays, onChange: (next) => onCostChange(variant.id, next) }}
+          />
         </div>
       ) : null}
     </div>
@@ -688,13 +739,15 @@ function KindSelect({ value, label, onChange }: {
   );
 }
 
-function BulkBar({ count, allSelected, printableIds, printingDisabled, layout, panel, onPanel, onClear, onPrint, onRemove }: {
+function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCosts, layout, panel, onPanel, onClear, onPrint, onRemove }: {
   count: number;
   /** The table's columns: the bar spans them, and without a Quantity column there is no quantity edit. */
   layout: RowLayout;
   allSelected: boolean;
   printableIds: string[];
   printingDisabled: boolean;
+  /** The page edits costs per item: one cost for every selected variant. */
+  canEditCosts: boolean;
   panel: BulkPanel;
   onPanel: (panel: BulkPanel) => void;
   onClear: () => void;
@@ -724,6 +777,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, layout, p
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
+          {canEditCosts ? <DropdownMenuItem onSelect={() => toggle("cost")}>{t("editCosts")}</DropdownMenuItem> : null}
           <DropdownMenuItem onSelect={() => toggle("sku")}>{t("setSkus")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => toggle("photo")}>{t("setPhoto")}</DropdownMenuItem>
           <DropdownMenuItem disabled={printableIds.length === 0} onSelect={() => onPrint(printableIds)}>
@@ -744,7 +798,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, layout, p
   );
 }
 
-function BulkPanelRow({ panel, options, images, money, productName, selectedVariants, onApply, onCancel }: {
+function BulkPanelRow({ panel, options, images, money, productName, selectedVariants, onApply, onCostApply, onCancel }: {
   panel: Exclude<BulkPanel, null>;
   options: DraftOption[];
   images: ProductSkuImageChoice[];
@@ -752,11 +806,14 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   productName: string;
   selectedVariants: DraftVariant[];
   onApply: (patch: Partial<DraftVariant> | ((variant: DraftVariant) => Partial<DraftVariant>)) => void;
+  /** One cost per item for every selected variant (kept by the page, not the drafts). */
+  onCostApply: (cost: number) => void;
   onCancel: () => void;
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const [price, setPrice] = React.useState<number | null>(null);
+  const [cost, setCost] = React.useState<number | null>(null);
   const [stock, setStock] = React.useState<number | null>(null);
   const [imageId, setImageId] = React.useState<string | null | undefined>(undefined);
   const [pattern, setPattern] = React.useState(() => defaultSkuPattern(productName, options));
@@ -782,6 +839,10 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
         className="w-36"
       />
     );
+  } else if (panel === "cost") {
+    ready = cost !== null && costProblem(cost) === null;
+    apply = () => onCostApply(cost!);
+    field = <CostInput id={inputId} autoFocus symbol={money.symbol} value={cost} onValueChange={setCost} className="w-36" />;
   } else if (panel === "stock") {
     ready = stock !== null && Number.isInteger(stock) && stock >= 0 && trackedCount > 0;
     apply = () => onApply((variant) => (variant.trackInventory ? { stock: stock! } : {}));
@@ -812,6 +873,7 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   }
 
   const label = panel === "price" ? t("newPriceFor", { count })
+    : panel === "cost" ? t("newCostFor", { count })
     : panel === "stock" ? t("newQuantityFor", { count: trackedCount })
       : panel === "sku" ? t("skuPattern")
         : t("photoForSelected");

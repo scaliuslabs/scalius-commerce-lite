@@ -12,6 +12,9 @@ import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { detectBarcodeType } from "@scalius/shared/barcode-identity";
 import { useCurrency } from "@/hooks/use-currency";
+import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
+import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
@@ -52,7 +55,13 @@ export interface StockElsewhere {
   places: string;
 }
 
-export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false, cell, elsewhere }: {
+/** Units on their way to a SKU (open purchase orders, transfers in transit): not on hand, not for sale. */
+export interface IncomingUnits {
+  purchaseOrders: number;
+  transfers: number;
+}
+
+export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false, cell, elsewhere, incoming }: {
   /** Marks the field for the table's arrow-key navigation (see VariantTable). */
   cell?: string;
   /** With several locations: the default location's on-hand (the SKU's otherwise). */
@@ -63,10 +72,13 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
   invalid?: boolean;
   /** Stores with several locations: the units held elsewhere, and the per-location breakdown. */
   elsewhere?: StockElsewhere;
+  /** Units on their way, shown under the quantity ("5 incoming") when there are any. */
+  incoming?: IncomingUnits;
 }) {
   const t = useMessages(productMessages);
   // Orders reserve from the SKU as a whole, wherever its units are.
   const available = Math.max(0, value + (elsewhere?.units ?? 0) - committed);
+  const incomingUnits = (incoming?.purchaseOrders ?? 0) + (incoming?.transfers ?? 0);
   return (
     <div className="space-y-1">
       <NumberInput
@@ -85,6 +97,14 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
       ) : null}
       {elsewhere?.breakdown ? (
         <p className="text-right text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
+      ) : null}
+      {incomingUnits > 0 ? (
+        <p
+          className="text-right text-body text-muted-foreground tabular-nums"
+          title={t("incomingDetail", { orders: incoming!.purchaseOrders, transfers: incoming!.transfers })}
+        >
+          {t("incomingCount", { count: incomingUnits })}
+        </p>
       ) : null}
     </div>
   );
@@ -239,17 +259,52 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   );
 }
 
-export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
+/** A variant's cost per item (kept by the page's cost store, not the variant draft). */
+export interface SkuCostField {
+  value: number | null;
+  onChange: (cost: number | null) => void;
+  /** What the customer pays for the variant (after its discount), for profit and margin. */
+  customerPays: number | null;
+}
+
+/** Cost per item, with the profit and margin it gives underneath. */
+function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
+  const t = useMessages(productMessages);
+  const { symbol, code, fmt } = useCurrency();
+  const problem = costProblem(cost.value);
+  const result = costMargin(cost.customerPays, cost.value, getDecimalPlaces(code));
+  return (
+    <Field
+      label={t("costPerItem")}
+      help={result ? t("profitAndMargin", { profit: fmt(result.profit), margin: formatMargin(result.margin) }) : t("costHelp")}
+      error={problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : undefined}
+    >
+      {(invalid) => (
+        <CostInput
+          symbol={symbol}
+          value={cost.value}
+          aria-invalid={invalid}
+          aria-label={t("costFor", { name })}
+          onValueChange={cost.onChange}
+        />
+      )}
+    </Field>
+  );
+}
+
+export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
   variant: DraftVariant;
   name: string;
   issueFor: IssueFor;
   onChange: (patch: Partial<DraftVariant>) => void;
+  /** Cost per item, where the page edits costs (not for gift cards). */
+  cost?: SkuCostField | null;
 }) {
   const t = useMessages(productMessages);
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
-  const { showDiscount, showWeight, showInventory } = useProductKindRules();
+  const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label={t("sku")} error={errorOf("sku")}>
@@ -257,6 +312,7 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
           <Input value={variant.sku} aria-invalid={invalid} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
         )}
       </Field>
+      {cost && !giftCard ? <CostField cost={cost} name={name} /> : null}
       {showDiscount ? (
         <Field label={t("discount")} error={errorOf("discount")}>
           {(invalid) => <DiscountInput variant={variant} name={name} invalid={invalid} onChange={onChange} />}

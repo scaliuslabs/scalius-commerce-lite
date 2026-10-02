@@ -3,8 +3,16 @@ import type { inventoryMessages } from "~/i18n/inventory";
 
 type Key = keyof typeof inventoryMessages.en;
 
-/** What a history row shows instead of the stored note: catalog labels plus a note a person typed. */
-export type MovementNote = { labels: Key[]; note: string | null };
+/**
+ * What a history row shows instead of the stored note: catalog labels, the
+ * purchase order or transfer it was booked on, and a note a person typed.
+ */
+export type MovementNote = {
+  labels: Key[];
+  note: string | null;
+  /** "Purchase order PO1001" / "Transfer T1001": the document's label and its number. */
+  document?: { label: "notePurchaseOrder" | "noteTransfer"; number: string };
+};
 
 const ADJUST_REASONS: Record<string, Key> = {
   received: "reason_received",
@@ -56,6 +64,16 @@ export function describeMovementNote(
   if (stocktake) {
     const typed = [stocktake[1], stocktake[2]].filter((part) => part && part !== DASHBOARD_STOCKTAKE_REASON);
     return { labels: ["sourceStockCount"], note: typed.join(" · ") || null };
+  }
+
+  // Purchasing and transfers (the type badge says received / out / in): name the document.
+  const received = /^Received on purchase order (\S+)$/.exec(text);
+  if (received) return { labels: [], note: null, document: { label: "notePurchaseOrder", number: received[1]! } };
+  const moved = /^(?:Shipped|Received) on transfer (\S+)$/.exec(text);
+  if (moved) return { labels: [], note: null, document: { label: "noteTransfer", number: moved[1]! } };
+  const returned = /^Returned to origin: transfer (\S+) cancelled$/.exec(text);
+  if (returned) {
+    return { labels: ["sourceTransferCancelled"], note: null, document: { label: "noteTransfer", number: returned[1]! } };
   }
 
   if (/^Stocktake: Initial /.test(text) || /^Stocktake: Allocated /.test(text)) {

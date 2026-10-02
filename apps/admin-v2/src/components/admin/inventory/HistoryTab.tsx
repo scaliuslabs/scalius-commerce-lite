@@ -76,10 +76,11 @@ function counterChanges(movement: InventoryMovement): CounterChange[] {
 /** `showLocation`: the store has several locations, so where stock moved is part of the line. */
 function MovementDetails({ movement, showLocation }: { movement: InventoryMovement; showLocation: boolean }) {
   const t = useMessages(inventoryMessages);
-  const { labels, note } = describeMovementNote(movement);
+  const { labels, note, document } = describeMovementNote(movement);
   const parts = [
     movement.actorType === "system" ? t("automatic") : t("byName", { name: movement.actorName }),
     ...labels.map((label) => t(label)),
+    ...(document ? [t(document.label, { number: document.number })] : []),
     ...(showLocation && movement.locationName ? [t("movedAt", { location: movement.locationName })] : []),
   ];
   return (
