@@ -288,7 +288,7 @@ async function readStorefrontCatalogResults(
     // `offset` rows to find that out. Deeper rows are reached with a cursor.
     const pageTooDeep = !cursor && offset >= lists.maxOffset;
     const shelfPreview = Boolean(
-        scope.shelfChildIds?.length && page === 1 && limit === 20 && sort === "newest"
+        scope.shelfChildIds?.length && page === 1 && !cursor && limit === 20 && sort === "newest"
         && !search && params.minPrice === undefined && params.maxPrice === undefined
         && params.minRating === undefined && !params.freeDelivery && !params.hasDiscount && !params.inStock
         && !params.attributeFilters?.length,

@@ -115,6 +115,18 @@ describe.each(PLANS)("storefront listing cursors on the %s plan", (plan) => {
         expect(last.pageInfo.hasNextPage).toBe(false);
     });
 
+    it("never previews shelves on a cursor page", async () => {
+        const { db, rows } = await setup(45);
+        const options = { includeDescendants: true, shelfPreview: true, shelfChildIds: ["cat_all"] } as const;
+        const first = await getStorefrontCategoryProducts(db, category, { limit: 20 }, options);
+        expect(first.shelfProducts.length).toBeGreaterThan(0);
+        const next = await getStorefrontCategoryProducts(db, category, { limit: 20, cursor: first.pageInfo.endCursor! }, options);
+        expect(next.shelfProducts).toEqual([]);
+        expect(next.products.map((product) => product.id)).toEqual(
+            [...rows].sort(SORTS.newest).map((row) => row.id).slice(20, 40),
+        );
+    });
+
     it("rejects a cursor for another order, an unsupported order or a numbered page", async () => {
         const { db } = await setup(20);
         const cursor = (await getStorefrontProducts(db, { limit: 5, sort: "price-asc" })).pageInfo.endCursor!;
