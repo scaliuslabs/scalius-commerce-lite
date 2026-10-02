@@ -6,7 +6,10 @@
 //   /api/v1/plugins/<id>/webhooks/<name>[/<sub path>]   provider callbacks, raw body preserved
 //
 // The storefront mounts the public routes at `/apps/<id>/*` (its proxy sets
-// `x-scalius-app-proxy`), for plugins whose manifest asks for the proxy.
+// `x-scalius-app-proxy`), for plugins whose manifest asks for the proxy. A
+// proxied request may carry the store's own customer session cookie, which
+// the storefront forwards for this alone: the platform resolves it and the
+// plugin gets `request.customer = { id }`, never the cookie.
 //
 // The platform owns the edges: only active plugins answer; only declared
 // routes and methods; bodies are capped; request headers are filtered (no
