@@ -196,7 +196,7 @@ export function ThemeEditor({ workspace, refetch }: {
   const queryClient = useQueryClient();
   const storeShape = workspace.storeShape as StoreShape;
   const media = useMediaPreviews(workspace.media);
-  const [history, dispatch] = useReducer(editorHistory, workspace.draft.theme as Theme, startHistory);
+  const [history, dispatchHistory] = useReducer(editorHistory, workspace.draft.theme as Theme, startHistory);
   const theme = history.present;
   const [saved, setSaved] = useState<SavedDraft>({
     theme: workspace.draft.theme as Theme,
@@ -217,6 +217,10 @@ export function ThemeEditor({ workspace, refetch }: {
   const [draftAction, setDraftAction] = useState(false);
   const [lastPublished, setLastPublished] = useState(workspace.lastPublished);
   const [previewRevision, setPreviewRevision] = useState<number | null>(null);
+  const dispatch = useCallback((action: Parameters<typeof dispatchHistory>[0]) => {
+    setPreviewRevision(null);
+    dispatchHistory(action);
+  }, []);
   const [page, setPage] = useState<EditorPage>("home");
   const [templatePreviewPaths, setTemplatePreviewPaths] = useState<Partial<Record<FixedEditorPage, string>>>({});
   const [templatePreviewInputs, setTemplatePreviewInputs] = useState<Partial<Record<FixedEditorPage, string>>>({});
@@ -239,7 +243,7 @@ export function ThemeEditor({ workspace, refetch }: {
 
   const setDraft: SetTheme = useCallback((next) => {
     dispatch({ type: "edit", update: (current) => (typeof next === "function" ? next(current) : next), at: Date.now() });
-  }, []);
+  }, [dispatch]);
 
   // ── Saving ───────────────────────────────────────────────────────────────
   const latest = useRef({ theme, saved, saving, conflict, draftAction });
@@ -363,7 +367,7 @@ export function ThemeEditor({ workspace, refetch }: {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dirty, invalid, save]);
+  }, [dirty, invalid, save, dispatch]);
 
   // ── Sections ─────────────────────────────────────────────────────────────
   const landingSlug = page.startsWith("landing:") ? page.slice(8) : null;

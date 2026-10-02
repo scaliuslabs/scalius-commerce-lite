@@ -574,6 +574,19 @@ const workspaceResult = (draft: StorefrontThemeDocument, live: StorefrontThemeDo
 });
 
 describe("theme editor: history and safeguards", () => {
+  it("returns to the current draft preview as soon as the merchant edits it", async () => {
+    api.versions.mockResolvedValue({ versions: [{ revision: 8, theme: themeWith(HOME), changes: [], summary: [], note: "Earlier campaign", publishedByName: null, createdAt: null }] });
+    render();
+    openTab("History");
+    await vi.waitFor(() => expect(container.textContent).toContain("Earlier campaign"));
+    act(() => button("Preview version").click());
+    expect(preview.props.sourceRevision).toBe(8);
+    openTab("Sections");
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="rail"] button:nth-of-type(2)')!.click());
+    type(field("theme-section-rail-title"), "Fresh campaign");
+    expect(preview.props.sourceRevision).toBeUndefined();
+  });
+
   it("previews immutable history, compares it with the draft and restores only after confirmation", async () => {
     const old = themeWith(HOME.map((each) => each.id === "rail" ? { ...each, settings: { ...each.settings, title: "Old honey" } } as StorefrontSection : each));
     api.versions.mockResolvedValue({ versions: [{ revision: 8, theme: old, changes: [{ kind: "settings", page: "home", sectionId: "rail" }], summary: [], note: "Eid campaign", publishedByName: "Rahima", createdAt: "2026-10-03T10:30:00Z" }] });
