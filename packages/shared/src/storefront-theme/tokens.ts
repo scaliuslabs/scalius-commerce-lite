@@ -356,6 +356,11 @@ export const storefrontThemeTokensSchema = z.object({
     >,
   ).strict(),
   typography: z.enum(STOREFRONT_TYPE_PAIRINGS),
+  /** Older stores keep their independent font stacks until a pairing is chosen. */
+  legacyTypography: z.object({
+    heading: z.enum(["system", "modern", "editorial"]),
+    body: z.enum(["system", "modern", "humanist"]),
+  }).strict().optional(),
   typeScale: z.enum(STOREFRONT_TYPE_SCALES),
   headingCase: z.enum(STOREFRONT_HEADING_CASES),
   density: z.enum(STOREFRONT_DENSITIES),
@@ -370,6 +375,19 @@ export const storefrontThemeTokensSchema = z.object({
 
 export type StorefrontThemeTokens = z.infer<typeof storefrontThemeTokensSchema>;
 
+const LEGACY_FONT_STACKS = {
+  heading: {
+    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    modern: '"Avenir Next", Avenir, "Segoe UI", ui-sans-serif, sans-serif',
+    editorial: 'Georgia, "Times New Roman", ui-serif, serif',
+  },
+  body: {
+    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    modern: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    humanist: 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
+  },
+} as const;
+
 // ─── CSS ──────────────────────────────────────────────────────────────────
 
 /** CSS custom properties for the tokens: only constants and validated hex colours. */
@@ -381,8 +399,8 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
   const bands = storefrontHeaderBands(tokens.headerTone, tokens.colors);
   return {
     ...tokens.colors,
-    "theme-font-heading": fontStack(type.heading, type.bangla),
-    "theme-font-body": fontStack(type.body, type.bangla),
+    "theme-font-heading": tokens.legacyTypography ? LEGACY_FONT_STACKS.heading[tokens.legacyTypography.heading] : fontStack(type.heading, type.bangla),
+    "theme-font-body": tokens.legacyTypography ? LEGACY_FONT_STACKS.body[tokens.legacyTypography.body] : fontStack(type.body, type.bangla),
     "theme-heading-weight": String(type.headingWeight),
     "theme-heading-tracking": type.headingTracking,
     "theme-heading-leading": type.headingLeading,

@@ -310,6 +310,15 @@ describe("typography", () => {
     expect(reset).toEqual(theme);
     expect(selectedTemplate(reset)).toBe("heritage-editorial");
   });
+
+  it("keeps saved independent fonts through other edits and replaces them only on a pairing choice", () => {
+    const theme = storefrontTemplateTheme("heritage-editorial");
+    theme.tokens.legacyTypography = { heading: "editorial", body: "humanist" };
+    expect(typeTokensAreTemplateDefault(theme)).toBe(false);
+    expect(setTypeTokens(theme, { headingCase: "uppercase" }).tokens.legacyTypography).toEqual(theme.tokens.legacyTypography);
+    expect(setTypeTokens(theme, { typography: theme.tokens.typography }).tokens.legacyTypography).toBeUndefined();
+    expect(resetTypeTokens(theme).tokens.legacyTypography).toBeUndefined();
+  });
 });
 
 describe("product page modules on the Theme page", () => {

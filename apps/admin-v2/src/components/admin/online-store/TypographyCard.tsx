@@ -124,10 +124,10 @@ export function TypographyCard({ theme, setDraft, frame: Frame = SectionCard }: 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body font-medium">
-            {option(`typography_${current}`)}
-            {current === defaults.typography ? templateDefault : null}
+            {theme.tokens.legacyTypography ? t("typographyLegacy") : option(`typography_${current}`)}
+            {!theme.tokens.legacyTypography && current === defaults.typography ? templateDefault : null}
           </p>
-          <p className="text-body text-muted-foreground">{families(current)}</p>
+          <p className="text-body text-muted-foreground">{theme.tokens.legacyTypography ? t("typographyLegacyHelp") : families(current)}</p>
         </div>
         <Button type="button" variant="outline" aria-label={t("typographyChangeLabel")} onClick={openPicker}>
           {t("typographyChange")}
@@ -185,7 +185,7 @@ export function TypographyCard({ theme, setDraft, frame: Frame = SectionCard }: 
               type="button"
               onClick={() => {
                 setOpen(false);
-                if (pending !== current) setDraft((draft) => setTypeTokens(draft, { typography: pending }));
+                if (pending !== current || theme.tokens.legacyTypography) setDraft((draft) => setTypeTokens(draft, { typography: pending }));
               }}
             >
               {t("typographySelect")}

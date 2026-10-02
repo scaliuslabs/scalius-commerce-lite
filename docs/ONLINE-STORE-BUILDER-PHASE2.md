@@ -26,6 +26,8 @@ collection and search blocks; publishing is the only way draft changes go live.
   then validates the current strict schema. Reads upgrade in memory; writes
   require v7. Historical golden fixtures and migration notes are beside the
   shared document code. A future v8 adds one upgrade step.
+  Independent historical heading/body font stacks stay intact until an explicit
+  pairing choice; the dashboard describes that state in English and Bangla.
 - Agent page edits, draft reads/saves, history, restore/discard and previews use
   stable operations with theme RBAC and revision requirements. The curated
   `theme.draft-landing-page.v1` workflow ends at review; publish is explicit.

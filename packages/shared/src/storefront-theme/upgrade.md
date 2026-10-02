@@ -17,9 +17,10 @@ The golden inputs in `fixtures/` were captured from these historical sources:
 | v5 | `727a1081d` | Former template-specific page chrome becomes stored block settings. Brand/home mode and newly required section settings are added. Options that never rendered (questions, retired sticky modes, arbitrary deal end times) are removed. |
 | v6 | `11d0d2788` | Landing pages and fixed product/collection/search block lists are added; merchant tokens, brand and sections stay exact. |
 
-The v1/v2 font models cannot represent arbitrary independent fonts in the
-current curated pairing model; the mapping above preserves their intended
-sans/serif character. Historical alpha colours flatten onto the old white
+The v1/v2 choices also retain `tokens.legacyTypography`; rendering uses their
+exact original font stacks until the merchant explicitly selects or resets a
+pairing. The editor labels them as saved fonts, and does not preload unused
+pairing faces. Historical alpha colours flatten onto the old white
 page. Documents still must satisfy current contrast and safe-content checks;
 malformed values and unknown future versions fail closed.
 

@@ -370,7 +370,7 @@ if (!window.$RefreshReg$) {
     {/* The Style's self-hosted fonts: the heading's Latin face preloads after
         the page's LCP image hints; every face swaps over a metric-matched
         fallback, so text never shifts. */}
-    <ThemeFonts pairing={storefrontTheme.tokens.typography} />
+    {!storefrontTheme.tokens.legacyTypography && <ThemeFonts pairing={storefrontTheme.tokens.typography} />}
 
     {/* Without JavaScript the phone menu and search buttons and the drawers'
         close buttons do nothing; each renders a <noscript> link in its place

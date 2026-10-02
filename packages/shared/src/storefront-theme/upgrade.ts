@@ -105,7 +105,7 @@ function v2to3(doc: RecordValue): RecordValue {
   const font = object(tokens.typography);
   const pairing = font.heading === "editorial" ? (font.body === "humanist" ? "heritage" : "editorial")
     : font.body === "humanist" ? "fresh" : "retail";
-  return { ...doc, version: 3, tokens: { ...tokens, typography: pairing, buttonShape: "radius" },
+  return { ...doc, version: 3, tokens: { ...tokens, typography: pairing, legacyTypography: font, buttonShape: "radius" },
     layout: { ...object(doc.layout), navigation: "menu", mobileNavigation: "drawer" } };
 }
 
@@ -126,7 +126,7 @@ function v3to4(doc: RecordValue): RecordValue {
   return {
     version: 4, template: "department-mall",
     tokens: {
-      colors: tokens.colors, typography: tokens.typography, radius: tokens.radius, buttonShape: tokens.buttonShape,
+      colors: tokens.colors, typography: tokens.typography, ...(tokens.legacyTypography ? { legacyTypography: tokens.legacyTypography } : {}), radius: tokens.radius, buttonShape: tokens.buttonShape,
       typeScale: doc.legacyTypeScale ?? "retail", headingCase: "sentence", density: doc.legacyDensity ?? layout.density,
       surface: choice(components.cards, { bordered: "hairline", elevated: "raised", flat: "flat" }),
       imageRatio: layout.card === "portrait" ? "portrait" : "square", imageFit: "cover", headerTone: "light",

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, homeSectionRequests, homeSectionsShowDeliveryFacts,
   parseStoredStorefrontThemeDocument, resolveStorefrontTheme, storefrontSectionDefault,
-  storefrontThemeDocumentSchema, upgradeThemeDocument,
+  storefrontThemeDocumentSchema, upgradeThemeDocument, buildStorefrontTokenCss,
 } from "../storefront-theme";
 
 const fixture = (version: number) => JSON.parse(readFileSync(new URL(`./fixtures/v${version}.json`, import.meta.url), "utf8"));
@@ -21,6 +21,10 @@ describe("step-wise stored theme upgrades", () => {
       expect(parseStoredStorefrontThemeDocument(JSON.stringify(stored))).toEqual(upgraded);
       expect(upgraded.tokens.colors.primary).toBe("#123456");
       expect(upgraded.tokens.typography).toBe(version === 1 ? "retail" : "heritage");
+      if (version <= 2) {
+        const fonts = version === 1 ? stored.typography : stored.tokens.typography;
+        expect(upgraded.tokens.legacyTypography).toEqual({ heading: fonts.heading, body: fonts.body });
+      }
       if (version >= 4) {
         expect(upgraded.tokens).toEqual(stored.tokens);
         expect(upgraded.pages.home.map((section) => section.id)).toEqual(stored.pages.home.map((section: { id: string }) => section.id));
@@ -85,6 +89,14 @@ describe("step-wise stored theme upgrades", () => {
       legacy.colors.border = color;
       expect(upgradeThemeDocument(legacy).tokens.colors.border, color).toBe(expected);
     }
+  });
+
+  it("keeps the original independent font stacks instead of substituting a new pairing", () => {
+    const theme = upgradeThemeDocument(fixture(2));
+    expect(buildStorefrontTokenCss(theme.tokens)).toMatchObject({
+      "theme-font-heading": 'Georgia, "Times New Roman", ui-serif, serif',
+      "theme-font-body": 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
+    });
   });
 
   it("rejects malformed and future documents and requires v7 on writes", () => {
