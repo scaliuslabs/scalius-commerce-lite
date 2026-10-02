@@ -39,8 +39,7 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
-import { storeTransferMessages } from "~/i18n/store-transfer";
-import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
+import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 
 const STATUSES = ["active", "draft"] as const;
 const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });
@@ -90,7 +89,6 @@ function ProductsPage() {
   const { getStorefrontPath } = useStorefrontUrl();
   const { products: can } = useCatalogActionPermissions();
   const duplicate = useDuplicateProduct();
-  const s = useMessages(storeTransferMessages);
   const [importing, setImporting] = useState(false);
   const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
@@ -112,7 +110,7 @@ function ProductsPage() {
               <Link to="/admin/inventory/labels">{t("printLabels")}</Link>
             </Button>
             {can.canCreate || can.canEdit ? (
-              <Button variant="outline" onClick={() => setImporting(true)}>{s("import")}</Button>
+              <Button variant="outline" onClick={() => setImporting(true)}>{r("import")}</Button>
             ) : null}
             {can.canCreate ? (
               <Button asChild>
@@ -193,7 +191,7 @@ function ProductsPage() {
           },
         }}
       />
-      <ImportDialog kind="products" open={importing} onOpenChange={setImporting} />
+      <LazyImportDialog kind="products" open={importing} onOpenChange={setImporting} />
     </>
   );
 }

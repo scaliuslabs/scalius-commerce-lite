@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { WarrantyPoliciesManager } from "~/components/admin/settings/warranty-policies/WarrantyPoliciesManager";
-import { warrantyPoliciesQueryOptions } from "~/components/admin/warranty/warranty-api";
+import { warrantyPoliciesQueryOptions } from "~/lib/api-query-options/warranty";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { settingsNavMessages } from "~/i18n/settings";

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Store, Truck } from "lucide-react";
@@ -7,11 +7,12 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import { Skeleton } from "~/components/ui/skeleton";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { AppHomeWidgets } from "~/components/admin/apps/ui/AppResourceCards";
-import { HomeAnalytics, homeOverviewQuery } from "~/components/admin/analytics/HomeAnalytics";
+import { homeOverviewQuery } from "~/components/admin/analytics/home-overview-query";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
@@ -49,6 +50,22 @@ export const Route = createFileRoute("/admin/")({
 });
 
 type HomeKey = keyof (typeof homeMessages)["en"];
+
+// The sales strip (its chart, tiles and copy) loads just after Home's own code;
+// its read already started in the loader.
+const HomeAnalytics = lazy(() => import("~/components/admin/analytics/HomeAnalytics").then((module) => ({ default: module.HomeAnalytics })));
+
+/** The strip's own loading shape: the range buttons, then four tiles. */
+function HomeAnalyticsSkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true">
+      <Skeleton className="h-8 w-72 max-w-full" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {["a", "b", "c", "d"].map((key) => <Skeleton key={key} className="h-28" />)}
+      </div>
+    </div>
+  );
+}
 
 /** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
@@ -107,7 +124,9 @@ function HomePage() {
     <div className="space-y-4 pb-8">
       <PageHeader title={t("home")} />
       {sales ? (
-        <HomeAnalytics />
+        <Suspense fallback={<HomeAnalyticsSkeleton />}>
+          <HomeAnalytics />
+        </Suspense>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">

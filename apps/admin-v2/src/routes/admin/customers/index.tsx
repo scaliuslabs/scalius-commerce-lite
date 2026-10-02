@@ -25,8 +25,8 @@ import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { CustomerBulkActions } from "~/components/admin/customers/CustomerBulkActions";
 import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
 import { ExportCustomersDialog } from "~/components/admin/customers/ExportCustomersDialog";
-import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
-import { storeTransferMessages } from "~/i18n/store-transfer";
+import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
+import { resourceMessages } from "~/i18n/resource";
 import {
   CUSTOMER_FILTER_PARAMS,
   customerListFilters,
@@ -79,7 +79,7 @@ function CustomersPage() {
   const { hasPermission } = usePermissions();
   const canDelete = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
   const canEdit = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
-  const s = useMessages(storeTransferMessages);
+  const r = useMessages(resourceMessages);
   const [importing, setImporting] = useState(false);
   const openTo = (row: Customer) => `/admin/customers/${row.id}/edit`;
   // The export dialog: from the header (the filters) or the bulk bar (the selection).
@@ -124,7 +124,7 @@ function CustomersPage() {
         actions={
           <>
             {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) || canEdit ? (
-              <Button variant="outline" onClick={() => setImporting(true)}>{s("import")}</Button>
+              <Button variant="outline" onClick={() => setImporting(true)}>{r("import")}</Button>
             ) : null}
             <Button variant="outline" onClick={() => setExporting({ open: true, ids: [] })}>{t("export")}</Button>
             {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
@@ -171,7 +171,7 @@ function CustomersPage() {
           },
         }}
       />
-      <ImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
+      <LazyImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
       <ExportCustomersDialog
         open={exporting.open}
         onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
