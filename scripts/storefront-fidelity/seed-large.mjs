@@ -153,13 +153,10 @@ export function seedReferenceProducts(db, mediaUrl) {
     VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const variant = insert(`INSERT INTO product_variants (id, product_id, option_combination_key, image_id, sku, price_minor, stock, reserved_stock,
     preorder_stock, is_default, track_inventory, version, stock_version, discount_bps, discount_type, discount_amount_minor, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 12, 0, 0, ?, 1, 1, 2, ?, 'percentage', 0, ?, ?)`);
+    VALUES (?, ?, ?, ?, ?, ?, 12, 0, 0, ?, 1, 1, 1, ?, 'percentage', 0, ?, ?)`);
+  // The SKU-insert trigger (migration 0102) books the 12 at the default
+  // location; no stocktake movement, so sum(levels) = stock without a fix-up.
   const assignment = insert(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)`);
-  const movement = insert(`INSERT INTO inventory_movements (id, variant_id, order_id, type, quantity, previous_stock, new_stock, notes,
-    created_by, ledger_version, pool, reservation_generation, stock_version_before, stock_version_after, stock_delta,
-    previous_reserved_stock, new_reserved_stock, reserved_stock_delta, previous_preorder_stock, new_preorder_stock,
-    preorder_stock_delta, created_at)
-    VALUES (?, ?, NULL, 'adjusted', 12, 0, 12, 'Stocktake: fidelity fixture', NULL, 2, 'regular', NULL, 1, 2, 12, 0, 0, 0, 0, 0, 0, ?)`);
   tx(db, () => {
     for (const name of ["Care", "Ingredients", "Origin", "Dimensions"]) {
       const id = `attr_fid_${slugify(name)}`;
@@ -206,7 +203,6 @@ export function seedReferenceProducts(db, mediaUrl) {
           imageId, `FID-${key.toUpperCase()}-${index}`, price, selected.length === 0 ? 1 : 0,
           key === "apparel" ? 1500 : 0, now, now);
         for (const [definitionId, valueId] of selected) assignment.run(variantId, definitionId, valueId);
-        movement.run(`mov_fid_${key}_${index}`, variantId, now);
       });
     }
   });
