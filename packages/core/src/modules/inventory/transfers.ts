@@ -32,6 +32,7 @@ import {
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { variantOptionLabelSql } from "../products/option-model";
+import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
@@ -416,9 +417,13 @@ async function planLines(db: Database, lines: ReadonlyArray<PlannedLine>): Promi
     throw new ValidationError("Each SKU appears once on a transfer; change its quantity instead.");
   }
   const skus = await readStockCommandSkus(db, lines.map((line) => line.variantId));
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     const sku = skus.get(line.variantId);
     if (!sku || sku.deletedAt) throw new ValidationError("A SKU on this transfer no longer exists.");
+    // A digital SKU's stock is its licence keys: it isn't held at a location to move.
+    if (isDigitalKind(sku.fulfillmentKind)) {
+      throw digitalStockError({ field: `lines.${index}.variantId`, sku: sku.sku, variantId: sku.id });
+    }
     if (sku.fulfillmentKind !== "physical") {
       throw new ValidationError(`SKU ${sku.sku} is not a physical item, so it has no stock to move.`);
     }
